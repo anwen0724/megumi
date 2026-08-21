@@ -13,7 +13,7 @@ const session = {
 const userMessage = {
   message_id: 'message:1',
   session_id: session.session_id,
-  run_id: 'run:1',
+  execution_id: 'run:1',
   message_kind: 'user_message' as const,
   display_content: [{ type: 'text' as const, text: 'hello' }],
   model_content: [{ type: 'text' as const, text: '<skill>private</skill>\nhello' }],
@@ -53,7 +53,7 @@ describe('Product Session reader', () => {
         getActive: () => ({
           status: 'found',
           run: {
-            runId: 'run:1', requestId: 'request:1', workspaceId: 'workspace:1',
+            executionId: 'run:1', requestId: 'request:1', workspaceId: 'workspace:1',
             sessionId: 'session:1', userMessageId: 'message:1',
             model: {} as never, permissionMode: 'ask', status: 'waiting',
             createdAt: '2026-07-04T00:00:02.000Z', startedAt: '2026-07-04T00:00:02.000Z',
@@ -75,9 +75,9 @@ describe('Product Session reader', () => {
     expect(result).toMatchObject({
       status: 'ok',
       session: { id: session.session_id, projectId: session.workspace_id },
-      activeRun: { runId: 'run:1', status: 'waiting' },
+      activeRun: { executionId: 'run:1', status: 'waiting' },
       eventRange: { firstSequence: 3, lastSequence: 4, truncated: true },
-      diagnostics: [{ code: 'workspace_changes_unavailable', runId: 'run:1' }],
+      diagnostics: [{ code: 'workspace_changes_unavailable', executionId: 'run:1' }],
       conversation: [
         { type: 'message', entryId: 'entry:1', message: { kind: 'user', displayContent: [{ text: 'hello' }] } },
         { type: 'compaction', compactionId: 'compaction:1', status: 'failed' },
@@ -102,7 +102,7 @@ describe('Product Session reader', () => {
       workspaceChanges: { listChangeSummaries: () => ({ summaries: [] }) },
     });
 
-    const result = await reader.readCommittedRun({ sessionId: session.session_id, runId: 'run:1' });
+    const result = await reader.readCommittedRun({ sessionId: session.session_id, executionId: 'run:1' });
 
     expect(result).toMatchObject({ status: 'ok', messages: [{ entryId: 'entry:1' }] });
     expect({ engineReads, eventReads }).toEqual({ engineReads: 0, eventReads: 0 });

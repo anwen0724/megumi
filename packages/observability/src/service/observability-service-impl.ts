@@ -43,7 +43,7 @@ export class ObservabilityServiceImpl implements ObservabilityService {
   startTrace(request: StartTraceRequest): TraceHandle {
     const context: TraceContext = compact({
       traceId: request.traceId,
-      runId: request.runId,
+      executionId: request.executionId,
       sessionId: request.sessionId,
       workspaceId: request.workspaceId,
       requestId: request.requestId,

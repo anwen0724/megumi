@@ -99,7 +99,7 @@ export class RunRegistry {
   private readonly pendingRuns = new Map<string, Run>();
   private readonly activeRuns = new Map<string, ActiveRun>();
   private readonly terminalRuns = new Map<string, Run>();
-  private readonly runIdBySession = new Map<string, string>();
+  private readonly executionIdBySession = new Map<string, string>();
   private readonly idleWaiters = new Set<() => void>();
 
   constructor(private readonly options: RunRegistryOptions) {
@@ -127,13 +127,13 @@ export class RunRegistry {
         : { status: 'already_started', result: existingRequest.result };
     }
 
-    const activeRunId = this.runIdBySession.get(input.fingerprint.sessionId);
-    if (activeRunId) {
-      const run = this.findLiveRun(activeRunId);
+    const activeExecutionId = this.executionIdBySession.get(input.fingerprint.sessionId);
+    if (activeExecutionId) {
+      const run = this.findLiveRun(activeExecutionId);
       if (run && !isTerminalRunStatus(run.status)) {
         return { status: 'session_busy', activeRun: run };
       }
-      this.runIdBySession.delete(input.fingerprint.sessionId);
+      this.executionIdBySession.delete(input.fingerprint.sessionId);
     }
 
     assertReservationMatchesRun(input);
@@ -148,8 +148,8 @@ export class RunRegistry {
       completion,
       settle,
     });
-    this.pendingRuns.set(input.run.runId, input.run);
-    this.runIdBySession.set(input.run.sessionId, input.run.runId);
+    this.pendingRuns.set(input.run.executionId, input.run);
+    this.executionIdBySession.set(input.run.sessionId, input.run.executionId);
     return { status: 'reserved', run: input.run };
   }
 
@@ -161,7 +161,7 @@ export class RunRegistry {
     if (!record || record.status !== 'pending') {
       throw new Error(`No pending Run start for request ${input.requestId}.`);
     }
-    if (record.run.runId !== input.result.run.runId) {
+    if (record.run.executionId !== input.result.run.executionId) {
       throw new Error('Completed Run start does not match its reserved Run.');
     }
 
@@ -184,9 +184,9 @@ export class RunRegistry {
     }
 
     this.requestRecords.delete(input.requestId);
-    this.pendingRuns.delete(record.run.runId);
-    if (this.runIdBySession.get(record.run.sessionId) === record.run.runId) {
-      this.runIdBySession.delete(record.run.sessionId);
+    this.pendingRuns.delete(record.run.executionId);
+    if (this.executionIdBySession.get(record.run.sessionId) === record.run.executionId) {
+      this.executionIdBySession.delete(record.run.sessionId);
     }
     record.settle({ status: 'failed', failure: input.failure });
     this.notifyIdle();
@@ -195,25 +195,25 @@ export class RunRegistry {
   /** Registers the single ActiveRun for a started Run. */
   attachActiveRun(activeRun: ActiveRun): void {
     const run = activeRun.run;
-    const existing = this.activeRuns.get(run.runId);
+    const existing = this.activeRuns.get(run.executionId);
     if (existing) {
-      throw new Error(`Run already has an ActiveRun: ${run.runId}.`);
+      throw new Error(`Run already has an ActiveRun: ${run.executionId}.`);
     }
-    this.pendingRuns.delete(run.runId);
-    this.activeRuns.set(run.runId, activeRun);
-    this.runIdBySession.set(run.sessionId, run.runId);
+    this.pendingRuns.delete(run.executionId);
+    this.activeRuns.set(run.executionId, activeRun);
+    this.executionIdBySession.set(run.sessionId, run.executionId);
   }
 
-  getActiveRun(runId: string): ActiveRun | undefined {
-    return this.activeRuns.get(runId);
+  getActiveRun(executionId: string): ActiveRun | undefined {
+    return this.activeRuns.get(executionId);
   }
 
   updateRun(run: Run): void {
     this.pruneExpired();
-    const active = this.activeRuns.get(run.runId);
+    const active = this.activeRuns.get(run.executionId);
     if (!active) {
       // A reserved Run may settle directly to a terminal result without a loop.
-      const pending = this.pendingRuns.get(run.runId);
+      const pending = this.pendingRuns.get(run.executionId);
       if (pending) {
         const requestRecord = this.requestRecords.get(run.requestId);
         if (requestRecord?.status === 'started') {
@@ -227,17 +227,17 @@ export class RunRegistry {
           });
         }
         if (isTerminalRunStatus(run.status)) {
-          this.pendingRuns.delete(run.runId);
-          this.terminalRuns.set(run.runId, run);
+          this.pendingRuns.delete(run.executionId);
+          this.terminalRuns.set(run.executionId, run);
           this.notifyIdle();
         } else {
-          this.pendingRuns.set(run.runId, run);
+          this.pendingRuns.set(run.executionId, run);
         }
         return;
       }
-      const previous = this.terminalRuns.get(run.runId);
+      const previous = this.terminalRuns.get(run.executionId);
       if (previous && isTerminalRunStatus(run.status)) {
-        this.terminalRuns.set(run.runId, run);
+        this.terminalRuns.set(run.executionId, run);
       }
       return;
     }
@@ -268,21 +268,21 @@ export class RunRegistry {
       } catch (error) {
         cleanupError = error;
       }
-      if (this.runIdBySession.get(run.sessionId) === run.runId) {
-        this.runIdBySession.delete(run.sessionId);
+      if (this.executionIdBySession.get(run.sessionId) === run.executionId) {
+        this.executionIdBySession.delete(run.sessionId);
       }
-      this.activeRuns.delete(run.runId);
-      this.terminalRuns.set(run.runId, run);
+      this.activeRuns.delete(run.executionId);
+      this.terminalRuns.set(run.executionId, run);
       this.notifyIdle();
       if (cleanupError !== undefined) throw cleanupError;
     }
   }
 
-  getRun(runId: string): Run | undefined {
+  getRun(executionId: string): Run | undefined {
     this.pruneExpired();
-    const live = this.findLiveRun(runId);
+    const live = this.findLiveRun(executionId);
     if (live) return snapshot(live);
-    const terminal = this.terminalRuns.get(runId);
+    const terminal = this.terminalRuns.get(executionId);
     return terminal ? snapshot(terminal) : undefined;
   }
 
@@ -291,20 +291,20 @@ export class RunRegistry {
    * index. This is a read of authoritative registry state, not a projection.
    */
   getActive(sessionId: string): Run | undefined {
-    const runId = this.runIdBySession.get(sessionId);
-    if (!runId) return undefined;
-    const run = this.findLiveRun(runId);
+    const executionId = this.executionIdBySession.get(sessionId);
+    if (!executionId) return undefined;
+    const run = this.findLiveRun(executionId);
     if (!run || isTerminalRunStatus(run.status)) {
-      this.runIdBySession.delete(sessionId);
+      this.executionIdBySession.delete(sessionId);
       return undefined;
     }
     return snapshot(run);
   }
 
-  private findLiveRun(runId: string): Run | undefined {
-    const active = this.activeRuns.get(runId);
+  private findLiveRun(executionId: string): Run | undefined {
+    const active = this.activeRuns.get(executionId);
     if (active) return active.run;
-    return this.pendingRuns.get(runId);
+    return this.pendingRuns.get(executionId);
   }
 
   listActiveRuns(): readonly Run[] {
@@ -345,19 +345,19 @@ export class RunRegistry {
    * promise. The Agent Adapter awaits it in place; the Run operation entry settles it.
    */
   beginApprovalWait(input: {
-    readonly runId: string;
+    readonly executionId: string;
     readonly approval: RunApproval;
   }): Promise<ApprovalResolution> {
-    const active = this.activeRuns.get(input.runId);
+    const active = this.activeRuns.get(input.executionId);
     if (!active || isTerminalRunStatus(active.run.status)) {
-      throw new Error(`Cannot wait for approval on inactive Run ${input.runId}.`);
+      throw new Error(`Cannot wait for approval on inactive Run ${input.executionId}.`);
     }
     // The Run transitions running -> waiting right before registering the wait.
     if (active.run.status !== 'running' && active.run.status !== 'waiting') {
-      throw new Error(`Run ${input.runId} is not running and cannot wait for approval.`);
+      throw new Error(`Run ${input.executionId} is not running and cannot wait for approval.`);
     }
     if (active.pendingApproval && !active.pendingApproval.settled) {
-      throw new Error(`Run ${input.runId} already has a pending approval.`);
+      throw new Error(`Run ${input.executionId} already has a pending approval.`);
     }
 
     let settle!: (resolution: ApprovalResolution) => void;
@@ -397,8 +397,8 @@ export class RunRegistry {
   }
 
   /** Settles the pending approval wait as cancelled, e.g. when the Run is cancelled. */
-  cancelPendingApproval(runId: string): boolean {
-    const active = this.activeRuns.get(runId);
+  cancelPendingApproval(executionId: string): boolean {
+    const active = this.activeRuns.get(executionId);
     const pending = active?.pendingApproval;
     if (!pending || pending.settled) return false;
     pending.settled = true;
@@ -408,7 +408,7 @@ export class RunRegistry {
 
   /** Cancels the pending approval wait when the Run reaches a terminal state. */
   private settlePendingApprovalCancelled(run: Run): void {
-    const active = this.activeRuns.get(run.runId);
+    const active = this.activeRuns.get(run.executionId);
     const pending = active?.pendingApproval;
     if (!pending || pending.settled) return;
     pending.settled = true;
@@ -433,7 +433,7 @@ export class RunRegistry {
         continue;
       }
       this.requestRecords.delete(requestId);
-      this.terminalRuns.delete(record.result.run.runId);
+      this.terminalRuns.delete(record.result.run.executionId);
     }
   }
 

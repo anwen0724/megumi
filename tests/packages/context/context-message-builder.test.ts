@@ -19,7 +19,7 @@ function userHistory(overrides: {
     type: 'message',
     entry: { entry_id: 'e1', session_id: 's', entry_type: 'message', message_id: 'm1', created_at: 'now' },
     message: {
-      message_id: 'm1', session_id: 's', run_id: 'r1', message_kind: 'user_message',
+      message_id: 'm1', session_id: 's', execution_id: 'r1', message_kind: 'user_message',
       display_content: [{ type: 'text', text: 'task' }],
       model_content: [{ type: 'text', text: overrides.modelContent ?? 'expanded task' }],
       created_at: 'now',
@@ -65,7 +65,7 @@ function summaryThenConversation(): SessionHistoryItem[] {
       type: 'message',
       entry: { entry_id: 'entry:user:3', session_id: 's', entry_type: 'message', message_id: 'message:user:3', created_at: 'now' },
       message: {
-        message_id: 'message:user:3', session_id: 's', run_id: 'r3', message_kind: 'user_message',
+        message_id: 'message:user:3', session_id: 's', execution_id: 'r3', message_kind: 'user_message',
         display_content: [{ type: 'text', text: 'question 3' }],
         model_content: [{ type: 'text', text: 'question 3' }],
         created_at: 'now',
@@ -76,7 +76,7 @@ function summaryThenConversation(): SessionHistoryItem[] {
       type: 'message',
       entry: { entry_id: 'entry:assistant:3', session_id: 's', entry_type: 'message', message_id: 'message:assistant:3', created_at: 'now' },
       message: {
-        message_id: 'message:assistant:3', session_id: 's', run_id: 'r3', message_kind: 'assistant_reply',
+        message_id: 'message:assistant:3', session_id: 's', execution_id: 'r3', message_kind: 'assistant_reply',
         status: 'completed',
         content: [{ type: 'text', text: 'answer 3' }],
         created_at: 'now',

@@ -70,7 +70,7 @@ export interface RunFailureCause {
 }
 
 export interface Run {
-  readonly runId: string;
+  readonly executionId: string;
   readonly requestId: string;
   readonly workspaceId: string;
   readonly sessionId: string;
@@ -86,7 +86,7 @@ export interface Run {
 }
 
 export interface CreateRunInput {
-  readonly runId: string;
+  readonly executionId: string;
   readonly requestId: string;
   readonly workspaceId: string;
   readonly sessionId: string;
@@ -225,7 +225,7 @@ export type ResolveApprovalResult =
   | { readonly status: 'failed'; readonly failure: RunFailure };
 
 export interface CancelRunRequest {
-  readonly runId: string;
+  readonly executionId: string;
 }
 
 export type CancelRunResult =
@@ -235,15 +235,15 @@ export type CancelRunResult =
     }
   | { readonly status: 'already_cancelling'; readonly run: Run }
   | { readonly status: 'already_terminal'; readonly run: Run }
-  | { readonly status: 'not_found'; readonly runId: string };
+  | { readonly status: 'not_found'; readonly executionId: string };
 
 export interface GetRunRequest {
-  readonly runId: string;
+  readonly executionId: string;
 }
 
 export type GetRunResult =
   | { readonly status: 'found'; readonly run: Run }
-  | { readonly status: 'not_found'; readonly runId: string };
+  | { readonly status: 'not_found'; readonly executionId: string };
 
 export interface GetActiveRunRequest {
   readonly sessionId: string;
@@ -275,7 +275,7 @@ export type RunApprovalStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
 
 export interface RunApproval {
   readonly runApprovalId: string;
-  readonly runId: string;
+  readonly executionId: string;
   readonly toolCallId: string;
   readonly toolName: string;
   readonly toolIdentity: ToolIdentity;
@@ -323,7 +323,7 @@ export interface CreateRunsOptions {
   readonly observability?: ObservabilityService;
   /** The ID creation capabilities the Run execution base needs; never exported as an object. */
   readonly ids: {
-    createRunId(): string;
+    createExecutionId(): string;
     createModelCallId(): string;
     createToolExecutionId(): string;
     createRunApprovalId(): string;
@@ -345,8 +345,8 @@ export function createRuns(options: CreateRunsOptions): Runs {
   };
   let accepting = true;
 
-  const settleAgentResult = (runId: string, result: EngineAgentRunResult): void => {
-    const active = store.getActiveRun(runId);
+  const settleAgentResult = (executionId: string, result: EngineAgentRunResult): void => {
+    const active = store.getActiveRun(executionId);
     if (!active || isTerminalRunStatus(active.run.status)) return;
     const at = options.clock.now();
     // Cancellation may win the settle race: a cancelling Run always converges
@@ -391,13 +391,13 @@ export function createRuns(options: CreateRunsOptions): Runs {
     run: Run,
     type: TType,
     payload: EventPayloadByType[TType],
-    omitRunId = false,
+    omitExecutionId = false,
   ): void => {
     options.events.publish({
       type,
       payload,
       sessionId: run.sessionId,
-      ...(omitRunId ? {} : { runId: run.runId }),
+      ...(omitExecutionId ? {} : { executionId: run.executionId }),
     });
   };
 
@@ -410,10 +410,10 @@ export function createRuns(options: CreateRunsOptions): Runs {
         };
       }
       const createdAt = options.clock.now();
-      const runId = options.ids.createRunId();
+      const executionId = options.ids.createExecutionId();
       const userMessageId = options.ids.createSessionMessageId();
       const run = createRun({
-        runId,
+        executionId,
         requestId: request.requestId,
         workspaceId: request.workspaceId,
         sessionId: request.sessionId,
@@ -470,7 +470,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
       const saved = await options.session.saveUserMessage({
         message_id: userMessageId,
         session_id: request.sessionId,
-        run_id: runId,
+        execution_id: executionId,
         display_content: [...request.input.displayContent],
         model_content: [...request.input.modelContent],
         ...(request.input.skillSelection ? {
@@ -532,7 +532,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
       });
 
       // The user message is the run's input: it precedes run.started and
-      // carries no runId (ordering contract, see events/CONTEXT.md).
+      // carries no executionId (ordering contract, see events/CONTEXT.md).
       publish(run, 'message.started', {
         role: 'user',
         messageId: userMessageId,
@@ -554,7 +554,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
         userEntry: saved.entry,
         signal: abortController.signal,
         transitionRunStatus: (status) => {
-          const current = store.getActiveRun(runId);
+          const current = store.getActiveRun(executionId);
           if (!current || isTerminalRunStatus(current.run.status)) return;
           if (current.run.status === 'waiting' && status === 'running') {
             store.updateRun(transitionRun(current.run, { status: 'running', at: options.clock.now() }));
@@ -563,7 +563,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
           }
         },
         awaitApproval: (request) => store.beginApprovalWait({
-          runId,
+          executionId,
           approval: request.approval,
         }),
       }, dependencies);
@@ -581,13 +581,13 @@ export function createRuns(options: CreateRunsOptions): Runs {
       };
       void agentTask.then(
         (result) => {
-          settleSafely(() => settleAgentResult(runId, result));
+          settleSafely(() => settleAgentResult(executionId, result));
         },
         () => {
           settleSafely(() => {
-            const current = store.getActiveRun(runId);
+            const current = store.getActiveRun(executionId);
             if (!current || isTerminalRunStatus(current.run.status)) return;
-            settleAgentResult(runId, {
+            settleAgentResult(executionId, {
               status: 'failed',
               failure: {
                 code: 'internal_error',
@@ -624,15 +624,15 @@ export function createRuns(options: CreateRunsOptions): Runs {
     },
 
     async cancel(request): Promise<CancelRunResult> {
-      const run = store.getRun(request.runId);
-      if (!run) return { status: 'not_found', runId: request.runId };
+      const run = store.getRun(request.executionId);
+      if (!run) return { status: 'not_found', executionId: request.executionId };
       if (isTerminalRunStatus(run.status)) {
         return { status: 'already_terminal', run };
       }
       if (run.status === 'cancelling') {
         return { status: 'already_cancelling', run };
       }
-      const active = store.getActiveRun(request.runId);
+      const active = store.getActiveRun(request.executionId);
       if (!active) {
         const failed = transitionRun(run, {
           status: 'failed',
@@ -659,7 +659,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
       });
       // A pending approval wait must settle as cancelled so the Agent execution
       // wakes and converges in place.
-      store.cancelPendingApproval(run.runId);
+      store.cancelPendingApproval(run.executionId);
       active.abortController.abort();
       return {
         status: 'cancellation_requested',
@@ -668,10 +668,10 @@ export function createRuns(options: CreateRunsOptions): Runs {
     },
 
     get(request): GetRunResult {
-      const run = store.getRun(request.runId);
+      const run = store.getRun(request.executionId);
       return run
         ? { status: 'found', run }
-        : { status: 'not_found', runId: request.runId };
+        : { status: 'not_found', executionId: request.executionId };
     },
 
     getActive(request): GetActiveRunResult {
@@ -684,7 +684,7 @@ export function createRuns(options: CreateRunsOptions): Runs {
     async shutdown(request): Promise<ShutdownRunsResult> {
       accepting = false;
       await Promise.allSettled(
-        store.listActiveRuns().map((run) => runs.cancel({ runId: run.runId })),
+        store.listActiveRuns().map((run) => runs.cancel({ executionId: run.executionId })),
       );
       const idle = await store.waitForIdle(request.timeoutMs);
       return idle

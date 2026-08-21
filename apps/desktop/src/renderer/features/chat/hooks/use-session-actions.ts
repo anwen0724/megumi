@@ -143,7 +143,7 @@ export function useSessionActions() {
   const [branchDraft, setBranchDraft] = useState<BranchDraftState | null>(null);
   const branchDraftRef = useRef<BranchDraftState | null>(null);
   const branchDraftCreateSequenceRef = useRef(0);
-  const submittedRunIdRef = useRef<string | null>(null);
+  const submittedExecutionIdRef = useRef<string | null>(null);
   const submittedSessionIdRef = useRef<string | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
 
@@ -230,7 +230,7 @@ export function useSessionActions() {
       ),
       { requestId },
     );
-    submittedRunIdRef.current = null;
+    submittedExecutionIdRef.current = null;
 
     const state = useChatUiStore.getState();
     state.setAgentStatus('sending', target.sessionId ?? null);
@@ -268,12 +268,12 @@ export function useSessionActions() {
     useChatUiStore.getState().setLastError(null, runSessionId);
 
     if (result.data.type !== 'agent_run') {
-      submittedRunIdRef.current = null;
+      submittedExecutionIdRef.current = null;
       useChatUiStore.getState().setAgentStatus('idle', runSessionId);
       return true;
     }
 
-    submittedRunIdRef.current = result.data.run.runId;
+    submittedExecutionIdRef.current = result.data.run.executionId;
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
     if (result.data.branchCommit) {
       useSessionTimelineStore.getState().addCommittedBranch(
@@ -303,8 +303,8 @@ export function useSessionActions() {
 
   const cancelSessionMessage = useCallback(async () => {
     const runState = useRunStore.getState();
-    const runId = submittedRunIdRef.current ?? runState.activeRunId;
-    if (!runId) {
+    const executionId = submittedExecutionIdRef.current ?? runState.activeExecutionId;
+    if (!executionId) {
       showToast({
         tone: 'warning',
         title: rendererI18n.t('chat:notifications.nothingToStop.title'),
@@ -316,7 +316,7 @@ export function useSessionActions() {
     try {
       const result = await window.megumi.session.message.cancel(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionMessageCancel, {
-          runId,
+          executionId,
         }),
       );
 

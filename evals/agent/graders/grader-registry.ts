@@ -118,8 +118,13 @@ function gradeToolActivity(grader: EvaluationGraderConfig, evidence: EvaluationE
     throw new Error(`Grader ${grader.graderId} config.result must be completed or failed.`);
   }
   const count = evidence.runtimeEvents.events.filter((event) => {
-    const expectedEvent = expectedResult ? `tool_call.${expectedResult}` : 'tool_call.requested';
-    if (event.eventType !== expectedEvent) return false;
+    if (expectedResult) {
+      if (event.type !== 'tool_execution.ended') return false;
+      const payload = event.payload as { status?: unknown; toolName?: unknown; tool_name?: unknown };
+      return payload.status === expectedResult
+        && (payload.toolName === toolName || payload.tool_name === toolName);
+    }
+    if (event.type !== 'tool_execution.requested') return false;
     const payload = event.payload as { toolName?: unknown; tool_name?: unknown };
     return payload.toolName === toolName || payload.tool_name === toolName;
   }).length;
@@ -133,7 +138,7 @@ function gradeBehavior(grader: EvaluationGraderConfig, evidence: EvaluationEvide
   const requiredEvent = configString(grader, 'eventType');
   const forbiddenEvent = configString(grader, 'forbidEventType');
   if (!requiredEvent && !forbiddenEvent) throw new Error(`Behavior Grader ${grader.graderId} has no rule.`);
-  const eventTypes = new Set<string>(evidence.runtimeEvents.events.map((event) => event.eventType));
+  const eventTypes = new Set<string>(evidence.runtimeEvents.events.map((event) => event.type));
   const passed = (!requiredEvent || eventTypes.has(requiredEvent)) && (!forbiddenEvent || !eventTypes.has(forbiddenEvent));
   return passed
     ? result(grader, 'passed', 'Required behavior was observed.', ['runtimeEvents'])

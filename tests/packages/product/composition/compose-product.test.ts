@@ -112,7 +112,7 @@ describe('composeProduct', () => {
       await vi.waitFor(async () => {
         const snapshot = await product.host.session.readSession({ sessionId: session.session.id });
         if (snapshot.status !== 'ok') return;
-        events = snapshot.runtimeEvents.filter((event) => event.runId === payload.run.runId);
+        events = snapshot.runtimeEvents.filter((event) => event.executionId === payload.run.executionId);
         expect(events.some((event) => event.type === 'run.ended')).toBe(true);
       }, { timeout: 5000 });
       expect(events.filter((event) => event.type === 'tool_execution.ended')).toHaveLength(2);

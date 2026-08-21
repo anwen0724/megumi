@@ -42,13 +42,13 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
     role: 'assistant',
     projectId: 'project-1',
     sessionId: 'session-1',
-    runId: 'run-1',
+    executionId: 'run-1',
     createdAt,
     blocks: [
       {
         blockId: 'process:run-1',
         kind: 'process_disclosure',
-        runId: 'run-1',
+        executionId: 'run-1',
         status: 'completed',
         startedAt: '2026-05-24T12:00:00.000Z',
         endedAt: '2026-05-24T12:00:03.000Z',
@@ -84,7 +84,7 @@ function assistantMessage(overrides: Partial<TimelineAssistantMessage> = {}): Ti
       {
         blockId: 'answer:run-1',
         kind: 'answer_text',
-        runId: 'run-1',
+        executionId: 'run-1',
         textId: 'text-answer-1',
         status: 'completed',
         text: '你好！我是 **Megumi**。\n\n- 可以读项目\n- 可以运行工具',
@@ -128,7 +128,7 @@ describe('TimelineMessage canonical block rendering', () => {
       message={assistantMessage()}
       afterContent={<WorkspaceChangeFooter
         footer={{
-          runId: 'run-1',
+          executionId: 'run-1',
           sessionId: 'session-1',
           updatedAt: '2026-06-06T10:00:01.000Z',
           changeSets: [{
@@ -191,7 +191,7 @@ describe('TimelineMessage canonical block rendering', () => {
       blocks: [{
         blockId: 'process:run-1',
         kind: 'process_disclosure',
-        runId: 'run-1',
+        executionId: 'run-1',
         status: 'running',
         startedAt: '2026-05-24T12:00:00.000Z',
         items: [],
@@ -244,7 +244,7 @@ describe('TimelineMessage canonical block rendering', () => {
         blocks: [{
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: createdAt,
           items: [],
@@ -267,7 +267,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: '2026-05-24T12:00:00.000Z',
           items: [{
@@ -294,7 +294,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'completed',
           startedAt: '2026-05-24T12:00:00.000Z',
           endedAt: '2026-05-24T12:00:03.000Z',
@@ -329,7 +329,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'completed',
           startedAt: '2026-05-24T12:00:00.000Z',
           endedAt: '2026-05-24T12:00:03.000Z',
@@ -338,7 +338,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'streaming',
           text: '正在流式输出最终回复',
@@ -361,7 +361,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: '2026-05-24T12:00:00.000Z',
           items: [{
@@ -376,7 +376,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'completed',
           text: longAnswerText,
@@ -397,7 +397,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: '2026-05-24T12:00:00.000Z',
           items: [{
@@ -412,7 +412,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'streaming',
           text: 'First chunk',
@@ -431,7 +431,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: '2026-05-24T12:00:00.000Z',
           items: [{
@@ -446,7 +446,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'streaming',
           text: 'First chunk plus second chunk',
@@ -464,7 +464,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: '2026-06-14T12:00:00.000Z',
           items: [{
@@ -491,7 +491,7 @@ describe('TimelineMessage canonical block rendering', () => {
       blocks: [{
         blockId: 'process:run-1',
         kind: 'process_disclosure',
-        runId: 'run-1',
+        executionId: 'run-1',
         status: 'running',
         startedAt: createdAt,
         items: [{
@@ -526,7 +526,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'completed',
           startedAt: '2026-06-14T12:00:00.000Z',
           endedAt: '2026-06-14T12:00:03.000Z',
@@ -613,7 +613,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'completed',
           text: '这是 *斜体* 文本',
@@ -632,7 +632,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'completed',
           text: [
@@ -663,7 +663,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'running',
           startedAt: '2026-05-24T12:00:00.000Z',
           items: [
@@ -693,7 +693,7 @@ describe('TimelineMessage canonical block rendering', () => {
       blocks: [{
         blockId: 'process:run-1',
         kind: 'process_disclosure',
-        runId: 'run-1',
+        executionId: 'run-1',
         status: 'completed',
         startedAt: '2026-06-01T10:00:00.000Z',
         endedAt: '2026-06-01T10:00:04.000Z',
@@ -741,7 +741,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'process:run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'completed',
           startedAt: '2026-06-01T10:00:00.000Z',
           endedAt: '2026-06-01T10:00:04.000Z',
@@ -801,7 +801,7 @@ describe('TimelineMessage canonical block rendering', () => {
         {
           blockId: 'answer:run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'completed',
           text: 'Final answer.',
@@ -827,7 +827,7 @@ describe('TimelineMessage canonical block rendering', () => {
       blocks: [{
         blockId: 'process:run-1',
         kind: 'process_disclosure',
-        runId: 'run-1',
+        executionId: 'run-1',
         status: 'running',
         startedAt: '2026-06-01T10:00:00.000Z',
         items: [
@@ -885,7 +885,7 @@ describe('TimelineMessage canonical block rendering', () => {
             {
               blockId: 'answer-bad',
               kind: 'answer_text',
-              runId: 'run-1',
+              executionId: 'run-1',
               textId: 'text-bad',
               status: 'completed',
               text: undefined,
@@ -895,7 +895,7 @@ describe('TimelineMessage canonical block rendering', () => {
             {
               blockId: 'answer-1',
               kind: 'answer_text',
-              runId: 'run-1',
+              executionId: 'run-1',
               textId: 'text-1',
               status: 'completed',
               text: 'Final answer remains visible.',

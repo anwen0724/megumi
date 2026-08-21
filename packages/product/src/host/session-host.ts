@@ -6,7 +6,7 @@ import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 export interface SessionHost {
   createSession(request: CreateSessionRequest): Promise<CreateSessionResult>;
   listSessions(request?: ListSessionsRequest): Promise<ListSessionsResult>;
-  listUserMessagesByRunIds(request: ListUserMessagesByRunIdsRequest): Promise<ListUserMessagesByRunIdsResult>;
+  listUserMessagesByExecutionIds(request: ListUserMessagesByExecutionIdsRequest): Promise<ListUserMessagesByExecutionIdsResult>;
   /** Returns durable conversation facts plus current-process runtime facts. */
   readSession(request: ReadSessionRequest): Promise<ReadSessionResult>;
   /** Returns committed facts used to reconcile one Run after its terminal event. */
@@ -84,12 +84,12 @@ export const SessionCreatePayloadSchema = z.object({
 }).strict();
 export const SessionListPayloadSchema = z.object({}).strict();
 export const SessionMessageListPayloadSchema = z.object({
-  runIds: z.array(z.string().min(1)).min(1).max(200),
+  executionIds: z.array(z.string().min(1)).min(1).max(200),
 }).strict();
 export const SessionReadPayloadSchema = z.object({ sessionId: z.string().min(1) }).strict();
 export const CommittedRunReadPayloadSchema = z.object({
   sessionId: z.string().min(1),
-  runId: z.string().min(1),
+  executionId: z.string().min(1),
 }).strict();
 export const SessionContextUsageGetPayloadSchema = z.object({
   sessionId: z.string().min(1),
@@ -121,7 +121,7 @@ export const SessionMessageSendPayloadSchema = z.object({
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
   permissionMode: z.enum(['ask', 'auto', 'full_access']).optional(), permissionSource: z.string().optional(),
 }).strict();
-export const SessionMessageCancelPayloadSchema = z.object({ runId: z.string().min(1) }).strict();
+export const SessionMessageCancelPayloadSchema = z.object({ executionId: z.string().min(1) }).strict();
 export const SessionBranchDraftCreatePayloadSchema = z.object({
   sessionId: z.string().min(1), messageId: z.string().min(1),
 }).strict();
@@ -199,7 +199,7 @@ export const SessionDtoSchema = z.object({
   status: z.enum(['active', 'archived']), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
 }).strict();
 export const RunDtoSchema = z.object({
-  runId: z.string().min(1), sessionId: z.string().min(1),
+  executionId: z.string().min(1), sessionId: z.string().min(1),
   status: z.enum(['running', 'waiting', 'cancelling', 'completed', 'failed', 'cancelled']),
   createdAt: z.string().datetime(), completedAt: z.string().datetime().optional(),
 }).strict();
@@ -263,7 +263,7 @@ const AttachmentDtoSchema = z.object({
 const MessageBaseShape = {
   messageId: z.string().min(1),
   sessionId: z.string().min(1),
-  runId: z.string().min(1).optional(),
+  executionId: z.string().min(1).optional(),
   createdAt: z.string(),
   completedAt: z.string().optional(),
 };
@@ -362,7 +362,7 @@ const WorkspaceChangedFileDtoSchema = z.object({
   changeKind: z.string(),
 }).strict();
 export const WorkspaceChangeSummaryDtoSchema = z.object({
-  runId: z.string().min(1),
+  executionId: z.string().min(1),
   sessionId: z.string().min(1),
   changeSetId: z.string().min(1),
   changedFileCount: z.number().int().nonnegative(),
@@ -372,7 +372,7 @@ export const WorkspaceChangeSummaryDtoSchema = z.object({
 const SessionReadDiagnosticDtoSchema = z.object({
   code: z.string().min(1),
   message: z.string(),
-  runId: z.string().min(1).optional(),
+  executionId: z.string().min(1).optional(),
 }).strict();
 const SessionRuntimeEventRangeDtoSchema = z.object({
   firstSequence: z.number().int().positive().optional(),
@@ -400,7 +400,7 @@ export const ReadCommittedRunResultSchema = z.discriminatedUnion('status', [
     workspaceChanges: z.array(WorkspaceChangeSummaryDtoSchema),
     diagnostics: z.array(SessionReadDiagnosticDtoSchema),
   }).strict(),
-  z.object({ status: z.literal('not_found'), runId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('not_found'), executionId: z.string().min(1) }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 export const SendUserInputPayloadSchema = z.discriminatedUnion('type', [
@@ -459,11 +459,11 @@ export const ListSessionsResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('ok'), sessions: z.array(SessionDtoSchema) }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
-export const ListUserMessagesByRunIdsResultSchema = z.discriminatedUnion('status', [
+export const ListUserMessagesByExecutionIdsResultSchema = z.discriminatedUnion('status', [
   z.object({
     status: z.literal('ok'),
     messages: z.array(z.object({
-      id: z.string().min(1), sessionId: z.string().min(1), runId: z.string().min(1).optional(),
+      id: z.string().min(1), sessionId: z.string().min(1), executionId: z.string().min(1).optional(),
       role: z.enum(['user', 'assistant', 'toolResult']), text: z.string(), createdAt: z.string().datetime(),
     }).strict()),
   }).strict(),
@@ -472,7 +472,7 @@ export const ListUserMessagesByRunIdsResultSchema = z.discriminatedUnion('status
 export const CancelUserInputPayloadSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('cancellation_requested'), run: RunDtoSchema }).strict(),
   z.object({ status: z.literal('cancelling'), run: RunDtoSchema }).strict(),
-  z.object({ status: z.literal('not_found'), runId: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('not_found'), executionId: z.string().min(1) }).strict(),
   z.object({
     status: z.literal('not_cancellable'),
     run: RunDtoSchema,
@@ -518,7 +518,7 @@ export type SessionDto = z.infer<typeof SessionDtoSchema>;
 export interface UserMessageSummaryDto {
   id: string;
   sessionId: string;
-  runId?: string;
+  executionId?: string;
   role: 'user' | 'assistant' | 'toolResult';
   text: string;
   createdAt: string;
@@ -552,8 +552,8 @@ export type ListSessionsResult =
   | { status: 'ok'; sessions: SessionDto[] }
   | { status: 'failed'; failure: HostFailure };
 
-export interface ListUserMessagesByRunIdsRequest { runIds: string[] }
-export type ListUserMessagesByRunIdsResult =
+export interface ListUserMessagesByExecutionIdsRequest { executionIds: string[] }
+export type ListUserMessagesByExecutionIdsResult =
   | { status: 'ok'; messages: UserMessageSummaryDto[] }
   | { status: 'failed'; failure: HostFailure };
 
@@ -627,12 +627,12 @@ export interface SendUserInputResult {
 export type PermissionMode = 'ask' | 'auto' | 'full_access';
 
 export interface CancelUserInputRequest {
-  runId: string;
+  executionId: string;
 }
 export type CancelUserInputPayload =
   | { status: 'cancellation_requested'; run: RunDto }
   | { status: 'cancelling'; run: RunDto }
-  | { status: 'not_found'; runId: string }
+  | { status: 'not_found'; executionId: string }
   | { status: 'not_cancellable'; run: RunDto; reason: 'already_terminal' | 'not_running' }
   | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 export interface CancelUserInputResult {

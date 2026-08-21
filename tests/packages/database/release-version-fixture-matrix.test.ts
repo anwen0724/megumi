@@ -32,7 +32,7 @@ describe('released Database migration fixture matrix', () => {
         seedReleaseFacts(database, releaseVersion);
         const result = migrateDatabase({ database, migrationsFolder: migrationsRoot });
 
-        expect(result.currentMigration).toBe('0010_session_compaction_lifecycle');
+        expect(result.currentMigration).toBe('0011_execution_id');
         expect(appTableNames(database)).toEqual([...databaseTables].sort());
         expect(database.prepare<{ name: string }>({
           sql: "SELECT name FROM workspaces WHERE workspace_id = 'workspace:fixture'",
@@ -40,9 +40,12 @@ describe('released Database migration fixture matrix', () => {
         expect(database.prepare<{ title: string; active_entry_id: string }>({
           sql: "SELECT title, active_entry_id FROM sessions WHERE session_id = 'session:fixture'",
         }).get()).toEqual({ title: 'Fixture Session', active_entry_id: 'entry:fixture' });
-        expect(database.prepare<{ message_kind: string }>({
-          sql: "SELECT message_kind FROM session_messages WHERE message_id = 'message:fixture'",
-        }).get()).toEqual({ message_kind: 'user_message' });
+        expect(database.prepare<{ message_kind: string; execution_id: string }>({
+          sql: "SELECT message_kind, execution_id FROM session_messages WHERE message_id = 'message:fixture'",
+        }).get()).toEqual({ message_kind: 'user_message', execution_id: 'run:fixture' });
+        expect(database.prepare<{ execution_id: string }>({
+          sql: "SELECT execution_id FROM workspace_changes WHERE change_set_id = 'change:fixture'",
+        }).get()).toEqual({ execution_id: 'run:fixture' });
         expect(database.prepare<{ source_value: string; ordinal: number }>({
           sql: "SELECT source_value, ordinal FROM session_message_attachments WHERE attachment_id = 'attachment:fixture'",
         }).get()).toEqual({ source_value: 'fixture.png', ordinal: 0 });

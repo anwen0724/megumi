@@ -19,7 +19,7 @@ export interface ToolWorkspaceChanges {
     readonly scope?: {
       readonly workspace_id: string;
       readonly session_id: string;
-      readonly run_id: string;
+      readonly execution_id: string;
       readonly step_id?: string;
       readonly tool_call_id?: string;
       readonly tool_execution_id?: string;
@@ -62,7 +62,7 @@ export async function executeSandboxToolInvocation(request: {
         scope: {
           workspace_id: request.invocation.workspaceId,
           session_id: request.invocation.sessionId,
-          run_id: request.invocation.runId,
+          execution_id: request.invocation.executionId,
           ...(request.stepId ? { step_id: request.stepId } : {}),
           tool_call_id: request.invocation.toolCallId,
           ...(request.toolExecutionId ? { tool_execution_id: request.toolExecutionId } : {}),

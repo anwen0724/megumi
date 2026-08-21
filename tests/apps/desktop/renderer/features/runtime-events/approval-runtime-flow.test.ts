@@ -52,7 +52,7 @@ describe('approval Runtime flow', () => {
       expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     const approvalEvent = events.find((event) => event.type === 'approval.requested');
     expect(approvalEvent).toBeDefined();
     expect(EventSchema.safeParse(approvalEvent).success).toBe(true);

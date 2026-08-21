@@ -12,7 +12,7 @@ const access = {
 };
 const invocation: ToolInvocation = {
   invocationId: 'model-call:1:tool-call:1',
-  runId: 'run:1',
+  executionId: 'run:1',
   sessionId: 'session:1',
   workspaceId: 'workspace:1',
   modelCallId: 'model-call:1',

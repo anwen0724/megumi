@@ -2,7 +2,7 @@
  * Verifies the bus contract at its public seam:
  *  - publish fills protocol fields (id, sequence, createdAt)
  *  - sequence is session-monotonic across producers (broadcast's entry fee)
- *  - subscribe filters by sessionId / runId / eventTypes
+ *  - subscribe filters by sessionId / executionId / eventTypes
  *  - consumer failures are isolated (best-effort delivery, run never affected)
  */
 import { describe, expect, it } from 'vitest';
@@ -21,9 +21,9 @@ describe('EventBus', () => {
 
     // Two producers interleave on the same session — like engine and session
     // emitting concurrently. The bus is the only counter; producers never coordinate.
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', executionId: 'run:1' });
     bus.publish({ type: 'session.branch_marker.created', payload: { markerId: 'marker:1' }, sessionId: 'session:1' });
-    bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', executionId: 'run:1' });
 
     expect(publishSequence(received)).toEqual([1, 2, 3]);
     for (const event of received) {
@@ -37,8 +37,8 @@ describe('EventBus', () => {
     const received: Event[] = [];
     bus.subscribe({}, (event) => { received.push(event); });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:2', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:2', runId: 'run:2' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', executionId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:2', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:2', executionId: 'run:2' });
 
     expect(received.map((event) => event.sequence)).toEqual([1, 1]);
   });
@@ -60,19 +60,19 @@ describe('EventBus', () => {
     expect(received[0]?.createdAt).toBe('2026-01-01T00:00:00.000Z');
   });
 
-  it('filters subscribers by sessionId, runId, and eventTypes', () => {
+  it('filters subscribers by sessionId, executionId, and eventTypes', () => {
     const bus = createEventBus();
     const sessionOnly: Event[] = [];
     const runOnly: Event[] = [];
     const terminalOnly: Event[] = [];
 
     bus.subscribe({ sessionId: 'session:1' }, (event) => { sessionOnly.push(event); });
-    bus.subscribe({ runId: 'run:1' }, (event) => { runOnly.push(event); });
+    bus.subscribe({ executionId: 'run:1' }, (event) => { runOnly.push(event); });
     bus.subscribe({ eventTypes: ['run.ended'] }, (event) => { terminalOnly.push(event); });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:2', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:2', runId: 'run:2' });
-    bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', runId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', executionId: 'run:1' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:2', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:2', executionId: 'run:2' });
+    bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', executionId: 'run:1' });
 
     expect(sessionOnly.map((event) => event.type)).toEqual(['run.started', 'run.ended']);
     expect(runOnly.map((event) => event.type)).toEqual(['run.started', 'run.ended']);
@@ -84,9 +84,9 @@ describe('EventBus', () => {
     const received: Event[] = [];
     bus.subscribe({ sessionId: 'session:1', eventTypes: ['run.ended'] }, (event) => { received.push(event); });
 
-    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', runId: 'run:1' });
-    bus.publish({ type: 'run.ended', payload: { status: 'failed', error: { message: 'x' } }, sessionId: 'session:2', runId: 'run:2' });
+    bus.publish({ type: 'run.started', payload: { requestId: 'req:1', providerId: 'provider:1', modelId: 'model:1' }, sessionId: 'session:1', executionId: 'run:1' });
+    bus.publish({ type: 'run.ended', payload: { status: 'completed' }, sessionId: 'session:1', executionId: 'run:1' });
+    bus.publish({ type: 'run.ended', payload: { status: 'failed', error: { message: 'x' } }, sessionId: 'session:2', executionId: 'run:2' });
 
     expect(received.map((event) => event.type)).toEqual(['run.ended']);
   });
@@ -209,12 +209,12 @@ describe('EventBus', () => {
 function publishStarted(
   bus: ReturnType<typeof createEventBus>,
   sessionId: string,
-  runId: string,
+  executionId: string,
 ): void {
   bus.publish({
     type: 'run.started',
-    payload: { requestId: `request:${runId}`, providerId: 'provider:1', modelId: 'model:1' },
+    payload: { requestId: `request:${executionId}`, providerId: 'provider:1', modelId: 'model:1' },
     sessionId,
-    runId,
+    executionId,
   });
 }

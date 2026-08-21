@@ -56,7 +56,7 @@ export type GetCommittedBranchResult =
 
 export interface GetCommittedRunMessagesRequest {
   readonly sessionId: string;
-  readonly runId: string;
+  readonly executionId: string;
 }
 
 export type GetCommittedRunMessagesResult =
@@ -115,7 +115,7 @@ export function createSessionConversationReader(input: {
         return {
           status: 'ok',
           messages: result.conversation.filter((item): item is SessionMessageConversationItem => (
-            item.type === 'message' && item.message.run_id === request.runId
+            item.type === 'message' && item.message.execution_id === request.executionId
           )),
         };
       } catch (error) {

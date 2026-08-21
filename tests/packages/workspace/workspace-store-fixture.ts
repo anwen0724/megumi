@@ -23,7 +23,7 @@ export function createWorkspaceStoreFixture() {
       change_set_id TEXT PRIMARY KEY,
       workspace_id TEXT NOT NULL REFERENCES workspaces(workspace_id),
       session_id TEXT NOT NULL,
-      run_id TEXT NOT NULL,
+      execution_id TEXT NOT NULL,
       status TEXT NOT NULL,
       effect_coverage TEXT NOT NULL,
       changed_file_count INTEGER NOT NULL,

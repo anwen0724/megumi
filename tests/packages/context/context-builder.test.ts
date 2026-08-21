@@ -272,7 +272,7 @@ describe('Context.build', () => {
         type: 'message' as const,
         entry: { entry_id: 'entry:user', session_id: 's', entry_type: 'message', message_id: 'm1', created_at: 'now' },
         message: {
-          message_id: 'm1', session_id: 's', run_id: 'r1', message_kind: 'user_message',
+          message_id: 'm1', session_id: 's', execution_id: 'r1', message_kind: 'user_message',
           display_content: [{ type: 'text', text: 'look' }],
           model_content: [{ type: 'text', text: 'look' }],
           created_at: 'now',
@@ -297,7 +297,7 @@ describe('Context.build', () => {
         type: 'message' as const,
         entry: { entry_id: 'entry:tool', session_id: 's', entry_type: 'message', message_id: 'm2', created_at: 'now' },
         message: {
-          message_id: 'm2', session_id: 's', run_id: 'r1', message_kind: 'tool_result',
+          message_id: 'm2', session_id: 's', execution_id: 'r1', message_kind: 'tool_result',
           tool_call_id: 'call:missing', tool_name: 'read_file', status: 'success',
           content: [{ type: 'text', text: 'ok' }], created_at: 'now',
         },

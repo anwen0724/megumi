@@ -32,7 +32,7 @@ export const PermissionOperationSchema = z.object({
   context: z.object({
     workspaceId: z.string().min(1),
     sessionId: z.string().min(1),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     toolIdentity: PermissionToolIdentitySchema,
   }).strict(),
 }).strict().superRefine((operation, context) => {
@@ -78,7 +78,7 @@ export interface PermissionWorkspacePathClassifier {
 }
 
 export interface EvaluateToolCallRequest {
-  readonly runId: string;
+  readonly executionId: string;
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly toolCallId: string;
@@ -89,7 +89,7 @@ export interface EvaluateToolCallRequest {
 }
 
 export const EvaluateToolCallRequestSchema: z.ZodType<EvaluateToolCallRequest> = z.object({
-  runId: z.string().min(1),
+  executionId: z.string().min(1),
   sessionId: z.string().min(1),
   workspaceId: z.string().min(1),
   toolCallId: z.string().min(1),

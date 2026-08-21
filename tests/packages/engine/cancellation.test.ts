@@ -39,7 +39,7 @@ describe('Engine cancellation', () => {
     });
     const started = await startedRun(fixture);
 
-    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ executionId: started.run.executionId });
     expect(cancellation.status).toBe('cancellation_requested');
     if (cancellation.status !== 'cancellation_requested') {
       throw new Error('Expected cancellation request.');
@@ -57,7 +57,7 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await requestedCancellation(fixture, started.run.runId);
+    await requestedCancellation(fixture, started.run.executionId);
     await settleRun(fixture);
 
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
@@ -107,7 +107,7 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await vi.waitFor(() => expect(executeTool).toHaveBeenCalledOnce());
 
-    await requestedCancellation(fixture, started.run.runId);
+    await requestedCancellation(fixture, started.run.executionId);
     await settleRun(fixture);
 
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
@@ -149,9 +149,9 @@ describe('Engine cancellation', () => {
     await vi.waitFor(() => {
       expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
     });
-    collectEvents(fixture, started.run.runId);
+    collectEvents(fixture, started.run.executionId);
 
-    await requestedCancellation(fixture, started.run.runId);
+    await requestedCancellation(fixture, started.run.executionId);
     await settleRun(fixture);
 
     expect(fixture.toolResults).toEqual([
@@ -180,7 +180,7 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await requestedCancellation(fixture, started.run.runId);
+    await requestedCancellation(fixture, started.run.executionId);
     await settleRun(fixture);
 
     const requested = fixture.published.find((event) => event.type === 'run.cancel.requested');
@@ -190,7 +190,7 @@ describe('Engine cancellation', () => {
       reason: 'user_cancelled',
       scope: 'run',
     });
-    expect(requested?.runId).toBe(started.run.runId);
+    expect(requested?.executionId).toBe(started.run.executionId);
     // The fact precedes the outcome.
     expect(requested!.sequence).toBeLessThan(
       fixture.published.find((event) => event.type === 'run.ended')!.sequence,
@@ -208,12 +208,12 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ executionId: started.run.executionId });
     expect(cancellation.status).toBe('cancellation_requested');
     const shutdown = await fixture.runs.shutdown({ timeoutMs: 50 });
     expect(shutdown.status).toBe('timed_out');
     if (shutdown.status === 'timed_out') {
-      expect(shutdown.activeRuns.map((run) => run.runId)).toContain(started.run.runId);
+      expect(shutdown.activeRuns.map((run) => run.executionId)).toContain(started.run.executionId);
     }
   });
 
@@ -231,11 +231,11 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ executionId: started.run.executionId });
     if (cancellation.status !== 'cancellation_requested') {
       throw new Error('Expected cancellation request.');
     }
-    collectEvents(fixture, cancellation.run.runId);
+    collectEvents(fixture, cancellation.run.executionId);
 
     releaseContext();
     await settleRun(fixture);
@@ -251,7 +251,7 @@ describe('Engine cancellation', () => {
     });
     const started = await startedRun(fixture);
 
-    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ executionId: started.run.executionId });
     if (cancellation.status !== 'cancellation_requested') {
       throw new Error('Expected cancellation request.');
     }
@@ -274,7 +274,7 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await requestedCancellation(fixture, started.run.runId);
+    await requestedCancellation(fixture, started.run.executionId);
     await settleRun(fixture);
 
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
@@ -303,7 +303,7 @@ describe('Engine cancellation', () => {
     const started = await startedRun(fixture);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    await requestedCancellation(fixture, started.run.runId);
+    await requestedCancellation(fixture, started.run.executionId);
     await settleRun(fixture);
 
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'cancelled' });
@@ -326,7 +326,7 @@ describe('Engine cancellation', () => {
     await settleRun(fixture);
     expect(fixture.published.at(-1)?.payload).toMatchObject({ status: 'completed' });
 
-    const cancellation = await fixture.runs.cancel({ runId: started.run.runId });
+    const cancellation = await fixture.runs.cancel({ executionId: started.run.executionId });
     expect(['already_terminal', 'cancellation_requested']).toContain(cancellation.status);
     await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',

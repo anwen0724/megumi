@@ -7,7 +7,7 @@ import { matchesPermissionRule } from '../../../packages/permissions/src/permiss
 const context = {
   workspaceId: 'workspace_1',
   sessionId: 'session_1',
-  runId: 'run_1',
+  executionId: 'run_1',
   toolIdentity: {
     registeredToolName: 'test',
     sourceId: 'built_in',

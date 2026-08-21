@@ -44,7 +44,7 @@ function runtimeEvent(
     type,
     payload,
     sessionId: 'session:1',
-    runId: 'run:1',
+    executionId: 'run:1',
     sequence,
     createdAt: `2026-07-19T00:00:0${sequence}.000Z`,
   } as AnyEvent;

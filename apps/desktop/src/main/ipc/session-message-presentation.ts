@@ -30,7 +30,7 @@ export const SessionMessagePresentationEventSchema = z.discriminatedUnion('phase
     phase: z.literal('accepted'),
     ...SessionMessagePresentationBaseShape,
     messageId: z.string().min(1),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
   }).strict(),
 ]);
 

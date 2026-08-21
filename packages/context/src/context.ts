@@ -32,7 +32,7 @@ export interface ContextWorkspaceSource {
 
 /** Facts that stay constant for the whole accepted Run. */
 export interface RunContext {
-  readonly runId: string;
+  readonly executionId: string;
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly userInput: UserInput;

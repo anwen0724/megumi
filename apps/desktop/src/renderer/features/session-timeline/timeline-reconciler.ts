@@ -23,11 +23,11 @@ export interface PendingUserMessageInput {
     readonly declaredMimeType?: string;
   }[];
   readonly createdAt: string;
-  readonly runId?: string;
+  readonly executionId?: string;
 }
 
 export interface ReconcileTimelineOptions {
-  readonly activeRunIds?: ReadonlySet<string>;
+  readonly activeExecutionIds?: ReadonlySet<string>;
   readonly preserveRuntimeOnly?: boolean;
 }
 
@@ -43,7 +43,7 @@ export function compareTimelineMessages(left: TimelineMessage, right: TimelineMe
   const createdOrder = left.createdAt.localeCompare(right.createdAt);
   if (createdOrder !== 0) return createdOrder;
 
-  const runOrder = messageRunId(left).localeCompare(messageRunId(right));
+  const runOrder = messageExecutionId(left).localeCompare(messageExecutionId(right));
   if (runOrder !== 0) return runOrder;
 
   const turnOrder = messageTurnOrder(left) - messageTurnOrder(right);
@@ -66,7 +66,7 @@ export function upsertPendingUserMessage(
       && (
         message.messageId === input.clientMessageId
         || message.clientMessageId === input.clientMessageId
-        || (Boolean(input.runId) && message.runId === input.runId)
+        || (Boolean(input.executionId) && message.executionId === input.executionId)
       ),
   );
   const nextBlocks: TimelineUserMessage['blocks'] = [
@@ -99,7 +99,7 @@ export function upsertPendingUserMessage(
           projectId: input.projectId,
           sessionId: input.sessionId,
           clientMessageId: input.clientMessageId,
-          ...(input.runId ? { runId: input.runId } : {}),
+          ...(input.executionId ? { executionId: input.executionId } : {}),
           updatedAt: input.createdAt,
           blocks: nextBlocks,
         }
@@ -113,7 +113,7 @@ export function upsertPendingUserMessage(
     sessionId: input.sessionId,
     turnOrder: 0,
     clientMessageId: input.clientMessageId,
-    ...(input.runId ? { runId: input.runId } : {}),
+    ...(input.executionId ? { executionId: input.executionId } : {}),
     createdAt: input.createdAt,
     updatedAt: input.createdAt,
     blocks: nextBlocks,
@@ -149,7 +149,7 @@ export function reconcileTimelineMessages(
       options.preserveRuntimeOnly
       || isLivePresentationMessage(message)
       || isOptimisticUserMessage(message)
-      || options.activeRunIds?.has(messageRunId(message))
+      || options.activeExecutionIds?.has(messageExecutionId(message))
     ) {
       byIdentity.set(identity, message);
     }
@@ -161,17 +161,17 @@ export function reconcileTimelineMessages(
 function isOptimisticUserMessage(message: TimelineMessage): boolean {
   return message.role === 'user'
     && Boolean(message.clientMessageId)
-    && (!message.runId || message.messageId === message.clientMessageId);
+    && (!message.executionId || message.messageId === message.clientMessageId);
 }
 
 /** Reconciles only one terminal Run without disturbing other Session UI state. */
 export function reconcileCommittedRunMessages(
   current: readonly TimelineMessage[],
-  runId: string,
+  executionId: string,
   committed: readonly TimelineMessage[],
 ): TimelineMessage[] {
-  const currentRun = current.filter((message) => messageRunId(message) === runId);
-  const committedRun = committed.filter((message) => messageRunId(message) === runId);
+  const currentRun = current.filter((message) => messageExecutionId(message) === executionId);
+  const committedRun = committed.filter((message) => messageExecutionId(message) === executionId);
   if (committedRun.length === 0) return [...current];
 
   const completeCommittedRun = [...committedRun];
@@ -183,7 +183,7 @@ export function reconcileCommittedRunMessages(
   }
 
   return [
-    ...current.filter((message) => messageRunId(message) !== runId),
+    ...current.filter((message) => messageExecutionId(message) !== executionId),
     ...reconcileTimelineMessages(currentRun, completeCommittedRun),
   ].sort(compareTimelineMessages);
 }
@@ -259,15 +259,15 @@ function assistantAnswerBlocks(message: TimelineAssistantMessage): AnswerTextBlo
 }
 
 function messageIdentity(message: TimelineMessage): string {
-  if (message.role === 'assistant') return `assistant:${message.runId}`;
+  if (message.role === 'assistant') return `assistant:${message.executionId}`;
   if (message.role === 'separator') return `separator:${message.messageId}`;
   if (message.role === 'activity') return `activity:${message.messageId}`;
-  if (message.runId) return `user-run:${message.sessionId}:${message.runId}`;
+  if (message.executionId) return `user-run:${message.sessionId}:${message.executionId}`;
   return `user:${message.clientMessageId ?? message.messageId}`;
 }
 
-function messageRunId(message: TimelineMessage): string {
-  return message.role === 'assistant' || message.role === 'user' ? String(message.runId ?? '') : '';
+function messageExecutionId(message: TimelineMessage): string {
+  return message.role === 'assistant' || message.role === 'user' ? String(message.executionId ?? '') : '';
 }
 
 function messageTurnOrder(message: TimelineMessage): number {

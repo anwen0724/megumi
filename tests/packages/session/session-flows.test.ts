@@ -106,7 +106,7 @@ describe('session service flows', () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
-    service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
+    service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', execution_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
     await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', display_content: text('m3'), model_content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
 
     const branchPoint = m1.status === 'saved' ? m1.entry.entry_id : undefined;
@@ -125,9 +125,9 @@ describe('session service flows', () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({ message_id: 'U1', session_id: 'S1', display_content: text('u1'), model_content: text('u1'), created_at: '2026-07-04T00:01:00.000Z' });
-    const a1 = service.saveAssistantReply({ message_id: 'A1', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('a1'), completed_at: '2026-07-04T00:02:00.000Z' });
+    const a1 = service.saveAssistantReply({ message_id: 'A1', session_id: 'S1', execution_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('a1'), completed_at: '2026-07-04T00:02:00.000Z' });
     await service.saveUserMessage({ message_id: 'U2', session_id: 'S1', display_content: text('u2'), model_content: text('u2'), created_at: '2026-07-04T00:03:00.000Z' });
-    service.saveAssistantReply({ message_id: 'A2', session_id: 'S1', run_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('a2'), completed_at: '2026-07-04T00:04:00.000Z' });
+    service.saveAssistantReply({ message_id: 'A2', session_id: 'S1', execution_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('a2'), completed_at: '2026-07-04T00:04:00.000Z' });
 
     await service.saveUserMessage({
       message_id: 'U3',
@@ -189,7 +189,7 @@ describe('session service flows', () => {
     await service.saveUserMessage({
       message_id: 'U1',
       session_id: 'S1',
-      run_id: 'R1',
+      execution_id: 'R1',
       display_content: text('first'),
       model_content: text('first'),
       created_at: '2026-07-04T00:01:00.000Z',
@@ -197,7 +197,7 @@ describe('session service flows', () => {
     service.saveAssistantReply({
       message_id: 'A1',
       session_id: 'S1',
-      run_id: 'R1',
+      execution_id: 'R1',
       status: 'completed',
       reason_code: 'normal_completion',
       content: text('done'),
@@ -206,17 +206,17 @@ describe('session service flows', () => {
     await service.saveUserMessage({
       message_id: 'U2',
       session_id: 'S1',
-      run_id: 'R2',
+      execution_id: 'R2',
       display_content: text('second'),
       model_content: text('second'),
       created_at: '2026-07-04T00:03:00.000Z',
     });
 
-    expect(service.getCommittedRunMessages({ sessionId: 'S1', runId: 'R1' })).toMatchObject({
+    expect(service.getCommittedRunMessages({ sessionId: 'S1', executionId: 'R1' })).toMatchObject({
       status: 'ok',
       messages: [
-        { type: 'message', entryId: 'message:U1', message: { message_id: 'U1', run_id: 'R1' } },
-        { type: 'message', entryId: 'message:A1', message: { message_id: 'A1', run_id: 'R1' } },
+        { type: 'message', entryId: 'message:U1', message: { message_id: 'U1', execution_id: 'R1' } },
+        { type: 'message', entryId: 'message:A1', message: { message_id: 'A1', execution_id: 'R1' } },
       ],
     });
   });
@@ -246,7 +246,7 @@ describe('session service flows', () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
-    const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
+    const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', execution_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
     const firstKeptEntryId = m2.status === 'saved' ? m2.entry.entry_id : undefined;
     completeCompaction(service, {
       compactionId: 'C1',
@@ -272,10 +272,10 @@ describe('session service flows', () => {
   it('expands compaction boundaries when reading the active conversation for UI', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
-    const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
-    const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', display_content: text('m3'), model_content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
-    service.saveAssistantReply({ message_id: 'M4', session_id: 'S1', run_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', execution_id: 'R1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
+    const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', execution_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
+    const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', execution_id: 'R2', display_content: text('m3'), model_content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
+    service.saveAssistantReply({ message_id: 'M4', session_id: 'S1', execution_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
     completeCompaction(service, {
       compactionId: 'C1',
       summaryText: 'm1 and m2 summary',
@@ -302,12 +302,12 @@ describe('session service flows', () => {
   it('expands nested rolling compactions without duplicating conversation messages', async () => {
     const { service, workspaceId } = createHarness();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
-    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', run_id: 'R1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
-    const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
-    const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', run_id: 'R2', display_content: text('m3'), model_content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
-    const m4 = service.saveAssistantReply({ message_id: 'M4', session_id: 'S1', run_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
-    const m5 = await service.saveUserMessage({ message_id: 'M5', session_id: 'S1', run_id: 'R3', display_content: text('m5'), model_content: text('m5'), created_at: '2026-07-04T00:05:00.000Z' });
-    service.saveAssistantReply({ message_id: 'M6', session_id: 'S1', run_id: 'R3', status: 'completed', reason_code: 'normal_completion', content: text('m6'), completed_at: '2026-07-04T00:06:00.000Z' });
+    const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', execution_id: 'R1', display_content: text('m1'), model_content: text('m1'), created_at: '2026-07-04T00:01:00.000Z' });
+    const m2 = service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', execution_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: text('m2'), completed_at: '2026-07-04T00:02:00.000Z' });
+    const m3 = await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', execution_id: 'R2', display_content: text('m3'), model_content: text('m3'), created_at: '2026-07-04T00:03:00.000Z' });
+    const m4 = service.saveAssistantReply({ message_id: 'M4', session_id: 'S1', execution_id: 'R2', status: 'completed', reason_code: 'normal_completion', content: text('m4'), completed_at: '2026-07-04T00:04:00.000Z' });
+    const m5 = await service.saveUserMessage({ message_id: 'M5', session_id: 'S1', execution_id: 'R3', display_content: text('m5'), model_content: text('m5'), created_at: '2026-07-04T00:05:00.000Z' });
+    service.saveAssistantReply({ message_id: 'M6', session_id: 'S1', execution_id: 'R3', status: 'completed', reason_code: 'normal_completion', content: text('m6'), completed_at: '2026-07-04T00:06:00.000Z' });
     completeCompaction(service, {
       compactionId: 'C1', summaryText: 'first summary',
       coveredUntilEntryId: m2.status === 'saved' ? m2.entry.entry_id : 'missing',

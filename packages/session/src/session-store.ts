@@ -30,9 +30,9 @@ export interface SessionStore {
   insertMessage(message: SessionMessage): SessionMessage;
   findMessageById(messageId: string): SessionMessage | undefined;
   listMessagesBySessionId(sessionId: string): SessionMessage[];
-  listMessagesByRunId(sessionId: string, runId: string): SessionMessage[];
-  findAssistantReplyByRunId(sessionId: string, runId: string): SessionMessage | undefined;
-  listUserMessagesByRunIds(runIds: string[]): SessionMessage[];
+  listMessagesByExecutionId(sessionId: string, executionId: string): SessionMessage[];
+  findAssistantReplyByExecutionId(sessionId: string, executionId: string): SessionMessage | undefined;
+  listUserMessagesByExecutionIds(executionIds: string[]): SessionMessage[];
   listMessagesByIds(messageIds: string[]): SessionMessage[];
   insertMessageAttachments(attachments: SessionMessageAttachment[]): void;
   listAttachmentsByMessageIds(messageIds: string[]): SessionMessageAttachment[];
@@ -114,10 +114,10 @@ class DatabaseSessionStore implements SessionStore {
   insertMessage(message: SessionMessage): SessionMessage {
     this.database.prepare({ sql: `
       INSERT INTO session_messages (
-        message_id, session_id, run_id, message_kind, message_json,
+        message_id, session_id, execution_id, message_kind, message_json,
         created_at, completed_at
       ) VALUES (
-        @message_id, @session_id, @run_id, @message_kind, @message_json,
+        @message_id, @session_id, @execution_id, @message_kind, @message_json,
         @created_at, @completed_at
       )
     ` }).run(toMessageRow(message));
@@ -139,31 +139,31 @@ class DatabaseSessionStore implements SessionStore {
     ` }).all([sessionId]).map(fromMessageRow);
   }
 
-  listMessagesByRunId(sessionId: string, runId: string): SessionMessage[] {
+  listMessagesByExecutionId(sessionId: string, executionId: string): SessionMessage[] {
     return this.database.prepare<SessionMessageRow>({ sql: `
       SELECT * FROM session_messages
-      WHERE session_id = ? AND run_id = ?
+      WHERE session_id = ? AND execution_id = ?
       ORDER BY created_at ASC, message_id ASC
-    ` }).all([sessionId, runId]).map(fromMessageRow);
+    ` }).all([sessionId, executionId]).map(fromMessageRow);
   }
 
-  findAssistantReplyByRunId(sessionId: string, runId: string): SessionMessage | undefined {
+  findAssistantReplyByExecutionId(sessionId: string, executionId: string): SessionMessage | undefined {
     const row = this.database.prepare<SessionMessageRow>({ sql: `
       SELECT * FROM session_messages
-      WHERE session_id = ? AND run_id = ? AND message_kind = 'assistant_reply'
+      WHERE session_id = ? AND execution_id = ? AND message_kind = 'assistant_reply'
       LIMIT 1
-    ` }).get([sessionId, runId]);
+    ` }).get([sessionId, executionId]);
     return row ? fromMessageRow(row) : undefined;
   }
 
-  listUserMessagesByRunIds(runIds: string[]): SessionMessage[] {
-    if (runIds.length === 0) return [];
-    const placeholders = runIds.map(() => '?').join(', ');
+  listUserMessagesByExecutionIds(executionIds: string[]): SessionMessage[] {
+    if (executionIds.length === 0) return [];
+    const placeholders = executionIds.map(() => '?').join(', ');
     return this.database.prepare<SessionMessageRow>({ sql: `
       SELECT * FROM session_messages
-      WHERE run_id IN (${placeholders}) AND message_kind = 'user_message'
+      WHERE execution_id IN (${placeholders}) AND message_kind = 'user_message'
       ORDER BY created_at ASC, message_id ASC
-    ` }).all(runIds).map(fromMessageRow);
+    ` }).all(executionIds).map(fromMessageRow);
   }
 
   listMessagesByIds(messageIds: string[]): SessionMessage[] {
@@ -388,7 +388,7 @@ type SessionRow = DatabaseRow & {
 type SessionMessageRow = DatabaseRow & {
   message_id: string;
   session_id: string;
-  run_id: Nullable<string>;
+  execution_id: Nullable<string>;
   message_kind: SessionMessageKind;
   message_json: string;
   created_at: string;
@@ -465,7 +465,7 @@ function toMessageRow(message: SessionMessage): SessionMessageRow {
   return {
     message_id: message.message_id,
     session_id: message.session_id,
-    run_id: message.run_id ?? null,
+    execution_id: message.execution_id ?? null,
     message_kind: message.message_kind,
     message_json: JSON.stringify(toMessagePayload(message)),
     created_at: message.created_at,
@@ -477,7 +477,7 @@ function fromMessageRow(row: SessionMessageRow): SessionMessage {
   const base = {
     message_id: row.message_id,
     session_id: row.session_id,
-    ...(row.run_id ? { run_id: row.run_id } : {}),
+    ...(row.execution_id ? { execution_id: row.execution_id } : {}),
     created_at: row.created_at,
     ...(row.completed_at ? { completed_at: row.completed_at } : {}),
   };

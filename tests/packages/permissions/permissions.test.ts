@@ -1,4 +1,4 @@
-﻿// @vitest-environment node
+// @vitest-environment node
 /* Verifies operation resolution, policy order, modes, immutable approval subjects, and persistence effects. */
 import { describe, expect, it } from 'vitest';
 import {
@@ -76,7 +76,7 @@ function baseRequest(overrides: Partial<EvaluateToolCallRequest> & { registeredT
   const { registeredTool: tool = registeredTool('run_command'), ...values } = overrides;
   const toolInput = values.toolInput ?? { command: 'npm test' };
   return {
-    runId: 'run_1',
+    executionId: 'run_1',
     sessionId: 'session_1',
     workspaceId: 'workspace_1',
     toolCallId: 'call_1',
@@ -91,7 +91,7 @@ function baseRequest(overrides: Partial<EvaluateToolCallRequest> & { registeredT
 function operationsFor(tool: TestToolFact, input: unknown): EvaluateToolCallRequest['operations'] {
   const record = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
   const context = {
-    workspaceId: 'workspace_1', sessionId: 'session_1', runId: 'run_1',
+    workspaceId: 'workspace_1', sessionId: 'session_1', executionId: 'run_1',
     toolIdentity: { ...tool.identity, registeredToolName: tool.registeredToolName },
   };
   const path = (key: string, fallback = '.') => typeof record[key] === 'string' ? String(record[key]) : fallback;

@@ -279,7 +279,7 @@ function isSelected(toolName: string, facts: {
 }
 
 function sameScope(left: ModelCallToolScope, right: ModelCallToolScope): boolean {
-  return left.runId === right.runId && left.sessionId === right.sessionId
+  return left.executionId === right.executionId && left.sessionId === right.sessionId
     && left.workspaceId === right.workspaceId && left.modelCallId === right.modelCallId;
 }
 

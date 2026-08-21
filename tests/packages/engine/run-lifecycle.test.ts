@@ -19,7 +19,7 @@ const failure: RunFailure = {
 
 function runningRun() {
   return createRun({
-    runId: 'run:1',
+    executionId: 'run:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',
     sessionId: 'session:1',

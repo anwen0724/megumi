@@ -7,7 +7,7 @@ import type {
 } from '../session-timeline';
 
 export interface CurrentInteraction {
-  readonly runId: string;
+  readonly executionId: string;
   readonly status: ProcessDisclosureBlock['status'];
   readonly userText?: string;
   readonly replyText?: string;
@@ -38,7 +38,7 @@ export function projectCurrentInteraction(messages: readonly TimelineMessage[]):
   const error = [...(process?.items ?? [])].reverse().find((item) => item.kind === 'error_activity');
 
   return {
-    runId: assistant.runId,
+    executionId: assistant.executionId,
     status: process?.status ?? (answer?.status === 'streaming' ? 'running' : answer?.status === 'failed' ? 'failed' : 'completed'),
     userText: findCurrentUserText(messages, assistantIndex),
     replyText: answer?.text || undefined,

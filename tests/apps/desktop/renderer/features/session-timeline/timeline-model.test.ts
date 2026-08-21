@@ -61,7 +61,7 @@ describe('timeline message and block contracts', () => {
     const message = {
       ...messageBase,
       role: 'user',
-      runId: 'run-1',
+      executionId: 'run-1',
       turnOrder: 0,
       clientMessageId: 'client-message-1',
       blocks: [
@@ -93,13 +93,13 @@ describe('timeline message and block contracts', () => {
       ...messageBase,
       messageId: 'assistant-message-1',
       role: 'assistant',
-      runId: 'run-1',
+      executionId: 'run-1',
       turnOrder: 1,
       blocks: [
         {
           blockId: 'process-run-1',
           kind: 'process_disclosure',
-          runId: 'run-1',
+          executionId: 'run-1',
           status: 'completed',
           startedAt: '2026-05-24T00:00:00.000Z',
           endedAt: '2026-05-24T00:00:03.000Z',
@@ -137,7 +137,7 @@ describe('timeline message and block contracts', () => {
         {
           blockId: 'answer-run-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'streaming',
           text: 'The docs directory contains README.md.',
@@ -191,21 +191,21 @@ describe('timeline message and block contracts', () => {
     const parsed = TimelineAssistantMessageSchema.parse({
       messageId: 'assistant:run-1',
       role: 'assistant',
-      runId: 'run-1',
+      executionId: 'run-1',
       projectId: 'project-1',
       sessionId: 'session-1',
       createdAt: '2026-06-06T10:00:00.000Z',
       blocks: [{
         blockId: 'answer:run-1',
         kind: 'answer_text',
-        runId: 'run-1',
+        executionId: 'run-1',
         textId: 'answer-text-1',
         status: 'completed',
         text: 'Done.',
         format: 'markdown',
       }],
       workspaceChangeFooter: {
-        runId: 'run-1',
+        executionId: 'run-1',
         sessionId: 'session-1',
         updatedAt: '2026-06-06T10:00:01.000Z',
         changeSets: [{
@@ -240,14 +240,14 @@ describe('timeline message and block contracts', () => {
     const process = ProcessDisclosureBlockSchema.parse({
       blockId: 'process-run-2',
       kind: 'process_disclosure',
-      runId: 'run-2',
+      executionId: 'run-2',
       status: 'completed',
       items: [],
     });
     const answer = AnswerTextBlockSchema.parse({
       blockId: 'answer-run-2',
       kind: 'answer_text',
-      runId: 'run-2',
+      executionId: 'run-2',
       textId: 'text-answer-2',
       status: 'streaming',
       text: 'Streaming now',
@@ -262,14 +262,14 @@ describe('timeline message and block contracts', () => {
     const parsed = TimelineMessageSchema.parse({
       messageId: 'assistant:run-1',
       role: 'assistant',
-      runId: 'run-1',
+      executionId: 'run-1',
       projectId: 'project-1',
       sessionId: 'session-1',
       createdAt: '2026-06-01T10:00:00.000Z',
       blocks: [{
         blockId: 'process:run-1',
         kind: 'process_disclosure',
-        runId: 'run-1',
+        executionId: 'run-1',
         status: 'completed',
         createdAt: '2026-06-01T10:00:00.000Z',
         items: [
@@ -311,7 +311,7 @@ describe('timeline message and block contracts', () => {
     const parsed = ProcessDisclosureBlockSchema.parse({
       blockId: 'process-run-all-items',
       kind: 'process_disclosure',
-      runId: 'run-all-items',
+      executionId: 'run-all-items',
       status: 'running',
       items: [
         {
@@ -394,12 +394,12 @@ describe('timeline message and block contracts', () => {
       ...messageBase,
       messageId: 'assistant-message-failed',
       role: 'assistant',
-      runId: 'run-failed',
+      executionId: 'run-failed',
       blocks: [
         {
           blockId: 'process-run-failed',
           kind: 'process_disclosure',
-          runId: 'run-failed',
+          executionId: 'run-failed',
           status: 'failed',
           items: [
             {
@@ -414,7 +414,7 @@ describe('timeline message and block contracts', () => {
         {
           blockId: 'answer-run-failed',
           kind: 'answer_text',
-          runId: 'run-failed',
+          executionId: 'run-failed',
           textId: 'text-answer-failed',
           status: 'failed',
           text: 'Partial answer',
@@ -426,12 +426,12 @@ describe('timeline message and block contracts', () => {
       ...messageBase,
       messageId: 'assistant-message-cancelled',
       role: 'assistant',
-      runId: 'run-cancelled',
+      executionId: 'run-cancelled',
       blocks: [
         {
           blockId: 'process-run-cancelled',
           kind: 'process_disclosure',
-          runId: 'run-cancelled',
+          executionId: 'run-cancelled',
           status: 'cancelled',
           items: [
             {
@@ -444,7 +444,7 @@ describe('timeline message and block contracts', () => {
         {
           blockId: 'answer-run-cancelled',
           kind: 'answer_text',
-          runId: 'run-cancelled',
+          executionId: 'run-cancelled',
           textId: 'text-answer-cancelled',
           status: 'cancelled',
           text: 'Partial answer',
@@ -462,10 +462,10 @@ describe('timeline message and block contracts', () => {
       ...messageBase,
       messageId: 'assistant-message-invalid-process',
       role: 'assistant',
-      runId: 'run-1',
+      executionId: 'run-1',
       blocks: [
-        { blockId: 'process-1', kind: 'process_disclosure', runId: 'run-1', status: 'running', items: [] },
-        { blockId: 'process-2', kind: 'process_disclosure', runId: 'run-1', status: 'running', items: [] },
+        { blockId: 'process-1', kind: 'process_disclosure', executionId: 'run-1', status: 'running', items: [] },
+        { blockId: 'process-2', kind: 'process_disclosure', executionId: 'run-1', status: 'running', items: [] },
       ],
     })).toThrow(/ProcessDisclosureBlock/);
 
@@ -473,12 +473,12 @@ describe('timeline message and block contracts', () => {
       ...messageBase,
       messageId: 'assistant-message-invalid-answer',
       role: 'assistant',
-      runId: 'run-1',
+      executionId: 'run-1',
       blocks: [
         {
           blockId: 'answer-1',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-1',
           status: 'completed',
           text: 'One',
@@ -487,7 +487,7 @@ describe('timeline message and block contracts', () => {
         {
           blockId: 'answer-2',
           kind: 'answer_text',
-          runId: 'run-1',
+          executionId: 'run-1',
           textId: 'text-answer-2',
           status: 'completed',
           text: 'Two',
@@ -501,7 +501,7 @@ describe('timeline message and block contracts', () => {
     expect(() => ProcessDisclosureBlockSchema.parse({
       blockId: 'process-run-3',
       kind: 'process_disclosure',
-      runId: 'run-3',
+      executionId: 'run-3',
       status: 'running',
       items: [
         {
@@ -530,7 +530,7 @@ describe('timeline message and block contracts', () => {
     expect(() => AnswerTextBlockSchema.parse({
       blockId: 'answer-with-order',
       kind: 'answer_text',
-      runId: 'run-1',
+      executionId: 'run-1',
       textId: 'text-answer-1',
       status: 'completed',
       text: 'Answer',
@@ -550,7 +550,7 @@ describe('timeline message and block contracts', () => {
     expect(() => ProcessDisclosureBlockSchema.parse({
       blockId: 'process-run-secret',
       kind: 'process_disclosure',
-      runId: 'run-secret',
+      executionId: 'run-secret',
       status: 'failed',
       items: [
         {

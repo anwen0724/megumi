@@ -15,7 +15,7 @@ describe('ModelCall ToolRouter', () => {
   it('routes only the selected ModelCall view and retains the original binding', () => {
     const registry = createToolRegistry({ registrations: [registration('first'), registration('second')] });
     const router = createToolRouter({
-      scope: { runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1' },
+      scope: { executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1' },
       tools: [registry.get('first')!],
     });
     expect(router.definitions().map((tool) => tool.name)).toEqual(['first']);

@@ -413,7 +413,7 @@ function composeProductRuntime(
     events,
     observability: observability.service,
     ids: {
-      createRunId: () => `run:${crypto.randomUUID()}`,
+      createExecutionId: () => `execution:${crypto.randomUUID()}`,
       createModelCallId: () => `model-call:${crypto.randomUUID()}`,
       createToolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
       createRunApprovalId: () => `run-approval:${crypto.randomUUID()}`,
@@ -475,8 +475,8 @@ function composeProductRuntime(
   resources.registerEventSubscription(
     events.subscribe(
       { eventTypes: ['run.ended'] },
-      createWorkspaceChangeEventHandler(workspaceChanges, (runId) => {
-        const result = runs.get({ runId });
+      createWorkspaceChangeEventHandler(workspaceChanges, (executionId) => {
+        const result = runs.get({ executionId });
         return result.status === 'found' ? result.run.workspaceId : undefined;
       }),
     ),
@@ -490,8 +490,8 @@ function composeProductRuntime(
         const result = onRunEndedForSpeechOutput(
           {
             settings,
-            findAssistantReplyByRunId: (sessionId, runId) =>
-              sessionStore.findAssistantReplyByRunId(sessionId, runId),
+            findAssistantReplyByExecutionId: (sessionId, executionId) =>
+              sessionStore.findAssistantReplyByExecutionId(sessionId, executionId),
             speechOutput,
           },
           event,
@@ -501,7 +501,7 @@ function composeProductRuntime(
           level: 'info',
           event: 'speech_output.read',
           attributes: {
-            runId: event.runId,
+            executionId: event.executionId,
             sessionId: event.sessionId,
             ...(result.status === 'read' ? { outcome: 'read' } : {}),
             ...(result.status === 'stopped' ? { outcome: 'stopped', reason: result.reason } : {}),
@@ -513,7 +513,7 @@ function composeProductRuntime(
           level: 'warn',
           event: 'speech_output_read_failed',
           attributes: {
-            runId: event.runId,
+            executionId: event.executionId,
             sessionId: event.sessionId,
             errorMessage: error instanceof Error ? error.message : String(error),
           },
@@ -530,7 +530,7 @@ function composeProductRuntime(
         observability.service.recordLog({
           level: 'info',
           event: 'speech_output.synthesis_started',
-          attributes: { runId: event.runId, sessionId: event.sessionId },
+          attributes: { executionId: event.executionId, sessionId: event.sessionId },
         });
         return;
       }
@@ -540,7 +540,7 @@ function composeProductRuntime(
           level: 'info',
           event: 'speech_output.first_chunk',
           attributes: {
-            runId: event.runId,
+            executionId: event.executionId,
             sessionId: event.sessionId,
             format: event.format,
             sampleRate: event.sampleRate,
@@ -552,7 +552,7 @@ function composeProductRuntime(
         observability.service.recordLog({
           level: 'info',
           event: 'speech_output.completed',
-          attributes: { runId: event.runId, sessionId: event.sessionId },
+          attributes: { executionId: event.executionId, sessionId: event.sessionId },
         });
         return;
       }
@@ -560,7 +560,7 @@ function composeProductRuntime(
         observability.service.recordLog({
           level: 'info',
           event: 'speech_output.stopped',
-          attributes: { runId: event.runId, sessionId: event.sessionId, reason: event.reason },
+          attributes: { executionId: event.executionId, sessionId: event.sessionId, reason: event.reason },
         });
         return;
       }
@@ -568,7 +568,7 @@ function composeProductRuntime(
         level: 'warn',
         event: 'speech_output.failed',
         attributes: {
-          runId: event.runId,
+          executionId: event.executionId,
           sessionId: event.sessionId,
           code: event.failure.code,
           message: event.failure.message,

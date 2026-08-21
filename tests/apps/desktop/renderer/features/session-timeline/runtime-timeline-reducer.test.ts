@@ -34,7 +34,7 @@ function event(
     id: `event:${sequence}`,
     type: eventType,
     payload,
-    runId: 'run:1',
+    executionId: 'run:1',
     sessionId: 'session:1',
     sequence,
     createdAt: `2026-07-09T00:00:${sequence.toString().padStart(2, '0')}.000Z`,
@@ -302,14 +302,14 @@ describe('RuntimeTimeline', () => {
       event: event('session.compaction.started', {
         trigger: 'manual',
         compactionId: 'compaction:1',
-      }, 2, { runId: undefined }),
+      }, 2, { executionId: undefined }),
     });
     next = reduceRuntimeTimeline({
       timeline: next,
       event: event('session.compaction.ended', {
         status: 'completed',
         compactionId: 'compaction:1',
-      }, 3, { runId: undefined }),
+      }, 3, { executionId: undefined }),
     });
 
     expect(next.messages.filter((message) => message.role === 'activity')).toEqual([

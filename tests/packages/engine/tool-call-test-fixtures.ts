@@ -51,7 +51,7 @@ export function registeredTool(
       operations: (invocation) => [{
         action: 'agent.context.activate',
         context: {
-          workspaceId: invocation.workspaceId, sessionId: invocation.sessionId, runId: invocation.runId,
+          workspaceId: invocation.workspaceId, sessionId: invocation.sessionId, executionId: invocation.executionId,
           toolIdentity: invocation.toolIdentity,
         },
       }],
@@ -117,7 +117,7 @@ export function toolsForRun(
   execute: TestToolExecute = async ({ toolName }) => succeeded(toolName),
 ): Pick<Tools, 'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'> {
   const routers = new Map<string, ReturnType<typeof createToolRouter>>();
-  const resolve = (scope: { runId: string; sessionId: string; workspaceId: string; modelCallId: string }) => {
+  const resolve = (scope: { executionId: string; sessionId: string; workspaceId: string; modelCallId: string }) => {
     let router = routers.get(scope.modelCallId);
     if (!router) {
       router = createToolRouter({ scope, tools });
@@ -125,7 +125,7 @@ export function toolsForRun(
     }
     return router;
   };
-  resolve({ runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1' });
+  resolve({ executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1' });
   return {
     resolveModelCallTools: (scope) => ({ status: 'resolved', definitions: resolve(scope).definitions() }),
     routeToolCall: (call) => resolve(call).route(call),

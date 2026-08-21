@@ -33,7 +33,7 @@ describe('ApprovalHost', () => {
       status: 'resumed',
       approvalRequestId: 'approval:1',
       run: {
-        runId: 'run:1',
+        executionId: 'run:1',
         sessionId: 'session:1',
         status: 'waiting',
         createdAt: '2026-07-10T00:00:00.000Z',
@@ -116,7 +116,7 @@ describe('ApprovalHost', () => {
 
 function runFixture(status: 'waiting' | 'completed') {
   return {
-    runId: 'run:1',
+    executionId: 'run:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',
     sessionId: 'session:1',

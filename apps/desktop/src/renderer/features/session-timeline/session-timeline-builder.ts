@@ -71,25 +71,25 @@ export function buildSessionTimeline(request: BuildSessionTimelineRequest): Time
     }
     if (item.message.kind !== 'user') continue;
     timeline.push(toTimelineUserMessage(request.projectId, item.message, historyOrder));
-    const runId = item.message.runId;
-    if (!runId) continue;
-    if (runId === request.activeRun?.runId) {
+    const executionId = item.message.executionId;
+    if (!executionId) continue;
+    if (executionId === request.activeRun?.executionId) {
       timeline.push(toActiveTimelineAssistantMessage({
         projectId: request.projectId,
-        runId,
+        executionId,
         user: item.message,
-        responses: responsesByRun.get(runId) ?? [],
+        responses: responsesByRun.get(executionId) ?? [],
         historyOrder: historyOrder + 1,
       }));
       continue;
     }
     timeline.push(toTimelineAssistantMessage({
       projectId: request.projectId,
-      runId,
+      executionId,
       user: item.message,
-      responses: responsesByRun.get(runId) ?? [],
+      responses: responsesByRun.get(executionId) ?? [],
       historyOrder: historyOrder + 1,
-      workspaceChangeFooter: workspaceByRun.get(runId),
+      workspaceChangeFooter: workspaceByRun.get(executionId),
     }));
   }
   return timeline;
@@ -122,28 +122,28 @@ export function toTimelineBranchSeparator(
 /** Builds the recoverable portion of an active Run without inventing lost streaming content. */
 function toActiveTimelineAssistantMessage(input: {
   readonly projectId: string;
-  readonly runId: string;
+  readonly executionId: string;
   readonly user: UserMessageDto;
   readonly responses: readonly SessionMessageDto[];
   readonly historyOrder: number;
 }): TimelineAssistantMessage {
   const last = input.responses.at(-1) ?? input.user;
   return {
-    messageId: `assistant:${input.runId}`,
+    messageId: `assistant:${input.executionId}`,
     role: 'assistant',
     projectId: input.projectId,
     sessionId: input.user.sessionId,
-    runId: input.runId,
+    executionId: input.executionId,
     createdAt: input.responses[0]?.createdAt ?? input.user.createdAt,
     updatedAt: last.completedAt ?? last.createdAt,
     historyOrder: input.historyOrder,
     blocks: [{
-      blockId: `process:${input.runId}`,
+      blockId: `process:${input.executionId}`,
       kind: 'process_disclosure',
-      runId: input.runId,
+      executionId: input.executionId,
       status: 'running',
       startedAt: input.user.createdAt,
-      items: buildProcessItems(input.runId, input.responses),
+      items: buildProcessItems(input.executionId, input.responses),
     }],
   };
 }
@@ -156,19 +156,19 @@ export function buildCommittedRunTimeline(
     (item): item is SessionMessageConversationItemDto & { message: UserMessageDto } =>
       item.message.kind === 'user',
   );
-  if (!user?.message.runId) return [];
-  const runId = user.message.runId;
+  if (!user?.message.executionId) return [];
+  const executionId = user.message.executionId;
   const responses = request.messages
-    .filter((item) => item.message.kind !== 'user' && item.message.runId === runId)
+    .filter((item) => item.message.kind !== 'user' && item.message.executionId === executionId)
     .map((item) => item.message);
   return [
     toTimelineUserMessage(request.projectId, user.message),
     toTimelineAssistantMessage({
       projectId: request.projectId,
-      runId,
+      executionId,
       user: user.message,
       responses,
-      workspaceChangeFooter: groupWorkspaceChangesByRun(request.workspaceChanges).get(runId),
+      workspaceChangeFooter: groupWorkspaceChangesByRun(request.workspaceChanges).get(executionId),
     }),
   ];
 }
@@ -211,7 +211,7 @@ export function toTimelineUserMessage(
     role: 'user',
     projectId,
     sessionId: message.sessionId,
-    ...(message.runId ? { runId: message.runId } : {}),
+    ...(message.executionId ? { executionId: message.executionId } : {}),
     ...(message.skillSelection ? { skillSelection: { ...message.skillSelection } } : {}),
     createdAt: message.createdAt,
     ...(message.completedAt ? { updatedAt: message.completedAt } : {}),
@@ -223,7 +223,7 @@ export function toTimelineUserMessage(
 /** Materializes one persisted Run into its disclosure and final-answer blocks. */
 function toTimelineAssistantMessage(input: {
   readonly projectId: string;
-  readonly runId: string;
+  readonly executionId: string;
   readonly user: UserMessageDto;
   readonly responses: readonly SessionMessageDto[];
   readonly historyOrder?: number;
@@ -233,29 +233,29 @@ function toTimelineAssistantMessage(input: {
   const legacyAnswer = !reply ? findLegacyAnswer(input.responses) : undefined;
   const answer = reply ?? legacyAnswer;
   const last = input.responses.at(-1) ?? input.user;
-  const messageId = answer?.messageId ?? `assistant:${input.runId}`;
+  const messageId = answer?.messageId ?? `assistant:${input.executionId}`;
   return {
     messageId,
     role: 'assistant',
     projectId: input.projectId,
     sessionId: input.user.sessionId,
-    runId: input.runId,
+    executionId: input.executionId,
     createdAt: input.responses[0]?.createdAt ?? input.user.createdAt,
     updatedAt: last.completedAt ?? last.createdAt,
     ...(input.historyOrder === undefined ? {} : { historyOrder: input.historyOrder }),
     ...(input.workspaceChangeFooter ? { workspaceChangeFooter: input.workspaceChangeFooter } : {}),
     blocks: [{
-      blockId: `process:${input.runId}`,
+      blockId: `process:${input.executionId}`,
       kind: 'process_disclosure',
-      runId: input.runId,
+      executionId: input.executionId,
       status: processStatus(input.responses, reply),
       startedAt: input.user.createdAt,
       endedAt: last.completedAt ?? last.createdAt,
-      items: buildProcessItems(input.runId, input.responses, answer?.messageId),
+      items: buildProcessItems(input.executionId, input.responses, answer?.messageId),
     }, {
       blockId: `answer:${messageId}`,
       kind: 'answer_text',
-      runId: input.runId,
+      executionId: input.executionId,
       textId: `text:${messageId}`,
       status: answerStatus(reply, legacyAnswer),
       text: answer ? assistantText(answer) : '',
@@ -268,7 +268,7 @@ function toTimelineAssistantMessage(input: {
 
 /** Reconstructs Thinking and Tool activity from the Run's persisted message sequence. */
 function buildProcessItems(
-  runId: string,
+  executionId: string,
   messages: readonly SessionMessageDto[],
   answerMessageId?: string,
 ): ProcessDisclosureItem[] {
@@ -327,10 +327,10 @@ function groupResponsesByRun(
 ): Map<string, SessionMessageDto[]> {
   const groups = new Map<string, SessionMessageDto[]>();
   for (const { message } of items) {
-    if (message.kind === 'user' || !message.runId) continue;
-    const group = groups.get(message.runId) ?? [];
+    if (message.kind === 'user' || !message.executionId) continue;
+    const group = groups.get(message.executionId) ?? [];
     group.push(message);
-    groups.set(message.runId, group);
+    groups.set(message.executionId, group);
   }
   return groups;
 }
@@ -340,12 +340,12 @@ function groupWorkspaceChangesByRun(
 ): Map<string, WorkspaceChangeFooterFact> {
   const groups = new Map<string, WorkspaceChangeSummaryDto[]>();
   for (const summary of summaries) {
-    const group = groups.get(summary.runId) ?? [];
+    const group = groups.get(summary.executionId) ?? [];
     group.push(summary);
-    groups.set(summary.runId, group);
+    groups.set(summary.executionId, group);
   }
-  return new Map([...groups].map(([runId, group]) => [runId, {
-    runId,
+  return new Map([...groups].map(([executionId, group]) => [executionId, {
+    executionId,
     sessionId: group[0]?.sessionId ?? '',
     updatedAt: group.reduce((latest, summary) => summary.updatedAt > latest ? summary.updatedAt : latest, ''),
     changeSets: group.map((summary) => ({

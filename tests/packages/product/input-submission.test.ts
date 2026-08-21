@@ -74,7 +74,7 @@ describe('Product InputSubmission', () => {
     const startRun = vi.fn(async (request: StartRunRequest): Promise<StartRunResult> => ({
       status: 'started',
       run: {
-        runId: 'run:1',
+        executionId: 'run:1',
         requestId: request.requestId,
         workspaceId: request.workspaceId,
         sessionId: request.sessionId,
@@ -89,7 +89,7 @@ describe('Product InputSubmission', () => {
         message: {
           message_id: 'm:1',
           session_id: 'session:1',
-          run_id: 'run:1',
+          execution_id: 'run:1',
           message_kind: 'user_message',
           display_content: [{ type: 'text', text: 'task' }],
           model_content: [{ type: 'text', text: 'expanded task' }],

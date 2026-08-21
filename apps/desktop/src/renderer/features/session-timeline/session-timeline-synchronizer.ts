@@ -98,7 +98,7 @@ class SessionTimelineSynchronizer {
       clientMessageId: event.clientMessageId,
       ...(event.phase === 'accepted' ? {
         messageId: event.messageId,
-        runId: event.runId,
+        executionId: event.executionId,
       } : {}),
       text: event.text,
       attachments: event.attachments,
@@ -127,8 +127,8 @@ class SessionTimelineSynchronizer {
 
   private dispatchLiveEvent(target: ActiveSessionTarget, event: AnyEvent): void {
     dispatchRuntimeEvent(event, { projectId: target.projectId, sessionId: event.sessionId });
-    if (event.type === 'run.ended' && event.runId) {
-      void this.reconcileTerminalRun(target.projectId, event.sessionId, event.runId);
+    if (event.type === 'run.ended' && event.executionId) {
+      void this.reconcileTerminalRun(target.projectId, event.sessionId, event.executionId);
     }
   }
 
@@ -182,15 +182,15 @@ class SessionTimelineSynchronizer {
 
       // The full Session read recovers durable facts after truncation. activeRun
       // supplies the current lifecycle state; lost process details are not invented.
-      const recoverableRunIds = new Set(result.data.conversation.flatMap((item) => (
-        item.type === 'message' && item.message.runId ? [item.message.runId] : []
+      const recoverableExecutionIds = new Set(result.data.conversation.flatMap((item) => (
+        item.type === 'message' && item.message.executionId ? [item.message.executionId] : []
       )));
-      if (result.data.activeRun) recoverableRunIds.add(result.data.activeRun.runId);
+      if (result.data.activeRun) recoverableExecutionIds.add(result.data.activeRun.executionId);
       const recoverableCompactionIds = new Set(result.data.conversation.flatMap((item) => (
         item.type === 'compaction' ? [item.compactionId] : []
       )));
       for (const event of [...result.data.runtimeEvents]
-        .filter((event) => isRecoverableEvent(event, recoverableRunIds, recoverableCompactionIds))
+        .filter((event) => isRecoverableEvent(event, recoverableExecutionIds, recoverableCompactionIds))
         .sort(compareRuntimeEvents)) {
         dispatchRuntimeEvent(event, {
           projectId: target.projectId,
@@ -228,22 +228,22 @@ class SessionTimelineSynchronizer {
   private async reconcileTerminalRun(
     projectId: string,
     sessionId: string,
-    runId: string,
+    executionId: string,
   ): Promise<void> {
-    const reconciliationKey = `${sessionId}:${runId}`;
+    const reconciliationKey = `${sessionId}:${executionId}`;
     if (this.terminalReconciliations.has(reconciliationKey)) return;
     this.terminalReconciliations.add(reconciliationKey);
 
     try {
       const result = await window.megumi.session.readCommittedRun(createRendererRuntimeIpcRequest(
         IPC_CHANNELS.session.committedRunRead,
-        { sessionId, runId },
+        { sessionId, executionId },
       ));
       if (!result.ok || result.data.status !== 'ok') return;
       useSessionTimelineStore.getState().reconcileCommittedRun(
         projectId,
         sessionId,
-        runId,
+        executionId,
         buildCommittedRunTimeline({
           projectId,
           messages: result.data.messages,
@@ -272,10 +272,10 @@ function compareRuntimeEvents(left: AnyEvent, right: AnyEvent): number {
 
 function isRecoverableEvent(
   event: AnyEvent,
-  runIds: ReadonlySet<string>,
+  executionIds: ReadonlySet<string>,
   compactionIds: ReadonlySet<string>,
 ): boolean {
-  if (event.runId) return runIds.has(event.runId);
+  if (event.executionId) return executionIds.has(event.executionId);
   if (event.type === 'session.compaction.started' || event.type === 'session.compaction.ended') {
     return compactionIds.has(event.payload.compactionId);
   }

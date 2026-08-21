@@ -107,7 +107,7 @@ describe('Session Timeline builder', () => {
       conversation: [messageItem(user('user:1', 'Hello.'))],
       workspaceChanges: [],
       activeRun: {
-        runId: 'run:1',
+        executionId: 'run:1',
         sessionId: 'session:1',
         status: 'running',
         createdAt: time(1),
@@ -166,7 +166,7 @@ describe('Session Timeline builder', () => {
 
   it('attaches Host-safe Workspace Changes to the matching Run', () => {
     const workspaceChanges: WorkspaceChangeSummaryDto[] = [{
-      runId: 'run:1',
+      executionId: 'run:1',
       sessionId: 'session:1',
       changeSetId: 'changes:1',
       changedFileCount: 1,
@@ -185,7 +185,7 @@ describe('Session Timeline builder', () => {
     });
 
     expect((timeline[1] as TimelineAssistantMessage).workspaceChangeFooter).toEqual({
-      runId: 'run:1',
+      executionId: 'run:1',
       sessionId: 'session:1',
       updatedAt: time(3),
       changeSets: [{
@@ -207,8 +207,8 @@ describe('Session Timeline builder', () => {
       workspaceChanges: [],
     });
     expect(timeline).toEqual([
-      expect.objectContaining({ role: 'user', runId: 'run:1' }),
-      expect.objectContaining({ role: 'assistant', runId: 'run:1' }),
+      expect.objectContaining({ role: 'user', executionId: 'run:1' }),
+      expect.objectContaining({ role: 'assistant', executionId: 'run:1' }),
     ]);
     expect(timeline[0]).not.toHaveProperty('historyOrder');
     expect(timeline[1]).not.toHaveProperty('historyOrder');
@@ -219,7 +219,7 @@ function messageBase(messageId: string) {
   return {
     messageId,
     sessionId: 'session:1',
-    runId: 'run:1',
+    executionId: 'run:1',
     createdAt: time(1),
     completedAt: time(2),
   };

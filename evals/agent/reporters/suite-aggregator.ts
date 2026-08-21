@@ -54,8 +54,8 @@ function calculateMetrics(
   const claimResults = valid.flatMap((report) => report.graderResults.filter((result) => /claim/i.test(result.graderId)
     && (result.status === 'passed' || result.status === 'failed')));
   const eventCounts = valid.map((report) => ({
-    model: report.evidence.runtimeEvents.events.filter((event) => event.eventType === 'model_call.started').length,
-    tool: report.evidence.runtimeEvents.events.filter((event) => event.eventType === 'tool_call.requested').length,
+    model: report.evidence.runtimeEvents.events.filter((event) => event.type === 'turn.started').length,
+    tool: report.evidence.runtimeEvents.events.filter((event) => event.type === 'tool_execution.requested').length,
   }));
   const durations = valid.flatMap((report) => report.execution.completedAt
     ? [Math.max(0, Date.parse(report.execution.completedAt) - Date.parse(report.execution.startedAt))]

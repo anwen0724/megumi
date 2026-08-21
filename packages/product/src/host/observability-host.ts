@@ -9,7 +9,7 @@ export const ObservabilityListPayloadSchema = z
   .strict();
 
 export const ObservabilityRunPayloadSchema = z
-  .object({ runId: z.string().min(1) })
+  .object({ executionId: z.string().min(1) })
   .strict();
 
 export const ObservabilityQueryResultSchema = z
@@ -20,10 +20,10 @@ export interface ObservabilityHost {
   listRecentRunTraces(payload: {
     limit?: number;
   }): Promise<ObservabilityListRunTracesUiResult>;
-  getRunTrace(payload: { runId: string }): Promise<ObservabilityGetRunTraceUiResult>;
+  getRunTrace(payload: { executionId: string }): Promise<ObservabilityGetRunTraceUiResult>;
   flush(): Promise<void>;
   exportDiagnosticBundle(payload: {
-    runId: string;
+    executionId: string;
   }): Promise<ObservabilityExportResult>;
 }
 
@@ -47,7 +47,7 @@ export type ObservabilityMeasurementUnit = 'count' | 'ms' | 'token' | 'ratio' | 
 
 export interface ObservabilityRunTraceSummaryUiDto {
   traceId: string;
-  runId: string;
+  executionId: string;
   sessionId?: string;
   workspaceId?: string;
   status: ObservabilityRunStatus;

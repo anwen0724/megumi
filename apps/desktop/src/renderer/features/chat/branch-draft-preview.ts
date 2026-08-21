@@ -31,9 +31,9 @@ function findSourceUserInput(
   message: TimelineMessage,
   timelineMessages: TimelineMessage[],
 ): TimelineMessage | null {
-  if ('runId' in message) {
+  if ('executionId' in message) {
     const sameRunUserMessage = timelineMessages.find((candidate) =>
-      candidate.role === 'user' && candidate.runId === message.runId,
+      candidate.role === 'user' && candidate.executionId === message.executionId,
     );
     if (sameRunUserMessage) return sameRunUserMessage;
   }

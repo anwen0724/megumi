@@ -42,7 +42,7 @@ function createRecordingCommitter(overrides: {
     message: {
       message_id: request.message_id,
       session_id: request.session_id,
-      run_id: request.run_id,
+      execution_id: request.execution_id,
       created_at: request.completed_at,
     } as SessionMessage,
     entry: {
@@ -94,7 +94,7 @@ describe('SessionMessageCommitter', () => {
 
     const model = await committer.commitModelResponse({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       messageId: 'message:model',
       content: [{ type: 'text', text: 'using tools' }],
       stopReason: 'toolUse',
@@ -103,13 +103,13 @@ describe('SessionMessageCommitter', () => {
     expect(model.status).toBe('saved');
     const tool = await committer.commitToolResults({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       results: [toolResult({ callOrder: 0, toolCallId: 'call:1' })],
     });
     expect(tool.status).toBe('saved');
     const reply = await committer.commitAssistantReply({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       status: 'completed',
       content: [{ type: 'text', text: 'done' }],
       reasonCode: 'normal_completion',
@@ -136,7 +136,7 @@ describe('SessionMessageCommitter', () => {
     const { committer, session } = createRecordingCommitter();
     const committed = await committer.commitToolResults({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       results: [
         toolResult({ callOrder: 1, toolCallId: 'call:2' }),
         toolResult({ callOrder: 0, toolCallId: 'call:1' }),
@@ -160,7 +160,7 @@ describe('SessionMessageCommitter', () => {
 
     const failed = await committer.commitModelResponse({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       messageId: 'message:model',
       content: [],
       stopReason: 'stop',
@@ -170,7 +170,7 @@ describe('SessionMessageCommitter', () => {
 
     const reply = await committer.commitAssistantReply({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       status: 'failed',
       content: [],
       completedAt: '2026-07-31T00:00:00.002Z',
@@ -188,7 +188,7 @@ describe('SessionMessageCommitter', () => {
 
     const failed = await committer.commitToolResults({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       results: [
         toolResult({ callOrder: 0, toolCallId: 'call:1' }),
         toolResult({ callOrder: 1, toolCallId: 'call:2' }),
@@ -211,7 +211,7 @@ describe('SessionMessageCommitter', () => {
 
     await committer.commitAssistantReply({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       status: 'cancelled',
       content: [],
       completedAt: '2026-07-31T00:00:00.001Z',
@@ -223,7 +223,7 @@ describe('SessionMessageCommitter', () => {
     });
     await committer.commitAssistantReply({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       status: 'completed',
       content: [],
       messageId: 'message:streamed',
@@ -239,7 +239,7 @@ describe('SessionMessageCommitter', () => {
     const { committer, session } = createRecordingCommitter();
     await committer.commitModelResponse({
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       messageId: 'message:model',
       content: [],
       stopReason: 'stop',

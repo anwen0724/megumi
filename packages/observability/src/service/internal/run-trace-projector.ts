@@ -13,7 +13,7 @@ export function projectRunTrace(
     .filter((r) => r.correlation.traceId === traceId)
     .sort((a, b) => a.sequence - b.sequence);
   const started = traceRecords.find((r) => r.type === "trace.started");
-  if (!started?.correlation.runId) return undefined;
+  if (!started?.correlation.executionId) return undefined;
   const ended = [...traceRecords]
     .reverse()
     .find((r) => r.type === "trace.ended");
@@ -25,7 +25,7 @@ export function projectRunTrace(
   );
   const summary: RunTraceSummary = {
     traceId,
-    runId: started.correlation.runId,
+    executionId: started.correlation.executionId,
     sessionId: started.correlation.sessionId,
     workspaceId: started.correlation.workspaceId,
     status: ended?.type === "trace.ended" ? ended.status : "incomplete",

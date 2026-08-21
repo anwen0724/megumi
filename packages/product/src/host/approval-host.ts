@@ -25,7 +25,7 @@ const RunFailureSchema = z.object({
   message: z.string(), retryable: z.boolean().optional(), details: z.record(z.string(), JsonValueSchema).optional(),
 }).strict();
 const ApprovalRunUiDtoSchema = z.object({
-  runId: z.string().min(1),
+  executionId: z.string().min(1),
   sessionId: z.string().min(1),
   status: z.enum(['running', 'waiting', 'cancelling', 'completed', 'failed', 'cancelled']),
   createdAt: z.string().datetime(),
@@ -52,7 +52,7 @@ export const ApprovalResolveResultSchema = z.discriminatedUnion('status', [
 export type ApprovalResolvePayload = z.infer<typeof ApprovalResolvePayloadSchema>;
 
 export interface ApprovalRunUiDto {
-  runId: string;
+  executionId: string;
   sessionId: string;
   status: z.infer<typeof ApprovalRunUiDtoSchema>['status'];
   createdAt: string;

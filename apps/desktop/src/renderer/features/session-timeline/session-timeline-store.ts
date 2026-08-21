@@ -51,7 +51,7 @@ export interface SessionTimelineStoreState {
   reconcileCommittedRun(
     projectId: string,
     sessionId: string,
-    runId: string,
+    executionId: string,
     messages: readonly TimelineMessage[],
   ): void;
   reset(): void;
@@ -162,15 +162,15 @@ export const useSessionTimelineStore = create<SessionTimelineStoreState>((set) =
     set((state) => {
       const key = sessionTimelineKey(projectId, sessionId);
       const session = state.sessions[key] ?? emptySessionTimeline(projectId, sessionId);
-      const activeRunIds = new Set(Object.entries(session.runStatusById)
-        .flatMap(([runId, status]) => status === 'running' ? [runId] : []));
+      const activeExecutionIds = new Set(Object.entries(session.runStatusById)
+        .flatMap(([executionId, status]) => status === 'running' ? [executionId] : []));
       return {
         sessions: {
           ...state.sessions,
           [key]: {
             ...session,
             messages: reconcileTimelineMessages(session.messages, messages, {
-              activeRunIds,
+              activeExecutionIds,
             }),
           },
         },
@@ -178,7 +178,7 @@ export const useSessionTimelineStore = create<SessionTimelineStoreState>((set) =
     });
   },
 
-  reconcileCommittedRun: (projectId, sessionId, runId, messages) => {
+  reconcileCommittedRun: (projectId, sessionId, executionId, messages) => {
     set((state) => {
       const key = sessionTimelineKey(projectId, sessionId);
       const session = state.sessions[key] ?? emptySessionTimeline(projectId, sessionId);
@@ -187,7 +187,7 @@ export const useSessionTimelineStore = create<SessionTimelineStoreState>((set) =
           ...state.sessions,
           [key]: {
             ...session,
-            messages: reconcileCommittedRunMessages(session.messages, runId, messages),
+            messages: reconcileCommittedRunMessages(session.messages, executionId, messages),
           },
         },
       };
@@ -217,16 +217,16 @@ function updateRunStatus(
   current: Readonly<Record<string, SessionTimelineRunStatus>>,
   event: AnyEvent,
 ): Readonly<Record<string, SessionTimelineRunStatus>> {
-  if (!event.runId) return current;
+  if (!event.executionId) return current;
   if (event.type === 'run.ended') {
     return {
       ...current,
-      [event.runId]: event.payload.status,
+      [event.executionId]: event.payload.status,
     };
   }
   if (event.type !== 'run.started') return current;
   return {
     ...current,
-    [event.runId]: 'running',
+    [event.executionId]: 'running',
   };
 }

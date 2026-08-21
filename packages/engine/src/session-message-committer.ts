@@ -53,7 +53,7 @@ export type CommitToolResultsResult =
 export interface SessionMessageCommitter {
   commitModelResponse(input: {
     readonly sessionId: string;
-    readonly runId: string;
+    readonly executionId: string;
     readonly messageId: string;
     readonly content: readonly SessionAssistantContent[];
     readonly stopReason: string;
@@ -62,12 +62,12 @@ export interface SessionMessageCommitter {
   }): Promise<CommitReplyResult>;
   commitToolResults(input: {
     readonly sessionId: string;
-    readonly runId: string;
+    readonly executionId: string;
     readonly results: readonly SessionToolResultCommit[];
   }): Promise<CommitToolResultsResult>;
   commitAssistantReply(input: {
     readonly sessionId: string;
-    readonly runId: string;
+    readonly executionId: string;
     readonly status: 'completed' | 'failed' | 'cancelled';
     readonly content: readonly SessionAssistantContent[];
     readonly reasonCode?: AssistantReplyReasonCode;
@@ -100,7 +100,7 @@ export function createSessionMessageCommitter(
       const saved = await options.session.saveModelResponse({
         message_id: input.messageId,
         session_id: input.sessionId,
-        run_id: input.runId,
+        execution_id: input.executionId,
         parent_entry_id: lastCommittedEntryId,
         content: [...input.content],
         outcome_status: 'completed',
@@ -123,7 +123,7 @@ export function createSessionMessageCommitter(
         const saved = await options.session.saveToolResultMessage({
           message_id: options.ids.createSessionMessageId(),
           session_id: input.sessionId,
-          run_id: input.runId,
+          execution_id: input.executionId,
           parent_entry_id: lastCommittedEntryId,
           tool_call_id: result.toolCallId,
           tool_name: result.toolName,
@@ -157,7 +157,7 @@ export function createSessionMessageCommitter(
         // otherwise settle a fresh reply for the Run.
         message_id: input.messageId ?? options.ids.createSessionMessageId(),
         session_id: input.sessionId,
-        run_id: input.runId,
+        execution_id: input.executionId,
         parent_entry_id: lastCommittedEntryId,
         status: input.status,
         content: [...input.content],

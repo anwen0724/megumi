@@ -55,7 +55,7 @@ describe('Session message presentation events', () => {
       sessionId: 'session:1',
       clientMessageId: 'client-message:1',
       messageId: 'message:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       text: '语音输入',
       createdAt: '2026-08-14T00:00:00.000Z',
     });
@@ -66,7 +66,7 @@ describe('Session message presentation events', () => {
       role: 'user',
       messageId: 'message:1',
       clientMessageId: 'client-message:1',
-      runId: 'run:1',
+      executionId: 'run:1',
     });
   });
 });

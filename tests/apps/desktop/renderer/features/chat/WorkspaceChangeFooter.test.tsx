@@ -80,7 +80,7 @@ function workspaceChangeFooter(input?: {
   ];
 
   return {
-    runId: 'run-1',
+    executionId: 'run-1',
     sessionId: 'session-1',
     updatedAt: '2026-06-06T10:00:00.000Z',
     changeSets: [{

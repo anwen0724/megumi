@@ -11,7 +11,7 @@ function completeEvent(overrides: Record<string, unknown> = {}) {
   return {
     id: 'evt:1',
     sessionId: 'session:1',
-    runId: 'run:1',
+    executionId: 'run:1',
     sequence: 1,
     createdAt: '2026-08-04T00:00:00.000Z',
     ...overrides,
@@ -77,11 +77,11 @@ describe('EventSchema', () => {
     }
   });
 
-  it('accepts a session-scoped event without runId', () => {
+  it('accepts a session-scoped event without executionId', () => {
     const event = completeEvent({
       type: 'session.branch_marker.created',
       payload: { markerId: 'marker:1' },
-      runId: undefined,
+      executionId: undefined,
     });
     expect(EventSchema.safeParse(event).success).toBe(true);
   });

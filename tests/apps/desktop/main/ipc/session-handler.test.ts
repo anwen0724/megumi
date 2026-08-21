@@ -20,7 +20,7 @@ describe('registerSessionHandlers message projection', () => {
       clientMessageId: 'client-message:1',
       text: '语音输入',
       createdAt: '2026-08-14T00:00:00.000Z',
-      // messageId and runId are intentionally missing.
+      // messageId and executionId are intentionally missing.
     }).success).toBe(false);
   });
 
@@ -77,7 +77,7 @@ describe('registerSessionHandlers message projection', () => {
       sessionId: 'session:1',
       clientMessageId: 'client-message:1',
       messageId: 'message:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       text: '语音输入',
       createdAt: '2026-08-14T00:00:00.000Z',
     });
@@ -100,7 +100,7 @@ function agentRunPayload() {
     userMessage: {
       messageId: 'message:1',
       sessionId: 'session:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       kind: 'user' as const,
       displayContent: [{ type: 'text' as const, text: '语音输入' }],
       attachments: [],
@@ -108,7 +108,7 @@ function agentRunPayload() {
       completedAt: '2026-08-14T00:00:00.000Z',
     },
     run: {
-      runId: 'run:1',
+      executionId: 'run:1',
       sessionId: 'session:1',
       status: 'running' as const,
       createdAt: '2026-08-14T00:00:00.000Z',

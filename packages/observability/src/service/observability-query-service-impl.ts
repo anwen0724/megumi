@@ -39,10 +39,10 @@ export class ObservabilityQueryServiceImpl implements ObservabilityQueryService 
       };
     }
   }
-  async getRunTrace({ runId }: { runId: string }) {
+  async getRunTrace({ executionId }: { executionId: string }) {
     try {
       const records = await this.reader.readAll();
-      const id = records.find((r) => r.correlation.runId === runId)?.correlation
+      const id = records.find((r) => r.correlation.executionId === executionId)?.correlation
         .traceId;
       if (!id) return { status: "not_found" as const };
       const trace = projectRunTrace(id, records, this.dropped());
@@ -57,8 +57,8 @@ export class ObservabilityQueryServiceImpl implements ObservabilityQueryService 
       };
     }
   }
-  async createDiagnosticBundle({ runId }: { runId: string }) {
-    const result = await this.getRunTrace({ runId });
+  async createDiagnosticBundle({ executionId }: { executionId: string }) {
+    const result = await this.getRunTrace({ executionId });
     if (result.status !== "found") return result;
     return {
       status: "created" as const,

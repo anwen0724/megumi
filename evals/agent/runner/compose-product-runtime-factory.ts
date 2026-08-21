@@ -1,5 +1,6 @@
 /* Creates the production Evaluation runtime exclusively through Product Composition and Host. */
-import { composeProduct, type ComposeProductOptions } from '@megumi/product';
+import { composeProduct, type ComposeProductOptions, type ProductRuntime } from '@megumi/product';
+import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
 import type { BuiltInToolAvailability } from '@megumi/tools';
 import {
   createEvaluationHomeOptions,
@@ -9,7 +10,11 @@ import {
   nodeObservabilityStorage,
   nodeSessionAttachmentFileSystem,
 } from '../adapters/node-product-host-adapters';
-import type { EvaluationProductRuntimeFactory } from './evaluation-runner';
+import type {
+  EvaluationChatHost,
+  EvaluationHost,
+  EvaluationProductRuntimeFactory,
+} from './evaluation-runner';
 
 export interface ComposeProductEvaluationFactoryOptions {
   credential?: string;
@@ -50,6 +55,7 @@ export function createComposeProductEvaluationFactory(
         settingsEnvironment: createNodeSettingsEnvironment(),
         productEnvironment: getNodeProductEnvironment(),
       });
+      const runtimeEvents = createRuntimeEventStream(product);
 
       try {
         await configureTarget(
@@ -60,11 +66,127 @@ export function createComposeProductEvaluationFactory(
           options.credential,
           options.webSearch,
         );
-        return product;
+        return {
+          host: createEvaluationHost(product, runtimeEvents),
+          dispose: async () => {
+            runtimeEvents.close();
+            await product.dispose();
+          },
+        };
       } catch (error) {
-        product.dispose();
+        runtimeEvents.close();
+        await product.dispose();
         throw error;
       }
+    },
+  };
+}
+
+/**
+ * Adapts the current Product Host seam into the Host surface the Evaluation
+ * runner drives: Session operations plus a live Runtime Event stream. The
+ * runner never constructs the Product itself.
+ */
+function createEvaluationHost(
+  product: ProductRuntime,
+  runtimeEvents: RuntimeEventStream,
+): EvaluationHost {
+  const chat: EvaluationChatHost = {
+    createSession(request) {
+      return product.host.session.createSession({
+        projectId: request.projectId,
+        ...(request.title ? { title: request.title } : {}),
+      });
+    },
+    async sendUserInput(request) {
+      const result = await product.host.session.sendUserInput(request);
+      return { payload: result.payload, events: runtimeEvents.stream };
+    },
+    async cancelUserInput(request) {
+      const result = await product.host.session.cancelUserInput(request);
+      return { payload: result.payload, events: runtimeEvents.stream };
+    },
+    async listMessages({ sessionId }) {
+      const read = await product.host.session.readSession({ sessionId });
+      return read.status === 'ok'
+        ? { status: 'ok' as const, messages: [...read.conversation] }
+        : {
+            status: 'failed' as const,
+            failure: {
+              message: read.status === 'not_found'
+                ? `Session ${read.sessionId} was not found.`
+                : read.failure.message,
+            },
+          };
+    },
+    async listTimeline({ sessionId }) {
+      const read = await product.host.session.readSession({ sessionId });
+      return { messages: read.status === 'ok' ? [...read.conversation] : [] };
+    },
+  };
+
+  return {
+    workspace: { useExistingProject: product.host.workspace.useExistingProject },
+    chat,
+    approval: {
+      async resolve(request) {
+        const result = await product.host.approval.resolve(request);
+        return { payload: result.payload, events: runtimeEvents.stream };
+      },
+    },
+    settings: { get: product.host.settings.get },
+    skill: { listSkills: product.host.skill.listSkills },
+    observability: {
+      getRunTrace: product.host.observability.getRunTrace,
+      flush: product.host.observability.flush,
+    },
+  };
+}
+
+interface RuntimeEventStream {
+  readonly stream: AsyncIterable<RuntimeEvent>;
+  close(): void;
+}
+
+/** Buffers live Runtime Events into the single iterable stream the runner consumes. */
+function createRuntimeEventStream(product: ProductRuntime): RuntimeEventStream {
+  const queue: RuntimeEvent[] = [];
+  const waiters = new Set<() => void>();
+  let closed = false;
+  const wakeAll = () => {
+    for (const wake of [...waiters]) wake();
+    waiters.clear();
+  };
+  const subscription = product.subscribeRuntimeEvents({}, (event) => {
+    if (closed) return;
+    queue.push(event);
+    wakeAll();
+  });
+  const stream: AsyncIterable<RuntimeEvent> = {
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<RuntimeEvent>> {
+          while (!closed && queue.length === 0) {
+            await new Promise<void>((resolve) => { waiters.add(resolve); });
+          }
+          const value = queue.shift();
+          return value ? { done: false, value } : { done: true, value: undefined };
+        },
+        async return(): Promise<IteratorResult<RuntimeEvent>> {
+          closed = true;
+          wakeAll();
+          return { done: true, value: undefined };
+        },
+      };
+    },
+  };
+  return {
+    stream,
+    close() {
+      if (closed) return;
+      closed = true;
+      subscription.unsubscribe();
+      wakeAll();
     },
   };
 }

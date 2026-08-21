@@ -67,8 +67,8 @@ export function createSessionOperations(options: {
       }
       return { status: 'ok', sessions: sessions.map(toSessionDto) };
     },
-    async listUserMessagesByRunIds(request) {
-      const result = options.history.listUserMessagesByRunIds({ run_ids: request.runIds });
+    async listUserMessagesByExecutionIds(request) {
+      const result = options.history.listUserMessagesByExecutionIds({ execution_ids: request.executionIds });
       if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
       return {
         status: 'ok',
@@ -76,10 +76,10 @@ export function createSessionOperations(options: {
       };
     },
     async cancelUserInput(request) {
-      const result = await options.runs.cancel({ runId: request.runId });
+      const result = await options.runs.cancel({ executionId: request.executionId });
       if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.run) } };
       if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toRunDto(result.run) } };
-      if (result.status === 'not_found') return { payload: { status: 'not_found', runId: result.runId } };
+      if (result.status === 'not_found') return { payload: { status: 'not_found', executionId: result.executionId } };
       return { payload: { status: 'not_cancellable', run: toRunDto(result.run), reason: 'already_terminal' } };
     },
     createBranchDraft(request) {
@@ -148,7 +148,7 @@ export function createSessionOperations(options: {
 
 function toUserMessageSummary(item: SessionMessageWithAttachments): UserMessageSummaryDto {
   const message = item.message;
-  return { id: message.message_id, sessionId: message.session_id, ...(message.run_id ? { runId: message.run_id } : {}), role: message.message_kind === 'user_message' ? 'user' : message.message_kind === 'tool_result' ? 'toolResult' : 'assistant', text: sessionMessageText(message), createdAt: message.created_at };
+  return { id: message.message_id, sessionId: message.session_id, ...(message.execution_id ? { executionId: message.execution_id } : {}), role: message.message_kind === 'user_message' ? 'user' : message.message_kind === 'tool_result' ? 'toolResult' : 'assistant', text: sessionMessageText(message), createdAt: message.created_at };
 }
 function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
 function toFailure(failure: { code: string; message: string; retryable?: boolean }): HostFailure {

@@ -69,18 +69,18 @@ describe('Product Host runtime schemas', () => {
     expect(CancelUserInputPayloadSchema.safeParse({
       status: 'cancellation_requested',
       run: {
-        runId: 'run:1',
+        executionId: 'run:1',
         sessionId: 'session:1',
         status: 'cancelling',
         createdAt: '2026-07-10T00:00:00.000Z',
       },
     }).success).toBe(true);
-    expect(CancelUserInputPayloadSchema.safeParse({ status: 'not_found', runId: 'run:1' }).success).toBe(true);
+    expect(CancelUserInputPayloadSchema.safeParse({ status: 'not_found', executionId: 'run:1' }).success).toBe(true);
     expect(CancelUserInputPayloadSchema.safeParse({
       status: 'not_cancellable',
       reason: 'already_terminal',
       run: {
-        runId: 'run:1',
+        executionId: 'run:1',
         sessionId: 'session:1',
         status: 'completed',
         createdAt: '2026-07-10T00:00:00.000Z',
@@ -183,7 +183,7 @@ describe('Product Host runtime schemas', () => {
       status: 'resumed',
       approvalRequestId: 'approval:1',
       run: {
-        runId: 'run:1',
+        executionId: 'run:1',
         sessionId: 'session:1',
         status: 'running',
         createdAt: '2026-07-10T00:00:00.000Z',
@@ -201,7 +201,7 @@ describe('Product Host runtime schemas', () => {
           approvalRequestId: 'approval:1',
           toolCallId: 'unknown',
           toolExecutionId: 'unknown',
-          runId: 'unknown',
+          executionId: 'unknown',
           stepId: 'unknown',
           decision: 'approved',
           scope: 'once',

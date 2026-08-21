@@ -17,12 +17,12 @@ const VoiceSpeechFailureSchema = z.object({
 export const SpeechOutputEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('synthesis-started'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     sessionId: z.string().min(1),
   }).strict(),
   z.object({
     type: z.literal('audio-chunk'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     sessionId: z.string().min(1),
     sequence: z.number().int().positive(),
     final: z.boolean(),
@@ -33,18 +33,18 @@ export const SpeechOutputEventSchema = z.discriminatedUnion('type', [
   }).strict(),
   z.object({
     type: z.literal('completed'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     sessionId: z.string().min(1),
   }).strict(),
   z.object({
     type: z.literal('stopped'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     sessionId: z.string().min(1),
     reason: z.enum(['replaced', 'character_hidden', 'user', 'run_cancelled']),
   }).strict(),
   z.object({
     type: z.literal('error'),
-    runId: z.string().min(1).optional(),
+    executionId: z.string().min(1).optional(),
     sessionId: z.string().min(1).optional(),
     failure: VoiceSpeechFailureSchema,
   }).strict(),

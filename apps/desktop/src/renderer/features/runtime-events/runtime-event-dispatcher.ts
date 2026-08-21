@@ -12,11 +12,11 @@ export interface DispatchRuntimeEventOptions {
 }
 
 function hasRuntimeEventAlreadyBeenDispatched(event: AnyEvent): boolean {
-  if (!event.runId) {
+  if (!event.executionId) {
     return false;
   }
 
-  const events = useRunStore.getState().eventsByRun[event.runId] ?? [];
+  const events = useRunStore.getState().eventsByRun[event.executionId] ?? [];
   return events.some((item) => item.id === event.id);
 }
 
@@ -51,7 +51,7 @@ function applyToolEvent(event: AnyEvent, targetSessionId: string | null): void {
     store.upsertToolCall({
       ...existing,
       toolCallId: payload.toolCallId,
-      runId: event.runId ?? existing?.runId ?? '',
+      executionId: event.executionId ?? existing?.executionId ?? '',
       toolName: payload.toolName,
       status: existing?.status ?? 'created',
       requestedAt: existing?.requestedAt ?? event.createdAt,
@@ -66,7 +66,7 @@ function applyToolEvent(event: AnyEvent, targetSessionId: string | null): void {
     store.upsertToolCall({
       ...existing,
       toolCallId: payload.toolCallId,
-      runId: event.runId ?? existing?.runId ?? '',
+      executionId: event.executionId ?? existing?.executionId ?? '',
       toolName: payload.toolName,
       status: 'running',
       requestedAt: existing?.requestedAt ?? event.createdAt,
@@ -113,7 +113,7 @@ export function dispatchRuntimeEvent(event: AnyEvent, options?: DispatchRuntimeE
     useSessionTimelineStore.getState().applyRuntimeEvent(options.projectId, event);
   }
 
-  if (!event.runId || alreadyDispatched) {
+  if (!event.executionId || alreadyDispatched) {
     return;
   }
   applyToolEvent(event, targetSessionId);

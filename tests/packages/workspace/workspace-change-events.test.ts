@@ -15,7 +15,7 @@ describe('Workspace Change Runtime Events', () => {
     expect(finalizeChangeSet).toHaveBeenCalledWith({
       workspace_id: 'workspace:1',
       session_id: 'session:1',
-      run_id: 'run:1',
+      execution_id: 'run:1',
       finalized_at: '2026-07-10T00:00:01.000Z',
     });
     expect(resolveWorkspaceId).toHaveBeenCalledWith('run:1');
@@ -35,7 +35,7 @@ function eventFixture(eventType: 'run.ended' | 'turn.ended'): AnyEvent {
     id: `event:${eventType}`,
     type: eventType,
     payload: eventType === 'run.ended' ? { status: 'completed' } : { messageId: 'message:1' },
-    runId: 'run:1',
+    executionId: 'run:1',
     sessionId: 'session:1',
     sequence: 1,
     createdAt: '2026-07-10T00:00:01.000Z',

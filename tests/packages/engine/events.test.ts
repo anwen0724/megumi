@@ -1,7 +1,7 @@
 /*
  * Verifies the Engine's Runtime Event emission against the new domain model:
  * the run lifecycle, the streaming turn/message pair, session ownership, the
- * ordering contract (user message precedes run.started, no runId), and the
+ * ordering contract (user message precedes run.started, no executionId), and the
  * full behaviour surface (thinking stream, tool requests, approval options,
  * retries, plan updates, permission denials).
  */
@@ -34,21 +34,21 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
 
-    // Every run event carries sessionId + runId; sequences are strictly
+    // Every run event carries sessionId + executionId; sequences are strictly
     // increasing (the user message, which precedes the run, occupies earlier
     // sequence numbers in the same session stream).
     for (const event of events) {
       expect(event.sessionId).toBe('session:1');
-      expect(event.runId).toBe(started.run.runId);
+      expect(event.executionId).toBe(started.run.executionId);
     }
     const sequences = events.map((event) => event.sequence);
     expect(sequences).toEqual([...sequences].sort((a, b) => a - b));
     expect(new Set(sequences).size).toBe(sequences.length);
   });
 
-  it('emits the user message before run.started, without a runId', async () => {
+  it('emits the user message before run.started, without a executionId', async () => {
     const fixture = createRunsFixture({
       streams: [assistantStream('answer')],
     });
@@ -65,7 +65,7 @@ describe('Engine RuntimeEvents', () => {
     const runStarted = fixture.published.find((event) => event.type === 'run.started');
 
     expect(userStarted).toBeDefined();
-    expect(userStarted?.runId).toBeUndefined();
+    expect(userStarted?.executionId).toBeUndefined();
     expect(runStarted).toBeDefined();
     expect(userStarted!.sequence).toBeLessThan(runStarted!.sequence);
   });
@@ -119,7 +119,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'tool_execution.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     const eventTypes = events.map((event) => event.type);
 
     expect(eventTypes).toEqual(expect.arrayContaining([
@@ -207,7 +207,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'tool_execution.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     const requested = events.find((event) => event.type === 'tool_execution.requested');
     const startedAt = events.find((event) => event.type === 'tool_execution.started');
     expect(requested).toBeDefined();
@@ -295,7 +295,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     const retryStarted = events.find((event) => event.type === 'turn.retry.started');
     const retryCompleted = events.find((event) => event.type === 'turn.retry.completed');
     expect(retryStarted?.payload).toMatchObject({ attemptNumber: 2, retryKind: 'model_call' });
@@ -313,7 +313,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     const retryFailed = events.find((event) => event.type === 'turn.retry.failed');
     expect(retryFailed?.payload).toMatchObject({
       attemptNumber: 2,
@@ -388,7 +388,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     expect(events.some((event) => event.type === 'run.ended' && event.payload.status === 'completed')).toBe(true);
   });
 
@@ -455,7 +455,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
-    const types = collectEvents(fixture, started.run.runId).map((event) => event.type);
+    const types = collectEvents(fixture, started.run.executionId).map((event) => event.type);
     const order = (name: (typeof types)[number]) => types.indexOf(name);
     const turnStarted = order('turn.started');
     const messageStarted = order('message.started');
@@ -492,7 +492,7 @@ describe('Engine RuntimeEvents', () => {
       expect(fixture.published.some((event) => event.type === 'run.ended')).toBe(true);
     });
 
-    const events = collectEvents(fixture, started.run.runId);
+    const events = collectEvents(fixture, started.run.executionId);
     // The streamed assistant Message and the persisted failed Reply each get
     // exactly one started/ended pair; the Turn closes once with error.
     const messageStarts = events.filter((event) => event.type === 'message.started');

@@ -1,5 +1,5 @@
 /* Defines immutable execution identity, lifecycle status, and bounded evidence. */
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
 
 export type EvaluationExecutionStatus = 'completed' | 'setup_failed' | 'runner_failed';
 
@@ -32,7 +32,7 @@ export interface EvaluationExecution {
   correlation?: {
     workspaceId?: string;
     sessionId?: string;
-    runId?: string;
+    executionId?: string;
   };
   diagnostics: EvaluationDiagnostic[];
 }

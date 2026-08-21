@@ -149,7 +149,7 @@ export function createRunsFixture(input: {
         message: {
           message_id: request.message_id,
           session_id: request.session_id,
-          ...(request.run_id ? { run_id: request.run_id } : {}),
+          ...(request.execution_id ? { execution_id: request.execution_id } : {}),
           message_kind: 'user_message' as const,
           display_content: request.display_content,
           model_content: request.model_content,
@@ -252,7 +252,7 @@ export function createRunsFixture(input: {
     events: eventsBus,
     ...(input.observability ? { observability: input.observability } : {}),
     ids: {
-      createRunId: () => `run:${++runNumber}`,
+      createExecutionId: () => `execution:${++runNumber}`,
       createModelCallId: () => `model-call:${++modelCallNumber}`,
       createToolExecutionId: () => `tool-execution:${++executionNumber}`,
       createRunApprovalId: () => `approval:${++approvalNumber}`,
@@ -285,9 +285,9 @@ export async function startedRun(
 
 export async function requestedCancellation(
   fixture: RunsFixture,
-  runId: string,
+  executionId: string,
 ): Promise<{ readonly run: Run }> {
-  const cancellation = await fixture.runs.cancel({ runId });
+  const cancellation = await fixture.runs.cancel({ executionId });
   if (cancellation.status !== 'cancellation_requested') {
     throw new Error(`Expected cancellation request, got ${cancellation.status}.`);
   }
@@ -516,8 +516,8 @@ export function retryableFailedStream(text: string): AssistantMessageEventStream
 }
 
 /** All events published for one run, in bus order. */
-export function collectEvents(fixture: RunsFixture, runId: string): AnyEvent[] {
-  return fixture.published.filter((event) => event.runId === runId);
+export function collectEvents(fixture: RunsFixture, executionId: string): AnyEvent[] {
+  return fixture.published.filter((event) => event.executionId === executionId);
 }
 
 /** Waits until the run settles (run.ended published) so behavior assertions are safe. */
@@ -566,7 +566,7 @@ function savedMessage(
   const shared = {
     message_id: request.message_id,
     session_id: request.session_id,
-    run_id: request.run_id,
+    execution_id: request.execution_id,
     created_at: request.completed_at,
     completed_at: request.completed_at,
   };

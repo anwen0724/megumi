@@ -54,16 +54,16 @@ export const sessionEntries = sqliteTable('session_entries', {
 export const sessionMessages = sqliteTable('session_messages', {
   messageId: text('message_id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  runId: text('run_id'),
+  executionId: text('execution_id'),
   messageKind: text('message_kind').notNull(),
   messageJson: jsonText('message_json').notNull(),
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 }, (table) => [
   index('idx_session_messages_session_created').on(table.sessionId, table.createdAt),
-  index('idx_session_messages_run').on(table.runId),
-  uniqueIndex('idx_session_messages_assistant_reply_run')
-    .on(table.sessionId, table.runId)
+  index('idx_session_messages_execution').on(table.executionId),
+  uniqueIndex('idx_session_messages_assistant_reply_execution')
+    .on(table.sessionId, table.executionId)
     .where(sql`${table.messageKind} = 'assistant_reply'`),
 ]);
 
@@ -108,14 +108,14 @@ export const workspaceChanges = sqliteTable('workspace_changes', {
   changeSetId: text('change_set_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
-  runId: text('run_id').notNull(),
+  executionId: text('execution_id').notNull(),
   status: text('status').notNull(),
   effectCoverage: text('effect_coverage').notNull(),
   changedFileCount: integer('changed_file_count').notNull(),
   createdAt: text('created_at').notNull(),
   finalizedAt: text('finalized_at'),
 }, (table) => [
-  index('idx_workspace_changes_run').on(table.runId),
+  index('idx_workspace_changes_execution').on(table.executionId),
   index('idx_workspace_changes_workspace_created').on(table.workspaceId, table.createdAt),
 ]);
 

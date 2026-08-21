@@ -13,13 +13,13 @@ import type { SpeechOutputRuntime } from '@megumi/voice';
 
 export interface SpeechOutputWiringDeps {
   readonly settings: Pick<Settings, 'resolve' | 'resolveVoiceTts' | 'readVoiceTtsApiKey'>;
-  readonly findAssistantReplyByRunId: (sessionId: string, runId: string) => SessionMessage | undefined;
+  readonly findAssistantReplyByExecutionId: (sessionId: string, executionId: string) => SessionMessage | undefined;
   readonly speechOutput: SpeechOutputRuntime;
 }
 
 export interface RunEndedEnvelopeLike {
   readonly type?: string;
-  readonly runId?: string;
+  readonly executionId?: string;
   readonly sessionId?: string;
   readonly payload?: { readonly status?: string };
 }
@@ -42,7 +42,7 @@ export function onRunEndedForSpeechOutput(
   event: RunEndedEnvelopeLike,
 ): SpeechOutputReadResult {
   if (event.type !== 'run.ended') return { status: 'ignored' };
-  if (!event.runId || !event.sessionId) return { status: 'ignored' };
+  if (!event.executionId || !event.sessionId) return { status: 'ignored' };
 
   // Cancelling the run also silences the read-aloud it displaced (or any
   // still-running one): the audio belongs to a reply that is no longer valid.
@@ -62,13 +62,13 @@ export function onRunEndedForSpeechOutput(
   if (tts.status === 'failed') return { status: 'skipped', reason: 'tts_resolution_failed' };
 
   const credential = deps.settings.readVoiceTtsApiKey({});
-  const reply = deps.findAssistantReplyByRunId(event.sessionId, event.runId);
+  const reply = deps.findAssistantReplyByExecutionId(event.sessionId, event.executionId);
   if (!reply || reply.message_kind !== 'assistant_reply') return { status: 'skipped', reason: 'no_reply' };
   const text = sessionMessageText(reply).trim();
   if (!text) return { status: 'skipped', reason: 'empty_text' };
 
   deps.speechOutput.read({
-    runId: event.runId,
+    executionId: event.executionId,
     sessionId: event.sessionId,
     text,
     config: {

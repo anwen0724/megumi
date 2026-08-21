@@ -63,7 +63,7 @@ export function history(): SessionHistoryItem[] {
       message: {
         message_id: 'message:user',
         session_id: 'session:1',
-        run_id: 'run:old',
+        execution_id: 'run:old',
         message_kind: 'user_message',
         display_content: [{ type: 'text', text: 'before' }],
         model_content: [{ type: 'text', text: 'before' }],
@@ -84,7 +84,7 @@ export function history(): SessionHistoryItem[] {
       message: {
         message_id: 'message:assistant',
         session_id: 'session:1',
-        run_id: 'run:old',
+        execution_id: 'run:old',
         message_kind: 'assistant_reply',
         status: 'completed',
         content: [{ type: 'text', text: 'done' }],
@@ -110,7 +110,7 @@ export function runHistory(index: number): SessionHistoryItem[] {
       message: {
         message_id: `message:user:${index}`,
         session_id: 'session:1',
-        run_id: `run:${index}`,
+        execution_id: `run:${index}`,
         message_kind: 'user_message',
         display_content: [{ type: 'text', text: `question ${index}` }],
         model_content: [{ type: 'text', text: `question ${index}` }],
@@ -131,7 +131,7 @@ export function runHistory(index: number): SessionHistoryItem[] {
       message: {
         message_id: `message:assistant:${index}`,
         session_id: 'session:1',
-        run_id: `run:${index}`,
+        execution_id: `run:${index}`,
         message_kind: 'assistant_reply',
         status: 'completed',
         reason_code: 'normal_completion',
@@ -146,7 +146,7 @@ export function runHistory(index: number): SessionHistoryItem[] {
 
 export function modelCall(overrides: Partial<ModelCallContext> = {}): ModelCallContext {
   const run: RunContext = {
-    runId: 'run:current',
+    executionId: 'run:current',
     sessionId: 'session:1',
     workspaceId: 'workspace:1',
     userInput: {

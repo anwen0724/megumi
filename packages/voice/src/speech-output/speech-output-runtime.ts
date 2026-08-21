@@ -18,10 +18,10 @@ import { filterReplyTextForSpeech } from './reply-text-filter';
 export type SpeechOutputStopReason = 'replaced' | 'character_hidden' | 'user' | 'run_cancelled';
 
 export type SpeechOutputEvent =
-  | { readonly type: 'synthesis-started'; readonly runId: string; readonly sessionId: string }
+  | { readonly type: 'synthesis-started'; readonly executionId: string; readonly sessionId: string }
   | {
       readonly type: 'audio-chunk';
-      readonly runId: string;
+      readonly executionId: string;
       readonly sessionId: string;
       readonly sequence: number;
       readonly final: boolean;
@@ -30,22 +30,22 @@ export type SpeechOutputEvent =
       readonly channels: 1 | 2;
       readonly bytes: Uint8Array;
     }
-  | { readonly type: 'completed'; readonly runId: string; readonly sessionId: string }
+  | { readonly type: 'completed'; readonly executionId: string; readonly sessionId: string }
   | {
       readonly type: 'stopped';
-      readonly runId: string;
+      readonly executionId: string;
       readonly sessionId: string;
       readonly reason: SpeechOutputStopReason;
     }
   | {
       readonly type: 'error';
-      readonly runId?: string;
+      readonly executionId?: string;
       readonly sessionId?: string;
       readonly failure: VoiceSpeechFailure;
     };
 
 export interface ReadSpeechOutputRequest {
-  readonly runId: string;
+  readonly executionId: string;
   readonly sessionId: string;
   readonly text: string;
   readonly config: SynthesizerConfig;
@@ -77,7 +77,7 @@ export function createSpeechOutputRuntime(input: {
     active.controller.abort();
     publish({
       type: 'stopped',
-      runId: active.runId,
+      executionId: active.executionId,
       sessionId: active.sessionId,
       reason,
     });
@@ -107,7 +107,7 @@ export function createSpeechOutputRuntime(input: {
       if (!text) return;
       const controller = new AbortController();
       const active: ActiveSynthesis = {
-        runId: request.runId,
+        executionId: request.executionId,
         sessionId: request.sessionId,
         controller,
       };
@@ -122,29 +122,29 @@ export function createSpeechOutputRuntime(input: {
           current = undefined;
           publish({
             type: 'error',
-            runId: request.runId,
+            executionId: request.executionId,
             sessionId: request.sessionId,
             failure: result.failure,
           });
           return;
         }
-        publish({ type: 'synthesis-started', runId: request.runId, sessionId: request.sessionId });
+        publish({ type: 'synthesis-started', executionId: request.executionId, sessionId: request.sessionId });
         try {
           for await (const chunk of result.chunks) {
             if (current !== active) return;
-            publish(toAudioChunkEvent(request.runId, request.sessionId, chunk));
+            publish(toAudioChunkEvent(request.executionId, request.sessionId, chunk));
             if (chunk.final) break;
           }
           if (current !== active) return;
           current = undefined;
-          publish({ type: 'completed', runId: request.runId, sessionId: request.sessionId });
+          publish({ type: 'completed', executionId: request.executionId, sessionId: request.sessionId });
         } catch (error) {
           if (current !== active) return;
           current = undefined;
           if (isAbortError(error)) {
             publish({
               type: 'stopped',
-              runId: request.runId,
+              executionId: request.executionId,
               sessionId: request.sessionId,
               reason: 'user',
             });
@@ -152,7 +152,7 @@ export function createSpeechOutputRuntime(input: {
           }
           publish({
             type: 'error',
-            runId: request.runId,
+            executionId: request.executionId,
             sessionId: request.sessionId,
             // A supplier-neutral failure thrown mid-stream keeps its code;
             // supplier details stay in the message (logs only).
@@ -167,15 +167,15 @@ export function createSpeechOutputRuntime(input: {
 }
 
 interface ActiveSynthesis {
-  readonly runId: string;
+  readonly executionId: string;
   readonly sessionId: string;
   readonly controller: AbortController;
 }
 
-function toAudioChunkEvent(runId: string, sessionId: string, chunk: SpeechAudioChunk): SpeechOutputEvent {
+function toAudioChunkEvent(executionId: string, sessionId: string, chunk: SpeechAudioChunk): SpeechOutputEvent {
   return {
     type: 'audio-chunk',
-    runId,
+    executionId,
     sessionId,
     sequence: chunk.sequence,
     final: chunk.final,

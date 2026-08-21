@@ -51,7 +51,7 @@ export function createLoopObserver(options: CreateLoopObserverOptions): LoopObse
   const correlation = () => ({
     ...(trace ? { traceId: trace.traceId } : {}),
     ...(rootSpan ? { spanId: rootSpan.spanId } : {}),
-    runId: options.run.runId,
+    executionId: options.run.executionId,
     sessionId: options.run.sessionId,
     workspaceId: options.run.workspaceId,
     requestId: options.run.requestId,
@@ -62,9 +62,9 @@ export function createLoopObserver(options: CreateLoopObserverOptions): LoopObse
       if (!service || ended) return;
       try {
         trace = service.startTrace({
-          traceId: options.run.runId,
+          traceId: options.run.executionId,
           name: 'agent_run',
-          runId: options.run.runId,
+          executionId: options.run.executionId,
           sessionId: options.run.sessionId,
           workspaceId: options.run.workspaceId,
           requestId: options.run.requestId,

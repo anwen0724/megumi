@@ -60,7 +60,7 @@ export interface SessionBranchDrafts {
 }
 
 export interface CreateSessionBranchDraftsOptions {
-  /** The event bus; branch facts are published here (session-scoped, no runId). */
+  /** The event bus; branch facts are published here (session-scoped, no executionId). */
   events: EventBus;
   ids?: {
     branchMarkerId?: () => string;

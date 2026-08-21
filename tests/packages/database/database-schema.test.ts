@@ -28,11 +28,11 @@ describe('final Database schema', () => {
     expect(tables).toEqual([...databaseTables].sort());
   });
 
-  it('keeps run_id as correlation data without a Run table foreign key', () => {
+  it('keeps execution_id as correlation data without a Run table foreign key', () => {
     expect(columns(database, 'session_messages')).toEqual([
-      'message_id', 'session_id', 'run_id', 'message_kind', 'message_json', 'created_at', 'completed_at',
+      'message_id', 'session_id', 'execution_id', 'message_kind', 'message_json', 'created_at', 'completed_at',
     ]);
-    expect(columns(database, 'workspace_changes')).toContain('run_id');
+    expect(columns(database, 'workspace_changes')).toContain('execution_id');
 
     for (const table of ['session_messages', 'workspace_changes']) {
       expect(foreignKeys(database, table).map((key) => key.table)).not.toContain('agent_runs');

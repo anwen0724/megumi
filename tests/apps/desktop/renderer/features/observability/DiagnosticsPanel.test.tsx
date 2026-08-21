@@ -81,7 +81,7 @@ describe("DiagnosticsPanel", () => {
         messages: [{
           id: "message-1",
           sessionId: "session-1",
-          runId: "run-1",
+          executionId: "run-1",
           role: "user",
           text: "How does context usage work?",
           createdAt: "2026-07-14T00:00:00.000Z",
@@ -118,7 +118,7 @@ describe("DiagnosticsPanel", () => {
     expect(screen.getByRole("option", { name: "Megumi / Context design" })).toBeInTheDocument();
     expect(screen.getAllByText(/Megumi \/ Context design/)).toHaveLength(2);
     expect(messageList).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { runIds: ["run-1"] },
+      payload: { executionIds: ["run-1"] },
     }));
 
     await user.selectOptions(screen.getByLabelText("Project"), "workspace-1");
@@ -128,7 +128,7 @@ describe("DiagnosticsPanel", () => {
 
 const summary = {
   traceId: "run-1",
-  runId: "run-1",
+  executionId: "run-1",
   sessionId: "session-1",
   workspaceId: "workspace-1",
   status: "ok" as const,

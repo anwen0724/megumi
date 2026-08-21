@@ -10,7 +10,7 @@ export type WorkspaceChangeFooterFile = {
 };
 
 export type WorkspaceChangeFooterFact = {
-  runId: string;
+  executionId: string;
   sessionId: string;
   updatedAt: string;
   changeSets: Array<{
@@ -21,7 +21,7 @@ export type WorkspaceChangeFooterFact = {
 };
 
 export const WorkspaceChangeFooterFactSchema = z.object({
-  runId: z.string().min(1),
+  executionId: z.string().min(1),
   sessionId: z.string().min(1),
   updatedAt: z.string().min(1),
   changeSets: z.array(z.object({
@@ -38,7 +38,7 @@ export const WorkspaceChangeFooterFactSchema = z.object({
 }).strict() satisfies z.ZodType<WorkspaceChangeFooterFact>;
 
 type MessageId = string;
-type RunId = string;
+type ExecutionId = string;
 type SessionId = string;
 type ToolCallId = string;
 type ToolExecutionId = string;
@@ -159,7 +159,7 @@ export type UserTimelineBlock = UserTextBlock | UserAttachmentBlock;
 
 export interface TimelineUserMessage extends TimelineMessageBase {
   role: 'user';
-  runId?: RunId | string;
+  executionId?: ExecutionId | string;
   clientMessageId?: string;
   /** Structured Skill selection persisted with the message; shown by the UI, never part of the model text. */
   skillSelection?: { name: string; skillPath: string };
@@ -299,7 +299,7 @@ export type ProcessDisclosureItem =
 
 export interface ProcessDisclosureBlock extends TimelineBlockBase {
   kind: 'process_disclosure';
-  runId: RunId | string;
+  executionId: ExecutionId | string;
   status: ProcessDisclosureStatus;
   startedAt?: string;
   endedAt?: string;
@@ -308,7 +308,7 @@ export interface ProcessDisclosureBlock extends TimelineBlockBase {
 
 export interface AnswerTextBlock extends TimelineBlockBase {
   kind: 'answer_text';
-  runId: RunId | string;
+  executionId: ExecutionId | string;
   textId: string;
   status: AnswerTextStatus;
   text: string;
@@ -319,7 +319,7 @@ export type AssistantTimelineBlock = ProcessDisclosureBlock | AnswerTextBlock;
 
 export interface TimelineAssistantMessage extends TimelineMessageBase {
   role: 'assistant';
-  runId: RunId | string;
+  executionId: ExecutionId | string;
   blocks: AssistantTimelineBlock[];
   workspaceChangeFooter?: WorkspaceChangeFooterFact;
 }
@@ -590,7 +590,7 @@ export const ProcessDisclosureBlockSchema = z
   .object({
     ...TimelineBlockBaseShape,
     kind: z.literal('process_disclosure'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     status: ProcessDisclosureStatusSchema,
     startedAt: TimelineIsoDateTimeSchema.optional(),
     endedAt: TimelineIsoDateTimeSchema.optional(),
@@ -602,7 +602,7 @@ export const AnswerTextBlockSchema = z
   .object({
     ...TimelineBlockBaseShape,
     kind: z.literal('answer_text'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     textId: z.string().min(1),
     status: AnswerTextStatusSchema,
     text: z.string(),
@@ -619,7 +619,7 @@ export const TimelineUserMessageSchema = z
   .object({
     ...TimelineMessageBaseShape,
     role: z.literal('user'),
-    runId: z.string().min(1).optional(),
+    executionId: z.string().min(1).optional(),
     clientMessageId: TimelineIdSchema.optional(),
     skillSelection: z.object({
       name: z.string().min(1),
@@ -633,7 +633,7 @@ export const TimelineAssistantMessageSchema = z
   .object({
     ...TimelineMessageBaseShape,
     role: z.literal('assistant'),
-    runId: z.string().min(1),
+    executionId: z.string().min(1),
     blocks: z.array(AssistantTimelineBlockSchema).min(1),
     workspaceChangeFooter: WorkspaceChangeFooterFactSchema.optional(),
   })

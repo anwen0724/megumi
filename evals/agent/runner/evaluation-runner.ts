@@ -3,8 +3,15 @@ import { cp, mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { ProductHostInterface } from '@megumi/product/host';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type {
+  AnyEvent as RuntimeEvent,
+  ApprovalHostResult,
+  ApprovalResolvePayload,
+  CancelUserInputPayload,
+  ProductHostInterface,
+  SendUserInputPayload,
+  SendUserInputRequest,
+} from '@megumi/product/host';
 import type { ApprovalRequestedPayload } from '@megumi/events';
 import type { EvaluationCase } from '../cases/evaluation-case';
 import type { EvaluationIsolation, ExecutionProfile } from '../config/execution-profile';
@@ -20,14 +27,42 @@ import type { EvaluationDiagnostic, EvaluationExecution } from './evaluation-con
 import type { EvaluationEvidence } from './evaluation-contracts';
 import { collectEvaluationEvidence } from './evidence-collector';
 
-type EvaluationHost = {
+export type EvaluationHost = {
   workspace: Pick<ProductHostInterface['workspace'], 'useExistingProject'>;
-  chat: Pick<ProductHostInterface['chat'], 'createSession' | 'sendUserInput' | 'cancelUserInput' | 'listMessages' | 'listTimeline'>;
-  approval: Pick<ProductHostInterface['approval'], 'resolve'>;
+  /** The Host seam the runner drives: current Session operations plus the live Runtime Event stream. */
+  chat: EvaluationChatHost;
+  approval: {
+    resolve(request: ApprovalResolvePayload): Promise<{
+      payload: ApprovalHostResult;
+      events: AsyncIterable<RuntimeEvent>;
+    }>;
+  };
   settings: Pick<ProductHostInterface['settings'], 'get'>;
   skill: Pick<ProductHostInterface['skill'], 'listSkills'>;
   observability: Pick<ProductHostInterface['observability'], 'getRunTrace' | 'flush'>;
 };
+
+export interface EvaluationChatHost {
+  createSession(request: { projectId: string; title?: string }): Promise<
+    | { status: 'created'; session: { id: string } }
+    | { status: 'failed'; failure: { message: string } }
+  >;
+  sendUserInput(request: SendUserInputRequest): Promise<{
+    payload: SendUserInputPayload;
+    events: AsyncIterable<RuntimeEvent>;
+  }>;
+  cancelUserInput(request: { executionId: string }): Promise<{
+    payload: CancelUserInputPayload;
+    events: AsyncIterable<RuntimeEvent>;
+  }>;
+  listMessages(request: { sessionId: string }): Promise<
+    | { status: 'ok'; messages: unknown[] }
+    | { status: 'failed'; failure: { message: string } }
+  >;
+  listTimeline(request: { projectId: string; sessionId: string; executionId?: string }): Promise<{
+    messages: unknown[];
+  }>;
+}
 
 export interface EvaluationProductRuntime {
   host: EvaluationHost;
@@ -67,7 +102,7 @@ export interface EvaluationAttemptResult {
   runtimeEvents: RuntimeEvent[];
   workspaceId?: string;
   sessionId?: string;
-  runId?: string;
+  executionId?: string;
   session: { messages: unknown[]; timeline: unknown[] };
   evidence: EvaluationEvidence;
   runtimeFacts: {
@@ -103,7 +138,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
   let runtime: EvaluationProductRuntime | undefined;
   let workspaceId: string | undefined;
   let sessionId: string | undefined;
-  let runId: string | undefined;
+  let executionId: string | undefined;
   let terminalEvent: RuntimeEvent | undefined;
   let outcome: EvaluationAttemptResult['outcome'] = 'runner_failed';
 
@@ -180,6 +215,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
     const created = await runtime.host.chat.createSession({ projectId: workspaceId, title: input.evaluationCase.name });
     if (created.status !== 'created') throw new SetupError(`Evaluation session could not be created: ${created.failure.message}`);
     sessionId = created.session.id;
+    const activeSessionId = sessionId;
     const attachments = await prepareEvaluationAttachments(input.evaluationCase, workspaceRoot);
 
     const invocation = await runtime.host.chat.sendUserInput({
@@ -194,7 +230,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
     if (invocation.payload.type !== 'agent_run' || !invocation.events) {
       throw new SetupError(`Product did not start the expected Agent Run: ${invocation.payload.type}`);
     }
-    runId = invocation.payload.run.runId;
+    executionId = invocation.payload.run.executionId;
 
     const state: StreamState = {
       deadlineAt: Date.now() + input.profile.limits.wallClockMs,
@@ -213,7 +249,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
         const approvalEvent = state.approvals.shift()!;
         const resolution = approvalMatcher.resolve(approvalEvent);
         if (resolution.status === 'unmatched') {
-          await cancelAndConsume(runtime.host, runId, state);
+          await cancelAndConsume(runtime.host, executionId, state);
           diagnostics.push({ code: 'unexpected_approval', message: resolution.message, source: 'runner' });
           execution.status = 'completed';
           outcome = 'unexpected_approval';
@@ -241,7 +277,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
       }
     } catch (error) {
       if (error instanceof EvaluationLimitError) {
-        await cancelAndConsume(runtime.host, runId, state);
+        await cancelAndConsume(runtime.host, executionId, state);
         diagnostics.push({ code: error.code, message: error.message, source: 'runner' });
         execution.status = 'completed';
         outcome = 'limit_reached';
@@ -253,7 +289,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
     const messages = await runtime.host.chat.listMessages({ sessionId });
     if (messages.status === 'ok') session.messages = messages.messages;
     else diagnostics.push({ code: 'session_reconciliation_failed', message: messages.failure.message, source: 'runner' });
-    const timeline = await runtime.host.chat.listTimeline({ projectId: workspaceId, sessionId, ...(runId ? { runId } : {}) });
+    const timeline = await runtime.host.chat.listTimeline({ projectId: workspaceId, sessionId, ...(executionId ? { executionId } : {}) });
     session.timeline = timeline.messages;
     try {
       await runtime.host.observability.flush();
@@ -263,13 +299,13 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
     evidence = await collectEvaluationEvidence({
       workspaceRoot,
       declaredWorkspacePaths,
-      sessionId,
+      sessionId: activeSessionId,
       messages: session.messages,
       timeline: session.timeline,
       runtimeEvents,
       runtimeEventsComplete: Boolean(terminalEvent) || outcome === 'unexpected_approval' || outcome === 'limit_reached',
       runtimeEventsTruncated: state.eventsTruncated,
-      runId,
+      executionId,
       observabilityHost: runtime.host.observability,
       initialWorkspaceFiles,
     });
@@ -305,7 +341,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
     execution.correlation = {
       ...(workspaceId ? { workspaceId } : {}),
       ...(sessionId ? { sessionId } : {}),
-      ...(runId ? { runId } : {}),
+      ...(executionId ? { executionId } : {}),
     };
     return {
       execution,
@@ -314,7 +350,7 @@ export async function runEvaluationAttempt(input: RunEvaluationAttemptInput): Pr
       runtimeEvents,
       ...(workspaceId ? { workspaceId } : {}),
       ...(sessionId ? { sessionId } : {}),
-      ...(runId ? { runId } : {}),
+      ...(executionId ? { executionId } : {}),
       session,
       evidence,
       runtimeFacts,
@@ -363,9 +399,9 @@ async function consumeRuntimeStream(stream: AsyncIterable<RuntimeEvent>, state: 
     const event = next.value;
     if (state.events.length < 10_000) state.events.push(event);
     else state.eventsTruncated = true;
-    if (event.eventType === 'approval.requested') state.approvals.push(event);
-    if (event.eventType === 'model_call.started') state.modelCalls += 1;
-    if (event.eventType === 'tool_call.requested') state.toolCalls += 1;
+    if (event.type === 'approval.requested') state.approvals.push(event);
+    if (event.type === 'turn.started') state.modelCalls += 1;
+    if (event.type === 'tool_execution.requested') state.toolCalls += 1;
     if (state.limits.maxModelCalls && state.modelCalls > state.limits.maxModelCalls) {
       await iterator.return?.();
       throw new EvaluationLimitError('model_call_limit_reached', 'Evaluation Model Call limit was reached.');
@@ -403,8 +439,8 @@ async function nextBeforeDeadline(
   }
 }
 
-async function cancelAndConsume(host: EvaluationHost, runId: string, state: StreamState): Promise<void> {
-  const cancelled = await host.chat.cancelUserInput({ runId });
+async function cancelAndConsume(host: EvaluationHost, executionId: string, state: StreamState): Promise<void> {
+  const cancelled = await host.chat.cancelUserInput({ executionId });
   if (cancelled.events) await consumeRuntimeStream(cancelled.events, state).catch(() => undefined);
 }
 
@@ -459,7 +495,7 @@ interface ApprovalFacts {
 }
 
 function approvalFacts(event: RuntimeEvent): ApprovalFacts | undefined {
-  const request = (event.payload as ApprovalRequestedPayload).approvalRequest;
+  const request = event.payload as ApprovalRequestedPayload;
   const operations = request.operations as Array<{
     action?: unknown;
     resource?: { matcher?: { value?: unknown }; type?: unknown };
@@ -503,7 +539,7 @@ function matchesApproval(
 }
 
 function isTerminalEvent(event: RuntimeEvent): boolean {
-  return event.eventType === 'run.completed' || event.eventType === 'run.failed' || event.eventType === 'run.cancelled';
+  return event.type === 'run.ended';
 }
 
 class SetupError extends Error {}

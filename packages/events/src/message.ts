@@ -4,7 +4,7 @@
  * Only assistant messages stream, so message.update is assistant-only;
  * user and tool_result messages appear whole (started → ended).
  * message.update carries a full snapshot — consumers replace, never merge.
- * The user message precedes run.started and carries no runId (input precedes run).
+ * The user message precedes run.started and carries no executionId (input precedes run).
  *
  * The zod schemas are the single source of truth; the payload types are
  * derived from them so they can never drift apart.

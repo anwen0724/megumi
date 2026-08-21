@@ -5,7 +5,7 @@ export interface ObservabilityCorrelation {
   traceId?: string;
   spanId?: string;
   parentSpanId?: string;
-  runId?: string;
+  executionId?: string;
   sessionId?: string;
   workspaceId?: string;
   requestId?: string;

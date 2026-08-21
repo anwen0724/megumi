@@ -34,7 +34,7 @@ describe('SessionBranchDrafts', () => {
         payload: { markerId: 'branch:owner-1' },
       }),
     ]);
-    expect(published[0]).not.toHaveProperty('runId');
+    expect(published[0]).not.toHaveProperty('executionId');
   });
 
   it('cancels active branch drafts with owner time and publishes the cancellation fact', () => {
@@ -65,7 +65,7 @@ describe('SessionBranchDrafts', () => {
       sessionId: 'session:1',
       payload: { draftId: 'branch:owner-1' },
     }));
-    expect(published.at(-1)).not.toHaveProperty('runId');
+    expect(published.at(-1)).not.toHaveProperty('executionId');
     expect(service.cancelBranchDraft({
       request_id: 'request:cancel-2',
       session_id: 'session:1',

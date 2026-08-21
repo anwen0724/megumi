@@ -23,7 +23,7 @@ export const EventIsoDateTimeSchema = z.string().datetime({ offset: true });
 const EventBaseSchema = z.object({
   id: EventIdSchema,
   sessionId: z.string().min(1),
-  runId: z.string().min(1).optional(),
+  executionId: z.string().min(1).optional(),
   sequence: EventSequenceSchema,
   createdAt: EventIsoDateTimeSchema,
 }).strict();

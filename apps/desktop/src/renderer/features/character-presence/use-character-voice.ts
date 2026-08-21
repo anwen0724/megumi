@@ -171,7 +171,7 @@ export function useCharacterVoice(
   const submitText = useCallback(async (text: string) => {
     const normalized = text.trim();
     if (!normalized) return;
-    if (findActiveRunId(selectedSessionId)) {
+    if (findActiveExecutionId(selectedSessionId)) {
       setError(t('errors.runActive'));
       return;
     }
@@ -326,11 +326,11 @@ function createVoiceClientMessageId(): string {
   return `message-user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function findActiveRunId(sessionId: string | null): string | undefined {
+function findActiveExecutionId(sessionId: string | null): string | undefined {
   if (!sessionId) return undefined;
   return Object.values(useRunStore.getState().runs)
     .filter((run) => run.sessionId === sessionId && (
       run.status === 'running' || run.status === 'waiting' || run.status === 'cancelling'
     ))
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.runId;
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.executionId;
 }

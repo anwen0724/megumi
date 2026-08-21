@@ -147,7 +147,7 @@ describe('useCharacterVoice window lifecycle', () => {
         type: 'agent_run',
         session: { id: 'session-1', projectId: 'project-1' },
         userMessage: { messageId: 'message-1' },
-        run: { runId: 'run-1' },
+        run: { executionId: 'run-1' },
       },
     });
     Object.assign(window.megumi, {

@@ -37,7 +37,7 @@ export function createBuiltInTestHarness(request: {
     const sequence = ++callSequence;
     const router = createToolRouter({
       scope: {
-        runId: 'run:test',
+        executionId: 'run:test',
         sessionId: 'session:test',
         workspaceId: 'workspace:test',
         modelCallId: `model-call:test:${sequence}`,

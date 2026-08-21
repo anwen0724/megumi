@@ -76,7 +76,7 @@ export function createToolRouter<TContext>(request: {
 
 function sameInvocation(expected: ToolInvocation, received: ToolInvocation): boolean {
   return expected.invocationId === received.invocationId
-    && expected.runId === received.runId
+    && expected.executionId === received.executionId
     && expected.sessionId === received.sessionId
     && expected.workspaceId === received.workspaceId
     && expected.modelCallId === received.modelCallId

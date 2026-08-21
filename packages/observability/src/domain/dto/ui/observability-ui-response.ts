@@ -7,7 +7,7 @@ import type { DiagnosticBundle } from "../../model/diagnostic-bundle";
 
 export interface RunTraceSummary {
   traceId: string;
-  runId: string;
+  executionId: string;
   sessionId?: string;
   workspaceId?: string;
   status: ObservabilityStatus;

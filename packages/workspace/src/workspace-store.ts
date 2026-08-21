@@ -28,16 +28,16 @@ export interface WorkspaceStore {
   findOpenChangeSet(input: {
     workspace_id: string;
     session_id: string;
-    run_id: string;
+    execution_id: string;
   }): WorkspaceChangeSet | undefined;
-  listChangeSetsByRunId(runId: string): WorkspaceChangeSet[];
+  listChangeSetsByExecutionId(executionId: string): WorkspaceChangeSet[];
   finalizeChangeSet(input: {
     change_set_id: string;
     finalized_at: string;
   }): WorkspaceChangeSet | undefined;
   upsertChangedFile(file: WorkspaceChangedFile): WorkspaceChangedFile;
   listChangedFilesByChangeSetId(changeSetId: string): WorkspaceChangedFile[];
-  listChangedFilesByRunId(runId: string): WorkspaceChangedFile[];
+  listChangedFilesByExecutionId(executionId: string): WorkspaceChangedFile[];
   getChangeSummary(changeSetId: string): WorkspaceChangeSummary | undefined;
 }
 
@@ -62,7 +62,7 @@ interface ChangeSetRow {
   change_set_id: string;
   workspace_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   status: WorkspaceChangeSet['status'];
   effect_coverage: WorkspaceChangeSet['effect_coverage'];
   changed_file_count: number;
@@ -162,10 +162,10 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
     insertChangeSet(changeSet) {
       database.prepare({ sql: `
         INSERT INTO workspace_changes (
-          change_set_id, workspace_id, session_id, run_id, status, effect_coverage,
+          change_set_id, workspace_id, session_id, execution_id, status, effect_coverage,
           changed_file_count, created_at, finalized_at
         ) VALUES (
-          @change_set_id, @workspace_id, @session_id, @run_id, @status, @effect_coverage,
+          @change_set_id, @workspace_id, @session_id, @execution_id, @status, @effect_coverage,
           @changed_file_count, @created_at, @finalized_at
         )
         ON CONFLICT(change_set_id) DO UPDATE SET
@@ -189,7 +189,7 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
         SELECT * FROM workspace_changes
         WHERE workspace_id = @workspace_id
           AND session_id = @session_id
-          AND run_id = @run_id
+          AND execution_id = @execution_id
           AND status = 'open'
         ORDER BY created_at ASC, change_set_id ASC
         LIMIT 1
@@ -197,12 +197,12 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
       return row ? fromChangeSetRow(row) : undefined;
     },
 
-    listChangeSetsByRunId(runId) {
+    listChangeSetsByExecutionId(executionId) {
       return database.prepare<ChangeSetRow>({ sql: `
         SELECT * FROM workspace_changes
-        WHERE run_id = ?
+        WHERE execution_id = ?
         ORDER BY created_at ASC, change_set_id ASC
-      ` }).all([runId]).map(fromChangeSetRow);
+      ` }).all([executionId]).map(fromChangeSetRow);
     },
 
     finalizeChangeSet(input) {
@@ -262,14 +262,14 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
       ` }).all([changeSetId]).map(fromChangedFileRow);
     },
 
-    listChangedFilesByRunId(runId) {
+    listChangedFilesByExecutionId(executionId) {
       return database.prepare<ChangedFileRow>({ sql: `
         SELECT f.*
         FROM workspace_changed_files f
         INNER JOIN workspace_changes c ON c.change_set_id = f.change_set_id
-        WHERE c.run_id = ?
+        WHERE c.execution_id = ?
         ORDER BY f.created_at ASC, f.changed_file_id ASC
-      ` }).all([runId]).map(fromChangedFileRow);
+      ` }).all([executionId]).map(fromChangedFileRow);
     },
 
     getChangeSummary(changeSetId) {
@@ -323,7 +323,7 @@ function fromChangeSetRow(row: ChangeSetRow): WorkspaceChangeSet {
     change_set_id: row.change_set_id,
     workspace_id: row.workspace_id,
     session_id: row.session_id,
-    run_id: row.run_id,
+    execution_id: row.execution_id,
     status: row.status,
     effect_coverage: row.effect_coverage,
     changed_file_count: row.changed_file_count,

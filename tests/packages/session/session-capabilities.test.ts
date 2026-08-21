@@ -257,7 +257,7 @@ describe('Session capabilities', () => {
     expect(service.saveAssistantReply({
       message_id: 'M2',
       session_id: 'S1',
-      run_id: 'R1',
+      execution_id: 'R1',
       status: 'completed',
       reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'reply' }],
@@ -273,17 +273,17 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
-      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      message_id: 'M1', session_id: 'S1', execution_id: 'R1',
       display_content: [{ type: 'text', text: 'hello' }], model_content: [{ type: 'text', text: 'hello' }], created_at: '2026-07-04T00:01:00.000Z',
     });
     expect(service.saveAssistantReply({
-      message_id: 'A1', session_id: 'S1', run_id: 'R1', status: 'completed',
+      message_id: 'A1', session_id: 'S1', execution_id: 'R1', status: 'completed',
       reason_code: 'normal_completion', content: [{ type: 'text', text: 'first' }],
       completed_at: '2026-07-04T00:02:00.000Z',
     }).status).toBe('saved');
 
     expect(service.saveAssistantReply({
-      message_id: 'A2', session_id: 'S1', run_id: 'R1', status: 'failed',
+      message_id: 'A2', session_id: 'S1', execution_id: 'R1', status: 'failed',
       reason_code: 'internal_error', content: [],
       completed_at: '2026-07-04T00:03:00.000Z',
     })).toMatchObject({
@@ -295,24 +295,24 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
-      message_id: 'U1', session_id: 'S1', run_id: 'R1',
+      message_id: 'U1', session_id: 'S1', execution_id: 'R1',
       display_content: [{ type: 'text', text: 'question' }], model_content: [{ type: 'text', text: 'question' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     service.saveModelResponse({
-      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      message_id: 'M1', session_id: 'S1', execution_id: 'R1',
       content: [{ type: 'text', text: 'working' }],
       outcome_status: 'incomplete', stop_reason: 'tool_use',
       completed_at: '2026-07-04T00:02:00.000Z',
     });
     service.saveToolResultMessage({
-      message_id: 'T1', session_id: 'S1', run_id: 'R1',
+      message_id: 'T1', session_id: 'S1', execution_id: 'R1',
       tool_call_id: 'call:1', tool_name: 'read_file', status: 'cancelled',
       content: [{ type: 'text', text: 'cancelled' }],
       completed_at: '2026-07-04T00:03:00.000Z',
     });
     service.saveAssistantReply({
-      message_id: 'A1', session_id: 'S1', run_id: 'R1',
+      message_id: 'A1', session_id: 'S1', execution_id: 'R1',
       status: 'cancelled', reason_code: 'user_cancelled', content: [],
       completed_at: '2026-07-04T00:04:00.000Z',
     });
@@ -334,7 +334,7 @@ describe('Session capabilities', () => {
     const request = {
       message_id: 'M-idempotent',
       session_id: 'S1',
-      run_id: 'R-idempotent',
+      execution_id: 'R-idempotent',
       display_content: [{ type: 'text' as const, text: 'same input' }],
       model_content: [{ type: 'text' as const, text: 'same input' }],
       created_at: '2026-07-04T00:01:00.000Z',
@@ -443,7 +443,7 @@ describe('Session capabilities', () => {
     });
 
     expect(service.saveAssistantReply({
-      message_id: 'A1', session_id: 'S1', run_id: 'R1',
+      message_id: 'A1', session_id: 'S1', execution_id: 'R1',
       parent_entry_id: first.entry.entry_id,
       status: 'completed',
       reason_code: 'normal_completion',
@@ -459,7 +459,7 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     const m1 = await service.saveUserMessage({ message_id: 'M1', session_id: 'S1', display_content: [{ type: 'text', text: 'm1' }], model_content: [{ type: 'text', text: 'm1' }], created_at: '2026-07-04T00:01:00.000Z' });
-    await service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', run_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: [{ type: 'text', text: 'm2' }], completed_at: '2026-07-04T00:02:00.000Z' });
+    await service.saveAssistantReply({ message_id: 'M2', session_id: 'S1', execution_id: 'R1', status: 'completed', reason_code: 'normal_completion', content: [{ type: 'text', text: 'm2' }], completed_at: '2026-07-04T00:02:00.000Z' });
     await service.switchActiveEntry({ session_id: 'S1', active_entry_id: m1.status === 'saved' ? m1.entry.entry_id : undefined, updated_at: '2026-07-04T00:03:00.000Z' });
     await service.saveUserMessage({ message_id: 'M3', session_id: 'S1', display_content: [{ type: 'text', text: 'm3' }], model_content: [{ type: 'text', text: 'm3' }], created_at: '2026-07-04T00:04:00.000Z' });
 
@@ -507,27 +507,27 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     await service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
-      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      message_id: 'M1', session_id: 'S1', execution_id: 'R1',
       display_content: [{ type: 'text', text: 'first input' }], model_content: [{ type: 'text', text: 'first input' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     await service.saveAssistantReply({
-      message_id: 'M2', session_id: 'S1', run_id: 'R1',
+      message_id: 'M2', session_id: 'S1', execution_id: 'R1',
       status: 'completed', reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'reply' }],
       completed_at: '2026-07-04T00:02:00.000Z',
     });
     await service.saveUserMessage({
-      message_id: 'M3', session_id: 'S1', run_id: 'R2',
+      message_id: 'M3', session_id: 'S1', execution_id: 'R2',
       display_content: [{ type: 'text', text: 'second input' }], model_content: [{ type: 'text', text: 'second input' }],
       created_at: '2026-07-04T00:03:00.000Z',
     });
 
-    expect(service.listUserMessagesByRunIds({ run_ids: ['R1', 'R2'] })).toMatchObject({
+    expect(service.listUserMessagesByExecutionIds({ execution_ids: ['R1', 'R2'] })).toMatchObject({
       status: 'ok',
       messages: [
-        { message_id: 'M1', run_id: 'R1', message_kind: 'user_message' },
-        { message_id: 'M3', run_id: 'R2', message_kind: 'user_message' },
+        { message_id: 'M1', execution_id: 'R1', message_kind: 'user_message' },
+        { message_id: 'M3', execution_id: 'R2', message_kind: 'user_message' },
       ],
     });
   });
@@ -644,7 +644,7 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
-      message_id: 'U1', session_id: 'S1', run_id: 'R1',
+      message_id: 'U1', session_id: 'S1', execution_id: 'R1',
       display_content: [{ type: 'text', text: 'question' }], model_content: [{ type: 'text', text: 'question' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
@@ -653,7 +653,7 @@ describe('Session capabilities', () => {
       totalTokens: 20, cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 },
     };
     service.saveModelResponse({
-      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      message_id: 'M1', session_id: 'S1', execution_id: 'R1',
       content: [{ type: 'text', text: 'working' }],
       outcome_status: 'incomplete', stop_reason: 'tool_use',
       api: 'anthropic-messages', provider: 'anthropic', model: 'claude-x',
@@ -662,7 +662,7 @@ describe('Session capabilities', () => {
       completed_at: '2026-07-04T00:02:00.000Z',
     });
     service.saveAssistantReply({
-      message_id: 'A1', session_id: 'S1', run_id: 'R1',
+      message_id: 'A1', session_id: 'S1', execution_id: 'R1',
       status: 'completed', reason_code: 'normal_completion',
       content: [{ type: 'text', text: 'done' }],
       api: 'anthropic-messages', provider: 'anthropic', model: 'claude-x', response_id: 'resp:2',
@@ -689,12 +689,12 @@ describe('Session capabilities', () => {
     const { service, workspaceId } = createService();
     service.createSession({ workspace_id: workspaceId, title: 'Session' });
     await service.saveUserMessage({
-      message_id: 'U1', session_id: 'S1', run_id: 'R1',
+      message_id: 'U1', session_id: 'S1', execution_id: 'R1',
       display_content: [{ type: 'text', text: 'question' }], model_content: [{ type: 'text', text: 'question' }],
       created_at: '2026-07-04T00:01:00.000Z',
     });
     service.saveModelResponse({
-      message_id: 'M1', session_id: 'S1', run_id: 'R1',
+      message_id: 'M1', session_id: 'S1', execution_id: 'R1',
       content: [{ type: 'toolCall', id: 'call:1', name: 'read_file', arguments: { path: 'a' } }],
       outcome_status: 'completed', stop_reason: 'tool_use',
       completed_at: '2026-07-04T00:02:00.000Z',
@@ -704,7 +704,7 @@ describe('Session capabilities', () => {
       totalTokens: 4, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     };
     service.saveToolResultMessage({
-      message_id: 'T1', session_id: 'S1', run_id: 'R1',
+      message_id: 'T1', session_id: 'S1', execution_id: 'R1',
       tool_call_id: 'call:1', tool_name: 'read_file', status: 'success',
       content: [{ type: 'text', text: 'content' }],
       usage,
@@ -725,7 +725,7 @@ describe('Session capabilities', () => {
     database.prepare({
       sql: `
         INSERT INTO session_messages (
-          message_id, session_id, run_id, message_kind, message_json, created_at, completed_at
+          message_id, session_id, execution_id, message_kind, message_json, created_at, completed_at
         ) VALUES (?, ?, ?, 'user_message', ?, ?, ?)
       `,
     }).run([

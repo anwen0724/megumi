@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Hosts the shaped Character Presence surface for the selected normal Session.
  * Character gestures control only presentation; Agent operations stay on existing Product contracts.
  */
@@ -260,7 +260,7 @@ export default function CharacterApp() {
             <CurrentInteractionView
               selectedSessionId={selectedSessionId}
               interaction={session.interaction}
-              activeRunId={session.activeRunId}
+              activeExecutionId={session.activeExecutionId}
               onApprovalResolve={session.resolveApproval}
               onCancel={session.cancelRun}
               onRetry={voice.submitText}

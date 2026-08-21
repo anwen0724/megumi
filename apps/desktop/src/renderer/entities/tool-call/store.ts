@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 
 export type ToolExecutionStatus =
   | 'created'
@@ -12,7 +12,7 @@ export type ToolExecutionStatus =
 
 export interface ToolPolicyDecision {
   toolCallId?: string;
-  runId?: string;
+  executionId?: string;
   source?: string;
   mode?: string;
   classifierLabel?: string;
@@ -29,7 +29,7 @@ export interface ToolPolicyDecision {
 export interface ToolExecution {
   toolExecutionId?: string;
   toolCallId: string;
-  runId: string;
+  executionId: string;
   toolName: string;
   modelVisibleName?: string;
   status: ToolExecutionStatus;
@@ -51,7 +51,7 @@ export interface ToolCallState {
   toolCallsById: Record<string, ToolExecution>;
   upsertToolCall(toolExecution: ToolExecution): void;
   findByToolCallId(toolCallId: string): ToolExecution | undefined;
-  listByRun(runId: string): ToolExecution[];
+  listByRun(executionId: string): ToolExecution[];
   reset(): void;
 }
 
@@ -65,8 +65,8 @@ export const useToolCallStore = create<ToolCallState>((set, get) => ({
   })),
   findByToolCallId: (toolCallId) => Object.values(get().toolCallsById)
     .find((toolExecution) => toolExecution.toolCallId === toolCallId),
-  listByRun: (runId) => Object.values(get().toolCallsById)
-    .filter((toolCall) => toolCall.runId === runId)
+  listByRun: (executionId) => Object.values(get().toolCallsById)
+    .filter((toolCall) => toolCall.executionId === executionId)
     .sort((left, right) => left.requestedAt.localeCompare(right.requestedAt)),
   reset: () => set({ toolCallsById: {} }),
 }));

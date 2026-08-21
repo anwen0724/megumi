@@ -58,8 +58,8 @@ describe('Timeline reconciler', () => {
       [user('user:1', 'run:1'), assistant('run:1', 'completed', 'Final', false)],
     );
 
-    expect(reconciled.find((message) => message.runId === 'run:2')).toBe(current[2]);
-    expect(JSON.stringify(reconciled.filter((message) => message.runId === 'run:1'))).toContain('Final');
+    expect(reconciled.find((message) => message.executionId === 'run:2')).toBe(current[2]);
+    expect(JSON.stringify(reconciled.filter((message) => message.executionId === 'run:1'))).toContain('Final');
   });
 
   it('deduplicates the live thinking item against the committed reconstruction', () => {
@@ -110,7 +110,7 @@ describe('Timeline reconciler', () => {
       sessionId: 'session:1',
       clientMessageId: 'client:1',
       messageId: 'user:1',
-      runId: 'run:1',
+      executionId: 'run:1',
       text: 'Hello',
       createdAt: time(2),
     });
@@ -119,19 +119,19 @@ describe('Timeline reconciler', () => {
     expect(committed[0]).toMatchObject({
       messageId: 'user:1',
       clientMessageId: 'client:1',
-      runId: 'run:1',
+      executionId: 'run:1',
     });
   });
 });
 
-function user(messageId: string, runId: string): TimelineMessage {
+function user(messageId: string, executionId: string): TimelineMessage {
   return {
     messageId,
     role: 'user',
     projectId: 'project:1',
     sessionId: 'session:1',
-    runId,
-    createdAt: time(runId === 'run:1' ? 1 : 3),
+    executionId,
+    createdAt: time(executionId === 'run:1' ? 1 : 3),
     blocks: [{
       blockId: `text:${messageId}`,
       kind: 'user_text',
@@ -142,36 +142,36 @@ function user(messageId: string, runId: string): TimelineMessage {
 }
 
 function assistant(
-  runId: string,
+  executionId: string,
   answerStatus: 'streaming' | 'completed',
   text: string,
   withThinking: boolean,
 ): TimelineAssistantMessage {
   return {
-    messageId: `assistant:${runId}`,
+    messageId: `assistant:${executionId}`,
     role: 'assistant',
     projectId: 'project:1',
     sessionId: 'session:1',
-    runId,
-    createdAt: time(runId === 'run:1' ? 2 : 4),
+    executionId,
+    createdAt: time(executionId === 'run:1' ? 2 : 4),
     blocks: [{
-      blockId: `process:${runId}`,
+      blockId: `process:${executionId}`,
       kind: 'process_disclosure',
-      runId,
+      executionId,
       status: answerStatus === 'completed' ? 'completed' : 'running',
       items: withThinking ? [{
-        itemId: `thinking:${runId}`,
+        itemId: `thinking:${executionId}`,
         kind: 'thinking',
-        thinkingId: `thinking:${runId}`,
+        thinkingId: `thinking:${executionId}`,
         status: answerStatus === 'completed' ? 'completed' : 'streaming',
         text: 'Thinking',
         format: 'markdown',
       }] : [],
     }, {
-      blockId: `answer:${runId}`,
+      blockId: `answer:${executionId}`,
       kind: 'answer_text',
-      runId,
-      textId: `text:${runId}`,
+      executionId,
+      textId: `text:${executionId}`,
       status: answerStatus,
       text,
       format: 'markdown',
@@ -187,7 +187,7 @@ function messageBase(messageId: string) {
   return {
     messageId,
     sessionId: 'session:1',
-    runId: 'run:1',
+    executionId: 'run:1',
     createdAt: time(1),
     completedAt: time(2),
   };

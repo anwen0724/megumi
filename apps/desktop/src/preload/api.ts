@@ -9,7 +9,7 @@ import type {
   ReadSessionResult,
   ReadCommittedRunResult,
   GetInputSuggestionsResult,
-  ListUserMessagesByRunIdsResult,
+  ListUserMessagesByExecutionIdsResult,
   GetContextUsageResult,
   ListSessionsResult,
   SendUserInputPayload,
@@ -251,7 +251,7 @@ export const api = {
     message: {
       list: (
         request: BusinessRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.sessionMessageList>,
-      ): Promise<RuntimeIpcResult<ListUserMessagesByRunIdsResult, typeof IPC_CHANNELS.session.sessionMessageList>> =>
+      ): Promise<RuntimeIpcResult<ListUserMessagesByExecutionIdsResult, typeof IPC_CHANNELS.session.sessionMessageList>> =>
         invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageList, request),
       send: (
         request: BusinessRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.session.sessionMessageSend>,

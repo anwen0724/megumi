@@ -29,7 +29,7 @@ describe('legacy Session history backfill', () => {
     try {
       const messages = migrated.prepare<{
         message_id: string;
-        run_id: string;
+        execution_id: string;
         message_kind: string;
         message_json: string;
       }>({ sql: `
@@ -40,14 +40,14 @@ describe('legacy Session history backfill', () => {
           SELECT parent.entry_id, parent.parent_entry_id, parent.message_id, child.depth + 1
           FROM session_entries parent JOIN active_path child ON parent.entry_id = child.parent_entry_id
         )
-        SELECT message.message_id, message.run_id, message.message_kind, message.message_json
+        SELECT message.message_id, message.execution_id, message.message_kind, message.message_json
         FROM active_path path JOIN session_messages message ON message.message_id = path.message_id
         ORDER BY path.depth DESC
       ` }).all();
       expect(messages.map((message) => message.message_kind)).toEqual([
         'user_message', 'model_response', 'tool_result', 'tool_result', 'model_response',
       ]);
-      expect(messages.every((message) => message.run_id === 'run:1')).toBe(true);
+      expect(messages.every((message) => message.execution_id === 'run:1')).toBe(true);
       expect(messages.slice(1, 4).map((message) => JSON.parse(message.message_json))).toMatchObject([
         { outcome_status: 'incomplete', content: [
           { type: 'text', text: 'Checking.' },

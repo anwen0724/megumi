@@ -47,13 +47,13 @@ describe('Tools ModelCall routing', () => {
     });
 
     const first = tools.resolveModelCallTools({
-      runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1',
+      executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1',
     });
     expect(first.status).toBe('resolved');
     disabled.add('read_file');
 
     const routed = tools.routeToolCall({
-      runId: 'run:1',
+      executionId: 'run:1',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       modelCallId: 'model-call:1',
@@ -73,7 +73,7 @@ describe('Tools ModelCall routing', () => {
       .not.toContain('read_file');
 
     const second = tools.resolveModelCallTools({
-      runId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:2',
+      executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:2',
     });
     expect(second.status).toBe('resolved');
     if (second.status === 'resolved') {
@@ -83,7 +83,7 @@ describe('Tools ModelCall routing', () => {
 
     tools.releaseModelCallTools({ modelCallId: 'model-call:1' });
     expect(tools.routeToolCall({
-      runId: 'run:1',
+      executionId: 'run:1',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       modelCallId: 'model-call:1',
@@ -116,7 +116,7 @@ describe('Tools ModelCall routing', () => {
       builtInToolAvailability: { isAvailable: () => true },
     });
     const scope = {
-      runId: 'run:plan', sessionId: 'session:plan', workspaceId: 'workspace:plan', modelCallId: 'model-call:plan',
+      executionId: 'run:plan', sessionId: 'session:plan', workspaceId: 'workspace:plan', modelCallId: 'model-call:plan',
     };
     expect(tools.resolveModelCallTools(scope).status).toBe('resolved');
     const routed = tools.routeToolCall({

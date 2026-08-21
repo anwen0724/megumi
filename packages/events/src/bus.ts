@@ -4,7 +4,7 @@
  * Producers publish the facts they know (type, payload, ownership); the bus
  * fills the protocol fields — id, session-monotonic sequence, createdAt — so
  * producers never coordinate. Subscribers declare what they care about
- * (sessionId / runId / eventTypes) and receive only matching events, in the
+ * (sessionId / executionId / eventTypes) and receive only matching events, in the
  * order the bus received them.
  *
  * Delivery is best-effort by design (see CONTEXT.md): a failing subscriber is
@@ -20,7 +20,7 @@ export interface PublishEventInput {
   /** Required ownership root. */
   readonly sessionId: string;
   /** Optional: the run the event happened in. */
-  readonly runId?: string;
+  readonly executionId?: string;
   /** Optional override; the bus assigns a unique id when omitted. */
   readonly id?: string;
   /** Optional override; the bus stamps createdAt when omitted. */
@@ -31,7 +31,7 @@ export interface EventFilter {
   /** Receive only events of this session. */
   readonly sessionId?: string;
   /** Receive only events of this run. */
-  readonly runId?: string;
+  readonly executionId?: string;
   /** Receive only these event types. Dimensions are intersected. */
   readonly eventTypes?: readonly EventType[];
 }
@@ -117,7 +117,7 @@ export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
         type: input.type,
         payload: input.payload,
         sessionId: input.sessionId,
-        ...(input.runId === undefined ? {} : { runId: input.runId }),
+        ...(input.executionId === undefined ? {} : { executionId: input.executionId }),
         sequence,
         createdAt: input.createdAt ?? now(),
       } as AnyEvent;
@@ -265,7 +265,7 @@ function validateReadRequest(request: ReadEventsRequest): void {
 
 function matches(filter: EventFilter, event: Event): boolean {
   if (filter.sessionId !== undefined && filter.sessionId !== event.sessionId) return false;
-  if (filter.runId !== undefined && filter.runId !== event.runId) return false;
+  if (filter.executionId !== undefined && filter.executionId !== event.executionId) return false;
   if (filter.eventTypes !== undefined && !filter.eventTypes.includes(event.type)) return false;
   return true;
 }

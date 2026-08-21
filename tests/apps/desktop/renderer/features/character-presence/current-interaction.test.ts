@@ -17,7 +17,7 @@ describe('projectCurrentInteraction', () => {
           {
             blockId: 'process-current-run',
             kind: 'process_disclosure' as const,
-            runId: 'current-run',
+            executionId: 'current-run',
             status: 'running' as const,
             items: [
               {
@@ -39,7 +39,7 @@ describe('projectCurrentInteraction', () => {
           {
             blockId: 'answer-current-run',
             kind: 'answer_text' as const,
-            runId: 'current-run',
+            executionId: 'current-run',
             textId: 'answer-current-run',
             status: 'streaming' as const,
             text: 'I am checking it.',
@@ -51,7 +51,7 @@ describe('projectCurrentInteraction', () => {
 
     const interaction = projectCurrentInteraction(messages);
 
-    expect(interaction?.runId).toBe('current-run');
+    expect(interaction?.executionId).toBe('current-run');
     expect(interaction?.userText).toBe('Change the file');
     expect(interaction?.replyText).toBe('I am checking it.');
     expect(interaction?.activeTool?.toolName).toBe('write_file');
@@ -73,23 +73,23 @@ function user(messageId: string, text: string, createdAt: string): TimelineMessa
 }
 
 function assistant(
-  runId: string,
+  executionId: string,
   text: string,
   status: 'streaming' | 'completed',
   createdAt: string,
 ): TimelineAssistantMessage {
   return {
-    messageId: `${runId}:message`,
+    messageId: `${executionId}:message`,
     role: 'assistant',
-    runId,
+    executionId,
     projectId: 'project-1',
     sessionId: 'session-1',
     createdAt,
     blocks: [{
-      blockId: `${runId}:answer`,
+      blockId: `${executionId}:answer`,
       kind: 'answer_text',
-      runId,
-      textId: `${runId}:answer`,
+      executionId,
+      textId: `${executionId}:answer`,
       status,
       text,
       format: 'markdown',

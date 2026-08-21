@@ -59,19 +59,19 @@ function assistantMessageWithFooter(): TimelineAssistantMessage {
     role: 'assistant',
     projectId: 'workspace-1',
     sessionId: 'session-1',
-    runId: 'run-1',
+    executionId: 'run-1',
     createdAt: '2026-07-09T03:13:25.326Z',
     blocks: [{
       blockId: 'answer:message-assistant-1',
       kind: 'answer_text',
-      runId: 'run-1',
+      executionId: 'run-1',
       textId: 'text:message-assistant-1',
       status: 'completed',
       text: '文件写好了。',
       format: 'markdown',
     }],
     workspaceChangeFooter: {
-      runId: 'run-1',
+      executionId: 'run-1',
       sessionId: 'session-1',
       updatedAt: '2026-07-09T03:13:25.335Z',
       changeSets: [{

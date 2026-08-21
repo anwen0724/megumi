@@ -9,7 +9,7 @@ function planRouter() {
   const registry = createBuiltInToolRegistry({});
   return createToolRouter({
     scope: {
-      runId: 'run:plan',
+      executionId: 'run:plan',
       sessionId: 'session:plan',
       workspaceId: 'workspace:plan',
       modelCallId: 'model-call:plan',

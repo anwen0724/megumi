@@ -1,11 +1,11 @@
-﻿import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useToolCallStore } from '@megumi/desktop/renderer/entities/tool-call';
 import type { ToolExecution } from '@megumi/desktop/renderer/entities/tool-call';
 
 const toolCall: ToolExecution = {
   toolExecutionId: 'tool-execution-1',
   toolCallId: 'tool-call-1',
-  runId: 'run-1',
+  executionId: 'run-1',
   toolName: 'read_file',
   input: { path: 'src/index.ts' },
   inputPreview: {
@@ -49,7 +49,7 @@ describe('useToolCallStore', () => {
       ...toolCall,
       toolExecutionId: 'tool-execution-4',
       toolCallId: 'tool-call-4',
-      runId: 'run-2',
+      executionId: 'run-2',
       requestedAt: '2026-05-16T00:00:00.000Z',
     };
 

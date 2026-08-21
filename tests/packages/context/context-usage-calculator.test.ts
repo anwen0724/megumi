@@ -36,7 +36,7 @@ function history(): SessionHistoryItem[] {
       type: 'message',
       entry: { entry_id: 'e1', session_id: 's', entry_type: 'message', message_id: 'm1', created_at: 'now' },
       message: {
-        message_id: 'm1', session_id: 's', run_id: 'r1', message_kind: 'user_message',
+        message_id: 'm1', session_id: 's', execution_id: 'r1', message_kind: 'user_message',
         display_content: [{ type: 'text', text: 'task' }],
         model_content: [{ type: 'text', text: 'task' }],
         created_at: 'now',
@@ -47,7 +47,7 @@ function history(): SessionHistoryItem[] {
       type: 'message',
       entry: { entry_id: 'e2', session_id: 's', entry_type: 'message', message_id: 'm2', created_at: 'now' },
       message: {
-        message_id: 'm2', session_id: 's', run_id: 'r1', message_kind: 'model_response',
+        message_id: 'm2', session_id: 's', execution_id: 'r1', message_kind: 'model_response',
         content: [{ type: 'text', text: 'answer' }],
         outcome_status: 'completed',
         stop_reason: 'stop',

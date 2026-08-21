@@ -9,7 +9,7 @@ import type { CurrentInteraction } from '../current-interaction';
 export function CurrentInteractionView(props: {
   readonly selectedSessionId: string | null;
   readonly interaction: CurrentInteraction | null;
-  readonly activeRunId?: string;
+  readonly activeExecutionId?: string;
   readonly onApprovalResolve: (payload: ToolApprovalResolvePayload) => Promise<ToolApprovalResolveResult>;
   readonly onCancel: () => Promise<boolean>;
   readonly onRetry: (text: string) => Promise<void>;
@@ -50,7 +50,7 @@ export function CurrentInteractionView(props: {
           {interaction?.error ? <p className="rounded-lg bg-rose-400/15 px-2 py-1.5 text-xs text-rose-100">{interaction.error}</p> : null}
           {interaction ? (
             <div className="flex gap-2 pt-1">
-              {props.activeRunId ? (
+              {props.activeExecutionId ? (
                 <button type="button" className="flex items-center gap-1.5 rounded-lg bg-rose-300/90 px-2.5 py-1.5 text-xs font-semibold text-slate-950" onClick={() => { void props.onCancel(); }}>
                   <Square size={12} />{t('interaction.cancel')}
                 </button>

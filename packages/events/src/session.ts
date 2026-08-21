@@ -3,7 +3,7 @@
  * run. Only execution actions live here (compaction, branch drafts) — state
  * changes like session rename are not events (see CONTEXT.md, domain boundary).
  * Long operations use a lifecycle pair; instant actions settle in one event.
- * Session-scoped events carry no runId; sequence locates them between runs.
+ * Session-scoped events carry no executionId; sequence locates them between runs.
  *
  * The zod schemas are the single source of truth; the payload types are
  * derived from them so they can never drift apart.

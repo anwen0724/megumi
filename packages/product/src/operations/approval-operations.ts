@@ -64,7 +64,7 @@ function toRunApprovalDecision(decision: ApprovalResolvePayload): RunApprovalDec
 
 function toApprovalRunDto(run: Run): ApprovalRunUiDto {
   return {
-    runId: run.runId,
+    executionId: run.executionId,
     sessionId: run.sessionId,
     status: run.status,
     createdAt: run.createdAt,

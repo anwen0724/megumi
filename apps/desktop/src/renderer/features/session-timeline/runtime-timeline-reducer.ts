@@ -77,7 +77,7 @@ function projectRuntimeTimelineEvent(
     return projectSessionCompactionEvent(nextMessages, event, projectId);
   }
 
-  if (!event.runId) return nextMessages;
+  if (!event.executionId) return nextMessages;
 
   if (event.type === 'run.started') {
     const assistant = ensureAssistantMessage(nextMessages, event, projectId);
@@ -299,7 +299,7 @@ function projectRuntimeTimelineEvent(
     process.items = process.items.filter((item) => (
       !(item.kind === 'tool_activity' && item.toolCallId === payload.toolCallId)
     ));
-    const item = ensurePlanActivityItem(process, event.runId ?? event.id, payload.toolCallId, event.createdAt);
+    const item = ensurePlanActivityItem(process, event.executionId ?? event.id, payload.toolCallId, event.createdAt);
     item.explanation = payload.explanation;
     item.plan = payload.plan.map((step) => ({ ...step }));
     item.updatedAt = event.createdAt;
@@ -325,7 +325,7 @@ function projectRuntimeTimelineEvent(
       const existingAnswer = assistant.blocks.find(
         (block): block is AnswerTextBlock => block.kind === 'answer_text',
       );
-      const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
+      const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.executionId);
       answer.status = 'failed';
       answer.updatedAt = event.createdAt;
       process.status = 'failed';
@@ -340,7 +340,7 @@ function projectRuntimeTimelineEvent(
       const existingAnswer = assistant.blocks.find(
         (block): block is AnswerTextBlock => block.kind === 'answer_text',
       );
-      const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.runId);
+      const answer = existingAnswer ?? ensureAnswerBlock(assistant, event, event.executionId);
       answer.status = 'cancelled';
       answer.updatedAt = event.createdAt;
       process.status = 'cancelled';
@@ -444,16 +444,16 @@ function ensureAssistantMessage(
 ): TimelineAssistantMessage {
   const existing = messages.find(
     (message): message is TimelineAssistantMessage =>
-      message.role === 'assistant' && message.runId === event.runId,
+      message.role === 'assistant' && message.executionId === event.executionId,
   );
   if (existing) return existing;
 
   const assistant: TimelineAssistantMessage = {
-    messageId: `assistant:${event.runId}`,
+    messageId: `assistant:${event.executionId}`,
     role: 'assistant',
     projectId,
     sessionId: event.sessionId ?? 'session:unknown',
-    runId: event.runId ?? event.id,
+    executionId: event.executionId ?? event.id,
     createdAt: event.createdAt,
     updatedAt: event.createdAt,
     turnOrder: 1,
@@ -467,9 +467,9 @@ function ensureProcessBlock(assistant: TimelineAssistantMessage, event: AnyEvent
   const existing = assistant.blocks.find((block): block is ProcessDisclosureBlock => block.kind === 'process_disclosure');
   if (existing) return existing;
   const block: ProcessDisclosureBlock = {
-    blockId: `process:${event.runId}`,
+    blockId: `process:${event.executionId}`,
     kind: 'process_disclosure',
-    runId: event.runId ?? event.id,
+    executionId: event.executionId ?? event.id,
     status: 'running',
     startedAt: event.createdAt,
     createdAt: event.createdAt,
@@ -488,9 +488,9 @@ function ensureAnswerBlock(
   const existing = findAnswerBlock(assistant, textId);
   if (existing) return existing;
   const block: AnswerTextBlock = {
-    blockId: `answer:${event.runId}`,
+    blockId: `answer:${event.executionId}`,
     kind: 'answer_text',
-    runId: event.runId ?? event.id,
+    executionId: event.executionId ?? event.id,
     textId: `text:${textId}`,
     status: 'streaming',
     text: '',
@@ -505,7 +505,7 @@ function ensureAnswerBlock(
 function findAnswerBlock(assistant: TimelineAssistantMessage, textId: string): AnswerTextBlock | undefined {
   return assistant.blocks.find(
     (block): block is AnswerTextBlock =>
-      block.kind === 'answer_text' && (block.textId === `text:${textId}` || block.runId === textId),
+      block.kind === 'answer_text' && (block.textId === `text:${textId}` || block.executionId === textId),
   );
 }
 
@@ -592,7 +592,7 @@ function retryLabel(eventType: 'turn.retry.started' | 'turn.retry.completed' | '
 
 function ensurePlanActivityItem(
   process: ProcessDisclosureBlock,
-  runId: string,
+  executionId: string,
   toolCallId: string,
   createdAt: string,
 ): PlanActivityItem {
@@ -604,7 +604,7 @@ function ensurePlanActivityItem(
     return existing;
   }
   const item: PlanActivityItem = {
-    itemId: `plan:${runId}`,
+    itemId: `plan:${executionId}`,
     kind: 'plan_activity',
     toolCallId,
     plan: [],

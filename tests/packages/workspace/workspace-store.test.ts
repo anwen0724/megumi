@@ -24,7 +24,7 @@ const changeSet = (overrides: Partial<WorkspaceChangeSet> = {}): WorkspaceChange
   change_set_id: 'change-set:one',
   workspace_id: 'workspace:one',
   session_id: 'session:one',
-  run_id: 'run:one',
+  execution_id: 'run:one',
   status: 'open',
   effect_coverage: 'complete',
   changed_file_count: 0,

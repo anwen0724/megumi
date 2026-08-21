@@ -9,7 +9,7 @@ export function buildDiagnosticBundle(
   environment: DiagnosticEnvironment,
   now: Date,
 ): DiagnosticBundle {
-  const id = detail.summary.runId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  const id = detail.summary.executionId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
   return {
     suggestedDirectoryName: `megumi-diagnostic-${id}`,
     files: [

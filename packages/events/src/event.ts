@@ -39,7 +39,7 @@ export interface Event<TType extends EventType = EventType> {
   /** Required ownership root: every event belongs to exactly one session. */
   readonly sessionId: string;
   /** Optional: which run the event happened in (session-scoped events omit it). */
-  readonly runId?: string;
+  readonly executionId?: string;
   /** Session-monotonic order assigned by the bus — the authority for sorting. */
   readonly sequence: number;
   /** Display time; never used for ordering (clocks may drift). */

@@ -180,7 +180,7 @@ export const SessionAssistantReplyPayloadSchema = z.object({
 const SessionMessageBaseSchema = z.object({
   message_id: z.string().min(1),
   session_id: z.string().min(1),
-  run_id: z.string().min(1).optional(),
+  execution_id: z.string().min(1).optional(),
   created_at: z.string().min(1),
   completed_at: z.string().min(1).optional(),
 });
@@ -221,8 +221,8 @@ export const SessionAssistantReplyMessageSchema = SessionMessageBaseSchema.exten
   if (!result.success) {
     for (const issue of result.error.issues) context.addIssue(issue);
   }
-  if (!message.run_id) {
-    context.addIssue({ code: 'custom', path: ['run_id'], message: 'Assistant Reply requires run_id.' });
+  if (!message.execution_id) {
+    context.addIssue({ code: 'custom', path: ['execution_id'], message: 'Assistant Reply requires execution_id.' });
   }
   if (!message.completed_at) {
     context.addIssue({ code: 'custom', path: ['completed_at'], message: 'Assistant Reply requires completed_at.' });

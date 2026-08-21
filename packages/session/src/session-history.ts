@@ -45,7 +45,7 @@ import type { SessionStore } from './session-store';
 export interface SaveUserMessageRequest {
   message_id: string;
   session_id: string;
-  run_id?: string;
+  execution_id?: string;
   display_content: SessionUserContent[];
   model_content: SessionUserContent[];
   skill_selection?: { name: string; skill_path: string };
@@ -57,7 +57,7 @@ export interface SaveUserMessageRequest {
 export interface SaveModelResponseRequest {
   message_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   parent_entry_id?: string;
   content: SessionAssistantContent[];
   outcome_status: 'completed' | 'incomplete' | 'failed';
@@ -77,7 +77,7 @@ export interface SaveModelResponseRequest {
 export interface SaveAssistantReplyRequest {
   message_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   parent_entry_id?: string;
   status: AssistantReplyStatus;
   content: SessionAssistantContent[];
@@ -95,7 +95,7 @@ export interface SaveAssistantReplyRequest {
 export interface SaveToolResultMessageRequest {
   message_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   parent_entry_id?: string;
   tool_call_id: string;
   tool_name: string;
@@ -128,11 +128,11 @@ export type ListMessagesResult =
   | { status: 'ok'; messages: SessionMessageWithAttachments[] }
   | { status: 'failed'; failure: SessionFailure };
 
-export interface ListUserMessagesByRunIdsRequest {
-  run_ids: string[];
+export interface ListUserMessagesByExecutionIdsRequest {
+  execution_ids: string[];
 }
 
-export type ListUserMessagesByRunIdsResult =
+export type ListUserMessagesByExecutionIdsResult =
   | { status: 'ok'; messages: SessionMessage[] }
   | { status: 'failed'; failure: SessionFailure };
 
@@ -151,7 +151,7 @@ export interface SessionHistory {
   saveAssistantReply(request: SaveAssistantReplyRequest): SaveAssistantReplyResult;
   saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
   listMessages(request: ListMessagesRequest): ListMessagesResult;
-  listUserMessagesByRunIds(request: ListUserMessagesByRunIdsRequest): ListUserMessagesByRunIdsResult;
+  listUserMessagesByExecutionIds(request: ListUserMessagesByExecutionIdsRequest): ListUserMessagesByExecutionIdsResult;
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult;
   getActiveConversationHistory(
     request: GetActiveConversationHistoryRequest,
@@ -186,7 +186,7 @@ export function createSessionHistory(options: CreateSessionHistoryOptions): Sess
     saveAssistantReply: (request) => implementation.saveAssistantReply(request),
     saveToolResultMessage: (request) => implementation.saveToolResultMessage(request),
     listMessages: (request) => implementation.listMessages(request),
-    listUserMessagesByRunIds: (request) => implementation.listUserMessagesByRunIds(request),
+    listUserMessagesByExecutionIds: (request) => implementation.listUserMessagesByExecutionIds(request),
     getActiveHistory: (request) => implementation.getActiveHistory(request),
     getActiveConversationHistory: (request) => implementation.getActiveConversationHistory(request),
     getCommittedBranch: (request) => implementation.getCommittedBranch(request),
@@ -214,7 +214,7 @@ class DefaultSessionHistory implements SessionHistory {
     const candidate: SessionMessage = {
       message_id: request.message_id,
       session_id: request.session_id,
-      ...(request.run_id ? { run_id: request.run_id } : {}),
+      ...(request.execution_id ? { execution_id: request.execution_id } : {}),
       message_kind: 'user_message',
       display_content: request.display_content,
       model_content: request.model_content,
@@ -312,7 +312,7 @@ class DefaultSessionHistory implements SessionHistory {
     const message: SessionMessage = {
       message_id: request.message_id,
       session_id: request.session_id,
-      run_id: request.run_id,
+      execution_id: request.execution_id,
       message_kind: 'model_response',
       content: request.content,
       outcome_status: request.outcome_status,
@@ -336,7 +336,7 @@ class DefaultSessionHistory implements SessionHistory {
     const message: SessionMessage = {
       message_id: request.message_id,
       session_id: request.session_id,
-      run_id: request.run_id,
+      execution_id: request.execution_id,
       message_kind: 'assistant_reply',
       status: request.status,
       content: request.content,
@@ -354,7 +354,7 @@ class DefaultSessionHistory implements SessionHistory {
     const replay = this.replayMessage(message);
     if (replay) return replay;
     try {
-      if (this.options.store.findAssistantReplyByRunId(request.session_id, request.run_id)) {
+      if (this.options.store.findAssistantReplyByExecutionId(request.session_id, request.execution_id)) {
         return {
           status: 'failed',
           failure: {
@@ -373,7 +373,7 @@ class DefaultSessionHistory implements SessionHistory {
     const message: SessionMessage = {
       message_id: request.message_id,
       session_id: request.session_id,
-      run_id: request.run_id,
+      execution_id: request.execution_id,
       message_kind: 'tool_result',
       tool_call_id: request.tool_call_id,
       tool_name: request.tool_name,
@@ -402,13 +402,13 @@ class DefaultSessionHistory implements SessionHistory {
     }
   }
 
-  listUserMessagesByRunIds(
-    request: ListUserMessagesByRunIdsRequest,
-  ): ListUserMessagesByRunIdsResult {
+  listUserMessagesByExecutionIds(
+    request: ListUserMessagesByExecutionIdsRequest,
+  ): ListUserMessagesByExecutionIdsResult {
     try {
       return {
         status: 'ok',
-        messages: this.options.store.listUserMessagesByRunIds(request.run_ids),
+        messages: this.options.store.listUserMessagesByExecutionIds(request.execution_ids),
       };
     } catch (error) {
       return sessionFailure(error);

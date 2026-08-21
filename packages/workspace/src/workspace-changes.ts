@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Records structured file effects reported by Tool execution without inferring
  * behavior from Tool names or re-running filesystem observations.
  */
@@ -14,7 +14,7 @@ export interface WorkspaceChangeSet {
   change_set_id: string;
   workspace_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   status: WorkspaceChangeSetStatus;
   effect_coverage: WorkspaceEffectCoverage;
   changed_file_count: number;
@@ -43,7 +43,7 @@ export interface WorkspaceChangeSummary {
 export interface WorkspaceChangeExecutionScope {
   workspace_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   step_id?: string;
   tool_call_id?: string;
   tool_execution_id?: string;
@@ -76,7 +76,7 @@ export interface TrackWorkspaceToolExecutionRequest<T extends { readonly effectR
 export interface FinalizeWorkspaceChangeSetRequest {
   workspace_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   step_id?: string;
   finalized_at: string;
 }
@@ -89,9 +89,9 @@ export type GetWorkspaceChangeSummaryResult =
   | { status: 'not_found'; change_set_id: string };
 export type ListWorkspaceChangedFilesRequest =
   | { by: 'change_set'; change_set_id: string }
-  | { by: 'run'; run_id: string };
+  | { by: 'run'; execution_id: string };
 export interface ListWorkspaceChangedFilesResult { files: WorkspaceChangedFile[] }
-export interface ListWorkspaceChangeSummariesRequest { by: 'run'; run_id: string }
+export interface ListWorkspaceChangeSummariesRequest { by: 'run'; execution_id: string }
 export interface ListWorkspaceChangeSummariesResult { summaries: WorkspaceChangeSummary[] }
 
 export interface WorkspaceChanges {
@@ -108,7 +108,7 @@ export interface WorkspaceChangeDiagnostic {
   reason: WorkspaceChangeDiagnosticReason;
   workspace_id: string;
   session_id: string;
-  run_id: string;
+  execution_id: string;
   workspace_path?: string;
 }
 
@@ -117,11 +117,11 @@ export interface CreateWorkspaceChangesRequest {
     WorkspaceStore,
     | 'insertChangeSet'
     | 'findOpenChangeSet'
-    | 'listChangeSetsByRunId'
+    | 'listChangeSetsByExecutionId'
     | 'finalizeChangeSet'
     | 'upsertChangedFile'
     | 'listChangedFilesByChangeSetId'
-    | 'listChangedFilesByRunId'
+    | 'listChangedFilesByExecutionId'
     | 'getChangeSummary'
   >;
   ids?: { change_set_id?: () => string; changed_file_id?: () => string };
@@ -141,7 +141,7 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
         reason: 'store_failed',
         workspace_id: scope.workspace_id,
         session_id: scope.session_id,
-        run_id: scope.run_id,
+        execution_id: scope.execution_id,
         ...(workspacePath ? { workspace_path: workspacePath } : {}),
       });
     } catch {
@@ -188,7 +188,7 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
         const finalized = options.store.finalizeChangeSet({ change_set_id: open.change_set_id, finalized_at: request.finalized_at });
         return finalized ? { status: 'finalized', change_set: finalized } : { status: 'not_found' };
       }
-      const finalized = options.store.listChangeSetsByRunId(request.run_id)
+      const finalized = options.store.listChangeSetsByExecutionId(request.execution_id)
         .find((changeSet) => changeSet.workspace_id === request.workspace_id
           && changeSet.session_id === request.session_id
           && changeSet.status === 'finalized');
@@ -203,11 +203,11 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
     listChangedFiles(request) {
       return { files: request.by === 'change_set'
         ? options.store.listChangedFilesByChangeSetId(request.change_set_id)
-        : options.store.listChangedFilesByRunId(request.run_id) };
+        : options.store.listChangedFilesByExecutionId(request.execution_id) };
     },
 
     listChangeSummaries(request) {
-      return { summaries: options.store.listChangeSetsByRunId(request.run_id)
+      return { summaries: options.store.listChangeSetsByExecutionId(request.execution_id)
         .map((changeSet) => options.store.getChangeSummary(changeSet.change_set_id))
         .filter((summary): summary is WorkspaceChangeSummary => Boolean(summary)) };
     },
@@ -309,7 +309,7 @@ function getOrCreateOpenChangeSet(input: {
     }
     return open;
   }
-  const finalized = input.store.listChangeSetsByRunId(input.scope.run_id)
+  const finalized = input.store.listChangeSetsByExecutionId(input.scope.execution_id)
     .some((changeSet) => changeSet.workspace_id === input.scope.workspace_id
       && changeSet.session_id === input.scope.session_id
       && changeSet.status === 'finalized');
@@ -318,7 +318,7 @@ function getOrCreateOpenChangeSet(input: {
     change_set_id: input.changeSetId(),
     workspace_id: input.scope.workspace_id,
     session_id: input.scope.session_id,
-    run_id: input.scope.run_id,
+    execution_id: input.scope.execution_id,
     status: 'open',
     effect_coverage: input.coverage,
     changed_file_count: 0,

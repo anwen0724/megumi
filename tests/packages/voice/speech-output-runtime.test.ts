@@ -80,7 +80,7 @@ describe('SpeechOutputRuntime', () => {
     const events = collect(runtime);
 
     runtime.read({
-      runId: 'run-1', sessionId: 'session-1',
+      executionId: 'run-1', sessionId: 'session-1',
       text: '# 你好\n```ts\ncode\n```\n再见',
       config: { provider: 'minimax', apiKey: 'key', voiceId: 'female-shaonv' },
     });
@@ -91,7 +91,7 @@ describe('SpeechOutputRuntime', () => {
     expect(received.map((event) => event.type)).toEqual(['synthesis-started', 'audio-chunk', 'audio-chunk', 'completed']);
     expect(received[1]).toMatchObject({ type: 'audio-chunk', sequence: 1, final: false });
     expect(received[2]).toMatchObject({ type: 'audio-chunk', sequence: 2, final: true });
-    expect(received[0]).toMatchObject({ runId: 'run-1', sessionId: 'session-1' });
+    expect(received[0]).toMatchObject({ executionId: 'run-1', sessionId: 'session-1' });
   });
 
   it('skips replies that contain nothing readable', async () => {
@@ -100,7 +100,7 @@ describe('SpeechOutputRuntime', () => {
     const events = collect(runtime);
 
     runtime.read({
-      runId: 'run-1', sessionId: 'session-1',
+      executionId: 'run-1', sessionId: 'session-1',
       text: '```\ncode only\n```',
       config: { provider: 'minimax', apiKey: 'key', voiceId: 'female-shaonv' },
     });
@@ -115,16 +115,16 @@ describe('SpeechOutputRuntime', () => {
     const runtime = createSpeechOutputRuntime({ synthesizer });
     const events = collect(runtime);
 
-    runtime.read({ runId: 'run-1', sessionId: 'session-1', text: '第一句', config: config() });
+    runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '第一句', config: config() });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    runtime.read({ runId: 'run-2', sessionId: 'session-1', text: '第二句', config: config() });
+    runtime.read({ executionId: 'run-2', sessionId: 'session-1', text: '第二句', config: config() });
 
     const received = await events;
     const types = received.map((event) => event.type);
     expect(types).toEqual(['synthesis-started', 'audio-chunk', 'stopped', 'synthesis-started', 'audio-chunk', 'audio-chunk', 'completed']);
-    expect(received[2]).toMatchObject({ type: 'stopped', runId: 'run-1', reason: 'replaced' });
+    expect(received[2]).toMatchObject({ type: 'stopped', executionId: 'run-1', reason: 'replaced' });
     // The stale run never completes or emits further chunks.
-    expect(received.filter((event) => event.runId === 'run-1').map((event) => event.type))
+    expect(received.filter((event) => event.executionId === 'run-1').map((event) => event.type))
       .toEqual(['synthesis-started', 'audio-chunk', 'stopped']);
   });
 
@@ -133,13 +133,13 @@ describe('SpeechOutputRuntime', () => {
     const runtime = createSpeechOutputRuntime({ synthesizer });
     const events = collect(runtime);
 
-    runtime.read({ runId: 'run-1', sessionId: 'session-1', text: '正在朗读', config: config() });
+    runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '正在朗读', config: config() });
     await new Promise((resolve) => setTimeout(resolve, 5));
     runtime.stop('character_hidden');
 
     const received = await events;
     expect(received.map((event) => event.type)).toEqual(['synthesis-started', 'audio-chunk', 'stopped']);
-    expect(received[2]).toMatchObject({ type: 'stopped', runId: 'run-1', reason: 'character_hidden' });
+    expect(received[2]).toMatchObject({ type: 'stopped', executionId: 'run-1', reason: 'character_hidden' });
   });
 
   it('publishes an error event when synthesis fails and stays usable afterwards', async () => {
@@ -148,14 +148,14 @@ describe('SpeechOutputRuntime', () => {
     const events = collect(runtime);
 
     synthesizer.failNext({ code: 'voice_tts_key_missing', message: 'no key' });
-    runtime.read({ runId: 'run-1', sessionId: 'session-1', text: '第一句', config: config() });
+    runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '第一句', config: config() });
     await new Promise((resolve) => setTimeout(resolve, 5));
-    runtime.read({ runId: 'run-2', sessionId: 'session-1', text: '第二句', config: config() });
+    runtime.read({ executionId: 'run-2', sessionId: 'session-1', text: '第二句', config: config() });
 
     const received = await events;
     expect(received[0]).toMatchObject({
       type: 'error',
-      runId: 'run-1',
+      executionId: 'run-1',
       failure: { code: 'voice_tts_key_missing', message: 'no key' },
     });
     expect(received[received.length - 1]!.type).toBe('completed');
@@ -167,7 +167,7 @@ describe('SpeechOutputRuntime', () => {
     const seen: unknown[] = [];
     runtime.subscribe((event) => seen.push(event));
 
-    runtime.read({ runId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
+    runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(seen.length).toBeGreaterThan(0);
@@ -195,7 +195,7 @@ describe('SpeechOutputRuntime', () => {
     const runtime = createSpeechOutputRuntime({ synthesizer });
     const events = collect(runtime);
 
-    runtime.read({ runId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
+    runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
 
     const received = await events;
     const failure = received.find((event) => event.type === 'error');

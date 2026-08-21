@@ -14,7 +14,7 @@ import type {
 
 export interface ToolInvocation {
   readonly invocationId: string;
-  readonly runId: string;
+  readonly executionId: string;
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly modelCallId: string;
@@ -51,7 +51,7 @@ export interface ToolRegistration<TContext = unknown> {
 }
 
 export interface ToolRouteScope {
-  readonly runId: string;
+  readonly executionId: string;
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly modelCallId: string;

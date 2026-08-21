@@ -208,7 +208,7 @@ export async function executeAgentRun(
   } catch (error) {
     if (input.signal.aborted) {
       final = await settleAgentResult(
-        { status: 'cancelled', executionId: input.run.runId, newMessages: [] },
+        { status: 'cancelled', executionId: input.run.executionId, newMessages: [] },
         input,
         dependencies,
         runtime,
@@ -235,7 +235,7 @@ function createContextProvider(
   runtime: AdapterRuntime,
 ): AgentContextProvider {
   const runContext: RunContext = {
-    runId: input.run.runId,
+    executionId: input.run.executionId,
     sessionId: input.run.sessionId,
     workspaceId: input.run.workspaceId,
     userInput: input.userInput,
@@ -290,7 +290,7 @@ function createContextProvider(
       let resolution;
       try {
         resolution = dependencies.tools.resolveModelCallTools({
-          runId: input.run.runId,
+          executionId: input.run.executionId,
           sessionId: input.run.sessionId,
           workspaceId: input.run.workspaceId,
           modelCallId,
@@ -387,7 +387,7 @@ function createAgentTool(
     executionMode: definition.executionMode === 'serial' ? 'sequential' : 'parallel',
     execute: async ({ toolCallId, arguments: argumentsValue, signal, onUpdate }) => {
       const routed = dependencies.tools.routeToolCall({
-        runId: input.run.runId,
+        executionId: input.run.executionId,
         sessionId: input.run.sessionId,
         workspaceId: input.run.workspaceId,
         modelCallId: scope.modelCallId,
@@ -431,7 +431,7 @@ async function executeRoutedTool(
     let permission;
     try {
       permission = await dependencies.permissions.evaluateToolCall({
-        runId: input.run.runId,
+        executionId: input.run.executionId,
         sessionId: input.run.sessionId,
         workspaceId: input.run.workspaceId,
         toolCallId: invocation.toolCallId,
@@ -651,7 +651,7 @@ async function applyApprovalDecision(
 ): Promise<{ readonly status: 'applied'; readonly executionAccess?: ToolExecutionAccess } | { readonly status: 'failed' }> {
   try {
     const current = await dependencies.permissions.evaluateToolCall({
-      runId: input.run.runId,
+      executionId: input.run.executionId,
       sessionId: input.run.sessionId,
       workspaceId: input.run.workspaceId,
       toolCallId: invocation.toolCallId,
@@ -934,7 +934,7 @@ async function settleTurn(
     }
     const response = await runtime.committer.commitModelResponse({
       sessionId: input.run.sessionId,
-      runId: input.run.runId,
+      executionId: input.run.executionId,
       messageId: turn.messageId,
       content: toAssistantContent(message),
       stopReason: message.stopReason,
@@ -953,7 +953,7 @@ async function settleTurn(
     ));
     const committed = await runtime.committer.commitToolResults({
       sessionId: input.run.sessionId,
-      runId: input.run.runId,
+      executionId: input.run.executionId,
       results: commits,
     });
     const commitById = new Map(commits.map((item) => [item.toolCallId, item]));
@@ -1088,7 +1088,7 @@ async function commitFinalReply(
   const turn = runtime.pendingFinalTurn ?? runtime.activeTurn;
   const reply = await runtime.committer.commitAssistantReply({
     sessionId: input.run.sessionId,
-    runId: input.run.runId,
+    executionId: input.run.executionId,
     status,
     content,
     reasonCode,
@@ -1334,7 +1334,7 @@ function createRunApproval(
 ): RunApproval {
   return {
     runApprovalId: dependencies.ids.createRunApprovalId(),
-    runId: run.runId,
+    executionId: run.executionId,
     toolCallId: invocation.toolCallId,
     toolName: invocation.toolName,
     toolIdentity: snapshotToolIdentity(invocation.toolIdentity),
@@ -1404,7 +1404,7 @@ function emitRuntime<TType extends EventType>(
       type,
       payload,
       sessionId: input.run.sessionId,
-      runId: input.run.runId,
+      executionId: input.run.executionId,
     });
   } catch {
     // Runtime Events are best-effort and never own the Run outcome.

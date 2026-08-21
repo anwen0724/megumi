@@ -77,11 +77,11 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
 
         const activeRunResult = options.runs.getActive({ sessionId: request.sessionId });
         const eventResult = options.events.read({ sessionId: request.sessionId });
-        const runIds = collectRunIds(
+        const executionIds = collectExecutionIds(
           conversationResult.conversation,
-          activeRunResult.status === 'found' ? activeRunResult.run.runId : undefined,
+          activeRunResult.status === 'found' ? activeRunResult.run.executionId : undefined,
         );
-        const workspace = readWorkspaceChanges(options.workspaceChanges, runIds);
+        const workspace = readWorkspaceChanges(options.workspaceChanges, executionIds);
 
         return {
           status: 'ok',
@@ -114,9 +114,9 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
           return { status: 'failed', failure: toHostFailure(messagesResult.failure) };
         }
         if (messagesResult.messages.length === 0) {
-          return { status: 'not_found', runId: request.runId };
+          return { status: 'not_found', executionId: request.executionId };
         }
-        const workspace = readWorkspaceChanges(options.workspaceChanges, [request.runId]);
+        const workspace = readWorkspaceChanges(options.workspaceChanges, [request.executionId]);
         return {
           status: 'ok',
           messages: messagesResult.messages.map(toMessageConversationItemDto),
@@ -143,7 +143,7 @@ export function toSessionDto(session: Session): SessionDto {
 
 export function toRunDto(run: import('@megumi/engine').Run): RunDto {
   return {
-    runId: run.runId,
+    executionId: run.executionId,
     sessionId: run.sessionId,
     status: run.status,
     createdAt: run.createdAt,
@@ -272,7 +272,7 @@ function messageIdentity(message: SessionMessage) {
   return {
     messageId: message.message_id,
     sessionId: message.session_id,
-    ...(message.run_id ? { runId: message.run_id } : {}),
+    ...(message.execution_id ? { executionId: message.execution_id } : {}),
     createdAt: message.created_at,
     ...(message.completed_at ? { completedAt: message.completed_at } : {}),
   };
@@ -304,37 +304,37 @@ function copyUsage(usage: import('@megumi/ai').Usage): import('@megumi/ai').Usag
   return { ...usage, cost: { ...usage.cost } };
 }
 
-function collectRunIds(
+function collectExecutionIds(
   conversation: readonly SessionConversationItem[],
-  activeRunId?: string,
+  activeExecutionId?: string,
 ): string[] {
-  const runIds = new Set<string>();
+  const executionIds = new Set<string>();
   for (const item of conversation) {
-    if (item.type === 'message' && item.message.run_id) runIds.add(item.message.run_id);
+    if (item.type === 'message' && item.message.execution_id) executionIds.add(item.message.execution_id);
   }
-  if (activeRunId) runIds.add(activeRunId);
-  return [...runIds];
+  if (activeExecutionId) executionIds.add(activeExecutionId);
+  return [...executionIds];
 }
 
 /** Reads optional Workspace facts independently so one damaged Run does not hide the others. */
 function readWorkspaceChanges(
   workspaceChanges: Pick<WorkspaceChanges, 'listChangeSummaries'>,
-  runIds: readonly string[],
+  executionIds: readonly string[],
 ): {
   readonly summaries: WorkspaceChangeSummaryDto[];
   readonly diagnostics: SessionReadDiagnosticDto[];
 } {
   const summaries: WorkspaceChangeSummaryDto[] = [];
   const diagnostics: SessionReadDiagnosticDto[] = [];
-  for (const runId of runIds) {
+  for (const executionId of executionIds) {
     try {
-      summaries.push(...workspaceChanges.listChangeSummaries({ by: 'run', run_id: runId })
+      summaries.push(...workspaceChanges.listChangeSummaries({ by: 'run', execution_id: executionId })
         .summaries.map(toWorkspaceChangeSummaryDto));
     } catch (error) {
       diagnostics.push({
         code: 'workspace_changes_unavailable',
         message: error instanceof Error ? error.message : 'Workspace Changes could not be read.',
-        runId,
+        executionId,
       });
     }
   }
@@ -343,7 +343,7 @@ function readWorkspaceChanges(
 
 function toWorkspaceChangeSummaryDto(summary: WorkspaceChangeSummary): WorkspaceChangeSummaryDto {
   return {
-    runId: summary.change_set.run_id,
+    executionId: summary.change_set.execution_id,
     sessionId: summary.change_set.session_id,
     changeSetId: summary.change_set.change_set_id,
     changedFileCount: summary.change_set.changed_file_count,

@@ -330,7 +330,7 @@ describe('Engine Agent Adapter', () => {
 
 function runInput(signal: AbortSignal = new AbortController().signal): EngineAgentRunInput {
   const run: Run = {
-    runId: 'run:1',
+    executionId: 'run:1',
     requestId: startRequest.requestId,
     workspaceId: startRequest.workspaceId,
     sessionId: startRequest.sessionId,

@@ -89,7 +89,7 @@ describe("Observability system", () => {
     const trace = runtime.service.startTrace({
       traceId: "R1",
       name: "agent_run",
-      runId: "R1",
+      executionId: "R1",
       sessionId: "S1",
     });
     runtime.service.runInTraceContext(trace, () => {
@@ -125,7 +125,7 @@ describe("Observability system", () => {
     });
     runtime.service.endTrace({ trace, status: "ok" });
     await runtime.flush();
-    const result = await runtime.queryService.getRunTrace({ runId: "R1" });
+    const result = await runtime.queryService.getRunTrace({ executionId: "R1" });
     expect(result).toMatchObject({
       status: "found",
       trace: {
@@ -149,10 +149,10 @@ describe("Observability system", () => {
     const recent = await runtime.queryService.listRecentRunTraces({ limit: 5 });
     expect(recent).toMatchObject({
       status: "ok",
-      traces: [expect.objectContaining({ runId: "R1", status: "ok" })],
+      traces: [expect.objectContaining({ executionId: "R1", status: "ok" })],
     });
 
-    const diagnostic = await runtime.queryService.createDiagnosticBundle({ runId: "R1" });
+    const diagnostic = await runtime.queryService.createDiagnosticBundle({ executionId: "R1" });
     expect(diagnostic).toMatchObject({
       status: "created",
       bundle: {
@@ -178,7 +178,7 @@ describe("Observability system", () => {
     const trace = runtime.service.startTrace({
       traceId: "R",
       name: "agent_run",
-      runId: "R",
+      executionId: "R",
     });
     await runtime.service.runInTraceContext(trace, async () => {
       const root = runtime.service.startSpan({ name: "agent_run" });
@@ -197,7 +197,7 @@ describe("Observability system", () => {
     });
     runtime.service.endTrace({ trace, status: "ok" });
     await runtime.flush();
-    const result = await runtime.queryService.getRunTrace({ runId: "R" });
+    const result = await runtime.queryService.getRunTrace({ executionId: "R" });
     expect(result.status).toBe("found");
     if (result.status === "found") {
       const tools = result.trace.spans.filter(

@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ToolCallStatusCard } from '@megumi/desktop/renderer/entities/tool-call';
@@ -8,7 +8,7 @@ function createToolExecution(overrides: Partial<ToolExecution> = {}): ToolExecut
   return {
     toolExecutionId: 'tool-execution-1',
     toolCallId: 'tool-call-1',
-    runId: 'run-1',
+    executionId: 'run-1',
     toolName: 'run_command',
     input: { command: 'npm test' },
     inputPreview: {
@@ -33,7 +33,7 @@ describe('ToolCallStatusCard', () => {
           policyDecision: {
             permissionDecisionId: 'permission-1',
             toolCallId: 'tool-call-1',
-            runId: 'run-1',
+            executionId: 'run-1',
             decision: 'ask',
             source: 'permission_mode',
             reason: 'Command execution requires approval in default mode.',

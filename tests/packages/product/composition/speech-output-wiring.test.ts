@@ -6,7 +6,7 @@ import type { ReadSpeechOutputRequest, SpeechOutputRuntime } from '../../../../p
 
 function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiringDeps & {
   speechOutput: SpeechOutputRuntime & { reads: ReadSpeechOutputRequest[] };
-  findAssistantReplyByRunId: ReturnType<typeof vi.fn>;
+  findAssistantReplyByExecutionId: ReturnType<typeof vi.fn>;
 } {
   const reads: ReadSpeechOutputRequest[] = [];
   const speechOutput = {
@@ -15,11 +15,11 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
     subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
     reads,
   };
-  const findAssistantReplyByRunId = vi.fn(() => ({
+  const findAssistantReplyByExecutionId = vi.fn(() => ({
     message_kind: 'assistant_reply' as const,
     message_id: 'reply-1',
     session_id: 'session-1',
-    run_id: 'run-1',
+    execution_id: 'run-1',
     created_at: '2026-08-14T00:00:00.000Z',
     completed_at: '2026-08-14T00:00:01.000Z',
     status: 'completed' as const,
@@ -27,7 +27,7 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
   }));
   const base = {
     speechOutput,
-    findAssistantReplyByRunId,
+    findAssistantReplyByExecutionId,
     settings: {
       resolve: vi.fn(() => ({
         status: 'ok' as const,
@@ -49,7 +49,7 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
 }
 
 function completedEvent() {
-  return { type: 'run.ended', runId: 'run-1', sessionId: 'session-1', payload: { status: 'completed' } };
+  return { type: 'run.ended', executionId: 'run-1', sessionId: 'session-1', payload: { status: 'completed' } };
 }
 
 describe('onRunEndedForSpeechOutput', () => {
@@ -59,7 +59,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
     expect(result).toEqual({ status: 'read' });
     expect(wiring.speechOutput.reads).toEqual([{
-      runId: 'run-1',
+      executionId: 'run-1',
       sessionId: 'session-1',
       text: '# 你好，世界。',
       config: { provider: 'minimax', apiKey: 'sk-test', voiceId: 'female-shaonv' },
@@ -72,7 +72,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
     expect(failed).toEqual({ status: 'ignored' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
-    expect(wiring.findAssistantReplyByRunId).not.toHaveBeenCalled();
+    expect(wiring.findAssistantReplyByExecutionId).not.toHaveBeenCalled();
   });
 
   it('stops the read-aloud when the run is cancelled', () => {
@@ -103,7 +103,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
     expect(result).toEqual({ status: 'read' });
     expect(wiring.speechOutput.reads).toEqual([{
-      runId: 'run-1',
+      executionId: 'run-1',
       sessionId: 'session-1',
       text: '# 你好，世界。',
       config: { provider: 'minimax', apiKey: '', voiceId: 'female-shaonv' },
@@ -112,7 +112,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('skips runs without an assistant reply', () => {
     const wiring = deps();
-    wiring.findAssistantReplyByRunId.mockReturnValueOnce(undefined);
+    wiring.findAssistantReplyByExecutionId.mockReturnValueOnce(undefined);
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'skipped', reason: 'no_reply' });
@@ -124,11 +124,11 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('skips replies with nothing readable', () => {
     const wiring = deps();
-    wiring.findAssistantReplyByRunId.mockReturnValueOnce({
+    wiring.findAssistantReplyByExecutionId.mockReturnValueOnce({
       message_kind: 'assistant_reply' as const,
       message_id: 'reply-2',
       session_id: 'session-1',
-      run_id: 'run-1',
+      execution_id: 'run-1',
       created_at: '2026-08-14T00:00:00.000Z',
       completed_at: '2026-08-14T00:00:01.000Z',
       status: 'completed' as const,

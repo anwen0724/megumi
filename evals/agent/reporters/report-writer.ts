@@ -89,7 +89,7 @@ function renderExecutionDetails(report: EvaluationSuiteReport['executionReports'
   return [
     `### ${report.execution.caseId} #${report.execution.repetition}`,
     '',
-    `- Correlation: workspace=${correlation?.workspaceId ?? 'n/a'}, session=${correlation?.sessionId ?? 'n/a'}, run=${correlation?.runId ?? 'n/a'}`,
+    `- Correlation: workspace=${correlation?.workspaceId ?? 'n/a'}, session=${correlation?.sessionId ?? 'n/a'}, run=${correlation?.executionId ?? 'n/a'}`,
     `- Final reply summary: ${singleLine(finalReply)}`,
     `- File changes: ${files.length > 0 ? files.join('; ') : 'None declared.'}`,
     ...report.execution.diagnostics.map((item) => `- Diagnostic (${item.code}): ${singleLine(item.message)}`),

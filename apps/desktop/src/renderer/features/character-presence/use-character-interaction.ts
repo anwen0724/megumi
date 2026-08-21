@@ -52,9 +52,9 @@ export function useCharacterInteraction(selectedSessionId: string | null) {
     return state.sessions[sessionTimelineKey(projectId, selectedSessionId)]?.messages ?? EMPTY_MESSAGES;
   });
   const interaction = useMemo(() => projectCurrentInteraction(messages), [messages]);
-  const runStatus = useRunStore((state) => interaction ? state.runs[interaction.runId]?.status : undefined);
-  const activeRunId = interaction && (runStatus === 'running' || runStatus === 'waiting' || runStatus === 'cancelling')
-    ? interaction.runId
+  const runStatus = useRunStore((state) => interaction ? state.runs[interaction.executionId]?.status : undefined);
+  const activeExecutionId = interaction && (runStatus === 'running' || runStatus === 'waiting' || runStatus === 'cancelling')
+    ? interaction.executionId
     : undefined;
 
   const resolveApproval = useCallback(async (
@@ -72,15 +72,15 @@ export function useCharacterInteraction(selectedSessionId: string | null) {
   }, []);
 
   const cancelRun = useCallback(async (): Promise<boolean> => {
-    if (!activeRunId) return false;
+    if (!activeExecutionId) return false;
     const result = await window.megumi.session.message.cancel(createRendererRuntimeIpcRequest(
       IPC_CHANNELS.session.sessionMessageCancel,
-      { runId: activeRunId },
+      { executionId: activeExecutionId },
     ));
     return Boolean(result.ok && result.data.status === 'cancellation_requested');
-  }, [activeRunId]);
+  }, [activeExecutionId]);
 
-  return { projectId, interaction, activeRunId, runStatus, resolveApproval, cancelRun };
+  return { projectId, interaction, activeExecutionId, runStatus, resolveApproval, cancelRun };
 }
 
 function isApprovalResolveFailed(value: unknown): value is {

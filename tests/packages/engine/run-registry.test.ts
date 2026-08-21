@@ -32,14 +32,14 @@ function createMutableClock(initial: string): RunClock & { set(value: string): v
 }
 
 function createTestRun(input: {
-  runId: string;
+  executionId: string;
   requestId: string;
   sessionId: string;
 }) {
   return createRun({
     ...input,
     workspaceId: 'workspace:1',
-    userMessageId: `message:${input.runId}`,
+    userMessageId: `message:${input.executionId}`,
     model: {} as Parameters<typeof createRun>[0]['model'],
     permissionMode: 'ask',
     createdAt: '2026-07-31T00:00:00.000Z',
@@ -60,7 +60,7 @@ function startedResult(run: ReturnType<typeof createTestRun>) {
     attachments: [],
   } as SessionMessageWithAttachments;
   const userEntry = {
-    entry_id: `entry:${run.runId}`,
+    entry_id: `entry:${run.executionId}`,
     session_id: run.sessionId,
     entry_type: 'message',
     message_id: run.userMessageId,
@@ -74,7 +74,7 @@ describe('RunRegistry', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
     const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const run = createTestRun({
-      runId: 'run:1',
+      executionId: 'run:1',
       requestId: 'request:1',
       sessionId: 'session:1',
     });
@@ -87,7 +87,7 @@ describe('RunRegistry', () => {
       requestId: run.requestId,
       fingerprint,
       run: createTestRun({
-        runId: 'run:duplicate',
+        executionId: 'run:duplicate',
         requestId: run.requestId,
         sessionId: run.sessionId,
       }),
@@ -109,7 +109,7 @@ describe('RunRegistry', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
     const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const run = createTestRun({
-      runId: 'run:1',
+      executionId: 'run:1',
       requestId: 'request:1',
       sessionId: 'session:1',
     });
@@ -135,14 +135,14 @@ describe('RunRegistry', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
     const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const first = createTestRun({
-      runId: 'run:1',
+      executionId: 'run:1',
       requestId: 'request:1',
       sessionId: 'session:1',
     });
     store.reserveStart({ requestId: first.requestId, fingerprint, run: first });
 
     const sameSession = createTestRun({
-      runId: 'run:2',
+      executionId: 'run:2',
       requestId: 'request:2',
       sessionId: 'session:1',
     });
@@ -153,7 +153,7 @@ describe('RunRegistry', () => {
     })).toEqual({ status: 'session_busy', activeRun: first });
 
     const otherSession = createTestRun({
-      runId: 'run:3',
+      executionId: 'run:3',
       requestId: 'request:3',
       sessionId: 'session:2',
     });
@@ -172,13 +172,13 @@ describe('RunRegistry', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
     const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const running = createTestRun({
-      runId: 'run:active',
+      executionId: 'run:active',
       requestId: 'request:active',
       sessionId: 'session:1',
     });
     store.reserveStart({ requestId: running.requestId, fingerprint, run: running });
 
-    expect(store.getActive('session:1')).toMatchObject({ runId: 'run:active', status: 'running' });
+    expect(store.getActive('session:1')).toMatchObject({ executionId: 'run:active', status: 'running' });
     const waiting = transitionRun(running, { status: 'waiting', at: '2026-07-31T00:00:01.000Z' });
     store.updateRun(waiting);
     expect(store.getActive('session:1')).toMatchObject({ status: 'waiting' });
@@ -195,7 +195,7 @@ describe('RunRegistry', () => {
     const clock = createMutableClock('2026-07-31T00:00:00.000Z');
     const store = new RunRegistry({ clock, terminalRunRetentionMs: 1_000 });
     const run = createTestRun({
-      runId: 'run:1',
+      executionId: 'run:1',
       requestId: 'request:1',
       sessionId: 'session:1',
     });
@@ -210,11 +210,11 @@ describe('RunRegistry', () => {
     clock.set('2026-07-31T00:00:01.000Z');
     store.updateRun(completed);
 
-    expect(store.getRun(run.runId)).toEqual(completed);
+    expect(store.getRun(run.executionId)).toEqual(completed);
     expect(store.getStartedResult(run.requestId)).toMatchObject({ run: completed });
 
     const next = createTestRun({
-      runId: 'run:2',
+      executionId: 'run:2',
       requestId: 'request:2',
       sessionId: 'session:1',
     });
@@ -225,7 +225,7 @@ describe('RunRegistry', () => {
     }).status).toBe('reserved');
 
     clock.set('2026-07-31T00:00:02.001Z');
-    expect(store.getRun(run.runId)).toBeUndefined();
+    expect(store.getRun(run.executionId)).toBeUndefined();
     expect(store.getStartedResult(run.requestId)).toBeUndefined();
   });
 });

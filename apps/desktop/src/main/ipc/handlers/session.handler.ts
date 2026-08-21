@@ -10,7 +10,7 @@ import {
   ReadSessionResultSchema,
   ReadCommittedRunResultSchema,
   GetContextUsageResultSchema,
-  ListUserMessagesByRunIdsResultSchema,
+  ListUserMessagesByExecutionIdsResultSchema,
   ListSessionsResultSchema,
   SendUserInputPayloadSchema,
   InputCapabilitiesResultSchema,
@@ -109,10 +109,10 @@ export function registerSessionHandlers(
   ipcMain.handle(IPC_CHANNELS.session.sessionMessageList, createIpcRequestHandler({
     channel: IPC_CHANNELS.session.sessionMessageList,
     requestSchema: SessionMessageListRequestSchema,
-    responseSchema: ListUserMessagesByRunIdsResultSchema,
+    responseSchema: ListUserMessagesByExecutionIdsResultSchema,
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.sessionMessageList>) =>
-      service.host.session.listUserMessagesByRunIds(request.payload),
+      service.host.session.listUserMessagesByExecutionIds(request.payload),
     mapError: mapSessionIpcError,
   }));
 
@@ -232,7 +232,7 @@ export function registerSessionHandlers(
           ...presentation,
           sessionId: result.payload.session.id,
           messageId: result.payload.userMessage.messageId,
-          runId: result.payload.run.runId,
+          executionId: result.payload.run.executionId,
         });
       }
       return result.payload;

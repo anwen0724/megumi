@@ -1,7 +1,7 @@
 /* Collects bounded Session, workspace, Runtime Event, and diagnostic evidence. */
 import path from 'node:path';
 import type { ProductHostInterface } from '@megumi/product/host';
-import type { RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
 import type { EvaluationEvidence, EvaluationWorkspaceFileEvidence } from './evaluation-contracts';
 import { digestOwnedFile, readBoundedOwnedText } from '../adapters/scoped-workspace-file-system';
 
@@ -16,7 +16,7 @@ export async function collectEvaluationEvidence(input: {
   runtimeEvents: RuntimeEvent[];
   runtimeEventsComplete: boolean;
   runtimeEventsTruncated?: boolean;
-  runId?: string;
+  executionId?: string;
   observabilityHost?: Pick<ProductHostInterface['observability'], 'getRunTrace'>;
   initialWorkspaceFiles?: Record<string, { exists: boolean; content?: string; digest?: string }>;
 }): Promise<EvaluationEvidence> {
@@ -77,7 +77,7 @@ export async function collectEvaluationEvidence(input: {
 
   const assistantMessages = input.messages.filter(isAssistantMessage);
   const finalReply = assistantMessages.at(-1)?.text;
-  const diagnostics = await collectDiagnostics(input.observabilityHost, input.runId);
+  const diagnostics = await collectDiagnostics(input.observabilityHost, input.executionId);
 
   return {
     session: {
@@ -99,11 +99,11 @@ export async function collectEvaluationEvidence(input: {
 
 async function collectDiagnostics(
   host: Pick<ProductHostInterface['observability'], 'getRunTrace'> | undefined,
-  runId: string | undefined,
+  executionId: string | undefined,
 ): Promise<EvaluationEvidence['diagnostics'] | undefined> {
-  if (!host || !runId) return undefined;
+  if (!host || !executionId) return undefined;
   try {
-    const result = await host.getRunTrace({ runId });
+    const result = await host.getRunTrace({ executionId });
     return result.status === 'found'
       ? { available: true, records: [{
           summary: result.trace.summary,

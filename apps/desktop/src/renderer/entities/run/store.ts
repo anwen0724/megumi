@@ -10,18 +10,18 @@ export type RendererRunStatus =
   | 'cancelled';
 
 export interface RendererRunSummary {
-  runId: string;
+  executionId: string;
   sessionId?: string;
   status: RendererRunStatus;
   updatedAt: string;
 }
 
 interface RunState {
-  activeRunId: string | null;
+  activeExecutionId: string | null;
   runs: Record<string, RendererRunSummary>;
   eventsByRun: Record<string, AnyEvent[]>;
   lastError: string | null;
-  setActiveRun: (runId: string | null) => void;
+  setActiveRun: (executionId: string | null) => void;
   applyRuntimeEvent: (event: AnyEvent) => void;
   resetRuns: () => void;
 }
@@ -46,21 +46,21 @@ function upsertEvent(events: AnyEvent[], event: AnyEvent): AnyEvent[] {
 }
 
 export const useRunStore = create<RunState>((set) => ({
-  activeRunId: null,
+  activeExecutionId: null,
   runs: {},
   eventsByRun: {},
   lastError: null,
-  setActiveRun: (activeRunId) => set({ activeRunId }),
+  setActiveRun: (activeExecutionId) => set({ activeExecutionId }),
   applyRuntimeEvent: (event) => set((state) => {
-    if (!event.runId) {
+    if (!event.executionId) {
       return state;
     }
 
     const nextStatus = statusFromEvent(event);
-    const existing = state.runs[event.runId];
+    const existing = state.runs[event.executionId];
     const nextRun = {
       ...(existing ?? {
-        runId: event.runId,
+        executionId: event.executionId,
         sessionId: event.sessionId,
         status: nextStatus ?? 'running',
         updatedAt: event.createdAt,
@@ -70,14 +70,14 @@ export const useRunStore = create<RunState>((set) => ({
     };
 
     return {
-      activeRunId: event.runId,
+      activeExecutionId: event.executionId,
       runs: {
         ...state.runs,
-        [event.runId]: nextRun,
+        [event.executionId]: nextRun,
       },
       eventsByRun: {
         ...state.eventsByRun,
-        [event.runId]: upsertEvent(state.eventsByRun[event.runId] ?? [], event),
+        [event.executionId]: upsertEvent(state.eventsByRun[event.executionId] ?? [], event),
       },
       lastError: event.type === 'run.ended' && event.payload.status === 'failed'
         ? event.payload.error?.message ?? 'Run failed.'
@@ -85,7 +85,7 @@ export const useRunStore = create<RunState>((set) => ({
     };
   }),
   resetRuns: () => set({
-    activeRunId: null,
+    activeExecutionId: null,
     runs: {},
     eventsByRun: {},
     lastError: null,

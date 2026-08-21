@@ -103,10 +103,10 @@ export function DiagnosticsPanel() {
     [projectFilter, sessionFilter, traces],
   );
 
-  const inspect = async (runId: string) => {
+  const inspect = async (executionId: string) => {
     const result = await window.megumi.observability.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.get, {
-        runId,
+        executionId,
       }),
     );
     if (result.ok && result.data.status === "found")
@@ -116,7 +116,7 @@ export function DiagnosticsPanel() {
     if (!selected) return;
     const result = await window.megumi.observability.createBundle(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.bundle, {
-        runId: selected.summary.runId,
+        executionId: selected.summary.executionId,
       }),
     );
     if (result.ok)
@@ -216,19 +216,19 @@ export function DiagnosticsPanel() {
               <div className="space-y-1.5">
                 {filteredTraces.map((trace) => (
                 <button
-                  key={trace.runId}
-                  onClick={() => void inspect(trace.runId)}
-                  aria-label={runInputById[trace.runId] ?? formatRunFallback(trace)}
+                  key={trace.executionId}
+                  onClick={() => void inspect(trace.executionId)}
+                  aria-label={runInputById[trace.executionId] ?? formatRunFallback(trace)}
                   className={cx(
                     "relative w-full cursor-pointer rounded-lg border p-3 text-left transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
-                    selected?.summary.runId === trace.runId
+                    selected?.summary.executionId === trace.executionId
                       ? "border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]"
                       : "border-transparent hover:bg-[var(--color-surface-muted)]",
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-medium text-[var(--color-text)]">
-                      {runInputById[trace.runId] ?? formatRunFallback(trace)}
+                      {runInputById[trace.executionId] ?? formatRunFallback(trace)}
                     </span>
                     <RunStatusIcon status={trace.status} />
                   </div>
@@ -256,7 +256,7 @@ export function DiagnosticsPanel() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-3">
                       <h2 className="truncate text-base font-semibold text-[var(--color-text)]">
-                        {runInputById[selected.summary.runId] ?? formatRunFallback(selected.summary)}
+                        {runInputById[selected.summary.executionId] ?? formatRunFallback(selected.summary)}
                       </h2>
                       <RunStatusIcon status={selected.summary.status} />
                     </div>
@@ -264,7 +264,7 @@ export function DiagnosticsPanel() {
                       {formatRunSource(selected.summary, projectNameById, sessionById)}
                     </p>
                     <p className="mt-1 font-mono text-xs text-[var(--color-text-subtle)]">
-                      {selected.summary.runId}
+                      {selected.summary.executionId}
                     </p>
                   </div>
                   <Button
@@ -434,14 +434,14 @@ function formatTokens(value: number): string {
 async function loadRunInputLabels(
   traces: readonly ObservabilityRunTraceSummaryUiDto[],
 ): Promise<Record<string, string>> {
-  const runIds = unique(traces.map((trace) => trace.runId));
-  if (runIds.length === 0) return {};
+  const executionIds = unique(traces.map((trace) => trace.executionId));
+  if (executionIds.length === 0) return {};
   let result;
   try {
     result = await window.megumi.session.message.list(
       createRendererRuntimeIpcRequest(
         IPC_CHANNELS.session.sessionMessageList,
-        { runIds },
+        { executionIds },
       ),
     );
   } catch {
@@ -450,9 +450,9 @@ async function loadRunInputLabels(
   const labels: Record<string, string> = {};
   if (!result.ok || result.data.status !== "ok") return labels;
   for (const item of result.data.messages) {
-    if (item.role !== "user" || !item.runId || labels[item.runId]) continue;
+    if (item.role !== "user" || !item.executionId || labels[item.executionId]) continue;
     const summary = summarizeUserInput(item.text);
-    if (summary) labels[item.runId] = summary;
+    if (summary) labels[item.executionId] = summary;
   }
   return labels;
 }

@@ -46,7 +46,7 @@ function canShowBranchAction(
   message: TimelineMessage,
   userActionsBlocked: boolean,
 ): boolean {
-  if (userActionsBlocked || message.role !== 'assistant' || !message.runId) {
+  if (userActionsBlocked || message.role !== 'assistant' || !message.executionId) {
     return false;
   }
 
@@ -60,7 +60,7 @@ export function useChatPageController() {
   const sessions = useSessionStore((state) => state.sessions);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
-  const activeRunId = useRunStore((state) => state.activeRunId);
+  const activeExecutionId = useRunStore((state) => state.activeExecutionId);
   const runs = useRunStore((state) => state.runs);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [contextUsage, setContextUsage] = useState<GetContextUsageResult | undefined>(undefined);
@@ -106,7 +106,7 @@ export function useChatPageController() {
     }).join('|'),
   ])), [timelineMessages]);
 
-  const activeRunCandidate = activeRunId ? runs[activeRunId] : null;
+  const activeRunCandidate = activeExecutionId ? runs[activeExecutionId] : null;
   const activeRun = activeRunCandidate && !isDraftNewSession && (!activeRunCandidate.sessionId || activeRunCandidate.sessionId === effectiveActiveSessionId)
     ? activeRunCandidate
     : null;

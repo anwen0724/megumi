@@ -36,7 +36,7 @@ export function operation(
     context: {
       workspaceId: invocation.workspaceId,
       sessionId: invocation.sessionId,
-      runId: invocation.runId,
+      executionId: invocation.executionId,
       toolIdentity: invocation.toolIdentity,
     },
   } as const;

@@ -59,15 +59,15 @@ function setup(options: { decodeFailures?: number; deviceId?: string } = {}) {
   return { controller, emit, context };
 }
 
-const started = (): SpeechOutputEvent => ({ type: 'synthesis-started', runId: 'r1', sessionId: 's1' });
+const started = (): SpeechOutputEvent => ({ type: 'synthesis-started', executionId: 'r1', sessionId: 's1' });
 const chunk = (sequence: number, final = false): SpeechOutputEvent => ({
-  type: 'audio-chunk', runId: 'r1', sessionId: 's1', sequence, final,
+  type: 'audio-chunk', executionId: 'r1', sessionId: 's1', sequence, final,
   format: 'mp3', sampleRate: 32000, channels: 1, bytes: new Uint8Array([sequence]),
 });
-const completed = (): SpeechOutputEvent => ({ type: 'completed', runId: 'r1', sessionId: 's1' });
-const stopped = (): SpeechOutputEvent => ({ type: 'stopped', runId: 'r1', sessionId: 's1', reason: 'replaced' });
+const completed = (): SpeechOutputEvent => ({ type: 'completed', executionId: 'r1', sessionId: 's1' });
+const stopped = (): SpeechOutputEvent => ({ type: 'stopped', executionId: 'r1', sessionId: 's1', reason: 'replaced' });
 const error = (): SpeechOutputEvent => ({
-  type: 'error', runId: 'r1', sessionId: 's1', failure: { code: 'x', message: 'synthesis exploded' },
+  type: 'error', executionId: 'r1', sessionId: 's1', failure: { code: 'x', message: 'synthesis exploded' },
 });
 
 describe('createSpeechOutputController', () => {

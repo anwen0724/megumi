@@ -1,4 +1,4 @@
-﻿/* Protects structured Tool Effect projection and projection-failure isolation. */
+/* Protects structured Tool Effect projection and projection-failure isolation. */
 import { describe, expect, it, vi } from 'vitest';
 import {
   createWorkspaceChanges,
@@ -116,7 +116,7 @@ function createChanges(store: FakeWorkspaceStore, onDiagnostic?: (diagnostic: un
   });
 }
 
-function scope() { return { workspace_id: 'workspace:one', session_id: 'session:one', run_id: 'run:one' }; }
+function scope() { return { workspace_id: 'workspace:one', session_id: 'session:one', execution_id: 'run:one' }; }
 
 interface FakeWorkspaceStore extends WorkspaceStore { changeSets: WorkspaceChangeSet[]; files: WorkspaceChangedFile[] }
 function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorkspaceStore {
@@ -130,10 +130,10 @@ function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorksp
       store.changeSets.push(changeSet); return changeSet;
     },
     findChangeSetById(id: string) { return store.changeSets.find((item) => item.change_set_id === id); },
-    findOpenChangeSet(input: { workspace_id: string; session_id: string; run_id: string }) {
-      return store.changeSets.find((item) => item.workspace_id === input.workspace_id && item.session_id === input.session_id && item.run_id === input.run_id && item.status === 'open');
+    findOpenChangeSet(input: { workspace_id: string; session_id: string; execution_id: string }) {
+      return store.changeSets.find((item) => item.workspace_id === input.workspace_id && item.session_id === input.session_id && item.execution_id === input.execution_id && item.status === 'open');
     },
-    listChangeSetsByRunId(runId: string) { return store.changeSets.filter((item) => item.run_id === runId); },
+    listChangeSetsByExecutionId(executionId: string) { return store.changeSets.filter((item) => item.execution_id === executionId); },
     finalizeChangeSet(input: { change_set_id: string; finalized_at: string }) {
       const item = store.changeSets.find((candidate) => candidate.change_set_id === input.change_set_id);
       if (!item) return undefined;
@@ -148,7 +148,7 @@ function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorksp
       store.files.push(file); return file;
     },
     listChangedFilesByChangeSetId(id: string) { return store.files.filter((file) => file.change_set_id === id); },
-    listChangedFilesByRunId(runId: string) { const ids = new Set(store.changeSets.filter((item) => item.run_id === runId).map((item) => item.change_set_id)); return store.files.filter((file) => ids.has(file.change_set_id)); },
+    listChangedFilesByExecutionId(executionId: string) { const ids = new Set(store.changeSets.filter((item) => item.execution_id === executionId).map((item) => item.change_set_id)); return store.files.filter((file) => ids.has(file.change_set_id)); },
     getChangeSummary(id: string) { const change_set = store.changeSets.find((item) => item.change_set_id === id); return change_set ? { change_set, files: store.files.filter((file) => file.change_set_id === id) } : undefined; },
   };
   return store;

@@ -44,7 +44,7 @@ vi.mock('@megumi/desktop/renderer/features/character-presence', () => ({
   resolveCharacterState: () => 'idle',
   useCharacterInteraction: () => ({
     interaction: null,
-    activeRunId: undefined,
+    activeExecutionId: undefined,
     resolveApproval: vi.fn(),
     cancelRun: vi.fn(),
   }),

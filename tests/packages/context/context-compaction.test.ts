@@ -157,7 +157,7 @@ describe('Context compaction', () => {
       compactionId: 'compaction:1',
     });
     expect(published[0]?.sessionId).toBe('session:1');
-    expect(published[0]?.runId).toBeUndefined();
+    expect(published[0]?.executionId).toBeUndefined();
     expect(published[1]?.payload).toMatchObject({
       status: 'completed',
       compactionId: 'compaction:1',

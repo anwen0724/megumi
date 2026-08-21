@@ -26,7 +26,7 @@ describe('createRuns', () => {
     expect(first.status).toBe('started');
     expect(second.status).toBe('already_started');
     if (first.status === 'started' && second.status === 'already_started') {
-      expect(second.run.runId).toBe(first.run.runId);
+      expect(second.run.executionId).toBe(first.run.executionId);
       expect(second.userEntry.entry_id).toBe(first.userEntry.entry_id);
       await settleRun(fixture);
     }
@@ -48,7 +48,7 @@ describe('createRuns', () => {
     expect(first.status).toBe('started');
     expect(second.status).toBe('session_busy');
     if (first.status === 'started') {
-      const cancellation = await fixture.runs.cancel({ runId: first.run.runId });
+      const cancellation = await fixture.runs.cancel({ executionId: first.run.executionId });
       if (cancellation.status === 'cancellation_requested') {
         await settleRun(fixture);
       }
@@ -66,9 +66,9 @@ describe('createRuns', () => {
 
     expect(fixture.runs.getActive({ sessionId: started.run.sessionId })).toMatchObject({
       status: 'found',
-      run: { runId: started.run.runId, status: 'running' },
+      run: { executionId: started.run.executionId, status: 'running' },
     });
-    await fixture.runs.cancel({ runId: started.run.runId });
+    await fixture.runs.cancel({ executionId: started.run.executionId });
     expect(fixture.runs.getActive({ sessionId: started.run.sessionId })).toMatchObject({
       status: 'found',
       run: { status: 'cancelling' },
@@ -249,7 +249,7 @@ describe('createRuns', () => {
     await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',
     });
-    expect(fixture.runs.get({ runId: started.run.runId })).toMatchObject({
+    expect(fixture.runs.get({ executionId: started.run.executionId })).toMatchObject({
       status: 'found',
       run: { status: 'cancelled' },
     });
@@ -276,7 +276,7 @@ describe('createRuns', () => {
     // The Run still reaches its terminal state and the completion settles:
     // an unhandled rejection would fail this test via vitest.
     await vi.waitFor(() => {
-      const found = fixture.runs.get({ runId: started.run.runId });
+      const found = fixture.runs.get({ executionId: started.run.executionId });
       expect(found.status === 'found' ? found.run.status : undefined).toBe('completed');
     });
   });
@@ -294,7 +294,7 @@ describe('createRuns', () => {
     await expect(fixture.runs.shutdown({ timeoutMs: 1_000 })).resolves.toEqual({
       status: 'shut_down',
     });
-    expect(fixture.runs.get({ runId: started.run.runId })).toMatchObject({
+    expect(fixture.runs.get({ executionId: started.run.executionId })).toMatchObject({
       status: 'found',
       run: { status: 'completed' },
     });

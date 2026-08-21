@@ -130,8 +130,8 @@ function summarizeAttempt(
     return [input + output];
   });
   return {
-    modelCallCount: evidence.runtimeEvents.events.filter((event) => event.eventType === 'model_call.started').length,
-    toolCallCount: evidence.runtimeEvents.events.filter((event) => event.eventType === 'tool_call.requested').length,
+    modelCallCount: evidence.runtimeEvents.events.filter((event) => event.type === 'turn.started').length,
+    toolCallCount: evidence.runtimeEvents.events.filter((event) => event.type === 'tool_execution.requested').length,
     ...(execution.completedAt ? { durationMs: Math.max(0, Date.parse(execution.completedAt) - Date.parse(execution.startedAt)) } : {}),
     ...(tokenCounts.length > 0 ? { tokenCount: tokenCounts.reduce((sum, count) => sum + count, 0) } : {}),
     ...(evidence.session.finalReply ? { finalReply: boundedSummary(evidence.session.finalReply, 500) } : {}),
