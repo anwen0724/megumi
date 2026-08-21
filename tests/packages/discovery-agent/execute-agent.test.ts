@@ -19,6 +19,7 @@ import {
   executionMetadata,
   launchedExecution,
   neverEndingStream,
+  partialThinkingStream,
   retryableFailedStream,
   type ExecutionFixture,
 } from './execution-test-fixtures';
@@ -27,6 +28,29 @@ import { permissionService, registeredTool } from './tool-call-test-fixtures';
 const NOW = '2026-07-31T00:00:00.000Z';
 
 describe('Execute Agent', () => {
+  it('uses the Discovery Agent executionId for the Agent state and result', async () => {
+    const fixture = createExecutionFixture({ streams: [neverEndingStream()] });
+    const launched = await launchedExecution(fixture, {
+      metadata: { executionId: 'execution:shared' },
+    });
+    let resultExecutionId: string | undefined;
+    launched.agent.subscribe((event) => {
+      if (event.type === 'agent_end') resultExecutionId = event.result.executionId;
+    });
+
+    const execution = launched.execute();
+    await vi.waitFor(() => {
+      expect(launched.agent.state.execution).toMatchObject({
+        status: 'executing',
+        executionId: 'execution:shared',
+      });
+    });
+    launched.agent.abort();
+
+    await expect(execution).resolves.toEqual({ status: 'cancelled' });
+    expect(resultExecutionId).toBe('execution:shared');
+  });
+
   it('continues from the already committed User Entry and commits one final reply', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
     const released: string[] = [];
@@ -165,6 +189,85 @@ describe('Execute Agent', () => {
       status: 'cancelled',
       reason_code: 'user_cancelled',
     });
+  });
+
+  it('preserves partial thinking and text in the one cancelled reply', async () => {
+    const fixture = createExecutionFixture({
+      streams: [partialThinkingStream('ponder xyz', 'partial answer')],
+    });
+    const launched = await launchedExecution(fixture);
+
+    const execution = launched.execute();
+    await vi.waitFor(() => {
+      expect(launched.agent.state.streamingMessage?.content).toEqual([
+        { type: 'thinking', thinking: 'ponder xyz' },
+        { type: 'text', text: 'partial answer' },
+      ]);
+    });
+    launched.agent.abort();
+    await execution;
+
+    expect(fixture.assistantReplies).toEqual([
+      expect.objectContaining({
+        status: 'cancelled',
+        reason_code: 'user_cancelled',
+        content: [
+          { type: 'thinking', thinking: 'ponder xyz' },
+          { type: 'text', text: 'partial answer' },
+        ],
+      }),
+    ]);
+    const messageEnded = fixture.published.find(
+      (event) => event.type === 'message.ended' && event.payload.role === 'assistant',
+    );
+    expect(messageEnded?.payload).toMatchObject({ content: 'partial answer' });
+  });
+
+  it('commits a cancelled ToolResult before the one cancelled reply', async () => {
+    const tool = registeredTool('slow-tool');
+    const executeTool = vi.fn(async (
+      request: { readonly toolName: string },
+      options?: { readonly signal?: AbortSignal },
+    ) => {
+      await new Promise<void>((resolve) => {
+        options?.signal?.addEventListener('abort', () => resolve(), { once: true });
+      });
+      return {
+        type: 'failed' as const,
+        toolName: request.toolName,
+        error: { code: 'tool_cancelled', message: 'cancelled' },
+        normalizedResult: {
+          kind: 'text' as const,
+          content: 'cancelled',
+          isError: true,
+          truncated: false,
+        },
+      };
+    });
+    const fixture = createExecutionFixture({
+      tools: [tool],
+      executeTool,
+      streams: [assistantStream('using tool', {
+        id: 'provider-call:1',
+        name: tool.registeredToolName,
+        arguments: { value: 'x' },
+      })],
+    });
+    const launched = await launchedExecution(fixture);
+
+    const execution = launched.execute();
+    await vi.waitFor(() => expect(executeTool).toHaveBeenCalledOnce());
+    launched.agent.abort();
+    await execution;
+
+    expect(fixture.toolResults).toEqual([
+      expect.objectContaining({
+        tool_call_id: 'provider-call:1',
+        tool_name: 'slow-tool',
+        status: 'cancelled',
+      }),
+    ]);
+    expect(fixture.writes.slice(-2)).toEqual(['tool', 'assistant:cancelled']);
   });
 
   it('keeps permission denial model-visible so the Agent can continue to a final answer', async () => {

@@ -3,7 +3,6 @@
  */
 import { EventSchema } from '@megumi/events';
 import type { PermissionDecision } from '@megumi/permissions';
-import type { ApprovalResolution } from '@megumi/discovery-agent';
 import { reduceRuntimeTimelineEvent } from '@megumi/desktop/renderer/features/session-timeline';
 import { describe, expect, it, vi } from 'vitest';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
@@ -33,8 +32,8 @@ describe('approval Runtime flow', () => {
       ],
       permissions: permissionService(approvalDecisionFor),
     });
-    let resolveApproval!: (resolution: ApprovalResolution) => void;
-    const approval = new Promise<ApprovalResolution>((resolve) => { resolveApproval = resolve; });
+    let resolveApproval!: (resolution: { readonly status: 'cancelled' }) => void;
+    const approval = new Promise<{ readonly status: 'cancelled' }>((resolve) => { resolveApproval = resolve; });
     const launched = await launchedExecution(fixture, { awaitApproval: async () => approval });
     const completion = launched.execute();
 

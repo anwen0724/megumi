@@ -10,9 +10,6 @@ export type {
   GetActiveExecutionResult,
   GetExecutionRequest,
   GetExecutionResult,
-  LaunchedAgentExecution,
-  LaunchAgentExecution,
-  LaunchAgentExecutionInput,
   ResolveApprovalRequest,
   ResolveApprovalResult,
   ShutdownRequest,
@@ -21,13 +18,9 @@ export type {
   StartExecutionResult,
 } from './discovery-agent';
 export type {
-  ApprovalRequest,
-  ApprovalResolution,
   ExecutionClock,
   ExecutionFailure,
   ExecutionFailureCode,
-  ExecutionMetadata,
-  ExecutionOutcome,
   ExecutionSnapshot,
   ExecutionStatus,
 } from './execution/execution-registry';

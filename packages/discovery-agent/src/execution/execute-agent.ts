@@ -249,7 +249,7 @@ async function executeAgentExecution(
   runtime.observer.start();
   let final: ExecutionOutcome | undefined;
   try {
-    const result = await agent.continue();
+    const result = await agent.continue({ executionId: metadata.executionId });
     final = outcomeFromResult(result, runtime);
     return final;
   } catch (error) {

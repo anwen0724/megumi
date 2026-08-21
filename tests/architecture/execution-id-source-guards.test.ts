@@ -9,7 +9,7 @@ const root = process.cwd();
 const CODE_ROOTS = ['packages', 'apps', 'evals'];
 const CODE_EXTENSIONS = ['.ts', '.tsx'];
 
-/** Files explicitly allowed to reference the old execution_id/executionId names. */
+/** Files explicitly allowed to reference the legacy run_id/runId names. */
 const ALLOWED_FILES = new Set([
   // Explicit legacy-format compatibility reads of V1 tables that predate the redesign.
   'packages/database/src/legacy-session-history-migration.ts',

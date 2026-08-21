@@ -36,9 +36,11 @@ describe('@megumi/discovery-agent public contract', () => {
     }
   });
 
-  it('does not export the ActiveExecution, TerminalExecution, PendingApproval or reservation surface', () => {
+  it('does not export execution records, launch seams, approval continuations or reservations', () => {
     const index = readFileSync(join(packageRoot, 'src/index.ts'), 'utf8');
-    expect(index).not.toMatch(/\b(?:ActiveExecution|TerminalExecution|PendingApproval|ExecutionRegistry|reserveStart|RequestFingerprint)\b/u);
+    expect(index).not.toMatch(
+      /\b(?:ActiveExecution|TerminalExecution|PendingApproval|ExecutionRegistry|reserveStart|RequestFingerprint|ExecutionMetadata|ExecutionOutcome|LaunchAgentExecution|LaunchedAgentExecution|LaunchAgentExecutionInput|ApprovalRequest|ApprovalResolution)\b/u,
+    );
   });
 
   it('depends only on capability packages, never on Engine or Product', () => {

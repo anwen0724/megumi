@@ -24,8 +24,8 @@ import {
   launchAgentExecution,
   type DiscoveryAgentPolicy,
   type ExecuteAgentDependencies,
-  type LaunchedAgentExecution,
 } from '../../../packages/discovery-agent/src/execution/execute-agent';
+import type { LaunchedAgentExecution } from '../../../packages/discovery-agent/src/discovery-agent';
 import type {
   ExecutionMetadata,
 } from '../../../packages/discovery-agent/src/execution/execution-registry';
@@ -376,6 +376,36 @@ export function errorOverflowStream(): AssistantMessageEventStream {
 export function neverEndingStream(): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
   pushAssistantStream(stream, baseMessage({ content: [], stopReason: 'stop' }));
+  return stream;
+}
+
+/** Streams thinking and text without a terminal event so cancellation must retain the partial response. */
+export function partialThinkingStream(thinking: string, text: string): AssistantMessageEventStream {
+  const stream = new AssistantMessageEventStream();
+  const message = baseMessage({
+    content: [
+      ...(thinking ? [{ type: 'thinking' as const, thinking }] : []),
+      ...(text ? [{ type: 'text' as const, text }] : []),
+    ],
+    stopReason: 'stop',
+  });
+  stream.push({ type: 'start', partial: { ...message, content: [] } });
+  if (thinking) {
+    stream.push({
+      type: 'thinking_delta',
+      contentIndex: 0,
+      delta: thinking,
+      partial: { ...message, content: [{ type: 'thinking', thinking }] },
+    });
+  }
+  if (text) {
+    stream.push({
+      type: 'text_delta',
+      contentIndex: thinking ? 1 : 0,
+      delta: text,
+      partial: message,
+    });
+  }
   return stream;
 }
 

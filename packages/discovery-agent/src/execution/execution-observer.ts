@@ -214,7 +214,7 @@ export interface CreateAgentEventListenerOptions {
 }
 
 export function createAgentEventListener(options: CreateAgentEventListenerOptions): AgentEventListener {
-  return async (event) => {
+  return async (event, signal) => {
     switch (event.type) {
       case 'turn_start': {
         const scope = options.runtime.activeScope;
@@ -286,10 +286,10 @@ export function createAgentEventListener(options: CreateAgentEventListenerOption
         publishToolUpdate(event.toolCallId, event.update, options);
         break;
       case 'tool_execution_end':
-        publishToolEnd(event.toolCallId, event.result, options);
+        publishToolEnd(event.toolCallId, event.result, signal?.aborted === true, options);
         break;
       case 'turn_end':
-        await settleTurn(event.message, event.toolResults, options);
+        await settleTurn(event.message, event.toolResults, signal?.aborted === true, options);
         break;
       case 'agent_end': {
         const retryTurn = options.runtime.activeTurn ?? options.runtime.pendingFinalTurn;
@@ -312,6 +312,7 @@ export function createAgentEventListener(options: CreateAgentEventListenerOption
 async function settleTurn(
   message: AssistantMessage,
   toolResults: readonly ToolResultMessage[],
+  cancellationRequested: boolean,
   options: CreateAgentEventListenerOptions,
 ): Promise<void> {
   const runtime = options.runtime;
@@ -349,6 +350,7 @@ async function settleTurn(
       result,
       callOrder,
       options.clock.now(),
+      cancellationRequested,
       runtime,
     ));
     const committed = await options.committer.commitToolResults({
@@ -574,11 +576,19 @@ function publishToolUpdate(
 function publishToolEnd(
   toolCallId: string,
   result: { readonly details?: unknown; readonly isError: boolean; readonly content: readonly { type: string; text?: string }[] },
+  cancellationRequested: boolean,
   options: CreateAgentEventListenerOptions,
 ): void {
   const details = result.details as DiscoveryAgentToolResultDetails | undefined;
   if (!details) {
     const systemFailure = options.runtime.toolSystemFailures.get(toolCallId);
+    if (cancellationRequested && !systemFailure) {
+      emitRuntime(options, 'tool_execution.ended', {
+        toolCallId,
+        status: 'cancelled',
+      });
+      return;
+    }
     emitRuntime(options, 'tool_execution.ended', {
       toolCallId,
       status: 'failed',
@@ -629,19 +639,25 @@ export function toToolResultCommit(
   result: ToolResultMessage,
   callOrder: number,
   fallbackCompletedAt: string,
+  cancellationRequested: boolean,
   runtime: ExecutionProjectionRuntime,
 ): SessionToolResultCommit {
   const details = result.details as DiscoveryAgentToolResultDetails | undefined;
   const systemFailure = runtime.toolSystemFailures.get(result.toolCallId);
+  const cancelledWithoutDetails = cancellationRequested && !details && !systemFailure;
   return {
     toolCallId: result.toolCallId,
     toolName: result.toolName,
     callOrder,
-    status: details?.status ?? 'failure',
+    status: details?.status ?? (cancelledWithoutDetails ? 'cancelled' : 'failure'),
     ...(details?.error ? { error: details.error } : result.isError
       ? {
           error: {
-            code: systemFailure ? 'run_failed_before_tool_result' : 'tool_execution_failed',
+            code: systemFailure
+              ? 'run_failed_before_tool_result'
+              : cancelledWithoutDetails
+                ? 'tool_cancelled'
+                : 'tool_execution_failed',
             message: systemFailure?.message ?? toolResultText(result),
           },
         }

@@ -1,3 +1,5 @@
+-- Renames the persisted execution correlation columns without rewriting values,
+-- then replaces the old Run-named indexes with executionId-aligned indexes.
 ALTER TABLE `session_messages` RENAME COLUMN `run_id` TO `execution_id`;
 --> statement-breakpoint
 DROP INDEX `idx_session_messages_run`;

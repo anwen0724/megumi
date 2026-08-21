@@ -9,15 +9,19 @@ import type { SessionEntry, SessionHistory, SessionMessageWithAttachments } from
 import type { Tools } from '@megumi/tools';
 import {
   createDiscoveryAgent,
-  type ApprovalRequest,
   type CreateDiscoveryAgentOptions,
   type DiscoveryAgent,
   type DiscoveryAgentPolicy,
-  type ExecutionOutcome,
-  type LaunchedAgentExecution,
-  type LaunchAgentExecutionInput,
   type StartExecutionRequest,
 } from '@megumi/discovery-agent';
+import type {
+  LaunchedAgentExecution,
+  LaunchAgentExecutionInput,
+} from '../../../packages/discovery-agent/src/discovery-agent';
+import type {
+  ApprovalRequest,
+  ExecutionOutcome,
+} from '../../../packages/discovery-agent/src/execution/execution-registry';
 
 const model: Model<Api> = {
   id: 'test-model',
