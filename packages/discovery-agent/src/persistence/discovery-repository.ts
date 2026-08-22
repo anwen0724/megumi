@@ -53,6 +53,13 @@ export type PublishDailyBatchResult =
   | { readonly status: 'published'; readonly batch: DailyDiscoveryBatch; readonly recommendations: readonly Recommendation[] }
   | { readonly status: 'conflict'; readonly reason: 'batch_not_running' | 'execution_mismatch' | 'publication_conflict' };
 
+export interface RecommendationSelectionSignal {
+  readonly contentIdentity: string;
+  readonly sourceName: string;
+  readonly title: string;
+  readonly reaction?: 'liked' | 'disliked';
+}
+
 export type ValidatedInterestCommand =
   | { readonly action: 'create'; readonly interestId: string; readonly description: string; readonly now: string }
   | { readonly action: 'update'; readonly interestId: string; readonly description: string; readonly now: string }
@@ -86,8 +93,17 @@ export interface DiscoveryRepository {
     readonly updatedAt: string;
   }): SessionParticipation;
   retractSessionEvidence(sessionId: string, retractedAt: string): void;
+  getDailyBatch(localDate: string): DailyDiscoveryBatch | undefined;
+  listRecommendationSelectionSignals(): readonly RecommendationSelectionSignal[];
   claimDailyBatch(command: ClaimDailyBatch): ClaimDailyBatchResult;
   publishDailyBatch(command: PublishDailyBatch): PublishDailyBatchResult;
+  failDailyBatch(command: {
+    readonly batchId: string;
+    readonly executionId: string;
+    readonly failureCode: string;
+    readonly failureMessage: string;
+    readonly failedAt: string;
+  }): boolean;
 }
 
 export function createDiscoveryRepository(options: {
@@ -155,6 +171,23 @@ export function createDiscoveryRepository(options: {
       options.database.transaction({
         operation: () => retractSessionEvidence(options.database, sessionId, retractedAt),
       });
+    },
+
+    getDailyBatch(localDate) {
+      return readBatchByLocalDate(options.database, LocalDateSchema.parse(localDate));
+    },
+
+    listRecommendationSelectionSignals() {
+      return options.database.prepare<RecommendationSelectionSignalRow>({ sql: `
+        SELECT content_identity, source_name, title, reaction
+        FROM discovery_recommendations
+        ORDER BY published_at, position, recommendation_id
+      ` }).all().map((row) => ({
+        contentIdentity: row.content_identity,
+        sourceName: row.source_name,
+        title: row.title,
+        ...(row.reaction === 'liked' || row.reaction === 'disliked' ? { reaction: row.reaction } : {}),
+      }));
     },
 
     claimDailyBatch(command) {
@@ -240,6 +273,25 @@ export function createDiscoveryRepository(options: {
             : 'publication_conflict',
         };
       }
+    },
+
+    failDailyBatch(command) {
+      TimestampSchema.parse(command.failedAt);
+      if (!command.batchId || !command.executionId || !command.failureCode) {
+        throw new Error('Daily discovery failure requires stable identifiers and a failure code.');
+      }
+      const updated = options.database.prepare({ sql: `
+        UPDATE discovery_batches
+        SET status = 'failed', failure_code = ?, failure_message = ?, updated_at = ?
+        WHERE batch_id = ? AND status = 'running' AND execution_id = ?
+      ` }).run([
+        command.failureCode,
+        command.failureMessage,
+        command.failedAt,
+        command.batchId,
+        command.executionId,
+      ]);
+      return updated.changes === 1;
     },
   };
 }
@@ -621,4 +673,11 @@ type SessionParticipationRow = DatabaseRow & {
   participation: string;
   effective_from: string;
   updated_at: string;
+};
+
+type RecommendationSelectionSignalRow = DatabaseRow & {
+  content_identity: string;
+  source_name: string;
+  title: string;
+  reaction: string | null;
 };

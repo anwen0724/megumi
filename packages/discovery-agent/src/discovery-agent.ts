@@ -38,6 +38,14 @@ import type {
   SetSessionParticipationRequest,
 } from './interests/interest';
 import {
+  createDailyDiscoveryRuntime,
+  type CreateDailyDiscoveryRuntimeOptions,
+} from './daily-discovery/daily-discovery-runtime';
+import type {
+  EnsureDailyDiscoveryRequest,
+  EnsureDailyDiscoveryResult,
+} from './daily-discovery/daily-discovery';
+import {
   LaunchExecutionError,
   launchAgentExecution,
   type DiscoveryAgentPolicy,
@@ -67,6 +75,7 @@ export interface DiscoveryAgent {
   ): Promise<SessionParticipation>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   retractSessionEvidence(sessionId: string): Promise<void>;
+  ensureDailyDiscovery(request: EnsureDailyDiscoveryRequest): Promise<EnsureDailyDiscoveryResult>;
   start(request: StartExecutionRequest): Promise<StartExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
@@ -215,6 +224,7 @@ export interface CreateDiscoveryAgentOptions {
   >;
   readonly conversation: ConversationSubmissionDependencies;
   readonly interests?: CreateInterestRuntimeOptions;
+  readonly dailyDiscovery?: CreateDailyDiscoveryRuntimeOptions;
   readonly observability?: ObservabilityService;
   readonly policy: DiscoveryAgentPolicy;
   /** Optional launch override for focused multi-execution tests; production uses the Execute Agent adapter. */
@@ -237,6 +247,14 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
   const interestRuntime = options.interests
     ? createInterestRuntime(options.interests)
     : createDisabledInterestRuntime();
+  const dailyDiscoveryRuntime = options.dailyDiscovery
+    ? createDailyDiscoveryRuntime({
+        ...options.dailyDiscovery,
+        models: options.models,
+        createExecutionId: options.ids.createExecutionId,
+        now: options.clock.now,
+      })
+    : undefined;
 
   const settleCompletion = (executionId: string, outcome: ExecutionOutcome): void => {
     try {
@@ -330,6 +348,17 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
+    ensureDailyDiscovery: (request) => dailyDiscoveryRuntime
+      ? dailyDiscoveryRuntime.ensure(request)
+      : Promise.resolve({
+          status: 'failed',
+          localDate: request.now.slice(0, 10),
+          failure: {
+            code: 'daily_discovery_not_configured',
+            message: 'Daily discovery is not configured.',
+            retryable: false,
+          },
+        }),
 
     async start(request): Promise<StartExecutionResult> {
       if (!accepting) {
@@ -515,6 +544,7 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     async shutdown(request): Promise<ShutdownResult> {
       accepting = false;
       interestRuntime.shutdown();
+      await dailyDiscoveryRuntime?.shutdown();
       await Promise.allSettled(
         store.listActiveExecutions().map((execution) => requestCancellation(execution.executionId)),
       );

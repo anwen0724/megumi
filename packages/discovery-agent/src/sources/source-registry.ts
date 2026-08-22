@@ -9,6 +9,7 @@ import {
 
 export interface SourceRegistry {
   listDescriptors(): readonly SourceDescriptor[];
+  get(sourceId: DiscoverySourceId): DiscoverySource | undefined;
   resolve(sourceId: DiscoverySourceId, mode: SourceSearchMode): DiscoverySource;
 }
 
@@ -25,6 +26,7 @@ export function createSourceRegistry(sources: readonly DiscoverySource[]): Sourc
 
   return {
     listDescriptors: () => [...entries.values()].map((entry) => entry.descriptor),
+    get: (sourceId) => entries.get(sourceId.trim())?.source,
     resolve(sourceId, mode) {
       const entry = entries.get(sourceId.trim());
       if (!entry) throw new Error(`Unknown source: ${sourceId}.`);

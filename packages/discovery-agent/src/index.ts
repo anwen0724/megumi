@@ -75,7 +75,10 @@ export type { SourceRegistry } from './sources/source-registry';
 export { createOpenWebSource } from './sources/open-web-source';
 export { createBilibiliSource } from './sources/bilibili-source';
 export { signBilibiliWbiParameters } from './sources/bilibili-wbi';
-export { createCandidateRegistry } from './daily-discovery/candidate-registry';
+export {
+  createCandidateRegistry,
+  discoveryContentIdentity,
+} from './daily-discovery/candidate-registry';
 export type {
   CandidateRegistry,
   DiscoveryCandidate,
@@ -100,6 +103,10 @@ export {
   EnsureDailyDiscoveryRequestSchema,
   LocalDateSchema,
 } from './daily-discovery/daily-discovery';
+export type {
+  CreateDailyDiscoveryRuntimeOptions,
+  DailyDiscoveryRuntime,
+} from './daily-discovery/daily-discovery-runtime';
 export type {
   DailyDiscoveryBatch,
   DiscoveryFailureView,
@@ -135,6 +142,7 @@ export type {
   ApplyInterestExtraction,
   PublishDailyBatch,
   PublishDailyBatchResult,
+  RecommendationSelectionSignal,
   ValidatedInterestCommand,
 } from './persistence/discovery-repository';
 export type {

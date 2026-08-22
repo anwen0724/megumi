@@ -35,7 +35,7 @@ export function createCandidateRegistry(): CandidateRegistry {
       const inserted: DiscoveryCandidate[] = [];
       for (const input of contents) {
         const content = SourceContentSchema.parse(input);
-        const identity = candidateIdentity(content);
+        const identity = discoveryContentIdentity(content);
         if (candidateIdsByIdentity.has(identity)) continue;
         const candidateId = `candidate:${nextId++}`;
         const candidate = { candidateId, ...content };
@@ -58,7 +58,8 @@ export function createCandidateRegistry(): CandidateRegistry {
       const current = candidates.get(candidateId);
       if (!current) throw new Error(`Unknown candidate: ${candidateId}.`);
       const detail = SourceContentDetailSchema.parse(input);
-      if (candidateIdentity(current) !== candidateIdentity(detail)) {
+      if (current.sourceId !== detail.sourceId
+        || (current.sourceContentId && current.sourceContentId !== detail.sourceContentId)) {
         throw new Error('Candidate detail identity does not match the candidate.');
       }
       const updated = { ...current, detail };
@@ -73,7 +74,7 @@ export function createCandidateRegistry(): CandidateRegistry {
   };
 }
 
-function candidateIdentity(content: SourceContent): string {
+export function discoveryContentIdentity(content: SourceContent): string {
   if (content.sourceContentId) return `${content.sourceId}:id:${content.sourceContentId}`;
   const url = new URL(content.canonicalUrl);
   url.hash = '';
