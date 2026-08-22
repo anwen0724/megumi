@@ -41,6 +41,15 @@ export async function executeSandboxToolInvocation(request: {
   readonly options: ToolExecutionOptions & { readonly executionAccess: ToolExecutionAccess };
   readonly execute: (context: BuiltInToolContext) => Promise<ToolExecutionResult>;
 }): Promise<ToolExecutionResult> {
+  const workspaceId = request.invocation.workspaceId;
+  const sessionId = request.invocation.sessionId;
+  if (!workspaceId || !sessionId) {
+    return createFailedToolResult({
+      toolName: request.invocation.toolName,
+      code: 'sandbox_denied',
+      message: 'Protected Tool execution requires a Session and Workspace.',
+    });
+  }
   const execution = await executeSandboxScope({
     sandbox: request.sandbox,
     open: {
@@ -60,8 +69,8 @@ export async function executeSandboxToolInvocation(request: {
       };
       return request.workspaceChanges.trackToolExecution({
         scope: {
-          workspace_id: request.invocation.workspaceId,
-          session_id: request.invocation.sessionId,
+          workspace_id: workspaceId,
+          session_id: sessionId,
           execution_id: request.invocation.executionId,
           ...(request.stepId ? { step_id: request.stepId } : {}),
           tool_call_id: request.invocation.toolCallId,

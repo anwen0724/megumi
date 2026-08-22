@@ -1,7 +1,85 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTools, type BuiltInToolName } from '@megumi/tools';
+import { createTools, type BuiltInToolName, type ToolSet } from '@megumi/tools';
 
 describe('Tools ModelCall routing', () => {
+  it('binds background business tools to one execution without Session, Workspace or Sandbox', async () => {
+    const openSandbox = vi.fn(async () => ({ status: 'unavailable' as const, reason: 'Must not be opened.' }));
+    const executed: string[] = [];
+    const tools = createTools({
+      settings: {
+        resolveWebSearch: () => ({ status: 'failed' }),
+        readWebSearchApiKey: () => ({ status: 'missing' }),
+      },
+      workspaces: {
+        getWorkspace: () => { throw new Error('Background tools must not resolve a Workspace.'); },
+      },
+      workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
+      sandbox: {
+        capabilities: () => ({
+          platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,
+          fileWriteBoundary: true, environmentIsolation: true, networkIsolation: true,
+          processTreeTermination: true, timeLimit: true, outputLimit: true,
+          processCountLimit: true, cpuLimit: false, memoryLimit: false,
+        }),
+        open: openSandbox,
+      },
+      executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
+    });
+    const toolSet: ToolSet = {
+      source: {
+        sourceId: 'daily-discovery', sourceKind: 'project_local', namespace: 'daily-discovery',
+        displayName: 'Daily discovery', configured: true, enabled: true,
+        availabilityStatus: 'available',
+      },
+      tools: [{
+        registrationId: 'daily-discovery:search_content',
+        definition: {
+          name: 'search_content', description: 'Search content.',
+          parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        },
+        availability: { status: 'available' },
+        executionMode: 'serial',
+        handler: {
+          toolName: 'search_content',
+          operations: () => [],
+          execute: async (_invocation, options) => {
+            expect(options?.signal?.aborted ?? false).toBe(false);
+            executed.push('search_content');
+            return { outputKind: 'json', content: { status: 'ok' } };
+          },
+        },
+      }],
+    };
+
+    const binding = tools.bindExecution({
+      executionId: 'execution:daily',
+      subject: { kind: 'background' },
+      includeBuiltIns: false,
+      toolSets: [toolSet],
+    });
+    expect(binding.status).toBe('bound');
+    if (binding.status !== 'bound') throw new Error('Expected execution binding.');
+    const modelCall = binding.binding.prepareModelCall({ modelCallId: 'model-call:daily' });
+    expect(modelCall.status).toBe('prepared');
+    if (modelCall.status !== 'prepared') throw new Error('Expected ModelCall binding.');
+    expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual(['search_content']);
+    const routed = modelCall.binding.routeToolCall({
+      toolCallId: 'tool-call:daily', toolName: 'search_content', input: { query: 'Agent' },
+    });
+    expect(routed).toMatchObject({ status: 'routed', operations: [] });
+    if (routed.status !== 'routed') throw new Error('Expected routed business tool.');
+    await expect(modelCall.binding.executeToolInvocation({ invocation: routed.invocation }))
+      .resolves.toMatchObject({ type: 'succeeded', toolName: 'search_content' });
+    expect(executed).toEqual(['search_content']);
+    expect(openSandbox).not.toHaveBeenCalled();
+
+    modelCall.binding.close();
+    expect(modelCall.binding.routeToolCall({
+      toolCallId: 'tool-call:late', toolName: 'search_content', input: { query: 'late' },
+    })).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
+    binding.binding.close();
+  });
+
   it('keeps one ModelCall view stable while a later ModelCall sees new availability', async () => {
     const disabled = new Set<BuiltInToolName>();
     const openSandbox = vi.fn(async () => ({ status: 'unavailable' as const, reason: 'Not used.' }));

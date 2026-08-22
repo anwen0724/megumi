@@ -14,10 +14,13 @@ import type {
 } from './tool';
 import type {
   RouteToolCallResult,
+  ToolSet,
   ToolInvocation,
+  ToolRegistration,
   ToolRouteScope,
 } from './tool-handler';
 import { createToolRouter, type ToolRouter } from './tool-router';
+import { createToolRegistry } from './tool-registry';
 import { createWebFetch, type WebFetch } from './built-ins/web-fetch';
 import { createWebSearch, type WebSearch, type WebSearchProvider } from './built-ins/web-search';
 import type { ToolProcessDescriptor } from './built-ins/run-command';
@@ -74,6 +77,7 @@ export interface BuiltInToolAvailability {
 export type { ToolExecutionPolicy, ToolWorkspaceChanges } from './sandbox-tool-executor';
 
 export interface Tools {
+  bindExecution(request: BindToolExecutionRequest): BindToolExecutionResult;
   resolveModelCallTools(request: ModelCallToolScope): ResolveModelCallToolsResult;
   listAvailableTools(request?: ListAvailableToolsRequest): ListAvailableToolsResult;
   routeToolCall(request: RouteModelCallToolRequest): RouteToolCallResult;
@@ -82,6 +86,46 @@ export interface Tools {
     options?: ToolExecutionOptions,
   ): Promise<ToolExecutionResult>;
   releaseModelCallTools(request: { readonly modelCallId: string }): void;
+}
+
+export type ToolExecutionSubject =
+  | { readonly kind: 'session'; readonly sessionId: string; readonly workspaceId: string }
+  | { readonly kind: 'background' };
+
+export interface BindToolExecutionRequest {
+  readonly executionId: string;
+  readonly subject: ToolExecutionSubject;
+  readonly includeBuiltIns: boolean;
+  readonly toolSets?: readonly ToolSet[];
+}
+
+export type BindToolExecutionResult =
+  | { readonly status: 'bound'; readonly binding: ToolExecutionBinding }
+  | { readonly status: 'failed'; readonly failure: ToolResolutionFailure };
+
+export interface ToolExecutionBinding {
+  readonly executionId: string;
+  prepareModelCall(request: { readonly modelCallId: string }): PrepareModelCallToolsResult;
+  close(): void;
+}
+
+export type PrepareModelCallToolsResult =
+  | { readonly status: 'prepared'; readonly binding: ModelCallToolBinding }
+  | { readonly status: 'failed'; readonly failure: ToolResolutionFailure };
+
+export interface ModelCallToolBinding {
+  readonly modelCallId: string;
+  readonly definitions: readonly ToolDefinition[];
+  routeToolCall(request: {
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly input: unknown;
+  }): RouteToolCallResult;
+  executeToolInvocation(
+    request: ExecuteToolInvocationRequest,
+    options?: ToolExecutionOptions,
+  ): Promise<ToolExecutionResult>;
+  close(): void;
 }
 
 export interface ToolSettings {
@@ -110,7 +154,7 @@ export interface CreateToolsRequest {
 
 interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
-  readonly workspaceRoot: string;
+  readonly workspaceRoot?: string;
   readonly router: ToolRouter<BuiltInToolContext>;
   readonly webSearch?: WebSearch;
   readonly webFetch: WebFetch;
@@ -120,37 +164,75 @@ export function createTools(request: CreateToolsRequest): Tools {
   const process = toolProcessDescriptor(request.sandbox);
   const registry = createBuiltInToolRegistry({ ...(process ? { process } : {}) });
   const routers = new Map<string, ModelCallRegistration>();
+  const executions = new Map<string, ToolExecutionBinding>();
   const webFetch = createWebFetch();
 
-  return {
-    resolveModelCallTools(scope) {
-      const existing = routers.get(scope.modelCallId);
-      if (existing) {
-        return sameScope(existing.scope, scope)
-          ? { status: 'resolved', definitions: existing.router.definitions() }
-          : { status: 'failed', failure: {
-              code: 'model_call_scope_conflict',
-              message: `ModelCall Tool scope conflicts with the existing Router: ${scope.modelCallId}`,
-            } };
+  const api: Tools = {
+    bindExecution(bindingRequest) {
+      if (executions.has(bindingRequest.executionId)) {
+        return failedBinding('model_call_scope_conflict', `Tool execution is already bound: ${bindingRequest.executionId}`);
       }
-      const workspace = request.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
-      if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
-      if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
-      const webSearch = resolveConfiguredWebSearch(request.settings);
-      const selected = registry.list().filter((tool) => isSelected(tool.registeredToolName, {
-        availability: request.builtInToolAvailability,
-        processAvailable: process !== undefined,
-        webSearchAvailable: webSearch !== undefined,
-      }));
-      const router = createToolRouter({ scope, tools: selected });
-      routers.set(scope.modelCallId, {
-        scope: { ...scope },
-        workspaceRoot: workspace.workspace.root_path,
-        router,
-        ...(webSearch ? { webSearch } : {}),
-        webFetch,
-      });
-      return { status: 'resolved', definitions: router.definitions() };
+      if (bindingRequest.includeBuiltIns && bindingRequest.subject.kind === 'background') {
+        return failedBinding('workspace_unavailable', 'Built-in tools require a Session-backed Workspace.');
+      }
+      let closed = false;
+      const modelCalls = new Set<string>();
+      const binding: ToolExecutionBinding = {
+        executionId: bindingRequest.executionId,
+        prepareModelCall({ modelCallId }) {
+          if (closed) return failedPreparation('model_call_scope_conflict', 'Tool execution binding is closed.');
+          const scope: ModelCallToolScope = {
+            executionId: bindingRequest.executionId,
+            modelCallId,
+            ...(bindingRequest.subject.kind === 'session' ? {
+              sessionId: bindingRequest.subject.sessionId,
+              workspaceId: bindingRequest.subject.workspaceId,
+            } : {}),
+          };
+          const prepared = prepareModelCall(scope, bindingRequest.includeBuiltIns, bindingRequest.toolSets ?? []);
+          if (prepared.status === 'failed') return prepared;
+          modelCalls.add(modelCallId);
+          let modelCallClosed = false;
+          const modelBinding: ModelCallToolBinding = {
+            modelCallId,
+            definitions: prepared.definitions,
+            routeToolCall(call) {
+              if (modelCallClosed || closed) return unknownModelCall(modelCallId);
+              return api.routeToolCall({ ...scope, ...call });
+            },
+            executeToolInvocation(execution, options) {
+              if (modelCallClosed || closed) {
+                return Promise.resolve(createFailedToolResult({
+                  toolName: execution.invocation.toolName,
+                  code: 'unknown_tool',
+                  message: `ModelCall Tool Router was not found: ${modelCallId}`,
+                }));
+              }
+              return api.executeToolInvocation(execution, options);
+            },
+            close() {
+              if (modelCallClosed) return;
+              modelCallClosed = true;
+              modelCalls.delete(modelCallId);
+              api.releaseModelCallTools({ modelCallId });
+            },
+          };
+          return { status: 'prepared', binding: modelBinding };
+        },
+        close() {
+          if (closed) return;
+          closed = true;
+          for (const modelCallId of modelCalls) api.releaseModelCallTools({ modelCallId });
+          modelCalls.clear();
+          executions.delete(bindingRequest.executionId);
+        },
+      };
+      executions.set(bindingRequest.executionId, binding);
+      return { status: 'bound', binding };
+    },
+
+    resolveModelCallTools(scope) {
+      return prepareModelCall(scope, true, []);
     },
 
     listAvailableTools(input = {}) {
@@ -207,6 +289,13 @@ export function createTools(request: CreateToolsRequest): Tools {
           message: 'Tool execution access was not provided.',
         });
       }
+      if (!registration.workspaceRoot) {
+        return createFailedToolResult({
+          toolName: invocation.toolName,
+          code: 'sandbox_denied',
+          message: 'A Workspace is required for protected Tool execution.',
+        });
+      }
       return executeSandboxToolInvocation({
         sandbox: request.sandbox,
         executionPolicy: request.executionPolicy,
@@ -224,6 +313,80 @@ export function createTools(request: CreateToolsRequest): Tools {
 
     releaseModelCallTools(input) { routers.delete(input.modelCallId); },
   };
+  return api;
+
+  function prepareModelCall(
+    scope: ModelCallToolScope,
+    includeBuiltIns: boolean,
+    toolSets: readonly ToolSet[],
+  ): ResolveModelCallToolsResult {
+    const existing = routers.get(scope.modelCallId);
+    if (existing) {
+      return sameScope(existing.scope, scope)
+        ? { status: 'resolved', definitions: existing.router.definitions() }
+        : failedResolution(
+            'model_call_scope_conflict',
+            `ModelCall Tool scope conflicts with the existing Router: ${scope.modelCallId}`,
+          );
+    }
+    let workspaceRoot: string | undefined;
+    let webSearch: WebSearch | undefined;
+    let selected: readonly import('./tool-handler').RegisteredTool<BuiltInToolContext>[] = [];
+    if (includeBuiltIns) {
+      if (!scope.workspaceId) return failedResolution('workspace_unavailable', 'Built-in tools require a Workspace.');
+      const workspace = request.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
+      if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
+      if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
+      workspaceRoot = workspace.workspace.root_path;
+      webSearch = resolveConfiguredWebSearch(request.settings);
+      selected = registry.list().filter((tool) => isSelected(tool.registeredToolName, {
+        availability: request.builtInToolAvailability,
+        processAvailable: process !== undefined,
+        webSearchAvailable: webSearch !== undefined,
+      }));
+    }
+    try {
+      const executionRegistrations = toolSets.flatMap((toolSet) => toolSet.tools.map((tool): ToolRegistration<BuiltInToolContext> => ({
+        registrationId: tool.registrationId,
+        source: toolSet.source,
+        definition: tool.definition,
+        availability: tool.availability,
+        ...(tool.executionMode ? { executionMode: tool.executionMode } : {}),
+        handler: {
+          toolName: tool.handler.toolName,
+          operations: (invocation) => tool.handler.operations(invocation),
+          execute: (_context, invocation, options) => tool.handler.execute(invocation, options),
+        },
+      })));
+      const combined = createToolRegistry({
+        registrations: [
+          ...selected.map((tool): ToolRegistration<BuiltInToolContext> => ({
+            registrationId: tool.registrationId,
+            source: tool.source,
+            definition: tool.definition,
+            handler: tool.handler,
+            availability: tool.availability,
+            executionMode: tool.executionMode,
+          })),
+          ...executionRegistrations,
+        ],
+      }).list().filter((tool) => tool.availability.status === 'available');
+      const router = createToolRouter({ scope, tools: combined });
+      routers.set(scope.modelCallId, {
+        scope: { ...scope },
+        ...(workspaceRoot ? { workspaceRoot } : {}),
+        router,
+        ...(webSearch ? { webSearch } : {}),
+        webFetch,
+      });
+      return { status: 'resolved', definitions: router.definitions() };
+    } catch (error) {
+      return failedResolution(
+        'model_call_scope_conflict',
+        error instanceof Error ? error.message : 'Tool Set registration failed.',
+      );
+    }
+  }
 }
 
 async function executeHandler(
@@ -281,6 +444,20 @@ function isSelected(toolName: string, facts: {
 function sameScope(left: ModelCallToolScope, right: ModelCallToolScope): boolean {
   return left.executionId === right.executionId && left.sessionId === right.sessionId
     && left.workspaceId === right.workspaceId && left.modelCallId === right.modelCallId;
+}
+
+function unknownModelCall(modelCallId: string): RouteToolCallResult {
+  return { status: 'failed', error: {
+    code: 'unknown_tool', message: `ModelCall Tool Router was not found: ${modelCallId}`,
+  } };
+}
+
+function failedBinding(code: ToolResolutionFailure['code'], message: string): BindToolExecutionResult {
+  return { status: 'failed', failure: { code, message } };
+}
+
+function failedPreparation(code: ToolResolutionFailure['code'], message: string): PrepareModelCallToolsResult {
+  return { status: 'failed', failure: { code, message } };
 }
 
 function failedResolution(code: ToolResolutionFailure['code'], message: string): ResolveModelCallToolsResult {

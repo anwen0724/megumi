@@ -30,6 +30,9 @@ export function operation(
     readonly attributes?: Record<string, string | number | boolean | null>;
   },
 ) {
+  if (!invocation.workspaceId || !invocation.sessionId) {
+    throw new Error(`Built-in Tool requires a Session-backed execution: ${invocation.toolName}`);
+  }
   return {
     action,
     ...(resource ? { resource } : {}),

@@ -30,6 +30,9 @@ export type {
   PermissionOperation,
   RegisteredTool,
   RouteToolCallResult,
+  ExecutionToolHandler,
+  ToolSet,
+  ToolSetToolRegistration,
   ToolHandler,
   ToolInvocation,
   ToolRegistration,
@@ -45,6 +48,8 @@ export {
 } from './built-ins';
 export {
   createTools,
+  type BindToolExecutionRequest,
+  type BindToolExecutionResult,
   type AvailableTool,
   type BuiltInToolAvailability,
   type CreateToolsRequest,
@@ -52,11 +57,15 @@ export {
   type ListAvailableToolsRequest,
   type ListAvailableToolsResult,
   type ModelCallToolScope,
+  type ModelCallToolBinding,
+  type PrepareModelCallToolsResult,
   type ResolveModelCallToolsResult,
   type RouteModelCallToolRequest,
   type ToolExecutionPolicy,
   type ToolResolutionFailure,
   type Tools,
+  type ToolExecutionBinding,
+  type ToolExecutionSubject,
 } from './tools';
 export type { WorkspaceFileAccess } from './built-ins/workspace-file-access';
 export {
