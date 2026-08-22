@@ -47,6 +47,8 @@ export const discovery = {
   removeLaterTooltip: '移出稍后看',
   chat: '聊一聊',
   chatAbout: '聊一聊 {{title}}',
+  showMoreRecommendations: '显示更多（还有 {{count}} 条）',
+  collapseRecommendations: '收起',
   loadMore: '加载更多',
   managementTitle: '关注与每日发现',
   managementDescription: '关注是一段自然语言描述，它会指导下一次每日发现。',

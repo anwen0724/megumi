@@ -16,6 +16,7 @@ describe('DiscoveryPage', () => {
 
   beforeEach(async () => {
     await initializeRendererI18n('zh-CN');
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
     getHome.mockReset().mockResolvedValue(ok(homeView()));
     searchRecommendations.mockReset().mockResolvedValue(ok({
       query: 'Agent',
@@ -100,7 +101,8 @@ describe('DiscoveryPage', () => {
     expect(within(card).getAllByText('Agent Harness 深入实践')).toHaveLength(2);
   });
 
-  it('renders every Recommendation returned for the day instead of enforcing a small card limit', async () => {
+  it('shows two responsive rows per timeline day and lets the user expand or collapse the group', async () => {
+    const user = userEvent.setup();
     const recommendations = Array.from({ length: 8 }, (_, index) => recommendation({
       recommendationId: `recommendation:${index + 1}`,
       title: `每日内容 ${index + 1}`,
@@ -110,11 +112,34 @@ describe('DiscoveryPage', () => {
 
     render(<DiscoveryPage />);
 
-    expect(await screen.findAllByTestId(/^recommendation-recommendation:/)).toHaveLength(8);
+    expect(await screen.findAllByTestId(/^recommendation-recommendation:/)).toHaveLength(4);
+    expect(screen.getByRole('button', { name: '显示更多（还有 4 条）' })).toHaveAttribute('aria-expanded', 'false');
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
+    fireEvent(window, new Event('resize'));
+    await waitFor(() => expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(6));
+
+    const expand = screen.getByRole('button', { name: '显示更多（还有 2 条）' });
+    expect(expand).toHaveAttribute('aria-expanded', 'false');
+
+    await user.click(expand);
+    expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(8);
+    expect(screen.getByRole('button', { name: '收起' })).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(screen.getByRole('button', { name: '收起' }));
+    expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(6);
   });
 
   it('searches only published local recommendations and updates card state through the Host', async () => {
     const user = userEvent.setup();
+    searchRecommendations.mockResolvedValue(ok({
+      query: 'Agent',
+      recommendations: Array.from({ length: 8 }, (_, index) => recommendation({
+        recommendationId: index === 0 ? 'recommendation:search' : `recommendation:search:${index}`,
+        title: index === 0 ? 'Agent 搜索结果' : `Agent 搜索结果 ${index + 1}`,
+        position: index,
+      })),
+    }));
     render(<DiscoveryPage />);
     await screen.findByText('Agent Harness 深入实践');
 
@@ -125,6 +150,8 @@ describe('DiscoveryPage', () => {
     expect(searchRecommendations.mock.calls[0][0].payload).toEqual({ query: 'Agent', limit: 60 });
     expect(ensureDaily).not.toHaveBeenCalled();
     expect(await screen.findByText('Agent 搜索结果')).toBeInTheDocument();
+    expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(8);
+    expect(screen.queryByRole('button', { name: /显示更多/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '收藏 Agent 搜索结果' }));
     expect(updateRecommendationState.mock.calls.at(-1)?.[0].payload).toEqual({

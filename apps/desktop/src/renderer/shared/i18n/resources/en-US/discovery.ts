@@ -44,6 +44,8 @@ export const discovery = {
   removeLaterTooltip: 'Remove from watch later',
   chat: 'Chat',
   chatAbout: 'Chat about {{title}}',
+  showMoreRecommendations: 'Show more ({{count}} remaining)',
+  collapseRecommendations: 'Show less',
   loadMore: 'Load more',
   managementTitle: 'Interests & daily discovery',
   managementDescription: 'Interests are natural-language descriptions that guide the next daily run.',

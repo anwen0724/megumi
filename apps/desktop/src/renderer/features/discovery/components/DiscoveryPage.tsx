@@ -1,6 +1,6 @@
 /* Owns the renderer projection for today, discovery history, search, and feedback. */
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Bookmark, Heart, LoaderCircle, Search, Settings2, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { Bookmark, ChevronDown, ChevronUp, Heart, LoaderCircle, Search, Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DiscoveryHomeUiResult, DiscoveryRecommendationUiDto } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
@@ -199,7 +199,12 @@ export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
               </h2>
               <span className="text-xs text-[var(--color-text-subtle)]">{t('resultCount', { count: day.recommendations.length })}</span>
             </div>
-            <RecommendationGrid recommendations={day.recommendations} onAction={updateState} onChat={onStartConversation} />
+            <RecommendationGrid
+              recommendations={day.recommendations}
+              collapsedRows={mode === 'timeline' ? 2 : undefined}
+              onAction={updateState}
+              onChat={onStartConversation}
+            />
           </section>
         ))}
 
@@ -211,23 +216,68 @@ export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
   );
 }
 
-function RecommendationGrid({ recommendations, onAction, onChat }: {
+function RecommendationGrid({ recommendations, collapsedRows, onAction, onChat }: {
   recommendations: DiscoveryRecommendationUiDto[];
+  collapsedRows?: number;
   onAction(id: string, action: RecommendationAction): void;
   onChat?(recommendation: DiscoveryRecommendationUiDto): void;
 }) {
+  const { t } = useTranslation('discovery');
+  const gridId = useId();
+  const columnCount = useRecommendationColumnCount();
+  const [expanded, setExpanded] = useState(false);
+  const collapsedLimit = collapsedRows ? collapsedRows * columnCount : recommendations.length;
+  const canToggle = collapsedRows !== undefined && recommendations.length > collapsedLimit;
+  const visibleRecommendations = expanded || collapsedRows === undefined
+    ? recommendations
+    : recommendations.slice(0, collapsedLimit);
+
   return (
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
-      {recommendations.map((recommendation) => (
-        <RecommendationCard
-          key={recommendation.recommendationId}
-          recommendation={recommendation}
-          onAction={(action) => void onAction(recommendation.recommendationId, action)}
-          onChat={() => onChat?.(recommendation)}
-        />
-      ))}
-    </div>
+    <>
+      <div id={gridId} className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
+        {visibleRecommendations.map((recommendation) => (
+          <RecommendationCard
+            key={recommendation.recommendationId}
+            recommendation={recommendation}
+            onAction={(action) => void onAction(recommendation.recommendationId, action)}
+            onChat={() => onChat?.(recommendation)}
+          />
+        ))}
+      </div>
+      {canToggle ? (
+        <Button
+          variant="ghost"
+          aria-controls={gridId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+          className="mt-5 h-11 w-full rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/55 text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/45 hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
+        >
+          {expanded ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+          {expanded
+            ? t('collapseRecommendations')
+            : t('showMoreRecommendations', { count: recommendations.length - collapsedLimit })}
+        </Button>
+      ) : null}
+    </>
   );
+}
+
+function useRecommendationColumnCount(): number {
+  const [columnCount, setColumnCount] = useState(readRecommendationColumnCount);
+
+  useEffect(() => {
+    const update = () => setColumnCount(readRecommendationColumnCount());
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  return columnCount;
+}
+
+function readRecommendationColumnCount(): number {
+  if (window.innerWidth >= 1536) return 3;
+  if (window.innerWidth >= 768) return 2;
+  return 1;
 }
 
 function ModeButton({ active, onClick, children }: { active: boolean; onClick(): void; children: React.ReactNode }) {
