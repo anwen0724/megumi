@@ -1,5 +1,6 @@
 /* Renders one persisted Recommendation snapshot and its user-controlled state. */
 import { Bookmark, Clock3, EyeOff, Heart, MessageCircle, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { DiscoveryRecommendationUiDto } from '@megumi/product/host';
 import { cx } from '../../../shared/ui';
@@ -19,6 +20,8 @@ interface RecommendationCardProps {
 
 export function RecommendationCard({ recommendation, onAction, onChat }: RecommendationCardProps) {
   const { t, i18n } = useTranslation('discovery');
+  const [failedCoverUrl, setFailedCoverUrl] = useState<string>();
+  const showCover = Boolean(recommendation.coverUrl && recommendation.coverUrl !== failedCoverUrl);
   const sourceMeta = [
     recommendation.author,
     recommendation.contentPublishedAt ? formatContentDate(recommendation.contentPublishedAt, i18n.language) : undefined,
@@ -40,10 +43,14 @@ export function RecommendationCard({ recommendation, onAction, onChat }: Recomme
         onClick={openOriginal}
         className="relative block aspect-[16/9] w-full overflow-hidden bg-[var(--color-surface-muted)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-focus)]"
       >
-        {recommendation.coverUrl ? (
+        {showCover ? (
           <img
             src={recommendation.coverUrl}
             alt=""
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            onError={() => setFailedCoverUrl(recommendation.coverUrl)}
             className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
           />
         ) : (
@@ -76,24 +83,28 @@ export function RecommendationCard({ recommendation, onAction, onChat }: Recomme
         <div className="mt-auto flex items-center gap-1 pt-4">
           <CardAction
             label={t('like', { title: recommendation.title })}
+            tooltip={t('likeTooltip')}
             active={recommendation.reaction === 'liked'}
             onClick={() => onAction({ action: 'set_reaction', reaction: recommendation.reaction === 'liked' ? null : 'liked' })}
           ><ThumbsUp size={15} /></CardAction>
           <CardAction
             label={t('dislike', { title: recommendation.title })}
+            tooltip={t('dislikeTooltip')}
             active={recommendation.reaction === 'disliked'}
             onClick={() => onAction({ action: 'set_reaction', reaction: recommendation.reaction === 'disliked' ? null : 'disliked' })}
           ><ThumbsDown size={15} /></CardAction>
-          <CardAction label={t('hide', { title: recommendation.title })} onClick={() => onAction({ action: 'set_hidden', hidden: true })}>
+          <CardAction label={t('hide', { title: recommendation.title })} tooltip={t('hideTooltip')} onClick={() => onAction({ action: 'set_hidden', hidden: true })}>
             <EyeOff size={15} />
           </CardAction>
           <CardAction
             label={t(recommendation.watchLater ? 'removeLater' : 'saveLater', { title: recommendation.title })}
+            tooltip={t(recommendation.watchLater ? 'removeLaterTooltip' : 'saveLaterTooltip')}
             active={recommendation.watchLater}
             onClick={() => onAction({ action: 'set_watch_later', watchLater: !recommendation.watchLater })}
           ><Clock3 size={15} /></CardAction>
           <CardAction
             label={t(recommendation.favorite ? 'unfavorite' : 'favorite', { title: recommendation.title })}
+            tooltip={t(recommendation.favorite ? 'unfavoriteTooltip' : 'favoriteTooltip')}
             active={recommendation.favorite}
             onClick={() => onAction({ action: 'set_favorite', favorite: !recommendation.favorite })}
           ><Heart size={15} className={recommendation.favorite ? 'fill-current' : undefined} /></CardAction>
@@ -112,8 +123,9 @@ export function RecommendationCard({ recommendation, onAction, onChat }: Recomme
   );
 }
 
-function CardAction({ label, active = false, onClick, children }: {
+function CardAction({ label, tooltip, active = false, onClick, children }: {
   label: string;
+  tooltip: string;
   active?: boolean;
   onClick(): void;
   children: React.ReactNode;
@@ -122,6 +134,7 @@ function CardAction({ label, active = false, onClick, children }: {
     <button
       type="button"
       aria-label={label}
+      title={tooltip}
       aria-pressed={active}
       onClick={onClick}
       className={cx(

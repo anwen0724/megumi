@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DiscoveryPage } from '@megumi/desktop/renderer/features/discovery';
 import { initializeRendererI18n } from '@megumi/desktop/renderer/shared/i18n';
@@ -80,6 +80,24 @@ describe('DiscoveryPage', () => {
     expect(within(card).queryByRole('img')).not.toBeInTheDocument();
     expect(within(card).queryByText('未知作者')).not.toBeInTheDocument();
     expect(within(card).queryByText('刚刚')).not.toBeInTheDocument();
+  });
+
+  it('labels card actions and replaces an unavailable remote cover with the title fallback', async () => {
+    render(<DiscoveryPage />);
+    const card = await screen.findByTestId('recommendation-recommendation:1');
+    const cover = card.querySelector('img');
+    expect(cover).not.toBeNull();
+
+    expect(cover).toHaveAttribute('loading', 'lazy');
+    expect(cover).toHaveAttribute('decoding', 'async');
+    expect(cover).toHaveAttribute('referrerpolicy', 'no-referrer');
+    expect(within(card).getByRole('button', { name: '喜欢 Agent Harness 深入实践' })).toHaveAttribute('title', '喜欢');
+    expect(within(card).getByRole('button', { name: '收藏 Agent Harness 深入实践' })).toHaveAttribute('title', '收藏');
+    expect(within(card).getByRole('button', { name: '稍后看 Agent Harness 深入实践' })).toHaveAttribute('title', '稍后看');
+
+    fireEvent.error(cover!);
+    expect(card.querySelector('img')).not.toBeInTheDocument();
+    expect(within(card).getAllByText('Agent Harness 深入实践')).toHaveLength(2);
   });
 
   it('renders every Recommendation returned for the day instead of enforcing a small card limit', async () => {
