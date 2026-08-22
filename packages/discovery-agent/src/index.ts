@@ -70,6 +70,16 @@ export {
   SourceFailureSchema,
   SourceSearchModeSchema,
 } from './sources/discovery-source';
+export { createSourceRegistry } from './sources/source-registry';
+export type { SourceRegistry } from './sources/source-registry';
+export { createOpenWebSource } from './sources/open-web-source';
+export { createBilibiliSource } from './sources/bilibili-source';
+export { signBilibiliWbiParameters } from './sources/bilibili-wbi';
+export { createCandidateRegistry } from './daily-discovery/candidate-registry';
+export type {
+  CandidateRegistry,
+  DiscoveryCandidate,
+} from './daily-discovery/candidate-registry';
 export type {
   DiscoveryContentType,
   DiscoverySource,
