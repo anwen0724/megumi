@@ -42,6 +42,16 @@ export {
   InterestStatusSchema,
   SessionParticipationSchema,
 } from './interests/interest';
+export { createInterestExtractor } from './interests/interest-extraction';
+export type {
+  InterestExtractionInput,
+  InterestExtractor,
+} from './interests/interest-extraction';
+export type {
+  CreateInterestRuntimeOptions,
+  ObserveConversationTurnRequest,
+  ObserveConversationTurnResult,
+} from './interests/interest-runtime';
 export type {
   ChangeInterestRequest,
   Interest,
@@ -112,8 +122,10 @@ export type {
   ClaimDailyBatch,
   ClaimDailyBatchResult,
   DiscoveryRepository,
+  ApplyInterestExtraction,
   PublishDailyBatch,
   PublishDailyBatchResult,
+  ValidatedInterestCommand,
 } from './persistence/discovery-repository';
 export type {
   DiscoveryDayView,

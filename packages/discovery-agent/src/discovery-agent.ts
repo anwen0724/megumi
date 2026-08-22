@@ -25,6 +25,19 @@ import {
   type SubmitConversationInputResult,
 } from './conversation/submit-conversation-input';
 import {
+  createDisabledInterestRuntime,
+  createInterestRuntime,
+  type CreateInterestRuntimeOptions,
+  type ObserveConversationTurnRequest,
+  type ObserveConversationTurnResult,
+} from './interests/interest-runtime';
+import type {
+  ChangeInterestRequest,
+  Interest,
+  SessionParticipation,
+  SetSessionParticipationRequest,
+} from './interests/interest';
+import {
   LaunchExecutionError,
   launchAgentExecution,
   type DiscoveryAgentPolicy,
@@ -48,6 +61,12 @@ export interface DiscoveryAgent {
   submitConversationInput(
     request: SubmitConversationInputRequest,
   ): Promise<SubmitConversationInputResult>;
+  changeInterest(request: ChangeInterestRequest): Promise<Interest>;
+  setSessionParticipation(
+    request: SetSessionParticipationRequest,
+  ): Promise<SessionParticipation>;
+  observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
+  retractSessionEvidence(sessionId: string): Promise<void>;
   start(request: StartExecutionRequest): Promise<StartExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
@@ -195,6 +214,7 @@ export interface CreateDiscoveryAgentOptions {
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
   readonly conversation: ConversationSubmissionDependencies;
+  readonly interests?: CreateInterestRuntimeOptions;
   readonly observability?: ObservabilityService;
   readonly policy: DiscoveryAgentPolicy;
   /** Optional launch override for focused multi-execution tests; production uses the Execute Agent adapter. */
@@ -214,12 +234,26 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     dependencies: options.conversation,
     startExecution: (request) => operations.start(request),
   });
+  const interestRuntime = options.interests
+    ? createInterestRuntime(options.interests)
+    : createDisabledInterestRuntime();
 
   const settleCompletion = (executionId: string, outcome: ExecutionOutcome): void => {
     try {
       store.settleTerminal(executionId, outcome);
       const terminal = store.getExecution(executionId);
-      if (terminal) publishEnded(terminal, outcome);
+      if (terminal) {
+        publishEnded(terminal, outcome);
+        if (outcome.status === 'completed' && terminal.completedAt) {
+          interestRuntime.observeConversationTurn({
+            sessionId: terminal.sessionId,
+            executionId: terminal.executionId,
+            userMessageId: terminal.userMessageId,
+            assistantMessageId: outcome.assistantMessageId,
+            completedAt: terminal.completedAt,
+          });
+        }
+      }
     } catch (error) {
       // Terminal settlement must never change the fixed result or reject; the
       // failure is a diagnostics-only invariant violation.
@@ -292,6 +326,10 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
 
   operations = {
     submitConversationInput: (request) => conversationSubmission.submit(request),
+    changeInterest: (request) => interestRuntime.changeInterest(request),
+    setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
+    observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
+    retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
 
     async start(request): Promise<StartExecutionResult> {
       if (!accepting) {
@@ -476,6 +514,7 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
 
     async shutdown(request): Promise<ShutdownResult> {
       accepting = false;
+      interestRuntime.shutdown();
       await Promise.allSettled(
         store.listActiveExecutions().map((execution) => requestCancellation(execution.executionId)),
       );

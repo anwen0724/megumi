@@ -20,6 +20,10 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import {
+  createDiscoveryRepository,
+  createInterestExtractor,
+} from '@megumi/discovery-agent';
+import {
   createEventBus,
   type EventBus,
 } from '@megumi/events';
@@ -386,6 +390,8 @@ function composeCapabilitiesWithDatabase(
     events,
     entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
   });
+  const discoveryRepository = createDiscoveryRepository({ database });
+  const interestExtractor = createInterestExtractor({ models: modelComposition.models });
 
   const capabilities: ProductCapabilities = {
     homePaths,
@@ -437,6 +443,50 @@ function composeCapabilitiesWithDatabase(
           provider_id: providerId,
           model_id: modelId,
         }),
+      },
+      interests: {
+        repository: discoveryRepository,
+        settings: {
+          getDiscoverySettings() {
+            const resolved = settings.resolve();
+            return {
+              conversationRecognitionEnabled: resolved.status === 'ok'
+                ? resolved.settings.discovery.conversation_recognition_enabled
+                : false,
+            };
+          },
+        },
+        sessions,
+        history,
+        async resolveModel() {
+          const resolved = settings.resolve();
+          const selection = resolved.status === 'ok'
+            ? resolved.settings.model_selection
+            : undefined;
+          if (!selection) {
+            return {
+              status: 'failed',
+              failure: { message: 'The default model is not configured.' },
+            };
+          }
+          return resolveModel(selection);
+        },
+        extractor: (input) => interestExtractor.extract(input),
+        ids: {
+          createInterestId: () => `interest:${crypto.randomUUID()}`,
+          createEvidenceId: () => `evidence:${crypto.randomUUID()}`,
+        },
+        clock: { now: () => new Date().toISOString() },
+        onError(error, job) {
+          observability.service.recordLog({
+            level: 'warn',
+            event: 'interest_extraction_failed',
+            attributes: {
+              errorMessage: error instanceof Error ? error.message : String(error),
+              ...(job ? { executionId: job.executionId, sessionId: job.sessionId } : {}),
+            },
+          });
+        },
       },
       observability: observability.service,
       policy: PRODUCT_EXECUTION_POLICY,

@@ -237,6 +237,104 @@ function approvalRequest(executionId: string, approvalId: string): ApprovalReque
 }
 
 describe('Discovery Agent', () => {
+  it('enqueues Interest extraction only after a completed foreground execution settles', async () => {
+    const extractor = vi.fn(async () => ({ evidence: [] }));
+    const { discoveryAgent, testLaunch } = fixture({
+      interests: {
+        repository: {
+          getSessionParticipation: () => undefined,
+          listInterests: () => [],
+          listPendingEvidence: () => [],
+          applyInterestExtraction: vi.fn(),
+        } as never,
+        settings: {
+          getDiscoverySettings: () => ({ conversationRecognitionEnabled: true }),
+        },
+        sessions: {
+          getSession: ({ session_id }) => ({
+            status: 'found',
+            session: {
+              session_id,
+              workspace_id: 'workspace:1',
+              title: 'Session',
+              status: 'active',
+              created_at: clock.now(),
+              updated_at: clock.now(),
+            },
+          }),
+        },
+        history: {
+          getCommittedRunMessages: ({ sessionId, executionId }) => ({
+            status: 'ok',
+            messages: [
+              {
+                type: 'message',
+                entryId: `entry:user:${executionId}`,
+                message: {
+                  message_id: executionId === 'execution:1' ? 'message:1' : 'message:2',
+                  session_id: sessionId,
+                  execution_id: executionId,
+                  message_kind: 'user_message',
+                  display_content: [{ type: 'text', text: 'hello' }],
+                  model_content: [{ type: 'text', text: 'hello' }],
+                  created_at: clock.now(),
+                },
+                attachments: [],
+              },
+              {
+                type: 'message',
+                entryId: `entry:assistant:${executionId}`,
+                message: {
+                  message_id: `assistant:${executionId}`,
+                  session_id: sessionId,
+                  execution_id: executionId,
+                  message_kind: 'assistant_reply',
+                  status: 'completed',
+                  content: [{ type: 'text', text: 'done' }],
+                  created_at: clock.now(),
+                },
+                attachments: [],
+              },
+            ],
+          }),
+        },
+        resolveModel: async () => ({ status: 'ok', model }),
+        extractor,
+        ids: {
+          createInterestId: () => 'interest:1',
+          createEvidenceId: () => 'evidence:1',
+        },
+        clock,
+      },
+    });
+
+    const completed = await discoveryAgent.start(startRequest);
+    expect(completed.status).toBe('started');
+    testLaunch.handles[0]!.resolveOutcome({
+      status: 'completed',
+      assistantMessageId: 'assistant:execution:1',
+    });
+    await vi.waitFor(() => expect(extractor).toHaveBeenCalledTimes(1));
+
+    const failed = await discoveryAgent.start({
+      ...startRequest,
+      requestId: 'request:2',
+      sessionId: 'session:2',
+    });
+    expect(failed.status).toBe('started');
+    testLaunch.handles[1]!.resolveOutcome({
+      status: 'failed',
+      failure: { code: 'internal_error', message: 'failed', retryable: false },
+    });
+    await vi.waitFor(() => {
+      expect(discoveryAgent.get({ executionId: 'execution:2' })).toMatchObject({
+        status: 'found',
+        execution: { status: 'failed' },
+      });
+    });
+    expect(extractor).toHaveBeenCalledTimes(1);
+  });
+
   it('does not create a Session or start an execution when Input completes the request', async () => {
     const createSession = vi.fn();
     const { discoveryAgent, testLaunch } = fixture({
