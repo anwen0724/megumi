@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**A local desktop Agent system that connects models, context, tools, permissions, and persistent sessions through one execution loop.**
+**A personal Agent that turns the interests surfaced in everyday conversations into proactive, personalized content discovery.**
 
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-5f6b7a)](#quick-start)
 [![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
@@ -12,32 +12,33 @@
 
 ## About Megumi
 
-Megumi is an open-source Agent system delivered as a desktop application. It provides the foundation required to run an Agent against a local workspace: accepting user input, assembling model context, streaming model responses, executing tool calls, applying permissions, recording session history, and continuing the model–tool loop until the run settles.
+Megumi is an open-source personal Agent delivered as a local desktop application. Users talk to it as part of their everyday work, learning, and interests. With the user's authorization, Megumi turns evidence from those conversations and later recommendation feedback into a dynamic model of what the user currently and consistently cares about.
 
-The system is provider-neutral. You choose the model provider and model, while Megumi supplies the execution loop and the surrounding capabilities that turn a model call into a controlled, observable Agent run.
+Megumi uses that understanding to proactively discover content across sources, filter noise and repetition, explain why an item is relevant, and refine future discovery from feedback. It does not require the user to maintain static topic categories, keywords, or subscription feeds.
 
-## How It Works
+The current codebase provides the local, provider-neutral Agent foundation for this product direction: a reusable execution loop together with context, tools, permissions, sandboxing, persistent sessions, and observable runtime behavior.
+
+## Agent Foundation
 
 ```mermaid
 flowchart LR
-    U["User Input"] --> I["Input"]
-    I --> E["Engine / Agent Loop"]
-    E --> C["Context"]
-    C --> A["AI Model"]
+    U["User Input"] --> H["Harness: Input & Context"]
+    H --> E["Agent Core / Agent Loop"]
+    E --> A["AI Model"]
     A --> E
-    E --> T["Tools"]
+    E --> T["Harness: Tools"]
     T --> P["Permissions"]
     P --> S["Sandbox"]
     S --> W["Local Workspace"]
-    E --> H["Session"]
-    E --> V["Events"]
+    H --> M["Session & Product State"]
+    E --> V["Events & Observability"]
 ```
 
-- **Engine** owns Run lifecycle and the model–tool execution loop.
-- **Context** builds the provider-neutral prompt from instructions, session history, workspace facts, skills, and the tools available to the current model call.
-- **AI** provides one interface for the supported model protocols and streams model output back to the Engine.
+- **Agent Core** owns the product-neutral Agent loop and the explicit lifecycle of one Agent execution.
+- **Context** builds the provider-neutral model context from instructions, session history, workspace facts, skills, and the tools available to the current model call.
+- **AI** provides one interface for the supported model protocols and streams model output back to Agent Core.
 - **Tools, Permissions, and Sandbox** route actions, decide whether they are allowed or require approval, and enforce their actual execution boundary.
-- **Session and Events** preserve semantic conversation history and publish the live execution process used by the desktop interface.
+- **Session, product state, and runtime events** surround the core loop with durable history, product behavior, and observable execution.
 
 ## Quick Start
 

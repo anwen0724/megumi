@@ -1,7 +1,7 @@
 {
   "name": "megumi",
   "version": "0.1.0",
-  "description": "AI-guided development workflow platform",
+  "description": "Local-first personal Agent for conversation-driven content discovery",
   "license": "MIT",
   "author": "Megumi contributors",
   "workspaces": [

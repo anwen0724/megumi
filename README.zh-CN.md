@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**一个本地桌面 Agent 系统，通过统一执行循环连接模型、上下文、工具、权限与持久化会话。**
+**一个把日常会话中产生的关注信号，转化为持续、主动、个性化内容发现的个人 Agent。**
 
 [![平台：Windows](https://img.shields.io/badge/平台-Windows-5f6b7a)](#快速开始)
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
@@ -12,32 +12,33 @@
 
 ## 关于 Megumi
 
-Megumi 是一个以桌面应用形态提供的开源 Agent 系统。它提供 Agent 在本地工作区中运行所需的基础能力：接收用户输入、组织模型上下文、流式调用模型、执行工具调用、应用权限规则、记录会话历史，并持续进行模型与工具之间的循环，直至本次运行得到确定结果。
+Megumi 是一个以本地桌面应用形态提供的开源个人 Agent。用户可以在日常工作、学习和兴趣探索中持续与它交流；在用户授权的范围内，Megumi 从这些会话以及后续推荐反馈中提取有依据的关注信号，理解用户当前和长期真正关注什么。
 
-系统不绑定单一模型供应商。用户选择模型供应商和具体模型，Megumi 提供执行循环以及围绕模型调用建立的完整运行环境，让一次模型请求成为受控制、可观察的 Agent 执行。
+Megumi 利用这种理解主动跨来源发现内容，过滤重复与噪声，说明每条内容为什么值得关注，并根据反馈调整后续发现。用户不需要维护静态领域、关键词或订阅源。
 
-## 运行原理
+当前代码已经提供这一产品方向所需的本地、供应商无关 Agent 基座，包括通用执行循环、上下文、工具、权限、Sandbox、持久化会话和可观察的运行过程。
+
+## Agent 基座
 
 ```mermaid
 flowchart LR
-    U["用户输入"] --> I["Input"]
-    I --> E["Engine / Agent Loop"]
-    E --> C["Context"]
-    C --> A["AI 模型"]
+    U["用户输入"] --> H["Harness：Input 与 Context"]
+    H --> E["Agent Core / Agent Loop"]
+    E --> A["AI 模型"]
     A --> E
-    E --> T["Tools"]
+    E --> T["Harness：Tools"]
     T --> P["Permissions"]
     P --> S["Sandbox"]
     S --> W["本地工作区"]
-    E --> H["Session"]
-    E --> V["Events"]
+    H --> M["Session 与产品状态"]
+    E --> V["Events 与 Observability"]
 ```
 
-- **Engine** 负责 Run 生命周期以及模型与工具之间的执行循环。
-- **Context** 使用 Instructions、会话历史、工作区事实、Skills 和当前模型调用可用的工具，构建供应商无关的 Prompt。
-- **AI** 为支持的模型协议提供统一调用接口，并将模型流式输出交回 Engine。
+- **Agent Core** 拥有与产品场景无关的 Agent Loop，以及单次 Agent Execution 的显式生命周期。
+- **Context** 使用 Instructions、会话历史、工作区事实、Skills 和当前模型调用可用的工具，构建供应商无关的模型上下文。
+- **AI** 为支持的模型协议提供统一调用接口，并将模型流式输出交回 Agent Core。
 - **Tools、Permissions 与 Sandbox** 负责路由行动、判断行动是否允许或需要审批，并强制执行真实影响范围。
-- **Session 与 Events** 保存语义会话历史，并发布桌面界面使用的实时执行过程。
+- **Session、产品状态与运行事件** 在核心循环之外提供持久化历史、产品行为和可观察的执行过程。
 
 ## 快速开始
 
