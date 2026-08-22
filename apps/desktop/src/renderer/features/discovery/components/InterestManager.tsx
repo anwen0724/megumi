@@ -29,7 +29,7 @@ type ManagerView = 'interests' | 'settings';
 type DiscoverySettings = SettingsUiResolved['discovery'];
 
 const SOURCE_IDS = ['bilibili', 'open_web'] as const;
-const EXIT_DURATION_MS = 160;
+const EXIT_SETTLE_MS = 260;
 
 export function InterestManager({ open, interests, onClose, onChanged }: InterestManagerProps) {
   const { t } = useTranslation('discovery');
@@ -68,7 +68,7 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
     const exitTimer = window.setTimeout(() => {
       setRendered(false);
       previousFocusRef.current?.focus();
-    }, EXIT_DURATION_MS);
+    }, prefersReducedMotion() ? 0 : EXIT_SETTLE_MS);
     return () => window.clearTimeout(exitTimer);
   }, [open]);
 
@@ -214,8 +214,10 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
         if (event.target === event.currentTarget) onClose();
       }}
       className={cx(
-        'fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-[2px] transition-opacity duration-200 motion-reduce:transition-none',
-        visible ? 'opacity-100' : 'pointer-events-none opacity-0',
+        'fixed inset-0 z-50 flex justify-end bg-black/30 backdrop-blur-[2px] transition-opacity motion-reduce:transition-none',
+        visible
+          ? 'opacity-100 duration-200 ease-out'
+          : 'pointer-events-none opacity-0 duration-200 ease-in',
       )}
     >
       <section
@@ -225,8 +227,10 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
         aria-labelledby="interest-manager-title"
         onKeyDown={handleDialogKeyDown}
         className={cx(
-          'flex h-full w-full max-w-[34rem] flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-app-bg)] shadow-[var(--shadow-soft)] transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none',
-          visible ? 'translate-x-0 opacity-100' : 'translate-x-8 opacity-0',
+          'flex h-full w-full max-w-[34rem] flex-col overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-app-bg)] shadow-[var(--shadow-soft)] transition-transform motion-reduce:transition-none',
+          visible
+            ? 'translate-x-0 duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]'
+            : 'translate-x-full duration-[240ms] ease-in',
         )}
       >
         <header className="border-b border-[var(--color-border)] bg-[var(--color-app-bg)]/95 px-6 pb-4 pt-5 backdrop-blur">
@@ -356,6 +360,10 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
       </section>
     </div>
   );
+}
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 
 function InterestSummary(props: {
