@@ -16,7 +16,7 @@ import type {
   PermissionMode,
   Permissions,
 } from '@megumi/permissions';
-import type { SessionEntry, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
+import type { RecommendationReferenceContent, SessionEntry, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import type { Tools } from '@megumi/tools';
 import {
   createConversationSubmission,
@@ -103,6 +103,7 @@ export interface StartExecutionRequest {
   readonly sessionId: string;
   readonly parentEntryId?: string;
   readonly input: UserInput;
+  readonly recommendationReference?: RecommendationReferenceContent;
   readonly model: Model<Api>;
   readonly permissionMode: PermissionMode;
 }
@@ -198,6 +199,7 @@ export type ShutdownResult =
 export interface LaunchAgentExecutionInput {
   readonly metadata: ExecutionMetadata;
   readonly input: UserInput;
+  readonly recommendationReference?: RecommendationReferenceContent;
   readonly awaitApproval: (request: { readonly approval: ApprovalRequest }) => Promise<ApprovalResolution>;
 }
 
@@ -253,7 +255,10 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
   let accepting = true;
   let operations!: DiscoveryAgent;
   const conversationSubmission = createConversationSubmission({
-    dependencies: options.conversation,
+    dependencies: {
+      ...options.conversation,
+      ...(options.dailyDiscovery ? { recommendations: options.dailyDiscovery.repository } : {}),
+    },
     startExecution: (request) => operations.start(request),
   });
   const interestRuntime = options.interests
@@ -416,7 +421,12 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
           workspaceId: request.workspaceId,
           sessionId: request.sessionId,
           ...(request.parentEntryId ? { parentEntryId: request.parentEntryId } : {}),
-          inputDigest: canonicalJson(request.input),
+          inputDigest: canonicalJson({
+            input: request.input,
+            ...(request.recommendationReference
+              ? { recommendationReference: request.recommendationReference }
+              : {}),
+          }),
         },
         metadata,
       });
@@ -461,6 +471,9 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
         launched = await launch({
           metadata,
           input: request.input,
+          ...(request.recommendationReference
+            ? { recommendationReference: request.recommendationReference }
+            : {}),
           awaitApproval: (approvalRequest) => store.beginApprovalWait({
             executionId,
             approval: approvalRequest.approval,

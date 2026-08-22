@@ -32,6 +32,26 @@ describe('Product Host runtime schemas', () => {
       text: 'hello',
       modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
     }).success).toBe(false);
+    expect(SessionMessageSendPayloadSchema.safeParse({
+      projectId: 'workspace:1',
+      recommendationId: 'recommendation:1',
+      text: '聊聊这个实现',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    }).success).toBe(true);
+    expect(SessionMessageSendPayloadSchema.safeParse({
+      sessionId: 'session:1',
+      projectId: 'workspace:1',
+      recommendationId: 'recommendation:1',
+      text: '不能把推荐注入已有会话',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    }).success).toBe(false);
+    expect(SessionMessageSendPayloadSchema.safeParse({
+      projectId: 'workspace:1',
+      recommendationId: 'recommendation:1',
+      recommendation: { title: 'Renderer 伪造的快照' },
+      text: 'hello',
+      modelSelection: { provider_id: 'deepseek', model_id: 'deepseek-chat' },
+    }).success).toBe(false);
   });
 
   it('owns Workspace, Skill, and Approval request validation', () => {

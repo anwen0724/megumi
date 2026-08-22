@@ -196,6 +196,22 @@ function readRecommendation(database: DatabaseConnection, recommendationId: stri
   ` }).get([recommendationId]);
 }
 
+/** Reads one currently published, visible Recommendation for a new conversation. */
+export function readPublishedRecommendation(
+  database: DatabaseConnection,
+  recommendationId: string,
+): RecommendationView | undefined {
+  const row = database.prepare<RecommendationRow>({ sql: `
+    SELECT r.*, b.local_date
+    FROM discovery_recommendations r
+    JOIN discovery_batches b ON b.batch_id = r.batch_id
+    WHERE r.recommendation_id = ?
+      AND b.status = 'published'
+      AND r.hidden_at IS NULL
+  ` }).get([recommendationId]);
+  return row ? recommendationViewFromRow(row) : undefined;
+}
+
 function recommendationViewFromRow(row: RecommendationRow): RecommendationView {
   return RecommendationViewSchema.parse({
     recommendationId: row.recommendation_id,

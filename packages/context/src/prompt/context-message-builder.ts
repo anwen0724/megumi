@@ -24,6 +24,7 @@ import type { ContextFailure } from '../context';
 import { buildCancelledContextFailure, buildFailedContextResult, buildSourceContextFailure } from '../context-failure-factory';
 import { materializeSessionImage, readHostImageContent, UNSUPPORTED_IMAGE_TEXT } from './image-content-builder';
 import { escapeXmlAttribute } from './prompt-markup-formatter';
+import { materializeRecommendationReference } from './recommendation-reference-content';
 
 export const COMPACTION_SUMMARY_PREFIX = 'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
 const COMPACTION_SUMMARY_SUFFIX = '\n</summary>';
@@ -64,7 +65,13 @@ export function sessionMessagesToEstimateMessages(
       messages.push({
         role: 'user',
         content: [
-          ...message.model_content.filter((block): block is TextContent => block.type === 'text'),
+          ...message.model_content.flatMap((block): TextContent[] => {
+            if (block.type === 'text') return [block];
+            if (block.type === 'recommendation_reference') {
+              return [materializeRecommendationReference(block)];
+            }
+            return [];
+          }),
           ...item.attachments.map(estimateAttachmentContent),
         ],
         timestamp: timestampOf(message.created_at),
@@ -172,6 +179,7 @@ async function materializeUserMessageContent(input: {
   const content: Array<TextContent | ImageContent> = [];
   for (const block of input.blocks) {
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
+    else if (block.type === 'recommendation_reference') content.push(materializeRecommendationReference(block));
     else content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
   }
   for (const attachment of [...input.attachments].sort((left, right) => left.ordinal - right.ordinal)) {
@@ -226,6 +234,7 @@ async function materializeBlocks(
       return buildFailedContextResult(buildCancelledContextFailure('Context construction was cancelled.'));
     }
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
+    else if (block.type === 'recommendation_reference') content.push(materializeRecommendationReference(block));
     else if (imageInputSupport) content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
     else content.push({ type: 'text', text: UNSUPPORTED_IMAGE_TEXT });
   }
@@ -282,6 +291,7 @@ function toolResultMessageFromSession(
     toolName: message.tool_name,
     content: message.content.map((block) => {
       if (block.type === 'text') return { type: 'text' as const, text: block.text };
+      if (block.type === 'recommendation_reference') return materializeRecommendationReference(block);
       return { type: 'image' as const, data: block.data, mimeType: block.mimeType };
     }),
     ...(message.error ? { details: { error: message.error } } : {}),

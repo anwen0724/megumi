@@ -64,6 +64,15 @@ describe('DiscoveryRepository Home and Recommendation queries', () => {
       .toEqual([]);
   });
 
+  it('resolves only published, visible Recommendations as conversation authority', () => {
+    const repository = createDiscoveryRepository({ database });
+    expect(repository.getPublishedRecommendation('recommendation:today:1')).toMatchObject({
+      recommendationId: 'recommendation:today:1', title: 'Today first', hidden: false,
+    });
+    expect(repository.getPublishedRecommendation('recommendation:hidden')).toBeUndefined();
+    expect(repository.getPublishedRecommendation('recommendation:missing')).toBeUndefined();
+  });
+
   it('updates current state by target value and preserves first-opened time', () => {
     const repository = createDiscoveryRepository({ database });
 

@@ -75,6 +75,7 @@ export function AppBody() {
             rightSidebarOpen={controller.rightSidebarOpen}
             onToggleRightSidebar={controller.toggleRightSidebar}
             page={controller.activePage}
+            onStartRecommendationConversation={controller.handleStartRecommendationConversation}
           />
           {controller.activePage === 'chat' ? (
             <RightSidebar open={controller.rightSidebarOpen} onClose={() => controller.setRightSidebarOpen(false)} />

@@ -156,6 +156,7 @@ async function submitUserInput(
     ...(request.requestId ? { requestId: request.requestId } : {}),
     workspaceId: request.projectId,
     ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+    ...(request.recommendationId ? { recommendationId: request.recommendationId } : {}),
     ...(request.sessionTitle ? { sessionTitle: request.sessionTitle } : {}),
     ...(request.branchMarkerId ? { branchMarkerId: request.branchMarkerId } : {}),
     text: request.text,

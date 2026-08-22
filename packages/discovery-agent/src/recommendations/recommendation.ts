@@ -1,6 +1,10 @@
 /* Defines persisted recommendation snapshots, user-state commands, and chat references. */
 import { z } from 'zod';
 import {
+  RecommendationReferenceContentSchema,
+  type RecommendationReferenceContent,
+} from '@megumi/session';
+import {
   DiscoveryContentTypeSchema,
   DiscoverySourceIdSchema,
 } from '../sources/discovery-source';
@@ -61,19 +65,8 @@ export const UpdateRecommendationStateRequestSchema = z.discriminatedUnion('acti
   }).strict(),
 ]);
 
-export const RecommendationReferenceContentSchema = z.object({
-  type: z.literal('recommendation_reference'),
-  recommendationId: z.string().min(1),
-  sourceName: z.string().trim().min(1),
-  canonicalUrl: HttpUrlSchema,
-  title: z.string().trim().min(1),
-  author: z.string().trim().min(1).optional(),
-  publishedAt: TimestampSchema.optional(),
-  description: z.string().trim().min(1).optional(),
-  coverUrl: HttpUrlSchema.optional(),
-  recommendationReason: z.string().trim().min(1).max(1000),
-}).strict();
+export { RecommendationReferenceContentSchema };
 
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 export type UpdateRecommendationStateRequest = z.infer<typeof UpdateRecommendationStateRequestSchema>;
-export type RecommendationReferenceContent = z.infer<typeof RecommendationReferenceContentSchema>;
+export type { RecommendationReferenceContent };

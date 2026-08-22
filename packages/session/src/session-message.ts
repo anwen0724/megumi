@@ -20,9 +20,30 @@ export const SessionImageContentSchema = z.object({
 }).strict();
 export type SessionImageContent = z.infer<typeof SessionImageContentSchema>;
 
+const HttpUrlSchema = z.string().url().refine((value) => {
+  const protocol = new URL(value).protocol;
+  return protocol === 'http:' || protocol === 'https:';
+}, 'Expected an HTTP(S) URL.');
+
+/** A durable snapshot of the Recommendation that started a conversation. */
+export const RecommendationReferenceContentSchema = z.object({
+  type: z.literal('recommendation_reference'),
+  recommendationId: z.string().min(1),
+  sourceName: z.string().trim().min(1),
+  canonicalUrl: HttpUrlSchema,
+  title: z.string().trim().min(1),
+  author: z.string().trim().min(1).optional(),
+  publishedAt: z.string().datetime({ offset: true }).optional(),
+  description: z.string().trim().min(1).optional(),
+  coverUrl: HttpUrlSchema.optional(),
+  recommendationReason: z.string().trim().min(1).max(1000),
+}).strict();
+export type RecommendationReferenceContent = z.infer<typeof RecommendationReferenceContentSchema>;
+
 export const SessionUserContentSchema = z.discriminatedUnion('type', [
   SessionTextContentSchema,
   SessionImageContentSchema,
+  RecommendationReferenceContentSchema,
 ]);
 export type SessionUserContent = z.infer<typeof SessionUserContentSchema>;
 export const SessionUserContentListSchema = z.array(SessionUserContentSchema);

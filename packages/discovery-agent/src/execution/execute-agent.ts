@@ -19,7 +19,7 @@ import {
   type AssistantMessageEventStream,
   type Models,
 } from '@megumi/ai';
-import type { ContextCapabilities } from '@megumi/context';
+import { materializeRecommendationReference, type ContextCapabilities } from '@megumi/context';
 import type { EventBus } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
 import type { ObservabilityService } from '@megumi/observability';
@@ -121,14 +121,20 @@ export async function launchAgentExecution(
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   const { metadata } = input;
+  const referenceContent = input.recommendationReference
+    ? [input.recommendationReference]
+    : [];
+  const referenceModelContent = input.recommendationReference
+    ? [materializeRecommendationReference(input.recommendationReference)]
+    : [];
 
   // 1. The User Message commits before the Agent exists; failure fails the start.
   const saved = await dependencies.session.saveUserMessage({
     message_id: metadata.userMessageId,
     session_id: metadata.sessionId,
     execution_id: metadata.executionId,
-    display_content: [...input.input.displayContent],
-    model_content: [...input.input.modelContent],
+    display_content: [...referenceContent, ...input.input.displayContent],
+    model_content: [...referenceContent, ...input.input.modelContent],
     ...(input.input.skillSelection ? {
       skill_selection: {
         name: input.input.skillSelection.name,
@@ -221,7 +227,7 @@ export async function launchAgentExecution(
       },
       messages: [{
         role: 'user',
-        content: [...input.input.modelContent],
+        content: [...referenceModelContent, ...input.input.modelContent],
         timestamp: timestampFrom(metadata.createdAt),
       }],
     },

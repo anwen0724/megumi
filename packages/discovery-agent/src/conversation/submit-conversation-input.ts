@@ -14,7 +14,9 @@ import type {
   SessionCatalog,
   SessionHistory,
   SessionMessageWithAttachments,
+  RecommendationReferenceContent,
 } from '@megumi/session';
+import type { RecommendationView } from '../discovery-view';
 import type { StartExecutionRequest, StartExecutionResult } from '../discovery-agent';
 import type { ExecutionSnapshot } from '../execution/execution-registry';
 
@@ -22,6 +24,7 @@ export interface SubmitConversationInputRequest extends RawUserInput {
   readonly requestId?: string;
   readonly workspaceId: string;
   readonly sessionId?: string;
+  readonly recommendationId?: string;
   readonly sessionTitle?: string;
   readonly branchMarkerId?: string;
   readonly modelSelection: {
@@ -91,6 +94,9 @@ export interface ConversationSubmissionDependencies {
     readonly providerId: string;
     readonly modelId: string;
   }) => Promise<ConversationModelResolution>;
+  readonly recommendations?: {
+    getPublishedRecommendation(recommendationId: string): RecommendationView | undefined;
+  };
 }
 
 export interface ConversationSubmission {
@@ -104,6 +110,13 @@ export function createConversationSubmission(options: {
   return {
     async submit(request) {
       const requestId = request.requestId ?? `request:${crypto.randomUUID()}`;
+      if (request.sessionId && request.recommendationId) {
+        return failure(
+          requestId,
+          'recommendation_requires_new_session',
+          'A Recommendation can only start a new Session.',
+        );
+      }
       const existingSession = request.sessionId
         ? resolveExistingSession(
             options.dependencies.sessions,
@@ -146,6 +159,13 @@ export function createConversationSubmission(options: {
         return terminalResult(requestId, processed.result, existingSession?.session);
       }
 
+      const recommendationReference = request.recommendationId
+        ? resolveRecommendationReference(options.dependencies, request.recommendationId)
+        : undefined;
+      if (recommendationReference?.status === 'failed') {
+        return failure(requestId, recommendationReference.code, recommendationReference.message);
+      }
+
       const acceptedText = processed.input.displayContent.map((block) => block.text).join('');
       const session = existingSession?.session
         ?? createAcceptedSession(options.dependencies.sessions, request, acceptedText);
@@ -169,6 +189,7 @@ export function createConversationSubmission(options: {
         sessionId: session.session_id,
         ...(branch.parentEntryId ? { parentEntryId: branch.parentEntryId } : {}),
         input: processed.input,
+        ...(recommendationReference ? { recommendationReference: recommendationReference.reference } : {}),
         model: model.model,
         permissionMode: request.permissionMode ?? 'ask',
       });
@@ -206,6 +227,36 @@ export function createConversationSubmission(options: {
         userMessage: started.userMessage,
         ...(branchCommit ? { branchCommit } : {}),
       };
+    },
+  };
+}
+
+function resolveRecommendationReference(
+  dependencies: ConversationSubmissionDependencies,
+  recommendationId: string,
+): { readonly status: 'ok'; readonly reference: RecommendationReferenceContent }
+  | { readonly status: 'failed'; readonly code: string; readonly message: string } {
+  const recommendation = dependencies.recommendations?.getPublishedRecommendation(recommendationId);
+  if (!recommendation) {
+    return {
+      status: 'failed',
+      code: 'recommendation_not_available',
+      message: 'The Recommendation is missing, hidden, or not published.',
+    };
+  }
+  return {
+    status: 'ok',
+    reference: {
+      type: 'recommendation_reference',
+      recommendationId: recommendation.recommendationId,
+      sourceName: recommendation.sourceName,
+      canonicalUrl: recommendation.canonicalUrl,
+      title: recommendation.title,
+      ...(recommendation.author ? { author: recommendation.author } : {}),
+      ...(recommendation.contentPublishedAt ? { publishedAt: recommendation.contentPublishedAt } : {}),
+      ...(recommendation.description ? { description: recommendation.description } : {}),
+      ...(recommendation.coverUrl ? { coverUrl: recommendation.coverUrl } : {}),
+      recommendationReason: recommendation.recommendationReason,
     },
   };
 }

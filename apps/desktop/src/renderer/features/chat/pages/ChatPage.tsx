@@ -5,6 +5,7 @@ import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
+import { useSessionStore } from '../../../entities/session/store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { createBranchDraftViewInput } from '../branch-draft-preview';
 import { useTimelineAutoScroll } from '../hooks/use-timeline-auto-scroll';
@@ -27,6 +28,7 @@ export function ChatPage() {
   const loadProviders = useProviderStore((state) => state.loadProviders);
   const composerDraft = useChatUiStore((state) => state.composerDraft);
   const setComposerDraft = useChatUiStore((state) => state.setComposerDraft);
+  const draftRecommendation = useSessionStore((state) => state.newSessionDraftRecommendation);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
   const [imageInputCapabilities, setImageInputCapabilities] = useState<InputCapabilitiesResult>();
   const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
@@ -175,6 +177,17 @@ export function ChatPage() {
                 onSwitchProject: (projectId) => {
                   void controller.switchNewSessionProject(projectId);
                 },
+                recommendationReference: draftRecommendation ? {
+                  recommendationId: draftRecommendation.recommendationId,
+                  sourceName: draftRecommendation.sourceName,
+                  canonicalUrl: draftRecommendation.canonicalUrl,
+                  title: draftRecommendation.title,
+                  ...(draftRecommendation.author ? { author: draftRecommendation.author } : {}),
+                  ...(draftRecommendation.contentPublishedAt ? { publishedAt: draftRecommendation.contentPublishedAt } : {}),
+                  ...(draftRecommendation.description ? { description: draftRecommendation.description } : {}),
+                  ...(draftRecommendation.coverUrl ? { coverUrl: draftRecommendation.coverUrl } : {}),
+                  recommendationReason: draftRecommendation.recommendationReason,
+                } : null,
               }}
               scrollPanel={scrollPanel}
               messageColumn={{
@@ -232,6 +245,17 @@ export function ChatPage() {
                 onSwitchProject: (projectId) => {
                   void controller.switchNewSessionProject(projectId);
                 },
+                recommendationReference: draftRecommendation ? {
+                  recommendationId: draftRecommendation.recommendationId,
+                  sourceName: draftRecommendation.sourceName,
+                  canonicalUrl: draftRecommendation.canonicalUrl,
+                  title: draftRecommendation.title,
+                  ...(draftRecommendation.author ? { author: draftRecommendation.author } : {}),
+                  ...(draftRecommendation.contentPublishedAt ? { publishedAt: draftRecommendation.contentPublishedAt } : {}),
+                  ...(draftRecommendation.description ? { description: draftRecommendation.description } : {}),
+                  ...(draftRecommendation.coverUrl ? { coverUrl: draftRecommendation.coverUrl } : {}),
+                  recommendationReason: draftRecommendation.recommendationReason,
+                } : null,
               }}
               scrollPanel={scrollPanel}
               messageColumn={{

@@ -97,6 +97,7 @@ export const SessionContextUsageGetPayloadSchema = z.object({
 }).strict();
 export const SessionMessageSendPayloadSchema = z.object({
   sessionId: z.string().min(1).optional(), projectId: z.string().min(1), text: z.string(),
+  recommendationId: z.string().min(1).optional(),
   skillSelection: z.object({
     type: z.literal('skill'), name: z.string().min(1), skillPath: z.string().min(1),
   }).strict().optional(),
@@ -120,7 +121,15 @@ export const SessionMessageSendPayloadSchema = z.object({
   clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
   modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
   permissionMode: z.enum(['ask', 'auto', 'full_access']).optional(), permissionSource: z.string().optional(),
-}).strict();
+}).strict().superRefine((payload, context) => {
+  if (payload.sessionId && payload.recommendationId) {
+    context.addIssue({
+      code: 'custom',
+      path: ['recommendationId'],
+      message: 'A Recommendation can only start a new Session.',
+    });
+  }
+});
 export const SessionMessageCancelPayloadSchema = z.object({ executionId: z.string().min(1) }).strict();
 export const SessionBranchDraftCreatePayloadSchema = z.object({
   sessionId: z.string().min(1), messageId: z.string().min(1),
@@ -231,6 +240,18 @@ const ImageContentDtoSchema = z.object({
   data: z.string(),
   mimeType: z.string().min(1),
 }).strict();
+const RecommendationReferenceContentDtoSchema = z.object({
+  type: z.literal('recommendation_reference'),
+  recommendationId: z.string().min(1),
+  sourceName: z.string().min(1),
+  canonicalUrl: z.string().url(),
+  title: z.string().min(1),
+  author: z.string().min(1).optional(),
+  publishedAt: z.string().datetime({ offset: true }).optional(),
+  description: z.string().min(1).optional(),
+  coverUrl: z.string().url().optional(),
+  recommendationReason: z.string().min(1),
+}).strict();
 const ThinkingContentDtoSchema = z.object({
   type: z.literal('thinking'),
   thinking: z.string(),
@@ -244,7 +265,11 @@ const ToolCallDtoSchema = z.object({
   arguments: z.record(z.string(), z.unknown()),
   thoughtSignature: z.string().optional(),
 }).strict();
-const UserContentDtoSchema = z.discriminatedUnion('type', [TextContentDtoSchema, ImageContentDtoSchema]);
+const UserContentDtoSchema = z.discriminatedUnion('type', [
+  TextContentDtoSchema,
+  ImageContentDtoSchema,
+  RecommendationReferenceContentDtoSchema,
+]);
 const AssistantContentDtoSchema = z.discriminatedUnion('type', [
   TextContentDtoSchema,
   ThinkingContentDtoSchema,
@@ -566,6 +591,7 @@ export type ReadCommittedRunResult = z.infer<typeof ReadCommittedRunResultSchema
 export interface SendUserInputRequest {
   requestId?: string;
   sessionId?: string;
+  recommendationId?: string;
   sessionTitle?: string;
   projectId: string;
   projectLabel?: string;

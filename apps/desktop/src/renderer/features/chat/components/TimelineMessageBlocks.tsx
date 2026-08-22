@@ -12,12 +12,17 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { useTranslation } from 'react-i18next';
 import { FileText, Package } from 'lucide-react';
+import { RecommendationReferenceCard } from './RecommendationReferenceCard';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
     return block.attachmentType === 'image'
       ? <TimelineImageAttachment attachmentId={block.attachmentId} name={block.name} />
       : <TimelineDocumentAttachment attachmentId={block.attachmentId} name={block.name} mediaType={block.mediaType} />;
+  }
+
+  if (block.kind === 'user_recommendation_reference') {
+    return <RecommendationReferenceCard reference={block} />;
   }
 
   return <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{block.text}</p>;

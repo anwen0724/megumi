@@ -13,6 +13,7 @@ const session = {
 describe('useSessionStore', () => {
   beforeEach(() => useSessionStore.setState({
     sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: null,
+    newSessionDraftRecommendation: null,
   }));
 
   it('stores and replaces canonical Product Host Session projections', () => {
@@ -25,6 +26,27 @@ describe('useSessionStore', () => {
     useSessionStore.getState().startNewSessionDraft('workspace:1');
     expect(useSessionStore.getState()).toMatchObject({
       sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: 'workspace:1',
+    });
+  });
+
+  it('keeps a Recommendation only in an unsaved new-session draft and clears it without creating a Session', () => {
+    const recommendation = {
+      recommendationId: 'recommendation:1', batchId: 'batch:1', localDate: '2026-08-22', position: 0,
+      sourceId: 'open-web', sourceName: 'GitHub', canonicalUrl: 'https://example.com/agent',
+      contentType: 'article' as const, title: 'Agent runtime', recommendationReason: '与你最近的关注相关',
+      hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T00:00:00.000Z',
+    };
+
+    useSessionStore.getState().startRecommendationSessionDraft('workspace:1', recommendation);
+    expect(useSessionStore.getState()).toMatchObject({
+      sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: 'workspace:1',
+      newSessionDraftRecommendation: recommendation,
+    });
+
+    useSessionStore.getState().clearNewSessionDraft();
+    expect(useSessionStore.getState()).toMatchObject({
+      sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: null,
+      newSessionDraftRecommendation: null,
     });
   });
 });

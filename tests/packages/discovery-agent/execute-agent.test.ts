@@ -28,6 +28,33 @@ import { permissionService, registeredTool } from './tool-call-test-fixtures';
 const NOW = '2026-07-31T00:00:00.000Z';
 
 describe('Execute Agent', () => {
+  it('persists a Recommendation reference and presents it to the first model call', async () => {
+    const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
+    const launched = await launchAgentExecution({
+      metadata: executionMetadata(),
+      input: {
+        displayContent: [{ type: 'text', text: '聊聊它的架构' }],
+        modelContent: [{ type: 'text', text: '聊聊它的架构' }],
+        attachments: [],
+      },
+      recommendationReference: {
+        type: 'recommendation_reference', recommendationId: 'recommendation:1', sourceName: 'GitHub',
+        canonicalUrl: 'https://example.com/agent', title: 'Agent runtime',
+        description: 'A concrete implementation.', recommendationReason: 'Relevant to your interests.',
+      },
+      awaitApproval: async () => ({ status: 'cancelled' as const }),
+    }, fixture.dependencies);
+
+    expect(fixture.userMessages[0]?.display_content).toEqual([
+      expect.objectContaining({ type: 'recommendation_reference', recommendationId: 'recommendation:1' }),
+      { type: 'text', text: '聊聊它的架构' },
+    ]);
+    expect(fixture.userMessages[0]?.model_content).toEqual(fixture.userMessages[0]?.display_content);
+    expect(launched.agent.state.messages[0]?.content).toEqual([
+      expect.objectContaining({ type: 'text', text: expect.stringContaining('<recommended_content') }),
+      { type: 'text', text: '聊聊它的架构' },
+    ]);
+  });
   it('uses the Discovery Agent executionId for the Agent state and result', async () => {
     const fixture = createExecutionFixture({ streams: [neverEndingStream()] });
     const launched = await launchedExecution(fixture, {

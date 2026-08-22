@@ -155,7 +155,20 @@ export interface UserAttachmentBlock extends TimelineBlockBase {
   source: UserAttachmentSource;
 }
 
-export type UserTimelineBlock = UserTextBlock | UserAttachmentBlock;
+export interface UserRecommendationReferenceBlock extends TimelineBlockBase {
+  kind: 'user_recommendation_reference';
+  recommendationId: string;
+  sourceName: string;
+  canonicalUrl: string;
+  title: string;
+  author?: string;
+  publishedAt?: string;
+  description?: string;
+  coverUrl?: string;
+  recommendationReason: string;
+}
+
+export type UserTimelineBlock = UserTextBlock | UserAttachmentBlock | UserRecommendationReferenceBlock;
 
 export interface TimelineUserMessage extends TimelineMessageBase {
   role: 'user';
@@ -447,9 +460,24 @@ export const UserAttachmentBlockSchema = z
   })
   .strict() satisfies z.ZodType<UserAttachmentBlock>;
 
+export const UserRecommendationReferenceBlockSchema = z.object({
+  ...TimelineBlockBaseShape,
+  kind: z.literal('user_recommendation_reference'),
+  recommendationId: z.string().min(1),
+  sourceName: z.string().min(1),
+  canonicalUrl: z.string().url(),
+  title: z.string().min(1),
+  author: z.string().min(1).optional(),
+  publishedAt: TimelineIsoDateTimeSchema.optional(),
+  description: z.string().min(1).optional(),
+  coverUrl: z.string().url().optional(),
+  recommendationReason: z.string().min(1),
+}).strict() satisfies z.ZodType<UserRecommendationReferenceBlock>;
+
 export const UserTimelineBlockSchema = z.discriminatedUnion('kind', [
   UserTextBlockSchema,
   UserAttachmentBlockSchema,
+  UserRecommendationReferenceBlockSchema,
 ]) satisfies z.ZodType<TimelineBlock>;
 
 export const BranchSeparatorBlockSchema = z

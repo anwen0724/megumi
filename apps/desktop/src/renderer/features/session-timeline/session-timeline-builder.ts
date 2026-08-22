@@ -184,6 +184,24 @@ export function toTimelineUserMessage(
     .map((content) => content.text)
     .join('');
   const blocks: TimelineUserMessage['blocks'] = [
+    ...message.displayContent
+      .filter((content): content is Extract<typeof content, { type: 'recommendation_reference' }> => (
+        content.type === 'recommendation_reference'
+      ))
+      .map((reference) => ({
+        blockId: `user-recommendation:${message.messageId}:${reference.recommendationId}`,
+        kind: 'user_recommendation_reference' as const,
+        recommendationId: reference.recommendationId,
+        sourceName: reference.sourceName,
+        canonicalUrl: reference.canonicalUrl,
+        title: reference.title,
+        ...(reference.author ? { author: reference.author } : {}),
+        ...(reference.publishedAt ? { publishedAt: reference.publishedAt } : {}),
+        ...(reference.description ? { description: reference.description } : {}),
+        ...(reference.coverUrl ? { coverUrl: reference.coverUrl } : {}),
+        recommendationReason: reference.recommendationReason,
+        createdAt: message.createdAt,
+      })),
     ...(text ? [{
       blockId: `user-text:${message.messageId}`,
       kind: 'user_text' as const,

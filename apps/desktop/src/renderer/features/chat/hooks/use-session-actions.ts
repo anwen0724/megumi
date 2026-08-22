@@ -36,6 +36,7 @@ function createId(prefix: string): string {
 interface SessionMessageTarget {
   sessionId?: string;
   projectId: string;
+  recommendationId?: string;
 }
 
 function resolveSessionMessageTarget(): SessionMessageTarget | null {
@@ -66,10 +67,13 @@ function resolveSessionMessageTarget(): SessionMessageTarget | null {
 
   return {
     projectId: targetProject.id,
+    ...(sessionState.newSessionDraftRecommendation
+      ? { recommendationId: sessionState.newSessionDraftRecommendation.recommendationId }
+      : {}),
   };
 }
 
-function createSessionMessageSendPayload(
+export function createSessionMessageSendPayload(
   payload: ComposerSubmitPayload,
   finalClientMessageId: string,
   messageCreatedAt: string,
@@ -78,6 +82,7 @@ function createSessionMessageSendPayload(
 ): SessionMessageSendPayload {
   return {
     ...(target.sessionId ? { sessionId: target.sessionId } : {}),
+    ...(target.recommendationId ? { recommendationId: target.recommendationId } : {}),
     projectId: target.projectId,
     ...(branchMarkerId ? { branchMarkerId } : {}),
     text: payload.message,

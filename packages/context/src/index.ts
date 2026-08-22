@@ -27,3 +27,4 @@ export {
   type DerivedContextUsage,
   deriveContextUsage,
 } from './context-usage-calculator';
+export { materializeRecommendationReference } from './prompt/recommendation-reference-content';

@@ -13,7 +13,7 @@ type HomeMode = DiscoveryHomeUiResult['mode'];
 type RecommendationAction = Parameters<Parameters<typeof RecommendationCard>[0]['onAction']>[0];
 
 interface DiscoveryPageProps {
-  onStartConversation?(recommendationId: string): void;
+  onStartConversation?(recommendation: DiscoveryRecommendationUiDto): void;
 }
 
 export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
@@ -214,7 +214,7 @@ export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
 function RecommendationGrid({ recommendations, onAction, onChat }: {
   recommendations: DiscoveryRecommendationUiDto[];
   onAction(id: string, action: RecommendationAction): void;
-  onChat?(id: string): void;
+  onChat?(recommendation: DiscoveryRecommendationUiDto): void;
 }) {
   return (
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
@@ -223,7 +223,7 @@ function RecommendationGrid({ recommendations, onAction, onChat }: {
           key={recommendation.recommendationId}
           recommendation={recommendation}
           onAction={(action) => void onAction(recommendation.recommendationId, action)}
-          onChat={() => onChat?.(recommendation.recommendationId)}
+          onChat={() => onChat?.(recommendation)}
         />
       ))}
     </div>

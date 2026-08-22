@@ -85,6 +85,7 @@ export interface ExecutionFixture {
   readonly contextRuns: unknown[];
   readonly published: AnyEvent[];
   readonly assistantReplies: SaveAssistantReplyRequest[];
+  readonly userMessages: SaveUserMessageRequest[];
   readonly toolResults: SaveToolResultMessageRequest[];
   readonly events: EventBus;
 }
@@ -106,6 +107,7 @@ export function createExecutionFixture(input: {
   const eventsBus = createEventBus();
   eventsBus.subscribe({}, (event) => { published.push(event); });
   const assistantReplies: SaveAssistantReplyRequest[] = [];
+  const userMessages: SaveUserMessageRequest[] = [];
   const toolResults: SaveToolResultMessageRequest[] = [];
   const streams = [...(input.streams ?? [assistantStream('done')])];
   let modelCallNumber = 0;
@@ -116,6 +118,7 @@ export function createExecutionFixture(input: {
 
   const saveUserMessage = async (request: SaveUserMessageRequest) => {
     writes.push('user');
+    userMessages.push(structuredClone(request));
     if (input.failUserMessageSave) {
       return { status: 'failed' as const, failure: { code: 'session_error', message: 'User message save failed.' } };
     }
@@ -239,6 +242,7 @@ export function createExecutionFixture(input: {
     contextRuns,
     published,
     assistantReplies,
+    userMessages,
     toolResults,
     events: eventsBus,
   };

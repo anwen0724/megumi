@@ -24,6 +24,7 @@ import {
 } from '../interests/interest';
 import {
   readHome,
+  readPublishedRecommendation,
   searchRecommendations,
   updateRecommendationState,
   type ReadHomeQuery,
@@ -143,6 +144,7 @@ export interface DiscoveryRepository {
     readonly limit?: number;
   }): SearchRecommendationsResult;
   updateRecommendationState(command: RecommendationStateCommand): RecommendationView;
+  getPublishedRecommendation(recommendationId: string): RecommendationView | undefined;
 }
 
 export function createDiscoveryRepository(options: {
@@ -403,6 +405,9 @@ export function createDiscoveryRepository(options: {
     updateRecommendationState: (command) => options.database.transaction({
       operation: () => updateRecommendationState(options.database, command),
     }),
+    getPublishedRecommendation: (recommendationId) => (
+      readPublishedRecommendation(options.database, recommendationId)
+    ),
   };
 }
 

@@ -15,6 +15,26 @@ import type {
 } from '../../../../../../apps/desktop/src/renderer/features/session-timeline/timeline-model';
 
 describe('Session Timeline builder', () => {
+  it('restores a persisted Recommendation reference without querying Discovery', () => {
+    const userMessage = user('user:recommendation', '聊聊它的实现');
+    userMessage.displayContent = [{
+      type: 'recommendation_reference', recommendationId: 'recommendation:1', sourceName: 'GitHub',
+      canonicalUrl: 'https://example.com/agent', title: 'Agent runtime',
+      description: 'A concrete implementation.', recommendationReason: 'Relevant to your interests.',
+    }, ...userMessage.displayContent];
+
+    const timeline = buildSessionTimeline({
+      projectId: 'project:1', sessionId: 'session:1',
+      conversation: [messageItem(userMessage)], workspaceChanges: [],
+    });
+
+    expect((timeline[0] as TimelineUserMessage).blocks).toEqual([
+      expect.objectContaining({
+        kind: 'user_recommendation_reference', recommendationId: 'recommendation:1', title: 'Agent runtime',
+      }),
+      expect.objectContaining({ kind: 'user_text', text: '聊聊它的实现' }),
+    ]);
+  });
   it('preserves Session order, Skill selection, and attachment ordinal', () => {
     const userMessage = user('user:1', 'Inspect the attachments.');
     userMessage.skillSelection = {

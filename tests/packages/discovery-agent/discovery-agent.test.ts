@@ -430,6 +430,91 @@ describe('Discovery Agent', () => {
     expect(testLaunch.handles).toHaveLength(1);
   });
 
+  it('starts two independent Sessions from the same authoritative Recommendation', async () => {
+    let sessionNumber = 0;
+    const createSession = vi.fn(() => {
+      const id = `session:recommendation:${++sessionNumber}`;
+      return { status: 'created' as const, session: { ...session, session_id: id } };
+    });
+    const recommendation = {
+      recommendationId: 'recommendation:1', batchId: 'batch:1', localDate: '2026-08-22', position: 0,
+      sourceId: 'open-web' as const, sourceName: 'GitHub', canonicalUrl: 'https://example.com/agent',
+      contentType: 'article' as const, title: 'Agent runtime', author: 'Example',
+      description: 'A concrete implementation.', recommendationReason: 'Relevant to your interests.',
+      hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T00:00:00.000Z',
+    };
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: { process: async () => ({
+          status: 'accepted',
+          input: {
+            displayContent: [{ type: 'text', text: '聊聊这个项目' }],
+            modelContent: [{ type: 'text', text: '聊聊这个项目' }],
+            attachments: [],
+          },
+        }) },
+        sessions: { getSession: vi.fn(), createSession },
+        history: { getCommittedBranch: vi.fn() },
+        branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
+        resolveModel: async () => ({ status: 'ok', model }),
+        recommendations: { getPublishedRecommendation: () => recommendation },
+      },
+    });
+
+    const base = {
+      workspaceId: 'workspace:1', recommendationId: 'recommendation:1', text: '聊聊这个项目',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+    } as const;
+    const first = await discoveryAgent.submitConversationInput({ ...base, requestId: 'request:recommendation:1' });
+    const second = await discoveryAgent.submitConversationInput({ ...base, requestId: 'request:recommendation:2' });
+
+    expect(first.status).toBe('agent_started');
+    expect(second.status).toBe('agent_started');
+    if (first.status !== 'agent_started' || second.status !== 'agent_started') throw new Error('unreachable');
+    expect(first.session.session_id).not.toBe(second.session.session_id);
+    expect(testLaunch.handles.map((handle) => handle.input.recommendationReference)).toEqual([
+      expect.objectContaining({ recommendationId: 'recommendation:1', title: 'Agent runtime' }),
+      expect.objectContaining({ recommendationId: 'recommendation:1', title: 'Agent runtime' }),
+    ]);
+  });
+
+  it('rejects unavailable Recommendation drafts and existing-Session injection before creating a Session', async () => {
+    const createSession = vi.fn();
+    const process = vi.fn(async () => ({
+      status: 'accepted' as const,
+      input: {
+        displayContent: [{ type: 'text' as const, text: '聊聊它' }],
+        modelContent: [{ type: 'text' as const, text: '聊聊它' }],
+        attachments: [],
+      },
+    }));
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: { process },
+        sessions: { getSession: vi.fn(), createSession },
+        history: { getCommittedBranch: vi.fn() },
+        branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
+        resolveModel: async () => ({ status: 'ok', model }),
+        recommendations: { getPublishedRecommendation: () => undefined },
+      },
+    });
+
+    const missing = await discoveryAgent.submitConversationInput({
+      requestId: 'request:missing', workspaceId: 'workspace:1', recommendationId: 'recommendation:missing',
+      text: '聊聊它', modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+    });
+    const existing = await discoveryAgent.submitConversationInput({
+      requestId: 'request:existing', workspaceId: 'workspace:1', sessionId: 'session:1',
+      recommendationId: 'recommendation:1', text: '注入已有会话',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+    });
+
+    expect(missing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_not_available' } });
+    expect(existing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_requires_new_session' } });
+    expect(createSession).not.toHaveBeenCalled();
+    expect(testLaunch.handles).toHaveLength(0);
+  });
+
   it('does not process Input or create a Session when model resolution fails', async () => {
     const process = vi.fn();
     const createSession = vi.fn();

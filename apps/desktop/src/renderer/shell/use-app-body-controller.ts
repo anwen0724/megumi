@@ -4,6 +4,7 @@ import { useSessionStore } from '../entities/session/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
+import type { DiscoveryRecommendationUiDto } from '@megumi/product/host';
 
 export function useAppBodyController() {
   const [activePage, setActivePage] = useState<'discovery' | 'chat'>('discovery');
@@ -16,6 +17,8 @@ export function useAppBodyController() {
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
   const startNewSessionDraft = useSessionStore((state) => state.startNewSessionDraft);
+  const startRecommendationSessionDraft = useSessionStore((state) => state.startRecommendationSessionDraft);
+  const clearNewSessionDraft = useSessionStore((state) => state.clearNewSessionDraft);
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
@@ -113,7 +116,18 @@ export function useAppBodyController() {
     setRightSidebarOpen(false);
     setSettingsOpen(false);
     setActivePage('discovery');
-  }, []);
+    clearNewSessionDraft();
+  }, [clearNewSessionDraft]);
+
+  const handleStartRecommendationConversation = useCallback((recommendation: DiscoveryRecommendationUiDto) => {
+    void (async () => {
+      const project = currentProject ?? await useProjectStore.getState().useExistingProject();
+      if (!project) return;
+      setSettingsOpen(false);
+      setActivePage('chat');
+      startRecommendationSessionDraft(project.id, recommendation);
+    })();
+  }, [currentProject, startRecommendationSessionDraft]);
 
   useEffect(() => window.megumi.character.onOpenSettingsRequested?.(openSettings), [openSettings]);
 
@@ -143,6 +157,7 @@ export function useAppBodyController() {
     handleRemoveProject,
     openSettings,
     openDiscovery,
+    handleStartRecommendationConversation,
     closeSettings,
     toggleRightSidebar: toggleWorkspaceSidebar,
   };

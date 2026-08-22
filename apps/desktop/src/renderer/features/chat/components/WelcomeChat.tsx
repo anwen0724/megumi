@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, ChevronDown, ChevronRight, FolderOpen, Plus, Search } from 'lucide-react';
 import { Button } from '../../../shared/ui/Button';
+import { RecommendationReferenceCard, type RecommendationReferenceCardData } from './RecommendationReferenceCard';
 
 interface WelcomeProject {
   id: string;
@@ -19,6 +20,7 @@ interface WelcomeChatProps {
   onToggleProjectPicker: () => void;
   onCloseProjectPicker: () => void;
   onSwitchProject: (projectId: string) => void;
+  recommendationReference?: RecommendationReferenceCardData | null;
 }
 
 export function WelcomeChat({
@@ -31,6 +33,7 @@ export function WelcomeChat({
   onToggleProjectPicker,
   onCloseProjectPicker,
   onSwitchProject,
+  recommendationReference,
 }: WelcomeChatProps) {
   const { t } = useTranslation('chat');
   const projectPickerRef = useRef<HTMLDivElement | null>(null);
@@ -77,6 +80,11 @@ export function WelcomeChat({
 
   return (
     <div data-testid="welcome-chat" className="text-center">
+      {recommendationReference ? (
+        <div className="mx-auto mb-7 max-w-2xl">
+          <RecommendationReferenceCard reference={recommendationReference} />
+        </div>
+      ) : null}
       <div className="w-full text-center">
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-surface-raised)] text-[var(--color-accent)]">
           <FolderOpen className="h-7 w-7" aria-hidden="true" />
