@@ -227,10 +227,7 @@ export interface CreateDiscoveryAgentOptions {
   readonly events: EventBus;
   readonly models: Models;
   readonly context: ContextCapabilities;
-  readonly tools: Pick<
-    Tools,
-    'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'
-  >;
+  readonly tools: Pick<Tools, 'bindExecution'>;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly session: Pick<
     SessionHistory,

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentToolExecutionOutcome } from '@megumi/agent';
 import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { PermissionDecision, Permissions } from '@megumi/permissions';
-import type { ToolDefinition } from '@megumi/tools';
+import type { ModelCallToolBinding, ToolDefinition } from '@megumi/tools';
 import {
   createAgentTool,
   type DiscoveryAgentToolResultDetails,
@@ -32,7 +32,11 @@ const observer: ExecutionObserver = {
   recordMeasurement: () => undefined,
 };
 
-function toolDependencies(overrides: Partial<ToolAdapterDependencies> = {}): ToolAdapterDependencies {
+type TestDependencies = ToolAdapterDependencies & { readonly binding: ModelCallToolBinding };
+
+function toolDependencies(
+  overrides: Partial<ToolAdapterDependencies> & { readonly binding?: Partial<ModelCallToolBinding> } = {},
+): TestDependencies {
   const eventsBus = createEventBus();
   const routeToolCall = ((request: { toolCallId: string; toolName: string; input: unknown; modelCallId: string }) => ({
     status: 'routed' as const,
@@ -53,12 +57,17 @@ function toolDependencies(overrides: Partial<ToolAdapterDependencies> = {}): Too
       },
     }],
   })) as never;
+  const binding: ModelCallToolBinding = {
+    modelCallId: 'model-call:1',
+    definitions: [],
+    routeToolCall,
+    executeToolInvocation: (async () => succeeded('lookup')) as never,
+    close: () => undefined,
+    ...overrides.binding,
+  };
+  const { binding: _binding, ...dependencyOverrides } = overrides;
   return {
     metadata,
-    tools: {
-      routeToolCall,
-      executeToolInvocation: (async () => succeeded('lookup')) as never,
-    },
     permissions: permissionService(),
     ids: {
       createToolExecutionId: () => 'tool-execution:1',
@@ -69,13 +78,15 @@ function toolDependencies(overrides: Partial<ToolAdapterDependencies> = {}): Too
     observer,
     awaitApproval: async () => ({ status: 'cancelled' as const }),
     toolSystemFailures: new Map(),
-    ...overrides,
+    ...dependencyOverrides,
+    binding,
   };
 }
 
-function scopeFor(definition: ToolDefinition): ToolScope {
+function scopeFor(definition: ToolDefinition, binding: ModelCallToolBinding): ToolScope {
   return {
     modelCallId: 'model-call:1',
+    binding,
     definitions: [definition],
     tools: [],
     released: false,
@@ -93,13 +104,13 @@ function invocationFor(toolName: string, toolCallId: string) {
 }
 
 async function execute(
-  dependencies: ToolAdapterDependencies,
+  dependencies: TestDependencies,
   tool: { readonly name: string; readonly id?: string },
   signal: AbortSignal = new AbortController().signal,
   updates: unknown[] = [],
 ): Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>> {
   const definition = registeredTool(tool.name).definition as ToolDefinition;
-  const agentTool = createAgentTool(dependencies)(definition, scopeFor(definition));
+  const agentTool = createAgentTool(dependencies)(definition, scopeFor(definition, dependencies.binding));
   return agentTool.execute({
     toolCallId: tool.id ?? 'call:1',
     arguments: { value: 'x' },
@@ -127,7 +138,7 @@ describe('Tool Adapter', () => {
 
   it('keeps a route failure model-visible as a settled failure', async () => {
     const dependencies = toolDependencies({
-      tools: {
+      binding: {
         routeToolCall: (() => ({
           status: 'failed' as const,
           error: { code: 'tool_not_found', message: 'Tool is unavailable.' },
@@ -305,7 +316,7 @@ describe('Tool Adapter', () => {
 
   it('keeps Tool execution exceptions as model-visible failures with settled details', async () => {
     const dependencies = toolDependencies({
-      tools: {
+      binding: {
         routeToolCall: (() => ({
           status: 'routed' as const,
           invocation: invocationFor('lookup', 'call:1'),
@@ -339,7 +350,7 @@ describe('Tool Adapter', () => {
       return { type: 'failed' as const, toolName: 'lookup', error: { code: 'tool_cancelled', message: 'cancelled' }, normalizedResult: { kind: 'text' as const, content: 'cancelled', isError: true, truncated: false } };
     });
     const dependencies = toolDependencies({
-      tools: {
+      binding: {
         routeToolCall: (() => ({
           status: 'routed' as const,
           invocation: invocationFor('lookup', 'call:1'),

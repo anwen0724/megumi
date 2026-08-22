@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentContextProvider } from '@megumi/agent';
 import type { ContextCapabilities } from '@megumi/context';
-import type { Tools } from '@megumi/tools';
+import type { ModelCallToolBinding, ToolExecutionBinding } from '@megumi/tools';
 import {
   createContextAdapter,
   releaseActiveScope,
@@ -18,8 +18,7 @@ const metadata = executionMetadata();
 function createAdapter(overrides: {
   readonly build?: ContextCapabilities['build'];
   readonly compact?: ContextCapabilities['compact'];
-  readonly resolve?: Tools['resolveModelCallTools'];
-  readonly release?: Tools['releaseModelCallTools'];
+  readonly release?: (request: { readonly modelCallId: string }) => void;
 } = {}): {
   adapter: AgentContextProvider;
   runtime: ContextAdapterRuntime;
@@ -55,13 +54,20 @@ function createAdapter(overrides: {
         reason: 'no_historical_messages',
       })),
     } as ContextCapabilities,
-    tools: {
-      resolveModelCallTools: overrides.resolve ?? (async () => ({
-        status: 'resolved' as const,
-        definitions: [],
-      })),
-      releaseModelCallTools: overrides.release ?? ((request) => { released.push(request.modelCallId); }),
-    } as Pick<Tools, 'resolveModelCallTools' | 'releaseModelCallTools'>,
+    toolExecution: {
+      executionId: metadata.executionId,
+      prepareModelCall: ({ modelCallId }) => ({
+        status: 'prepared' as const,
+        binding: {
+          modelCallId,
+          definitions: [],
+          routeToolCall: () => ({ status: 'failed', error: { code: 'unknown_tool', message: 'unused' } }),
+          executeToolInvocation: async () => { throw new Error('unused'); },
+          close: () => (overrides.release ?? ((request) => { released.push(request.modelCallId); }))({ modelCallId }),
+        } satisfies ModelCallToolBinding,
+      }),
+      close: () => undefined,
+    } satisfies ToolExecutionBinding,
     ids: { createModelCallId: () => 'model-call:1' },
     observer,
     createAgentTool: (definition) => ({
@@ -82,10 +88,6 @@ describe('Context Adapter', () => {
     const released: string[] = [];
     let modelCalls = 0;
     const { adapter, runtime } = createAdapter({
-      resolve: async () => ({
-        status: 'resolved' as const,
-        definitions: [],
-      }),
       release: (request) => { released.push(request.modelCallId); },
     });
     void modelCalls;
@@ -170,13 +172,21 @@ describe('Context Adapter', () => {
       metadata,
       userInput: { displayContent: [], modelContent: [], attachments: [] },
       context: {} as ContextCapabilities,
-      tools: { releaseModelCallTools: (request: { modelCallId: string }) => { released.push(request.modelCallId); } } as unknown as ContextAdapterDependencies['tools'],
+      toolExecution: {} as ToolExecutionBinding,
       ids: { createModelCallId: () => 'model-call:1' },
       observer: { recordLog: () => undefined } as unknown as ExecutionObserver,
       createAgentTool: () => ({} as never),
     } as ContextAdapterDependencies;
     const runtime: ContextAdapterRuntime = {
-      activeScope: { modelCallId: 'model-call:1', definitions: [], tools: [], released: false },
+      activeScope: {
+        modelCallId: 'model-call:1', definitions: [], tools: [], released: false,
+        binding: {
+          modelCallId: 'model-call:1', definitions: [],
+          routeToolCall: () => ({ status: 'failed', error: { code: 'unknown_tool', message: 'unused' } }),
+          executeToolInvocation: async () => { throw new Error('unused'); },
+          close: () => { released.push('model-call:1'); },
+        },
+      },
     };
     releaseActiveScope(dependencies, runtime);
     releaseActiveScope(dependencies, runtime);

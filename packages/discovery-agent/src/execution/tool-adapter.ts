@@ -26,7 +26,7 @@ import type {
   ToolExecutionNotification,
   ToolIdentity,
   ToolInvocation,
-  Tools,
+  ModelCallToolBinding,
 } from '@megumi/tools';
 import type { ExecutionClock, ApprovalRequest, ApprovalResolution, ExecutionMetadata } from './execution-registry';
 import type { ExecutionObserver } from './execution-observer';
@@ -55,7 +55,6 @@ export interface DiscoveryAgentToolResultDetails {
 
 export interface ToolAdapterDependencies {
   readonly metadata: ExecutionMetadata;
-  readonly tools: Pick<Tools, 'routeToolCall' | 'executeToolInvocation'>;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly ids: { createToolExecutionId(): string; createApprovalId(): string };
   readonly clock: ExecutionClock;
@@ -76,11 +75,7 @@ export function createAgentTool(
     parameters: definition.parameters as AgentTool['parameters'],
     executionMode: definition.executionMode === 'serial' ? 'sequential' : 'parallel',
     execute: async ({ toolCallId, arguments: argumentsValue, signal, onUpdate }) => {
-      const routed = dependencies.tools.routeToolCall({
-        executionId: dependencies.metadata.executionId,
-        sessionId: dependencies.metadata.sessionId,
-        workspaceId: dependencies.metadata.workspaceId,
-        modelCallId: scope.modelCallId,
+      const routed = scope.binding.routeToolCall({
         toolCallId,
         toolName: definition.name,
         input: argumentsValue,
@@ -101,6 +96,7 @@ export function createAgentTool(
         signal,
         onUpdate as (update: AgentToolResult) => void,
         dependencies,
+        scope.binding,
       );
     },
   });
@@ -112,6 +108,7 @@ async function executeRoutedTool(
   signal: AbortSignal,
   onUpdate: (update: AgentToolResult) => void,
   dependencies: ToolAdapterDependencies,
+  binding: ModelCallToolBinding,
 ): Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>> {
   if (signal.aborted) return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
   let executionAccess: ToolExecutionAccess | undefined;
@@ -201,7 +198,7 @@ async function executeRoutedTool(
       executionAccess = permission.executionAccess;
     }
   }
-  return runToolInvocation(invocation, executionAccess, signal, onUpdate, dependencies);
+  return runToolInvocation(invocation, executionAccess, signal, onUpdate, dependencies, binding);
 }
 
 async function runToolInvocation(
@@ -210,6 +207,7 @@ async function runToolInvocation(
   signal: AbortSignal,
   onUpdate: (update: AgentToolResult) => void,
   dependencies: ToolAdapterDependencies,
+  binding: ModelCallToolBinding,
 ): Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>> {
   if (signal.aborted) return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
   const toolExecutionId = dependencies.ids.createToolExecutionId();
@@ -232,7 +230,7 @@ async function runToolInvocation(
   signal.addEventListener('abort', () => { closed = true; }, { once: true });
   let execution;
   try {
-    execution = await dependencies.tools.executeToolInvocation({
+    execution = await binding.executeToolInvocation({
       invocation,
       toolExecutionId,
     }, {

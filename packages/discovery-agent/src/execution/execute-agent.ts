@@ -80,7 +80,7 @@ export interface ExecuteAgentDependencies {
   readonly context: ContextCapabilities;
   readonly tools: Pick<
     Tools,
-    'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'
+    'bindExecution'
   >;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly session: Pick<
@@ -183,9 +183,27 @@ export async function launchAgentExecution(
     observer,
   };
 
+  const toolExecutionResult = dependencies.tools.bindExecution({
+    executionId: metadata.executionId,
+    subject: {
+      kind: 'session',
+      sessionId: metadata.sessionId,
+      workspaceId: metadata.workspaceId,
+    },
+    includeBuiltIns: true,
+  });
+  if (toolExecutionResult.status === 'failed') {
+    throw new LaunchExecutionError({
+      code: 'tool_system_failed',
+      message: toolExecutionResult.failure.message,
+      retryable: true,
+      cause: { owner: 'tools', code: toolExecutionResult.failure.code },
+    });
+  }
+  const toolExecution = toolExecutionResult.binding;
+
   const toolAdapter = createAgentTool({
     metadata,
-    tools: dependencies.tools,
     permissions: dependencies.permissions,
     ids: dependencies.ids,
     clock: dependencies.clock,
@@ -198,7 +216,7 @@ export async function launchAgentExecution(
     metadata,
     userInput: input.input,
     context: dependencies.context,
-    tools: dependencies.tools,
+    toolExecution,
     ids: dependencies.ids,
     observer,
     createAgentTool: toolAdapter,
@@ -213,7 +231,10 @@ export async function launchAgentExecution(
     clock: dependencies.clock,
     observer,
     runtime,
-    onAgentEnd: () => releaseActiveScope(contextDependencies, runtime),
+    onAgentEnd: () => {
+      releaseActiveScope(contextDependencies, runtime);
+      toolExecution.close();
+    },
   };
   const settlement = createFinalReplySettlement(runtime, listenerOptions);
 
@@ -242,7 +263,7 @@ export async function launchAgentExecution(
     agent,
     userMessage: saved.message,
     userEntry: saved.entry,
-    execute: () => executeAgentExecution(agent, runtime, contextDependencies, metadata),
+    execute: () => executeAgentExecution(agent, runtime, contextDependencies, metadata, toolExecution),
   };
 }
 
@@ -251,6 +272,7 @@ async function executeAgentExecution(
   runtime: ExecutionRuntime,
   contextDependencies: Parameters<typeof createContextAdapter>[0],
   metadata: ExecutionMetadata,
+  toolExecution: import('@megumi/tools').ToolExecutionBinding,
 ): Promise<ExecutionOutcome> {
   runtime.observer.start();
   let final: ExecutionOutcome | undefined;
@@ -266,6 +288,7 @@ async function executeAgentExecution(
     return final;
   } finally {
     releaseActiveScope(contextDependencies, runtime);
+    toolExecution.close();
     runtime.observer.end(
       final?.status === 'completed' ? 'ok'
         : final?.status === 'cancelled' ? 'cancelled'

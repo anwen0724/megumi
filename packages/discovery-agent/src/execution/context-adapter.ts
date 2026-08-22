@@ -6,13 +6,14 @@
 import type { AgentContext, AgentContextProvider, AgentError, AgentTool } from '@megumi/agent';
 import type { ContextCapabilities } from '@megumi/context';
 import type { UserInput } from '@megumi/input';
-import type { ToolDefinition, Tools } from '@megumi/tools';
+import type { ModelCallToolBinding, ToolDefinition, ToolExecutionBinding } from '@megumi/tools';
 import type { ExecutionMetadata } from './execution-registry';
 import type { ExecutionObserver } from './execution-observer';
 
 /** One ModelCall's fixed Tool Router scope; released exactly once. */
 export interface ToolScope {
   readonly modelCallId: string;
+  readonly binding: ModelCallToolBinding;
   readonly definitions: readonly ToolDefinition[];
   tools: AgentTool[];
   released: boolean;
@@ -22,7 +23,7 @@ export interface ContextAdapterDependencies {
   readonly metadata: ExecutionMetadata;
   readonly userInput: UserInput;
   readonly context: ContextCapabilities;
-  readonly tools: Pick<Tools, 'resolveModelCallTools' | 'releaseModelCallTools'>;
+  readonly toolExecution: ToolExecutionBinding;
   readonly ids: { createModelCallId(): string };
   readonly observer: ExecutionObserver;
   /** Builds the AgentTool for one definition on the active scope. */
@@ -92,14 +93,8 @@ export function createContextAdapter(
       const modelCallId = dependencies.ids.createModelCallId();
       let resolution;
       try {
-        resolution = await dependencies.tools.resolveModelCallTools({
-          executionId: dependencies.metadata.executionId,
-          sessionId: dependencies.metadata.sessionId,
-          workspaceId: dependencies.metadata.workspaceId,
-          modelCallId,
-        });
+        resolution = dependencies.toolExecution.prepareModelCall({ modelCallId });
       } catch {
-        safeReleaseModelCallTools(dependencies, modelCallId);
         return {
           status: 'failed',
           error: contextAgentError('Tool registry is unavailable.', true, {
@@ -109,7 +104,6 @@ export function createContextAdapter(
         };
       }
       if (resolution.status === 'failed') {
-        safeReleaseModelCallTools(dependencies, modelCallId);
         return {
           status: 'failed',
           error: contextAgentError(resolution.failure.message, true, {
@@ -120,11 +114,12 @@ export function createContextAdapter(
       }
       const scope: ToolScope = {
         modelCallId,
-        definitions: resolution.definitions,
+        binding: resolution.binding,
+        definitions: resolution.binding.definitions,
         tools: [],
         released: false,
       };
-      scope.tools = resolution.definitions.map((definition) => (
+      scope.tools = resolution.binding.definitions.map((definition) => (
         dependencies.createAgentTool(definition, scope)
       ));
       runtime.activeScope = scope;
@@ -184,21 +179,21 @@ export function releaseActiveScope(
   if (!scope || scope.released) return;
   scope.released = true;
   runtime.activeScope = undefined;
-  safeReleaseModelCallTools(dependencies, scope.modelCallId);
+  safeReleaseModelCallTools(dependencies, scope);
 }
 
 function safeReleaseModelCallTools(
   dependencies: ContextAdapterDependencies,
-  modelCallId: string,
+  scope: ToolScope,
 ): void {
   try {
-    dependencies.tools.releaseModelCallTools({ modelCallId });
+    scope.binding.close();
   } catch (error) {
     dependencies.observer.recordLog({
       level: 'error',
       event: 'tool.router.release_failed',
       attributes: {
-        modelCallId,
+        modelCallId: scope.modelCallId,
         errorMessage: error instanceof Error ? error.message : String(error),
       },
     });
