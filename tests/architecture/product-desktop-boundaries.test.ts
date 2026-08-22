@@ -80,6 +80,20 @@ describe('Product and Desktop final boundaries', () => {
     expect(approvalOperations).not.toContain("from '@megumi/engine'");
     expect(approvalOperations).toContain('createApprovalOperations');
   });
+
+  it('delegates normal conversation submission to the Discovery Agent owner', () => {
+    const composer = read('packages/product/src/composition/product-composer.ts');
+    const sessionOperations = read('packages/product/src/operations/session/session-operations.ts');
+
+    expect(fs.existsSync(path.join(
+      root,
+      'packages/product/src/operations/session/input-submission.ts',
+    ))).toBe(false);
+    expect(composer).not.toContain('createInputSubmission');
+    expect(sessionOperations).toContain('submitConversationInput');
+    expect(sessionOperations).not.toContain('.input.process(');
+    expect(sessionOperations).not.toContain('.discoveryAgent.start(');
+  });
 });
 
 function read(relativePath: string): string {

@@ -29,7 +29,6 @@ import { createSkillOperations } from '../operations/skill-operations';
 import { createWorkspaceOperations } from '../operations/workspace-operations';
 import { createVoiceOperations } from '../operations/voice-operations';
 import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
-import { createInputSubmission } from '../operations/session/input-submission';
 import { createSessionOperations } from '../operations/session/session-operations';
 import { createSessionReader } from '../operations/session/session-reader';
 import {
@@ -125,14 +124,6 @@ function composeProductRuntime(
   migrateLegacyProviderApiSettingsFile(homePaths.settingsPath);
   resources.registerDatabase(capabilities.database);
 
-  const submission = createInputSubmission({
-    discoveryAgent,
-    input: capabilities.input,
-    sessions,
-    history,
-    branches,
-    resolveModel: capabilities.resolveModel,
-  });
   const suggestions = createInputSuggestionQuery({
     commands,
     skills,
@@ -145,7 +136,6 @@ function composeProductRuntime(
     workspaceChanges,
   });
   const session = createSessionOperations({
-    submission,
     reader: sessionReader,
     discoveryAgent,
     suggestions,

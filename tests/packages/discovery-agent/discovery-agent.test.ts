@@ -4,8 +4,16 @@ import { Agent } from '@megumi/agent';
 import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model, type Models } from '@megumi/ai';
 import type { ContextCapabilities } from '@megumi/context';
 import { createEventBus, type AnyEvent } from '@megumi/events';
+import type { CommandTerminalResult } from '@megumi/commands';
+import type { InputProcessor } from '@megumi/input';
 import type { Permissions } from '@megumi/permissions';
-import type { SessionEntry, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
+import type {
+  SessionBranchDrafts,
+  SessionCatalog,
+  SessionEntry,
+  SessionHistory,
+  SessionMessageWithAttachments,
+} from '@megumi/session';
 import type { Tools } from '@megumi/tools';
 import {
   createDiscoveryAgent,
@@ -70,6 +78,15 @@ const startRequest: StartExecutionRequest = {
   model,
   permissionMode: 'ask',
 };
+
+const session = {
+  session_id: 'session:1',
+  workspace_id: 'workspace:1',
+  title: 'hello',
+  status: 'active',
+  created_at: clock.now(),
+  updated_at: clock.now(),
+} as const;
 
 interface LaunchHandle {
   readonly agent: Agent;
@@ -181,6 +198,13 @@ function fixture(overrides: Partial<CreateDiscoveryAgentOptions> = {}): {
     tools: {} as Pick<Tools, 'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'>,
     permissions: {} as Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>,
     session: {} as Pick<SessionHistory, 'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'>,
+    conversation: {
+      input: {} as Pick<InputProcessor<CommandTerminalResult>, 'process'>,
+      sessions: {} as Pick<SessionCatalog, 'getSession' | 'createSession'>,
+      history: {} as Pick<SessionHistory, 'getCommittedBranch'>,
+      branches: {} as Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>,
+      resolveModel: async () => ({ status: 'ok', model }),
+    },
     policy: testPolicy,
     ...overrides,
   };
@@ -213,6 +237,299 @@ function approvalRequest(executionId: string, approvalId: string): ApprovalReque
 }
 
 describe('Discovery Agent', () => {
+  it('does not create a Session or start an execution when Input completes the request', async () => {
+    const createSession = vi.fn();
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: {
+          process: async () => ({
+            status: 'completed',
+            result: { type: 'completed', message: 'done' },
+          }),
+        },
+        sessions: {
+          getSession: vi.fn(),
+          createSession,
+        },
+        history: { getCommittedBranch: vi.fn() },
+        branches: {
+          resolveBranchDraft: vi.fn(),
+          commitBranchDraft: vi.fn(),
+        },
+        resolveModel: async () => ({ status: 'ok', model }),
+      },
+    });
+
+    const result = await discoveryAgent.submitConversationInput({
+      requestId: 'request:command',
+      workspaceId: 'workspace:1',
+      text: '/test',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+      permissionMode: 'ask',
+    });
+
+    expect(result).toEqual({
+      status: 'completed',
+      requestId: 'request:command',
+      message: 'done',
+    });
+    expect(createSession).not.toHaveBeenCalled();
+    expect(testLaunch.handles).toHaveLength(0);
+  });
+
+  it('creates a Session only after Input accepts and then starts one execution', async () => {
+    const order: string[] = [];
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: {
+          process: async (request) => {
+            order.push('input');
+            expect(request.context).toMatchObject({ workspaceId: 'workspace:1', model });
+            return {
+              status: 'accepted',
+              input: {
+                displayContent: [{ type: 'text', text: 'hello' }],
+                modelContent: [{ type: 'text', text: 'hello' }],
+                attachments: [],
+              },
+            };
+          },
+        },
+        sessions: {
+          getSession: vi.fn(),
+          createSession: (request) => {
+            order.push('session');
+            expect(request).toMatchObject({ workspace_id: 'workspace:1', initial_user_text: 'hello' });
+            return { status: 'created', session };
+          },
+        },
+        history: { getCommittedBranch: vi.fn() },
+        branches: {
+          resolveBranchDraft: vi.fn(),
+          commitBranchDraft: vi.fn(),
+        },
+        resolveModel: async (selection) => {
+          order.push('model');
+          expect(selection).toEqual({ providerId: 'test-provider', modelId: 'test-model' });
+          return { status: 'ok', model };
+        },
+      },
+    });
+
+    const result = await discoveryAgent.submitConversationInput({
+      requestId: 'request:accepted',
+      workspaceId: 'workspace:1',
+      text: 'hello',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+      permissionMode: 'ask',
+    });
+
+    expect(order).toEqual(['model', 'input', 'session']);
+    expect(result.status).toBe('agent_started');
+    if (result.status !== 'agent_started') throw new Error('unreachable');
+    expect(result.session).toEqual(session);
+    expect(result.execution).toMatchObject({ sessionId: 'session:1' });
+    expect(testLaunch.handles).toHaveLength(1);
+  });
+
+  it('does not process Input or create a Session when model resolution fails', async () => {
+    const process = vi.fn();
+    const createSession = vi.fn();
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: { process },
+        sessions: { getSession: vi.fn(), createSession },
+        history: { getCommittedBranch: vi.fn() },
+        branches: {
+          resolveBranchDraft: vi.fn(),
+          commitBranchDraft: vi.fn(),
+        },
+        resolveModel: async () => ({
+          status: 'failed',
+          failure: { code: 'model_unavailable', message: 'Model is unavailable.' },
+        }),
+      },
+    });
+
+    const result = await discoveryAgent.submitConversationInput({
+      requestId: 'request:model-failure',
+      workspaceId: 'workspace:1',
+      text: 'hello',
+      modelSelection: { providerId: 'missing', modelId: 'missing' },
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: { message: 'Model is unavailable.' },
+    });
+    expect(process).not.toHaveBeenCalled();
+    expect(createSession).not.toHaveBeenCalled();
+    expect(testLaunch.handles).toHaveLength(0);
+  });
+
+  it('does not create a Session or start an execution when Input rejects the request', async () => {
+    const createSession = vi.fn();
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: {
+          process: async () => ({
+            status: 'failed',
+            failure: { code: 'input_empty', message: 'Input is empty.' },
+          }),
+        },
+        sessions: { getSession: vi.fn(), createSession },
+        history: { getCommittedBranch: vi.fn() },
+        branches: {
+          resolveBranchDraft: vi.fn(),
+          commitBranchDraft: vi.fn(),
+        },
+        resolveModel: async () => ({ status: 'ok', model }),
+      },
+    });
+
+    const result = await discoveryAgent.submitConversationInput({
+      requestId: 'request:rejected',
+      workspaceId: 'workspace:1',
+      text: '',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: { message: 'Input is empty.' },
+    });
+    expect(createSession).not.toHaveBeenCalled();
+    expect(testLaunch.handles).toHaveLength(0);
+  });
+
+  it('resolves and commits a branch around the started user entry', async () => {
+    const commitBranchDraft = vi.fn(() => ({
+      status: 'committed' as const,
+      branch_draft: {
+        branch_marker_id: 'branch:1',
+        session_id: 'session:1',
+        source_message_id: 'message:source',
+        source_entry_id: 'entry:source',
+        created_at: clock.now(),
+      },
+    }));
+    const getCommittedBranch = vi.fn(() => ({
+      status: 'found' as const,
+      branch: {
+        type: 'branch' as const,
+        branchId: 'branch:committed',
+        sourceEntryId: 'entry:source',
+        sourceMessageId: 'message:source',
+        targetEntryId: 'entry:message:1',
+        targetMessageId: 'message:1',
+        createdAt: clock.now(),
+      },
+    }));
+    const { discoveryAgent } = fixture({
+      conversation: {
+        input: {
+          process: async () => ({
+            status: 'accepted',
+            input: {
+              displayContent: [{ type: 'text', text: 'continue here' }],
+              modelContent: [{ type: 'text', text: 'continue here' }],
+              attachments: [],
+            },
+          }),
+        },
+        sessions: {
+          getSession: () => ({ status: 'found', session }),
+          createSession: vi.fn(),
+        },
+        history: { getCommittedBranch },
+        branches: {
+          resolveBranchDraft: () => ({
+            status: 'resolved',
+            branch_draft: {
+              branch_marker_id: 'branch:1',
+              session_id: 'session:1',
+              source_message_id: 'message:source',
+              source_entry_id: 'entry:source',
+              created_at: clock.now(),
+            },
+          }),
+          commitBranchDraft,
+        },
+        resolveModel: async () => ({ status: 'ok', model }),
+      },
+    });
+
+    const result = await discoveryAgent.submitConversationInput({
+      requestId: 'request:branch',
+      workspaceId: 'workspace:1',
+      sessionId: 'session:1',
+      branchMarkerId: 'branch:1',
+      text: 'continue here',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+    });
+
+    expect(result.status).toBe('agent_started');
+    if (result.status !== 'agent_started') throw new Error('unreachable');
+    expect(result.branchCommit).toMatchObject({
+      branchMarkerId: 'branch:1',
+      branch: { targetMessageId: 'message:1' },
+    });
+    expect(commitBranchDraft).toHaveBeenCalledWith({
+      request_id: 'request:branch',
+      session_id: 'session:1',
+      branch_marker_id: 'branch:1',
+    });
+    expect(getCommittedBranch).toHaveBeenCalledWith({
+      sessionId: 'session:1',
+      targetEntryId: 'entry:message:1',
+    });
+  });
+
+  it('preserves request-id idempotency when the same Session submission is retried', async () => {
+    const { discoveryAgent, testLaunch } = fixture({
+      conversation: {
+        input: {
+          process: async () => ({
+            status: 'accepted',
+            input: {
+              displayContent: [{ type: 'text', text: 'hello' }],
+              modelContent: [{ type: 'text', text: 'hello' }],
+              attachments: [],
+            },
+          }),
+        },
+        sessions: {
+          getSession: () => ({ status: 'found', session }),
+          createSession: vi.fn(),
+        },
+        history: { getCommittedBranch: vi.fn() },
+        branches: {
+          resolveBranchDraft: vi.fn(),
+          commitBranchDraft: vi.fn(),
+        },
+        resolveModel: async () => ({ status: 'ok', model }),
+      },
+    });
+    const request = {
+      requestId: 'request:retry',
+      workspaceId: 'workspace:1',
+      sessionId: 'session:1',
+      text: 'hello',
+      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
+    } as const;
+
+    const first = await discoveryAgent.submitConversationInput(request);
+    const second = await discoveryAgent.submitConversationInput(request);
+
+    expect(first.status).toBe('agent_started');
+    expect(second.status).toBe('agent_started');
+    if (first.status !== 'agent_started' || second.status !== 'agent_started') {
+      throw new Error('unreachable');
+    }
+    expect(second.execution.executionId).toBe(first.execution.executionId);
+    expect(testLaunch.handles).toHaveLength(1);
+  });
+
   it('starts one execution, publishes the user message before run.started, and returns a running projection', async () => {
     const { discoveryAgent, published, testLaunch } = fixture();
     const started = await discoveryAgent.start(startRequest);

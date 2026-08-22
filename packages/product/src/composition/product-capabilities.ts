@@ -428,6 +428,16 @@ function composeCapabilitiesWithDatabase(
       tools,
       permissions,
       session: history,
+      conversation: {
+        input,
+        sessions,
+        history,
+        branches,
+        resolveModel: ({ providerId, modelId }) => resolveModel({
+          provider_id: providerId,
+          model_id: modelId,
+        }),
+      },
       observability: observability.service,
       policy: PRODUCT_EXECUTION_POLICY,
     },

@@ -10,6 +10,7 @@
   "references": [
     { "path": "../agent" },
     { "path": "../ai" },
+    { "path": "../commands" },
     { "path": "../context" },
     { "path": "../events" },
     { "path": "../input" },

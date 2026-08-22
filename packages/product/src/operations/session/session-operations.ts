@@ -1,32 +1,34 @@
 /*
- * Owns Product Session operations outside the single input submission chain.
- * The submit chain itself is delegated to the dedicated InputSubmission owner.
+ * Adapts Product Session Host DTOs to their owning capability interfaces and
+ * projects domain results back to stable Host DTOs.
  */
-import type { DiscoveryAgent } from '@megumi/discovery-agent';
+import type {
+  DiscoveryAgent,
+  SubmitConversationInputResult,
+} from '@megumi/discovery-agent';
 import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
 import type { WorkspaceCatalog } from '@megumi/workspace';
-import type { InputSubmission } from './input-submission';
-
 import type {
   SessionHost,
   HostFailure,
+  SendUserInputRequest,
+  SendUserInputResult,
   UserMessageSummaryDto,
 } from '../../host/session-host';
 import type { AttachmentPicker } from '../../host/capabilities/attachment-picker';
 import type { LocalFileAvailability } from '../../host/capabilities/local-file-availability';
 import type { InputSuggestionQuery } from './input-suggestions';
 import type { SessionReader } from './session-reader';
-import { toRunDto, toSessionDto } from './session-reader';
+import { toRunDto, toSessionDto, toUserMessageDto } from './session-reader';
 
 export type SessionOperations = SessionHost;
 
 /** Creates the concrete Product operations exposed through SessionHost. */
 export function createSessionOperations(options: {
-  submission: InputSubmission;
   reader: SessionReader;
-  discoveryAgent: Pick<DiscoveryAgent, 'cancel'>;
+  discoveryAgent: Pick<DiscoveryAgent, 'cancel' | 'submitConversationInput'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
   history: SessionHistory;
@@ -48,7 +50,7 @@ export function createSessionOperations(options: {
   localFileAvailability?: LocalFileAvailability;
 }): SessionOperations {
   return {
-    sendUserInput: (request) => options.submission.submit(request),
+    sendUserInput: (request) => submitUserInput(options.discoveryAgent, request),
     readSession: (request) => options.reader.readSession(request),
     readCommittedRun: (request) => options.reader.readCommittedRun(request),
     async createSession(request) {
@@ -142,6 +144,90 @@ export function createSessionOperations(options: {
       if (!options.localFileAvailability) return { status: 'failed', failure: { code: 'file_status_unavailable', message: 'Local file status is unavailable.' } };
       try { return await options.localFileAvailability.exists(result.attachment.source_value) ? { status: 'available' } : { status: 'unavailable' }; }
       catch { return { status: 'unavailable' }; }
+    },
+  };
+}
+
+async function submitUserInput(
+  discoveryAgent: Pick<DiscoveryAgent, 'submitConversationInput'>,
+  request: SendUserInputRequest,
+): Promise<SendUserInputResult> {
+  const result = await discoveryAgent.submitConversationInput({
+    ...(request.requestId ? { requestId: request.requestId } : {}),
+    workspaceId: request.projectId,
+    ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+    ...(request.sessionTitle ? { sessionTitle: request.sessionTitle } : {}),
+    ...(request.branchMarkerId ? { branchMarkerId: request.branchMarkerId } : {}),
+    text: request.text,
+    ...(request.skillSelection ? { skillSelection: request.skillSelection } : {}),
+    ...(request.attachments ? { attachments: request.attachments } : {}),
+    modelSelection: {
+      providerId: request.modelSelection.provider_id,
+      modelId: request.modelSelection.model_id,
+    },
+    ...(request.permissionMode ? { permissionMode: request.permissionMode } : {}),
+  });
+  return mapConversationSubmission(result);
+}
+
+function mapConversationSubmission(result: SubmitConversationInputResult): SendUserInputResult {
+  const session = result.session ? { session: toSessionDto(result.session) } : {};
+  if (result.status === 'agent_started') {
+    if (result.userMessage.message.message_kind !== 'user_message') {
+      throw new Error('Discovery Agent returned a non-user message for a started execution.');
+    }
+    return {
+      payload: {
+        type: 'agent_run',
+        session: toSessionDto(result.session),
+        requestId: result.requestId,
+        userMessageId: result.userMessage.message.message_id,
+        userMessage: toUserMessageDto({
+          message: result.userMessage.message,
+          attachments: result.userMessage.attachments,
+        }),
+        run: toRunDto(result.execution),
+        ...(result.branchCommit ? {
+          branchCommit: {
+            branchMarkerId: result.branchCommit.branchMarkerId,
+            branch: {
+              type: 'branch',
+              branchId: result.branchCommit.branch.branchId,
+              sourceMessageId: result.branchCommit.branch.sourceMessageId,
+              targetMessageId: result.branchCommit.branch.targetMessageId,
+              createdAt: result.branchCommit.branch.createdAt,
+            },
+          },
+        } : {}),
+      },
+    };
+  }
+  if (result.status === 'host_interaction_requested') {
+    return {
+      payload: {
+        type: 'host_interaction_request',
+        ...session,
+        requestId: result.requestId,
+        request: result.request,
+      },
+    };
+  }
+  if (result.status === 'completed') {
+    return {
+      payload: {
+        type: 'completed',
+        ...session,
+        requestId: result.requestId,
+        ...(result.message ? { message: result.message } : {}),
+      },
+    };
+  }
+  return {
+    payload: {
+      type: 'error',
+      ...session,
+      requestId: result.requestId,
+      message: result.failure.message,
     },
   };
 }

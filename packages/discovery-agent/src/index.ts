@@ -18,6 +18,14 @@ export type {
   StartExecutionResult,
 } from './discovery-agent';
 export type {
+  ConversationBranchCommit,
+  ConversationModelResolution,
+  ConversationSubmissionFailure,
+  ConversationSubmissionDependencies,
+  SubmitConversationInputRequest,
+  SubmitConversationInputResult,
+} from './conversation/submit-conversation-input';
+export type {
   ExecutionClock,
   ExecutionFailure,
   ExecutionFailureCode,

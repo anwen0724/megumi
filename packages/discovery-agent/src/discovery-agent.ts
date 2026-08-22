@@ -19,6 +19,12 @@ import type {
 import type { SessionEntry, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import type { Tools } from '@megumi/tools';
 import {
+  createConversationSubmission,
+  type ConversationSubmissionDependencies,
+  type SubmitConversationInputRequest,
+  type SubmitConversationInputResult,
+} from './conversation/submit-conversation-input';
+import {
   LaunchExecutionError,
   launchAgentExecution,
   type DiscoveryAgentPolicy,
@@ -39,6 +45,9 @@ import {
 // ---------------------------------------------------------------------------
 
 export interface DiscoveryAgent {
+  submitConversationInput(
+    request: SubmitConversationInputRequest,
+  ): Promise<SubmitConversationInputResult>;
   start(request: StartExecutionRequest): Promise<StartExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
@@ -185,6 +194,7 @@ export interface CreateDiscoveryAgentOptions {
     SessionHistory,
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
+  readonly conversation: ConversationSubmissionDependencies;
   readonly observability?: ObservabilityService;
   readonly policy: DiscoveryAgentPolicy;
   /** Optional launch override for focused multi-execution tests; production uses the Execute Agent adapter. */
@@ -199,6 +209,11 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
   });
   const launch = options.launch ?? ((input) => launchAgentExecution(input, options));
   let accepting = true;
+  let operations!: DiscoveryAgent;
+  const conversationSubmission = createConversationSubmission({
+    dependencies: options.conversation,
+    startExecution: (request) => operations.start(request),
+  });
 
   const settleCompletion = (executionId: string, outcome: ExecutionOutcome): void => {
     try {
@@ -275,7 +290,9 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     };
   };
 
-  return {
+  operations = {
+    submitConversationInput: (request) => conversationSubmission.submit(request),
+
     async start(request): Promise<StartExecutionResult> {
       if (!accepting) {
         return {
@@ -468,6 +485,7 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
         : { status: 'timed_out', activeExecutions: store.listActiveExecutions() };
     },
   };
+  return operations;
 }
 
 /** The Discovery Agent validates the policy facts it owns; the Agent validates its own limits. */
