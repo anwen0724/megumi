@@ -28,6 +28,7 @@ import { createSettingsOperations } from '../operations/settings-operations';
 import { createSkillOperations } from '../operations/skill-operations';
 import { createWorkspaceOperations } from '../operations/workspace-operations';
 import { createVoiceOperations } from '../operations/voice-operations';
+import { createDiscoveryOperations } from '../operations/discovery-operations';
 import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
 import { createSessionOperations } from '../operations/session/session-operations';
 import { createSessionReader } from '../operations/session/session-reader';
@@ -269,6 +270,7 @@ function composeProductRuntime(
     }),
   );
   const host: ProductHostInterface = {
+    discovery: createDiscoveryOperations(discoveryAgent),
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
@@ -288,6 +290,14 @@ function composeProductRuntime(
     }),
     voice: createVoiceOperations({ voice, speechOutput }),
   };
+
+  // Product starts the business owner's background lifecycle but does not
+  // implement scheduling or recovery rules itself.
+  void discoveryAgent.startBackground().catch((error) => {
+    logger.warn('discovery_background_start_failed', {
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   return createProductRuntime({
     host,

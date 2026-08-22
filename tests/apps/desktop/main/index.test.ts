@@ -142,7 +142,8 @@ vi.mock('@megumi/product', () => ({
   resolveMegumiHomePath: vi.fn(() => mocks.homePath),
 }));
 
-vi.mock('@megumi/discovery-agent', () => ({
+vi.mock('@megumi/discovery-agent', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@megumi/discovery-agent')>(),
   createDiscoveryAgent: mocks.createDiscoveryAgent,
 }));
 
@@ -261,6 +262,7 @@ describe('main runtime logger composition', () => {
       skill: { host: mocks.agentHost },
       settings: { host: mocks.agentHost },
       approval: { host: mocks.agentHost },
+      discovery: { host: mocks.agentHost },
       voice: { host: mocks.agentHost },
       voiceInput: expect.objectContaining({ adapter: expect.objectContaining({
         acceptFrame: expect.any(Function),

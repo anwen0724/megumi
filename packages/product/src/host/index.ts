@@ -7,6 +7,7 @@ export { redactHostRuntimeValue } from './runtime-redaction';
 export type { AnyEvent } from '@megumi/events';
 
 export * from './product-host';
+export * from './discovery-host';
 export type {
   WorkspaceFileEntryUiDto,
   WorkspaceListFilesUiResult,

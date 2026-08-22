@@ -48,6 +48,12 @@ import type {
   VoiceHostSnapshot,
   VoiceTtsApiKeyUiRequest,
   VoiceTtsKeyUiResult,
+  DiscoveryInterestUiDto,
+  DiscoverySessionParticipationUiDto,
+  DiscoveryDailyEnsureResult,
+  DiscoveryHomeUiResult,
+  DiscoveryRecommendationSearchUiResult,
+  DiscoveryRecommendationUiDto,
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
@@ -88,6 +94,12 @@ import type {
   VoiceSessionMutedPayload,
   VoiceSessionStartPayload,
   VoiceModelCapabilityPayload,
+  DiscoveryInterestChangePayload,
+  DiscoverySessionParticipationPayload,
+  DiscoveryDailyEnsurePayload,
+  DiscoveryHomePayload,
+  DiscoveryRecommendationSearchPayload,
+  DiscoveryRecommendationStatePayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -318,6 +330,32 @@ export const api = {
       request: BusinessRequest<ApprovalResolvePayload, typeof IPC_CHANNELS.approval.resolve>,
     ): Promise<RuntimeIpcResult<ApprovalHostResult, typeof IPC_CHANNELS.approval.resolve>> =>
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
+  },
+  discovery: {
+    changeInterest: (
+      request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
+    ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
+    setSessionParticipation: (
+      request: BusinessRequest<DiscoverySessionParticipationPayload, typeof IPC_CHANNELS.discovery.sessionParticipationSet>,
+    ): Promise<RuntimeIpcResult<DiscoverySessionParticipationUiDto, typeof IPC_CHANNELS.discovery.sessionParticipationSet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.sessionParticipationSet, request),
+    ensureDaily: (
+      request: BusinessRequest<DiscoveryDailyEnsurePayload, typeof IPC_CHANNELS.discovery.dailyEnsure>,
+    ): Promise<RuntimeIpcResult<DiscoveryDailyEnsureResult, typeof IPC_CHANNELS.discovery.dailyEnsure>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.dailyEnsure, request),
+    getHome: (
+      request: BusinessRequest<DiscoveryHomePayload, typeof IPC_CHANNELS.discovery.homeGet>,
+    ): Promise<RuntimeIpcResult<DiscoveryHomeUiResult, typeof IPC_CHANNELS.discovery.homeGet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.homeGet, request),
+    searchRecommendations: (
+      request: BusinessRequest<DiscoveryRecommendationSearchPayload, typeof IPC_CHANNELS.discovery.recommendationsSearch>,
+    ): Promise<RuntimeIpcResult<DiscoveryRecommendationSearchUiResult, typeof IPC_CHANNELS.discovery.recommendationsSearch>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationsSearch, request),
+    updateRecommendationState: (
+      request: BusinessRequest<DiscoveryRecommendationStatePayload, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>,
+    ): Promise<RuntimeIpcResult<DiscoveryRecommendationUiDto, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
   },
   voiceInput: {
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {

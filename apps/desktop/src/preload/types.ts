@@ -12,6 +12,12 @@ import type {
   ListSkillsUiResponse,
   RefreshSkillsUiResponse,
   WorkspaceOpenFileUiResult,
+  DiscoveryDailyEnsureResult,
+  DiscoveryHomeUiResult,
+  DiscoveryInterestUiDto,
+  DiscoveryRecommendationSearchUiResult,
+  DiscoveryRecommendationUiDto,
+  DiscoverySessionParticipationUiDto,
 } from '@megumi/product/host';
 import type {
   SessionBranchDraftCancelPayload,
@@ -27,6 +33,12 @@ import type {
   SkillListPayload,
   SkillRefreshPayload,
   WorkspaceFileOpenPayload,
+  DiscoveryDailyEnsurePayload,
+  DiscoveryHomePayload,
+  DiscoveryInterestChangePayload,
+  DiscoveryRecommendationSearchPayload,
+  DiscoveryRecommendationStatePayload,
+  DiscoverySessionParticipationPayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
 
@@ -57,3 +69,15 @@ export type SkillDeletePreloadPayload = SkillDeletePayload;
 export type SkillDeletePreloadData = DeleteSkillUiResponse;
 export type SkillRefreshPreloadPayload = SkillRefreshPayload;
 export type SkillRefreshPreloadData = RefreshSkillsUiResponse;
+export type DiscoveryInterestChangePreloadPayload = DiscoveryInterestChangePayload;
+export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
+export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
+export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;
+export type DiscoveryDailyEnsurePreloadPayload = DiscoveryDailyEnsurePayload;
+export type DiscoveryDailyEnsurePreloadData = DiscoveryDailyEnsureResult;
+export type DiscoveryHomePreloadPayload = DiscoveryHomePayload;
+export type DiscoveryHomePreloadData = DiscoveryHomeUiResult;
+export type DiscoveryRecommendationSearchPreloadPayload = DiscoveryRecommendationSearchPayload;
+export type DiscoveryRecommendationSearchPreloadData = DiscoveryRecommendationSearchUiResult;
+export type DiscoveryRecommendationStatePreloadPayload = DiscoveryRecommendationStatePayload;
+export type DiscoveryRecommendationStatePreloadData = DiscoveryRecommendationUiDto;

@@ -20,8 +20,11 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import {
+  createBilibiliSource,
   createDiscoveryRepository,
   createInterestExtractor,
+  createOpenWebSource,
+  createSourceRegistry,
 } from '@megumi/discovery-agent';
 import {
   createEventBus,
@@ -57,6 +60,9 @@ import {
 import { createSettingsStore } from '@megumi/settings/store';
 import { createSkills, type Skills } from '@megumi/skills';
 import {
+  createWebFetch,
+  createWebSearch,
+  ToolExecutionFailure,
   createTools,
   type BuiltInToolAvailability,
   type Tools,
@@ -392,6 +398,30 @@ function composeCapabilitiesWithDatabase(
   });
   const discoveryRepository = createDiscoveryRepository({ database });
   const interestExtractor = createInterestExtractor({ models: modelComposition.models });
+  const discoverySources = createSourceRegistry([
+    createBilibiliSource(),
+    createOpenWebSource({
+      webSearch: {
+        async search(request) {
+          const resolved = settings.resolveWebSearch();
+          const credential = settings.readWebSearchApiKey({});
+          if (resolved.status !== 'ok' || !resolved.settings.provider || credential.status !== 'found') {
+            throw new ToolExecutionFailure(
+              'Open Web search is not configured.',
+              'tool_execution_failed',
+              { reason: 'not_configured' },
+            );
+          }
+          return createWebSearch({
+            provider: resolved.settings.provider,
+            apiKey: credential.api_key,
+            ...(resolved.settings.base_url ? { baseUrl: resolved.settings.base_url } : {}),
+          }).search(request);
+        },
+      },
+      webFetch: createWebFetch(),
+    }),
+  ]);
 
   const capabilities: ProductCapabilities = {
     homePaths,
@@ -486,6 +516,40 @@ function composeCapabilitiesWithDatabase(
               ...(job ? { executionId: job.executionId, sessionId: job.sessionId } : {}),
             },
           });
+        },
+      },
+      dailyDiscovery: {
+        repository: discoveryRepository,
+        sourceRegistry: discoverySources,
+        settings: {
+          getDiscoverySettings() {
+            const resolved = settings.resolve();
+            return resolved.status === 'ok'
+              ? {
+                  dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
+                  dailyTargetCount: resolved.settings.discovery.daily_target_count,
+                  enabledSources: resolved.settings.discovery.enabled_sources,
+                }
+              : {
+                  dailyGenerationTime: '08:00',
+                  dailyTargetCount: 20,
+                  enabledSources: [],
+                };
+          },
+        },
+        timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        async resolveModel() {
+          const resolved = settings.resolve();
+          const selection = resolved.status === 'ok'
+            ? resolved.settings.model_selection
+            : undefined;
+          if (!selection) return undefined;
+          const result = await resolveModel(selection);
+          return result.status === 'ok' ? result.model : undefined;
+        },
+        ids: {
+          createBatchId: () => `discovery-batch:${crypto.randomUUID()}`,
+          createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
         },
       },
       observability: observability.service,

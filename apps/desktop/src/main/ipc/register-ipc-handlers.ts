@@ -7,6 +7,7 @@ import { registerSessionHandlers, type SessionHandlersService } from './handlers
 import { registerSkillHandlers, type SkillHandlersService } from './handlers/skill.handler';
 import { registerSettingsHandlers, type SettingsHandlersService } from './handlers/settings.handler';
 import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
+import { registerDiscoveryHandlers, type DiscoveryHandlersService } from './handlers/discovery.handler';
 import type { ProductRuntimeLogger } from '@megumi/product';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
 import { registerVoiceHandlers, type VoiceHandlersService } from './handlers/voice.handler';
@@ -26,6 +27,7 @@ export interface RegisterAllHandlersOptions {
   skill?: SkillHandlersService;
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
+  discovery?: DiscoveryHandlersService;
   observability?: { host: Pick<import('@megumi/product/host').ProductHostInterface, 'observability'> };
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
@@ -59,6 +61,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.approval) {
     registerApprovalHandlers(options.approval, { logger: options.logger, ipcMain });
+  }
+
+  if (options.discovery) {
+    registerDiscoveryHandlers(options.discovery, { logger: options.logger, ipcMain });
   }
 
   if (options.observability) {

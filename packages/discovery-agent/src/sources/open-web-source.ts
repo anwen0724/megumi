@@ -81,6 +81,7 @@ function toolFailure(error: unknown, signal: AbortSignal): SourceFailure {
     const reason = typeof error.details?.reason === 'string' ? error.details.reason : undefined;
     const statusCode = typeof error.details?.statusCode === 'number' ? error.details.statusCode : undefined;
     if (reason === 'cancelled') return { code: 'cancelled', message: error.message, retryable: false };
+    if (reason === 'not_configured') return { code: 'not_configured', message: error.message, retryable: false };
     if (reason === 'timeout') return { code: 'timeout', message: error.message, retryable: true };
     if (reason === 'http_429' || statusCode === 429) {
       return { code: 'rate_limited', message: error.message, retryable: true };

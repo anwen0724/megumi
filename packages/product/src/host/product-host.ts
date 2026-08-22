@@ -9,6 +9,7 @@ import type { SkillHost } from './skill-host';
 import type { WorkspaceHost } from './workspace-host';
 import type { ObservabilityHost } from './observability-host';
 import type { VoiceHost } from './voice-host';
+import type { DiscoveryHost } from './discovery-host';
 
 export interface ProductHostInterface {
   workspace: WorkspaceHost;
@@ -18,4 +19,5 @@ export interface ProductHostInterface {
   approval: ApprovalHost;
   observability: ObservabilityHost;
   voice: VoiceHost;
+  discovery: DiscoveryHost;
 }

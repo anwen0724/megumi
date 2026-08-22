@@ -50,6 +50,14 @@ export const IPC_CHANNELS = {
   approval: {
     resolve: 'approval:resolve',
   },
+  discovery: {
+    interestChange: 'discovery:interest:change',
+    sessionParticipationSet: 'discovery:session-participation:set',
+    dailyEnsure: 'discovery:daily:ensure',
+    homeGet: 'discovery:home:get',
+    recommendationsSearch: 'discovery:recommendations:search',
+    recommendationStateUpdate: 'discovery:recommendation:state:update',
+  },
   voice: {
     snapshot: 'voice:snapshot',
     modelStatus: 'voice:model-status',
@@ -145,6 +153,12 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.skill.delete,
   IPC_CHANNELS.skill.refresh,
   IPC_CHANNELS.approval.resolve,
+  IPC_CHANNELS.discovery.interestChange,
+  IPC_CHANNELS.discovery.sessionParticipationSet,
+  IPC_CHANNELS.discovery.dailyEnsure,
+  IPC_CHANNELS.discovery.homeGet,
+  IPC_CHANNELS.discovery.recommendationsSearch,
+  IPC_CHANNELS.discovery.recommendationStateUpdate,
   IPC_CHANNELS.voice.snapshot,
   IPC_CHANNELS.voice.modelStatus,
   IPC_CHANNELS.voice.modelCapability,

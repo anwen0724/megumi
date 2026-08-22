@@ -68,6 +68,7 @@ if (shouldQuitForSquirrelStartup()) {
         skill: desktopMain.skill,
         settings: desktopMain.settings,
         approval: desktopMain.approval,
+        discovery: desktopMain.discovery,
         voice: desktopMain.voice,
         voiceInput: desktopMain.voiceInput,
         character,

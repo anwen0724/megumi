@@ -101,6 +101,7 @@ export function composeDesktopMain() {
     skill: { host: productHost },
     settings: { host: productHost },
     approval: { host: productHost },
+    discovery: { host: productHost },
     voice: { host: productHost },
     voiceInput: { adapter: voiceInputAdapter },
     observability: { host: productHost },
