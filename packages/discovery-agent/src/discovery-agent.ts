@@ -45,6 +45,14 @@ import type {
   EnsureDailyDiscoveryRequest,
   EnsureDailyDiscoveryResult,
 } from './daily-discovery/daily-discovery';
+import type {
+  DiscoveryHomeView,
+  GetDiscoveryHomeRequest,
+  RecommendationView,
+  SearchRecommendationsRequest,
+  SearchRecommendationsResult,
+} from './discovery-view';
+import type { UpdateRecommendationStateRequest } from './recommendations/recommendation';
 import {
   LaunchExecutionError,
   launchAgentExecution,
@@ -75,7 +83,11 @@ export interface DiscoveryAgent {
   ): Promise<SessionParticipation>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   retractSessionEvidence(sessionId: string): Promise<void>;
+  startBackground(): Promise<void>;
   ensureDailyDiscovery(request: EnsureDailyDiscoveryRequest): Promise<EnsureDailyDiscoveryResult>;
+  getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
+  searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
+  updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationView>;
   start(request: StartExecutionRequest): Promise<StartExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
@@ -344,10 +356,17 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
 
   operations = {
     submitConversationInput: (request) => conversationSubmission.submit(request),
-    changeInterest: (request) => interestRuntime.changeInterest(request),
+    async changeInterest(request) {
+      const interest = await interestRuntime.changeInterest(request);
+      if (request.action === 'create' && interest.status === 'active' && dailyDiscoveryRuntime) {
+        void dailyDiscoveryRuntime.ensure({ trigger: 'first_interest', now: options.clock.now() });
+      }
+      return interest;
+    },
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
+    startBackground: () => dailyDiscoveryRuntime?.start() ?? Promise.resolve(),
     ensureDailyDiscovery: (request) => dailyDiscoveryRuntime
       ? dailyDiscoveryRuntime.ensure(request)
       : Promise.resolve({
@@ -359,6 +378,15 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
             retryable: false,
           },
         }),
+    getDiscoveryHome: (request) => dailyDiscoveryRuntime
+      ? Promise.resolve(dailyDiscoveryRuntime.getHome(request))
+      : Promise.reject(new Error('Daily discovery is not configured.')),
+    searchRecommendations: (request) => dailyDiscoveryRuntime
+      ? Promise.resolve(dailyDiscoveryRuntime.searchRecommendations(request))
+      : Promise.reject(new Error('Daily discovery is not configured.')),
+    updateRecommendationState: (request) => dailyDiscoveryRuntime
+      ? Promise.resolve(dailyDiscoveryRuntime.updateRecommendationState(request))
+      : Promise.reject(new Error('Daily discovery is not configured.')),
 
     async start(request): Promise<StartExecutionResult> {
       if (!accepting) {

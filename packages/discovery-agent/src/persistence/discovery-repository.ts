@@ -22,6 +22,18 @@ import {
   type InterestEvidence,
   type SessionParticipation,
 } from '../interests/interest';
+import {
+  readHome,
+  searchRecommendations,
+  updateRecommendationState,
+  type ReadHomeQuery,
+  type RecommendationStateCommand,
+} from './discovery-query-repository';
+import type {
+  DiscoveryHomeView,
+  SearchRecommendationsResult,
+} from '../discovery-view';
+import type { RecommendationView } from '../discovery-view';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const ClaimDailyBatchSchema = z.object({
@@ -52,6 +64,11 @@ export type ClaimDailyBatchResult =
 export type PublishDailyBatchResult =
   | { readonly status: 'published'; readonly batch: DailyDiscoveryBatch; readonly recommendations: readonly Recommendation[] }
   | { readonly status: 'conflict'; readonly reason: 'batch_not_running' | 'execution_mismatch' | 'publication_conflict' };
+
+export type FailDailyAttemptResult =
+  | { readonly status: 'retry_claimed'; readonly batch: DailyDiscoveryBatch }
+  | { readonly status: 'failed'; readonly batch: DailyDiscoveryBatch }
+  | { readonly status: 'conflict' };
 
 export interface RecommendationSelectionSignal {
   readonly contentIdentity: string;
@@ -94,6 +111,7 @@ export interface DiscoveryRepository {
   }): SessionParticipation;
   retractSessionEvidence(sessionId: string, retractedAt: string): void;
   getDailyBatch(localDate: string): DailyDiscoveryBatch | undefined;
+  listRunningDailyBatches(): readonly DailyDiscoveryBatch[];
   listRecommendationSelectionSignals(): readonly RecommendationSelectionSignal[];
   claimDailyBatch(command: ClaimDailyBatch): ClaimDailyBatchResult;
   publishDailyBatch(command: PublishDailyBatch): PublishDailyBatchResult;
@@ -104,6 +122,27 @@ export interface DiscoveryRepository {
     readonly failureMessage: string;
     readonly failedAt: string;
   }): boolean;
+  failDailyAttempt(command: {
+    readonly batchId: string;
+    readonly executionId: string;
+    readonly nextExecutionId: string;
+    readonly failureCode: string;
+    readonly failureMessage: string;
+    readonly failedAt: string;
+  }): FailDailyAttemptResult;
+  retryFailedDailyBatch(command: {
+    readonly batchId: string;
+    readonly executionId: string;
+    readonly targetCount: number;
+    readonly startedAt: string;
+  }): DailyDiscoveryBatch | undefined;
+  readHome(query: ReadHomeQuery): DiscoveryHomeView;
+  searchRecommendations(query: {
+    readonly query: string;
+    readonly cursor?: string;
+    readonly limit?: number;
+  }): SearchRecommendationsResult;
+  updateRecommendationState(command: RecommendationStateCommand): RecommendationView;
 }
 
 export function createDiscoveryRepository(options: {
@@ -175,6 +214,12 @@ export function createDiscoveryRepository(options: {
 
     getDailyBatch(localDate) {
       return readBatchByLocalDate(options.database, LocalDateSchema.parse(localDate));
+    },
+
+    listRunningDailyBatches() {
+      return options.database.prepare<BatchRow>({ sql: `
+        SELECT * FROM discovery_batches WHERE status = 'running' ORDER BY local_date, batch_id
+      ` }).all().map(batchFromRow);
     },
 
     listRecommendationSelectionSignals() {
@@ -293,6 +338,71 @@ export function createDiscoveryRepository(options: {
       ]);
       return updated.changes === 1;
     },
+
+    failDailyAttempt(command) {
+      TimestampSchema.parse(command.failedAt);
+      return options.database.transaction({
+        operation: () => {
+          const batch = readBatchById(options.database, command.batchId);
+          if (!batch || batch.status !== 'running' || batch.executionId !== command.executionId) {
+            return { status: 'conflict' as const };
+          }
+          if (batch.automaticRetryCount < 2) {
+            options.database.prepare({ sql: `
+              UPDATE discovery_batches
+              SET execution_id = ?, attempt_count = attempt_count + 1,
+                  automatic_retry_count = automatic_retry_count + 1,
+                  failure_code = NULL, failure_message = NULL,
+                  started_at = ?, updated_at = ?
+              WHERE batch_id = ? AND status = 'running' AND execution_id = ?
+            ` }).run([
+              command.nextExecutionId, command.failedAt, command.failedAt,
+              command.batchId, command.executionId,
+            ]);
+            return { status: 'retry_claimed' as const, batch: readBatchByIdRequired(options.database, command.batchId) };
+          }
+          options.database.prepare({ sql: `
+            UPDATE discovery_batches
+            SET status = 'failed', failure_code = ?, failure_message = ?, updated_at = ?
+            WHERE batch_id = ? AND status = 'running' AND execution_id = ?
+          ` }).run([
+            command.failureCode, command.failureMessage, command.failedAt,
+            command.batchId, command.executionId,
+          ]);
+          return { status: 'failed' as const, batch: readBatchByIdRequired(options.database, command.batchId) };
+        },
+      });
+    },
+
+    retryFailedDailyBatch(command) {
+      TimestampSchema.parse(command.startedAt);
+      if (!Number.isInteger(command.targetCount) || command.targetCount < 1 || command.targetCount > 100) {
+        throw new Error('Daily discovery targetCount must be between 1 and 100.');
+      }
+      return options.database.transaction({
+        operation: () => {
+          const batch = readBatchById(options.database, command.batchId);
+          if (!batch || batch.status !== 'failed') return undefined;
+          options.database.prepare({ sql: `
+            UPDATE discovery_batches
+            SET status = 'running', execution_id = ?, target_count = ?,
+                attempt_count = attempt_count + 1, failure_code = NULL, failure_message = NULL,
+                started_at = ?, updated_at = ?
+            WHERE batch_id = ? AND status = 'failed'
+          ` }).run([
+            command.executionId, command.targetCount, command.startedAt,
+            command.startedAt, command.batchId,
+          ]);
+          return readBatchByIdRequired(options.database, command.batchId);
+        },
+      });
+    },
+
+    readHome: (query) => readHome(options.database, query),
+    searchRecommendations: (query) => searchRecommendations(options.database, query),
+    updateRecommendationState: (command) => options.database.transaction({
+      operation: () => updateRecommendationState(options.database, command),
+    }),
   };
 }
 

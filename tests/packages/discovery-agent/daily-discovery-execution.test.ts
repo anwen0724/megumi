@@ -59,8 +59,8 @@ describe('daily discovery Agent execution', () => {
     ];
     const contexts: Context[] = [];
     const fixture = createFixture(database, [openWeb, bilibili], streams, contexts, 5);
-    await fixture.agent.changeInterest({ action: 'create', description: 'Agent 工程化与真实项目' });
-    await fixture.agent.changeInterest({ action: 'create', description: '2027 届秋招信息' });
+    addInterest(fixture.repository, 'interest:1', 'Agent 工程化与真实项目');
+    addInterest(fixture.repository, 'interest:2', '2027 届秋招信息');
 
     const started = await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
     expect(started).toMatchObject({ status: 'started', localDate: '2026-08-22' });
@@ -100,7 +100,7 @@ describe('daily discovery Agent execution', () => {
       textStream('done'),
     ];
     const fixture = createFixture(database, [adapter], streams);
-    await fixture.agent.changeInterest({ action: 'create', description: 'Anything useful' });
+    addInterest(fixture.repository, 'interest:1', 'Anything useful');
 
     await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
     await waitForBatch(database, 'published');
@@ -125,7 +125,7 @@ describe('daily discovery Agent execution', () => {
       textStream('done'),
     ];
     const fixture = createFixture(database, [adapter], streams);
-    await fixture.agent.changeInterest({ action: 'create', description: 'Broad topic' });
+    addInterest(fixture.repository, 'interest:1', 'Broad topic');
 
     await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
     await waitForBatch(database, 'published');
@@ -168,7 +168,7 @@ describe('daily discovery Agent execution', () => {
       textStream('done'),
     ];
     const fixture = createFixture(database, [adapter], streams);
-    await fixture.agent.changeInterest({ action: 'create', description: 'Broad topic' });
+    addInterest(fixture.repository, 'interest:1', 'Broad topic');
 
     await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
     await waitForBatch(database, 'published');
@@ -179,10 +179,25 @@ describe('daily discovery Agent execution', () => {
   });
 
   it.each([
-    { streams: [textStream('No tool selection')], expected: 'selection_missing' },
+    {
+      streams: [
+        textStream('No tool selection'),
+        textStream('No tool selection'),
+        textStream('No tool selection'),
+      ],
+      expected: 'selection_missing',
+    },
     {
       streams: [
         toolStream('call:1', 'select_recommendations', {
+          items: [{ candidateId: 'missing', recommendationReason: 'invalid' }],
+        }),
+        textStream('done'),
+        toolStream('call:2', 'select_recommendations', {
+          items: [{ candidateId: 'missing', recommendationReason: 'invalid' }],
+        }),
+        textStream('done'),
+        toolStream('call:3', 'select_recommendations', {
           items: [{ candidateId: 'missing', recommendationReason: 'invalid' }],
         }),
         textStream('done'),
@@ -191,7 +206,7 @@ describe('daily discovery Agent execution', () => {
     },
   ])('does not publish partial data when execution ends with $expected', async ({ streams, expected }) => {
     const fixture = createFixture(database, [source('open_web', async () => [])], streams);
-    await fixture.agent.changeInterest({ action: 'create', description: 'Agent' });
+    addInterest(fixture.repository, 'interest:1', 'Agent');
 
     await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
     await waitForBatch(database, 'failed');
@@ -213,7 +228,7 @@ describe('daily discovery Agent execution', () => {
       }),
       textStream('done'),
     ]);
-    await fixture.agent.changeInterest({ action: 'create', description: 'Agent' });
+    addInterest(fixture.repository, 'interest:1', 'Agent');
 
     await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
     await waitForBatch(database, 'published', '2026-08-22');
@@ -274,6 +289,7 @@ function createFixture(
       repository,
       sourceRegistry: createSourceRegistry(sources),
       settings: { getDiscoverySettings: () => ({
+        dailyGenerationTime: '08:00',
         dailyTargetCount: targetCount,
         enabledSources: sources.map((source) => source.descriptor.id),
       }) },
@@ -391,4 +407,12 @@ function seedPublishedRecommendation(database: DatabaseConnection, identity: str
     ) VALUES ('old-recommendation', 'old-batch', ?, 0, 'open_web', 'example.com',
       'https://example.com/seen', 'Old', 'article', 'Old reason', ?)
   ` }).run([identity, now]);
+}
+
+function addInterest(
+  repository: ReturnType<typeof createDiscoveryRepository>,
+  interestId: string,
+  description: string,
+) {
+  repository.changeInterest({ action: 'create', interestId, description, now });
 }

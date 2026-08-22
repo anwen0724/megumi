@@ -139,12 +139,17 @@ export type {
   ClaimDailyBatch,
   ClaimDailyBatchResult,
   DiscoveryRepository,
+  FailDailyAttemptResult,
   ApplyInterestExtraction,
   PublishDailyBatch,
   PublishDailyBatchResult,
   RecommendationSelectionSignal,
   ValidatedInterestCommand,
 } from './persistence/discovery-repository';
+export type {
+  ReadHomeQuery,
+  RecommendationStateCommand,
+} from './persistence/discovery-query-repository';
 export type {
   DiscoveryDayView,
   DiscoveryHomeMode,
