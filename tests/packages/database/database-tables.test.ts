@@ -37,6 +37,19 @@ describe('Database table ownership', () => {
       modulePath: 'packages/skills',
       tables: ['skill_availability'],
     });
+
+    expect(databaseTableOwnership.discovery).toMatchObject({
+      module: 'discovery-agent',
+      repository: 'DiscoveryRepository',
+      modulePath: 'packages/discovery-agent',
+      tables: [
+        'discovery_interests',
+        'discovery_interest_evidence',
+        'discovery_session_policies',
+        'discovery_batches',
+        'discovery_recommendations',
+      ],
+    });
   });
 
   it('keeps active business repositories free of deleted Session and Workspace schema names', () => {

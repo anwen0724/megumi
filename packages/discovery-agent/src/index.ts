@@ -33,3 +33,96 @@ export type {
   ExecutionStatus,
 } from './execution/execution-registry';
 export type { DiscoveryAgentPolicy } from './execution/execute-agent';
+export {
+  InterestCreatedFromSchema,
+  InterestDescriptionSchema,
+  InterestEvidenceSchema,
+  InterestExtractionResultSchema,
+  InterestSchema,
+  InterestStatusSchema,
+  SessionParticipationSchema,
+} from './interests/interest';
+export type {
+  ChangeInterestRequest,
+  Interest,
+  InterestEvidence,
+  InterestExtractionResult,
+  SessionParticipation,
+  SetSessionParticipationRequest,
+} from './interests/interest';
+export {
+  DiscoveryContentTypeSchema,
+  DiscoverySourceIdSchema,
+  SourceContentDetailSchema,
+  SourceContentSchema,
+  SourceDescriptorSchema,
+  SourceEngagementSchema,
+  SourceFailureSchema,
+  SourceSearchModeSchema,
+} from './sources/discovery-source';
+export type {
+  DiscoveryContentType,
+  DiscoverySource,
+  DiscoverySourceId,
+  SourceContent,
+  SourceContentDetail,
+  SourceDescriptor,
+  SourceEngagement,
+  SourceFailure,
+  SourceReadResult,
+  SourceSearchMode,
+  SourceSearchResult,
+} from './sources/discovery-source';
+export {
+  DailyDiscoveryBatchSchema,
+  DailyDiscoveryBatchStatusSchema,
+  DiscoveryFailureViewSchema,
+  EnsureDailyDiscoveryRequestSchema,
+  LocalDateSchema,
+} from './daily-discovery/daily-discovery';
+export type {
+  DailyDiscoveryBatch,
+  DiscoveryFailureView,
+  EnsureDailyDiscoveryRequest,
+  EnsureDailyDiscoveryResult,
+} from './daily-discovery/daily-discovery';
+export {
+  RecommendationReferenceContentSchema,
+  RecommendationSchema,
+  UpdateRecommendationStateRequestSchema,
+} from './recommendations/recommendation';
+export type {
+  Recommendation,
+  RecommendationReferenceContent,
+  UpdateRecommendationStateRequest,
+} from './recommendations/recommendation';
+export {
+  DiscoveryDayViewSchema,
+  DiscoveryHomeModeSchema,
+  DiscoveryHomeViewSchema,
+  GetDiscoveryHomeRequestSchema,
+  InterestViewSchema,
+  RecommendationViewSchema,
+  SearchRecommendationsRequestSchema,
+  SearchRecommendationsResultSchema,
+  TodayDiscoveryViewSchema,
+} from './discovery-view';
+export { createDiscoveryRepository } from './persistence/discovery-repository';
+export type {
+  ClaimDailyBatch,
+  ClaimDailyBatchResult,
+  DiscoveryRepository,
+  PublishDailyBatch,
+  PublishDailyBatchResult,
+} from './persistence/discovery-repository';
+export type {
+  DiscoveryDayView,
+  DiscoveryHomeMode,
+  DiscoveryHomeView,
+  GetDiscoveryHomeRequest,
+  InterestView,
+  RecommendationView,
+  SearchRecommendationsRequest,
+  SearchRecommendationsResult,
+  TodayDiscoveryView,
+} from './discovery-view';

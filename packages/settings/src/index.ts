@@ -174,3 +174,15 @@ export type {
 export type {
   SettingsStore,
 } from './settings-store';
+export {
+  DEFAULT_DISCOVERY_SETTINGS,
+  DiscoverySettingsRawSchema,
+  DiscoverySettingsResolvedSchema,
+  DiscoverySourceIdSchema,
+  resolveDiscoverySettings,
+} from './discovery-settings';
+export type {
+  DiscoverySettingsRaw,
+  DiscoverySettingsResolved,
+  DiscoverySourceId,
+} from './discovery-settings';

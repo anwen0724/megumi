@@ -27,6 +27,12 @@ import {
   VoiceTtsSettingsRawSchema,
   VoiceTtsSettingsResolvedSchema,
 } from './voice-tts-settings';
+import {
+  DEFAULT_DISCOVERY_SETTINGS,
+  DiscoverySettingsFileRawSchema,
+  DiscoverySettingsRawSchema,
+  DiscoverySettingsResolvedSchema,
+} from './discovery-settings';
 
 export const SettingsThemeNameSchema = z.enum([
   'megumi-warm',
@@ -95,6 +101,7 @@ const settingsShape = {
 
 export const SettingsRawSchema = z.object({
   ...settingsShape,
+  discovery: DiscoverySettingsRawSchema.optional(),
   web: z.object({ search: WebSearchSettingsRawSchema.optional() }).strict().optional(),
   providers: z.record(z.string().min(1), ProviderSettingsRawSchema).optional(),
 }).strict();
@@ -105,6 +112,7 @@ export type SettingsRaw = z.infer<typeof SettingsRawSchema>;
 // patch contract above stays strict.
 export const SettingsRawReadSchema = z.object({
   ...settingsShape,
+  discovery: DiscoverySettingsFileRawSchema.optional(),
   web: z.object({
     search: WebSearchSettingsRawSchema.passthrough().optional(),
   }).strict().optional(),
@@ -117,6 +125,7 @@ export const SettingsRawReadSchema = z.object({
 // or future versions must not make the whole file unreadable.
 export const SettingsFileRawSchema = z.object({
   ...settingsShape,
+  discovery: DiscoverySettingsFileRawSchema.optional(),
   voice: VoiceSettingsFileRawSchema.optional(),
   web: z.object({ search: WebSearchSettingsFileRawSchema.optional() }).strict().optional(),
   providers: z.record(z.string().min(1), ProviderSettingsFileRawSchema).optional(),
@@ -128,6 +137,7 @@ export const SettingsResolvedSchema = z.object({
   theme: SettingsThemeNameSchema,
   setup: SetupSettingsResolvedSchema,
   memory: MemorySettingsResolvedSchema,
+  discovery: DiscoverySettingsResolvedSchema,
   voice: VoiceSettingsResolvedSchema,
   context: ContextSettingsResolvedSchema,
   model_selection: ModelSelectionSettingsSchema.optional(),
@@ -142,6 +152,7 @@ export const DEFAULT_SETTINGS = SettingsResolvedSchema.parse({
   theme: 'midnight-blue',
   setup: { completed: false },
   memory: { enabled: false },
+  discovery: DEFAULT_DISCOVERY_SETTINGS,
   voice: {
     input_device_id: 'default',
     output_device_id: 'default',

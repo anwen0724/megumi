@@ -12,6 +12,7 @@
     { "path": "../ai" },
     { "path": "../commands" },
     { "path": "../context" },
+    { "path": "../database" },
     { "path": "../events" },
     { "path": "../input" },
     { "path": "../observability" },

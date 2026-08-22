@@ -22,12 +22,17 @@ import {
   VoiceTtsSettingsFileRawSchema,
   type VoiceTtsSettingsFileRaw,
 } from './voice-tts-settings';
+import {
+  DiscoverySettingsFileRawSchema,
+  resolveDiscoverySettings,
+} from './discovery-settings';
 
 // Strict variants detect unknown keys while the tolerant file schemas keep reading.
 const STRICT_FILE_SCHEMA = SettingsFileRawSchema.strict();
 const STRICT_PROVIDER_SCHEMA = ProviderSettingsFileRawSchema.strict();
 const STRICT_WEB_SEARCH_SCHEMA = WebSearchSettingsFileRawSchema.strict();
 const STRICT_VOICE_TTS_SCHEMA = VoiceTtsSettingsFileRawSchema.strict();
+const STRICT_DISCOVERY_SCHEMA = DiscoverySettingsFileRawSchema.strict();
 
 /** Strips the secret-bearing fields, producing the public SettingsRaw view. */
 export function publicRawFromFile(file: SettingsFileRaw): SettingsRaw {
@@ -93,6 +98,9 @@ export function mergeFileWithPublicPatch(file: SettingsFileRaw, patch: SettingsR
       }
     : undefined;
   if (voice?.tts && voicePatch?.tts?.api_key_env === null) delete voice.tts.api_key_env;
+  const discovery = patch.discovery
+    ? { ...(file.discovery ?? {}), ...definedObject(patch.discovery) }
+    : file.discovery;
   return SettingsFileRawSchema.parse({
     ...file,
     ...definedObject({
@@ -100,6 +108,7 @@ export function mergeFileWithPublicPatch(file: SettingsFileRaw, patch: SettingsR
       theme: patch.theme,
       setup: patch.setup ? { ...(file.setup ?? {}), ...definedObject(patch.setup) } : undefined,
       memory: patch.memory ? { ...(file.memory ?? {}), ...definedObject(patch.memory) } : undefined,
+      discovery,
       voice,
       context: patch.context ? { ...(file.context ?? {}), ...definedObject(patch.context) } : undefined,
       model_selection: patch.model_selection,
@@ -176,6 +185,7 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
     ...(raw.theme ? { theme: raw.theme } : {}),
     ...(raw.setup ? { setup: { ...DEFAULT_SETTINGS.setup, ...definedObject(raw.setup) } } : {}),
     ...(raw.memory ? { memory: { ...DEFAULT_SETTINGS.memory, ...definedObject(raw.memory) } } : {}),
+    discovery: resolveDiscoverySettings(raw.discovery),
     ...(raw.voice ? { voice: { ...DEFAULT_SETTINGS.voice, ...voice } } : {}),
     ...(raw.context ? { context: { ...DEFAULT_SETTINGS.context, ...definedObject(raw.context) } } : {}),
     ...(raw.model_selection ? { model_selection: raw.model_selection } : {}),
@@ -211,6 +221,13 @@ export function collectUnknownFileKeys(file: SettingsFileRaw): string[] {
     for (const issue of STRICT_VOICE_TTS_SCHEMA.safeParse(file.voice.tts).error?.issues ?? []) {
       if (issue.code === 'unrecognized_keys') {
         keys.push(...issue.keys.map((key) => `voice.tts.${key}`));
+      }
+    }
+  }
+  if (file.discovery) {
+    for (const issue of STRICT_DISCOVERY_SCHEMA.safeParse(file.discovery).error?.issues ?? []) {
+      if (issue.code === 'unrecognized_keys') {
+        keys.push(...issue.keys.map((key) => `discovery.${key}`));
       }
     }
   }
