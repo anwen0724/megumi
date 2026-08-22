@@ -1,6 +1,7 @@
 /* Verifies local scheduling, explicit generation, idempotency, retry and startup recovery. */
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createDailyDiscoveryTestTools } from './daily-discovery-test-tools';
 import {
   AssistantMessageEventStream,
   type Api,
@@ -170,7 +171,7 @@ function createFixture(
       createToolExecutionId: () => 'tool:unused', createApprovalId: () => 'approval:unused',
     },
     clock: { now }, terminalRetentionMs: 60_000, events: createEventBus(), models,
-    context: {} as never, tools: {} as never, permissions: {} as never, session: {} as never,
+    context: {} as never, tools: createDailyDiscoveryTestTools(), permissions: {} as never, session: {} as never,
     conversation: {
       input: {} as never, sessions: {} as never, history: {} as never, branches: {} as never,
       resolveModel: async () => ({ status: 'ok', model }),

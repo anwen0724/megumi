@@ -235,7 +235,7 @@ export interface CreateDiscoveryAgentOptions {
   >;
   readonly conversation: ConversationSubmissionDependencies;
   readonly interests?: CreateInterestRuntimeOptions;
-  readonly dailyDiscovery?: CreateDailyDiscoveryRuntimeOptions;
+  readonly dailyDiscovery?: Omit<CreateDailyDiscoveryRuntimeOptions, 'tools'>;
   readonly observability?: ObservabilityService;
   readonly policy: DiscoveryAgentPolicy;
   /** Optional launch override for focused multi-execution tests; production uses the Execute Agent adapter. */
@@ -264,6 +264,7 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
   const dailyDiscoveryRuntime = options.dailyDiscovery
     ? createDailyDiscoveryRuntime({
         ...options.dailyDiscovery,
+        tools: options.tools,
         models: options.models,
         createExecutionId: options.ids.createExecutionId,
         now: options.clock.now,

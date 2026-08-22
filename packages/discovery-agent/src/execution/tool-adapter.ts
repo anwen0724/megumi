@@ -102,6 +102,46 @@ export function createAgentTool(
   });
 }
 
+/**
+ * Adapts an operations-free Tool binding to Agent Core. Background Agents use
+ * the same Router and executor as Session executions, but have no Approval UI.
+ */
+export function createUnprotectedAgentTool(
+  definition: ToolDefinition,
+  binding: ModelCallToolBinding,
+): AgentTool {
+  return {
+    ...definition,
+    parameters: definition.parameters as AgentTool['parameters'],
+    executionMode: definition.executionMode === 'serial' ? 'sequential' : 'parallel',
+    async execute({ toolCallId, arguments: input, signal }) {
+      const routed = binding.routeToolCall({ toolCallId, toolName: definition.name, input });
+      if (routed.status === 'failed') {
+        return completedToolOutcome({
+          content: [{ type: 'text', text: routed.error.message }],
+          isError: true,
+        });
+      }
+      if (routed.operations.length > 0) {
+        return {
+          status: 'system_failed',
+          error: {
+            code: 'tool_system_failed',
+            message: `Background Tool requires unsupported authorization: ${definition.name}`,
+            retryable: false,
+            cause: { owner: 'permissions', code: 'background_authorization_required' },
+          },
+        };
+      }
+      const result = await binding.executeToolInvocation({ invocation: routed.invocation }, { signal });
+      return completedToolOutcome({
+        content: [{ type: 'text', text: result.normalizedResult.content }],
+        isError: result.type === 'failed' || result.normalizedResult.isError,
+      });
+    },
+  };
+}
+
 async function executeRoutedTool(
   invocation: ToolInvocation,
   operations: readonly PermissionOperation[],
