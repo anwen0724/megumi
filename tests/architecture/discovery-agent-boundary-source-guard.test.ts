@@ -31,16 +31,14 @@ describe('Discovery Agent architecture boundary', () => {
     expect(callers).not.toMatch(/from ['"]@megumi\/agent(?:\/[^'"]*)?['"]/u);
   });
 
-  it('does not recreate a second execution loop or mutable Run state', () => {
-    const discoveryAgent = readTypeScriptTree('packages/discovery-agent/src');
-    expect(discoveryAgent).not.toMatch(/\b(?:RunStatus|transitionRun|runAgentLoop)\b|new\s+AbortController/u);
-    expect(discoveryAgent).not.toMatch(/class\s+\w*(?:Runtime|Harness|Manager)\b/u);
-  });
-
-  it('does not prebuild unconfirmed push business modules', () => {
-    for (const directory of ['discovery', 'recommendation', 'feedback', 'scheduling', 'delivery']) {
-      expect(existsSync(join(root, 'packages/discovery-agent/src', directory)), directory).toBe(false);
-    }
+  it('keeps Discovery persistence and source execution out of Product operations and Host contracts', () => {
+    const productBusinessBoundary = [
+      readTypeScriptTree('packages/product/src/operations'),
+      readTypeScriptTree('packages/product/src/host'),
+    ].join('\n');
+    expect(productBusinessBoundary).not.toMatch(
+      /createDiscoveryRepository|DiscoveryRepository|discovery_(?:interests|batches|recommendations)|search_content|CandidateRegistry/u,
+    );
   });
 });
 

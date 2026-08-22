@@ -457,7 +457,12 @@ describe('Discovery Agent', () => {
         history: { getCommittedBranch: vi.fn() },
         branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
         resolveModel: async () => ({ status: 'ok', model }),
-        recommendations: { getPublishedRecommendation: () => recommendation },
+        recommendations: { readRecommendationReference: () => ({
+          type: 'recommendation_reference', recommendationId: recommendation.recommendationId,
+          sourceName: recommendation.sourceName, canonicalUrl: recommendation.canonicalUrl,
+          title: recommendation.title, author: recommendation.author, description: recommendation.description,
+          recommendationReason: recommendation.recommendationReason,
+        }) },
       },
     });
 
@@ -495,7 +500,7 @@ describe('Discovery Agent', () => {
         history: { getCommittedBranch: vi.fn() },
         branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
         resolveModel: async () => ({ status: 'ok', model }),
-        recommendations: { getPublishedRecommendation: () => undefined },
+        recommendations: { readRecommendationReference: () => undefined },
       },
     });
 
@@ -509,7 +514,7 @@ describe('Discovery Agent', () => {
       modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
     });
 
-    expect(missing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_not_available' } });
+    expect(missing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_not_found' } });
     expect(existing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_requires_new_session' } });
     expect(createSession).not.toHaveBeenCalled();
     expect(testLaunch.handles).toHaveLength(0);

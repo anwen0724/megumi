@@ -24,7 +24,7 @@ import {
 } from '../interests/interest';
 import {
   readHome,
-  readPublishedRecommendation,
+  readRecommendationReference,
   searchRecommendations,
   updateRecommendationState,
   type ReadHomeQuery,
@@ -35,6 +35,7 @@ import type {
   SearchRecommendationsResult,
 } from '../discovery-view';
 import type { RecommendationView } from '../discovery-view';
+import type { RecommendationReferenceContent } from '../recommendations/recommendation';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const ClaimDailyBatchSchema = z.object({
@@ -144,7 +145,7 @@ export interface DiscoveryRepository {
     readonly limit?: number;
   }): SearchRecommendationsResult;
   updateRecommendationState(command: RecommendationStateCommand): RecommendationView;
-  getPublishedRecommendation(recommendationId: string): RecommendationView | undefined;
+  readRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
 }
 
 export function createDiscoveryRepository(options: {
@@ -405,8 +406,8 @@ export function createDiscoveryRepository(options: {
     updateRecommendationState: (command) => options.database.transaction({
       operation: () => updateRecommendationState(options.database, command),
     }),
-    getPublishedRecommendation: (recommendationId) => (
-      readPublishedRecommendation(options.database, recommendationId)
+    readRecommendationReference: (recommendationId) => (
+      readRecommendationReference(options.database, recommendationId)
     ),
   };
 }

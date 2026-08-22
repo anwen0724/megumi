@@ -14,7 +14,9 @@ import {
 } from '../discovery-view';
 import { LocalDateSchema } from '../daily-discovery/daily-discovery';
 import {
+  RecommendationReferenceContentSchema,
   UpdateRecommendationStateRequestSchema,
+  type RecommendationReferenceContent,
   type UpdateRecommendationStateRequest,
 } from '../recommendations/recommendation';
 
@@ -197,10 +199,10 @@ function readRecommendation(database: DatabaseConnection, recommendationId: stri
 }
 
 /** Reads one currently published, visible Recommendation for a new conversation. */
-export function readPublishedRecommendation(
+export function readRecommendationReference(
   database: DatabaseConnection,
   recommendationId: string,
-): RecommendationView | undefined {
+): RecommendationReferenceContent | undefined {
   const row = database.prepare<RecommendationRow>({ sql: `
     SELECT r.*, b.local_date
     FROM discovery_recommendations r
@@ -209,7 +211,18 @@ export function readPublishedRecommendation(
       AND b.status = 'published'
       AND r.hidden_at IS NULL
   ` }).get([recommendationId]);
-  return row ? recommendationViewFromRow(row) : undefined;
+  return row ? RecommendationReferenceContentSchema.parse({
+    type: 'recommendation_reference',
+    recommendationId: row.recommendation_id,
+    sourceName: row.source_name,
+    canonicalUrl: row.canonical_url,
+    title: row.title,
+    ...(row.author ? { author: row.author } : {}),
+    ...(row.content_published_at ? { publishedAt: row.content_published_at } : {}),
+    ...(row.description ? { description: row.description } : {}),
+    ...(row.cover_url ? { coverUrl: row.cover_url } : {}),
+    recommendationReason: row.recommendation_reason,
+  }) : undefined;
 }
 
 function recommendationViewFromRow(row: RecommendationRow): RecommendationView {

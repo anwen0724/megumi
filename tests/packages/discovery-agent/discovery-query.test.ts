@@ -66,11 +66,11 @@ describe('DiscoveryRepository Home and Recommendation queries', () => {
 
   it('resolves only published, visible Recommendations as conversation authority', () => {
     const repository = createDiscoveryRepository({ database });
-    expect(repository.getPublishedRecommendation('recommendation:today:1')).toMatchObject({
-      recommendationId: 'recommendation:today:1', title: 'Today first', hidden: false,
+    expect(repository.readRecommendationReference('recommendation:today:1')).toMatchObject({
+      type: 'recommendation_reference', recommendationId: 'recommendation:today:1', title: 'Today first',
     });
-    expect(repository.getPublishedRecommendation('recommendation:hidden')).toBeUndefined();
-    expect(repository.getPublishedRecommendation('recommendation:missing')).toBeUndefined();
+    expect(repository.readRecommendationReference('recommendation:hidden')).toBeUndefined();
+    expect(repository.readRecommendationReference('recommendation:missing')).toBeUndefined();
   });
 
   it('updates current state by target value and preserves first-opened time', () => {

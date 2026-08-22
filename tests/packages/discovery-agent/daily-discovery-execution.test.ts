@@ -37,6 +37,63 @@ describe('daily discovery Agent execution', () => {
   });
   afterEach(() => database.close());
 
+  it('closes the durable two-day discovery loop and applies feedback only to the next execution', async () => {
+    let searchNumber = 0;
+    const contexts: Context[] = [];
+    const community = source('community', async () => {
+      searchNumber += 1;
+      const item = (id: string, title: string): SourceContent => ({
+        ...content(id, title), sourceId: 'community', sourceName: 'Community',
+      });
+      return searchNumber === 1
+        ? [item('shared', 'First-day Agent article')]
+        : [item('shared', 'First-day Agent article'), item('new', 'Second-day Agent article')];
+    });
+    const fixture = createFixture(database, [community], [
+      toolStream('day1:search', 'search_content', { sourceId: 'community', query: 'Agent', mode: 'relevance', limit: 5 }),
+      toolStream('day1:select', 'select_recommendations', { items: [{ candidateId: 'candidate:1', recommendationReason: 'Day one reason.' }] }),
+      textStream('done'),
+      toolStream('day2:search', 'search_content', { sourceId: 'community', query: 'Agent new', mode: 'relevance', limit: 5 }),
+      toolStream('day2:select', 'select_recommendations', { items: [{ candidateId: 'candidate:1', recommendationReason: 'Day two reason.' }] }),
+      textStream('done'),
+    ], contexts, 10);
+    addInterest(fixture.repository, 'interest:1', 'Agent engineering');
+
+    await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
+    await waitForBatch(database, 'published');
+    const firstDayBeforeFeedback = fixture.repository.readHome({
+      mode: 'timeline', localDate: '2026-08-22', limit: 20,
+    }).days[0]!.recommendations[0]!;
+    fixture.repository.updateRecommendationState({
+      recommendationId: firstDayBeforeFeedback.recommendationId,
+      action: 'set_reaction', reaction: 'disliked', now,
+    });
+
+    const secondDay = '2026-08-23T10:00:00.000Z';
+    await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now: secondDay });
+    await waitForBatch(database, 'published', '2026-08-23');
+
+    expect(contexts[3]?.systemPrompt).toContain('First-day Agent article');
+    expect(contexts[3]?.systemPrompt).toContain('"reaction":"disliked"');
+    const restartedRepository = createDiscoveryRepository({ database });
+    const restartedHome = restartedRepository.readHome({
+      mode: 'timeline', localDate: '2026-08-23', limit: 20,
+    });
+    expect(restartedHome.days.map((day) => [day.localDate, day.recommendations.map((item) => item.title)]))
+      .toEqual([
+        ['2026-08-23', ['Second-day Agent article']],
+        ['2026-08-22', ['First-day Agent article']],
+      ]);
+    expect(restartedHome.days[1]!.recommendations[0]).toMatchObject({
+      recommendationReason: 'Day one reason.', reaction: 'disliked',
+    });
+    expect(database.prepare<{ count: number }>({
+      sql: 'SELECT COUNT(*) AS count FROM discovery_batches',
+    }).get()?.count).toBe(2);
+    await expect(fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now: secondDay }))
+      .resolves.toMatchObject({ status: 'already_published', localDate: '2026-08-23' });
+  });
+
   it('lets the Agent adjust queries and sources, then publishes only its explicit selection', async () => {
     const calls: Array<{ sourceId: string; query: string }> = [];
     const openWeb = source('open_web', async (query) => {

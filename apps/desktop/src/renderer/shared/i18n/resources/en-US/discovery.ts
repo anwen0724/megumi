@@ -1,5 +1,6 @@
 /* Defines source-language copy for the daily discovery experience. */
 export const discovery = {
+  eyebrow: 'Megumi briefing',
   title: 'Today\'s discoveries',
   subtitle: 'A personal briefing assembled from what you care about.',
   searchPlaceholder: 'Search recommendations, authors, or sources',

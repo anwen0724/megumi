@@ -3,6 +3,7 @@ import type { TranslationShape } from '../translation-shape';
 import type { discovery as source } from '../en-US/discovery';
 
 export const discovery = {
+  eyebrow: 'Megumi 每日简报',
   title: '今日发现',
   subtitle: '围绕你真正关心的内容，整理成每天可读的一份信息简报。',
   searchPlaceholder: '搜索推荐、作者或来源',

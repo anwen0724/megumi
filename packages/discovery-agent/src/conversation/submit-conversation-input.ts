@@ -16,7 +16,6 @@ import type {
   SessionMessageWithAttachments,
   RecommendationReferenceContent,
 } from '@megumi/session';
-import type { RecommendationView } from '../discovery-view';
 import type { StartExecutionRequest, StartExecutionResult } from '../discovery-agent';
 import type { ExecutionSnapshot } from '../execution/execution-registry';
 
@@ -95,7 +94,7 @@ export interface ConversationSubmissionDependencies {
     readonly modelId: string;
   }) => Promise<ConversationModelResolution>;
   readonly recommendations?: {
-    getPublishedRecommendation(recommendationId: string): RecommendationView | undefined;
+    readRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
   };
 }
 
@@ -236,28 +235,26 @@ function resolveRecommendationReference(
   recommendationId: string,
 ): { readonly status: 'ok'; readonly reference: RecommendationReferenceContent }
   | { readonly status: 'failed'; readonly code: string; readonly message: string } {
-  const recommendation = dependencies.recommendations?.getPublishedRecommendation(recommendationId);
-  if (!recommendation) {
+  let reference: RecommendationReferenceContent | undefined;
+  try {
+    reference = dependencies.recommendations?.readRecommendationReference(recommendationId);
+  } catch {
     return {
       status: 'failed',
-      code: 'recommendation_not_available',
+      code: 'recommendation_reference_invalid',
+      message: 'The Recommendation reference is invalid.',
+    };
+  }
+  if (!reference) {
+    return {
+      status: 'failed',
+      code: 'recommendation_not_found',
       message: 'The Recommendation is missing, hidden, or not published.',
     };
   }
   return {
     status: 'ok',
-    reference: {
-      type: 'recommendation_reference',
-      recommendationId: recommendation.recommendationId,
-      sourceName: recommendation.sourceName,
-      canonicalUrl: recommendation.canonicalUrl,
-      title: recommendation.title,
-      ...(recommendation.author ? { author: recommendation.author } : {}),
-      ...(recommendation.contentPublishedAt ? { publishedAt: recommendation.contentPublishedAt } : {}),
-      ...(recommendation.description ? { description: recommendation.description } : {}),
-      ...(recommendation.coverUrl ? { coverUrl: recommendation.coverUrl } : {}),
-      recommendationReason: recommendation.recommendationReason,
-    },
+    reference,
   };
 }
 

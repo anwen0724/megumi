@@ -128,7 +128,7 @@ export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
         <header className="mb-7 grid gap-5 xl:grid-cols-[minmax(18rem,1fr)_minmax(28rem,0.9fr)_auto] xl:items-end">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">
-              <Sparkles size={14} aria-hidden="true" /> Megumi briefing
+              <Sparkles size={14} aria-hidden="true" /> {t('eyebrow')}
             </div>
             <h1 className="text-[clamp(2rem,4vw,3.65rem)] font-semibold leading-none tracking-[-0.055em] text-[var(--color-text)]">{t('title')}</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-[var(--color-text-muted)]">{t('subtitle')}</p>
