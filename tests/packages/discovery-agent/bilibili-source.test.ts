@@ -72,6 +72,36 @@ describe('Bilibili discovery source', () => {
     }] });
   });
 
+  it('uses anonymous nav WBI keys even when Bilibili reports code -101', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(json({ ...navPayload, code: -101, message: '账号未登录' }))
+      .mockResolvedValueOnce(json({ code: 0, data: { result: [] } }));
+
+    const result = await createBilibiliSource({ fetch }).search({
+      query: '秋招面试经验', mode: 'relevance', limit: 20, signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({ status: 'success', items: [] });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects an anonymous nav response only when WBI keys are actually missing', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(json({
+      code: -101,
+      message: '账号未登录',
+      data: { wbi_img: {} },
+    }));
+
+    const result = await createBilibiliSource({ fetch }).search({
+      query: 'Agent', mode: 'relevance', limit: 5, signal: new AbortController().signal,
+    });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      failure: { code: 'invalid_response', message: 'Bilibili WBI keys were missing.' },
+    });
+  });
+
   it('caches WBI keys and refreshes them once after an invalid-key response', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(json(navPayload))

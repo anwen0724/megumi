@@ -71,6 +71,8 @@ export {
 } from './built-ins/run-command';
 export {
   createBraveWebSearch,
+  createBingRssWebSearch,
+  createFallbackWebSearch,
   createWebSearch,
   type WebSearchProvider,
   type WebSearchRequest,
@@ -79,6 +81,7 @@ export {
   type WebSearchRuntimeConfig,
   type WebSearch,
 } from './built-ins/web-search';
+export { resolveConfiguredWebSearch, type ToolSettings } from './tools';
 export { createWebFetch, type WebFetch, type WebFetchResult } from './built-ins/web-fetch';
 export {
   updatePlanToolDefinition,

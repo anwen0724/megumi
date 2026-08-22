@@ -361,13 +361,7 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
 
   operations = {
     submitConversationInput: (request) => conversationSubmission.submit(request),
-    async changeInterest(request) {
-      const interest = await interestRuntime.changeInterest(request);
-      if (request.action === 'create' && interest.status === 'active' && dailyDiscoveryRuntime) {
-        void dailyDiscoveryRuntime.ensure({ trigger: 'first_interest', now: options.clock.now() });
-      }
-      return interest;
-    },
+    changeInterest: (request) => interestRuntime.changeInterest(request),
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),

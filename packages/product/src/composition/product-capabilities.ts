@@ -60,10 +60,11 @@ import {
 import { createSettingsStore } from '@megumi/settings/store';
 import { createSkills, type Skills } from '@megumi/skills';
 import {
+  createBingRssWebSearch,
+  createFallbackWebSearch,
   createWebFetch,
-  createWebSearch,
-  ToolExecutionFailure,
   createTools,
+  resolveConfiguredWebSearch,
   type BuiltInToolAvailability,
   type Tools,
 } from '@megumi/tools';
@@ -398,27 +399,21 @@ function composeCapabilitiesWithDatabase(
   });
   const discoveryRepository = createDiscoveryRepository({ database });
   const interestExtractor = createInterestExtractor({ models: modelComposition.models });
+  const discoveryWebSearch = createFallbackWebSearch([
+    {
+      async search(request) {
+        const configured = resolveConfiguredWebSearch(settings);
+        return configured
+          ? configured.search(request)
+          : { query: request.query.trim(), results: [] };
+      },
+    },
+    createBingRssWebSearch(),
+  ]);
   const discoverySources = createSourceRegistry([
     createBilibiliSource(),
     createOpenWebSource({
-      webSearch: {
-        async search(request) {
-          const resolved = settings.resolveWebSearch();
-          const credential = settings.readWebSearchApiKey({});
-          if (resolved.status !== 'ok' || !resolved.settings.provider || credential.status !== 'found') {
-            throw new ToolExecutionFailure(
-              'Open Web search is not configured.',
-              'tool_execution_failed',
-              { reason: 'not_configured' },
-            );
-          }
-          return createWebSearch({
-            provider: resolved.settings.provider,
-            apiKey: credential.api_key,
-            ...(resolved.settings.base_url ? { baseUrl: resolved.settings.base_url } : {}),
-          }).search(request);
-        },
-      },
+      webSearch: discoveryWebSearch,
       webFetch: createWebFetch(),
     }),
   ]);

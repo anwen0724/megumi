@@ -29,6 +29,7 @@ import type {
   DiscoverySourceId,
   SourceContent,
   SourceDescriptor,
+  SourceFailure,
   SourceSearchMode,
 } from '../sources/discovery-source';
 import type { SourceRegistry } from '../sources/source-registry';
@@ -104,7 +105,11 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     const operation = (async () => {
       const snapshot = attempt.snapshot ?? await snapshotInputs();
       if (!snapshot.model || snapshot.interests.length === 0 || snapshot.descriptors.length === 0) {
-        await handleFailure('agent_execution_failed', 'Daily discovery retry prerequisites are unavailable.');
+        await handleFailure(
+          'agent_execution_failed',
+          'Daily discovery retry prerequisites are unavailable.',
+          false,
+        );
         return;
       }
       const signals = input.repository.listRecommendationSelectionSignals();
@@ -125,8 +130,8 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
         onFailure: handleFailure,
       });
 
-      async function handleFailure(code: string, message: string): Promise<void> {
-        if (!accepting) {
+      async function handleFailure(code: string, message: string, retryable = true): Promise<void> {
+        if (!accepting || !retryable) {
           input.repository.failDailyBatch({
             batchId: attempt.batchId, executionId: attempt.executionId,
             failureCode: code, failureMessage: message, failedAt: input.now(),
@@ -321,7 +326,7 @@ async function executeDailyBatch(input: {
   readonly ids: Pick<CreateDailyDiscoveryRuntimeOptions['ids'], 'createRecommendationId'>;
   readonly now: () => string;
   readonly activeAgents: Map<string, Agent>;
-  readonly onFailure: (code: string, message: string) => Promise<void>;
+  readonly onFailure: (code: string, message: string, retryable?: boolean) => Promise<void>;
 }): Promise<void> {
   const candidates = createCandidateRegistry();
   const historicalIdentities = new Set(input.signals.map((signal) => signal.contentIdentity));
@@ -332,6 +337,7 @@ async function executeDailyBatch(input: {
   let failedSearches = 0;
   let rawCandidates = 0;
   let invalidSelection = false;
+  const sourceFailures: Array<{ readonly sourceId: string; readonly failure: SourceFailure }> = [];
 
   const tools: readonly AgentTool[] = [
     {
@@ -362,6 +368,7 @@ async function executeDailyBatch(input: {
         const result = await source.search({ ...parsed, signal });
         if (result.status === 'failed') {
           failedSearches += 1;
+          sourceFailures.push({ sourceId: parsed.sourceId, failure: result.failure });
           return toolError(result.failure.code, result.failure.message, { failure: result.failure });
         }
         successfulSearches += 1;
@@ -466,9 +473,13 @@ async function executeDailyBatch(input: {
       timestamp: Date.parse(input.now()),
     }, { executionId: input.executionId });
     if (result.status !== 'completed') {
-      await input.onFailure('agent_execution_failed', result.status === 'cancelled'
-        ? 'Daily discovery Agent execution was cancelled.'
-        : result.error.message);
+      await input.onFailure(
+        'agent_execution_failed',
+        result.status === 'cancelled'
+          ? 'Daily discovery Agent execution was cancelled.'
+          : result.error.message,
+        result.status !== 'cancelled',
+      );
       return;
     }
     if (!selected) {
@@ -478,7 +489,13 @@ async function executeDailyBatch(input: {
             : rawCandidates > 0 ? 'all_candidates_rejected'
               : successfulSearches > 0 ? 'no_candidates'
                 : 'selection_missing';
-      await input.onFailure(code, failureMessage(code));
+      const message = code === 'source_search_failed'
+        ? sourceSearchFailureMessage(sourceFailures)
+        : failureMessage(code);
+      const retryable = code === 'source_search_failed'
+        ? sourceFailures.some(({ failure }) => isImmediatelyRetryableSourceFailure(failure))
+        : true;
+      await input.onFailure(code, message, retryable);
       return;
     }
     const publishedAt = input.now();
@@ -498,7 +515,11 @@ async function executeDailyBatch(input: {
       recommendations,
     });
     if (published.status !== 'published') {
-      await input.onFailure('publish_conflict', `Daily discovery publication failed: ${published.reason}.`);
+      await input.onFailure(
+        'publish_conflict',
+        `Daily discovery publication failed: ${published.reason}.`,
+        false,
+      );
     }
   } catch (error) {
     await input.onFailure('agent_execution_failed', error instanceof Error ? error.message : 'Daily discovery failed.');
@@ -654,6 +675,25 @@ function failureMessage(code: string): string {
     all_candidates_rejected: 'All discovered candidates were deterministically rejected.',
   };
   return messages[code] ?? 'Daily discovery failed.';
+}
+
+function sourceSearchFailureMessage(
+  failures: readonly { readonly sourceId: string; readonly failure: SourceFailure }[],
+): string {
+  const seen = new Set<string>();
+  const details = failures.flatMap(({ sourceId, failure }) => {
+    const key = `${sourceId}\u0000${failure.code}\u0000${failure.message}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [`${sourceId} (${failure.code}): ${failure.message}`];
+  });
+  return details.length > 0
+    ? `Content source searches failed: ${details.join('; ')}`
+    : failureMessage('source_search_failed');
+}
+
+function isImmediatelyRetryableSourceFailure(failure: SourceFailure): boolean {
+  return failure.retryable && (failure.code === 'network_error' || failure.code === 'timeout');
 }
 
 function localDateAt(timestamp: string, timezone: string): string {

@@ -131,6 +131,75 @@ export function createBraveWebSearch(input: {
   return createWebSearch({ provider: 'brave', ...input });
 }
 
+/** Creates a no-credential public Web Search over Bing's RSS response. */
+export function createBingRssWebSearch(input: {
+  fetch?: typeof globalThis.fetch;
+  timeoutMs?: number;
+} = {}): WebSearch {
+  const fetchImplementation = input.fetch ?? globalThis.fetch;
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  return {
+    async search(request) {
+      validateRequest(request);
+      const url = new URL('https://www.bing.com/search');
+      url.searchParams.set('q', request.query.trim());
+      url.searchParams.set('format', 'rss');
+      url.searchParams.set('count', String(request.count));
+      const response = await fetchWithTimeout(fetchImplementation, url, {
+        method: 'GET',
+        headers: {
+          accept: 'application/rss+xml, application/xml;q=0.9, text/xml;q=0.8',
+          'user-agent': 'Mozilla/5.0 Megumi/0.1',
+        },
+        signal: request.signal,
+        timeoutMs,
+      });
+      if (!response.ok) {
+        throw new ToolExecutionFailure(
+          webSearchHttpError(response.status),
+          'tool_execution_failed',
+          { reason: webSearchHttpReason(response.status), statusCode: response.status },
+        );
+      }
+      const payload = await response.text();
+      return {
+        query: request.query.trim(),
+        results: parseBingRssResults(payload).slice(0, request.count),
+      };
+    },
+  };
+}
+
+/** Tries Web Search implementations in order, falling through on errors or empty results. */
+export function createFallbackWebSearch(searches: readonly WebSearch[]): WebSearch {
+  const providers = [...searches];
+  return {
+    async search(request) {
+      let lastError: unknown;
+      let completedQuery = request.query.trim();
+      let sawSuccessfulProvider = false;
+      for (const provider of providers) {
+        try {
+          const result = await provider.search(request);
+          completedQuery = result.query;
+          sawSuccessfulProvider = true;
+          if (result.results.length > 0) return result;
+        } catch (error) {
+          if (isCancelledSearch(error, request.signal)) throw error;
+          lastError = error;
+        }
+      }
+      if (sawSuccessfulProvider) return { query: completedQuery, results: [] };
+      if (lastError !== undefined) throw lastError;
+      throw new ToolExecutionFailure(
+        'Web search is not configured.',
+        'tool_execution_failed',
+        { reason: 'not_configured' },
+      );
+    },
+  };
+}
+
 function createProviderRequest(
   config: WebSearchRuntimeConfig,
   request: WebSearchRequest,
@@ -194,6 +263,46 @@ function parseProviderResults(provider: WebSearchProvider, payload: unknown): We
           : candidate.snippet;
     return [{ title: plainText(candidate.title), url: candidate.url, snippet: typeof snippet === 'string' ? plainText(snippet) : '' }];
   });
+}
+
+function parseBingRssResults(payload: string): WebSearchResultItem[] {
+  const items = payload.match(/<item\b[^>]*>[\s\S]*?<\/item>/gi) ?? [];
+  return items.flatMap((item) => {
+    const title = rssElement(item, 'title');
+    const url = rssElement(item, 'link');
+    if (!title || !url || !isPublicHttpUrl(url)) return [];
+    return [{
+      title: plainText(decodeXml(title)),
+      url,
+      snippet: plainText(decodeXml(rssElement(item, 'description') ?? '')),
+    }];
+  }).filter((item) => item.title.length > 0);
+}
+
+function rssElement(item: string, name: string): string | undefined {
+  const match = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, 'i').exec(item);
+  if (!match) return undefined;
+  const value = match[1]!.trim();
+  const cdata = /^<!\[CDATA\[([\s\S]*)\]\]>$/i.exec(value);
+  return (cdata?.[1] ?? value).trim();
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&amp;/gi, '&');
+}
+
+function isCancelledSearch(error: unknown, signal: AbortSignal | undefined): boolean {
+  return Boolean(signal?.aborted) || (
+    error instanceof ToolExecutionFailure
+    && (error.code === 'tool_cancelled' || error.details?.reason === 'cancelled')
+  );
 }
 
 function validateRequest(request: WebSearchRequest): void {

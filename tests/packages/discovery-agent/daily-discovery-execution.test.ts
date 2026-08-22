@@ -272,6 +272,31 @@ describe('daily discovery Agent execution', () => {
     expect(readRecommendations(database)).toEqual([]);
   });
 
+  it('does not automatically retry a non-retryable source failure and preserves source diagnostics', async () => {
+    const unavailable = source('open_web', async () => ({
+      status: 'failed',
+      failure: { code: 'not_configured', message: 'Open Web search is not configured.', retryable: false },
+    }));
+    const fixture = createFixture(database, [unavailable], [
+      toolStream('call:1', 'search_content', {
+        sourceId: 'open_web', query: 'Agent', mode: 'relevance', limit: 5,
+      }),
+      textStream('No available source.'),
+    ]);
+    addInterest(fixture.repository, 'interest:1', 'Agent');
+
+    await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
+    await waitForBatch(database, 'failed');
+
+    expect(readBatch(database)).toMatchObject({
+      status: 'failed',
+      attempt_count: 1,
+      automatic_retry_count: 0,
+      failure_code: 'source_search_failed',
+      failure_message: expect.stringMatching(/open_web.*not_configured/i),
+    });
+  });
+
   it('rejects content identities that have already been published globally', async () => {
     seedPublishedRecommendation(database, 'open_web:id:seen');
     const adapter = source('open_web', async () => [

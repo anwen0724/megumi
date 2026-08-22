@@ -3,7 +3,9 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createBingRssWebSearch,
   createBraveWebSearch,
+  createFallbackWebSearch,
   createWebFetch,
   createWebSearch,
 } from '../../../packages/tools/src';
@@ -94,6 +96,54 @@ describe('web_search built-in Tool', () => {
       error: { message: 'Web search authentication failed.', details: { statusCode: 401 } },
     });
     expect(JSON.stringify(result)).not.toContain('search-secret');
+  });
+
+  it('searches the public web through the no-key Bing RSS endpoint', async () => {
+    const fetch = vi.fn(async () => new Response(`<?xml version="1.0" encoding="utf-8"?>
+      <rss><channel><item>
+        <title>秋招 &amp; 面试经验</title>
+        <link>https://example.com/campus</link>
+        <description><![CDATA[<b>真实</b>面试复盘]]></description>
+      </item></channel></rss>`, {
+      status: 200,
+      headers: { 'content-type': 'application/rss+xml' },
+    }));
+    const search = createBingRssWebSearch({ fetch: fetch as typeof globalThis.fetch });
+
+    await expect(search.search({ query: '秋招面试经验', count: 5 })).resolves.toEqual({
+      query: '秋招面试经验',
+      results: [{
+        title: '秋招 & 面试经验',
+        url: 'https://example.com/campus',
+        snippet: '真实面试复盘',
+      }],
+    });
+    const url = new URL(String(fetch.mock.calls[0]?.[0]));
+    expect(url.hostname).toBe('www.bing.com');
+    expect(url.searchParams.get('format')).toBe('rss');
+  });
+
+  it('falls back after a configured provider fails or returns no results', async () => {
+    const configured = {
+      search: vi.fn()
+        .mockRejectedValueOnce(new Error('provider unavailable'))
+        .mockResolvedValueOnce({ query: 'empty', results: [] }),
+    };
+    const fallback = {
+      search: vi.fn(async ({ query }: { query: string }) => ({
+        query,
+        results: [{ title: 'Fallback', url: 'https://example.com/fallback', snippet: 'Available' }],
+      })),
+    };
+    const search = createFallbackWebSearch([configured, fallback]);
+
+    await expect(search.search({ query: 'failed', count: 5 })).resolves.toMatchObject({
+      results: [{ title: 'Fallback' }],
+    });
+    await expect(search.search({ query: 'empty', count: 5 })).resolves.toMatchObject({
+      results: [{ title: 'Fallback' }],
+    });
+    expect(fallback.search).toHaveBeenCalledTimes(2);
   });
 });
 

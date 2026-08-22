@@ -30,7 +30,7 @@ export const DiscoveryFailureViewSchema = z.object({
 }).strict();
 
 export const EnsureDailyDiscoveryRequestSchema = z.object({
-  trigger: z.enum(['first_interest', 'schedule', 'startup_catchup', 'manual', 'retry']),
+  trigger: z.enum(['schedule', 'startup_catchup', 'manual', 'retry']),
   now: TimestampSchema,
 }).strict();
 

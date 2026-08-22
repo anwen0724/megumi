@@ -136,7 +136,7 @@ export function createTools(request: CreateToolsRequest): Tools {
       const workspace = request.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
       if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
       if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
-      const webSearch = resolveWebSearch(request.settings);
+      const webSearch = resolveConfiguredWebSearch(request.settings);
       const selected = registry.list().filter((tool) => isSelected(tool.registeredToolName, {
         availability: request.builtInToolAvailability,
         processAvailable: process !== undefined,
@@ -159,7 +159,7 @@ export function createTools(request: CreateToolsRequest): Tools {
           .filter((tool) => input.includeDisabled || isSelected(tool.registeredToolName, {
             availability: request.builtInToolAvailability,
             processAvailable: process !== undefined,
-            webSearchAvailable: resolveWebSearch(request.settings) !== undefined,
+            webSearchAvailable: resolveConfiguredWebSearch(request.settings) !== undefined,
           }))
           .map((tool) => ({
             identity: tool.identity,
@@ -255,7 +255,7 @@ function toolProcessDescriptor(sandbox: Sandbox): ToolProcessDescriptor | undefi
     : undefined;
 }
 
-function resolveWebSearch(settings: ToolSettings): WebSearch | undefined {
+export function resolveConfiguredWebSearch(settings: ToolSettings): WebSearch | undefined {
   const resolved = settings.resolveWebSearch();
   if (resolved.status !== 'ok' || !resolved.settings.provider) return undefined;
   const credential = settings.readWebSearchApiKey({});

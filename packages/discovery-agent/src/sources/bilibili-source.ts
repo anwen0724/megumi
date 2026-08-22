@@ -105,9 +105,8 @@ export function createBilibiliSource(input: {
   async function resolveKeys(signal: AbortSignal, force: boolean): Promise<WbiKeys> {
     if (!force && keys && keys.expiresAt > now()) return keys;
     const payload = await fetchJson(new URL(NAV_URL), signal);
-    if (recordNumber(payload, 'code') !== 0) {
-      throw new BilibiliFailure(failure('invalid_response', 'Bilibili WBI key response was invalid.', true));
-    }
+    // Anonymous nav responses use code -101 while still returning the public
+    // WBI keys. Login state is irrelevant here; the key fields are authoritative.
     const data = recordValue(payload, 'data');
     const wbiImage = recordValue(data, 'wbi_img');
     const imgKey = fileKey(recordString(wbiImage, 'img_url'));

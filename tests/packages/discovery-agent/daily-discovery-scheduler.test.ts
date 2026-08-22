@@ -1,4 +1,4 @@
-/* Verifies local scheduling, first-interest trigger, idempotency, retry and startup recovery. */
+/* Verifies local scheduling, explicit generation, idempotency, retry and startup recovery. */
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -54,11 +54,14 @@ describe('daily discovery scheduler and retry lifecycle', () => {
     expect((await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now })).status).toBe('already_published');
   });
 
-  it('generates immediately for the first Interest and keeps concurrent triggers idempotent', async () => {
+  it('saves the first Interest without generating until an explicit trigger arrives', async () => {
     const streams = successfulStreams();
     const fixture = createFixture(database, () => '2026-08-22T10:00:00.000+08:00', streams);
 
     await fixture.agent.changeInterest({ action: 'create', description: 'Agent' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fixture.repository.getDailyBatch('2026-08-22')).toBeUndefined();
+
     const [left, right] = await Promise.all([
       fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now: '2026-08-22T10:00:00.000+08:00' }),
       fixture.agent.ensureDailyDiscovery({ trigger: 'schedule', now: '2026-08-22T10:00:00.000+08:00' }),
