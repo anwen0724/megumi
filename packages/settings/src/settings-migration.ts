@@ -1,6 +1,6 @@
 /* Owns settings.json legacy format normalization and migration. */
 import { z } from 'zod';
-import type { SettingsFileRaw } from './settings-schema';
+import type { SettingsFileRaw, SettingsThemeName } from './settings-schema';
 
 export interface NormalizeSettingsFileResult {
   readonly value: unknown;
@@ -10,7 +10,8 @@ export interface NormalizeSettingsFileResult {
 /** Applies every legacy normalization in order and reports whether the file changed. */
 export function normalizeSettingsFile(value: unknown): NormalizeSettingsFileResult {
   const withoutCompaction = withoutObsoleteCompaction(value);
-  const withModels = normalizeLegacyProviderModels(withoutCompaction);
+  const withTheme = normalizeRetiredTheme(withoutCompaction);
+  const withModels = normalizeLegacyProviderModels(withTheme);
   const withApis = normalizeLegacyProviderApis(withModels);
   return { value: withApis, changed: !structurallyEqual(withApis, value) };
 }
@@ -40,6 +41,13 @@ function withoutObsoleteCompaction(value: unknown): unknown {
   if (!isRecord(value)) return value;
   const { compaction: _obsoleteCompaction, ...settings } = value;
   return settings;
+}
+
+function normalizeRetiredTheme(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  if (value.theme === 'graphite-dark') return { ...value, theme: 'midnight-blue' };
+  if (value.theme === 'sage-mist') return { ...value, theme: 'verdant-cloud' };
+  return value;
 }
 
 function normalizeLegacyProviderModels(value: unknown): unknown {
@@ -85,7 +93,7 @@ function normalizeLegacyProviderApis(value: unknown): unknown {
 function appRawToSettingsFileRaw(raw: AppSettingsRaw): SettingsFileRaw {
   return {
     ...(raw.language ? { language: raw.language } : {}),
-    ...(raw.theme ? { theme: raw.theme } : {}),
+    ...(raw.theme ? { theme: currentThemeName(raw.theme) } : {}),
     ...(raw.setup ? {
       setup: {
         ...(raw.setup.completed !== undefined ? { completed: raw.setup.completed } : {}),
@@ -130,6 +138,12 @@ const AppSettingsRawSchema = z.object({
   theme: z.enum([
     'megumi-warm',
     'neutral-light',
+    'sunlit-sky',
+    'rose-moon',
+    'verdant-cloud',
+    'cangming-blue',
+    'frost-cyan',
+    'cyan-tide',
     'graphite-dark',
     'sage-mist',
     'midnight-blue',
@@ -139,6 +153,12 @@ const AppSettingsRawSchema = z.object({
   providers: z.record(z.string().min(1), LegacyAppProviderSettingsRawSchema).optional(),
 }).strict();
 type AppSettingsRaw = z.infer<typeof AppSettingsRawSchema>;
+
+function currentThemeName(theme: NonNullable<AppSettingsRaw['theme']>): SettingsThemeName {
+  if (theme === 'graphite-dark') return 'midnight-blue';
+  if (theme === 'sage-mist') return 'verdant-cloud';
+  return theme;
+}
 
 function legacyProviderApi(protocol: 'openai-compatible' | 'anthropic') {
   return protocol === 'anthropic' ? 'anthropic-messages' : 'openai-completions';

@@ -37,8 +37,12 @@ import {
 export const SettingsThemeNameSchema = z.enum([
   'megumi-warm',
   'neutral-light',
-  'graphite-dark',
-  'sage-mist',
+  'sunlit-sky',
+  'rose-moon',
+  'verdant-cloud',
+  'cangming-blue',
+  'frost-cyan',
+  'cyan-tide',
   'midnight-blue',
 ]);
 export type SettingsThemeName = z.infer<typeof SettingsThemeNameSchema>;

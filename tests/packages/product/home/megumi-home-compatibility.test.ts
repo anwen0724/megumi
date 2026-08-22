@@ -143,7 +143,7 @@ describe('Megumi Home foundation', () => {
     const readmePath = path.join(homePath, 'README.md');
 
     await fileSystem.writeJson(settingsPath, {
-      theme: 'graphite-dark',
+      theme: 'cangming-blue',
     });
     await fileSystem.writeFile(readmePath, 'User edited README');
 
@@ -157,7 +157,7 @@ describe('Megumi Home foundation', () => {
     });
 
     expect(fileSystem.jsonFiles.get(paths.settingsPath)).toEqual({
-      theme: 'graphite-dark',
+      theme: 'cangming-blue',
     });
     expect(fileSystem.textFiles.get(paths.readmePath)).toBe('User edited README');
   });

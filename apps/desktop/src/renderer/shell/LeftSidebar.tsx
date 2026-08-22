@@ -160,10 +160,16 @@ export function LeftSidebar({
           <IconButton label={t('navigation.expandSidebar')} onClick={onToggleCollapsed} size="sm">
             <PanelLeftOpen size={16} aria-hidden="true" />
           </IconButton>
-          <IconButton label={t('navigation.newSession')} onClick={onCreateSession} size="sm" variant="primary">
+          <IconButton label={t('navigation.newSession')} onClick={onCreateSession} size="sm" variant="secondary">
             <MessageSquarePlus size={15} aria-hidden="true" />
           </IconButton>
-          <IconButton label={t('navigation.discovery')} onClick={onOpenDiscovery} size="sm" variant={activePage === 'discovery' ? 'secondary' : 'ghost'}>
+          <IconButton
+            label={t('navigation.discovery')}
+            onClick={onOpenDiscovery}
+            size="sm"
+            variant="ghost"
+            className={activePage === 'discovery' ? 'border-[var(--color-accent)]/35 bg-[var(--color-accent-soft)] text-[var(--color-accent)]' : undefined}
+          >
             <Sparkles size={15} aria-hidden="true" />
           </IconButton>
           <IconButton label={t('navigation.taskPlan')} size="sm" variant="ghost">
@@ -208,14 +214,14 @@ export function LeftSidebar({
             className={cx(
               'flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
               activePage === 'discovery'
-                ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
                 : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',
             )}
           >
             <Sparkles size={15} aria-hidden="true" />
             {t('navigation.discovery')}
           </button>
-          <Button onClick={onCreateSession} variant="primary" size="md" className="w-full justify-start">
+          <Button onClick={onCreateSession} variant="secondary" size="md" className="w-full justify-start">
             <MessageSquarePlus size={15} aria-hidden="true" />
             {t('navigation.newSession')}
           </Button>

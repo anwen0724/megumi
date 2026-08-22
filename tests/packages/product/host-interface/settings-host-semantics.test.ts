@@ -158,7 +158,7 @@ describe('SettingsHost semantics', () => {
   it('reports unknown file keys as diagnostics on the ok response', async () => {
     const host = createSettingsOperations(createSettings({
       store: memoryStore({
-        theme: 'sage-mist',
+        theme: 'verdant-cloud',
         custom_field: true,
         providers: { deepseek: { enabled: true, api: 'openai-completions', extra: 1 } },
         web: { search: { provider: 'tavily', note: 'x' } },

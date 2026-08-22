@@ -51,9 +51,9 @@ describe('Settings secret boundary', () => {
     });
     const settings = createSettings({ store });
 
-    expect(settings.update({ patch: { theme: 'sage-mist' } })).toMatchObject({ status: 'updated' });
+    expect(settings.update({ patch: { theme: 'rose-moon' } })).toMatchObject({ status: 'updated' });
     expect(store.document).toMatchObject({
-      theme: 'sage-mist',
+      theme: 'rose-moon',
       providers: { deepseek: { api_key: 'provider-secret' } },
       web: { search: { api_key: 'web-secret' } },
     });

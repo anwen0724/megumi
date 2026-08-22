@@ -65,6 +65,18 @@ describe('LeftSidebar', () => {
     expect(onCreateSession).toHaveBeenCalledTimes(1);
   });
 
+  it('uses one active-page highlight while keeping new session as a neutral action', () => {
+    render(<LeftSidebar {...defaultProps} activePage="discovery" />);
+
+    const discovery = screen.getByRole('button', { name: "Today's discoveries" });
+    const newSession = screen.getByRole('button', { name: 'New session' });
+
+    expect(discovery).toHaveAttribute('aria-current', 'page');
+    expect(discovery).toHaveClass('bg-[var(--color-accent-soft)]');
+    expect(newSession).toHaveClass('bg-[var(--color-surface)]');
+    expect(newSession).not.toHaveClass('bg-[var(--color-accent)]');
+  });
+
   it('renders empty state when a project has no sessions', () => {
     render(
       <LeftSidebar

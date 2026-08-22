@@ -57,7 +57,7 @@ describe('setup wizard store', () => {
       data: {
         settings: {
           language: 'en-US',
-          theme: 'graphite-dark',
+          theme: 'cangming-blue',
           setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
           memory: { enabled: false },
           providers: {},
@@ -67,7 +67,7 @@ describe('setup wizard store', () => {
     });
     await useSetupWizardStore.getState().completeSetup({
       language: 'en-US',
-      theme: 'graphite-dark',
+      theme: 'cangming-blue',
       providerId: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       modelIds: ['gpt-5.5'],
@@ -80,7 +80,7 @@ describe('setup wizard store', () => {
     expect(settingsCompleteSetup).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         language: 'en-US',
-        theme: 'graphite-dark',
+        theme: 'cangming-blue',
         provider: {
           providerId: 'openai',
             enabled: true,
@@ -152,7 +152,7 @@ describe('setup wizard store', () => {
       data: {
         settings: {
           language: 'zh-CN',
-          theme: 'sage-mist',
+          theme: 'verdant-cloud',
           setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
           memory: { enabled: false },
           providers: {},
@@ -163,7 +163,7 @@ describe('setup wizard store', () => {
 
     await useSetupWizardStore.getState().completeSetup({
       language: 'zh-CN',
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       modelIds: [],
       skipProvider: true,
     });
@@ -174,7 +174,7 @@ describe('setup wizard store', () => {
     expect(settingsCompleteSetup).toHaveBeenCalledWith(expect.objectContaining({
       payload: {
         language: 'zh-CN',
-        theme: 'sage-mist',
+        theme: 'verdant-cloud',
       },
     }));
     expect(settingsCompleteSetup).toHaveBeenCalledTimes(1);

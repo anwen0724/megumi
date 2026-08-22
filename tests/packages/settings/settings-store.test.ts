@@ -44,24 +44,24 @@ describe('settings.json store', () => {
   it('merges partial raw settings with defaults', async () => {
     const { settings, settingsPath } = await createFixture();
     await writeFile(settingsPath, JSON.stringify({
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       memory: { enabled: true },
     }), 'utf8');
     const resolved = settings.resolve();
     expect(resolved.status).toBe('ok');
     if (resolved.status !== 'ok') return;
     expect(resolved.settings).toMatchObject({
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       memory: { enabled: true },
     });
   });
 
   it('atomically writes materialized settings without leaving temporary files', async () => {
     const { settings, settingsPath } = await createFixture();
-    expect(settings.update({ patch: { theme: 'graphite-dark' } })).toMatchObject({ status: 'updated' });
+    expect(settings.update({ patch: { theme: 'cangming-blue' } })).toMatchObject({ status: 'updated' });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
       context: { compaction_threshold_ratio: 0.8 },
-      theme: 'graphite-dark',
+      theme: 'cangming-blue',
     });
     expect(await readdir(path.dirname(settingsPath))).toEqual(['settings.json']);
   });
@@ -75,9 +75,9 @@ describe('settings.json store', () => {
 
     expect(JSON.stringify(settings.read())).not.toContain('provider-secret');
     expect(JSON.stringify(settings.resolve())).not.toContain('web-secret');
-    expect(settings.update({ patch: { theme: 'sage-mist' } })).toMatchObject({ status: 'updated' });
+    expect(settings.update({ patch: { theme: 'rose-moon' } })).toMatchObject({ status: 'updated' });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toMatchObject({
-      theme: 'sage-mist',
+      theme: 'rose-moon',
       providers: { deepseek: { api_key: 'provider-secret' } },
       web: { search: { provider: 'tavily', api_key: 'web-secret' } },
     });
@@ -93,13 +93,13 @@ describe('settings.json store', () => {
     const { settings, settingsPath } = await createFixture();
     settings.update({ patch: {
       language: 'zh-CN',
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       setup: { completed: true, completed_at: '2026-06-29T12:00:00.000Z' },
     } });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
       context: { compaction_threshold_ratio: 0.8 },
       language: 'zh-CN',
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       setup: { completed: true, completed_at: '2026-06-29T12:00:00.000Z' },
     });
   });
@@ -114,6 +114,18 @@ describe('settings.json store', () => {
       context: { compaction_threshold_ratio: 0.8 },
       memory: { enabled: true },
     });
+  });
+
+  it('migrates retired themes to their supported replacements', async () => {
+    const { store, settingsPath } = await createFixture();
+
+    await writeFile(settingsPath, JSON.stringify({ theme: 'graphite-dark' }), 'utf8');
+    expect(store.read()).toMatchObject({ theme: 'midnight-blue' });
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toMatchObject({ theme: 'midnight-blue' });
+
+    await writeFile(settingsPath, JSON.stringify({ theme: 'sage-mist' }), 'utf8');
+    expect(store.read()).toMatchObject({ theme: 'verdant-cloud' });
+    expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toMatchObject({ theme: 'verdant-cloud' });
   });
 
   it('migrates legacy provider protocol and models array and persists the normalized file', async () => {
@@ -155,12 +167,12 @@ describe('settings.json store', () => {
   it('leaves already normalized settings.json untouched', async () => {
     const { store, settingsPath } = await createFixture();
     await writeFile(settingsPath, JSON.stringify({
-      theme: 'sage-mist',
+      theme: 'cyan-tide',
       providers: { deepseek: { enabled: true, api: 'openai-completions' } },
     }), 'utf8');
-    expect(store.read()).toMatchObject({ theme: 'sage-mist' });
+    expect(store.read()).toMatchObject({ theme: 'cyan-tide' });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toEqual({
-      theme: 'sage-mist',
+      theme: 'cyan-tide',
       providers: { deepseek: { enabled: true, api: 'openai-completions' } },
     });
   });
@@ -168,7 +180,7 @@ describe('settings.json store', () => {
   it('tolerates unknown file keys and preserves them on write', async () => {
     const { settings, settingsPath } = await createFixture();
     await writeFile(settingsPath, JSON.stringify({
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       custom_field: { anything: true },
       providers: { deepseek: { enabled: true, api: 'openai-completions', extra_field: 'keep-me' } },
     }), 'utf8');
@@ -180,7 +192,7 @@ describe('settings.json store', () => {
     expect(settings.update({ patch: { language: 'en-US' } })).toMatchObject({ status: 'updated' });
     expect(JSON.parse(await readFile(settingsPath, 'utf8'))).toMatchObject({
       language: 'en-US',
-      theme: 'sage-mist',
+      theme: 'verdant-cloud',
       custom_field: { anything: true },
       providers: { deepseek: { extra_field: 'keep-me' } },
     });

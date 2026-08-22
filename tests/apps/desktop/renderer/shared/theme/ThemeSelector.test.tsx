@@ -26,7 +26,7 @@ describe('ThemeSelector', () => {
             ok: true,
             data: {
               settings: {
-                theme: 'graphite-dark',
+                theme: 'rose-moon',
                 memory: { enabled: false },
               },
             },
@@ -46,9 +46,15 @@ describe('ThemeSelector', () => {
 
     expect(screen.getByRole('radio', { name: /Megumi Warm/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: /Neutral Light/ })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Graphite Dark/ })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Sage Mist/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Sunlit Sky/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Rose Moon/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Verdant Cloud/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Cangming Blue/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Frost Cyan/ })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Cyan Tide/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Midnight Blue/ })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /Graphite Dark/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /Sage Mist/ })).not.toBeInTheDocument();
     expect(screen.queryByText('megumi-warm')).not.toBeInTheDocument();
   });
 
@@ -59,15 +65,15 @@ describe('ThemeSelector', () => {
       </ThemeProvider>,
     );
 
-    await userEvent.click(screen.getByRole('radio', { name: /Graphite Dark/ }));
+    await userEvent.click(screen.getByRole('radio', { name: /Rose Moon/ }));
 
-    expect(useThemeStore.getState().theme).toBe('graphite-dark');
-    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'graphite-dark');
-    expect(screen.getByRole('radio', { name: /Graphite Dark/ })).toHaveAttribute('aria-checked', 'true');
+    expect(useThemeStore.getState().theme).toBe('rose-moon');
+    expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'rose-moon');
+    expect(screen.getByRole('radio', { name: /Rose Moon/ })).toHaveAttribute('aria-checked', 'true');
     expect(window.megumi.settings.update).toHaveBeenCalledWith(expect.objectContaining({
       meta: expect.objectContaining({ channel: IPC_CHANNELS.settings.update }),
       payload: {
-        theme: 'graphite-dark',
+        theme: 'rose-moon',
       },
     }));
   });

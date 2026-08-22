@@ -60,7 +60,7 @@ describe('SetupWizard', () => {
     expect(screen.getByRole('heading', { name: 'Make Megumi yours' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /English/ })).toHaveAttribute('aria-pressed', 'true');
 
-    await user.click(screen.getByRole('radio', { name: 'Graphite Dark' }));
+    await user.click(screen.getByRole('radio', { name: 'Cangming Blue' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await user.click(screen.getByRole('button', { name: /OpenAI/ }));
@@ -72,7 +72,7 @@ describe('SetupWizard', () => {
 
     expect(completeSetup).toHaveBeenCalledWith({
       language: 'en-US',
-      theme: 'graphite-dark',
+      theme: 'cangming-blue',
       providerId: 'OpenAI',
       baseUrl: 'https://api.openai.com/v1',
       modelIds: ['gpt-5.6'],
@@ -106,9 +106,9 @@ describe('SetupWizard', () => {
     useSetupWizardStore.setState({ status: 'ready', setupCompleted: false });
 
     render(<SetupWizard />);
-    await user.click(screen.getByRole('radio', { name: 'Sage Mist' }));
+    await user.click(screen.getByRole('radio', { name: 'Verdant Cloud' }));
 
-    expect(useThemeStore.getState().theme).toBe('sage-mist');
+    expect(useThemeStore.getState().theme).toBe('verdant-cloud');
   });
 
   it('exposes the catalog base URL only as an advanced override', async () => {

@@ -68,10 +68,21 @@ const ProviderSettingsUiPatchSchema = z.object({
   displayName: z.string().optional(), baseUrl: z.string().optional(), models: z.array(z.string()).optional(),
   apiKeyEnv: z.string().nullable().optional(),
 }).strict();
+const SettingsUiThemeNameSchema = z.enum([
+  'megumi-warm',
+  'neutral-light',
+  'sunlit-sky',
+  'rose-moon',
+  'verdant-cloud',
+  'cangming-blue',
+  'frost-cyan',
+  'cyan-tide',
+  'midnight-blue',
+]);
 export const SettingsGetPayloadSchema = z.object({}).strict();
 export const SettingsUpdatePayloadSchema = z.object({
   language: z.enum(['zh-CN', 'en-US']).optional(),
-  theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
+  theme: SettingsUiThemeNameSchema.optional(),
   setup: z.object({ completed: z.boolean().optional() }).strict().optional(),
   memory: z.object({ enabled: z.boolean().optional() }).strict().optional(),
   voice: z.object({
@@ -111,7 +122,7 @@ export const SettingsUpdatePayloadSchema = z.object({
 }).strict();
 export const SettingsCompleteSetupPayloadSchema = z.object({
   language: z.enum(['zh-CN', 'en-US']).optional(),
-  theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']).optional(),
+  theme: SettingsUiThemeNameSchema.optional(),
   provider: z.object({
     providerId: z.string().min(1),
     enabled: z.boolean().optional(),
@@ -157,7 +168,7 @@ const ProviderSettingsUiDtoSchema = z.object({
 }).strict();
 const SettingsUiResolvedSchema = z.object({
   language: z.enum(['zh-CN', 'en-US']),
-  theme: z.enum(['megumi-warm', 'neutral-light', 'graphite-dark', 'sage-mist', 'midnight-blue']),
+  theme: SettingsUiThemeNameSchema,
   setup: z.object({ completed: z.boolean(), completedAt: z.string().datetime().optional() }).strict(),
   memory: z.object({ enabled: z.boolean() }).strict(),
   voice: z.object({
@@ -330,12 +341,7 @@ export type SettingsUiRaw = {
   permissions?: { mode?: 'ask' | 'auto' | 'full_access'; ruleChange?: PermissionRuleChangeUi };
 };
 
-export type SettingsUiThemeName =
-  | 'megumi-warm'
-  | 'neutral-light'
-  | 'graphite-dark'
-  | 'sage-mist'
-  | 'midnight-blue';
+export type SettingsUiThemeName = z.infer<typeof SettingsUiThemeNameSchema>;
 export type AppLanguage = 'zh-CN' | 'en-US';
 export type AppThemeName = SettingsUiThemeName;
 

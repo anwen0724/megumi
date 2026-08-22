@@ -42,7 +42,7 @@ export function ThemeSelector() {
               className="grid h-12 w-full grid-cols-[1.4fr_1fr_0.65fr] overflow-hidden border-b"
               style={swatchStyle}
             >
-              <span style={{ background: definition.variables['--color-surface'] }} />
+              <span style={{ background: definition.variables['--color-app-bg'] }} />
               <span style={{ background: definition.variables['--color-surface-muted'] }} />
               <span style={{ background: definition.variables['--color-accent'] }} />
             </span>

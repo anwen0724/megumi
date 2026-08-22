@@ -14,7 +14,7 @@ function successfulSettings(language: 'zh-CN' | 'en-US', setupCompleted = true) 
       status: 'ok' as const,
       settings: {
         language,
-        theme: 'sage-mist' as const,
+        theme: 'verdant-cloud' as const,
         setup: { completed: setupCompleted },
         permissions: { mode: 'ask' as const, allow: [], ask: [], deny: [] },
         memory: { enabled: false },
@@ -53,7 +53,7 @@ describe('renderer bootstrap localization', () => {
     expect(render).toHaveBeenCalledOnce();
     expect(rendererI18n.resolvedLanguage).toBe('zh-CN');
     expect(document.documentElement.lang).toBe('zh-CN');
-    expect(useThemeStore.getState().theme).toBe('sage-mist');
+    expect(useThemeStore.getState().theme).toBe('verdant-cloud');
     expect(usePermissionModeStore.getState().mode).toBe('ask');
     expect(useModelSelectionStore.getState().selection).toEqual({
       providerId: 'deepseek',
