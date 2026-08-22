@@ -2,56 +2,91 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**A personal Agent that turns the interests surfaced in everyday conversations into proactive, personalized content discovery.**
+**A personal information-discovery Agent that follows what you care about and brings back relevant content every day.**
 
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-5f6b7a)](#quick-start)
 [![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4c7a68)](./LICENSE)
 
+<!-- Placeholder: replace with the current Today's Discoveries screen. -->
 ![Megumi desktop interface](./assets/screenshots/startup-screen.png)
 
-## About Megumi
+## Why Megumi
 
-Megumi is an open-source personal Agent delivered as a local desktop application. Users talk to it as part of their everyday work, learning, and interests. With the user's authorization, Megumi turns evidence from those conversations and later recommendation feedback into a dynamic model of what the user currently and consistently cares about.
+People rarely care about only one stable topic. You may be following Agent engineering, graduate recruitment, and local food at the same time, while each interest keeps changing as your work and life move forward.
 
-Megumi uses that understanding to proactively discover content across sources, filter noise and repetition, explain why an item is relevant, and refine future discovery from feedback. It does not require the user to maintain static topic categories, keywords, or subscription feeds.
+The useful information is scattered across video platforms, blogs, communities, and the open Web. Search engines make you repeat queries, subscription tools make you maintain keywords and feeds, and platform recommenders understand only what you do inside one platform.
 
-The current codebase provides the local, provider-neutral Agent foundation for this product direction: a reusable execution loop together with context, tools, permissions, sandboxing, persistent sessions, and observable runtime behavior.
+Megumi turns this recurring search work into a daily product experience. Tell it what you want to follow in natural language—or allow it to understand durable interests from your conversations—and it will actively search across enabled sources, filter candidates, and assemble the results into **Today's Discoveries**.
 
-## Agent Foundation
+> **Megumi understands what you currently care about and finds relevant information for you every day.**
+
+## What You Can Do
+
+- **Describe any interest naturally.** An interest can be a word, a sentence, or a detailed description of what you want to follow.
+- **Receive a daily discovery feed.** Browse today's recommendations and earlier daily batches in chronological order.
+- **Discover content across sources.** The current release connects Bilibili and the open Web through an extensible source boundary.
+- **Let the Agent search and select.** Megumi plans queries, searches enabled sources, reads candidates, removes duplicates, and publishes only the items it explicitly selects.
+- **Control your discovery profile.** Review, edit, pause, resume, or delete the interests Megumi currently understands.
+- **Tune the daily run.** Choose the generation time, target recommendation count, content sources, and whether authorized conversations may contribute interest signals.
+- **Teach Megumi through feedback.** Like, dislike, hide, favorite, or save a recommendation for later.
+- **Continue from a recommendation.** Open a new conversation grounded in the selected recommendation and discuss it with Megumi.
+
+## The Daily Discovery Loop
 
 ```mermaid
 flowchart LR
-    U["User Input"] --> H["Harness: Input & Context"]
-    H --> E["Agent Core / Agent Loop"]
-    E --> A["AI Model"]
-    A --> E
-    E --> T["Harness: Tools"]
-    T --> P["Permissions"]
-    P --> S["Sandbox"]
-    S --> W["Local Workspace"]
-    H --> M["Session & Product State"]
-    E --> V["Events & Observability"]
+    A["Add or understand interests"] --> B["Daily discovery trigger"]
+    B --> C["Agent plans search directions"]
+    C --> D["Search and read across sources"]
+    D --> E["Deduplicate, evaluate, and select"]
+    E --> F["Publish Today's Discoveries"]
+    F --> G["Feedback or conversation"]
+    G --> A
 ```
 
-- **Agent Core** owns the product-neutral Agent loop and the explicit lifecycle of one Agent execution.
-- **Context** builds the provider-neutral model context from instructions, session history, workspace facts, skills, and the tools available to the current model call.
-- **AI** provides one interface for the supported model protocols and streams model output back to Agent Core.
-- **Tools, Permissions, and Sandbox** route actions, decide whether they are allowed or require approval, and enforce their actual execution boundary.
-- **Session, product state, and runtime events** surround the core loop with durable history, product behavior, and observable execution.
+This is not a fixed keyword crawler. Each discovery execution receives the user's current interests, enabled sources, prior recommendations, and feedback. The Agent can adjust its search plan during the run, but only its final validated selection is persisted and shown in the product.
+
+## Product Experience
+
+Megumi brings three activities into one desktop product:
+
+1. **Today's Discoveries** — read the daily recommendation feed, search published recommendations, and revisit favorites or saved items.
+2. **Interest Management** — see what Megumi currently follows for you and adjust the daily discovery settings.
+3. **Recommendation Conversations** — start a new conversation from a recommendation without losing the content that motivated it.
+
+<!-- Placeholder screenshots; replace with current discovery and recommendation-conversation screens. -->
+![Megumi conversation interface](./assets/screenshots/chat-timeline.png)
+
+## Current Status
+
+Megumi is under active development. The current implementation includes:
+
+- a Windows desktop application built with Electron and React;
+- local persistence for interests, daily batches, recommendations, feedback, sessions, and settings;
+- scheduled and manual daily discovery generation;
+- Bilibili and open-Web content sources;
+- recommendation search, favorites, watch-later state, and feedback;
+- conversation-driven interest extraction when explicitly enabled;
+- recommendation-grounded conversations;
+- provider-neutral Agent execution with tools, permissions, sandboxing, session history, and observability.
+
+Application state is stored locally under `~/.megumi`. Model requests and content discovery still communicate with the external providers and sources configured by the user.
 
 ## Quick Start
 
-Megumi currently provides a Windows desktop application.
+Megumi currently targets Windows 10 and Windows 11.
 
 1. Download the installer from [GitHub Releases](https://github.com/anwen0724/megumi/releases).
-2. Start Megumi and open a local workspace.
-3. Configure a model provider and credential in Settings.
-4. Select a model and start a session.
+2. Open Settings and configure a supported model provider and credential.
+3. Configure the Web search credential used by the open-Web source when needed.
+4. Open **Manage Interests** and describe something you want to keep following.
+5. Choose the generation time, recommendation count, and enabled sources.
+6. Generate today's discoveries manually or wait for the scheduled run.
 
-## Model Configuration
+## Model Support
 
-Megumi supports model providers through these API protocols:
+Megumi integrates model providers through these API protocols:
 
 - OpenAI Completions
 - OpenAI Responses
@@ -59,12 +94,58 @@ Megumi supports model providers through these API protocols:
 - Anthropic Messages
 - Google Generative AI
 
-The application includes a built-in provider and model catalog. Custom providers can be configured with a supported API protocol, base URL, model ID, and credential.
+The application includes a provider and model catalog. A custom provider can be configured with a supported protocol, base URL, model ID, and credential.
 
-Local application data is stored under:
+## How It Is Built
+
+Megumi is one complete Agent product. The modules below are internal responsibility boundaries, not separate products:
+
+```mermaid
+flowchart TD
+    UI["Desktop UI"] --> PH["Product Host & Composition"]
+    PH --> DA["Discovery Agent"]
+    DA --> CONV["Conversation Submission"]
+    DA --> INT["Interest Runtime"]
+    DA --> DAILY["Daily Discovery Runtime"]
+    DAILY --> SRC["Content Sources"]
+    DA --> CORE["Agent Core"]
+    CORE --> AI["AI Providers"]
+    CORE --> TOOLS["Execution-bound Tools"]
+    DA --> HARNESS["Context · Session · Permissions · Sandbox · Events"]
+    HARNESS --> DB["Local Database"]
+```
+
+- **Agent Core** owns the product-neutral Agent loop, explicit execution state, model calls, and tool-call progression.
+- **Discovery Agent** combines conversations, interests, content sources, daily execution, recommendation selection, and persistence into Megumi's product behavior.
+- **AI and Tools** expose provider-neutral model access and execution-bound tool routing.
+- **Harness modules** provide context construction, durable sessions, permissions, sandbox enforcement, runtime events, and diagnostics around the loop.
+- **Product Host** composes these capabilities and exposes renderer-safe operations to the desktop UI.
+
+## Repository Structure
 
 ```text
-~/.megumi
+apps/desktop/              Electron main process, preload bridge, and React UI
+
+packages/
+├── agent                  Product-neutral Agent loop and execution state
+├── discovery-agent        Megumi's conversation and daily-discovery behavior
+├── ai                     Provider-neutral models and provider adapters
+├── tools                  Tool definitions, bindings, routing, and execution
+├── context                Model-context construction and compaction
+├── session                Durable semantic conversation history
+├── product                Product composition and renderer-safe Host APIs
+├── permissions            Authorization and approval decisions
+├── sandbox                Enforced file, process, and network boundaries
+├── database               Schema, migrations, and transaction boundary
+├── settings               Product settings and provider credentials
+├── events                 Runtime event protocol and event bus
+├── observability          Traces, measurements, logs, and diagnostics
+├── workspace              Workspace access and durable change facts
+├── instructions           Base and effective instruction sources
+└── skills                 Skill discovery, loading, and selection
+
+tests/                     Automated tests and architecture guards
+assets/                    Public screenshots and README assets
 ```
 
 ## Build from Source
@@ -72,7 +153,7 @@ Local application data is stored under:
 Requirements:
 
 - Windows 10 or Windows 11
-- A current Node.js LTS release and npm
+- a current Node.js LTS release and npm
 - Git
 
 Install dependencies and start the desktop application:
@@ -98,35 +179,6 @@ npm run make
 ```
 
 Electron Forge writes build output to `out/`.
-
-## Repository Structure
-
-```text
-apps/desktop           Electron desktop host and user interface
-
-packages/
-├── product            Product composition, Host interface, and lifecycle
-├── engine             Run lifecycle and the Agent Loop
-├── input              User input and attachment processing
-├── commands           Explicit command recognition and handling
-├── context            Prompt construction, context budget, and compaction
-├── ai                 Provider-neutral models and provider adapters
-├── tools              Tool registration, routing, and execution
-├── permissions        Action authorization and approval decisions
-├── sandbox            Enforced file, process, and network boundaries
-├── session            Semantic history, entries, and branches
-├── workspace          Workspace access and change tracking
-├── instructions       Base and effective instruction sources
-├── skills             Skill discovery, loading, and selection
-├── settings           Product configuration and provider credentials
-├── database           Database schema, migrations, and transactions
-├── events             Runtime event protocol and event bus
-├── projections        Read models derived from runtime and session facts
-└── observability      Traces, logs, measurements, and diagnostics
-
-tests/                 Automated tests and architecture guards
-assets/                Public project and README assets
-```
 
 ## Acknowledgements
 
