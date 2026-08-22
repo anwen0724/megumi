@@ -160,7 +160,7 @@ export function LeftSidebar({
           <IconButton label={t('navigation.expandSidebar')} onClick={onToggleCollapsed} size="sm">
             <PanelLeftOpen size={16} aria-hidden="true" />
           </IconButton>
-          <IconButton label={t('navigation.newSession')} onClick={onCreateSession} size="sm" variant="secondary">
+          <IconButton label={t('navigation.newSession')} onClick={onCreateSession} size="sm" variant={activePage === 'chat' ? 'secondary' : 'ghost'}>
             <MessageSquarePlus size={15} aria-hidden="true" />
           </IconButton>
           <IconButton
@@ -221,7 +221,7 @@ export function LeftSidebar({
             <Sparkles size={15} aria-hidden="true" />
             {t('navigation.discovery')}
           </button>
-          <Button onClick={onCreateSession} variant="secondary" size="md" className="w-full justify-start">
+          <Button onClick={onCreateSession} variant={activePage === 'chat' ? 'secondary' : 'ghost'} size="md" className="w-full justify-start">
             <MessageSquarePlus size={15} aria-hidden="true" />
             {t('navigation.newSession')}
           </Button>

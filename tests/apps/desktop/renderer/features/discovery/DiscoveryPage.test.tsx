@@ -179,10 +179,19 @@ describe('DiscoveryPage', () => {
     await screen.findByText('Agent Harness 深入实践');
 
     await user.click(screen.getByRole('button', { name: '管理关注' }));
-    expect(await screen.findByDisplayValue('Agent 工程化')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: '关注与每日发现' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '关注 1' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Agent 工程化')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Agent 工程化')).not.toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: '添加关注' }), '秋招信息');
     await user.click(screen.getByRole('button', { name: '添加' }));
     expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({ action: 'create', description: '秋招信息' });
+
+    await user.click(screen.getByRole('tab', { name: '发现设置' }));
+    expect(screen.getByRole('switch', { name: '允许从已授权会话中理解关注' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', { name: '哔哩哔哩' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('switch', { name: '开放 Web' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
     const count = screen.getByRole('spinbutton', { name: '每日推荐数量' });
     await user.clear(count);
@@ -190,6 +199,32 @@ describe('DiscoveryPage', () => {
     await user.click(screen.getByRole('button', { name: '保存发现设置' }));
 
     expect(settingsUpdate.mock.calls.at(-1)?.[0].payload.discovery).toMatchObject({ dailyTargetCount: 36 });
+  });
+
+  it('keeps interests readable until edited and places destructive actions in an overflow menu', async () => {
+    const user = userEvent.setup();
+    render(<DiscoveryPage />);
+    await screen.findByText('Agent Harness 深入实践');
+
+    await user.click(screen.getByRole('button', { name: '管理关注' }));
+    const activeSwitch = await screen.findByRole('switch', { name: '暂停 Agent 工程化' });
+    expect(activeSwitch).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Agent 工程化的更多操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '编辑' }));
+    const editor = screen.getByRole('textbox', { name: '编辑关注 Agent 工程化' });
+    await user.clear(editor);
+    await user.type(editor, 'Agent 工程化与真实项目');
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+
+    expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({
+      action: 'update',
+      interestId: 'interest:1',
+      description: 'Agent 工程化与真实项目',
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Agent 工程化的更多操作' }));
+    expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
   });
 
   it('shows a failed daily run and lets the user retry it', async () => {

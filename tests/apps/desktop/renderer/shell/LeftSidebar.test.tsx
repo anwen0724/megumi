@@ -45,7 +45,7 @@ describe('LeftSidebar', () => {
 
     expect(screen.queryByText('Megumi')).not.toBeInTheDocument();
     expect(screen.getByText('Chats')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New session' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New session' })).toHaveClass('bg-[var(--color-surface)]');
     expect(screen.getByRole('button', { name: 'Task plan' })).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'megumi' })).toBeInTheDocument();
@@ -73,8 +73,8 @@ describe('LeftSidebar', () => {
 
     expect(discovery).toHaveAttribute('aria-current', 'page');
     expect(discovery).toHaveClass('bg-[var(--color-accent-soft)]');
-    expect(newSession).toHaveClass('bg-[var(--color-surface)]');
-    expect(newSession).not.toHaveClass('bg-[var(--color-accent)]');
+    expect(newSession).toHaveClass('bg-transparent');
+    expect(newSession).not.toHaveClass('bg-[var(--color-surface)]');
   });
 
   it('renders empty state when a project has no sessions', () => {
