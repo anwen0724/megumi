@@ -25,6 +25,7 @@ const defaultProps = {
   onCreateSession: () => undefined,
   onUseExistingProject: () => undefined,
   onManageProjects: () => undefined,
+  onOpenDiscovery: () => undefined,
 };
 
 describe('LeftSidebar', () => {
@@ -33,6 +34,7 @@ describe('LeftSidebar', () => {
     render(<LeftSidebar {...defaultProps} />);
 
     expect(screen.getByText('聊天')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '今日发现' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument();
     expect(screen.getByText('项目')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument();

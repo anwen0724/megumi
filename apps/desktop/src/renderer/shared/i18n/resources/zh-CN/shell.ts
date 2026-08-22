@@ -10,6 +10,7 @@ export const shell = {
     collapseSidebar: '收起侧边栏',
     resizeSidebar: '调整聊天侧边栏宽度',
     chats: '聊天',
+    discovery: '今日发现',
     newSession: '新建会话',
     taskPlan: '任务计划',
     settings: '设置',

@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, shell } from 'electron';
 import path from 'path';
 
 export interface CreateMainWindowOptions {
@@ -35,5 +35,20 @@ export function createMainWindow({
     mainWindow.loadFile(path.join(dirname, `../renderer/${rendererName}/index.html`));
   }
 
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const parsed = safeExternalUrl(url);
+    if (parsed) void shell.openExternal(parsed);
+    return { action: 'deny' };
+  });
+
   return mainWindow;
+}
+
+function safeExternalUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -1,19 +1,23 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
-const { loadURL, loadFile, browserWindowConstructor } = vi.hoisted(() => {
+const { loadURL, loadFile, setWindowOpenHandler, openExternal, browserWindowConstructor } = vi.hoisted(() => {
   const loadURL = vi.fn();
   const loadFile = vi.fn();
+  const setWindowOpenHandler = vi.fn();
+  const openExternal = vi.fn();
   const browserWindowConstructor = vi.fn(function (this: Record<string, unknown>) {
     this.loadURL = loadURL;
     this.loadFile = loadFile;
+    this.webContents = { setWindowOpenHandler };
     return this;
   });
-  return { loadURL, loadFile, browserWindowConstructor };
+  return { loadURL, loadFile, setWindowOpenHandler, openExternal, browserWindowConstructor };
 });
 
 vi.mock('electron', () => ({
   BrowserWindow: browserWindowConstructor,
+  shell: { openExternal },
 }));
 
 describe('createMainWindow', () => {
@@ -42,5 +46,11 @@ describe('createMainWindow', () => {
     );
     expect(loadURL).toHaveBeenCalledWith('http://localhost:5173');
     expect(loadFile).not.toHaveBeenCalled();
+
+    const handleOpen = setWindowOpenHandler.mock.calls[0][0];
+    expect(handleOpen({ url: 'https://example.com/article' })).toEqual({ action: 'deny' });
+    expect(openExternal).toHaveBeenCalledWith('https://example.com/article');
+    expect(handleOpen({ url: 'file:///C:/secret.txt' })).toEqual({ action: 'deny' });
+    expect(openExternal).toHaveBeenCalledOnce();
   });
 });

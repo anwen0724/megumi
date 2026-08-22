@@ -6,6 +6,7 @@ import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
 
 export function useAppBodyController() {
+  const [activePage, setActivePage] = useState<'discovery' | 'chat'>('discovery');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -18,7 +19,11 @@ export function useAppBodyController() {
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
   const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null;
-  const pageTitle = settingsOpen ? 'Settings' : activeSession?.title ?? 'New session';
+  const pageTitle = settingsOpen
+    ? 'Settings'
+    : activePage === 'discovery'
+      ? 'Today\'s discoveries'
+      : activeSession?.title ?? 'New session';
 
   useEffect(() => {
     void (async () => {
@@ -49,6 +54,7 @@ export function useAppBodyController() {
   );
 
   const handleCreateSession = useCallback(() => {
+    setActivePage('chat');
     if (!currentProject) {
       setSettingsOpen(false);
       void useProjectStore.getState().useExistingProject();
@@ -60,6 +66,7 @@ export function useAppBodyController() {
   }, [currentProject, startNewSessionDraft]);
 
   const handleSelectSession = useCallback((sessionId: string) => {
+    setActivePage('chat');
     if (sessionId === activeSessionId) {
       setSettingsOpen(false);
       return;
@@ -102,6 +109,12 @@ export function useAppBodyController() {
     setSettingsOpen(true);
   }, []);
 
+  const openDiscovery = useCallback(() => {
+    setRightSidebarOpen(false);
+    setSettingsOpen(false);
+    setActivePage('discovery');
+  }, []);
+
   useEffect(() => window.megumi.character.onOpenSettingsRequested?.(openSettings), [openSettings]);
 
   const closeSettings = useCallback(() => {
@@ -114,6 +127,7 @@ export function useAppBodyController() {
 
   return {
     sidebarCollapsed,
+    activePage,
     rightSidebarOpen,
     settingsOpen,
     pageTitle,
@@ -128,6 +142,7 @@ export function useAppBodyController() {
     handleOpenProject,
     handleRemoveProject,
     openSettings,
+    openDiscovery,
     closeSettings,
     toggleRightSidebar: toggleWorkspaceSidebar,
   };

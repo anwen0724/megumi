@@ -97,6 +97,12 @@ export const SettingsUpdatePayloadSchema = z.object({
       baseUrl: z.string().url().nullable().optional(),
     }).strict().optional(),
   }).strict().optional(),
+  discovery: z.object({
+    conversationRecognitionEnabled: z.boolean().optional(),
+    dailyGenerationTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u).optional(),
+    dailyTargetCount: z.number().int().min(1).max(100).optional(),
+    enabledSources: z.array(z.string().trim().min(1)).optional(),
+  }).strict().optional(),
   providers: z.record(z.string(), ProviderSettingsUiPatchSchema).optional(),
   permissions: z.object({
     mode: z.enum(['ask', 'auto', 'full_access']).optional(),
@@ -178,6 +184,12 @@ const SettingsUiResolvedSchema = z.object({
       credentialSource: z.enum(['settings', 'environment', 'missing']),
       apiKeyEnv: z.string().optional(),
     }).strict(),
+  }).strict(),
+  discovery: z.object({
+    conversationRecognitionEnabled: z.boolean(),
+    dailyGenerationTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u),
+    dailyTargetCount: z.number().int().min(1).max(100),
+    enabledSources: z.array(z.string().trim().min(1)),
   }).strict(),
   providers: z.record(z.string(), ProviderSettingsUiDtoSchema),
   permissions: z.object({
@@ -308,6 +320,12 @@ export type SettingsUiRaw = {
       baseUrl?: string | null;
     };
   };
+  discovery?: {
+    conversationRecognitionEnabled?: boolean;
+    dailyGenerationTime?: string;
+    dailyTargetCount?: number;
+    enabledSources?: string[];
+  };
   providers?: Record<string, ProviderSettingsUiPatch>;
   permissions?: { mode?: 'ask' | 'auto' | 'full_access'; ruleChange?: PermissionRuleChangeUi };
 };
@@ -355,6 +373,12 @@ export type SettingsUiResolved = {
       credentialSource: 'settings' | 'environment' | 'missing';
       apiKeyEnv?: string;
     };
+  };
+  discovery: {
+    conversationRecognitionEnabled: boolean;
+    dailyGenerationTime: string;
+    dailyTargetCount: number;
+    enabledSources: string[];
   };
   providers: Record<string, ProviderSettingsUiDto>;
   permissions: {
@@ -605,6 +629,22 @@ export function toSettingsRawPatch(patch: SettingsUiRaw): SettingsRaw {
         },
       },
     } : {}),
+    ...(patch.discovery ? {
+      discovery: {
+        ...(patch.discovery.conversationRecognitionEnabled !== undefined
+          ? { conversation_recognition_enabled: patch.discovery.conversationRecognitionEnabled }
+          : {}),
+        ...(patch.discovery.dailyGenerationTime !== undefined
+          ? { daily_generation_time: patch.discovery.dailyGenerationTime }
+          : {}),
+        ...(patch.discovery.dailyTargetCount !== undefined
+          ? { daily_target_count: patch.discovery.dailyTargetCount }
+          : {}),
+        ...(patch.discovery.enabledSources !== undefined
+          ? { enabled_sources: patch.discovery.enabledSources }
+          : {}),
+      },
+    } : {}),
     ...(patch.providers ? {
       providers: Object.fromEntries(Object.entries(patch.providers).map(([providerId, provider]) => [
         providerId,
@@ -669,6 +709,12 @@ export function toSettingsUiResolved(
         credentialSource: webSearch.credential_source,
         ...(webSearch.api_key_env ? { apiKeyEnv: webSearch.api_key_env } : {}),
       },
+    },
+    discovery: {
+      conversationRecognitionEnabled: settings.discovery.conversation_recognition_enabled,
+      dailyGenerationTime: settings.discovery.daily_generation_time,
+      dailyTargetCount: settings.discovery.daily_target_count,
+      enabledSources: [...settings.discovery.enabled_sources],
     },
     providers: Object.fromEntries(Object.entries(settings.providers).map(([providerId, provider]) => [
       providerId,

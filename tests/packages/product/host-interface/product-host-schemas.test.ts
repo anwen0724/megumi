@@ -233,5 +233,13 @@ describe('Product Host runtime schemas', () => {
       theme: 'midnight-blue',
       compaction: { enabled: true, reserveTokens: 16_384 },
     }).success).toBe(false);
+    expect(SettingsUpdatePayloadSchema.safeParse({
+      discovery: {
+        conversationRecognitionEnabled: true,
+        dailyGenerationTime: '09:30',
+        dailyTargetCount: 24,
+        enabledSources: ['bilibili', 'open_web'],
+      },
+    }).success).toBe(true);
   });
 });

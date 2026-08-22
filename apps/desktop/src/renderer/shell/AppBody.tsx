@@ -65,6 +65,8 @@ export function AppBody() {
               // LeftSidebar manages the modal open state internally.
             }}
             onOpenSettings={controller.openSettings}
+            onOpenDiscovery={controller.openDiscovery}
+            activePage={controller.activePage}
             onOpenProject={controller.handleOpenProject}
             onRemoveProject={controller.handleRemoveProject}
           />
@@ -72,8 +74,11 @@ export function AppBody() {
             title={controller.pageTitle}
             rightSidebarOpen={controller.rightSidebarOpen}
             onToggleRightSidebar={controller.toggleRightSidebar}
+            page={controller.activePage}
           />
-          <RightSidebar open={controller.rightSidebarOpen} onClose={() => controller.setRightSidebarOpen(false)} />
+          {controller.activePage === 'chat' ? (
+            <RightSidebar open={controller.rightSidebarOpen} onClose={() => controller.setRightSidebarOpen(false)} />
+          ) : null}
         </>
       )}
     </div>

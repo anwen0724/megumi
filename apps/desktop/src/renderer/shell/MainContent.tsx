@@ -7,12 +7,14 @@ interface MainContentProps {
   title: string;
   rightSidebarOpen: boolean;
   onToggleRightSidebar: () => void;
+  page: 'discovery' | 'chat';
 }
 
 export function MainContent({
   title,
   rightSidebarOpen,
   onToggleRightSidebar,
+  page,
 }: MainContentProps) {
   const ProjectSidebarIcon = rightSidebarOpen ? PanelRightClose : PanelRightOpen;
 
@@ -21,7 +23,7 @@ export function MainContent({
       data-testid="main-content"
       className="relative flex min-h-0 min-w-[var(--main-content-width)] flex-1 flex-col overflow-hidden transition-[width] duration-200 ease-out"
     >
-      <div
+      {page === 'chat' ? <div
         data-testid="main-content-header"
         className="flex h-11 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-app-bg)] px-4"
       >
@@ -37,9 +39,9 @@ export function MainContent({
         >
           <ProjectSidebarIcon size={15} aria-hidden="true" />
         </IconButton>
-      </div>
+      </div> : null}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <PageHost />
+        <PageHost page={page} />
         <MainOverlays />
       </div>
     </main>

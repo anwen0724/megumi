@@ -11,6 +11,7 @@ import {
   Plus,
   Settings,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import { Button, IconButton, cx } from '../shared/ui';
 import { ProjectManagerModal } from './ProjectManagerModal';
@@ -48,6 +49,8 @@ interface LeftSidebarProps {
   onUseExistingProject: () => void;
   onManageProjects: () => void;
   onOpenSettings?: () => void;
+  onOpenDiscovery: () => void;
+  activePage?: 'discovery' | 'chat';
   onOpenProject?: (projectId: string) => void;
   onRemoveProject?: (projectId: string) => void;
 }
@@ -64,6 +67,8 @@ export function LeftSidebar({
   onUseExistingProject,
   onManageProjects,
   onOpenSettings,
+  onOpenDiscovery,
+  activePage = 'chat',
   onOpenProject,
   onRemoveProject,
 }: LeftSidebarProps) {
@@ -158,6 +163,9 @@ export function LeftSidebar({
           <IconButton label={t('navigation.newSession')} onClick={onCreateSession} size="sm" variant="primary">
             <MessageSquarePlus size={15} aria-hidden="true" />
           </IconButton>
+          <IconButton label={t('navigation.discovery')} onClick={onOpenDiscovery} size="sm" variant={activePage === 'discovery' ? 'secondary' : 'ghost'}>
+            <Sparkles size={15} aria-hidden="true" />
+          </IconButton>
           <IconButton label={t('navigation.taskPlan')} size="sm" variant="ghost">
             <ClipboardList size={15} aria-hidden="true" />
           </IconButton>
@@ -193,6 +201,20 @@ export function LeftSidebar({
 
       <nav aria-label={t('navigation.primary')} className="flex-1 overflow-y-auto px-3 py-1">
         <div className="mb-5 space-y-1">
+          <button
+            type="button"
+            aria-current={activePage === 'discovery' ? 'page' : undefined}
+            onClick={onOpenDiscovery}
+            className={cx(
+              'flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
+              activePage === 'discovery'
+                ? 'bg-[var(--color-accent-soft)] text-[var(--color-text)]'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]',
+            )}
+          >
+            <Sparkles size={15} aria-hidden="true" />
+            {t('navigation.discovery')}
+          </button>
           <Button onClick={onCreateSession} variant="primary" size="md" className="w-full justify-start">
             <MessageSquarePlus size={15} aria-hidden="true" />
             {t('navigation.newSession')}
