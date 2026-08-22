@@ -124,24 +124,26 @@ describe('Tools ModelCall routing', () => {
       },
     });
 
-    const first = tools.resolveModelCallTools({
-      executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1',
+    const execution = tools.bindExecution({
+      executionId: 'run:1',
+      subject: { kind: 'session', sessionId: 'session:1', workspaceId: 'workspace:1' },
+      includeBuiltIns: true,
     });
-    expect(first.status).toBe('resolved');
+    expect(execution.status).toBe('bound');
+    if (execution.status !== 'bound') throw new Error('Expected execution binding.');
+    const first = execution.binding.prepareModelCall({ modelCallId: 'model-call:1' });
+    expect(first.status).toBe('prepared');
+    if (first.status !== 'prepared') throw new Error('Expected ModelCall binding.');
     disabled.add('read_file');
 
-    const routed = tools.routeToolCall({
-      executionId: 'run:1',
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      modelCallId: 'model-call:1',
+    const routed = first.binding.routeToolCall({
       toolCallId: 'call:1',
       toolName: 'read_file',
       input: { path: 'notes.md' },
     });
     expect(routed.status).toBe('routed');
     if (routed.status !== 'routed') throw new Error('Expected routed read_file');
-    await expect(tools.executeToolInvocation({
+    await expect(first.binding.executeToolInvocation({
       invocation: structuredClone(routed.invocation),
     })).resolves.toMatchObject({
       type: 'failed', error: { code: 'sandbox_denied' },
@@ -150,25 +152,20 @@ describe('Tools ModelCall routing', () => {
     expect(tools.listAvailableTools().tools.map((tool) => tool.registeredToolName))
       .not.toContain('read_file');
 
-    const second = tools.resolveModelCallTools({
-      executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:2',
-    });
-    expect(second.status).toBe('resolved');
-    if (second.status === 'resolved') {
-      expect(second.definitions.map((tool) => tool.name))
+    const second = execution.binding.prepareModelCall({ modelCallId: 'model-call:2' });
+    expect(second.status).toBe('prepared');
+    if (second.status === 'prepared') {
+      expect(second.binding.definitions.map((tool) => tool.name))
         .not.toContain('read_file');
     }
 
-    tools.releaseModelCallTools({ modelCallId: 'model-call:1' });
-    expect(tools.routeToolCall({
-      executionId: 'run:1',
-      sessionId: 'session:1',
-      workspaceId: 'workspace:1',
-      modelCallId: 'model-call:1',
+    first.binding.close();
+    expect(first.binding.routeToolCall({
       toolCallId: 'call:2',
       toolName: 'read_file',
       input: { path: 'notes.md' },
     })).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
+    execution.binding.close();
   });
 
   it('executes update_plan without Permissions or Sandbox and emits a complete snapshot', async () => {
@@ -193,12 +190,15 @@ describe('Tools ModelCall routing', () => {
       executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
       builtInToolAvailability: { isAvailable: () => true },
     });
-    const scope = {
-      executionId: 'run:plan', sessionId: 'session:plan', workspaceId: 'workspace:plan', modelCallId: 'model-call:plan',
-    };
-    expect(tools.resolveModelCallTools(scope).status).toBe('resolved');
-    const routed = tools.routeToolCall({
-      ...scope,
+    const execution = tools.bindExecution({
+      executionId: 'run:plan',
+      subject: { kind: 'session', sessionId: 'session:plan', workspaceId: 'workspace:plan' },
+      includeBuiltIns: true,
+    });
+    if (execution.status !== 'bound') throw new Error('Expected execution binding.');
+    const modelCall = execution.binding.prepareModelCall({ modelCallId: 'model-call:plan' });
+    if (modelCall.status !== 'prepared') throw new Error('Expected ModelCall binding.');
+    const routed = modelCall.binding.routeToolCall({
       toolCallId: 'tool-call:plan',
       toolName: 'update_plan',
       input: { plan: [{ step: 'Implement', status: 'in_progress' }] },
@@ -206,7 +206,7 @@ describe('Tools ModelCall routing', () => {
     expect(routed).toMatchObject({ status: 'routed', operations: [] });
     if (routed.status !== 'routed') throw new Error('Expected routed update_plan');
     const notifications: unknown[] = [];
-    const result = await tools.executeToolInvocation(
+    const result = await modelCall.binding.executeToolInvocation(
       { invocation: routed.invocation },
       { onNotification: (notification) => notifications.push(notification) },
     );
@@ -215,5 +215,6 @@ describe('Tools ModelCall routing', () => {
       type: 'plan_updated',
       plan: [{ step: 'Implement', status: 'in_progress' }],
     }]);
+    execution.binding.close();
   });
 });

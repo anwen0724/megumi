@@ -78,13 +78,13 @@ export type { ToolExecutionPolicy, ToolWorkspaceChanges } from './sandbox-tool-e
 
 export interface Tools {
   bindExecution(request: BindToolExecutionRequest): BindToolExecutionResult;
-  resolveModelCallTools(request: ModelCallToolScope): ResolveModelCallToolsResult;
   listAvailableTools(request?: ListAvailableToolsRequest): ListAvailableToolsResult;
+}
+
+interface InternalTools extends Tools {
+  resolveModelCallTools(request: ModelCallToolScope): ResolveModelCallToolsResult;
   routeToolCall(request: RouteModelCallToolRequest): RouteToolCallResult;
-  executeToolInvocation(
-    request: ExecuteToolInvocationRequest,
-    options?: ToolExecutionOptions,
-  ): Promise<ToolExecutionResult>;
+  executeToolInvocation(request: ExecuteToolInvocationRequest, options?: ToolExecutionOptions): Promise<ToolExecutionResult>;
   releaseModelCallTools(request: { readonly modelCallId: string }): void;
 }
 
@@ -167,7 +167,7 @@ export function createTools(request: CreateToolsRequest): Tools {
   const executions = new Map<string, ToolExecutionBinding>();
   const webFetch = createWebFetch();
 
-  const api: Tools = {
+  const runtime: InternalTools = {
     bindExecution(bindingRequest) {
       if (executions.has(bindingRequest.executionId)) {
         return failedBinding('model_call_scope_conflict', `Tool execution is already bound: ${bindingRequest.executionId}`);
@@ -198,7 +198,7 @@ export function createTools(request: CreateToolsRequest): Tools {
             definitions: prepared.definitions,
             routeToolCall(call) {
               if (modelCallClosed || closed) return unknownModelCall(modelCallId);
-              return api.routeToolCall({ ...scope, ...call });
+              return runtime.routeToolCall({ ...scope, ...call });
             },
             executeToolInvocation(execution, options) {
               if (modelCallClosed || closed) {
@@ -208,13 +208,13 @@ export function createTools(request: CreateToolsRequest): Tools {
                   message: `ModelCall Tool Router was not found: ${modelCallId}`,
                 }));
               }
-              return api.executeToolInvocation(execution, options);
+              return runtime.executeToolInvocation(execution, options);
             },
             close() {
               if (modelCallClosed) return;
               modelCallClosed = true;
               modelCalls.delete(modelCallId);
-              api.releaseModelCallTools({ modelCallId });
+              runtime.releaseModelCallTools({ modelCallId });
             },
           };
           return { status: 'prepared', binding: modelBinding };
@@ -222,7 +222,7 @@ export function createTools(request: CreateToolsRequest): Tools {
         close() {
           if (closed) return;
           closed = true;
-          for (const modelCallId of modelCalls) api.releaseModelCallTools({ modelCallId });
+          for (const modelCallId of modelCalls) runtime.releaseModelCallTools({ modelCallId });
           modelCalls.clear();
           executions.delete(bindingRequest.executionId);
         },
@@ -313,7 +313,10 @@ export function createTools(request: CreateToolsRequest): Tools {
 
     releaseModelCallTools(input) { routers.delete(input.modelCallId); },
   };
-  return api;
+  return {
+    bindExecution: runtime.bindExecution,
+    listAvailableTools: runtime.listAvailableTools,
+  };
 
   function prepareModelCall(
     scope: ModelCallToolScope,
