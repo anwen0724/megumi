@@ -115,23 +115,60 @@ export function succeeded(toolName: string): ToolExecutionResult {
 export function toolsForRun(
   tools: readonly RegisteredTool[],
   execute: TestToolExecute = async ({ toolName }) => succeeded(toolName),
-): Pick<Tools, 'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'> {
-  const routers = new Map<string, ReturnType<typeof createToolRouter>>();
-  const resolve = (scope: { executionId: string; sessionId: string; workspaceId: string; modelCallId: string }) => {
-    let router = routers.get(scope.modelCallId);
-    if (!router) {
-      router = createToolRouter({ scope, tools });
-      routers.set(scope.modelCallId, router);
-    }
-    return router;
-  };
-  resolve({ executionId: 'run:1', sessionId: 'session:1', workspaceId: 'workspace:1', modelCallId: 'model-call:1' });
+): Pick<Tools, 'bindExecution'> {
   return {
-    resolveModelCallTools: (scope) => ({ status: 'resolved', definitions: resolve(scope).definitions() }),
-    routeToolCall: (call) => resolve(call).route(call),
-    executeToolInvocation: (input, options) => execute({
-      toolName: input.invocation.toolName, input: input.invocation.input,
-    }, options),
-    releaseModelCallTools: ({ modelCallId }) => { routers.delete(modelCallId); },
+    bindExecution: (request) => {
+      let closed = false;
+      const modelCalls = new Map<string, { readonly close: () => void }>();
+      return {
+        status: 'bound',
+        binding: {
+          executionId: request.executionId,
+          prepareModelCall: ({ modelCallId }) => {
+            if (closed || request.subject.kind !== 'session') {
+              return {
+                status: 'failed',
+                failure: { code: 'workspace_unavailable', message: 'Test execution binding is unavailable.' },
+              };
+            }
+            const router = createToolRouter({
+              scope: {
+                executionId: request.executionId,
+                sessionId: request.subject.sessionId,
+                workspaceId: request.subject.workspaceId,
+                modelCallId,
+              },
+              tools,
+            });
+            let modelCallClosed = false;
+            const close = () => {
+              modelCallClosed = true;
+              modelCalls.delete(modelCallId);
+            };
+            modelCalls.set(modelCallId, { close });
+            return {
+              status: 'prepared',
+              binding: {
+                modelCallId,
+                definitions: router.definitions(),
+                routeToolCall: (call) => modelCallClosed
+                  ? { status: 'failed', error: { code: 'unknown_tool', message: 'ModelCall is closed.' } }
+                  : router.route(call),
+                executeToolInvocation: (input, options) => execute({
+                  toolName: input.invocation.toolName, input: input.invocation.input,
+                }, options),
+                close,
+              },
+            };
+          },
+          close: () => {
+            if (closed) return;
+            closed = true;
+            for (const modelCall of modelCalls.values()) modelCall.close();
+            modelCalls.clear();
+          },
+        },
+      };
+    },
   };
 }

@@ -569,10 +569,33 @@ function captureReleases(
   released: string[],
 ): ExecuteAgentDependencies['tools'] {
   return {
-    ...tools,
-    releaseModelCallTools(request) {
-      released.push(request.modelCallId);
-      tools.releaseModelCallTools(request);
+    bindExecution(request) {
+      const result = tools.bindExecution(request);
+      if (result.status === 'failed') return result;
+      return {
+        status: 'bound',
+        binding: {
+          executionId: result.binding.executionId,
+          prepareModelCall(input) {
+            const prepared = result.binding.prepareModelCall(input);
+            if (prepared.status === 'failed') return prepared;
+            let closed = false;
+            return {
+              status: 'prepared',
+              binding: {
+                ...prepared.binding,
+                close() {
+                  if (closed) return;
+                  closed = true;
+                  released.push(prepared.binding.modelCallId);
+                  prepared.binding.close();
+                },
+              },
+            };
+          },
+          close: () => result.binding.close(),
+        },
+      };
     },
   };
 }
