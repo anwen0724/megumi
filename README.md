@@ -8,8 +8,11 @@
 [![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-4c7a68)](./LICENSE)
 
-<!-- Placeholder: replace with the current Today's Discoveries screen. -->
-![Megumi desktop interface](./assets/screenshots/startup-screen.png)
+<p align="center">
+  <a href="./assets/screenshots/today-discoveries.png">
+    <img src="./assets/screenshots/today-discoveries.png" alt="Megumi Today's Discoveries interface" width="100%">
+  </a>
+</p>
 
 ## Why Megumi
 
@@ -31,6 +34,8 @@ Megumi turns this recurring search work into a daily product experience. Tell it
 - **Tune the daily run.** Choose the generation time, target recommendation count, content sources, and whether authorized conversations may contribute interest signals.
 - **Teach Megumi through feedback.** Like, dislike, hide, favorite, or save a recommendation for later.
 - **Continue from a recommendation.** Open a new conversation grounded in the selected recommendation and discuss it with Megumi.
+- **Work with Megumi as a general-purpose Agent.** Beyond content discovery, use multi-turn conversations to let Megumi understand tasks, call the tools available to the current execution, and complete work.
+- **Talk through the anime character window.** Open the floating character and speak naturally; local speech recognition sends what you say into the bound Megumi conversation.
 
 ## The Daily Discovery Loop
 
@@ -55,8 +60,27 @@ Megumi brings three activities into one desktop product:
 2. **Interest Management** — see what Megumi currently follows for you and adjust the daily discovery settings.
 3. **Recommendation Conversations** — start a new conversation from a recommendation without losing the content that motivated it.
 
-<!-- Placeholder screenshots; replace with current discovery and recommendation-conversation screens. -->
-![Megumi conversation interface](./assets/screenshots/chat-timeline.png)
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Interest management</strong></td>
+    <td width="50%" align="center"><strong>Discovery settings</strong></td>
+  </tr>
+  <tr>
+    <td><a href="./assets/screenshots/interest-management.png"><img src="./assets/screenshots/interest-management.png" alt="Megumi interest management"></a></td>
+    <td><a href="./assets/screenshots/discovery-settings.png"><img src="./assets/screenshots/discovery-settings.png" alt="Megumi discovery settings"></a></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>Start from a recommendation</strong></td>
+    <td width="50%" align="center"><strong>Continue the conversation</strong></td>
+  </tr>
+  <tr>
+    <td><a href="./assets/screenshots/recommendation-conversation-start.png"><img src="./assets/screenshots/recommendation-conversation-start.png" alt="Start a Megumi conversation from a recommendation"></a></td>
+    <td><a href="./assets/screenshots/recommendation-conversation.png"><img src="./assets/screenshots/recommendation-conversation.png" alt="Megumi recommendation conversation"></a></td>
+  </tr>
+</table>
 
 ## Current Status
 

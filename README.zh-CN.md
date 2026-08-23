@@ -8,8 +8,11 @@
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
 
-<!-- 临时占位：后续替换为当前“今日发现”页面截图。 -->
-![Megumi 桌面界面](./assets/screenshots/startup-screen.png)
+<p align="center">
+  <a href="./assets/screenshots/today-discoveries.png">
+    <img src="./assets/screenshots/today-discoveries.png" alt="Megumi 今日发现界面" width="100%">
+  </a>
+</p>
 
 ## 为什么做 Megumi
 
@@ -31,6 +34,8 @@ Megumi 把这种重复的信息搜索变成一种每日产品体验。你可以�
 - **调整每日生成方式。** 设置生成时间、目标推荐数量、内容来源，以及是否允许从已授权会话中理解关注。
 - **通过反馈影响后续发现。** 对推荐进行喜欢、不喜欢、隐藏、收藏或稍后看操作。
 - **围绕推荐继续对话。** 从一条推荐开启新的会话，并让 Megumi 基于这条内容继续讨论。
+- **把 Megumi 当作通用 Agent 使用。** 除内容发现外，也可以在多轮会话中让 Megumi 理解任务、调用当前执行可用的工具并完成工作。
+- **通过动漫角色窗口进行语音交互。** 打开悬浮角色窗口，用自然语言说话；本地语音识别会把内容送入当前绑定的 Megumi 会话。
 
 ## 每日发现闭环
 
@@ -55,8 +60,27 @@ Megumi 把三类行为放在同一个桌面产品中：
 2. **关注管理**：查看 Megumi 当前为你关注的内容，并调整每日发现设置。
 3. **推荐会话**：从一条推荐开启新会话，同时保留触发这次讨论的内容上下文。
 
-<!-- 临时占位：后续替换为当前发现页面和推荐会话页面截图。 -->
-![Megumi 会话界面](./assets/screenshots/chat-timeline.png)
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>管理关注</strong></td>
+    <td width="50%" align="center"><strong>每日发现设置</strong></td>
+  </tr>
+  <tr>
+    <td><a href="./assets/screenshots/interest-management.png"><img src="./assets/screenshots/interest-management.png" alt="Megumi 关注管理界面"></a></td>
+    <td><a href="./assets/screenshots/discovery-settings.png"><img src="./assets/screenshots/discovery-settings.png" alt="Megumi 每日发现设置界面"></a></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td width="50%" align="center"><strong>从推荐开启会话</strong></td>
+    <td width="50%" align="center"><strong>围绕内容继续讨论</strong></td>
+  </tr>
+  <tr>
+    <td><a href="./assets/screenshots/recommendation-conversation-start.png"><img src="./assets/screenshots/recommendation-conversation-start.png" alt="从推荐开启 Megumi 会话"></a></td>
+    <td><a href="./assets/screenshots/recommendation-conversation.png"><img src="./assets/screenshots/recommendation-conversation.png" alt="Megumi 推荐会话界面"></a></td>
+  </tr>
+</table>
 
 ## 当前实现状态
 
