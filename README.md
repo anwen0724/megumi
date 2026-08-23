@@ -122,7 +122,7 @@ The application includes a provider and model catalog. A custom provider can be 
 
 ## How It Is Built
 
-Megumi is one complete Agent product. The modules below are internal responsibility boundaries, not separate products:
+The modules below are internal responsibility boundaries:
 
 ```mermaid
 flowchart TD
