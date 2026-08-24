@@ -1,7 +1,9 @@
 // @vitest-environment node
 /* Verifies the Instructions owner reads exact AGENTS.md sources with stable scope and failure semantics. */
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as PublicInstructions from '../../../packages/agent/instructions/src/index';
 import {
   createInstructionReader,
@@ -65,6 +67,21 @@ const EXPECTED_SYSTEM_INSTRUCTIONS = [
   },
 ] as const;
 
+const EXPECTED_CONVERSATION_DOCUMENT = [
+  'Behavior guidelines:',
+  ...EXPECTED_SYSTEM_INSTRUCTIONS[1].groups.flatMap((group) => (
+    group.items.map((item) => `- ${item}`)
+  )),
+].join('\n');
+
+const temporaryInstructionRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of temporaryInstructionRoots.splice(0)) {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 describe('InstructionReader', () => {
   it('exports only stable contracts and creation entries', () => {
     expect(PublicInstructions).not.toHaveProperty('DefaultInstructionReader');
@@ -81,18 +98,64 @@ describe('InstructionReader', () => {
     const conversation = await reader.getSystemInstructions('conversation');
     const discovery = await reader.getSystemInstructions('daily_discovery');
 
-    expect(conversation.map((document) => document.instructionId)).toEqual([
-      'megumi.common',
-      'megumi.conversation',
+    expect(conversation.map((document) => ({
+      instructionId: document.instructionId,
+      content: document.content,
+    }))).toEqual([
+      {
+        instructionId: 'megumi.common',
+        content: EXPECTED_SYSTEM_INSTRUCTIONS[0].groups[0].items[0],
+      },
+      {
+        instructionId: 'megumi.conversation',
+        content: EXPECTED_CONVERSATION_DOCUMENT,
+      },
     ]);
     expect(discovery.map((document) => document.instructionId)).toEqual([
       'megumi.common',
       'megumi.daily-discovery',
     ]);
-    expect(conversation[0]?.content).toContain('Megumi');
     expect(discovery[1]?.content).toContain('select_recommendations');
     expect(conversation).not.toBe(discovery);
     expect(conversation[0]).not.toBe(discovery[0]);
+  });
+
+  it('normalizes BOM and Windows line endings in replaceable instruction files', async () => {
+    const contentRoot = createInstructionContentRoot({
+      common: '\uFEFFIdentity\r\nline two\r\n',
+      conversation: 'Behavior guidelines:\r- one\r\n- two\r\n',
+      dailyDiscovery: 'Daily discovery.\r\n',
+    });
+    const reader = createInstructionReader({
+      megumiHomePath: testPath('home', '.megumi'),
+      systemContentRoot: contentRoot,
+    });
+
+    await expect(reader.getSystemInstructions('conversation')).resolves.toMatchObject([
+      { content: 'Identity\nline two' },
+      { content: 'Behavior guidelines:\n- one\n- two' },
+    ]);
+  });
+
+  it('rejects missing and empty profile instruction files', async () => {
+    const missingRoot = createInstructionContentRoot({
+      common: 'Identity',
+      dailyDiscovery: 'Daily discovery.',
+    });
+    const emptyRoot = createInstructionContentRoot({
+      common: 'Identity',
+      conversation: ' \r\n ',
+      dailyDiscovery: 'Daily discovery.',
+    });
+
+    await expect(createInstructionReader({
+      megumiHomePath: testPath('home', '.megumi'),
+      systemContentRoot: missingRoot,
+    }).getSystemInstructions('conversation')).rejects.toThrow('conversation.md');
+    await expect(createInstructionReader({
+      megumiHomePath: testPath('home', '.megumi'),
+      systemContentRoot: emptyRoot,
+    }).getSystemInstructions('conversation')).rejects.toThrow('System instruction document is empty');
   });
 
   it('reads Home, Workspace, and nested exact AGENTS.md sources from far to near', async () => {
@@ -303,6 +366,23 @@ describe('InstructionReader', () => {
     },
   );
 });
+
+function createInstructionContentRoot(input: {
+  readonly common?: string;
+  readonly conversation?: string;
+  readonly dailyDiscovery?: string;
+}): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-instruction-content-'));
+  temporaryInstructionRoots.push(root);
+  for (const [fileName, content] of [
+    ['common.md', input.common],
+    ['conversation.md', input.conversation],
+    ['daily-discovery.md', input.dailyDiscovery],
+  ] as const) {
+    if (content !== undefined) fs.writeFileSync(path.join(root, fileName), content, 'utf8');
+  }
+  return root;
+}
 
 class FakeInstructionSource implements InstructionSource {
   readonly realPaths = new Map<string, string>();

@@ -40,7 +40,10 @@ export async function loadSystemInstructionDocuments(
 }
 
 function requireContent(sourcePath: string, content: string): string {
-  const normalized = content.trim();
+  const normalized = content
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n?/g, '\n')
+    .trim();
   if (!normalized) throw new Error(`System instruction document is empty: ${sourcePath}`);
   return normalized;
 }

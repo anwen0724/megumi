@@ -25,7 +25,6 @@ import type {
   ContextFailure,
   ContextWorkspaceSource,
   ConversationRunContext,
-  DailyDiscoveryContextMaterial,
   DailyDiscoveryRunContext,
   Prompt,
 } from './context';
@@ -43,10 +42,10 @@ import {
   type CompactionPolicy,
   type ContextCapacity,
 } from './context-policy';
-import { createContextResolver, type ContextResolver, type ResolvedContext } from './context-resolver';
+import { createContextResolver, type ContextResolver } from './context-resolver';
+import type { ConversationResolvedContext } from './resolvers/conversation-context-resolver';
 import { calculatePromptUsage, type ContextUsageEstimate } from './context-usage-calculator';
 import { createPromptBuilder, type PromptBuilder } from './prompt/prompt-builder';
-import { buildSystemPrompt } from './prompt/system-prompt-builder';
 import type { MaterializedHistory } from './prompt/context-message-builder';
 import {
   executeContextCompaction,
@@ -159,6 +158,7 @@ class DefaultContext implements ContextCapabilities {
     try {
       return await this.withSessionOperation(request.sessionId, async () => {
         const prepared = await this.buildResolvedPrompt({
+          kind: 'conversation',
           sessionId: request.sessionId,
           workspaceId: request.workspaceId,
           model: request.model,
@@ -203,6 +203,7 @@ class DefaultContext implements ContextCapabilities {
   ): Promise<BuildContextResult> {
     const modelCall = request.modelCallContext;
     const prepared = await this.buildResolvedPrompt({
+      kind: 'conversation',
       sessionId: run.sessionId,
       workspaceId: run.workspaceId,
       model: run.model,
@@ -232,6 +233,7 @@ class DefaultContext implements ContextCapabilities {
         // The Summary is now a Session fact: re-read the authoritative history
         // and rebuild the Prompt from it, never from a pre-commit projection.
         const refreshed = await this.buildResolvedPrompt({
+          kind: 'conversation',
           sessionId: run.sessionId,
           workspaceId: run.workspaceId,
           model: run.model,
@@ -253,26 +255,22 @@ class DefaultContext implements ContextCapabilities {
     if (request.signal?.aborted) {
       return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
     }
-    try {
-      const systemInstructions = await this.options.instructionReader
-        .getSystemInstructions('daily_discovery');
-      const prompt: Prompt = {
-        systemPrompt: buildSystemPrompt({
-          systemInstructions,
-          tools: request.modelCallContext.tools,
-          additionalSections: [renderDailyDiscoveryMaterial(run.localDate, run.material)],
-        }),
-        messages: [...request.currentMessages],
-        tools: [...request.modelCallContext.tools],
-      };
-      const capacity = contextCapacityFromModel(run.model);
-      return this.finalizePrompt(prompt, capacity, this.countUsage(prompt));
-    } catch (error) {
-      if (request.signal?.aborted || isAbortError(error)) {
-        return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
-      }
-      return buildFailedContextResult(buildSourceInstructionsFailure(error));
-    }
+    const resolved = await this.resolver.resolve({
+      kind: 'daily_discovery',
+      localDate: run.localDate,
+      material: run.material,
+      currentMessages: request.currentMessages,
+      tools: request.modelCallContext.tools,
+      signal: request.signal,
+    });
+    if (resolved.status === 'failed') return resolved;
+    const built = await this.promptBuilder.build({
+      context: resolved.context,
+      signal: request.signal,
+    });
+    if (built.status === 'failed') return built;
+    const capacity = contextCapacityFromModel(run.model);
+    return this.finalizePrompt(built.prompt, capacity, this.countUsage(built.prompt));
   }
 
   /**
@@ -284,6 +282,7 @@ class DefaultContext implements ContextCapabilities {
    * it.
    */
   private async buildResolvedPrompt(input: {
+    readonly kind: 'conversation';
     readonly sessionId: string;
     readonly workspaceId: string;
     readonly model: Model<Api>;
@@ -292,7 +291,7 @@ class DefaultContext implements ContextCapabilities {
   }): Promise<
     | {
         readonly status: 'ok';
-        readonly resolved: ResolvedContext;
+        readonly resolved: ConversationResolvedContext;
         readonly prompt: Prompt;
         readonly materialized: MaterializedHistory;
         readonly policy: CompactionPolicy;
@@ -305,6 +304,7 @@ class DefaultContext implements ContextCapabilities {
       return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
     }
     const resolved = await this.resolver.resolve({
+      kind: 'conversation',
       sessionId: input.sessionId,
       workspaceId: input.workspaceId,
       model: input.model,
@@ -312,6 +312,12 @@ class DefaultContext implements ContextCapabilities {
       signal: input.signal,
     });
     if (resolved.status === 'failed') return resolved;
+    if (resolved.context.kind !== 'conversation') {
+      return buildFailedContextResult(buildUnexpectedContextFailure({
+        code: 'context_build_failed',
+        message: 'Conversation Context resolved to an incompatible profile.',
+      }));
+    }
     const capacity = contextCapacityFromModel(input.model);
     const policyResult = resolveCompactionPolicyProblem({
       defaults: this.options.policy,
@@ -323,6 +329,12 @@ class DefaultContext implements ContextCapabilities {
     }
     const built = await this.promptBuilder.build({ context: resolved.context, signal: input.signal });
     if (built.status === 'failed') return built;
+    if (built.kind !== 'conversation') {
+      return buildFailedContextResult(buildUnexpectedContextFailure({
+        code: 'context_build_failed',
+        message: 'Conversation Prompt built with an incompatible profile.',
+      }));
+    }
     return {
       status: 'ok',
       resolved: resolved.context,
@@ -359,7 +371,7 @@ class DefaultContext implements ContextCapabilities {
 
   private executeCompaction(input: {
     readonly sessionId: string;
-    readonly context: ResolvedContext;
+    readonly context: ConversationResolvedContext;
     readonly materialized: MaterializedHistory;
     readonly prompt: Prompt;
     readonly policy: CompactionPolicy;
@@ -408,34 +420,6 @@ class DefaultContext implements ContextCapabilities {
       }
     }
   }
-}
-
-function renderDailyDiscoveryMaterial(
-  localDate: string,
-  material: DailyDiscoveryContextMaterial,
-): string {
-  return [
-    '<daily_discovery_material>',
-    `  <local_date>${escapePromptText(localDate)}</local_date>`,
-    `  <target_count>${material.targetCount}</target_count>`,
-    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
-    `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
-    `  <recommendation_signals>${escapePromptText(JSON.stringify(material.recommendationSignals))}</recommendation_signals>`,
-    '</daily_discovery_material>',
-  ].join('\n');
-}
-
-function escapePromptText(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
-function buildSourceInstructionsFailure(error: unknown): ContextFailure {
-  return {
-    code: 'base_instructions_failed',
-    message: error instanceof Error ? error.message : 'System Instructions could not be read.',
-    retryable: true,
-    cause: { owner: 'instructions' },
-  };
 }
 
 function spanStatus(result: BuildContextResult): 'ok' | 'cancelled' | 'error' {

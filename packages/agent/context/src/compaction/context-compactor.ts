@@ -22,7 +22,7 @@ import {
   buildSummaryModelContextFailure,
   buildUnexpectedContextFailure,
 } from '../context-failure-factory';
-import type { ResolvedContext } from '../context-resolver';
+import type { ConversationResolvedContext } from '../resolvers/conversation-context-resolver';
 import type { MaterializedHistory } from '../prompt/context-message-builder';
 import type { PromptBuilder } from '../prompt/prompt-builder';
 import type { Prompt } from '../context';
@@ -36,7 +36,7 @@ export interface ExecuteCompactionInput {
   readonly sessionId: string;
   readonly trigger: CompactionTrigger;
   /** The resolved facts the pre-compaction Prompt was built from. */
-  readonly context: ResolvedContext;
+  readonly context: ConversationResolvedContext;
   /** The pre-compaction full Prompt; its Usage is the before-baseline. */
   readonly prompt: Prompt;
   /** The materialized mapping of the same history. */
@@ -282,7 +282,7 @@ async function projectCandidate(
       message: 'Compaction plan covers an unknown Session Entry.',
     }));
   }
-  const projectedContext: ResolvedContext = {
+  const projectedContext: ConversationResolvedContext = {
     ...input.context,
     // The projection mirrors the to-be-committed facts exactly: same id, time
     // and coverage. It is a pre-commit validation only and is never returned

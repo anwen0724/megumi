@@ -35,7 +35,13 @@ function resolveContext(tools: readonly ToolDefinition[]) {
       })),
     },
   });
-  return resolver.resolve({ sessionId: 'session:1', workspaceId: 'workspace:1', model, tools });
+  return resolver.resolve({
+    kind: 'conversation',
+    sessionId: 'session:1',
+    workspaceId: 'workspace:1',
+    model,
+    tools,
+  });
 }
 
 const tools: readonly ToolDefinition[] = [

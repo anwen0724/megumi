@@ -10,7 +10,7 @@ import type { SystemInstructionDocument } from '@megumi/instructions';
 import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
-import type { ExecutionEnvironment } from '../context';
+import type { DailyDiscoveryContextMaterial, ExecutionEnvironment } from '../context';
 import { escapeXmlAttribute } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
@@ -19,14 +19,29 @@ export interface SystemPromptSources {
   readonly skills?: SkillView;
   readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
-  readonly additionalSections?: readonly string[];
+  readonly dailyDiscoveryMaterial?: {
+    readonly localDate: string;
+    readonly material: DailyDiscoveryContextMaterial;
+  };
 }
 
 export function buildSystemPrompt(sources: SystemPromptSources): string {
   const sections: string[] = [];
-  sections.push(...sources.systemInstructions.map((document) => document.content));
-  sections.push(...(sources.additionalSections ?? []));
-  const guidance = renderToolGuidelines(sources.tools);
+  const conversationDocument = sources.systemInstructions.find(
+    (document) => document.instructionId === 'megumi.conversation',
+  );
+  for (const document of sources.systemInstructions) {
+    sections.push(document === conversationDocument
+      ? appendToolGuidelines(document.content, sources.tools)
+      : document.content);
+  }
+  if (sources.dailyDiscoveryMaterial) {
+    sections.push(renderDailyDiscoveryMaterial(
+      sources.dailyDiscoveryMaterial.localDate,
+      sources.dailyDiscoveryMaterial.material,
+    ));
+  }
+  const guidance = conversationDocument ? '' : renderToolGuidelines(sources.tools);
   if (guidance) sections.push(guidance);
   const effective = sources.effectiveInstructions
     ? renderEffectiveInstructions(sources.effectiveInstructions)
@@ -40,6 +55,38 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
     sections.push(renderExecutionEnvironment(sources.executionEnvironment));
   }
   return sections.join('\n\n');
+}
+
+function renderDailyDiscoveryMaterial(
+  localDate: string,
+  material: DailyDiscoveryContextMaterial,
+): string {
+  return [
+    '<daily_discovery_material>',
+    `  <local_date>${escapePromptText(localDate)}</local_date>`,
+    `  <target_count>${material.targetCount}</target_count>`,
+    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
+    `  <recommendation_signals>${escapePromptText(JSON.stringify(material.recommendationSignals))}</recommendation_signals>`,
+    '</daily_discovery_material>',
+  ].join('\n');
+}
+
+function escapePromptText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+/** Preserves the original single Behavior-guidelines list for conversation prompts. */
+function appendToolGuidelines(
+  fixedGuidance: string,
+  tools: readonly ToolDefinition[],
+): string {
+  const items = tools.flatMap((tool) => tool.promptGuidelines ?? []);
+  if (items.length === 0) return fixedGuidance;
+  const renderedItems = items.map((item) => `- ${item}`).join('\n');
+  return fixedGuidance.startsWith('Behavior guidelines:')
+    ? `${fixedGuidance}\n${renderedItems}`
+    : `${fixedGuidance}\n\nBehavior guidelines:\n${renderedItems}`;
 }
 
 /** Tool-specific prompt guidance follows the profile documents. */

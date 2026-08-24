@@ -87,6 +87,43 @@ function fixture(tokens = 50): CreateContextOptions {
 }
 
 describe('Context.build', () => {
+  it('preserves the original conversation System Prompt organization through the public Context seam', async () => {
+    const options = fixture();
+    options.instructionReader.getSystemInstructions = vi.fn(async () => [
+      {
+        instructionId: 'megumi.common',
+        sourcePath: '/instructions/common.md',
+        content: 'Original identity paragraph.',
+      },
+      {
+        instructionId: 'megumi.conversation',
+        sourcePath: '/instructions/conversation.md',
+        content: 'Behavior guidelines:\n- Original fixed guidance.',
+      },
+    ]);
+    const tool = {
+      name: 'inspect_result',
+      description: 'Inspect one result.',
+      promptSnippet: 'Inspect result evidence.',
+      promptGuidelines: ['Tool guidance remains in the same list.'],
+      parameters: { type: 'object' as const },
+    };
+    const result = await createContext(options).build({
+      modelCallContext: modelCall({ tools: [tool] }),
+      currentMessages: [],
+    });
+
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(result.prompt.systemPrompt).toBe([
+      'Original identity paragraph.',
+      'Behavior guidelines:\n- Original fixed guidance.\n- Tool guidance remains in the same list.',
+      '<effective_instructions>\n  User and project-specific instructions and guidelines:\n  <instruction path="/workspace/AGENTS.md">\n    rules\n  </instruction>\n</effective_instructions>',
+      '<available_tools>\n  In addition to the tools above, you may have access to other custom tools depending on the project.\n- inspect_result: Inspect result evidence.\n</available_tools>',
+      '<execution_environment>\n  <working_directory>/workspace/packages/app</working_directory>\n  <operating_system>Linux</operating_system>\n  <shell>POSIX shell</shell>\n</execution_environment>',
+    ].join('\n\n'));
+  });
+
   it('builds daily discovery from fixed material and current Agent messages without Session or Workspace reads', async () => {
     const options = fixture();
     const currentMessages = [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'start discovery' }], timestamp: 1 }];

@@ -37,6 +37,7 @@ describe('ContextResolver', () => {
     const deps = dependencies();
     const resolver = createContextResolver(deps);
     const result = await resolver.resolve({
+      kind: 'conversation',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       model,
@@ -68,6 +69,7 @@ describe('ContextResolver', () => {
     const deps = dependencies();
     const resolver = createContextResolver(deps);
     const result = await resolver.resolve({
+      kind: 'conversation',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       model,
@@ -81,6 +83,7 @@ describe('ContextResolver', () => {
   it('resolves imageInputSupport false for a text-only Model', async () => {
     const resolver = createContextResolver(dependencies());
     const result = await resolver.resolve({
+      kind: 'conversation',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       model: { ...model, input: ['text'] },
@@ -98,7 +101,7 @@ describe('ContextResolver', () => {
       failure: { code: 'history_unreadable', message: 'unreadable' },
     })) as never;
     expect(await createContextResolver(deps).resolve({
-      sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
+      kind: 'conversation', sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
       status: 'failed',
       failure: { code: 'session_history_failed', cause: { owner: 'session', code: 'history_unreadable' } },
@@ -110,7 +113,7 @@ describe('ContextResolver', () => {
       failure: { code: 'workspace_not_found', message: 'missing' },
     }));
     expect(await createContextResolver(deps).resolve({
-      sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
+      kind: 'conversation', sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
       status: 'failed',
       failure: { code: 'workspace_failed', cause: { owner: 'workspace', code: 'workspace_not_found' } },
@@ -122,7 +125,7 @@ describe('ContextResolver', () => {
       failure: { code: 'instruction_source_read_failed', message: 'unreadable', sourcePath: '/workspace/AGENTS.md' },
     })) as never;
     expect(await createContextResolver(deps).resolve({
-      sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
+      kind: 'conversation', sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
       status: 'failed',
       failure: {
@@ -140,7 +143,7 @@ describe('ContextResolver', () => {
       failure: { code: 'skills_unavailable' as const, message: 'broken view' },
     })) as never;
     expect(await createContextResolver(deps).resolve({
-      sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
+      kind: 'conversation', sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({
       status: 'failed',
       failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skills_unavailable' } },
@@ -153,6 +156,7 @@ describe('ContextResolver', () => {
     const deps = dependencies();
     deps.workspaceSource.readWorkspace = vi.fn(async () => ({ status: 'cancelled' as const }));
     const result = await createContextResolver(deps).resolve({
+      kind: 'conversation',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       model,
@@ -170,11 +174,12 @@ describe('ContextResolver', () => {
       environment: { workingDirectory: '', operatingSystem: 'Linux', shell: 'POSIX shell' },
     }));
     expect(await createContextResolver(deps).resolve({
-      sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
+      kind: 'conversation', sessionId: 'session:1', workspaceId: 'workspace:1', model, tools,
     })).toMatchObject({ status: 'failed', failure: { code: 'execution_environment_invalid' } });
 
     const deps2 = dependencies();
     expect(await createContextResolver(deps2).resolve({
+      kind: 'conversation',
       sessionId: 'session:1',
       workspaceId: 'workspace:1',
       model,
