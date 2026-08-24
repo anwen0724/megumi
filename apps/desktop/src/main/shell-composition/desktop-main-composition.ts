@@ -58,6 +58,7 @@ export function composeDesktopMain() {
     settingsEnvironment: createDesktopSettingsEnvironment(),
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
+    browserSourceTaskGateway: browserSource,
   });
   const discoveryAgent = createDiscoveryAgent(capabilities.discoveryAgentOptions);
   const product = composeProduct({

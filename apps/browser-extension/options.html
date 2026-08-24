@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>连接 Megumi</title></head>
+  <body>
+    <main>
+      <h1>连接 Megumi</h1>
+      <p>在 Megumi 的“管理关注”中生成配对码，然后在这里输入本机端口和配对码。</p>
+      <form id="pair-form">
+        <label>端口 <input id="port" type="number" min="1" max="65535" required></label>
+        <label>配对码 <input id="code" autocomplete="one-time-code" required></label>
+        <button type="submit">连接</button>
+      </form>
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="src/options.js"></script>
+  </body>
+</html>

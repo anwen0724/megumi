@@ -20,11 +20,10 @@ import {
   type ResolveDatabaseMigrationsFolderRequest,
 } from '@megumi/database';
 import {
-  createBilibiliSource,
+  createDiscoverySourceRegistry,
   createDiscoveryRepository,
   createInterestExtractor,
-  createOpenWebSource,
-  createSourceRegistry,
+  type BrowserSourceTaskGateway,
 } from '@megumi/discovery-agent';
 import {
   createEventBus,
@@ -107,6 +106,7 @@ export interface ProductCapabilitiesOptions {
   settingsStorage?: SettingsStore;
   builtInToolAvailability?: BuiltInToolAvailability;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
+  browserSourceTaskGateway?: BrowserSourceTaskGateway;
 }
 
 export interface ProductCapabilities {
@@ -410,13 +410,11 @@ function composeCapabilitiesWithDatabase(
     },
     createBingRssWebSearch(),
   ]);
-  const discoverySources = createSourceRegistry([
-    createBilibiliSource(),
-    createOpenWebSource({
-      webSearch: discoveryWebSearch,
-      webFetch: createWebFetch(),
-    }),
-  ]);
+  const discoverySources = createDiscoverySourceRegistry({
+    webSearch: discoveryWebSearch,
+    webFetch: createWebFetch(),
+    browserGateway: options.browserSourceTaskGateway ?? unavailableBrowserSourceGateway,
+  });
 
   const capabilities: ProductCapabilities = {
     homePaths,
@@ -590,6 +588,14 @@ function composeCapabilitiesWithDatabase(
 
 /** Re-exposed so Product and the Host compositions share the same shutdown budget. */
 export { PRODUCT_SHUTDOWN_TIMEOUT_MS };
+
+const unavailableBrowserSourceGateway: BrowserSourceTaskGateway = {
+  getConnectionState: () => ({ state: 'not_configured' }),
+  execute: async () => ({
+    status: 'failed',
+    failure: { code: 'extension_offline', message: 'Browser source tasks are unavailable.' },
+  }),
+};
 
 /**
  * Reconciles unfinished Session facts left by a prior process before startup

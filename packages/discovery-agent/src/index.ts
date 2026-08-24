@@ -77,6 +77,10 @@ export { createSourceRegistry } from './sources/source-registry';
 export type { SourceRegistry } from './sources/source-registry';
 export { createOpenWebSource } from './sources/open-web-source';
 export { createBilibiliSource } from './sources/bilibili-source';
+export { createXiaohongshuSource } from './sources/xiaohongshu-source';
+export { createDouyinSource } from './sources/douyin-source';
+export { createZhihuSource } from './sources/zhihu-source';
+export { createDiscoverySourceRegistry, DISCOVERY_SOURCE_IDS } from './sources/source-catalog';
 export { signBilibiliWbiParameters } from './sources/bilibili-wbi';
 export {
   createCandidateRegistry,
