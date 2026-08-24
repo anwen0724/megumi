@@ -250,6 +250,7 @@ export function createExecutionFixture(input: {
 
 export function executionMetadata(overrides: Partial<ExecutionMetadata> = {}): ExecutionMetadata {
   return {
+    kind: 'conversation',
     executionId: 'execution:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',

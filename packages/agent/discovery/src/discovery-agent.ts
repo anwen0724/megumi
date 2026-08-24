@@ -96,7 +96,7 @@ export interface CreateDiscoveryAgentOptions {
   >;
   readonly conversation: ConversationSubmissionDependencies;
   readonly interests?: CreateInterestRuntimeOptions;
-  readonly dailyDiscovery?: Omit<CreateDailyDiscoveryRuntimeOptions, 'tools'>;
+  readonly dailyDiscovery?: Omit<CreateDailyDiscoveryRuntimeOptions, 'startExecution'>;
   readonly configuration?: {
     readonly sourceRegistry: SourceRegistry;
     readonly settings: DiscoveryConfigurationStore;
@@ -119,7 +119,10 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     events: options.events,
     launch,
     onSettled(execution, outcome) {
-      if (outcome.status !== 'completed' || !execution.completedAt) return;
+      if (execution.kind !== 'conversation'
+        || outcome.status !== 'completed'
+        || !outcome.assistantMessageId
+        || !execution.completedAt) return;
       interestRuntime.observeConversationTurn({
         sessionId: execution.sessionId,
         executionId: execution.executionId,
@@ -139,9 +142,7 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
   const dailyDiscoveryRuntime = options.dailyDiscovery
     ? createDailyDiscoveryRuntime({
         ...options.dailyDiscovery,
-        tools: options.tools,
-        models: options.models,
-        createExecutionId: options.ids.createExecutionId,
+        startExecution: (request) => executions.start(request),
         now: options.clock.now,
       })
     : undefined;
@@ -186,7 +187,9 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     async shutdown(request) {
       interestRuntime.shutdown();
       await dailyDiscoveryRuntime?.shutdown();
-      return executions.shutdown(request);
+      const result = await executions.shutdown(request);
+      await dailyDiscoveryRuntime?.shutdown();
+      return result;
     },
   };
 }

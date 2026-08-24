@@ -16,7 +16,7 @@ import type {
   SessionMessageWithAttachments,
   RecommendationReferenceContent,
 } from '@megumi/session';
-import type { StartExecutionRequest, StartExecutionResult } from '@megumi/execution';
+import type { ConversationExecutionInput, StartExecutionResult } from '@megumi/execution';
 import type { ExecutionSnapshot } from '@megumi/execution';
 
 export interface SubmitConversationInputRequest extends RawUserInput {
@@ -104,7 +104,7 @@ export interface ConversationSubmission {
 
 export function createConversationSubmission(options: {
   readonly dependencies: ConversationSubmissionDependencies;
-  readonly startExecution: (request: StartExecutionRequest) => Promise<StartExecutionResult>;
+  readonly startExecution: (request: ConversationExecutionInput) => Promise<StartExecutionResult>;
 }): ConversationSubmission {
   return {
     async submit(request) {
@@ -183,6 +183,7 @@ export function createConversationSubmission(options: {
       }
 
       const started = await options.startExecution({
+        kind: 'conversation',
         requestId,
         workspaceId: request.workspaceId,
         sessionId: session.session_id,

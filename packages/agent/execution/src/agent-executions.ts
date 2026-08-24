@@ -1,6 +1,10 @@
 /* Owns admission, identity, registry state, approvals, cancellation, and settlement for Agent executions. */
 import type { Agent } from '@megumi/agent-core';
 import type { Api, Model } from '@megumi/ai';
+import type {
+  DailyDiscoveryContextMaterial,
+  DailyDiscoveryRunContext,
+} from '@megumi/context';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
 import type { ApprovalDecision, PermissionMode } from '@megumi/permissions';
@@ -17,11 +21,14 @@ import {
   type ExecutionFailure,
   ExecutionMetadata,
   ExecutionOutcome,
+  type ConversationExecutionMetadata,
+  type DailyDiscoveryExecutionMetadata,
   type ExecutionSnapshot,
 } from './execution-registry';
 
-export interface LaunchAgentExecutionInput {
-  readonly metadata: ExecutionMetadata;
+export interface LaunchConversationAgentExecutionInput {
+  readonly kind: 'conversation';
+  readonly metadata: ConversationExecutionMetadata;
   readonly input: UserInput;
   readonly recommendationReference?: RecommendationReferenceContent;
   readonly awaitApproval: (request: {
@@ -29,10 +36,20 @@ export interface LaunchAgentExecutionInput {
   }) => Promise<ApprovalResolution>;
 }
 
+export interface LaunchDailyDiscoveryAgentExecutionInput {
+  readonly kind: 'daily_discovery';
+  readonly metadata: DailyDiscoveryExecutionMetadata;
+  readonly runContext: DailyDiscoveryRunContext;
+}
+
+export type LaunchAgentExecutionInput =
+  | LaunchConversationAgentExecutionInput
+  | LaunchDailyDiscoveryAgentExecutionInput;
+
 export interface LaunchedAgentExecution {
   readonly agent: Agent;
-  readonly userMessage: SessionMessageWithAttachments;
-  readonly userEntry: SessionEntry;
+  readonly userMessage?: SessionMessageWithAttachments;
+  readonly userEntry?: SessionEntry;
   readonly execute: () => Promise<ExecutionOutcome>;
 }
 
@@ -40,7 +57,8 @@ export type LaunchAgentExecution = (
   input: LaunchAgentExecutionInput,
 ) => Promise<LaunchedAgentExecution>;
 
-export interface StartExecutionRequest {
+export interface ConversationExecutionInput {
+  readonly kind: 'conversation';
   readonly requestId: string;
   readonly workspaceId: string;
   readonly sessionId: string;
@@ -51,10 +69,35 @@ export interface StartExecutionRequest {
   readonly permissionMode: PermissionMode;
 }
 
+export interface DailyDiscoveryExecutionInput<TRejected = unknown> {
+  readonly kind: 'daily_discovery';
+  readonly requestId: string;
+  readonly batchId: string;
+  readonly localDate: string;
+  readonly material: DailyDiscoveryContextMaterial;
+  readonly model: Model<Api>;
+  accept(request: { readonly executionId: string }): Promise<
+    | { readonly status: 'accepted' }
+    | { readonly status: 'rejected'; readonly reason: TRejected }
+  >;
+  onSettled(request: {
+    readonly executionId: string;
+    readonly outcome: ExecutionOutcome;
+  }): void | Promise<void>;
+}
+
+export type StartExecutionRequest = ConversationExecutionInput | DailyDiscoveryExecutionInput;
+
 export type StartExecutionResult =
-  | { readonly status: 'started'; readonly execution: ExecutionSnapshot; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
-  | { readonly status: 'already_started'; readonly execution: ExecutionSnapshot; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
-  | { readonly status: 'session_busy'; readonly activeExecution: ExecutionSnapshot }
+  | { readonly status: 'started'; readonly execution: ConversationExecutionSnapshot; readonly completion: Promise<ExecutionOutcome>; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
+  | { readonly status: 'already_started'; readonly execution: ConversationExecutionSnapshot; readonly completion: Promise<ExecutionOutcome>; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
+  | { readonly status: 'session_busy'; readonly activeExecution: ConversationExecutionSnapshot }
+  | { readonly status: 'failed'; readonly failure: ExecutionFailure };
+
+export type StartDailyDiscoveryExecutionResult<TRejected = unknown> =
+  | { readonly status: 'started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
+  | { readonly status: 'already_started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
+  | { readonly status: 'rejected'; readonly reason: TRejected }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
 
 export interface ResolveApprovalRequest {
@@ -87,7 +130,7 @@ export type GetExecutionResult =
 
 export interface GetActiveExecutionRequest { readonly sessionId: string }
 export type GetActiveExecutionResult =
-  | { readonly status: 'found'; readonly execution: ExecutionSnapshot }
+  | { readonly status: 'found'; readonly execution: ConversationExecutionSnapshot }
   | { readonly status: 'not_found'; readonly sessionId: string };
 
 export interface ShutdownRequest { readonly timeoutMs: number }
@@ -95,8 +138,11 @@ export type ShutdownResult =
   | { readonly status: 'shut_down' }
   | { readonly status: 'timed_out'; readonly activeExecutions: readonly ExecutionSnapshot[] };
 
+export type ConversationExecutionSnapshot = Extract<ExecutionSnapshot, { kind: 'conversation' }>;
+
 export interface AgentExecutions {
-  start(request: StartExecutionRequest): Promise<StartExecutionResult>;
+  start(request: ConversationExecutionInput): Promise<StartExecutionResult>;
+  start<TRejected>(request: DailyDiscoveryExecutionInput<TRejected>): Promise<StartDailyDiscoveryExecutionResult<TRejected>>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
   get(request: GetExecutionRequest): GetExecutionResult;
@@ -115,6 +161,7 @@ export interface CreateAgentExecutionsOptions {
 
 export function createAgentExecutions(options: CreateAgentExecutionsOptions): AgentExecutions {
   const store = new ExecutionRegistry({ clock: options.clock, terminalRetentionMs: options.terminalRetentionMs });
+  const dailySettlementHandlers = new Map<string, DailyDiscoveryExecutionInput['onSettled']>();
   let accepting = true;
 
   const publish = <TType extends EventType>(
@@ -123,6 +170,7 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
     payload: EventPayloadByType[TType],
     omitExecutionId = false,
   ): void => {
+    if (execution.kind !== 'conversation') return;
     options.events.publish({
       type,
       payload,
@@ -132,7 +180,9 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
   };
 
   const publishEnded = (execution: ExecutionSnapshot, outcome: ExecutionOutcome): void => {
+    if (execution.kind !== 'conversation') return;
     if (outcome.status === 'completed') {
+      if (!outcome.assistantMessageId) return;
       publish(execution, 'run.ended', { status: 'completed', assistantMessageId: outcome.assistantMessageId });
       return;
     }
@@ -158,6 +208,11 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
       if (!terminal) return;
       publishEnded(terminal, outcome);
       void Promise.resolve(options.onSettled?.(terminal, outcome)).catch(() => undefined);
+      const dailySettled = dailySettlementHandlers.get(executionId);
+      dailySettlementHandlers.delete(executionId);
+      if (dailySettled) {
+        void Promise.resolve(dailySettled({ executionId, outcome })).catch(() => undefined);
+      }
     } catch {
       // Settlement diagnostics must not alter the Agent Core outcome.
     }
@@ -172,98 +227,170 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
     if (current.status === 'cancelling') return { status: 'already_cancelling', execution: current };
     store.cancelPendingApproval(executionId);
     store.getActiveExecutionHandle(executionId)?.agent.abort();
-    publish(current, 'run.cancel.requested', {
-      requestedBy: 'user',
-      reason: 'user_cancelled',
-      scope: 'run',
-    });
+    if (current.kind === 'conversation') {
+      publish(current, 'run.cancel.requested', {
+        requestedBy: 'user',
+        reason: 'user_cancelled',
+        scope: 'run',
+      });
+    }
     return { status: 'cancellation_requested', execution: store.getExecution(executionId) ?? current };
   };
 
-  return {
-    async start(request): Promise<StartExecutionResult> {
-      if (!accepting) {
-        return { status: 'failed', failure: executionFailure('Agent execution service is shutting down.', 'execution_shutting_down') };
-      }
-      const createdAt = options.clock.now();
-      const executionId = options.ids.createExecutionId();
-      const userMessageId = options.ids.createSessionMessageId();
-      const metadata: ExecutionMetadata = {
-        executionId,
-        requestId: request.requestId,
+  const startExecution = async (
+    request: ConversationExecutionInput | DailyDiscoveryExecutionInput,
+  ): Promise<StartExecutionResult | StartDailyDiscoveryExecutionResult> => {
+    if (!accepting) {
+      return { status: 'failed', failure: executionFailure('Agent execution service is shutting down.', 'execution_shutting_down') };
+    }
+    return request.kind === 'conversation'
+      ? startConversationExecution(request)
+      : startDailyDiscoveryExecution(request);
+  };
+
+  async function startConversationExecution(request: ConversationExecutionInput): Promise<StartExecutionResult> {
+    const createdAt = options.clock.now();
+    const executionId = options.ids.createExecutionId();
+    const userMessageId = options.ids.createSessionMessageId();
+    const metadata: ConversationExecutionMetadata = {
+      kind: 'conversation',
+      executionId,
+      requestId: request.requestId,
+      workspaceId: request.workspaceId,
+      sessionId: request.sessionId,
+      ...(request.parentEntryId ? { parentEntryId: request.parentEntryId } : {}),
+      userMessageId,
+      model: request.model,
+      permissionMode: request.permissionMode,
+      createdAt,
+      startedAt: createdAt,
+    };
+    const reserved = store.reserveStart({
+      requestId: request.requestId,
+      fingerprint: {
         workspaceId: request.workspaceId,
         sessionId: request.sessionId,
         ...(request.parentEntryId ? { parentEntryId: request.parentEntryId } : {}),
-        userMessageId,
-        model: request.model,
-        permissionMode: request.permissionMode,
-        createdAt,
-        startedAt: createdAt,
+        inputDigest: canonicalJson({ input: request.input, ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}) }),
+      },
+      metadata,
+    });
+
+    if (reserved.status === 'pending') {
+      const established = await reserved.completion;
+      if (established.status === 'failed') return { status: 'failed', failure: established.failure };
+      return {
+        status: 'already_started',
+        ...established.result,
+        completion: requireCompletion(store, established.result.execution.executionId),
       };
-      const reserved = store.reserveStart({
-        requestId: request.requestId,
-        fingerprint: {
-          workspaceId: request.workspaceId,
-          sessionId: request.sessionId,
-          ...(request.parentEntryId ? { parentEntryId: request.parentEntryId } : {}),
-          inputDigest: canonicalJson({ input: request.input, ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}) }),
-        },
+    }
+    if (reserved.status === 'already_started') {
+      return {
+        status: 'already_started',
+        ...reserved.result,
+        completion: requireCompletion(store, reserved.result.execution.executionId),
+      };
+    }
+    if (reserved.status === 'request_conflict') {
+      return { status: 'failed', failure: executionFailure('requestId was reused with different execution input.', 'request_id_conflict') };
+    }
+    if (reserved.status === 'session_busy') return { status: 'session_busy', activeExecution: reserved.activeExecution };
+
+    let launched: LaunchedAgentExecution;
+    try {
+      launched = await options.launch({
+        kind: 'conversation',
         metadata,
+        input: request.input,
+        ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}),
+        awaitApproval: ({ approval }) => store.beginApprovalWait({ executionId, approval }),
       });
+    } catch (error) {
+      const failure = launchFailure(error);
+      store.failStart({ requestId: request.requestId, failure });
+      return { status: 'failed', failure };
+    }
+    if (!launched.userMessage || !launched.userEntry) {
+      const failure = executionFailure('Conversation launch did not commit its user message.', 'conversation_acceptance_missing');
+      store.failStart({ requestId: request.requestId, failure });
+      return { status: 'failed', failure };
+    }
 
-      if (reserved.status === 'pending') {
-        const completion = await reserved.completion;
-        return completion.status === 'started'
-          ? { status: 'already_started', execution: completion.result.execution, userMessage: completion.result.userMessage, userEntry: completion.result.userEntry }
-          : { status: 'failed', failure: completion.failure };
-      }
-      if (reserved.status === 'already_started') {
-        return { status: 'already_started', execution: reserved.result.execution, userMessage: reserved.result.userMessage, userEntry: reserved.result.userEntry };
-      }
-      if (reserved.status === 'request_conflict') {
-        return { status: 'failed', failure: executionFailure('requestId was reused with different execution input.', 'request_id_conflict') };
-      }
-      if (reserved.status === 'session_busy') return { status: 'session_busy', activeExecution: reserved.activeExecution };
+    const completion = attachExecution(metadata, launched);
+    store.completeStart({
+      requestId: request.requestId,
+      executionId,
+      userMessage: launched.userMessage,
+      userEntry: launched.userEntry,
+    });
+    const execution = store.getExecution(executionId)!;
+    if (execution.kind !== 'conversation') {
+      throw new Error('Conversation start produced a non-conversation execution.');
+    }
+    publish(execution, 'message.started', { role: 'user', messageId: userMessageId }, true);
+    publish(execution, 'message.ended', { role: 'user', messageId: userMessageId, content: userMessageText(request.input) }, true);
+    publish(execution, 'run.started', {
+      requestId: execution.requestId,
+      providerId: String(execution.model.provider),
+      modelId: execution.model.id,
+    });
+    return { status: 'started', execution, completion, userMessage: launched.userMessage, userEntry: launched.userEntry };
+  }
 
-      let launched: LaunchedAgentExecution;
-      try {
-        launched = await options.launch({
-          metadata,
-          input: request.input,
-          ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}),
-          awaitApproval: ({ approval }) => store.beginApprovalWait({ executionId, approval }),
-        });
-      } catch (error) {
-        const failure = launchFailure(error);
-        store.failStart({ requestId: request.requestId, failure });
-        return { status: 'failed', failure };
-      }
+  async function startDailyDiscoveryExecution(
+    request: DailyDiscoveryExecutionInput,
+  ): Promise<StartDailyDiscoveryExecutionResult> {
+    const createdAt = options.clock.now();
+    const executionId = options.ids.createExecutionId();
+    const metadata: DailyDiscoveryExecutionMetadata = {
+      kind: 'daily_discovery',
+      executionId,
+      requestId: request.requestId,
+      batchId: request.batchId,
+      localDate: request.localDate,
+      model: request.model,
+      createdAt,
+      startedAt: createdAt,
+    };
+    const accepted = await request.accept({ executionId });
+    if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
 
-      let resolveCompletion!: (outcome: ExecutionOutcome) => void;
-      const completion = new Promise<ExecutionOutcome>((resolve) => { resolveCompletion = resolve; });
-      store.attachActiveExecution({ metadata, agent: launched.agent, completion, pendingApproval: undefined });
-      void completion.then((outcome) => settleCompletion(executionId, outcome));
-      store.completeStart({
-        requestId: request.requestId,
-        executionId,
-        userMessage: launched.userMessage,
-        userEntry: launched.userEntry,
+    let launched: LaunchedAgentExecution;
+    try {
+      launched = await options.launch({
+        kind: 'daily_discovery',
+        metadata,
+        runContext: {
+          kind: 'daily_discovery', executionId, batchId: request.batchId,
+          localDate: request.localDate, material: request.material, model: request.model,
+        },
       });
+    } catch (error) {
+      const failure = launchFailure(error);
+      await request.onSettled({ executionId, outcome: { status: 'failed', failure } });
+      return { status: 'failed', failure };
+    }
+    dailySettlementHandlers.set(executionId, request.onSettled);
+    const completion = attachExecution(metadata, launched);
+    const execution = store.getExecution(executionId)!;
+    return { status: 'started', execution, completion };
+  }
 
-      const execution = store.getExecution(executionId)!;
-      publish(execution, 'message.started', { role: 'user', messageId: userMessageId }, true);
-      publish(execution, 'message.ended', { role: 'user', messageId: userMessageId, content: userMessageText(request.input) }, true);
-      publish(execution, 'run.started', {
-        requestId: execution.requestId,
-        providerId: String(execution.model.provider),
-        modelId: execution.model.id,
-      });
-      void launched.execute().then(
-        resolveCompletion,
-        () => resolveCompletion({ status: 'failed', failure: executionFailure('Execution failed unexpectedly.', 'unexpected_exception') }),
-      );
-      return { status: 'started', execution, userMessage: launched.userMessage, userEntry: launched.userEntry };
-    },
+  function attachExecution(metadata: ExecutionMetadata, launched: LaunchedAgentExecution): Promise<ExecutionOutcome> {
+    let resolveCompletion!: (outcome: ExecutionOutcome) => void;
+    const completion = new Promise<ExecutionOutcome>((resolve) => { resolveCompletion = resolve; });
+    store.attachActiveExecution({ metadata, agent: launched.agent, completion, pendingApproval: undefined });
+    void completion.then((outcome) => settleCompletion(metadata.executionId, outcome));
+    void launched.execute().then(
+      resolveCompletion,
+      () => resolveCompletion({ status: 'failed', failure: executionFailure('Execution failed unexpectedly.', 'unexpected_exception') }),
+    );
+    return completion;
+  }
+
+  return {
+    start: startExecution as AgentExecutions['start'],
 
     async resolveApproval(request): Promise<ResolveApprovalResult> {
       const resolved = store.resolveApproval({
@@ -283,7 +410,9 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
     },
     getActive: ({ sessionId }) => {
       const execution = store.getActive(sessionId);
-      return execution ? { status: 'found', execution } : { status: 'not_found', sessionId };
+      return execution?.kind === 'conversation'
+        ? { status: 'found', execution }
+        : { status: 'not_found', sessionId };
     },
     async shutdown({ timeoutMs }): Promise<ShutdownResult> {
       accepting = false;
@@ -313,6 +442,12 @@ function canonicalJson(value: unknown): string {
     return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function requireCompletion(store: ExecutionRegistry, executionId: string): Promise<ExecutionOutcome> {
+  const completion = store.getCompletion(executionId);
+  if (!completion) throw new Error(`Execution completion is unavailable: ${executionId}`);
+  return completion;
 }
 
 function launchFailure(error: unknown): ExecutionFailure {

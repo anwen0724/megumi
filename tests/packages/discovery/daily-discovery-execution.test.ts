@@ -121,7 +121,11 @@ describe('daily discovery Agent execution', () => {
     addInterest(fixture.repository, 'interest:2', '2027 届秋招信息');
 
     const started = await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
-    expect(started).toMatchObject({ status: 'started', localDate: '2026-08-22' });
+    expect(started).toMatchObject({
+      status: 'started',
+      localDate: '2026-08-22',
+      executionId: 'execution:1',
+    });
     await waitForBatch(database, 'published');
 
     expect(calls).toEqual([
@@ -138,6 +142,26 @@ describe('daily discovery Agent execution', () => {
       position: 0,
     })]);
     expect(readBatch(database)).toMatchObject({ status: 'published', result_count: 1, target_count: 5 });
+  });
+
+  it('returns the same durable execution while the daily batch is already running', async () => {
+    const fixture = createFixture(database, [source('open_web', async () => [content('one', 'First')])], [
+      toolStream('call:1', 'search_content', {
+        sourceId: 'open_web', query: 'query', mode: 'relevance', limit: 5,
+      }),
+      toolStream('call:2', 'select_recommendations', {
+        items: [{ candidateId: 'candidate:1', recommendationReason: 'Useful.' }],
+      }),
+      textStream('done'),
+    ]);
+    addInterest(fixture.repository, 'interest:1', 'Agent engineering');
+
+    const first = await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
+    const duplicate = await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
+
+    expect(first).toMatchObject({ status: 'started', executionId: 'execution:1' });
+    expect(duplicate).toMatchObject({ status: 'in_progress', executionId: 'execution:1' });
+    await waitForBatch(database, 'published');
   });
 
   it('freezes the first valid selection and does not let later Tool calls replace it', async () => {
@@ -219,7 +243,8 @@ describe('daily discovery Agent execution', () => {
     }));
     const streams = [
       toolsStream(searchCalls),
-      toolsStream(readCalls),
+      toolsStream(readCalls.slice(0, 32)),
+      toolsStream(readCalls.slice(32)),
       toolStream('select:1', 'select_recommendations', {
         items: [{ candidateId: 'candidate:1', recommendationReason: 'Within fixed budgets' }],
       }),
@@ -352,7 +377,18 @@ function createFixture(
     clock: { now: () => now },
     terminalRetentionMs: 60_000,
     events: createEventBus(), models,
-    context: {} as never, tools: discoveryTools.tools, permissions: {} as never, session: {} as never,
+    context: {
+      build: async (request) => ({
+        status: 'ready' as const,
+        prompt: {
+          systemPrompt: JSON.stringify(request.modelCallContext.run),
+          messages: [...request.currentMessages],
+          tools: [...request.modelCallContext.tools],
+        },
+      }),
+      compact: async () => ({ status: 'nothing_to_compact' as const, reason: 'no_historical_messages' as const }),
+    },
+    tools: discoveryTools.tools, permissions: {} as never, session: {} as never,
     conversation: {
       input: {} as never, sessions: {} as never, history: {} as never, branches: {} as never,
       resolveModel: async () => ({ status: 'ok', model }),
@@ -386,8 +422,8 @@ function createFixture(
       },
     },
     policy: {
-      maxModelCallsPerExecution: 4, maxToolRoundsPerExecution: 3,
-      maxToolCallsPerModelCall: 4, maxToolCallsPerExecution: 8,
+      maxModelCallsPerExecution: 80, maxToolRoundsPerExecution: 50,
+      maxToolCallsPerModelCall: 32, maxToolCallsPerExecution: 256,
       maxConcurrentToolExecutions: 2, modelCallTimeoutMs: 1_000,
       toolExecutionTimeoutMs: 1_000, maxModelCallAttempts: 1,
       modelRetryDelayMs: 0, maxContextOverflowRecoveries: 1,

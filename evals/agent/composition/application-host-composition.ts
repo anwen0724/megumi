@@ -176,7 +176,9 @@ function composeProductRuntime(
       { eventTypes: ['run.ended'] },
       createWorkspaceChangeEventHandler(workspaceChanges, (executionId) => {
         const result = discoveryAgent.get({ executionId });
-        return result.status === 'found' ? result.execution.workspaceId : undefined;
+        return result.status === 'found' && result.execution.kind === 'conversation'
+          ? result.execution.workspaceId
+          : undefined;
       }),
     ),
   );

@@ -65,6 +65,7 @@ function assistant(text: string, timestamp = 2): AssistantMessage {
 }
 
 const startRequest: StartExecutionRequest = {
+  kind: 'conversation',
   requestId: 'request:1',
   workspaceId: 'workspace:1',
   sessionId: 'session:1',

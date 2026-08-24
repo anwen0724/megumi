@@ -176,7 +176,18 @@ function createFixture(
       createToolExecutionId: () => 'tool:unused', createApprovalId: () => 'approval:unused',
     },
     clock: { now }, terminalRetentionMs: 60_000, events: createEventBus(), models,
-    context: {} as never, tools: discoveryTools.tools, permissions: {} as never, session: {} as never,
+    context: {
+      build: async (request) => ({
+        status: 'ready' as const,
+        prompt: {
+          systemPrompt: JSON.stringify(request.modelCallContext.run),
+          messages: [...request.currentMessages],
+          tools: [...request.modelCallContext.tools],
+        },
+      }),
+      compact: async () => ({ status: 'nothing_to_compact' as const, reason: 'no_historical_messages' as const }),
+    },
+    tools: discoveryTools.tools, permissions: {} as never, session: {} as never,
     conversation: {
       input: {} as never, sessions: {} as never, history: {} as never, branches: {} as never,
       resolveModel: async () => ({ status: 'ok', model }),
@@ -202,8 +213,8 @@ function createFixture(
       ...(timers ? { timers } : {}),
     },
     policy: {
-      maxModelCallsPerExecution: 4, maxToolRoundsPerExecution: 3,
-      maxToolCallsPerModelCall: 4, maxToolCallsPerExecution: 8,
+      maxModelCallsPerExecution: 80, maxToolRoundsPerExecution: 50,
+      maxToolCallsPerModelCall: 32, maxToolCallsPerExecution: 256,
       maxConcurrentToolExecutions: 2, modelCallTimeoutMs: 1_000,
       toolExecutionTimeoutMs: 1_000, maxModelCallAttempts: 1,
       modelRetryDelayMs: 0, maxContextOverflowRecoveries: 1,

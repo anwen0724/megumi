@@ -28,9 +28,11 @@ import type { SessionHistory } from '@megumi/session';
 import type { Tools } from '@megumi/tools';
 import type {
   LaunchedAgentExecution,
+  LaunchDailyDiscoveryAgentExecutionInput,
   LaunchAgentExecutionInput,
 } from './agent-executions';
 import type {
+  ConversationExecutionMetadata,
   ExecutionClock,
   ExecutionFailure,
   ExecutionMetadata,
@@ -56,7 +58,7 @@ import {
   type AssistantReplyMetadata,
   type SessionMessageCommitter,
 } from './session-settlement';
-import { createAgentTool } from './tool-adapter';
+import { createAgentTool, createUnprotectedAgentTool } from './tool-adapter';
 
 export interface DiscoveryAgentPolicy {
   readonly maxModelCallsPerExecution: number;
@@ -120,6 +122,9 @@ export async function launchAgentExecution(
   input: LaunchAgentExecutionInput,
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
+  if (input.kind === 'daily_discovery') {
+    return launchDailyDiscoveryAgentExecution(input, dependencies);
+  }
   const { metadata } = input;
   const referenceContent = input.recommendationReference
     ? [input.recommendationReference]
@@ -267,11 +272,92 @@ export async function launchAgentExecution(
   };
 }
 
+async function launchDailyDiscoveryAgentExecution(
+  input: LaunchDailyDiscoveryAgentExecutionInput,
+  dependencies: ExecuteAgentDependencies,
+): Promise<LaunchedAgentExecution> {
+  const { metadata } = input;
+  const observer = createExecutionObserver({ metadata, observability: dependencies.observability });
+  const runtime: ContextAdapterRuntime = {};
+  const toolExecutionResult = dependencies.tools.bindExecution({
+    executionId: metadata.executionId,
+    subject: { kind: 'background' },
+    toolGroupId: 'daily_discovery',
+  });
+  if (toolExecutionResult.status === 'failed') {
+    throw new LaunchExecutionError({
+      code: 'tool_system_failed',
+      message: toolExecutionResult.failure.message,
+      retryable: true,
+      cause: { owner: 'tools', code: toolExecutionResult.failure.code },
+    });
+  }
+  const toolExecution = toolExecutionResult.binding;
+  const contextDependencies = {
+    metadata,
+    runContext: input.runContext,
+    context: dependencies.context,
+    toolExecution,
+    ids: dependencies.ids,
+    observer,
+    createAgentTool: (definition: import('@megumi/tools').ToolDefinition, scope: import('./context-adapter').ToolScope) => (
+      createUnprotectedAgentTool(definition, scope.binding)
+    ),
+  };
+  const contextProvider = createContextAdapter(contextDependencies, runtime);
+  const agent = new Agent({
+    initialState: {
+      configuration: {
+        systemPrompt: '',
+        model: metadata.model,
+        thinkingLevel: metadata.model.reasoning ? 'high' : 'minimal',
+        tools: [],
+      },
+      messages: [{
+        role: 'user',
+        content: '开始本次每日发现执行。',
+        timestamp: timestampFrom(metadata.createdAt),
+      }],
+    },
+    stream: createStreamAdapter(dependencies, metadata),
+    context: contextProvider,
+    policy: toAgentPolicy(dependencies.policy),
+  });
+
+  return {
+    agent,
+    execute: async () => {
+      observer.start();
+      let outcome: ExecutionOutcome | undefined;
+      try {
+        const result = await agent.continue({ executionId: metadata.executionId });
+        outcome = result.status === 'completed'
+          ? { status: 'completed' }
+          : result.status === 'cancelled'
+            ? { status: 'cancelled' }
+            : { status: 'failed', failure: outcomeFromFailedError(result.error) };
+        return outcome;
+      } catch (error) {
+        outcome = { status: 'failed', failure: internalFailure(error) };
+        return outcome;
+      } finally {
+        releaseActiveScope(contextDependencies, runtime);
+        toolExecution.close();
+        observer.end(
+          outcome?.status === 'completed' ? 'ok'
+            : outcome?.status === 'cancelled' ? 'cancelled'
+              : 'error',
+        );
+      }
+    },
+  };
+}
+
 async function executeAgentExecution(
   agent: Agent,
   runtime: ExecutionRuntime,
   contextDependencies: Parameters<typeof createContextAdapter>[0],
-  metadata: ExecutionMetadata,
+  metadata: ConversationExecutionMetadata,
   toolExecution: import('@megumi/tools').ToolExecutionBinding,
 ): Promise<ExecutionOutcome> {
   runtime.observer.start();

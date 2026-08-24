@@ -142,6 +142,9 @@ export function toSessionDto(session: Session): SessionDto {
 }
 
 export function toRunDto(execution: ExecutionSnapshot): RunDto {
+  if (execution.kind !== 'conversation') {
+    throw new Error('Session operations received a non-conversation execution.');
+  }
   return {
     executionId: execution.executionId,
     sessionId: execution.sessionId,

@@ -27,6 +27,7 @@ const clock = { now: () => '2026-07-31T00:00:00.000Z' };
 
 function metadata(overrides: Partial<ExecutionMetadata> = {}): ExecutionMetadata {
   return {
+    kind: 'conversation',
     executionId: 'execution:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',

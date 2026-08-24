@@ -21,18 +21,30 @@ import type { ToolIdentity } from '@megumi/tools';
 // Internal execution records
 // ---------------------------------------------------------------------------
 
-export interface ExecutionMetadata {
+export interface BaseExecutionMetadata {
   readonly executionId: string;
   readonly requestId: string;
+  readonly model: Model<Api>;
+  readonly createdAt: string;
+  readonly startedAt: string;
+}
+
+export interface ConversationExecutionMetadata extends BaseExecutionMetadata {
+  readonly kind: 'conversation';
   readonly workspaceId: string;
   readonly sessionId: string;
   readonly parentEntryId?: string;
   readonly userMessageId: string;
-  readonly model: Model<Api>;
   readonly permissionMode: PermissionMode;
-  readonly createdAt: string;
-  readonly startedAt: string;
 }
+
+export interface DailyDiscoveryExecutionMetadata extends BaseExecutionMetadata {
+  readonly kind: 'daily_discovery';
+  readonly batchId: string;
+  readonly localDate: string;
+}
+
+export type ExecutionMetadata = ConversationExecutionMetadata | DailyDiscoveryExecutionMetadata;
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
 
@@ -95,7 +107,7 @@ export interface TerminalExecution {
 export type ExecutionOutcome =
   | {
       readonly status: 'completed';
-      readonly assistantMessageId: string;
+      readonly assistantMessageId?: string;
     }
   | {
       readonly status: 'failed';
@@ -150,21 +162,11 @@ export type ExecutionStatus =
   | 'failed'
   | 'cancelled';
 
-export interface ExecutionSnapshot {
-  readonly executionId: string;
-  readonly requestId: string;
-  readonly workspaceId: string;
-  readonly sessionId: string;
-  readonly parentEntryId?: string;
-  readonly userMessageId: string;
-  readonly model: Model<Api>;
-  readonly permissionMode: PermissionMode;
+export type ExecutionSnapshot = ExecutionMetadata & {
   readonly status: ExecutionStatus;
-  readonly createdAt: string;
-  readonly startedAt: string;
   readonly completedAt?: string;
   readonly failure?: ExecutionFailure;
-}
+};
 
 // ---------------------------------------------------------------------------
 // Registry records
@@ -178,7 +180,7 @@ export interface StartRequestFingerprint {
 }
 
 export interface StoredStartResult {
-  readonly execution: ExecutionSnapshot;
+  readonly execution: Extract<ExecutionSnapshot, { kind: 'conversation' }>;
   readonly userMessage: SessionMessageWithAttachments;
   readonly userEntry: SessionEntry;
 }
@@ -195,7 +197,7 @@ export type ReserveStartResult =
     }
   | { readonly status: 'already_started'; readonly result: StoredStartResult }
   | { readonly status: 'request_conflict' }
-  | { readonly status: 'session_busy'; readonly activeExecution: ExecutionSnapshot };
+  | { readonly status: 'session_busy'; readonly activeExecution: Extract<ExecutionSnapshot, { kind: 'conversation' }> };
 
 interface PendingStartRecord {
   readonly status: 'pending';
@@ -252,7 +254,7 @@ export class ExecutionRegistry {
   reserveStart(input: {
     readonly requestId: string;
     readonly fingerprint: StartRequestFingerprint;
-    readonly metadata: ExecutionMetadata;
+    readonly metadata: ConversationExecutionMetadata;
   }): ReserveStartResult {
     this.pruneExpired();
     const existingRequest = this.requestRecords.get(input.requestId);
@@ -270,7 +272,10 @@ export class ExecutionRegistry {
     if (activeExecutionId) {
       const execution = this.findLiveExecution(activeExecutionId);
       if (execution) {
-        return { status: 'session_busy', activeExecution: this.snapshotLive(execution) };
+        const activeExecution = this.snapshotLive(execution);
+        if (activeExecution.kind === 'conversation') {
+          return { status: 'session_busy', activeExecution };
+        }
       }
       this.executionIdBySession.delete(input.fingerprint.sessionId);
     }
@@ -324,7 +329,8 @@ export class ExecutionRegistry {
     this.requestRecords.delete(input.requestId);
     const metadata = this.pendingExecutions.get(record.executionId);
     this.pendingExecutions.delete(record.executionId);
-    if (metadata && this.executionIdBySession.get(metadata.sessionId) === metadata.executionId) {
+    if (metadata?.kind === 'conversation'
+      && this.executionIdBySession.get(metadata.sessionId) === metadata.executionId) {
       this.executionIdBySession.delete(metadata.sessionId);
     }
     record.settle({ status: 'failed', failure: snapshot(input.failure) });
@@ -344,7 +350,9 @@ export class ExecutionRegistry {
       completion: active.completion,
       pendingApproval: active.pendingApproval,
     });
-    this.executionIdBySession.set(active.metadata.sessionId, executionId);
+    if (active.metadata.kind === 'conversation') {
+      this.executionIdBySession.set(active.metadata.sessionId, executionId);
+    }
   }
 
   /** Fixes the immutable terminal record and releases every held resource. */
@@ -359,7 +367,8 @@ export class ExecutionRegistry {
     // Terminal settlement releases every resource independently: a pending
     // approval, the Session occupancy and the active record.
     this.settlePendingApprovalCancelled(active);
-    if (this.executionIdBySession.get(active.metadata.sessionId) === executionId) {
+    if (active.metadata.kind === 'conversation'
+      && this.executionIdBySession.get(active.metadata.sessionId) === executionId) {
       this.executionIdBySession.delete(active.metadata.sessionId);
     }
     this.activeExecutions.delete(executionId);
@@ -382,7 +391,7 @@ export class ExecutionRegistry {
     return terminal ? this.snapshotTerminal(terminal) : undefined;
   }
 
-  getActive(sessionId: string): ExecutionSnapshot | undefined {
+  getActive(sessionId: string): Extract<ExecutionSnapshot, { kind: 'conversation' }> | undefined {
     const executionId = this.executionIdBySession.get(sessionId);
     if (!executionId) return undefined;
     const live = this.findLiveExecution(executionId);
@@ -390,12 +399,20 @@ export class ExecutionRegistry {
       this.executionIdBySession.delete(sessionId);
       return undefined;
     }
-    return this.snapshotLive(live);
+    const snapshot = this.snapshotLive(live);
+    return snapshot.kind === 'conversation' ? snapshot : undefined;
   }
 
   /** The internal ActiveExecution handle; only the Discovery Agent cancel path reads it. */
   getActiveExecutionHandle(executionId: string): ActiveExecution | undefined {
     return this.activeExecutions.get(executionId);
+  }
+
+  getCompletion(executionId: string): Promise<ExecutionOutcome> | undefined {
+    const active = this.activeExecutions.get(executionId);
+    if (active) return active.completion;
+    const terminal = this.terminalExecutions.get(executionId);
+    return terminal ? Promise.resolve(snapshot(terminal.outcome)) : undefined;
   }
 
   listActiveExecutions(): readonly ExecutionSnapshot[] {
@@ -531,7 +548,7 @@ export class ExecutionRegistry {
 
   private storedResult(record: StartedRecord): StoredStartResult {
     const execution = this.getExecution(record.executionId);
-    if (!execution) {
+    if (!execution || execution.kind !== 'conversation') {
       throw new Error(`Started request ${record.executionId} has no live or terminal execution.`);
     }
     return {
@@ -584,7 +601,7 @@ function sameFingerprint(left: StartRequestFingerprint, right: StartRequestFinge
 function assertReservationMatchesMetadata(input: {
   readonly requestId: string;
   readonly fingerprint: StartRequestFingerprint;
-  readonly metadata: ExecutionMetadata;
+  readonly metadata: ConversationExecutionMetadata;
 }): void {
   if (
     input.metadata.requestId !== input.requestId

@@ -28,7 +28,12 @@ import type {
   ToolInvocation,
   ModelCallToolBinding,
 } from '@megumi/tools';
-import type { ExecutionClock, ApprovalRequest, ApprovalResolution, ExecutionMetadata } from './execution-registry';
+import type {
+  ApprovalRequest,
+  ApprovalResolution,
+  ConversationExecutionMetadata,
+  ExecutionClock,
+} from './execution-registry';
 import type { ExecutionObserver } from './execution-observer';
 import type { SessionToolResultCommit } from './session-settlement';
 import type { ToolScope } from './context-adapter';
@@ -54,7 +59,7 @@ export interface DiscoveryAgentToolResultDetails {
 }
 
 export interface ToolAdapterDependencies {
-  readonly metadata: ExecutionMetadata;
+  readonly metadata: ConversationExecutionMetadata;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly ids: { createToolExecutionId(): string; createApprovalId(): string };
   readonly clock: ExecutionClock;

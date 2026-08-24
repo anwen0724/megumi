@@ -1,10 +1,13 @@
-/* Owns daily preflight, one background Agent Execution, bounded discovery Tools and publication. */
-import { Agent, type AgentContextProvider } from '@megumi/agent-core';
-import { type Api, type Model, type Models } from '@megumi/ai';
-import type { Tools } from '@megumi/tools';
+/* Owns daily preflight, Batch/Attempt facts, result publication, retries, and scheduling. */
+import { type Api, type Model } from '@megumi/ai';
+import type { DailyDiscoveryContextMaterial } from '@megumi/context';
+import type {
+  DailyDiscoveryExecutionInput,
+  ExecutionOutcome,
+  StartDailyDiscoveryExecutionResult,
+} from '@megumi/execution';
 import { discoveryContentIdentity, type DiscoveryCandidate } from './candidate-registry';
 import type { DailyDiscoveryAttempts, SourceAttemptBudget } from './daily-discovery-attempt';
-import { createUnprotectedAgentTool } from '@megumi/execution';
 import {
   EnsureDailyDiscoveryRequestSchema,
   type EnsureDailyDiscoveryRequest,
@@ -34,8 +37,10 @@ import type { SourceRegistry } from '../sources/source-registry';
 export interface CreateDailyDiscoveryRuntimeOptions {
   readonly repository: DiscoveryRepository;
   readonly sourceRegistry: SourceRegistry;
-  readonly tools: Pick<Tools, 'bindExecution'>;
   readonly attempts: DailyDiscoveryAttempts;
+  readonly startExecution: <TRejected>(
+    request: DailyDiscoveryExecutionInput<TRejected>,
+  ) => Promise<StartDailyDiscoveryExecutionResult<TRejected>>;
   readonly settings: {
     getDiscoverySettings(): {
       readonly dailyGenerationTime: string;
@@ -67,11 +72,8 @@ export interface DailyDiscoveryRuntime {
 }
 
 export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOptions & {
-  readonly models: Pick<Models, 'streamSimple'>;
-  readonly createExecutionId: () => string;
   readonly now: () => string;
 }): DailyDiscoveryRuntime {
-  const activeAgents = new Map<string, Agent>();
   const activePromises = new Set<Promise<void>>();
   const timers = input.timers ?? defaultTimers();
   let accepting = true;
@@ -99,70 +101,193 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     return { interests, settings, descriptors, model };
   };
 
-  const launchAttempt = (attempt: {
+  const startAttempt = async (request: {
     readonly batchId: string;
-    readonly executionId: string;
+    readonly localDate: string;
+    readonly timezone: string;
     readonly targetCount: number;
-    readonly snapshot?: Awaited<ReturnType<typeof snapshotInputs>>;
-  }): void => {
-    const operation = (async () => {
-      const snapshot = attempt.snapshot ?? await snapshotInputs();
-      if (!snapshot.model || snapshot.interests.length === 0 || snapshot.descriptors.length === 0) {
-        await handleFailure(
-          'agent_execution_failed',
-          'Daily discovery retry prerequisites are unavailable.',
-          false,
-        );
+    readonly requestId: string;
+    readonly snapshot: Awaited<ReturnType<typeof snapshotInputs>>;
+    readonly claim: (executionId: string) => EnsureDailyDiscoveryResult | undefined;
+  }): Promise<EnsureDailyDiscoveryResult> => {
+    const { snapshot } = request;
+    if (!snapshot.model || snapshot.interests.length === 0 || snapshot.descriptors.length === 0) {
+      return failedResult(request.localDate, 'agent_execution_failed', 'Daily discovery prerequisites are unavailable.', false);
+    }
+    const signals = input.repository.listRecommendationSelectionSignals().map(copySignal);
+    const material = discoveryMaterial({
+      targetCount: request.targetCount,
+      interests: snapshot.interests,
+      descriptors: snapshot.descriptors,
+      signals,
+    });
+    const started = await input.startExecution<EnsureDailyDiscoveryResult>({
+      kind: 'daily_discovery',
+      requestId: request.requestId,
+      batchId: request.batchId,
+      localDate: request.localDate,
+      material,
+      model: snapshot.model,
+      async accept({ executionId }) {
+        const rejected = request.claim(executionId);
+        if (rejected) return { status: 'rejected', reason: rejected };
+        try {
+          input.attempts.start({
+            executionId,
+            targetCount: request.targetCount,
+            descriptors: snapshot.descriptors.map(copyDescriptor),
+            signals,
+            sourceRegistry: input.sourceRegistry,
+            sourceBudgets: snapshot.settings.sourceBudgets ?? {},
+          });
+          return { status: 'accepted' };
+        } catch (error) {
+          input.repository.failDailyBatch({
+            batchId: request.batchId,
+            executionId,
+            failureCode: 'attempt_start_failed',
+            failureMessage: error instanceof Error ? error.message : 'Daily discovery attempt could not start.',
+            failedAt: input.now(),
+          });
+          return {
+            status: 'rejected',
+            reason: failedResult(request.localDate, 'attempt_start_failed', 'Daily discovery attempt could not start.', false),
+          };
+        }
+      },
+      onSettled({ executionId, outcome }) {
+        const operation = settleAttempt({
+          batchId: request.batchId,
+          localDate: request.localDate,
+          targetCount: request.targetCount,
+          executionId,
+          outcome,
+        });
+        track(operation);
+        return operation;
+      },
+    });
+    if (started.status === 'rejected') return started.reason;
+    if (started.status === 'failed') {
+      return failedResult(request.localDate, 'agent_execution_failed', started.failure.message, started.failure.retryable);
+    }
+    return {
+      status: 'started',
+      localDate: request.localDate,
+      batchId: request.batchId,
+      executionId: started.execution.executionId,
+    };
+  };
+
+  const settleAttempt = async (request: {
+    readonly batchId: string;
+    readonly localDate: string;
+    readonly targetCount: number;
+    readonly executionId: string;
+    readonly outcome: ExecutionOutcome;
+  }): Promise<void> => {
+    try {
+      if (request.outcome.status !== 'completed') {
+        const message = request.outcome.status === 'cancelled'
+          ? 'Daily discovery Agent execution was cancelled.'
+          : request.outcome.failure.message;
+        await handleAttemptFailure(request, 'agent_execution_failed', message, request.outcome.status === 'failed' && request.outcome.failure.retryable);
         return;
       }
-      const signals = input.repository.listRecommendationSelectionSignals();
-      await executeDailyBatch({
-        batchId: attempt.batchId,
-        executionId: attempt.executionId,
-        targetCount: attempt.targetCount,
-        model: snapshot.model,
-        interests: snapshot.interests.map(copyInterest),
-        descriptors: snapshot.descriptors.map(copyDescriptor),
-        signals: signals.map(copySignal),
-        sourceBudgets: snapshot.settings.sourceBudgets ?? {},
-        repository: input.repository,
-        sourceRegistry: input.sourceRegistry,
-        tools: input.tools,
-        attempts: input.attempts,
-        models: input.models,
-        ids: input.ids,
-        now: input.now,
-        activeAgents,
-        onFailure: handleFailure,
+      const state = input.attempts.snapshot(request.executionId);
+      if (!state) {
+        await handleAttemptFailure(request, 'attempt_not_found', 'Daily discovery attempt state was lost.', false);
+        return;
+      }
+      if (!state.selected) {
+        const code = state.invalidSelection ? 'selection_invalid'
+          : state.candidates.list().length > 0 ? 'selection_missing'
+            : state.successfulSearches === 0 && state.failedSearches > 0 ? 'source_search_failed'
+              : state.rawCandidates > 0 ? 'all_candidates_rejected'
+                : state.successfulSearches > 0 ? 'no_candidates'
+                  : 'selection_missing';
+        const message = code === 'source_search_failed'
+          ? sourceSearchFailureMessage(state.sourceFailures)
+          : failureMessage(code);
+        const retryable = code === 'source_search_failed'
+          ? state.sourceFailures.some(({ failure }) => isImmediatelyRetryableSourceFailure(failure))
+          : true;
+        await handleAttemptFailure(request, code, message, retryable);
+        return;
+      }
+      const publishedAt = input.now();
+      const recommendations = state.selected.map((selection, position) => {
+        const candidate = state.candidates.get(selection.candidateId)!;
+        return recommendationFromCandidate({
+          candidate,
+          batchId: request.batchId,
+          recommendationId: input.ids.createRecommendationId(),
+          recommendationReason: selection.recommendationReason,
+          position,
+          publishedAt,
+        });
       });
+      const published = input.repository.publishDailyBatch({
+        batchId: request.batchId,
+        executionId: request.executionId,
+        publishedAt,
+        recommendations,
+      });
+      if (published.status !== 'published') {
+        await handleAttemptFailure(request, 'publish_conflict', `Daily discovery publication failed: ${published.reason}.`, false);
+      }
+    } finally {
+      input.attempts.dispose(request.executionId);
+    }
+  };
 
-      async function handleFailure(code: string, message: string, retryable = true): Promise<void> {
-        if (!accepting || !retryable) {
-          input.repository.failDailyBatch({
-            batchId: attempt.batchId, executionId: attempt.executionId,
-            failureCode: code, failureMessage: message, failedAt: input.now(),
-          });
-          return;
-        }
-        const nextExecutionId = input.createExecutionId();
-        const result = input.repository.failDailyAttempt({
-          batchId: attempt.batchId,
-          executionId: attempt.executionId,
+  const handleAttemptFailure = async (
+    request: { readonly batchId: string; readonly localDate: string; readonly targetCount: number; readonly executionId: string },
+    code: string,
+    message: string,
+    retryable: boolean,
+  ): Promise<void> => {
+    if (!accepting || !retryable) {
+      input.repository.failDailyBatch({
+        batchId: request.batchId,
+        executionId: request.executionId,
+        failureCode: code,
+        failureMessage: message,
+        failedAt: input.now(),
+      });
+      return;
+    }
+    const snapshot = await snapshotInputs();
+    if (!snapshot.model || snapshot.interests.length === 0 || snapshot.descriptors.length === 0) {
+      input.repository.failDailyBatch({
+        batchId: request.batchId,
+        executionId: request.executionId,
+        failureCode: code,
+        failureMessage: message,
+        failedAt: input.now(),
+      });
+      return;
+    }
+    await startAttempt({
+      batchId: request.batchId,
+      localDate: request.localDate,
+      timezone: input.timezone(),
+      targetCount: request.targetCount,
+      requestId: `${request.batchId}:retry:${request.executionId}`,
+      snapshot,
+      claim(nextExecutionId) {
+        const retried = input.repository.failDailyAttempt({
+          batchId: request.batchId,
+          executionId: request.executionId,
           nextExecutionId,
           failureCode: code,
           failureMessage: message,
           failedAt: input.now(),
         });
-        if (result.status === 'retry_claimed') {
-          launchAttempt({
-            batchId: result.batch.batchId,
-            executionId: result.batch.executionId,
-            targetCount: result.batch.targetCount,
-          });
-        }
-      }
-    })();
-    track(operation);
+        if (retried.status === 'retry_claimed') return undefined;
+        return failedResult(request.localDate, code, message, false);
+      },
+    });
   };
 
   const scheduleNext = (): void => {
@@ -185,22 +310,29 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       ensureIdentityMigration();
       started = true;
       for (const batch of input.repository.listRunningDailyBatches()) {
-        const nextExecutionId = input.createExecutionId();
-        const recovered = input.repository.failDailyAttempt({
+        const snapshot = await snapshotInputs();
+        const operation = startAttempt({
           batchId: batch.batchId,
-          executionId: batch.executionId,
-          nextExecutionId,
-          failureCode: 'attempt_interrupted',
-          failureMessage: 'The previous daily discovery attempt was interrupted by application shutdown.',
-          failedAt: input.now(),
-        });
-        if (recovered.status === 'retry_claimed') {
-          launchAttempt({
-            batchId: recovered.batch.batchId,
-            executionId: recovered.batch.executionId,
-            targetCount: recovered.batch.targetCount,
-          });
-        }
+          localDate: batch.localDate,
+          timezone: batch.timezone,
+          targetCount: batch.targetCount,
+          requestId: `${batch.batchId}:recovery:${batch.executionId}`,
+          snapshot,
+          claim(nextExecutionId) {
+            const recovered = input.repository.failDailyAttempt({
+              batchId: batch.batchId,
+              executionId: batch.executionId,
+              nextExecutionId,
+              failureCode: 'attempt_interrupted',
+              failureMessage: 'The previous daily discovery attempt was interrupted by application shutdown.',
+              failedAt: input.now(),
+            });
+            return recovered.status === 'retry_claimed'
+              ? undefined
+              : failedResult(batch.localDate, 'attempt_interrupted', 'The interrupted attempt could not be recovered.', false);
+          },
+        }).then(() => undefined);
+        track(operation);
       }
       const settings = input.settings.getDiscoverySettings();
       const scheduledToday = scheduledTimestamp(
@@ -263,43 +395,46 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       if (!snapshot.model) return { status: 'model_unavailable', localDate };
 
       const batchId = existing?.batchId ?? input.ids.createBatchId();
-      const executionId = input.createExecutionId();
       const targetCount = Math.max(1, Math.min(100, Math.floor(snapshot.settings.dailyTargetCount)));
-      const retried = existing?.status === 'failed'
-        ? input.repository.retryFailedDailyBatch({
-            batchId, executionId, targetCount, startedAt: parsed.now,
-          })
-        : undefined;
-      const claimed = retried
-        ? { status: 'claimed' as const, batch: retried }
-        : input.repository.claimDailyBatch({
-            batchId, localDate, timezone, executionId, targetCount, now: parsed.now,
-          });
-      if (claimed.status === 'already_published') {
-        return {
-          status: 'already_published', localDate, batchId: claimed.batch.batchId,
-          resultCount: claimed.batch.resultCount, publishedAt: claimed.batch.publishedAt!,
-        };
-      }
-      if (claimed.status === 'in_progress') {
-        return {
-          status: 'in_progress', localDate, batchId: claimed.batch.batchId,
-          executionId: claimed.batch.executionId,
-        };
-      }
-      if (claimed.status !== 'claimed') {
-        return {
-          status: 'failed', localDate,
-          failure: {
-            code: claimed.batch.failureCode ?? 'database_failed',
-            message: claimed.batch.failureMessage ?? 'Daily discovery batch could not be claimed.',
-            retryable: true,
-          },
-        };
-      }
-
-      launchAttempt({ batchId, executionId, targetCount, snapshot });
-      return { status: 'started', localDate, batchId, executionId };
+      return startAttempt({
+        batchId,
+        localDate,
+        timezone,
+        targetCount,
+        requestId: `${batchId}:${parsed.trigger}:${parsed.now}`,
+        snapshot,
+        claim(executionId) {
+          const retried = existing?.status === 'failed'
+            ? input.repository.retryFailedDailyBatch({
+                batchId, executionId, targetCount, startedAt: parsed.now,
+              })
+            : undefined;
+          const claimed = retried
+            ? { status: 'claimed' as const, batch: retried }
+            : input.repository.claimDailyBatch({
+                batchId, localDate, timezone, executionId, targetCount, now: parsed.now,
+              });
+          if (claimed.status === 'claimed') return undefined;
+          if (claimed.status === 'already_published') {
+            return {
+              status: 'already_published', localDate, batchId: claimed.batch.batchId,
+              resultCount: claimed.batch.resultCount, publishedAt: claimed.batch.publishedAt!,
+            };
+          }
+          if (claimed.status === 'in_progress') {
+            return {
+              status: 'in_progress', localDate, batchId: claimed.batch.batchId,
+              executionId: claimed.batch.executionId,
+            };
+          }
+          return failedResult(
+            localDate,
+            claimed.batch.failureCode ?? 'database_failed',
+            claimed.batch.failureMessage ?? 'Daily discovery batch could not be claimed.',
+            true,
+          );
+        },
+      });
     },
 
     getHome(request) {
@@ -324,199 +459,10 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       if (timerHandle !== undefined) timers.clearTimeout(timerHandle);
       timerHandle = undefined;
       nextScheduledAt = undefined;
-      for (const agent of activeAgents.values()) agent.abort();
       while (activePromises.size > 0) await Promise.allSettled([...activePromises]);
     },
   };
   return runtime;
-}
-
-async function executeDailyBatch(input: {
-  readonly batchId: string;
-  readonly executionId: string;
-  readonly targetCount: number;
-  readonly model: Model<Api>;
-  readonly interests: readonly Interest[];
-  readonly descriptors: readonly SourceDescriptor[];
-  readonly signals: readonly RecommendationSelectionSignal[];
-  readonly sourceBudgets: Readonly<Record<string, SourceAttemptBudget>>;
-  readonly repository: DiscoveryRepository;
-  readonly sourceRegistry: SourceRegistry;
-  readonly tools: Pick<Tools, 'bindExecution'>;
-  readonly attempts: DailyDiscoveryAttempts;
-  readonly models: Pick<Models, 'streamSimple'>;
-  readonly ids: Pick<CreateDailyDiscoveryRuntimeOptions['ids'], 'createRecommendationId'>;
-  readonly now: () => string;
-  readonly activeAgents: Map<string, Agent>;
-  readonly onFailure: (code: string, message: string, retryable?: boolean) => Promise<void>;
-}): Promise<void> {
-  input.attempts.start(input);
-  const bound = input.tools.bindExecution({
-    executionId: input.executionId,
-    subject: { kind: 'background' },
-    toolGroupId: 'daily_discovery',
-  });
-  if (bound.status === 'failed') {
-    input.attempts.dispose(input.executionId);
-    await input.onFailure('tool_system_failed', bound.failure.message);
-    return;
-  }
-  const toolExecution = bound.binding;
-  let activeModelCall: import('@megumi/tools').ModelCallToolBinding | undefined;
-  let modelCallSequence = 0;
-  const contextProvider: AgentContextProvider = {
-    async prepare({ context, signal }) {
-      activeModelCall?.close();
-      if (signal.aborted) return { status: 'cancelled' };
-      const prepared = toolExecution.prepareModelCall({
-        modelCallId: `${input.executionId}:model-call:${++modelCallSequence}`,
-      });
-      if (prepared.status === 'failed') {
-        return {
-          status: 'failed',
-          error: {
-            code: 'context_failed',
-            message: prepared.failure.message,
-            retryable: true,
-            cause: { owner: 'tools', code: prepared.failure.code },
-          },
-        };
-      }
-      activeModelCall = prepared.binding;
-      return {
-        status: 'ready',
-        context: {
-          ...context,
-          systemPrompt: dailySystemPrompt(input),
-          tools: prepared.binding.definitions.map((definition) => (
-            createUnprotectedAgentTool(definition, prepared.binding)
-          )),
-        },
-      };
-    },
-  };
-
-  const agent = new Agent({
-    initialState: {
-      configuration: {
-        systemPrompt: dailySystemPrompt(input),
-        model: input.model,
-        thinkingLevel: input.model.reasoning ? 'high' : 'minimal',
-        tools: [],
-      },
-      messages: [],
-    },
-    stream: (model, context, options) => input.models.streamSimple(model, context, options),
-    context: contextProvider,
-    policy: {
-      maxModelCalls: 24,
-      maxModelCallAttempts: 2,
-      maxToolRounds: 20,
-      maxToolCalls: 128,
-      maxToolCallsPerModelCall: 64,
-      maxConcurrentToolCalls: 1,
-      modelCallTimeoutMs: 120_000,
-      toolCallTimeoutMs: 90_000,
-      modelRetryDelayMs: 250,
-      maxContextOverflowRecoveries: 1,
-    },
-  });
-  input.activeAgents.set(input.executionId, agent);
-
-  try {
-    const result = await agent.prompt({
-      role: 'user',
-      content: '为今天生成个性化内容推荐。使用工具完成搜索和选择。',
-      timestamp: Date.parse(input.now()),
-    }, { executionId: input.executionId });
-    if (result.status !== 'completed') {
-      await input.onFailure(
-        'agent_execution_failed',
-        result.status === 'cancelled'
-          ? 'Daily discovery Agent execution was cancelled.'
-          : result.error.message,
-        result.status !== 'cancelled',
-      );
-      return;
-    }
-    const toolState = input.attempts.snapshot(input.executionId);
-    if (!toolState) {
-      await input.onFailure('attempt_not_found', 'Daily discovery attempt state was lost.', false);
-      return;
-    }
-    if (!toolState.selected) {
-      const code = toolState.invalidSelection ? 'selection_invalid'
-        : toolState.candidates.list().length > 0 ? 'selection_missing'
-          : toolState.successfulSearches === 0 && toolState.failedSearches > 0 ? 'source_search_failed'
-            : toolState.rawCandidates > 0 ? 'all_candidates_rejected'
-              : toolState.successfulSearches > 0 ? 'no_candidates'
-                : 'selection_missing';
-      const message = code === 'source_search_failed'
-        ? sourceSearchFailureMessage(toolState.sourceFailures)
-        : failureMessage(code);
-      const retryable = code === 'source_search_failed'
-        ? toolState.sourceFailures.some(({ failure }) => isImmediatelyRetryableSourceFailure(failure))
-        : true;
-      await input.onFailure(code, message, retryable);
-      return;
-    }
-    const publishedAt = input.now();
-    const recommendations = toolState.selected.map((selection, position) => {
-      const candidate = toolState.candidates.get(selection.candidateId)!;
-      return recommendationFromCandidate({
-        candidate, batchId: input.batchId,
-        recommendationId: input.ids.createRecommendationId(),
-        recommendationReason: selection.recommendationReason,
-        position, publishedAt,
-      });
-    });
-    const published = input.repository.publishDailyBatch({
-      batchId: input.batchId,
-      executionId: input.executionId,
-      publishedAt,
-      recommendations,
-    });
-    if (published.status !== 'published') {
-      await input.onFailure(
-        'publish_conflict',
-        `Daily discovery publication failed: ${published.reason}.`,
-        false,
-      );
-    }
-  } catch (error) {
-    await input.onFailure('agent_execution_failed', error instanceof Error ? error.message : 'Daily discovery failed.');
-  } finally {
-    input.activeAgents.delete(input.executionId);
-    activeModelCall?.close();
-    toolExecution.close();
-    input.attempts.dispose(input.executionId);
-  }
-}
-
-function dailySystemPrompt(input: {
-  readonly interests: readonly Interest[];
-  readonly descriptors: readonly SourceDescriptor[];
-  readonly signals: readonly RecommendationSelectionSignal[];
-  readonly targetCount: number;
-}): string {
-  return [
-    '你是 Megumi 的每日个性化信息发现 Agent。',
-    '你必须主动制定查询、必要时换词或换来源，并只通过 select_recommendations 确定最终结果。',
-    '不要按关注分配固定配额，不要用无关热门内容凑数；结果可以少于目标数量。',
-    '最终文本不构成推荐，第一次有效选择会被冻结。',
-    JSON.stringify({
-      targetCount: input.targetCount,
-      interests: input.interests.map((interest) => ({
-        interestId: interest.interestId,
-        description: interest.description,
-      })),
-      sources: input.descriptors,
-      priorFeedback: input.signals.flatMap((signal) => signal.reaction ? [{
-        sourceName: signal.sourceName, title: signal.title, reaction: signal.reaction,
-      }] : []),
-      exposedContentIdentities: input.signals.map((signal) => signal.contentIdentity),
-    }),
-  ].join('\n');
 }
 
 function enabledDescriptors(registry: SourceRegistry, enabled: readonly DiscoverySourceId[]): SourceDescriptor[] {
@@ -527,6 +473,37 @@ function enabledDescriptors(registry: SourceRegistry, enabled: readonly Discover
       && (availability.state === 'ready' || availability.state === 'unknown')
     ))
     .map(({ descriptor }) => descriptor);
+}
+
+function discoveryMaterial(input: {
+  readonly targetCount: number;
+  readonly interests: readonly Interest[];
+  readonly descriptors: readonly SourceDescriptor[];
+  readonly signals: readonly RecommendationSelectionSignal[];
+}): DailyDiscoveryContextMaterial {
+  return {
+    targetCount: input.targetCount,
+    interests: input.interests.map((interest) => ({
+      interestId: interest.interestId,
+      description: interest.description,
+    })),
+    sources: input.descriptors.map((descriptor) => ({
+      id: descriptor.id,
+      name: descriptor.name,
+      access: descriptor.access,
+      supportedModes: [...descriptor.supportedModes],
+    })),
+    recommendationSignals: input.signals.map(copySignal),
+  };
+}
+
+function failedResult(
+  localDate: string,
+  code: string,
+  message: string,
+  retryable: boolean,
+): EnsureDailyDiscoveryResult {
+  return { status: 'failed', localDate, failure: { code, message, retryable } };
 }
 
 function recommendationFromCandidate(input: {

@@ -17,7 +17,11 @@ import type {
   TraceHandle,
 } from '@megumi/observability';
 import type { SessionAssistantContent } from '@megumi/session';
-import type { ExecutionClock, ExecutionMetadata } from './execution-registry';
+import type {
+  ConversationExecutionMetadata,
+  ExecutionClock,
+  ExecutionMetadata,
+} from './execution-registry';
 import type {
   AssistantReplyMetadata,
   SessionMessageCommitter,
@@ -68,8 +72,10 @@ export function createExecutionObserver(options: CreateExecutionObserverOptions)
     ...(trace ? { traceId: trace.traceId } : {}),
     ...(rootSpan ? { spanId: rootSpan.spanId } : {}),
     executionId: options.metadata.executionId,
-    sessionId: options.metadata.sessionId,
-    workspaceId: options.metadata.workspaceId,
+    ...(options.metadata.kind === 'conversation' ? {
+      sessionId: options.metadata.sessionId,
+      workspaceId: options.metadata.workspaceId,
+    } : {}),
     requestId: options.metadata.requestId,
   });
 
@@ -81,8 +87,10 @@ export function createExecutionObserver(options: CreateExecutionObserverOptions)
           traceId: options.metadata.executionId,
           name: 'agent_run',
           executionId: options.metadata.executionId,
-          sessionId: options.metadata.sessionId,
-          workspaceId: options.metadata.workspaceId,
+          ...(options.metadata.kind === 'conversation' ? {
+            sessionId: options.metadata.sessionId,
+            workspaceId: options.metadata.workspaceId,
+          } : {}),
           requestId: options.metadata.requestId,
           attributes: {
             providerId: String(options.metadata.model.provider),
@@ -202,7 +210,7 @@ export interface ExecutionProjectionRuntime {
 // ---------------------------------------------------------------------------
 
 export interface CreateAgentEventListenerOptions {
-  readonly metadata: ExecutionMetadata;
+  readonly metadata: ConversationExecutionMetadata;
   readonly events: EventBus;
   readonly committer: SessionMessageCommitter;
   readonly ids: { createSessionMessageId(): string };

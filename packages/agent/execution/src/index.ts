@@ -4,6 +4,9 @@ export type {
   ApprovalDecisionRequest,
   CancelExecutionRequest,
   CancelExecutionResult,
+  ConversationExecutionInput,
+  ConversationExecutionSnapshot,
+  DailyDiscoveryExecutionInput,
   CreateAgentExecutionsOptions,
   GetActiveExecutionRequest,
   GetActiveExecutionResult,
@@ -11,6 +14,8 @@ export type {
   GetExecutionResult,
   LaunchAgentExecution,
   LaunchAgentExecutionInput,
+  LaunchConversationAgentExecutionInput,
+  LaunchDailyDiscoveryAgentExecutionInput,
   LaunchedAgentExecution,
   ResolveApprovalRequest,
   ResolveApprovalResult,
@@ -18,6 +23,7 @@ export type {
   ShutdownResult,
   StartExecutionRequest,
   StartExecutionResult,
+  StartDailyDiscoveryExecutionResult,
 } from './agent-executions';
 export { createAgentExecutions } from './agent-executions';
 export {
@@ -54,6 +60,9 @@ export type {
   ActiveExecution,
   ApprovalRequest,
   ApprovalResolution,
+  BaseExecutionMetadata,
+  ConversationExecutionMetadata,
+  DailyDiscoveryExecutionMetadata,
   ExecutionClock,
   ExecutionFailure,
   ExecutionFailureCode,

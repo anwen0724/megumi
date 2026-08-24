@@ -63,6 +63,9 @@ function toApprovalDecision(decision: ApprovalResolvePayload): import('@megumi/d
 }
 
 function toApprovalRunDto(execution: ExecutionSnapshot): ApprovalRunUiDto {
+  if (execution.kind !== 'conversation') {
+    throw new Error('Approval resolution returned a non-conversation execution.');
+  }
   return {
     executionId: execution.executionId,
     sessionId: execution.sessionId,

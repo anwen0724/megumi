@@ -21,7 +21,7 @@ export interface ToolScope {
 
 export interface ContextAdapterDependencies {
   readonly metadata: ExecutionMetadata;
-  readonly userInput: UserInput;
+  readonly userInput?: UserInput;
   readonly runContext?: RunContext;
   readonly context: ContextCapabilities;
   readonly toolExecution: ToolExecutionBinding;
@@ -39,14 +39,7 @@ export function createContextAdapter(
   dependencies: ContextAdapterDependencies,
   runtime: ContextAdapterRuntime,
 ): AgentContextProvider {
-  const runContext: RunContext = dependencies.runContext ?? {
-    kind: 'conversation',
-    executionId: dependencies.metadata.executionId,
-    sessionId: dependencies.metadata.sessionId,
-    workspaceId: dependencies.metadata.workspaceId,
-    userInput: dependencies.userInput,
-    model: dependencies.metadata.model,
-  };
+  const runContext: RunContext = dependencies.runContext ?? conversationRunContext(dependencies);
 
   const build = async (
     scope: ToolScope,
@@ -146,9 +139,18 @@ export function createContextAdapter(
           }),
         };
       }
+      if (runContext.kind === 'daily_discovery') {
+        return {
+          status: 'failed',
+          error: contextAgentError('Daily discovery context exceeded the model window.', false, {
+            owner: 'context',
+            code: 'daily_discovery_context_overflow',
+          }),
+        };
+      }
       const compacted = await dependencies.context.compact({
-        sessionId: dependencies.metadata.sessionId,
-        workspaceId: dependencies.metadata.workspaceId,
+        sessionId: runContext.sessionId,
+        workspaceId: runContext.workspaceId,
         model: dependencies.metadata.model,
         tools: scope.definitions,
         trigger: 'overflow',
@@ -174,6 +176,20 @@ export function createContextAdapter(
       }
       return build(scope, context.messages, signal);
     },
+  };
+}
+
+function conversationRunContext(dependencies: ContextAdapterDependencies): RunContext {
+  if (dependencies.metadata.kind !== 'conversation' || !dependencies.userInput) {
+    throw new Error('Conversation Context requires conversation metadata and UserInput.');
+  }
+  return {
+    kind: 'conversation',
+    executionId: dependencies.metadata.executionId,
+    sessionId: dependencies.metadata.sessionId,
+    workspaceId: dependencies.metadata.workspaceId,
+    userInput: dependencies.userInput,
+    model: dependencies.metadata.model,
   };
 }
 
