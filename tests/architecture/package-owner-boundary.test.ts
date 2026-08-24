@@ -53,10 +53,10 @@ describe('Package Owner boundaries', () => {
     expect(hostSource).not.toContain('apps/desktop');
   });
 
-  it('keeps Desktop product-facing code behind Product contracts', () => {
-    const desktopSource = readTypeScriptTree('apps/desktop/src');
+  it('keeps Renderer product-facing code behind Product contracts', () => {
+    const rendererSource = readTypeScriptTree('apps/desktop/src/renderer');
 
-    expect(desktopSource).not.toContain('@megumi/observability');
+    expect(rendererSource).not.toContain('@megumi/observability');
   });
   it('keeps Host platform capability creation outside Product source', () => {
     const productSource = readTypeScriptTree('packages/product/src');
@@ -79,9 +79,9 @@ describe('Package Owner boundaries', () => {
     expect(publicSource).not.toContain('resolveSandboxBackend');
     expect(publicSource).not.toContain('SandboxBackend');
     expect(desktopSource).not.toContain('resolveSandboxBackend');
-    expect(desktopSource).not.toContain('createSandbox');
+    expect(desktopSource).not.toMatch(/@megumi\/sandbox\/src/u);
     expect(evaluationSource).not.toContain('resolveSandboxBackend');
-    expect(evaluationSource).not.toContain('createSandbox');
+    expect(evaluationSource).not.toMatch(/@megumi\/sandbox\/src/u);
   });
   it('allows Package subpaths only when the owning manifest exports them', () => {
     const packageExports = readPackageExports();

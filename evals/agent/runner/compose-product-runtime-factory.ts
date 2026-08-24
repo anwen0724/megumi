@@ -4,8 +4,8 @@ import {
   composeProduct,
   composeProductCapabilities,
   type ProductCapabilitiesInput as ProductCapabilitiesOptions,
-} from '../../../apps/desktop/src/main/shell-composition/application-host-composition';
-import type { ProductRuntime } from '../../../apps/desktop/src/main/shell-composition/application-runtime';
+} from '../composition/application-host-composition';
+import type { ProductRuntime } from '../composition/application-runtime';
 import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
 import type { BuiltInToolAvailability } from '@megumi/tools';
 import {

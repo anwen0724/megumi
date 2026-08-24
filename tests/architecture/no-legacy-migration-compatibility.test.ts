@@ -81,13 +81,12 @@ describe('migration compatibility removal', () => {
     expect(fs.existsSync(path.join(root, 'packages/agent/persistence'))).toBe(false);
   });
 
-  it('does not let the desktop shell own database schema, migrations, or repositories', () => {
+  it('lets Desktop compose Database only through its public owner entry', () => {
     const violations: string[] = [];
     const forbiddenImports = [
-      '@megumi/database',
-      'packages/database',
       'drizzle-orm',
       'drizzle-kit',
+      'packages/database/src',
       'database-schema',
       'database-migrations',
     ];

@@ -12,7 +12,7 @@ describe('Agent Evaluation architecture boundary', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('allows evals to use only Product public seams', async () => {
+  it('keeps Evaluation on owner packages and Product public seams, without Desktop or Agent Core internals', async () => {
     const files = await sourceFiles(path.join(repositoryRoot, 'evals'));
     const offenders = await importsMatching(
       files,

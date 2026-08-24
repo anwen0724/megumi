@@ -123,8 +123,10 @@ describe('DiscoveryPage', () => {
     expect(await screen.findAllByTestId(/^recommendation-recommendation:/)).toHaveLength(4);
     expect(screen.getByRole('button', { name: '显示更多（还有 4 条）' })).toHaveAttribute('aria-expanded', 'false');
 
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
-    fireEvent(window, new Event('resize'));
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
+      window.dispatchEvent(new Event('resize'));
+    });
     await waitFor(() => expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(6));
 
     const expand = screen.getByRole('button', { name: '显示更多（还有 2 条）' });

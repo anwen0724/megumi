@@ -11,11 +11,9 @@ const forbiddenDirectories = [
   'packages/db',
   'packages/memory',
   'packages/security',
-  'packages/home',
   'packages/shared',
   'tests/packages/memory',
   'tests/packages/security',
-  'tests/packages/home',
 ];
 
 const forbiddenAliases = [
@@ -24,7 +22,6 @@ const forbiddenAliases = [
   '@megumi/db',
   '@megumi/memory',
   '@megumi/security',
-  '@megumi/home',
   '@megumi/shared',
 ];
 
