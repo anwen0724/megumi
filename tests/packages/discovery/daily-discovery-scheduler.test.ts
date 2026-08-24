@@ -12,12 +12,12 @@ import {
 } from '@megumi/ai';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
 import {
-  createDiscoveryAgent,
+  createDiscovery,
   createDiscoveryRepository,
   createSourceRegistry,
-  type CreateDiscoveryAgentOptions,
   type DiscoverySource,
 } from '@megumi/discovery';
+import { createAgentExecutions, launchAgentExecution } from '@megumi/execution';
 import { createEventBus } from '@megumi/events';
 
 const model = {
@@ -131,7 +131,9 @@ describe('daily discovery scheduler and retry lifecycle', () => {
     addInterest(fixture.repository);
     await fixture.agent.startBackground();
 
-    expect(await fixture.agent.shutdown({ timeoutMs: 100 })).toEqual({ status: 'shut_down' });
+    const discoveryShutdown = fixture.agent.shutdown();
+    expect(await fixture.executions.shutdown({ timeoutMs: 100 })).toEqual({ status: 'shut_down' });
+    await discoveryShutdown;
     expect(timers.pending()).toEqual([]);
     expect(fixture.repository.getDailyBatch('2026-08-22')).toBeUndefined();
   });
@@ -169,7 +171,7 @@ function createFixture(
     }),
   } as unknown as Models;
   const discoveryTools = createDailyDiscoveryTestTools();
-  const options: CreateDiscoveryAgentOptions = {
+  const options = {
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
       createSessionMessageId: () => 'message:unused', createModelCallId: () => 'model-call:unused',
@@ -221,7 +223,22 @@ function createFixture(
       providerRequestMaxRetries: 0, providerRequestMaxRetryDelayMs: 0,
     },
   };
-  return { agent: createDiscoveryAgent(options), repository };
+  const executions = createAgentExecutions({
+    ids: options.ids,
+    clock: options.clock,
+    terminalRetentionMs: options.terminalRetentionMs,
+    events: options.events,
+    launch: (input) => launchAgentExecution(input, options),
+  });
+  const agent = createDiscovery({
+    interests: options.interests,
+    dailyDiscovery: {
+      ...options.dailyDiscovery,
+      startExecution: (request) => executions.start(request),
+      now: options.clock.now,
+    },
+  });
+  return { agent, executions, repository };
 }
 
 function successfulStreams() {

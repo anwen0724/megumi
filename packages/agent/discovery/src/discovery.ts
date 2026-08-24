@@ -1,35 +1,15 @@
-/* Composes Megumi's discovery business operations with the shared Agent execution service. */
-import type { Models } from '@megumi/ai';
-import type { ContextCapabilities } from '@megumi/context';
-import type { EventBus } from '@megumi/events';
-import {
-  createAgentExecutions,
-  launchAgentExecution,
-  type AgentExecutions,
-  type DiscoveryAgentPolicy,
-  type ExecutionClock,
-  type LaunchAgentExecution,
-  type ShutdownRequest,
-  type ShutdownResult,
-} from '@megumi/execution';
-import type { ObservabilityService } from '@megumi/observability';
-import type { Permissions } from '@megumi/permissions';
-import type { SessionHistory } from '@megumi/session';
-import type { Tools } from '@megumi/tools';
+/*
+ * Composes Megumi's content-discovery business operations. Execution is
+ * injected as a capability; this module never creates or owns Agent runs.
+ */
 import {
   createDiscoveryConfiguration,
+  type ConnectDiscoverySourceRequest,
   type DiscoveryConfigurationStore,
   type DiscoveryConfigurationView,
-  type ConnectDiscoverySourceRequest,
   type DiscoverySourceView,
   type UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
-import {
-  createConversationSubmission,
-  type ConversationSubmissionDependencies,
-  type SubmitConversationInputRequest,
-  type SubmitConversationInputResult,
-} from './conversation/submit-conversation-input';
 import type {
   EnsureDailyDiscoveryRequest,
   EnsureDailyDiscoveryResult,
@@ -61,8 +41,7 @@ import {
 import type { UpdateRecommendationStateRequest } from './recommendations/recommendation';
 import type { SourceRegistry } from './sources/source-registry';
 
-export interface DiscoveryAgent extends Omit<AgentExecutions, 'shutdown'> {
-  submitConversationInput(request: SubmitConversationInputRequest): Promise<SubmitConversationInputResult>;
+export interface Discovery {
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
@@ -75,87 +54,32 @@ export interface DiscoveryAgent extends Omit<AgentExecutions, 'shutdown'> {
   getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
   updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
   connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
-  shutdown(request: ShutdownRequest): Promise<ShutdownResult>;
+  shutdown(): Promise<void>;
 }
 
-export interface CreateDiscoveryAgentOptions {
-  readonly ids: {
-    createExecutionId(): string;
-    createSessionMessageId(): string;
-    createModelCallId(): string;
-    createToolExecutionId(): string;
-    createApprovalId(): string;
-  };
-  readonly clock: ExecutionClock;
-  readonly terminalRetentionMs: number;
-  readonly events: EventBus;
-  readonly models: Models;
-  readonly context: ContextCapabilities;
-  readonly tools: Pick<Tools, 'bindExecution'>;
-  readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  readonly session: Pick<
-    SessionHistory,
-    'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
-  >;
-  readonly conversation: ConversationSubmissionDependencies;
+export interface CreateDiscoveryOptions {
   readonly interests?: CreateInterestRuntimeOptions;
-  readonly dailyDiscovery?: Omit<CreateDailyDiscoveryRuntimeOptions, 'startExecution'>;
+  readonly dailyDiscovery?: CreateDailyDiscoveryRuntimeOptions & {
+    readonly now: () => string;
+  };
   readonly configuration?: {
     readonly sourceRegistry: SourceRegistry;
     readonly settings: DiscoveryConfigurationStore;
   };
-  readonly observability?: ObservabilityService;
-  readonly policy: DiscoveryAgentPolicy;
-  readonly launch?: LaunchAgentExecution;
 }
 
-export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): DiscoveryAgent {
-  validateDiscoveryAgentPolicy(options.policy);
+export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
   const interestRuntime = options.interests
     ? createInterestRuntime(options.interests)
     : createDisabledInterestRuntime();
-  const launch = options.launch ?? ((input) => launchAgentExecution(input, options));
-  const executions = createAgentExecutions({
-    ids: options.ids,
-    clock: options.clock,
-    terminalRetentionMs: options.terminalRetentionMs,
-    events: options.events,
-    launch,
-    onSettled(execution, outcome) {
-      if (execution.kind !== 'conversation'
-        || outcome.status !== 'completed'
-        || !outcome.assistantMessageId
-        || !execution.completedAt) return;
-      interestRuntime.observeConversationTurn({
-        sessionId: execution.sessionId,
-        executionId: execution.executionId,
-        userMessageId: execution.userMessageId,
-        assistantMessageId: outcome.assistantMessageId,
-        completedAt: execution.completedAt,
-      });
-    },
-  });
-  const conversationSubmission = createConversationSubmission({
-    dependencies: {
-      ...options.conversation,
-      ...(options.dailyDiscovery ? { recommendations: options.dailyDiscovery.repository } : {}),
-    },
-    startExecution: (request) => executions.start(request),
-  });
   const dailyDiscoveryRuntime = options.dailyDiscovery
-    ? createDailyDiscoveryRuntime({
-        ...options.dailyDiscovery,
-        startExecution: (request) => executions.start(request),
-        now: options.clock.now,
-      })
+    ? createDailyDiscoveryRuntime(options.dailyDiscovery)
     : undefined;
   const discoveryConfiguration = options.configuration
     ? createDiscoveryConfiguration(options.configuration)
     : undefined;
 
   return {
-    ...executions,
-    submitConversationInput: (request) => conversationSubmission.submit(request),
     changeInterest: (request) => interestRuntime.changeInterest(request),
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
@@ -190,20 +114,9 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     connectDiscoverySource: (request) => discoveryConfiguration
       ? discoveryConfiguration.connectSource(request)
       : Promise.reject(new Error('Discovery configuration is not configured.')),
-    async shutdown(request) {
+    async shutdown() {
       interestRuntime.shutdown();
       await dailyDiscoveryRuntime?.shutdown();
-      const result = await executions.shutdown(request);
-      await dailyDiscoveryRuntime?.shutdown();
-      return result;
     },
   };
-}
-
-function validateDiscoveryAgentPolicy(policy: DiscoveryAgentPolicy): void {
-  for (const field of ['providerRequestMaxRetries', 'providerRequestMaxRetryDelayMs'] as const) {
-    if (!Number.isInteger(policy[field]) || policy[field] < 0) {
-      throw new TypeError(`Invalid DiscoveryAgentPolicy.${field}: expected a non-negative integer.`);
-    }
-  }
 }

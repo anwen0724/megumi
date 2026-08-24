@@ -1,6 +1,5 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
 import { app, BrowserWindow } from 'electron';
-import { createDiscoveryAgent } from '@megumi/discovery';
 import { resolveMegumiHomePath } from '@megumi/home';
 import { composeProduct, composeProductCapabilities } from './application-host-composition';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
@@ -44,7 +43,7 @@ export function composeDesktopMain() {
       mainBuildDirectory: __dirname,
     }),
   });
-  // The capability instances and Discovery Agent are composed once in this Host root.
+  // The capability instances and stable operation owners are composed once in this Host root.
   const capabilities = composeProductCapabilities({
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
@@ -61,10 +60,8 @@ export function composeDesktopMain() {
       cwd: process.cwd(),
     }),
   });
-  const discoveryAgent = createDiscoveryAgent(capabilities.discoveryAgentOptions);
   const product = composeProduct({
     capabilities,
-    discoveryAgent,
     diagnosticBundleSave: { save: saveDiagnosticBundle },
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,

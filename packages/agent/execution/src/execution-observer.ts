@@ -28,7 +28,7 @@ import type {
   SessionToolResultCommit,
 } from './session-settlement';
 import { SessionCommitError } from './session-settlement';
-import type { DiscoveryAgentToolResultDetails, DiscoveryAgentToolUpdateDetails } from './tool-adapter';
+import type { AgentToolResultDetails, AgentToolUpdateDetails } from './tool-adapter';
 import type { ToolScope } from './context-adapter';
 
 // ---------------------------------------------------------------------------
@@ -556,7 +556,7 @@ function publishToolUpdate(
   update: { readonly details?: unknown },
   options: CreateAgentEventListenerOptions,
 ): void {
-  const details = update.details as DiscoveryAgentToolUpdateDetails | undefined;
+  const details = update.details as AgentToolUpdateDetails | undefined;
   if (!details) return;
   if (details.kind === 'execution_started') {
     emitRuntime(options, 'tool_execution.started', {
@@ -587,7 +587,7 @@ function publishToolEnd(
   cancellationRequested: boolean,
   options: CreateAgentEventListenerOptions,
 ): void {
-  const details = result.details as DiscoveryAgentToolResultDetails | undefined;
+  const details = result.details as AgentToolResultDetails | undefined;
   if (!details) {
     const systemFailure = options.runtime.toolSystemFailures.get(toolCallId);
     if (cancellationRequested && !systemFailure) {
@@ -650,7 +650,7 @@ export function toToolResultCommit(
   cancellationRequested: boolean,
   runtime: ExecutionProjectionRuntime,
 ): SessionToolResultCommit {
-  const details = result.details as DiscoveryAgentToolResultDetails | undefined;
+  const details = result.details as AgentToolResultDetails | undefined;
   const systemFailure = runtime.toolSystemFailures.get(result.toolCallId);
   const cancelledWithoutDetails = cancellationRequested && !details && !systemFailure;
   return {

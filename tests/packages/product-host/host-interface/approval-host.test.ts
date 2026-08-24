@@ -1,11 +1,11 @@
 /*
- * Verifies Product approval operations against the Discovery Agent-owned execution state.
+ * Verifies Product approval operations against Agent Execution-owned state.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { createApprovalOperations } from '../../../../packages/agent/product-host/src/operations/approval-operations';
 
 describe('ApprovalHost', () => {
-  it('maps an approved decision to the Discovery Agent', async () => {
+  it('maps an approved decision to Agent Execution', async () => {
     const resolveApproval = vi.fn(async () => ({
       status: 'accepted' as const,
       execution: executionFixture('waiting'),
@@ -100,7 +100,7 @@ describe('ApprovalHost', () => {
         },
       },
     ],
-  ])('projects Discovery Agent approval result %s', async (agentResult, expectedPayload) => {
+  ])('projects Agent Execution approval result %s', async (agentResult, expectedPayload) => {
     const host = createApprovalOperations({
       resolveApproval: vi.fn(async () => agentResult),
     } as never);
@@ -116,6 +116,7 @@ describe('ApprovalHost', () => {
 
 function executionFixture(status: 'waiting' | 'completed') {
   return {
+    kind: 'conversation',
     executionId: 'execution:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',

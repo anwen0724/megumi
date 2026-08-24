@@ -1,10 +1,10 @@
-/* Adapts renderer-safe Discovery Host DTOs to the DiscoveryAgent business owner. */
-import type { DiscoveryAgent } from '@megumi/discovery';
+/* Adapts renderer-safe Discovery Host DTOs to the Discovery business owner. */
+import type { Discovery } from '@megumi/discovery';
 import type { DiscoveryHost } from '../host/discovery-host';
 
 export function createDiscoveryOperations(
   agent: Pick<
-    DiscoveryAgent,
+    Discovery,
     | 'changeInterest'
     | 'setSessionParticipation'
     | 'ensureDailyDiscovery'

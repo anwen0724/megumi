@@ -36,7 +36,7 @@ export interface LaunchConversationAgentExecutionInput {
   }) => Promise<ApprovalResolution>;
 }
 
-export interface LaunchDailyDiscoveryAgentExecutionInput {
+export interface LaunchDailyDiscoveryExecutionInput {
   readonly kind: 'daily_discovery';
   readonly metadata: DailyDiscoveryExecutionMetadata;
   readonly runContext: DailyDiscoveryRunContext;
@@ -44,7 +44,7 @@ export interface LaunchDailyDiscoveryAgentExecutionInput {
 
 export type LaunchAgentExecutionInput =
   | LaunchConversationAgentExecutionInput
-  | LaunchDailyDiscoveryAgentExecutionInput;
+  | LaunchDailyDiscoveryExecutionInput;
 
 export interface LaunchedAgentExecution {
   readonly agent: Agent;

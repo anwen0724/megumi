@@ -25,7 +25,7 @@ describe('Discovery Host', () => {
     expect(() => DiscoveryRecommendationStatePayloadSchema.parse({ recommendationId: 'r', action: 'opened', extra: true })).toThrow();
   });
 
-  it('forwards DTOs to DiscoveryAgent without reading Repository or Sources', async () => {
+  it('forwards DTOs to Discovery without reading Repository or Sources', async () => {
     const agent = {
       getDiscoveryConfiguration: vi.fn(async () => ({ sources: [] })),
       updateDiscoveryConfiguration: vi.fn(async () => ({ sources: [] })),

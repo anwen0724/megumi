@@ -2,7 +2,8 @@
  * Owns application startup rollback and ordered shutdown. It records only
  * resources created by Composition and never decides module business state.
  */
-import type { DiscoveryAgent } from '@megumi/discovery';
+import type { Discovery } from '@megumi/discovery';
+import type { AgentExecutions } from '@megumi/execution';
 import type { DatabaseConnection } from '@megumi/database';
 import type { EventSubscription } from '@megumi/events';
 import type { Voice } from '@megumi/voice';
@@ -12,7 +13,8 @@ export interface ApplicationResourceManager {
   registerEventSubscription(subscription: EventSubscription): void;
   rollbackStartup(): void;
   dispose(input: {
-    readonly discoveryAgent: DiscoveryAgent;
+    readonly discovery: Discovery;
+    readonly executions: AgentExecutions;
     readonly voice: Voice;
     readonly speechOutput: { dispose(): void };
     readonly observability: { flush(): Promise<void> };
@@ -20,7 +22,7 @@ export interface ApplicationResourceManager {
 }
 
 interface ProductDisposeFailure {
-  readonly resource: 'discovery-agent' | 'voice' | 'speech-output' | 'events' | 'observability' | 'database';
+  readonly resource: 'discovery' | 'execution' | 'voice' | 'speech-output' | 'events' | 'observability' | 'database';
   readonly error: unknown;
 }
 
@@ -58,19 +60,27 @@ export function createApplicationResourceManager(input: {
     },
 
     /** Attempts every shutdown step and reports all failures only after cleanup. */
-    async dispose({ discoveryAgent, voice, speechOutput, observability }) {
+    async dispose({ discovery, executions, voice, speechOutput, observability }) {
       const failures: ProductDisposeFailure[] = [];
+      const discoveryShutdown = (async () => {
+        try {
+          await discovery.shutdown();
+        } catch (error) {
+          failures.push({ resource: 'discovery', error });
+        }
+      })();
       try {
-        const result = await discoveryAgent.shutdown({ timeoutMs: input.shutdownTimeoutMs });
+        const result = await executions.shutdown({ timeoutMs: input.shutdownTimeoutMs });
         if (result.status === 'timed_out') {
           failures.push({
-            resource: 'discovery-agent',
-            error: new Error(`Discovery Agent shutdown timed out with ${result.activeExecutions.length} active execution(s).`),
+            resource: 'execution',
+            error: new Error(`Agent Execution shutdown timed out with ${result.activeExecutions.length} active execution(s).`),
           });
         }
       } catch (error) {
-        failures.push({ resource: 'discovery-agent', error });
+        failures.push({ resource: 'execution', error });
       }
+      await discoveryShutdown;
 
       try {
         await voice.dispose();

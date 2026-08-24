@@ -28,7 +28,7 @@ import type { SessionHistory } from '@megumi/session';
 import type { Tools } from '@megumi/tools';
 import type {
   LaunchedAgentExecution,
-  LaunchDailyDiscoveryAgentExecutionInput,
+  LaunchDailyDiscoveryExecutionInput,
   LaunchAgentExecutionInput,
 } from './agent-executions';
 import type {
@@ -60,7 +60,7 @@ import {
 } from './session-settlement';
 import { createAgentTool, createUnprotectedAgentTool } from './tool-adapter';
 
-export interface DiscoveryAgentPolicy {
+export interface AgentExecutionPolicy {
   readonly maxModelCallsPerExecution: number;
   readonly maxToolRoundsPerExecution: number;
   readonly maxToolCallsPerModelCall: number;
@@ -98,7 +98,7 @@ export interface ExecuteAgentDependencies {
     createSessionMessageId(): string;
   };
   readonly clock: ExecutionClock;
-  readonly policy: DiscoveryAgentPolicy;
+  readonly policy: AgentExecutionPolicy;
 }
 
 /** A launch failure carries its real ExecutionFailure so start() preserves the cause. */
@@ -123,7 +123,7 @@ export async function launchAgentExecution(
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   if (input.kind === 'daily_discovery') {
-    return launchDailyDiscoveryAgentExecution(input, dependencies);
+    return launchDailyDiscoveryExecution(input, dependencies);
   }
   const { metadata } = input;
   const referenceContent = input.recommendationReference
@@ -272,8 +272,8 @@ export async function launchAgentExecution(
   };
 }
 
-async function launchDailyDiscoveryAgentExecution(
-  input: LaunchDailyDiscoveryAgentExecutionInput,
+async function launchDailyDiscoveryExecution(
+  input: LaunchDailyDiscoveryExecutionInput,
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   const { metadata } = input;
@@ -572,7 +572,7 @@ async function pumpStream(
   }
 }
 
-function toAgentPolicy(policy: DiscoveryAgentPolicy): Partial<AgentPolicy> {
+function toAgentPolicy(policy: AgentExecutionPolicy): Partial<AgentPolicy> {
   return {
     maxModelCalls: policy.maxModelCallsPerExecution,
     maxModelCallAttempts: policy.maxModelCallAttempts,

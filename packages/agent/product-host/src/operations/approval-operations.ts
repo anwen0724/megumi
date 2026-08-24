@@ -1,14 +1,18 @@
-/* Implements Product approval submission using Discovery Agent-owned execution state. */
-import type { DiscoveryAgent, ExecutionSnapshot } from '@megumi/discovery';
+/* Implements Product approval submission using Agent Execution-owned state. */
+import type {
+  AgentExecutions,
+  ApprovalDecisionRequest,
+  ExecutionSnapshot,
+} from '@megumi/execution';
 import type { ApprovalHost, ApprovalResolvePayload, ApprovalRunUiDto } from '../host/approval-host';
 
 /** Creates the Product operations exposed through ApprovalHost. */
 export function createApprovalOperations(
-  discoveryAgent: Pick<DiscoveryAgent, 'resolveApproval'>,
+  executions: Pick<AgentExecutions, 'resolveApproval'>,
 ): ApprovalHost {
   return {
     async resolve(request) {
-      const result = await discoveryAgent.resolveApproval({
+      const result = await executions.resolveApproval({
         approvalId: request.approvalRequestId,
         decision: toApprovalDecision(request),
       });
@@ -49,7 +53,7 @@ export function createApprovalOperations(
   };
 }
 
-function toApprovalDecision(decision: ApprovalResolvePayload): import('@megumi/discovery').ApprovalDecisionRequest {
+function toApprovalDecision(decision: ApprovalResolvePayload): ApprovalDecisionRequest {
   return decision.decision === 'approved'
     ? {
         decision: 'approved',

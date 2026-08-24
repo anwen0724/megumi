@@ -1,8 +1,7 @@
 /*
  * Composes the shared Harness capability instances (Models, Context, Tools,
- * Permissions, Session, Events, Observability, Workspace and Sandbox) and the
- * Discovery Agent dependency facts. Desktop main and Evaluation compositions
- * call this once and construct the Discovery Agent for their Host.
+ * Permissions, Session, Events, Observability, Workspace and Sandbox), then
+ * composes the shared Execution, conversation, and Discovery operation owners.
  */
 import path from 'node:path';
 import type { Api, Model, ProviderStreams } from '@megumi/ai';
@@ -23,9 +22,18 @@ import {
   createDiscoverySourceRegistry,
   createDiscoveryRepository,
   createDailyDiscoveryAttempts,
+  createDiscovery,
   createInterestExtractor,
+  type Discovery,
   type EmbeddedBrowser,
 } from '@megumi/discovery';
+import {
+  createAgentExecutions,
+  createConversationSubmission,
+  launchAgentExecution,
+  type AgentExecutions,
+  type ConversationSubmission,
+} from '@megumi/execution';
 import {
   createEventBus,
   type EventBus,
@@ -139,7 +147,9 @@ export interface ProductCapabilities {
   readonly tools: Tools;
   readonly branches: ReturnType<typeof createSessionBranchDrafts>;
   readonly resolveModel: ProductModelResolver;
-  readonly discoveryAgentOptions: import('@megumi/discovery').CreateDiscoveryAgentOptions;
+  readonly executions: AgentExecutions;
+  readonly conversation: ConversationSubmission;
+  readonly discovery: Discovery;
 }
 
 export type ProductModelResolver = (
@@ -415,6 +425,185 @@ function composeCapabilitiesWithDatabase(
     twitterApiKey: () => discoveryCredential(settings, 'twitter'),
   });
 
+  const clock = { now: () => new Date().toISOString() };
+  const ids = {
+    createExecutionId: () => `execution:${crypto.randomUUID()}`,
+    createModelCallId: () => `model-call:${crypto.randomUUID()}`,
+    createToolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
+    createApprovalId: () => `approval:${crypto.randomUUID()}`,
+    createSessionMessageId: () => `message:${crypto.randomUUID()}`,
+  };
+  let discovery: Discovery;
+  const executions = createAgentExecutions({
+    ids,
+    clock,
+    terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
+    events,
+    launch: (execution) => launchAgentExecution(execution, {
+      ids,
+      clock,
+      events,
+      models: modelComposition.models,
+      context,
+      tools,
+      permissions,
+      session: history,
+      observability: observability.service,
+      policy: PRODUCT_EXECUTION_POLICY,
+    }),
+    onSettled(execution, outcome) {
+      if (execution.kind !== 'conversation'
+        || outcome.status !== 'completed'
+        || !outcome.assistantMessageId
+        || !execution.completedAt) return;
+      discovery.observeConversationTurn({
+        sessionId: execution.sessionId,
+        executionId: execution.executionId,
+        userMessageId: execution.userMessageId,
+        assistantMessageId: outcome.assistantMessageId,
+        completedAt: execution.completedAt,
+      });
+    },
+  });
+  const conversation = createConversationSubmission({
+    dependencies: {
+      input,
+      sessions,
+      history,
+      branches,
+      recommendations: discoveryRepository,
+      resolveModel: ({ providerId, modelId }) => resolveModel({
+        provider_id: providerId,
+        model_id: modelId,
+      }),
+    },
+    startExecution: (request) => executions.start(request),
+  });
+  discovery = createDiscovery({
+    interests: {
+      repository: discoveryRepository,
+      settings: {
+        getDiscoverySettings() {
+          const resolved = settings.resolve();
+          return {
+            conversationRecognitionEnabled: resolved.status === 'ok'
+              ? resolved.settings.discovery.conversation_recognition_enabled
+              : false,
+          };
+        },
+      },
+      sessions,
+      history,
+      async resolveModel() {
+        const resolved = settings.resolve();
+        const selection = resolved.status === 'ok'
+          ? resolved.settings.model_selection
+          : undefined;
+        if (!selection) {
+          return {
+            status: 'failed',
+            failure: { message: 'The default model is not configured.' },
+          };
+        }
+        return resolveModel(selection);
+      },
+      extractor: (input) => interestExtractor.extract(input),
+      ids: {
+        createInterestId: () => `interest:${crypto.randomUUID()}`,
+        createEvidenceId: () => `evidence:${crypto.randomUUID()}`,
+      },
+      clock,
+      onError(error, job) {
+        observability.service.recordLog({
+          level: 'warn',
+          event: 'interest_extraction_failed',
+          attributes: {
+            errorMessage: error instanceof Error ? error.message : String(error),
+            ...(job ? { executionId: job.executionId, sessionId: job.sessionId } : {}),
+          },
+        });
+      },
+    },
+    dailyDiscovery: {
+      repository: discoveryRepository,
+      attempts: dailyDiscoveryAttempts,
+      sourceRegistry: discoverySources,
+      startExecution: (request) => executions.start(request),
+      now: clock.now,
+      settings: {
+        getDiscoverySettings() {
+          const resolved = settings.resolve();
+          return resolved.status === 'ok'
+            ? {
+                dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
+                dailyTargetCount: resolved.settings.discovery.daily_target_count,
+                enabledSources: resolved.settings.discovery.enabled_sources,
+                sourceBudgets: {
+                  twitter: {
+                    maxSearchCalls: resolved.settings.discovery.twitter_budget.max_search_calls,
+                    maxResultsPerSearch: resolved.settings.discovery.twitter_budget.max_results_per_search,
+                    maxResultsPerAttempt: resolved.settings.discovery.twitter_budget.max_results_per_attempt,
+                  },
+                },
+              }
+            : {
+                dailyGenerationTime: '08:00',
+                dailyTargetCount: 20,
+                enabledSources: [],
+              };
+        },
+      },
+      timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      async resolveModel() {
+        const resolved = settings.resolve();
+        const selection = resolved.status === 'ok'
+          ? resolved.settings.model_selection
+          : undefined;
+        if (!selection) return undefined;
+        const result = await resolveModel(selection);
+        return result.status === 'ok' ? result.model : undefined;
+      },
+      ids: {
+        createBatchId: () => `discovery-batch:${crypto.randomUUID()}`,
+        createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
+      },
+    },
+    configuration: {
+      sourceRegistry: discoverySources,
+      settings: {
+        read() {
+          const resolved = settings.resolve();
+          return resolved.status === 'ok'
+            ? {
+                conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
+                dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
+                dailyTargetCount: resolved.settings.discovery.daily_target_count,
+                enabledSources: resolved.settings.discovery.enabled_sources,
+              }
+            : {
+                conversationRecognitionEnabled: false,
+                dailyGenerationTime: '08:00',
+                dailyTargetCount: 20,
+                enabledSources: [],
+              };
+        },
+        write(next) {
+          const result = settings.update({
+            patch: {
+              discovery: {
+                conversation_recognition_enabled: next.conversationRecognitionEnabled,
+                daily_generation_time: next.dailyGenerationTime,
+                daily_target_count: next.dailyTargetCount,
+                enabled_sources: [...next.enabledSources],
+              },
+            },
+          });
+          if (result.status !== 'updated') throw new Error(result.failure.message);
+        },
+      },
+    },
+  });
+
   const capabilities: ProductCapabilities = {
     homePaths,
     observability,
@@ -440,155 +629,9 @@ function composeCapabilitiesWithDatabase(
     tools,
     branches,
     resolveModel,
-    discoveryAgentOptions: {
-      ids: {
-        createExecutionId: () => `execution:${crypto.randomUUID()}`,
-        createModelCallId: () => `model-call:${crypto.randomUUID()}`,
-        createToolExecutionId: () => `tool-execution:${crypto.randomUUID()}`,
-        createApprovalId: () => `approval:${crypto.randomUUID()}`,
-        createSessionMessageId: () => `message:${crypto.randomUUID()}`,
-      },
-      clock: { now: () => new Date().toISOString() },
-      terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
-      events,
-      models: modelComposition.models,
-      context,
-      tools,
-      permissions,
-      session: history,
-      conversation: {
-        input,
-        sessions,
-        history,
-        branches,
-        resolveModel: ({ providerId, modelId }) => resolveModel({
-          provider_id: providerId,
-          model_id: modelId,
-        }),
-      },
-      interests: {
-        repository: discoveryRepository,
-        settings: {
-          getDiscoverySettings() {
-            const resolved = settings.resolve();
-            return {
-              conversationRecognitionEnabled: resolved.status === 'ok'
-                ? resolved.settings.discovery.conversation_recognition_enabled
-                : false,
-            };
-          },
-        },
-        sessions,
-        history,
-        async resolveModel() {
-          const resolved = settings.resolve();
-          const selection = resolved.status === 'ok'
-            ? resolved.settings.model_selection
-            : undefined;
-          if (!selection) {
-            return {
-              status: 'failed',
-              failure: { message: 'The default model is not configured.' },
-            };
-          }
-          return resolveModel(selection);
-        },
-        extractor: (input) => interestExtractor.extract(input),
-        ids: {
-          createInterestId: () => `interest:${crypto.randomUUID()}`,
-          createEvidenceId: () => `evidence:${crypto.randomUUID()}`,
-        },
-        clock: { now: () => new Date().toISOString() },
-        onError(error, job) {
-          observability.service.recordLog({
-            level: 'warn',
-            event: 'interest_extraction_failed',
-            attributes: {
-              errorMessage: error instanceof Error ? error.message : String(error),
-              ...(job ? { executionId: job.executionId, sessionId: job.sessionId } : {}),
-            },
-          });
-        },
-      },
-      dailyDiscovery: {
-        repository: discoveryRepository,
-        attempts: dailyDiscoveryAttempts,
-        sourceRegistry: discoverySources,
-        settings: {
-          getDiscoverySettings() {
-            const resolved = settings.resolve();
-            return resolved.status === 'ok'
-              ? {
-                  dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
-                  dailyTargetCount: resolved.settings.discovery.daily_target_count,
-                  enabledSources: resolved.settings.discovery.enabled_sources,
-                }
-              : {
-                  dailyGenerationTime: '08:00',
-                  dailyTargetCount: 20,
-                  enabledSources: [],
-                };
-          },
-        },
-        timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        async resolveModel() {
-          const resolved = settings.resolve();
-          const selection = resolved.status === 'ok'
-            ? resolved.settings.model_selection
-            : undefined;
-          if (!selection) return undefined;
-          const result = await resolveModel(selection);
-          return result.status === 'ok' ? result.model : undefined;
-        },
-        ids: {
-          createBatchId: () => `discovery-batch:${crypto.randomUUID()}`,
-          createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
-        },
-      },
-      configuration: {
-        sourceRegistry: discoverySources,
-        settings: {
-          read() {
-            const resolved = settings.resolve();
-            return resolved.status === 'ok'
-              ? {
-                  conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
-                  dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
-                  dailyTargetCount: resolved.settings.discovery.daily_target_count,
-                  enabledSources: resolved.settings.discovery.enabled_sources,
-                  sourceBudgets: {
-                    twitter: {
-                      maxSearchCalls: resolved.settings.discovery.twitter_budget.max_search_calls,
-                      maxResultsPerSearch: resolved.settings.discovery.twitter_budget.max_results_per_search,
-                      maxResultsPerAttempt: resolved.settings.discovery.twitter_budget.max_results_per_attempt,
-                    },
-                  },
-                }
-              : {
-                  conversationRecognitionEnabled: false,
-                  dailyGenerationTime: '08:00',
-                  dailyTargetCount: 20,
-                  enabledSources: [],
-                };
-          },
-          write(next) {
-            const result = settings.update({
-              patch: {
-                discovery: {
-                  conversation_recognition_enabled: next.conversationRecognitionEnabled,
-                  daily_generation_time: next.dailyGenerationTime,
-                  daily_target_count: next.dailyTargetCount,
-                  enabled_sources: [...next.enabledSources],
-                },
-              },
-            });
-            if (result.status !== 'updated') throw new Error(result.failure.message);
-          },
-        },
-      },
-      observability: observability.service,
-      policy: PRODUCT_EXECUTION_POLICY,
-    },
+    executions,
+    conversation,
+    discovery,
   };
   return capabilities;
 }

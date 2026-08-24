@@ -3,11 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Model, Api } from '@megumi/ai';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createEventBus } from '@megumi/events';
 import {
-  createDiscoveryAgent,
+  createDiscovery,
   createDiscoveryRepository,
-  type CreateDiscoveryAgentOptions,
 } from '@megumi/discovery';
 
 const now = '2026-08-22T10:00:00.000Z';
@@ -173,7 +171,7 @@ describe('Discovery Agent Interest runtime', () => {
     agent.observeConversationTurn(turn('execution:2', 'user:2', 'assistant:2'));
     await vi.waitFor(() => expect(extractor).toHaveBeenCalledTimes(1));
 
-    expect(await agent.shutdown({ timeoutMs: 100 })).toEqual({ status: 'shut_down' });
+    await agent.shutdown();
     expect(activeSignal?.aborted).toBe(true);
     await Promise.resolve();
     expect(extractor).toHaveBeenCalledTimes(1);
@@ -203,29 +201,7 @@ function fixture(database: DatabaseConnection, override: {
   const repository = createDiscoveryRepository({ database });
   let interestNumber = 0;
   let evidenceNumber = 0;
-  const options: CreateDiscoveryAgentOptions = {
-    ids: {
-      createExecutionId: () => 'execution:runtime',
-      createSessionMessageId: () => 'message:runtime',
-      createModelCallId: () => 'model-call:runtime',
-      createToolExecutionId: () => 'tool:runtime',
-      createApprovalId: () => 'approval:runtime',
-    },
-    clock: { now: () => now },
-    terminalRetentionMs: 60_000,
-    events: createEventBus(),
-    models: {} as never,
-    context: {} as never,
-    tools: {} as never,
-    permissions: {} as never,
-    session: {} as never,
-    conversation: {
-      input: {} as never,
-      sessions: {} as never,
-      history: {} as never,
-      branches: {} as never,
-      resolveModel: async () => ({ status: 'ok', model }),
-    },
+  const options = {
     interests: {
       repository,
       settings: {
@@ -252,22 +228,8 @@ function fixture(database: DatabaseConnection, override: {
       },
       clock: { now: () => now },
     },
-    policy: {
-      maxModelCallsPerExecution: 4,
-      maxToolRoundsPerExecution: 3,
-      maxToolCallsPerModelCall: 4,
-      maxToolCallsPerExecution: 8,
-      maxConcurrentToolExecutions: 2,
-      modelCallTimeoutMs: 1_000,
-      toolExecutionTimeoutMs: 1_000,
-      maxModelCallAttempts: 1,
-      modelRetryDelayMs: 0,
-      maxContextOverflowRecoveries: 1,
-      providerRequestMaxRetries: 0,
-      providerRequestMaxRetryDelayMs: 0,
-    },
   };
-  return { agent: createDiscoveryAgent(options), repository };
+  return { agent: createDiscovery(options), repository };
 }
 
 function turn(executionId: string, userMessageId: string, assistantMessageId: string) {

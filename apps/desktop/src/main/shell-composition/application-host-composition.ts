@@ -1,9 +1,7 @@
 /*
  * Composes the application Host from already-composed capability
- * instances and the already-constructed Discovery Agent public Interface, and
- * owns process startup, shutdown, and resource rollback for a concrete Host.
+ * instances and owns Host operation wiring, startup, shutdown, and rollback.
  */
-import type { DiscoveryAgent } from '@megumi/discovery';
 import {
   migrateLegacyPermissionSettingsFile,
   migrateLegacyProviderApiSettingsFile,
@@ -65,10 +63,8 @@ export interface ComposeProductVoiceOptions {
 }
 
 export interface ComposeProductOptions {
-  /** The once-composed capability instances shared with the Discovery Agent construction. */
+  /** The once-composed capability instances and stable Megumi operation owners. */
   readonly capabilities: ProductCapabilities;
-  /** The already-constructed Discovery Agent public Interface; Product never constructs it. */
-  readonly discoveryAgent: DiscoveryAgent;
   readonly diagnosticBundleSave?: DiagnosticBundleSaver;
   readonly directoryPicker?: DirectoryPicker;
   readonly fileOpen?: FileOpener;
@@ -108,7 +104,7 @@ function composeProductRuntime(
   resources: ApplicationResourceManager,
 ): ProductRuntime {
   const capabilities = options.capabilities;
-  const discoveryAgent = options.discoveryAgent;
+  const { executions, conversation, discovery } = capabilities;
   const {
     homePaths,
     observability,
@@ -138,13 +134,14 @@ function composeProductRuntime(
   const sessionReader = createSessionReader({
     sessions,
     history,
-    discoveryAgent,
+    executions,
     events,
     workspaceChanges,
   });
   const session = createSessionOperations({
     reader: sessionReader,
-    discoveryAgent,
+    executions,
+    conversation,
     suggestions,
     sessions,
     history,
@@ -170,12 +167,12 @@ function composeProductRuntime(
     synthesizer: options.voice?.speechOutputSynthesizer ?? unavailableSpeechSynthesizer,
   });
   // The workspace subscriber resolves execution -> workspace through the
-  // Discovery Agent registry; subscribe after its injection.
+  // Agent Execution registry; subscribe after its construction.
   resources.registerEventSubscription(
     events.subscribe(
       { eventTypes: ['run.ended'] },
       createWorkspaceChangeEventHandler(workspaceChanges, (executionId) => {
-        const result = discoveryAgent.get({ executionId });
+        const result = executions.get({ executionId });
         return result.status === 'found' && result.execution.kind === 'conversation'
           ? result.execution.workspaceId
           : undefined;
@@ -278,7 +275,7 @@ function composeProductRuntime(
     }),
   );
   const host = createProductHost({
-    discovery: createDiscoveryOperations(discoveryAgent),
+    discovery: createDiscoveryOperations(discovery),
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
@@ -290,7 +287,7 @@ function composeProductRuntime(
     settings: createSettingsOperations(settings, {
       listAvailableTools: () => [...tools.listAvailableTools().tools],
     }),
-    approval: createApprovalOperations(discoveryAgent),
+    approval: createApprovalOperations(executions),
     observability: createObservabilityOperations({
       queries: observability.queryService,
       flush: observability.flush,
@@ -299,9 +296,9 @@ function composeProductRuntime(
     voice: createVoiceOperations({ voice, speechOutput }),
   });
 
-  // Product starts the business owner's background lifecycle but does not
-  // implement scheduling or recovery rules itself.
-  void discoveryAgent.startBackground().catch((error) => {
+  // Composition starts the business background lifecycle without implementing
+  // its scheduling or recovery rules.
+  void discovery.startBackground().catch((error) => {
     logger.warn('discovery_background_start_failed', {
       errorMessage: error instanceof Error ? error.message : String(error),
     });
@@ -312,7 +309,7 @@ function composeProductRuntime(
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
-    dispose: () => resources.dispose({ discoveryAgent, voice, speechOutput, observability }),
+    dispose: () => resources.dispose({ discovery, executions, voice, speechOutput, observability }),
   });
 }
 

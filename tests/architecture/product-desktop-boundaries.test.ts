@@ -87,12 +87,12 @@ describe('Product and Desktop final boundaries', () => {
     expect(productHost).not.toContain('chat:');
     expect(approvalHost).not.toContain("from '@megumi/engine'");
     expect(approvalHost).not.toContain('createApprovalOperations');
-    expect(approvalOperations).toContain("from '@megumi/discovery'");
+    expect(approvalOperations).toContain("from '@megumi/execution'");
     expect(approvalOperations).not.toContain("from '@megumi/engine'");
     expect(approvalOperations).toContain('createApprovalOperations');
   });
 
-  it('delegates normal conversation submission to the Discovery Agent owner', () => {
+  it('delegates normal conversation submission and execution operations to their stable owners', () => {
     const composer = read('apps/desktop/src/main/shell-composition/application-host-composition.ts');
     const sessionOperations = read('packages/agent/product-host/src/operations/session/session-operations.ts');
 
@@ -101,9 +101,10 @@ describe('Product and Desktop final boundaries', () => {
       'packages/agent/product-host/src/operations/session/input-submission.ts',
     ))).toBe(false);
     expect(composer).not.toContain('createInputSubmission');
-    expect(sessionOperations).toContain('submitConversationInput');
+    expect(sessionOperations).toContain('conversation.submit');
     expect(sessionOperations).not.toContain('.input.process(');
-    expect(sessionOperations).not.toContain('.discoveryAgent.start(');
+    expect(sessionOperations).not.toContain('DiscoveryAgent');
+    expect(sessionOperations).toContain("from '@megumi/execution'");
   });
 
   it('keeps concrete system construction and lifecycle out of Product', () => {

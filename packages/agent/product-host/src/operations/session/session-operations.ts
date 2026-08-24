@@ -3,9 +3,10 @@
  * projects domain results back to stable Host DTOs.
  */
 import type {
-  DiscoveryAgent,
+  AgentExecutions,
+  ConversationSubmission,
   SubmitConversationInputResult,
-} from '@megumi/discovery';
+} from '@megumi/execution';
 import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/input';
 import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
@@ -28,7 +29,8 @@ export type SessionOperations = SessionHost;
 /** Creates the concrete Product operations exposed through SessionHost. */
 export function createSessionOperations(options: {
   reader: SessionReader;
-  discoveryAgent: Pick<DiscoveryAgent, 'cancel' | 'submitConversationInput'>;
+  executions: Pick<AgentExecutions, 'cancel'>;
+  conversation: ConversationSubmission;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
   history: SessionHistory;
@@ -50,7 +52,7 @@ export function createSessionOperations(options: {
   localFileAvailability?: LocalFileAvailability;
 }): SessionOperations {
   return {
-    sendUserInput: (request) => submitUserInput(options.discoveryAgent, request),
+    sendUserInput: (request) => submitUserInput(options.conversation, request),
     readSession: (request) => options.reader.readSession(request),
     readCommittedRun: (request) => options.reader.readCommittedRun(request),
     async createSession(request) {
@@ -78,7 +80,7 @@ export function createSessionOperations(options: {
       };
     },
     async cancelUserInput(request) {
-      const result = await options.discoveryAgent.cancel({ executionId: request.executionId });
+      const result = await options.executions.cancel({ executionId: request.executionId });
       if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.execution) } };
       if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toRunDto(result.execution) } };
       if (result.status === 'not_found') return { payload: { status: 'not_found', executionId: result.executionId } };
@@ -149,10 +151,10 @@ export function createSessionOperations(options: {
 }
 
 async function submitUserInput(
-  discoveryAgent: Pick<DiscoveryAgent, 'submitConversationInput'>,
+  conversation: ConversationSubmission,
   request: SendUserInputRequest,
 ): Promise<SendUserInputResult> {
-  const result = await discoveryAgent.submitConversationInput({
+  const result = await conversation.submit({
     ...(request.requestId ? { requestId: request.requestId } : {}),
     workspaceId: request.projectId,
     ...(request.sessionId ? { sessionId: request.sessionId } : {}),
@@ -175,7 +177,7 @@ function mapConversationSubmission(result: SubmitConversationInputResult): SendU
   const session = result.session ? { session: toSessionDto(result.session) } : {};
   if (result.status === 'agent_started') {
     if (result.userMessage.message.message_kind !== 'user_message') {
-      throw new Error('Discovery Agent returned a non-user message for a started execution.');
+      throw new Error('Conversation submission returned a non-user message for a started execution.');
     }
     return {
       payload: {

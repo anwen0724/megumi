@@ -1,40 +1,9 @@
-/* Exposes only the Discovery Agent public interface, construction entry and operation contracts. */
-export { createDiscoveryAgent } from './discovery-agent';
+/* Exposes Megumi's content-discovery business interface and contracts. */
+export { createDiscovery } from './discovery';
 export type {
-  CreateDiscoveryAgentOptions,
-  DiscoveryAgent,
-} from './discovery-agent';
-export type {
-  ApprovalDecisionRequest,
-  CancelExecutionRequest,
-  CancelExecutionResult,
-  GetActiveExecutionRequest,
-  GetActiveExecutionResult,
-  GetExecutionRequest,
-  GetExecutionResult,
-  ResolveApprovalRequest,
-  ResolveApprovalResult,
-  ShutdownRequest,
-  ShutdownResult,
-  StartExecutionRequest,
-  StartExecutionResult,
-} from '@megumi/execution';
-export type {
-  ConversationBranchCommit,
-  ConversationModelResolution,
-  ConversationSubmissionFailure,
-  ConversationSubmissionDependencies,
-  SubmitConversationInputRequest,
-  SubmitConversationInputResult,
-} from './conversation/submit-conversation-input';
-export type {
-  DiscoveryAgentPolicy,
-  ExecutionClock,
-  ExecutionFailure,
-  ExecutionFailureCode,
-  ExecutionSnapshot,
-  ExecutionStatus,
-} from '@megumi/execution';
+  CreateDiscoveryOptions,
+  Discovery,
+} from './discovery';
 export {
   InterestCreatedFromSchema,
   InterestDescriptionSchema,

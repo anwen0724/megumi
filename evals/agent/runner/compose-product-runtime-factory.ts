@@ -1,5 +1,5 @@
 /* Owns the headless Evaluation composition root and projects it through Product Host contracts. */
-import { createDiscoveryAgent } from '@megumi/discovery';
+import path from 'node:path';
 import {
   composeProduct,
   composeProductCapabilities,
@@ -47,7 +47,7 @@ export function createComposeProductEvaluationFactory(
       const builtInToolAvailability: BuiltInToolAvailability = {
         isAvailable: ({ toolName }) => input.isBuiltInToolAvailable(toolName),
       };
-      // Evaluation selects its Node adapters, then composes the shared Harness and Discovery Agent.
+      // Evaluation selects its Node adapters, then composes the shared Harness owners.
       const capabilities = composeProductCapabilities({
         ...options.productOverrides,
         home: createEvaluationHomeOptions(input.homeRoot),
@@ -56,13 +56,12 @@ export function createComposeProductEvaluationFactory(
         workspaceFileSystem: input.workspaceFileSystem,
         sessionAttachmentFileSystem: nodeSessionAttachmentFileSystem,
         builtInToolAvailability,
+        instructionContentRoot: path.resolve(process.cwd(), 'packages/agent/instructions/content'),
         settingsEnvironment: createNodeSettingsEnvironment(),
         productEnvironment: getNodeProductEnvironment(),
       });
-      const discoveryAgent = createDiscoveryAgent(capabilities.discoveryAgentOptions);
       const product = composeProduct({
         capabilities,
-        discoveryAgent,
         directoryPicker: {
           chooseDirectory: async () => ({ canceled: false, filePaths: [input.workspaceRoot] }),
         },

@@ -3,7 +3,7 @@
  * It does not reimplement the policies enforced by those modules.
  */
 import type { RecentEventBufferOptions } from '@megumi/events';
-import type { DiscoveryAgentPolicy } from '@megumi/discovery';
+import type { AgentExecutionPolicy } from '@megumi/execution';
 import type { Settings } from '@megumi/settings';
 
 export const PRODUCT_RECENT_EVENT_BUFFER = {
@@ -25,7 +25,7 @@ export const PRODUCT_EXECUTION_POLICY = {
   maxContextOverflowRecoveries: 1,
   providerRequestMaxRetries: 2,
   providerRequestMaxRetryDelayMs: 60_000,
-} satisfies DiscoveryAgentPolicy;
+} satisfies AgentExecutionPolicy;
 
 /** The terminal execution retention budget handed to the Execution Registry. */
 export const PRODUCT_TERMINAL_RETENTION_MS = 300_000;

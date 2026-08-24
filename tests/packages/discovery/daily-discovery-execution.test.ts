@@ -12,13 +12,13 @@ import {
 } from '@megumi/ai';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
 import {
-  createDiscoveryAgent,
+  createDiscovery,
   createDiscoveryRepository,
   createSourceRegistry,
-  type CreateDiscoveryAgentOptions,
   type DiscoverySource,
   type SourceContent,
 } from '@megumi/discovery';
+import { createAgentExecutions, launchAgentExecution } from '@megumi/execution';
 import { createEventBus } from '@megumi/events';
 
 const now = '2026-08-22T10:00:00.000Z';
@@ -366,7 +366,7 @@ function createFixture(
     }),
   } as unknown as Models;
   const discoveryTools = createDailyDiscoveryTestTools();
-  const options: CreateDiscoveryAgentOptions = {
+  const options = {
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
       createSessionMessageId: () => 'message:unused',
@@ -430,7 +430,22 @@ function createFixture(
       providerRequestMaxRetries: 0, providerRequestMaxRetryDelayMs: 0,
     },
   };
-  return { agent: createDiscoveryAgent(options), repository };
+  const executions = createAgentExecutions({
+    ids: options.ids,
+    clock: options.clock,
+    terminalRetentionMs: options.terminalRetentionMs,
+    events: options.events,
+    launch: (input) => launchAgentExecution(input, options),
+  });
+  const agent = createDiscovery({
+    interests: options.interests,
+    dailyDiscovery: {
+      ...options.dailyDiscovery,
+      startExecution: (request) => executions.start(request),
+      now: options.clock.now,
+    },
+  });
+  return { agent, executions, repository };
 }
 
 function source(

@@ -1,12 +1,10 @@
-/* Verifies the public Discovery Agent operations: start, approval, cancel, read, shutdown. */
+/* Verifies shared Agent Execution and conversation-submission operations. */
 import { describe, expect, it, vi } from 'vitest';
 import { Agent } from '@megumi/agent-core';
-import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model, type Models } from '@megumi/ai';
-import type { ContextCapabilities } from '@megumi/context';
+import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
 import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { CommandTerminalResult } from '@megumi/commands';
 import type { InputProcessor } from '@megumi/input';
-import type { Permissions } from '@megumi/permissions';
 import type {
   SessionBranchDrafts,
   SessionCatalog,
@@ -14,19 +12,19 @@ import type {
   SessionHistory,
   SessionMessageWithAttachments,
 } from '@megumi/session';
-import type { Tools } from '@megumi/tools';
 import {
-  createDiscoveryAgent,
-  type CreateDiscoveryAgentOptions,
-  type DiscoveryAgent,
-  type DiscoveryAgentPolicy,
-  type StartExecutionRequest,
-} from '@megumi/discovery';
-import type {
+  createAgentExecutions,
+  createConversationSubmission,
+  type AgentExecutions,
   ApprovalRequest,
+  type ConversationSubmissionDependencies,
   ExecutionOutcome,
   LaunchedAgentExecution,
   LaunchAgentExecutionInput,
+  type LaunchAgentExecution,
+  type StartExecutionRequest,
+  type SubmitConversationInputRequest,
+  type SubmitConversationInputResult,
 } from '@megumi/execution';
 
 const model: Model<Api> = {
@@ -95,24 +93,9 @@ interface LaunchHandle {
 }
 
 interface TestLaunch {
-  readonly launch: CreateDiscoveryAgentOptions['launch'];
+  readonly launch: LaunchAgentExecution;
   readonly handles: LaunchHandle[];
 }
-
-const testPolicy: DiscoveryAgentPolicy = {
-  maxModelCallsPerExecution: 4,
-  maxToolRoundsPerExecution: 3,
-  maxToolCallsPerModelCall: 4,
-  maxToolCallsPerExecution: 8,
-  maxConcurrentToolExecutions: 2,
-  modelCallTimeoutMs: 1_000,
-  toolExecutionTimeoutMs: 1_000,
-  maxModelCallAttempts: 1,
-  modelRetryDelayMs: 0,
-  maxContextOverflowRecoveries: 1,
-  providerRequestMaxRetries: 0,
-  providerRequestMaxRetryDelayMs: 0,
-};
 
 function createTestLaunch(): TestLaunch {
   const handles: LaunchHandle[] = [];
@@ -166,11 +149,19 @@ function createTestLaunch(): TestLaunch {
   return { launch, handles };
 }
 
-function fixture(overrides: Partial<CreateDiscoveryAgentOptions> = {}): {
-  discoveryAgent: DiscoveryAgent;
+interface TestRuntime extends AgentExecutions {
+  submitConversationInput(request: SubmitConversationInputRequest): Promise<SubmitConversationInputResult>;
+}
+
+interface TestRuntimeOptions {
+  readonly launch: LaunchAgentExecution;
+  readonly conversation: ConversationSubmissionDependencies;
+}
+
+function fixture(overrides: Partial<TestRuntimeOptions> = {}): {
+  runtime: TestRuntime;
   published: AnyEvent[];
   testLaunch: TestLaunch;
-  options: CreateDiscoveryAgentOptions;
 } {
   const eventsBus = createEventBus();
   const published: AnyEvent[] = [];
@@ -178,40 +169,34 @@ function fixture(overrides: Partial<CreateDiscoveryAgentOptions> = {}): {
   const testLaunch = createTestLaunch();
   let executionNumber = 0;
   let messageNumber = 0;
-  let approvalNumber = 0;
-  const options: CreateDiscoveryAgentOptions = {
+  const conversationDependencies: ConversationSubmissionDependencies = overrides.conversation ?? {
+    input: {} as Pick<InputProcessor<CommandTerminalResult>, 'process'>,
+    sessions: {} as Pick<SessionCatalog, 'getSession' | 'createSession'>,
+    history: {} as Pick<SessionHistory, 'getCommittedBranch'>,
+    branches: {} as Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>,
+    resolveModel: async () => ({ status: 'ok', model }),
+  };
+  const executions = createAgentExecutions({
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
       createSessionMessageId: () => `message:${++messageNumber}`,
-      createModelCallId: () => `model-call:${++executionNumber}`,
-      createToolExecutionId: () => `tool-execution:${++executionNumber}`,
-      createApprovalId: () => `approval:${++approvalNumber}`,
     },
     clock,
     terminalRetentionMs: 60_000,
     events: eventsBus,
-    launch: testLaunch.launch,
-    // Capability stubs: the injected launch override never reads them.
-    models: {} as Models,
-    context: {} as ContextCapabilities,
-    tools: {} as Pick<Tools, 'resolveModelCallTools' | 'routeToolCall' | 'executeToolInvocation' | 'releaseModelCallTools'>,
-    permissions: {} as Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>,
-    session: {} as Pick<SessionHistory, 'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'>,
-    conversation: {
-      input: {} as Pick<InputProcessor<CommandTerminalResult>, 'process'>,
-      sessions: {} as Pick<SessionCatalog, 'getSession' | 'createSession'>,
-      history: {} as Pick<SessionHistory, 'getCommittedBranch'>,
-      branches: {} as Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>,
-      resolveModel: async () => ({ status: 'ok', model }),
-    },
-    policy: testPolicy,
-    ...overrides,
-  };
+    launch: overrides.launch ?? testLaunch.launch,
+  });
+  const conversation = createConversationSubmission({
+    dependencies: conversationDependencies,
+    startExecution: (request) => executions.start(request),
+  });
   return {
-    discoveryAgent: createDiscoveryAgent(options),
+    runtime: {
+      ...executions,
+      submitConversationInput: (request) => conversation.submit(request),
+    },
     published,
     testLaunch,
-    options,
   };
 }
 
@@ -235,108 +220,10 @@ function approvalRequest(executionId: string, approvalId: string): ApprovalReque
   };
 }
 
-describe('Discovery Agent', () => {
-  it('enqueues Interest extraction only after a completed foreground execution settles', async () => {
-    const extractor = vi.fn(async () => ({ evidence: [] }));
-    const { discoveryAgent, testLaunch } = fixture({
-      interests: {
-        repository: {
-          getSessionParticipation: () => undefined,
-          listInterests: () => [],
-          listPendingEvidence: () => [],
-          applyInterestExtraction: vi.fn(),
-        } as never,
-        settings: {
-          getDiscoverySettings: () => ({ conversationRecognitionEnabled: true }),
-        },
-        sessions: {
-          getSession: ({ session_id }) => ({
-            status: 'found',
-            session: {
-              session_id,
-              workspace_id: 'workspace:1',
-              title: 'Session',
-              status: 'active',
-              created_at: clock.now(),
-              updated_at: clock.now(),
-            },
-          }),
-        },
-        history: {
-          getCommittedRunMessages: ({ sessionId, executionId }) => ({
-            status: 'ok',
-            messages: [
-              {
-                type: 'message',
-                entryId: `entry:user:${executionId}`,
-                message: {
-                  message_id: executionId === 'execution:1' ? 'message:1' : 'message:2',
-                  session_id: sessionId,
-                  execution_id: executionId,
-                  message_kind: 'user_message',
-                  display_content: [{ type: 'text', text: 'hello' }],
-                  model_content: [{ type: 'text', text: 'hello' }],
-                  created_at: clock.now(),
-                },
-                attachments: [],
-              },
-              {
-                type: 'message',
-                entryId: `entry:assistant:${executionId}`,
-                message: {
-                  message_id: `assistant:${executionId}`,
-                  session_id: sessionId,
-                  execution_id: executionId,
-                  message_kind: 'assistant_reply',
-                  status: 'completed',
-                  content: [{ type: 'text', text: 'done' }],
-                  created_at: clock.now(),
-                },
-                attachments: [],
-              },
-            ],
-          }),
-        },
-        resolveModel: async () => ({ status: 'ok', model }),
-        extractor,
-        ids: {
-          createInterestId: () => 'interest:1',
-          createEvidenceId: () => 'evidence:1',
-        },
-        clock,
-      },
-    });
-
-    const completed = await discoveryAgent.start(startRequest);
-    expect(completed.status).toBe('started');
-    testLaunch.handles[0]!.resolveOutcome({
-      status: 'completed',
-      assistantMessageId: 'assistant:execution:1',
-    });
-    await vi.waitFor(() => expect(extractor).toHaveBeenCalledTimes(1));
-
-    const failed = await discoveryAgent.start({
-      ...startRequest,
-      requestId: 'request:2',
-      sessionId: 'session:2',
-    });
-    expect(failed.status).toBe('started');
-    testLaunch.handles[1]!.resolveOutcome({
-      status: 'failed',
-      failure: { code: 'internal_error', message: 'failed', retryable: false },
-    });
-    await vi.waitFor(() => {
-      expect(discoveryAgent.get({ executionId: 'execution:2' })).toMatchObject({
-        status: 'found',
-        execution: { status: 'failed' },
-      });
-    });
-    expect(extractor).toHaveBeenCalledTimes(1);
-  });
-
+describe('Agent Executions and conversation submission', () => {
   it('does not create a Session or start an execution when Input completes the request', async () => {
     const createSession = vi.fn();
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: {
           process: async () => ({
@@ -357,7 +244,7 @@ describe('Discovery Agent', () => {
       },
     });
 
-    const result = await discoveryAgent.submitConversationInput({
+    const result = await runtime.submitConversationInput({
       requestId: 'request:command',
       workspaceId: 'workspace:1',
       text: '/test',
@@ -376,7 +263,7 @@ describe('Discovery Agent', () => {
 
   it('creates a Session only after Input accepts and then starts one execution', async () => {
     const order: string[] = [];
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: {
           process: async (request) => {
@@ -413,7 +300,7 @@ describe('Discovery Agent', () => {
       },
     });
 
-    const result = await discoveryAgent.submitConversationInput({
+    const result = await runtime.submitConversationInput({
       requestId: 'request:accepted',
       workspaceId: 'workspace:1',
       text: 'hello',
@@ -442,7 +329,7 @@ describe('Discovery Agent', () => {
       description: 'A concrete implementation.', recommendationReason: 'Relevant to your interests.',
       hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T00:00:00.000Z',
     };
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: { process: async () => ({
           status: 'accepted',
@@ -469,8 +356,8 @@ describe('Discovery Agent', () => {
       workspaceId: 'workspace:1', recommendationId: 'recommendation:1', text: '聊聊这个项目',
       modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
     } as const;
-    const first = await discoveryAgent.submitConversationInput({ ...base, requestId: 'request:recommendation:1' });
-    const second = await discoveryAgent.submitConversationInput({ ...base, requestId: 'request:recommendation:2' });
+    const first = await runtime.submitConversationInput({ ...base, requestId: 'request:recommendation:1' });
+    const second = await runtime.submitConversationInput({ ...base, requestId: 'request:recommendation:2' });
 
     expect(first.status).toBe('agent_started');
     expect(second.status).toBe('agent_started');
@@ -492,7 +379,7 @@ describe('Discovery Agent', () => {
         attachments: [],
       },
     }));
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: { process },
         sessions: { getSession: vi.fn(), createSession },
@@ -503,11 +390,11 @@ describe('Discovery Agent', () => {
       },
     });
 
-    const missing = await discoveryAgent.submitConversationInput({
+    const missing = await runtime.submitConversationInput({
       requestId: 'request:missing', workspaceId: 'workspace:1', recommendationId: 'recommendation:missing',
       text: '聊聊它', modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
     });
-    const existing = await discoveryAgent.submitConversationInput({
+    const existing = await runtime.submitConversationInput({
       requestId: 'request:existing', workspaceId: 'workspace:1', sessionId: 'session:1',
       recommendationId: 'recommendation:1', text: '注入已有会话',
       modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
@@ -522,7 +409,7 @@ describe('Discovery Agent', () => {
   it('does not process Input or create a Session when model resolution fails', async () => {
     const process = vi.fn();
     const createSession = vi.fn();
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: { process },
         sessions: { getSession: vi.fn(), createSession },
@@ -538,7 +425,7 @@ describe('Discovery Agent', () => {
       },
     });
 
-    const result = await discoveryAgent.submitConversationInput({
+    const result = await runtime.submitConversationInput({
       requestId: 'request:model-failure',
       workspaceId: 'workspace:1',
       text: 'hello',
@@ -556,7 +443,7 @@ describe('Discovery Agent', () => {
 
   it('does not create a Session or start an execution when Input rejects the request', async () => {
     const createSession = vi.fn();
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: {
           process: async () => ({
@@ -574,7 +461,7 @@ describe('Discovery Agent', () => {
       },
     });
 
-    const result = await discoveryAgent.submitConversationInput({
+    const result = await runtime.submitConversationInput({
       requestId: 'request:rejected',
       workspaceId: 'workspace:1',
       text: '',
@@ -612,7 +499,7 @@ describe('Discovery Agent', () => {
         createdAt: clock.now(),
       },
     }));
-    const { discoveryAgent } = fixture({
+    const { runtime } = fixture({
       conversation: {
         input: {
           process: async () => ({
@@ -646,7 +533,7 @@ describe('Discovery Agent', () => {
       },
     });
 
-    const result = await discoveryAgent.submitConversationInput({
+    const result = await runtime.submitConversationInput({
       requestId: 'request:branch',
       workspaceId: 'workspace:1',
       sessionId: 'session:1',
@@ -673,7 +560,7 @@ describe('Discovery Agent', () => {
   });
 
   it('preserves request-id idempotency when the same Session submission is retried', async () => {
-    const { discoveryAgent, testLaunch } = fixture({
+    const { runtime, testLaunch } = fixture({
       conversation: {
         input: {
           process: async () => ({
@@ -705,8 +592,8 @@ describe('Discovery Agent', () => {
       modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
     } as const;
 
-    const first = await discoveryAgent.submitConversationInput(request);
-    const second = await discoveryAgent.submitConversationInput(request);
+    const first = await runtime.submitConversationInput(request);
+    const second = await runtime.submitConversationInput(request);
 
     expect(first.status).toBe('agent_started');
     expect(second.status).toBe('agent_started');
@@ -718,8 +605,8 @@ describe('Discovery Agent', () => {
   });
 
   it('starts one execution, publishes the user message before run.started, and returns a running projection', async () => {
-    const { discoveryAgent, published, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, published, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     if (started.status !== 'started') throw new Error('unreachable');
 
@@ -748,9 +635,9 @@ describe('Discovery Agent', () => {
   });
 
   it('shares one launch across concurrent equal requests and rejects a different fingerprint', async () => {
-    const { discoveryAgent, testLaunch } = fixture();
-    const first = discoveryAgent.start(startRequest);
-    const duplicate = discoveryAgent.start(startRequest);
+    const { runtime, testLaunch } = fixture();
+    const first = runtime.start(startRequest);
+    const duplicate = runtime.start(startRequest);
     const [firstResult, duplicateResult] = await Promise.all([first, duplicate]);
     expect(firstResult.status).toBe('started');
     expect(duplicateResult.status).toBe('already_started');
@@ -758,7 +645,7 @@ describe('Discovery Agent', () => {
     if (firstResult.status !== 'started' || duplicateResult.status !== 'already_started') throw new Error('unreachable');
     expect(duplicateResult.execution.executionId).toBe(firstResult.execution.executionId);
 
-    const conflict = await discoveryAgent.start({
+    const conflict = await runtime.start({
       ...startRequest,
       requestId: 'request:1',
       input: { ...startRequest.input, displayContent: [{ type: 'text', text: 'different' }] },
@@ -769,10 +656,10 @@ describe('Discovery Agent', () => {
   });
 
   it('returns session busy while another execution on the same Session is live', async () => {
-    const { discoveryAgent, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
-    const busy = await discoveryAgent.start({
+    const busy = await runtime.start({
       ...startRequest,
       requestId: 'request:2',
       workspaceId: 'workspace:2',
@@ -784,22 +671,22 @@ describe('Discovery Agent', () => {
   });
 
   it('releases the reservation when the launch fails so the same request can start again', async () => {
-    const failingLaunch = vi.fn<CreateDiscoveryAgentOptions['launch']>(async () => {
+    const failingLaunch = vi.fn<LaunchAgentExecution>(async () => {
       throw new Error('launch exploded');
     });
-    const { discoveryAgent } = fixture({ launch: failingLaunch });
-    const failed = await discoveryAgent.start(startRequest);
+    const { runtime } = fixture({ launch: failingLaunch });
+    const failed = await runtime.start(startRequest);
     expect(failed.status).toBe('failed');
     if (failed.status !== 'failed') throw new Error('unreachable');
     expect(failed.failure).toMatchObject({ code: 'internal_error' });
 
-    const retried = await discoveryAgent.start(startRequest);
+    const retried = await runtime.start(startRequest);
     expect(retried.status).toBe('failed');
   });
 
   it('fixes one terminal outcome, publishes run.ended, and keeps terminal reads immutable', async () => {
-    const { discoveryAgent, published, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, published, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     if (started.status !== 'started') throw new Error('unreachable');
 
@@ -814,24 +701,24 @@ describe('Discovery Agent', () => {
       payload: { status: 'completed', assistantMessageId: 'message:reply' },
     });
 
-    const found = discoveryAgent.get({ executionId: 'execution:1' });
+    const found = runtime.get({ executionId: 'execution:1' });
     expect(found.status).toBe('found');
     if (found.status !== 'found') throw new Error('unreachable');
     expect(found.execution).toMatchObject({ status: 'completed', completedAt: clock.now() });
-    const again = discoveryAgent.get({ executionId: 'execution:1' });
+    const again = runtime.get({ executionId: 'execution:1' });
     if (again.status !== 'found') throw new Error('unreachable');
     expect(again.execution).toEqual(found.execution);
   });
 
   it('resolves one approval once and reports not_found and already_resolved afterwards', async () => {
-    const { discoveryAgent, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
     // The launch registers its pending approval through the real wait seam.
     const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
 
-    const resolved = await discoveryAgent.resolveApproval({
+    const resolved = await runtime.resolveApproval({
       approvalId: 'approval:1',
       decision: { decision: 'approved', optionId: 'once:1' },
     });
@@ -840,13 +727,13 @@ describe('Discovery Agent', () => {
     expect(resolved.execution).toMatchObject({ executionId: 'execution:1' });
     await expect(wait).resolves.toMatchObject({ status: 'approved' });
 
-    const repeated = await discoveryAgent.resolveApproval({
+    const repeated = await runtime.resolveApproval({
       approvalId: 'approval:1',
       decision: { decision: 'denied' },
     });
     expect(repeated.status).toBe('already_resolved');
 
-    const missing = await discoveryAgent.resolveApproval({
+    const missing = await runtime.resolveApproval({
       approvalId: 'approval:missing',
       decision: { decision: 'denied' },
     });
@@ -854,8 +741,8 @@ describe('Discovery Agent', () => {
   });
 
   it('cancels by settling the pending approval before aborting the Agent and converges as cancelled', async () => {
-    const { discoveryAgent, published, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, published, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
     const abortSpy = vi.spyOn(handle.agent, 'abort');
@@ -866,7 +753,7 @@ describe('Discovery Agent', () => {
       handle.resolveOutcome({ status: 'cancelled' });
     });
 
-    const cancelled = await discoveryAgent.cancel({ executionId: 'execution:1' });
+    const cancelled = await runtime.cancel({ executionId: 'execution:1' });
     expect(cancelled.status).toBe('cancellation_requested');
     if (cancelled.status !== 'cancellation_requested') throw new Error('unreachable');
     expect(cancelled.execution.status).toBe('cancelling');
@@ -878,63 +765,63 @@ describe('Discovery Agent', () => {
     await vi.waitFor(() => {
       expect(collect(published, 'execution:1').map((event) => event.type)).toContain('run.ended');
     });
-    const repeated = await discoveryAgent.cancel({ executionId: 'execution:1' });
+    const repeated = await runtime.cancel({ executionId: 'execution:1' });
     expect(repeated.status).toBe('already_terminal');
-    const unknown = await discoveryAgent.cancel({ executionId: 'execution:missing' });
+    const unknown = await runtime.cancel({ executionId: 'execution:missing' });
     expect(unknown.status).toBe('not_found');
   });
 
   it('reports already_cancelling for a repeated live cancel', async () => {
-    const { discoveryAgent, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
     const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
 
-    const first = await discoveryAgent.cancel({ executionId: 'execution:1' });
+    const first = await runtime.cancel({ executionId: 'execution:1' });
     expect(first.status).toBe('cancellation_requested');
-    const second = await discoveryAgent.cancel({ executionId: 'execution:1' });
+    const second = await runtime.cancel({ executionId: 'execution:1' });
     expect(second.status).toBe('already_cancelling');
     void wait;
   });
 
   it('reads active executions per Session through getActive', async () => {
-    const { discoveryAgent } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
-    const found = discoveryAgent.getActive({ sessionId: 'session:1' });
+    const found = runtime.getActive({ sessionId: 'session:1' });
     expect(found.status).toBe('found');
     if (found.status !== 'found') throw new Error('unreachable');
     expect(found.execution.executionId).toBe('execution:1');
-    const missing = discoveryAgent.getActive({ sessionId: 'session:missing' });
+    const missing = runtime.getActive({ sessionId: 'session:missing' });
     expect(missing.status).toBe('not_found');
   });
 
   it('stops admission on shutdown, cancels active Agents, and waits for completion', async () => {
-    const { discoveryAgent, testLaunch } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime, testLaunch } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
     const abortSpy = vi.spyOn(handle.agent, 'abort');
     const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
     void wait.then(() => handle.resolveOutcome({ status: 'cancelled' }));
 
-    const shutdown = await discoveryAgent.shutdown({ timeoutMs: 2_000 });
+    const shutdown = await runtime.shutdown({ timeoutMs: 2_000 });
     expect(shutdown.status).toBe('shut_down');
     expect(abortSpy).toHaveBeenCalledTimes(1);
 
-    const after = await discoveryAgent.start(startRequest);
+    const after = await runtime.start(startRequest);
     expect(after.status).toBe('failed');
     if (after.status !== 'failed') throw new Error('unreachable');
     expect(after.failure).toMatchObject({ code: 'internal_error' });
   });
 
   it('returns timed_out with active projections when shutdown cannot wait out executions', async () => {
-    const { discoveryAgent } = fixture();
-    const started = await discoveryAgent.start(startRequest);
+    const { runtime } = fixture();
+    const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     // The approval promise never settles; abort fires but the outcome stays open.
-    const shutdown = await discoveryAgent.shutdown({ timeoutMs: 30 });
+    const shutdown = await runtime.shutdown({ timeoutMs: 30 });
     expect(shutdown.status).toBe('timed_out');
     if (shutdown.status !== 'timed_out') throw new Error('unreachable');
     expect(shutdown.activeExecutions).toHaveLength(1);

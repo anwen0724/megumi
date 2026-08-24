@@ -13,6 +13,7 @@
     { "path": "../context" },
     { "path": "../discovery" },
     { "path": "../events" },
+    { "path": "../execution" },
     { "path": "../input" },
     { "path": "../observability" },
     { "path": "../permissions" },

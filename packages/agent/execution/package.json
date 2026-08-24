@@ -10,6 +10,7 @@
   "dependencies": {
     "@megumi/agent-core": "0.1.0",
     "@megumi/ai": "0.1.0",
+    "@megumi/commands": "0.1.0",
     "@megumi/context": "0.1.0",
     "@megumi/events": "0.1.0",
     "@megumi/input": "0.1.0",

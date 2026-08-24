@@ -2,7 +2,7 @@
  * Composes Session page facts from their owning modules and maps them to
  * host-safe DTOs without constructing Desktop Timeline presentation state.
  */
-import type { DiscoveryAgent, ExecutionSnapshot } from '@megumi/discovery';
+import type { AgentExecutions, ExecutionSnapshot } from '@megumi/execution';
 import type { EventBus } from '@megumi/events';
 import type {
   Session,
@@ -45,7 +45,7 @@ export interface CreateSessionReaderOptions {
     SessionHistory,
     'getActiveConversationHistory' | 'getCommittedRunMessages'
   >;
-  readonly discoveryAgent: Pick<DiscoveryAgent, 'getActive'>;
+  readonly executions: Pick<AgentExecutions, 'getActive'>;
   readonly events: Pick<EventBus, 'read'>;
   readonly workspaceChanges: Pick<WorkspaceChanges, 'listChangeSummaries'>;
 }
@@ -75,7 +75,7 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
           return { status: 'failed', failure: toHostFailure(conversationResult.failure) };
         }
 
-        const activeRunResult = options.discoveryAgent.getActive({ sessionId: request.sessionId });
+        const activeRunResult = options.executions.getActive({ sessionId: request.sessionId });
         const eventResult = options.events.read({ sessionId: request.sessionId });
         const executionIds = collectExecutionIds(
           conversationResult.conversation,
@@ -104,7 +104,7 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
 
     /**
      * Reads only the committed messages and Workspace Changes for one Run.
-     * Discovery Agent state and recent Events are deliberately excluded from this
+     * Agent Execution state and recent Events are deliberately excluded from this
      * terminal reconciliation query.
      */
     async readCommittedRun(request) {

@@ -22,7 +22,7 @@ import type { Tools } from '@megumi/tools';
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
 import {
   launchAgentExecution,
-  type DiscoveryAgentPolicy,
+  type AgentExecutionPolicy,
   type ExecuteAgentDependencies,
 } from '@megumi/execution';
 import type { LaunchedAgentExecution } from '@megumi/execution';
@@ -62,7 +62,7 @@ export const model: Model<Api> = {
   maxTokens: 512,
 };
 
-export const executionPolicy: DiscoveryAgentPolicy = {
+export const executionPolicy: AgentExecutionPolicy = {
   maxModelCallsPerExecution: 4,
   maxToolRoundsPerExecution: 3,
   maxToolCallsPerModelCall: 4,
@@ -95,7 +95,7 @@ export function createExecutionFixture(input: {
   readonly tools?: ReturnType<typeof registeredTool>[];
   readonly permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly executeTool?: TestToolExecute;
-  readonly policy?: Partial<DiscoveryAgentPolicy>;
+  readonly policy?: Partial<AgentExecutionPolicy>;
   readonly contextBuild?: ExecuteAgentDependencies['context']['build'];
   readonly contextCompact?: ExecuteAgentDependencies['context']['compact'];
   readonly failUserMessageSave?: boolean;

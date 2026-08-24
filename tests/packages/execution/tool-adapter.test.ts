@@ -6,7 +6,7 @@ import type { PermissionDecision, Permissions } from '@megumi/permissions';
 import type { ModelCallToolBinding, ToolDefinition } from '@megumi/tools';
 import {
   createAgentTool,
-  type DiscoveryAgentToolResultDetails,
+  type AgentToolResultDetails,
   type ToolAdapterDependencies,
 } from '@megumi/execution';
 import type { ToolScope } from '@megumi/execution';
@@ -108,7 +108,7 @@ async function execute(
   tool: { readonly name: string; readonly id?: string },
   signal: AbortSignal = new AbortController().signal,
   updates: unknown[] = [],
-): Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>> {
+): Promise<AgentToolExecutionOutcome<AgentToolResultDetails>> {
   const definition = registeredTool(tool.name).definition as ToolDefinition;
   const agentTool = createAgentTool(dependencies)(definition, scopeFor(definition, dependencies.binding));
   return agentTool.execute({
@@ -116,7 +116,7 @@ async function execute(
     arguments: { value: 'x' },
     signal,
     onUpdate: (update) => { updates.push(update); },
-  }) as Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>>;
+  }) as Promise<AgentToolExecutionOutcome<AgentToolResultDetails>>;
 }
 
 describe('Tool Adapter', () => {

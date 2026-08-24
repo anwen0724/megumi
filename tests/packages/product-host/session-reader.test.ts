@@ -49,10 +49,11 @@ describe('Product Session reader', () => {
         }),
         getCommittedRunMessages: () => ({ status: 'ok', messages: [messageItem] }),
       },
-      discoveryAgent: {
+      executions: {
         getActive: () => ({
           status: 'found',
           execution: {
+            kind: 'conversation',
             executionId: 'execution:1', requestId: 'request:1', workspaceId: 'workspace:1',
             sessionId: 'session:1', userMessageId: 'message:1',
             model: {} as never, permissionMode: 'ask', status: 'waiting',
@@ -88,8 +89,8 @@ describe('Product Session reader', () => {
     }
   });
 
-  it('reads one committed execution without consulting the Discovery Agent or Events', async () => {
-    let discoveryReads = 0;
+  it('reads one committed execution without consulting active Execution state or Events', async () => {
+    let executionReads = 0;
     let eventReads = 0;
     const reader = createSessionReader({
       sessions: { getSession: () => ({ status: 'found', session }) },
@@ -97,7 +98,7 @@ describe('Product Session reader', () => {
         getActiveConversationHistory: () => ({ status: 'ok', conversation: [] }),
         getCommittedRunMessages: () => ({ status: 'ok', messages: [messageItem] }),
       },
-      discoveryAgent: { getActive: () => { discoveryReads += 1; return { status: 'not_found', sessionId: session.session_id }; } },
+      executions: { getActive: () => { executionReads += 1; return { status: 'not_found', sessionId: session.session_id }; } },
       events: { read: () => { eventReads += 1; return { events: [], truncated: false }; } },
       workspaceChanges: { listChangeSummaries: () => ({ summaries: [] }) },
     });
@@ -105,6 +106,6 @@ describe('Product Session reader', () => {
     const result = await reader.readCommittedRun({ sessionId: session.session_id, executionId: 'execution:1' });
 
     expect(result).toMatchObject({ status: 'ok', messages: [{ entryId: 'entry:1' }] });
-    expect({ discoveryReads, eventReads }).toEqual({ discoveryReads: 0, eventReads: 0 });
+    expect({ executionReads, eventReads }).toEqual({ executionReads: 0, eventReads: 0 });
   });
 });

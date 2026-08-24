@@ -38,7 +38,7 @@ import type { ExecutionObserver } from './execution-observer';
 import type { SessionToolResultCommit } from './session-settlement';
 import type { ToolScope } from './context-adapter';
 
-export type DiscoveryAgentToolUpdateDetails =
+export type AgentToolUpdateDetails =
   | {
       readonly kind: 'execution_started';
       readonly toolExecutionId: string;
@@ -48,7 +48,7 @@ export type DiscoveryAgentToolUpdateDetails =
   | { readonly kind: 'output'; readonly output: string }
   | { readonly kind: 'plan_updated'; readonly notification: ToolExecutionNotification };
 
-export interface DiscoveryAgentToolResultDetails {
+export interface AgentToolResultDetails {
   readonly kind: 'settled';
   readonly status: SessionToolResultCommit['status'];
   readonly content: string;
@@ -72,7 +72,7 @@ export interface ToolAdapterDependencies {
 
 export function createAgentTool(
   dependencies: ToolAdapterDependencies,
-): (definition: ToolDefinition, scope: ToolScope) => AgentTool<DiscoveryAgentToolResultDetails> {
+): (definition: ToolDefinition, scope: ToolScope) => AgentTool<AgentToolResultDetails> {
   return (definition, scope) => ({
     // Preserve Context-facing Tool guidance metadata on the runtime object;
     // Agent Core and provider adapters consume only the AgentTool contract.
@@ -154,7 +154,7 @@ async function executeRoutedTool(
   onUpdate: (update: AgentToolResult) => void,
   dependencies: ToolAdapterDependencies,
   binding: ModelCallToolBinding,
-): Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>> {
+): Promise<AgentToolExecutionOutcome<AgentToolResultDetails>> {
   if (signal.aborted) return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
   let executionAccess: ToolExecutionAccess | undefined;
   if (operations.length > 0) {
@@ -253,7 +253,7 @@ async function runToolInvocation(
   onUpdate: (update: AgentToolResult) => void,
   dependencies: ToolAdapterDependencies,
   binding: ModelCallToolBinding,
-): Promise<AgentToolExecutionOutcome<DiscoveryAgentToolResultDetails>> {
+): Promise<AgentToolExecutionOutcome<AgentToolResultDetails>> {
   if (signal.aborted) return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
   const toolExecutionId = dependencies.ids.createToolExecutionId();
   const span = dependencies.observer.startSpan('tool.call', {
@@ -268,7 +268,7 @@ async function runToolInvocation(
       toolExecutionId,
       toolName: invocation.toolName,
       arguments: snapshotValue(invocation.input),
-    } satisfies DiscoveryAgentToolUpdateDetails,
+    } satisfies AgentToolUpdateDetails,
   });
   let accumulatedOutput = '';
   let closed: boolean = signal.aborted;
@@ -286,7 +286,7 @@ async function runToolInvocation(
         onUpdate({
           content: [{ type: 'text', text: accumulatedOutput }],
           isError: false,
-          details: { kind: 'output', output: accumulatedOutput } satisfies DiscoveryAgentToolUpdateDetails,
+          details: { kind: 'output', output: accumulatedOutput } satisfies AgentToolUpdateDetails,
         });
       },
       onNotification: (notification) => {
@@ -294,7 +294,7 @@ async function runToolInvocation(
         onUpdate({
           content: [],
           isError: false,
-          details: { kind: 'plan_updated', notification } satisfies DiscoveryAgentToolUpdateDetails,
+          details: { kind: 'plan_updated', notification } satisfies AgentToolUpdateDetails,
         });
       },
       ...(executionAccess ? { executionAccess } : {}),
@@ -483,14 +483,14 @@ function emitRuntime<TType extends EventTypeOf>(
 type EventTypeOf = import('@megumi/events').EventType;
 type EventPayloadOf = import('@megumi/events').EventPayloadByType;
 
-function completedToolOutcome(result: AgentToolResult<DiscoveryAgentToolResultDetails>) {
+function completedToolOutcome(result: AgentToolResult<AgentToolResultDetails>) {
   return { status: 'completed' as const, result };
 }
 
 function settledToolResult(
-  input: Omit<DiscoveryAgentToolResultDetails, 'kind'>,
-): AgentToolResult<DiscoveryAgentToolResultDetails> {
-  const details: DiscoveryAgentToolResultDetails = { kind: 'settled', ...input };
+  input: Omit<AgentToolResultDetails, 'kind'>,
+): AgentToolResult<AgentToolResultDetails> {
+  const details: AgentToolResultDetails = { kind: 'settled', ...input };
   return {
     content: [{ type: 'text', text: input.content }],
     isError: input.status !== 'success',
@@ -501,7 +501,7 @@ function settledToolResult(
 function cancelledToolResult(
   completedAt: string,
   toolExecutionId?: string,
-): AgentToolResult<DiscoveryAgentToolResultDetails> {
+): AgentToolResult<AgentToolResultDetails> {
   return settledToolResult({
     status: 'cancelled',
     content: 'Tool call was cancelled.',

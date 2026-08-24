@@ -15,7 +15,7 @@ export type {
   LaunchAgentExecution,
   LaunchAgentExecutionInput,
   LaunchConversationAgentExecutionInput,
-  LaunchDailyDiscoveryAgentExecutionInput,
+  LaunchDailyDiscoveryExecutionInput,
   LaunchedAgentExecution,
   ResolveApprovalRequest,
   ResolveApprovalResult,
@@ -26,12 +26,22 @@ export type {
   StartDailyDiscoveryExecutionResult,
 } from './agent-executions';
 export { createAgentExecutions } from './agent-executions';
+export { createConversationSubmission } from './conversation-submission';
+export type {
+  ConversationBranchCommit,
+  ConversationModelResolution,
+  ConversationSubmission,
+  ConversationSubmissionDependencies,
+  ConversationSubmissionFailure,
+  SubmitConversationInputRequest,
+  SubmitConversationInputResult,
+} from './conversation-submission';
 export {
   LaunchExecutionError,
   launchAgentExecution,
 } from './execute-agent';
 export type {
-  DiscoveryAgentPolicy,
+  AgentExecutionPolicy,
   ExecuteAgentDependencies,
 } from './execute-agent';
 export {
@@ -87,6 +97,6 @@ export type {
 } from './session-settlement';
 export { createAgentTool, createUnprotectedAgentTool } from './tool-adapter';
 export type {
-  DiscoveryAgentToolResultDetails,
-  DiscoveryAgentToolUpdateDetails,
+  AgentToolResultDetails,
+  AgentToolUpdateDetails,
 } from './tool-adapter';
