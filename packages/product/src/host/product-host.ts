@@ -10,6 +10,7 @@ import type { WorkspaceHost } from './workspace-host';
 import type { ObservabilityHost } from './observability-host';
 import type { VoiceHost } from './voice-host';
 import type { DiscoveryHost } from './discovery-host';
+import type { BrowserSourceHost } from './browser-source-host';
 
 export interface ProductHostInterface {
   workspace: WorkspaceHost;
@@ -20,4 +21,5 @@ export interface ProductHostInterface {
   observability: ObservabilityHost;
   voice: VoiceHost;
   discovery: DiscoveryHost;
+  browserSource: BrowserSourceHost;
 }

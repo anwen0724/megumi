@@ -1,5 +1,6 @@
 // Composes the Electron UI shell and connects it to the Product Host Interface.
 import { app, BrowserWindow } from 'electron';
+import path from 'node:path';
 import { createDiscoveryAgent } from '@megumi/discovery-agent';
 import { composeProduct, composeProductCapabilities, resolveMegumiHomePath } from '@megumi/product';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
@@ -25,9 +26,16 @@ import {
   type ElectronVoiceInputAdapter,
 } from '../adapters/voice-input/electron-voice-input-adapter';
 import { IPC_CHANNELS } from '../ipc/channels';
+import { createBrowserSourceLoopbackServer } from '../adapters/browser-source/browser-source-loopback-server';
+import { createFileBrowserSourceConnectionStore } from '../adapters/browser-source/file-browser-source-connection-store';
 
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
+  const homePath = resolveMegumiHomePath(home);
+  const browserSource = createBrowserSourceLoopbackServer({
+    store: createFileBrowserSourceConnectionStore(path.join(homePath, 'browser-source-connection.json')),
+  });
+  void browserSource.start();
   const voiceResources = createElectronVoiceOptions(home);
   // The single Voice Input Adapter: injected into Product/Voice composition
   // AND connected to the dedicated PCM IPC; there is no second runtime.
@@ -61,6 +69,7 @@ export function composeDesktopMain() {
     attachmentPicker: electronInputAttachmentPickerAdapter,
     localFileAvailability: electronLocalFileAvailability,
     voice: { ...voiceResources.voiceOptions, speechInput: voiceInputAdapter },
+    browserSource,
   });
   const runtimeLogger = product.logger;
   const productHost = product.host;
@@ -94,7 +103,7 @@ export function composeDesktopMain() {
   });
 
   return {
-    homePath: resolveMegumiHomePath(home),
+    homePath,
     runtimeLogger,
     workspace: { host: productHost },
     session: { host: productHost },
@@ -112,6 +121,7 @@ export function composeDesktopMain() {
       // Product ends the Voice Session (stopping speech input) before the
       // Adapter releases the Worker.
       await product.dispose();
+      await browserSource.stop();
       await voiceInputAdapter.dispose();
     },
   };

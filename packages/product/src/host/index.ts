@@ -8,6 +8,7 @@ export type { AnyEvent } from '@megumi/events';
 
 export * from './product-host';
 export * from './discovery-host';
+export * from './browser-source-host';
 export type {
   WorkspaceFileEntryUiDto,
   WorkspaceListFilesUiResult,

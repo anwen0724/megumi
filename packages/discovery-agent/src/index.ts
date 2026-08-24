@@ -109,6 +109,19 @@ export {
   DiscoverySourceViewSchema,
   UpdateDiscoveryConfigurationRequestSchema,
 } from './configuration/discovery-configuration';
+export {
+  BrowserSourceIdSchema,
+  BrowserSourceItemSchema,
+  BrowserSourceTaskRequestSchema,
+  BrowserSourceTaskResultSchema,
+} from './browser-sources/browser-source-contracts';
+export type {
+  BrowserSourceId,
+  BrowserSourceItem,
+  BrowserSourceTaskGateway,
+  BrowserSourceTaskRequest,
+  BrowserSourceTaskResult,
+} from './browser-sources/browser-source-contracts';
 export type {
   DiscoveryConfiguration,
   DiscoveryConfigurationSettings,

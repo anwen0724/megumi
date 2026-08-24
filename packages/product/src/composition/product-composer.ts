@@ -29,6 +29,8 @@ import { createSkillOperations } from '../operations/skill-operations';
 import { createWorkspaceOperations } from '../operations/workspace-operations';
 import { createVoiceOperations } from '../operations/voice-operations';
 import { createDiscoveryOperations } from '../operations/discovery-operations';
+import { createBrowserSourceOperations } from '../operations/browser-source-operations';
+import type { BrowserSourceConnectionAdapter } from '../host/browser-source-host';
 import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
 import { createSessionOperations } from '../operations/session/session-operations';
 import { createSessionReader } from '../operations/session/session-reader';
@@ -70,6 +72,7 @@ export interface ComposeProductOptions {
   readonly attachmentPicker?: AttachmentPicker;
   readonly localFileAvailability?: LocalFileAvailability;
   readonly voice?: ComposeProductVoiceOptions;
+  readonly browserSource?: BrowserSourceConnectionAdapter;
 }
 
 export type ProductCapabilitiesInput = ProductCapabilitiesOptions;
@@ -271,6 +274,7 @@ function composeProductRuntime(
   );
   const host: ProductHostInterface = {
     discovery: createDiscoveryOperations(discoveryAgent),
+    browserSource: createBrowserSourceOperations(options.browserSource ?? unsupportedBrowserSource),
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
@@ -322,6 +326,12 @@ const unavailableSpeechInput: SpeechInputRuntime = {
   finishManualUtterance() {},
   async stop() {},
   subscribe() { return () => {}; },
+};
+
+const unsupportedBrowserSource: BrowserSourceConnectionAdapter = {
+  getConnection: () => ({ state: 'not_supported' }),
+  beginPairing() { throw new Error('Browser source connection is not supported by this Host.'); },
+  revokeConnection: () => ({ state: 'not_supported' }),
 };
 
 /** Hosts that do not inject a Speech Synthesizer still expose an honest failure. */
