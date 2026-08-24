@@ -82,6 +82,7 @@ export {
   createCandidateRegistry,
   discoveryContentIdentity,
 } from './daily-discovery/candidate-registry';
+export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './daily-discovery/content-identity';
 export type {
   CandidateRegistry,
   DiscoveryCandidate,

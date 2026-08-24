@@ -5,6 +5,7 @@ import {
   type SourceContent,
   type SourceContentDetail,
 } from '../sources/discovery-source';
+import { canonicalContentIdentity, sourceContentIdentity } from './content-identity';
 
 export type DiscoveryCandidate = SourceContent & {
   readonly candidateId: string;
@@ -22,6 +23,7 @@ export interface CandidateRegistry {
 export function createCandidateRegistry(): CandidateRegistry {
   const candidates = new Map<string, DiscoveryCandidate>();
   const candidateIdsByIdentity = new Map<string, string>();
+  const candidateIdsBySourceIdentity = new Map<string, string>();
   let nextId = 1;
   let disposed = false;
 
@@ -36,10 +38,20 @@ export function createCandidateRegistry(): CandidateRegistry {
       for (const input of contents) {
         const content = SourceContentSchema.parse(input);
         const identity = discoveryContentIdentity(content);
-        if (candidateIdsByIdentity.has(identity)) continue;
+        const sourceIdentity = sourceContentIdentity(content);
+        const existingId = candidateIdsByIdentity.get(identity)
+          ?? candidateIdsBySourceIdentity.get(sourceIdentity);
+        if (existingId) {
+          const merged = mergeContent(candidates.get(existingId)!, content);
+          candidates.set(existingId, merged);
+          candidateIdsByIdentity.set(identity, existingId);
+          candidateIdsBySourceIdentity.set(sourceIdentity, existingId);
+          continue;
+        }
         const candidateId = `candidate:${nextId++}`;
         const candidate = { candidateId, ...content };
         candidateIdsByIdentity.set(identity, candidateId);
+        candidateIdsBySourceIdentity.set(sourceIdentity, candidateId);
         candidates.set(candidateId, candidate);
         inserted.push(candidate);
       }
@@ -69,15 +81,36 @@ export function createCandidateRegistry(): CandidateRegistry {
     dispose() {
       candidates.clear();
       candidateIdsByIdentity.clear();
+      candidateIdsBySourceIdentity.clear();
       disposed = true;
     },
   };
 }
 
 export function discoveryContentIdentity(content: SourceContent): string {
-  if (content.sourceContentId) return `${content.sourceId}:id:${content.sourceContentId}`;
-  const url = new URL(content.canonicalUrl);
-  url.hash = '';
-  url.searchParams.sort();
-  return `${content.sourceId}:url:${url.toString()}`;
+  return canonicalContentIdentity(content);
+}
+
+function mergeContent(current: DiscoveryCandidate, incoming: SourceContent): DiscoveryCandidate {
+  if (sourcePriority(incoming.sourceId) > sourcePriority(current.sourceId)) {
+    return {
+      candidateId: current.candidateId,
+      ...incoming,
+      ...(!incoming.author && current.author ? { author: current.author } : {}),
+      ...(!incoming.publishedAt && current.publishedAt ? { publishedAt: current.publishedAt } : {}),
+      ...(!incoming.description && current.description ? { description: current.description } : {}),
+      ...(!incoming.coverUrl && current.coverUrl ? { coverUrl: current.coverUrl } : {}),
+    };
+  }
+  return {
+    ...current,
+    ...(!current.author && incoming.author ? { author: incoming.author } : {}),
+    ...(!current.publishedAt && incoming.publishedAt ? { publishedAt: incoming.publishedAt } : {}),
+    ...(!current.description && incoming.description ? { description: incoming.description } : {}),
+    ...(!current.coverUrl && incoming.coverUrl ? { coverUrl: incoming.coverUrl } : {}),
+  };
+}
+
+function sourcePriority(sourceId: string): number {
+  return sourceId === 'open_web' ? 0 : 1;
 }

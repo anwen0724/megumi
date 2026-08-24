@@ -76,6 +76,13 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
   let started = false;
   let timerHandle: unknown;
   let nextScheduledAt: string | undefined;
+  let identitiesMigrated = false;
+
+  const ensureIdentityMigration = (): void => {
+    if (identitiesMigrated) return;
+    input.repository.migrateRecommendationIdentities();
+    identitiesMigrated = true;
+  };
 
   const track = (operation: Promise<void>): void => {
     activePromises.add(operation);
@@ -171,6 +178,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
   const runtime: DailyDiscoveryRuntime = {
     async start() {
       if (started || !accepting) return;
+      ensureIdentityMigration();
       started = true;
       for (const batch of input.repository.listRunningDailyBatches()) {
         const nextExecutionId = input.createExecutionId();
@@ -233,6 +241,18 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
         };
       }
 
+      try {
+        ensureIdentityMigration();
+      } catch {
+        return {
+          status: 'failed', localDate,
+          failure: {
+            code: 'content_identity_migration_failed',
+            message: 'Discovery content identities could not be migrated.',
+            retryable: false,
+          },
+        };
+      }
       const snapshot = await snapshotInputs();
       if (snapshot.interests.length === 0) return { status: 'no_active_interests', localDate };
       if (snapshot.descriptors.length === 0) return { status: 'no_available_sources', localDate };

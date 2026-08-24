@@ -92,6 +92,13 @@
       "when": 1787407504599,
       "tag": "0012_daily_personalized_information_discovery",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1787548800000,
+      "tag": "0013_discovery_content_identity_v2",
+      "breakpoints": true
     }
   ]
 }

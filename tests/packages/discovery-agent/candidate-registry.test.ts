@@ -32,6 +32,46 @@ describe('CandidateRegistry', () => {
     expect(inserted).toHaveLength(1);
   });
 
+  it('merges the same platform content across Open Web and a native source', () => {
+    const registry = createCandidateRegistry();
+
+    registry.add([content({
+      sourceId: 'open_web',
+      sourceName: 'zhihu.com',
+      canonicalUrl: 'https://www.zhihu.com/question/123/answer/456?utm_source=search#answer',
+      title: 'Web title',
+    })]);
+    registry.add([content({
+      sourceId: 'zhihu',
+      sourceName: '知乎',
+      sourceContentId: 'answer:456',
+      canonicalUrl: 'https://www.zhihu.com/question/123/answer/456',
+      contentType: 'article',
+      title: 'Native title',
+      author: 'Author',
+    })]);
+
+    expect(registry.list()).toHaveLength(1);
+    expect(registry.list()[0]).toMatchObject({
+      candidateId: 'candidate:1',
+      sourceId: 'zhihu',
+      sourceContentId: 'answer:456',
+      title: 'Native title',
+      author: 'Author',
+    });
+  });
+
+  it('removes known tracking parameters without removing content parameters', () => {
+    const registry = createCandidateRegistry();
+    registry.add([
+      content({ canonicalUrl: 'https://example.com/article?id=7&utm_medium=social&spm_id_from=333' }),
+      content({ sourceId: 'other', canonicalUrl: 'https://example.com/article?id=7' }),
+      content({ sourceId: 'other', canonicalUrl: 'https://example.com/article?id=8' }),
+    ]);
+
+    expect(registry.list()).toHaveLength(2);
+  });
+
   it('drops the whole candidate set when its execution ends', () => {
     const registry = createCandidateRegistry();
     registry.add([content({ canonicalUrl: 'https://example.com/one' })]);

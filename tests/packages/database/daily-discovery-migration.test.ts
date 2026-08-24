@@ -30,7 +30,7 @@ describe('daily discovery database migration', () => {
     const database = createDatabase({ filename: ':memory:' });
     try {
       const migrated = migrateDatabase({ database });
-      expect(migrated.currentMigration).toBe('0012_daily_personalized_information_discovery');
+      expect(migrated.currentMigration).toBe('0013_discovery_content_identity_v2');
       const tables = tableNames(database).filter((name) => name.startsWith('discovery_'));
       expect(tables).toEqual([...discoveryTables]);
       expect(database.prepare({ sql: 'PRAGMA foreign_key_check' }).all()).toEqual([]);
@@ -79,7 +79,7 @@ describe('daily discovery database migration', () => {
       ` }).run(['workspace:kept', 'Kept', 'C:/kept', 'c:/kept', 'active', now, now, now]);
 
       expect(migrateDatabase({ database }).currentMigration)
-        .toBe('0012_daily_personalized_information_discovery');
+        .toBe('0013_discovery_content_identity_v2');
       expect(database.prepare<{ name: string }>({
         sql: 'SELECT name FROM workspaces WHERE workspace_id = ?',
       }).get(['workspace:kept'])).toEqual({ name: 'Kept' });
