@@ -14,6 +14,7 @@
     { "path": "../database" },
     { "path": "../discovery-agent" },
     { "path": "../events" },
+    { "path": "../home" },
     { "path": "../input" },
     { "path": "../instructions" },
     { "path": "../observability" },

@@ -37,21 +37,3 @@ export type {
 export type { LocalFileAvailability } from './host/capabilities/local-file-availability';
 export type { DiagnosticBundleSaver } from './host/capabilities/diagnostic-bundle-saver';
 export type { DiagnosticBundleDto } from './host/observability-host';
-export {
-  createMegumiHomeReadme,
-  createMegumiHomeVersion,
-  createMegumiSettingsSchema,
-  initializeMegumiHome,
-  initializeMegumiHomeSync,
-  type InitializeMegumiHomeOptions,
-  type InitializeMegumiHomeSyncOptions,
-  type MegumiHomeFileSystem,
-  type MegumiHomeSyncFileSystem,
-} from './home/home-initializer';
-export {
-  buildMegumiHomePaths,
-  resolveMegumiHomePath,
-  type MegumiHomePaths,
-} from './home/home-paths';
-export type { MegumiHomeResourceLocator } from './home/home-resources';
-export * from './packaging/product-resources';

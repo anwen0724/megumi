@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getProductPackagingResources } from '@megumi/product';
+import { getProductPackagingResources } from '@megumi/desktop/main/packaging/product-resources';
 
 const roots: string[] = [];
 

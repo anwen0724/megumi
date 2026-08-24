@@ -8,7 +8,6 @@ const root = process.cwd();
 describe('Product and Desktop final boundaries', () => {
   it('removes legacy owner and shadow-service directories', () => {
     for (const relativePath of [
-      'packages/home',
       'packages/agent/host-interface',
       'apps/desktop/src/main/services',
       'apps/desktop/src/main/shell',
@@ -18,21 +17,32 @@ describe('Product and Desktop final boundaries', () => {
     }
   });
 
-  it('provides the responsibility-based Product structure', () => {
+  it('keeps Home, Settings migrations, Voice wiring, and packaging with their owners', () => {
     for (const relativePath of [
+      'packages/home/src/home-paths.ts',
+      'packages/home/src/home-initializer.ts',
+      'packages/home/src/home-resources.ts',
+      'packages/settings/src/migrations/legacy-permission-settings.ts',
+      'packages/settings/src/migrations/legacy-provider-api-settings.ts',
+      'packages/voice/src/speech-output/speech-output-wiring.ts',
+      'apps/desktop/src/main/packaging/product-resources.ts',
       'packages/product/src/composition/product-composer.ts',
       'packages/product/src/composition/product-runtime.ts',
       'packages/product/src/composition/product-resource-manager.ts',
       'packages/product/src/composition/product-policy.ts',
-      'packages/product/src/home/home-paths.ts',
-      'packages/product/src/home/home-initializer.ts',
-      'packages/product/src/home/home-resources.ts',
       'packages/product/src/operations/session/session-operations.ts',
       'packages/product/src/operations/session/session-reader.ts',
       'packages/product/src/host/session-host.ts',
       'packages/product/src/host/product-host.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(true);
+    }
+    for (const relativePath of [
+      'packages/product/src/home',
+      'packages/product/src/packaging',
+      'packages/product/src/composition/speech-output-wiring.ts',
+    ]) {
+      expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(false);
     }
   });
 

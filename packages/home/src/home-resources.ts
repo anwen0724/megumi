@@ -1,5 +1,5 @@
 /*
- * Installs Product-owned Home resources. System Skills are swapped atomically
+ * Installs Megumi Home resources. System Skills are swapped atomically
  * so an interrupted update cannot expose a partially copied resource tree.
  */
 import path from 'node:path';
@@ -31,7 +31,7 @@ export interface MegumiHomeSyncResourceFileSystem {
   moveDirectorySync?(sourcePath: string, targetPath: string): void;
 }
 
-/** Synchronizes built-in System Skills into Product Home with an atomic swap. */
+/** Synchronizes built-in System Skills into Megumi Home with an atomic swap. */
 export async function installBuiltInSystemSkills(
   fileSystem: MegumiHomeResourceFileSystem,
   paths: MegumiHomePaths,

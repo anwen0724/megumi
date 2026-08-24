@@ -1,5 +1,5 @@
 /*
- * Performs the one-time Product-owned migration from legacy permission pattern
+ * Performs the one-time Settings-owned migration from legacy permission pattern
  * settings to structured action permission rules before strict Settings parsing.
  */
 import fs from 'node:fs';

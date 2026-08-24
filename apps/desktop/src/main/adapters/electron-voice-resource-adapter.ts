@@ -12,9 +12,9 @@ import path from 'node:path';
 import {
   buildMegumiHomePaths,
   resolveMegumiHomePath,
-  type ComposeProductVoiceOptions,
   type InitializeMegumiHomeSyncOptions,
-} from '@megumi/product';
+} from '@megumi/home';
+import type { ComposeProductVoiceOptions } from '@megumi/product';
 import {
   createFileVoiceModels,
   createMinimaxSynthesizer,

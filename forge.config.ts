@@ -4,7 +4,7 @@ import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
 import fs from 'fs-extra';
 import path from 'node:path';
-import { getProductPackagingResources } from './packages/product/src/packaging/product-resources';
+import { getProductPackagingResources } from './apps/desktop/src/main/packaging/product-resources';
 
 const nativeRuntimeModuleRoots = [
   '/node_modules/better-sqlite3',

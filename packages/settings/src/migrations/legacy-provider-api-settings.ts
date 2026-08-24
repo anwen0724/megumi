@@ -1,10 +1,10 @@
 /*
- * Performs the one-time Product-owned migration from legacy Provider protocol
+ * Performs the one-time Settings-owned migration from legacy Provider protocol
  * settings to the current API field before strict Agent Settings parsing.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { SettingsRawSchema } from '@megumi/settings';
+import { SettingsRawSchema } from '../settings-schema';
 
 const LEGACY_PROVIDER_API = {
   'openai-compatible': 'openai-completions',

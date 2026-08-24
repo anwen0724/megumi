@@ -37,6 +37,13 @@ export {
 } from './speech-output/speech-output-schema';
 export { filterReplyTextForSpeech } from './speech-output/reply-text-filter';
 export {
+  onRunEndedForSpeechOutput,
+  type RunEndedEnvelopeLike,
+  type SpeechOutputReadResult,
+  type SpeechOutputSkipReason,
+  type SpeechOutputWiringDeps,
+} from './speech-output/speech-output-wiring';
+export {
   createMinimaxSynthesizer,
   type CreateMinimaxSynthesizerOptions,
 } from './speech-output/synthesizers/minimax-synthesizer';

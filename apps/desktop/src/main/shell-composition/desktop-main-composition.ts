@@ -2,7 +2,8 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { createDiscoveryAgent } from '@megumi/discovery-agent';
-import { composeProduct, composeProductCapabilities, resolveMegumiHomePath } from '@megumi/product';
+import { resolveMegumiHomePath } from '@megumi/home';
+import { composeProduct, composeProductCapabilities } from '@megumi/product';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { forwardRuntimeEvent } from '../ipc/event-forwarders';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';

@@ -186,3 +186,12 @@ export type {
   DiscoverySettingsResolved,
   DiscoverySourceId,
 } from './discovery-settings';
+export {
+  LegacyPermissionSettingsMigrationError,
+  migrateLegacyPermissionSettings,
+  migrateLegacyPermissionSettingsFile,
+} from './migrations/legacy-permission-settings';
+export {
+  migrateLegacyProviderApiSettings,
+  migrateLegacyProviderApiSettingsFile,
+} from './migrations/legacy-provider-api-settings';

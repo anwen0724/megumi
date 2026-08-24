@@ -8,6 +8,7 @@
     { "path": "./packages/database" },
     { "path": "./packages/discovery-agent" },
     { "path": "./packages/events" },
+    { "path": "./packages/home" },
     { "path": "./packages/input" },
     { "path": "./packages/instructions" },
     { "path": "./packages/observability" },

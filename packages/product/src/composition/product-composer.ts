@@ -5,6 +5,10 @@
  * Product only wires Host requests, DTO conversions and UI event forwarding.
  */
 import type { DiscoveryAgent } from '@megumi/discovery-agent';
+import {
+  migrateLegacyPermissionSettingsFile,
+  migrateLegacyProviderApiSettingsFile,
+} from '@megumi/settings';
 import { deriveContextUsage } from '@megumi/context';
 import { createWorkspaceChangeEventHandler } from '@megumi/workspace';
 import {
@@ -13,6 +17,7 @@ import {
   type SpeechInputRuntime,
   type SpeechSynthesizer,
   type VoiceModels,
+  onRunEndedForSpeechOutput,
 } from '@megumi/voice';
 import type { AttachmentPicker } from '../host/capabilities/attachment-picker';
 import type { LocalFileAvailability } from '../host/capabilities/local-file-availability';
@@ -20,8 +25,6 @@ import type { DiagnosticBundleSaver } from '../host/capabilities/diagnostic-bund
 import type { ProductHostInterface } from '../host/product-host';
 import type { DirectoryPicker } from '../host/capabilities/directory-picker';
 import type { FileOpener } from '../host/capabilities/file-opener';
-import { migrateLegacyPermissionSettingsFile } from '../home/migrations/legacy-permission-settings';
-import { migrateLegacyProviderApiSettingsFile } from '../home/migrations/legacy-provider-api-settings';
 import { createApprovalOperations } from '../operations/approval-operations';
 import { createObservabilityOperations } from '../operations/observability-operations';
 import { createSettingsOperations } from '../operations/settings-operations';
@@ -51,7 +54,6 @@ import {
   createProductRuntime,
   type ProductRuntime,
 } from './product-runtime';
-import { onRunEndedForSpeechOutput } from './speech-output-wiring';
 
 export interface ComposeProductVoiceOptions {
   /** Desktop injects the single Voice Input Adapter that owns the Speech Worker. */

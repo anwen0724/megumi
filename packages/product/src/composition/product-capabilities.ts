@@ -77,8 +77,8 @@ import { createWorkspaceStore } from '@megumi/workspace/store';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
-} from '../home/home-initializer';
-import type { MegumiHomePaths } from '../home/home-paths';
+  type MegumiHomePaths,
+} from '@megumi/home';
 import { composeModels } from './model-composer';
 import {
   PRODUCT_EXECUTION_POLICY,

@@ -1,0 +1,13 @@
+{
+  "name": "@megumi/home",
+  "version": "0.1.0",
+  "description": "Megumi Home paths, initialization, and bundled resource synchronization",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@megumi/settings": "0.1.0"
+  }
+}

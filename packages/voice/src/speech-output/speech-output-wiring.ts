@@ -9,7 +9,7 @@
 
 import { sessionMessageText, type SessionMessage } from '@megumi/session';
 import type { Settings } from '@megumi/settings';
-import type { SpeechOutputRuntime } from '@megumi/voice';
+import type { SpeechOutputRuntime } from './speech-output-runtime';
 
 export interface SpeechOutputWiringDeps {
   readonly settings: Pick<Settings, 'resolve' | 'resolveVoiceTts' | 'readVoiceTtsApiKey'>;

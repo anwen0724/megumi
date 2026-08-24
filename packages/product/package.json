@@ -15,6 +15,7 @@
                          "@megumi/database":  "0.1.0",
                          "@megumi/discovery-agent":  "0.1.0",
                          "@megumi/events":  "0.1.0",
+                         "@megumi/home":  "0.1.0",
                          "@megumi/input":  "0.1.0",
                          "@megumi/instructions":  "0.1.0",
                          "@megumi/observability":  "0.1.0",

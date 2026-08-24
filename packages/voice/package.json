@@ -11,6 +11,8 @@
     "./speech-output/speech-output-schema": "./src/speech-output/speech-output-schema.ts"
   },
   "dependencies": {
+    "@megumi/session": "0.1.0",
+    "@megumi/settings": "0.1.0",
     "zod": "^3.25.76"
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Initializes Product Home directories and base files, then delegates bundled
+ * Initializes Megumi Home directories and base files, then delegates bundled
  * resource synchronization to the Home resource owner.
  */
 import { createSettingsJsonSchema } from '@megumi/settings';
@@ -52,7 +52,7 @@ export interface InitializeMegumiHomeSyncOptions extends ResolveMegumiHomePathOp
   readonly resourceLocator?: MegumiHomeResourceLocator;
 }
 
-/** Creates missing Product Home state without overwriting user-owned files. */
+/** Creates missing Megumi Home state without overwriting user-owned files. */
 export async function initializeMegumiHome(
   options: InitializeMegumiHomeOptions,
 ): Promise<MegumiHomePaths> {
