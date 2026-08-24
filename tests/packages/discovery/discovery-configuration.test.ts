@@ -55,6 +55,43 @@ describe('Discovery configuration', () => {
     });
   });
 
+  it('opens login only through a browser-session source and returns its refreshed public state', async () => {
+    let connected = false;
+    const connect = vi.fn(async () => { connected = true; });
+    const browserSource: DiscoverySource = {
+      descriptor: {
+        id: 'xiaohongshu', name: '小红书', access: 'browser_session',
+        supportedModes: ['relevance'], supportsRead: true,
+      },
+      getAvailability: () => ({ state: connected ? 'unknown' : 'login_required' }),
+      connect,
+      async search() { return { status: 'success', items: [] }; },
+    };
+    const configuration = createDiscoveryConfiguration({
+      sourceRegistry: createSourceRegistry([
+        source('bilibili', 'public_http'),
+        browserSource,
+      ]),
+      settings: {
+        read: () => ({
+          conversationRecognitionEnabled: false,
+          dailyGenerationTime: '08:00',
+          dailyTargetCount: 20,
+          enabledSources: ['xiaohongshu'],
+        }),
+        write: vi.fn(),
+      },
+    });
+
+    await expect(configuration.connectSource({ sourceId: 'xiaohongshu' })).resolves.toMatchObject({
+      sourceId: 'xiaohongshu',
+      access: 'browser_session',
+      connectionState: 'unknown',
+    });
+    expect(connect).toHaveBeenCalledOnce();
+    await expect(configuration.connectSource({ sourceId: 'bilibili' })).rejects.toThrow(/login/i);
+  });
+
   it.each([
     { enabledSources: [] },
     { enabledSources: ['missing'] },

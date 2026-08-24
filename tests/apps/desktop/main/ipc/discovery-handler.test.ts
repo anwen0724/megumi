@@ -68,4 +68,32 @@ describe('registerDiscoveryHandlers', () => {
       data: { code: 'ipc_invalid_request' },
     });
   });
+
+  it('forwards a browser source login request without platform-specific payloads', async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    const connectSource = vi.fn(async () => ({
+      sourceId: 'xiaohongshu', name: '小红书', access: 'browser_session' as const,
+      supportedModes: ['relevance' as const], supportsRead: true, enabled: true,
+      connectionState: 'unknown' as const,
+    }));
+    registerDiscoveryHandlers(
+      { host: { discovery: { connectSource } } as never },
+      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
+    );
+
+    const response = await handlers.get(IPC_CHANNELS.discovery.sourceConnect)?.({}, request(
+      IPC_CHANNELS.discovery.sourceConnect, { sourceId: 'xiaohongshu' },
+    ));
+
+    expect(connectSource).toHaveBeenCalledWith({ sourceId: 'xiaohongshu' });
+    expect(response).toMatchObject({ ok: true, data: { sourceId: 'xiaohongshu' } });
+  });
 });
+
+function request(channel: string, payload: unknown) {
+  return {
+    requestId: `request:${channel}`,
+    payload,
+    meta: { channel, createdAt: '2026-08-22T10:00:00.000Z', source: 'renderer' },
+  };
+}

@@ -101,6 +101,9 @@ export type {
   VoiceTtsApiKeyUiRequest,
   VoiceTtsKeyUiResult,
   VoiceTtsPublicUiDto,
+  DiscoverySourceCredentialStatusUiRequest,
+  DiscoverySourceCredentialSetUiRequest,
+  DiscoverySourceCredentialStatusUiResult,
 } from './settings-host';
 export type { SettingsHost } from './settings-host';
 export type {
@@ -226,6 +229,9 @@ export {
   VoiceTtsApiKeyPayloadSchema,
   VoiceTtsPublicUiDtoSchema,
   VoiceTtsKeyUiResultSchema,
+  DiscoverySourceCredentialStatusPayloadSchema,
+  DiscoverySourceCredentialSetPayloadSchema,
+  DiscoverySourceCredentialStatusUiResultSchema,
   SettingsGetUiResultSchema,
   SettingsUpdateUiResultSchema,
   SettingsCompleteSetupUiResultSchema,

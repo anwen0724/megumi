@@ -10,6 +10,7 @@ interface MainContentProps {
   onToggleRightSidebar: () => void;
   page: 'discovery' | 'chat';
   onStartRecommendationConversation: (recommendation: DiscoveryRecommendationUiDto) => void;
+  onOpenContentSources: () => void;
 }
 
 export function MainContent({
@@ -18,6 +19,7 @@ export function MainContent({
   onToggleRightSidebar,
   page,
   onStartRecommendationConversation,
+  onOpenContentSources,
 }: MainContentProps) {
   const ProjectSidebarIcon = rightSidebarOpen ? PanelRightClose : PanelRightOpen;
 
@@ -44,7 +46,7 @@ export function MainContent({
         </IconButton>
       </div> : null}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <PageHost page={page} onStartRecommendationConversation={onStartRecommendationConversation} />
+        <PageHost page={page} onStartRecommendationConversation={onStartRecommendationConversation} onOpenContentSources={onOpenContentSources} />
         <MainOverlays />
       </div>
     </main>

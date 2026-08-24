@@ -59,8 +59,6 @@ import {
 import { createSettingsStore } from '@megumi/settings/store';
 import { createSkills, type Skills } from '@megumi/skills';
 import {
-  createBingRssWebSearch,
-  createFallbackWebSearch,
   createWebFetch,
   createTools,
   resolveConfiguredWebSearch,
@@ -402,19 +400,8 @@ function composeCapabilitiesWithDatabase(
   });
   const discoveryRepository = createDiscoveryRepository({ database });
   const interestExtractor = createInterestExtractor({ models: modelComposition.models });
-  const discoveryWebSearch = createFallbackWebSearch([
-    {
-      async search(request) {
-        const configured = resolveConfiguredWebSearch(settings);
-        return configured
-          ? configured.search(request)
-          : { query: request.query.trim(), results: [] };
-      },
-    },
-    createBingRssWebSearch(),
-  ]);
   const discoverySources = createDiscoverySourceRegistry({
-    webSearch: discoveryWebSearch,
+    webSearch: () => resolveConfiguredWebSearch(settings),
     webFetch: createWebFetch(),
     embeddedBrowser: options.embeddedBrowser ?? unavailableEmbeddedBrowser,
     zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),

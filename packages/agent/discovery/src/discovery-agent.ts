@@ -20,6 +20,8 @@ import {
   createDiscoveryConfiguration,
   type DiscoveryConfigurationStore,
   type DiscoveryConfigurationView,
+  type ConnectDiscoverySourceRequest,
+  type DiscoverySourceView,
   type UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
 import {
@@ -72,6 +74,7 @@ export interface DiscoveryAgent extends Omit<AgentExecutions, 'shutdown'> {
   updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationView>;
   getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
   updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
+  connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
   shutdown(request: ShutdownRequest): Promise<ShutdownResult>;
 }
 
@@ -183,6 +186,9 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     updateDiscoveryConfiguration: (request) => discoveryConfiguration
       ? discoveryConfiguration.update(request)
+      : Promise.reject(new Error('Discovery configuration is not configured.')),
+    connectDiscoverySource: (request) => discoveryConfiguration
+      ? discoveryConfiguration.connectSource(request)
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     async shutdown(request) {
       interestRuntime.shutdown();

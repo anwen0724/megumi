@@ -76,6 +76,7 @@ export const discovery = {
   targetCount: 'Daily recommendation count',
   sources: 'Sources',
   sourcesDescription: 'At least one content source must remain enabled.',
+  configureSources: 'Configure',
   sourceReady: 'Ready',
   sourceUnknown: 'Waiting for first check',
   sourceLoginRequired: 'Sign in on the platform first',

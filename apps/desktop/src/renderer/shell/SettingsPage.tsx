@@ -1,10 +1,10 @@
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Activity, AudioLines, Bot, BrainCircuit, Boxes, CheckCircle2, Globe2, Info, Palette, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Activity, AudioLines, Bot, BrainCircuit, Boxes, CheckCircle2, Info, Palette, Rss, ShieldCheck } from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
 import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
-import { WebSettingsPanel } from '../features/web-settings';
+import { ContentSourcesSettingsPanel } from '../features/content-sources-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
 import { SkillSettingsPanel } from '../features/skill-settings';
 import { VoiceSettingsPanel } from '../features/voice-settings';
@@ -18,10 +18,11 @@ import {
   cx,
 } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'web' | 'memory' | 'diagnostics' | 'security' | 'about';
+type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'memory' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
+  initialCategory?: SettingsCategory;
   sidebarWidth?: number;
   onStartSidebarResize?: (event: ReactPointerEvent) => void;
 }
@@ -45,7 +46,7 @@ const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: Set
     items: [
       { id: 'models', icon: Bot },
       { id: 'skills', icon: Boxes },
-      { id: 'web', icon: Globe2 },
+      { id: 'sources', icon: Rss },
       { id: 'security', icon: ShieldCheck },
     ],
   },
@@ -64,9 +65,9 @@ function activeCategoryLabel(category: SettingsCategory): SettingsCategoryItem {
   return categories.find((item) => item.id === category) ?? categories[0];
 }
 
-export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize }: SettingsPageProps) {
+export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWidth = 288, onStartSidebarResize }: SettingsPageProps) {
   const { t } = useTranslation('settings');
-  const [category, setCategory] = useState<SettingsCategory>('appearance');
+  const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const activeCategory = activeCategoryLabel(category);
 
   useEffect(() => {
@@ -195,7 +196,7 @@ export function SettingsPage({ onDone, sidebarWidth = 288, onStartSidebarResize 
 
               {category === 'skills' ? <SkillSettingsPanel /> : null}
 
-              {category === 'web' ? <WebSettingsPanel /> : null}
+              {category === 'sources' ? <ContentSourcesSettingsPanel /> : null}
 
               {category === 'memory' ? <MemorySettingsPanel /> : null}
 

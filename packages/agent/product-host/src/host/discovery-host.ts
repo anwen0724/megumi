@@ -3,6 +3,8 @@ import { z } from 'zod';
 import {
   DiscoveryHomeViewSchema,
   DiscoveryConfigurationViewSchema,
+  DiscoverySourceViewSchema,
+  ConnectDiscoverySourceRequestSchema,
   EnsureDailyDiscoveryRequestSchema,
   GetDiscoveryHomeRequestSchema,
   InterestSchema,
@@ -31,7 +33,9 @@ export const DiscoveryRecommendationSearchPayloadSchema = SearchRecommendationsR
 export const DiscoveryRecommendationStatePayloadSchema = UpdateRecommendationStateRequestSchema;
 export const DiscoveryConfigurationGetPayloadSchema = z.object({}).strict();
 export const DiscoveryConfigurationUpdatePayloadSchema = UpdateDiscoveryConfigurationRequestSchema;
+export const DiscoverySourceConnectPayloadSchema = ConnectDiscoverySourceRequestSchema;
 export const DiscoveryConfigurationUiDtoSchema = DiscoveryConfigurationViewSchema;
+export const DiscoverySourceUiDtoSchema = DiscoverySourceViewSchema;
 
 export const DiscoveryInterestUiDtoSchema = InterestSchema;
 export const DiscoverySessionParticipationUiDtoSchema = SessionParticipationSchema;
@@ -59,7 +63,9 @@ export type DiscoveryRecommendationSearchPayload = z.infer<typeof DiscoveryRecom
 export type DiscoveryRecommendationStatePayload = z.infer<typeof DiscoveryRecommendationStatePayloadSchema>;
 export type DiscoveryConfigurationGetPayload = z.infer<typeof DiscoveryConfigurationGetPayloadSchema>;
 export type DiscoveryConfigurationUpdatePayload = z.infer<typeof DiscoveryConfigurationUpdatePayloadSchema>;
+export type DiscoverySourceConnectPayload = z.infer<typeof DiscoverySourceConnectPayloadSchema>;
 export type DiscoveryConfigurationUiDto = z.infer<typeof DiscoveryConfigurationUiDtoSchema>;
+export type DiscoverySourceUiDto = z.infer<typeof DiscoverySourceUiDtoSchema>;
 export type DiscoveryInterestUiDto = z.infer<typeof DiscoveryInterestUiDtoSchema>;
 export type DiscoverySessionParticipationUiDto = z.infer<typeof DiscoverySessionParticipationUiDtoSchema>;
 export type DiscoveryDailyEnsureResult = z.infer<typeof DiscoveryDailyEnsureResultSchema>;
@@ -70,6 +76,7 @@ export type DiscoveryRecommendationUiDto = z.infer<typeof DiscoveryRecommendatio
 export interface DiscoveryHost {
   getConfiguration(request?: DiscoveryConfigurationGetPayload): Promise<DiscoveryConfigurationUiDto>;
   updateConfiguration(request: DiscoveryConfigurationUpdatePayload): Promise<DiscoveryConfigurationUiDto>;
+  connectSource(request: DiscoverySourceConnectPayload): Promise<DiscoverySourceUiDto>;
   changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestUiDto>;
   setSessionParticipation(request: DiscoverySessionParticipationPayload): Promise<DiscoverySessionParticipationUiDto>;
   ensureDaily(request: DiscoveryDailyEnsurePayload): Promise<DiscoveryDailyEnsureResult>;

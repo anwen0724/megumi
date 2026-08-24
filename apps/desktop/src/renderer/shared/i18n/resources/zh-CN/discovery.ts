@@ -79,6 +79,7 @@ export const discovery = {
   targetCount: '每日推荐数量',
   sources: '内容来源',
   sourcesDescription: '至少保留一个内容来源，后续接入的新来源也会显示在这里。',
+  configureSources: '配置',
   sourceReady: '可用',
   sourceUnknown: '等待首次检查',
   sourceLoginRequired: '需要先在平台登录',

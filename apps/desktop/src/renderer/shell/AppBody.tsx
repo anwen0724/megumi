@@ -44,6 +44,7 @@ export function AppBody() {
       {controller.settingsOpen ? (
         <SettingsPage
           onDone={controller.closeSettings}
+          initialCategory={controller.settingsCategory}
           sidebarWidth={leftSidebarWidth}
           onStartSidebarResize={startLeftSidebarResize}
         />
@@ -76,6 +77,7 @@ export function AppBody() {
             onToggleRightSidebar={controller.toggleRightSidebar}
             page={controller.activePage}
             onStartRecommendationConversation={controller.handleStartRecommendationConversation}
+            onOpenContentSources={controller.openContentSources}
           />
           {controller.activePage === 'chat' ? (
             <RightSidebar open={controller.rightSidebarOpen} onClose={() => controller.setRightSidebarOpen(false)} />

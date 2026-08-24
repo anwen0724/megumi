@@ -12,7 +12,7 @@ import {
 } from './discovery-source';
 
 export function createOpenWebSource(input: {
-  readonly webSearch?: WebSearch;
+  readonly webSearch?: WebSearch | (() => WebSearch | undefined);
   readonly webFetch?: WebFetch;
 }): DiscoverySource {
   return {
@@ -23,11 +23,12 @@ export function createOpenWebSource(input: {
       supportedModes: ['relevance'],
       supportsRead: Boolean(input.webFetch),
     },
-    getAvailability: () => ({ state: input.webSearch ? 'ready' : 'not_configured' }),
+    getAvailability: () => ({ state: resolveWebSearch(input.webSearch) ? 'ready' : 'not_configured' }),
     async search(request) {
-      if (!input.webSearch) return failed('not_configured', 'Open Web search is not configured.', false);
+      const webSearch = resolveWebSearch(input.webSearch);
+      if (!webSearch) return failed('not_configured', 'Open Web search is not configured.', false);
       try {
-        const result = await input.webSearch.search({
+        const result = await webSearch.search({
           query: request.query.trim(),
           count: request.limit,
           signal: request.signal,
@@ -72,6 +73,10 @@ export function createOpenWebSource(input: {
       }
     },
   };
+}
+
+function resolveWebSearch(input: WebSearch | (() => WebSearch | undefined) | undefined): WebSearch | undefined {
+  return typeof input === 'function' ? input() : input;
 }
 
 function siteName(value: string): string {

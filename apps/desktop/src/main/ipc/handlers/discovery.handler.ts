@@ -7,6 +7,7 @@ import {
   DiscoveryRecommendationSearchUiResultSchema,
   DiscoveryRecommendationUiDtoSchema,
   DiscoverySessionParticipationUiDtoSchema,
+  DiscoverySourceUiDtoSchema,
   type ProductHostInterface,
 } from '@megumi/product-host/host';
 import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
@@ -23,6 +24,7 @@ import {
   DiscoveryRecommendationSearchRequestSchema,
   DiscoveryRecommendationStateRequestSchema,
   DiscoverySessionParticipationRequestSchema,
+  DiscoverySourceConnectRequestSchema,
 } from '../schemas';
 
 export interface DiscoveryHandlersService {
@@ -56,6 +58,15 @@ export function registerDiscoveryHandlers(
     responseValidation: 'dev-only',
     logger: options.logger,
     handle: (request) => service.host.discovery.updateConfiguration(request.payload),
+    mapError: mapDiscoveryIpcError,
+  }));
+  ipcMain.handle(IPC_CHANNELS.discovery.sourceConnect, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.sourceConnect,
+    requestSchema: DiscoverySourceConnectRequestSchema,
+    responseSchema: DiscoverySourceUiDtoSchema,
+    responseValidation: 'dev-only',
+    logger: options.logger,
+    handle: (request) => service.host.discovery.connectSource(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
   ipcMain.handle(IPC_CHANNELS.discovery.interestChange, createIpcRequestHandler({

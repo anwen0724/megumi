@@ -8,6 +8,7 @@ import {
   SettingsGetUiResultSchema,
   SettingsUpdateUiResultSchema,
   VoiceTtsKeyUiResultSchema,
+  DiscoverySourceCredentialStatusUiResultSchema,
   type ProductHostInterface,
 } from '@megumi/product-host/host';
 import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
@@ -26,6 +27,9 @@ import {
   SettingsUpdateRequestSchema,
   VoiceTtsApiKeyRequestSchema,
   VoiceTtsDeleteApiKeyRequestSchema,
+  DiscoveryCredentialGetRequestSchema,
+  DiscoveryCredentialSetRequestSchema,
+  DiscoveryCredentialDeleteRequestSchema,
 } from '../schemas';
 
 export interface SettingsHandlersService {
@@ -130,6 +134,33 @@ export function registerSettingsHandlers(
     responseSchema: VoiceTtsKeyUiResultSchema,
     logger: options.logger,
     handle: () => service.host.settings.deleteVoiceTtsApiKey(),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.discoveryCredentialGet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.discoveryCredentialGet,
+    requestSchema: DiscoveryCredentialGetRequestSchema,
+    responseSchema: DiscoverySourceCredentialStatusUiResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.getDiscoverySourceCredentialStatus(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.discoveryCredentialSet, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.discoveryCredentialSet,
+    requestSchema: DiscoveryCredentialSetRequestSchema,
+    responseSchema: DiscoverySourceCredentialStatusUiResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.setDiscoverySourceCredential(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.discoveryCredentialDelete, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.discoveryCredentialDelete,
+    requestSchema: DiscoveryCredentialDeleteRequestSchema,
+    responseSchema: DiscoverySourceCredentialStatusUiResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.deleteDiscoverySourceCredential(request.payload),
     mapError: mapSettingsIpcError,
   }));
 }

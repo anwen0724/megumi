@@ -11,6 +11,7 @@ export function useAppBodyController() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsCategory, setSettingsCategory] = useState<'appearance' | 'sources'>('appearance');
   const projects = useProjectStore((state) => state.projects);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const sessions = useSessionStore((state) => state.sessions);
@@ -107,8 +108,9 @@ export function useAppBodyController() {
     })();
   }, [setActiveSession]);
 
-  const openSettings = useCallback(() => {
+  const openSettings = useCallback((category: 'appearance' | 'sources' = 'appearance') => {
     setRightSidebarOpen(false);
+    setSettingsCategory(category);
     setSettingsOpen(true);
   }, []);
 
@@ -144,6 +146,7 @@ export function useAppBodyController() {
     activePage,
     rightSidebarOpen,
     settingsOpen,
+    settingsCategory,
     pageTitle,
     projects,
     sidebarProjects,
@@ -156,6 +159,7 @@ export function useAppBodyController() {
     handleOpenProject,
     handleRemoveProject,
     openSettings,
+    openContentSources: () => openSettings('sources'),
     openDiscovery,
     handleStartRecommendationConversation,
     closeSettings,

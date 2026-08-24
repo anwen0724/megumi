@@ -4,6 +4,23 @@ import { createSettings, type SettingsStore } from '@megumi/settings';
 import { createSettingsOperations } from '../../../../packages/agent/product-host/src/operations/settings-operations';
 
 describe('SettingsHost semantics', () => {
+  it('manages discovery provider credentials without ever returning their value', async () => {
+    const store = memoryStore({});
+    const host = createSettingsOperations(createSettings({ store }));
+
+    expect(await host.getDiscoverySourceCredentialStatus({ sourceId: 'zhihu' })).toEqual({
+      status: 'ok', sourceId: 'zhihu', configured: false,
+    });
+    const saved = await host.setDiscoverySourceCredential({
+      sourceId: 'zhihu', credential: 'zhihu-secret',
+    });
+    expect(saved).toEqual({ status: 'ok', sourceId: 'zhihu', configured: true });
+    expect(JSON.stringify(saved)).not.toContain('zhihu-secret');
+    expect(await host.deleteDiscoverySourceCredential({ sourceId: 'zhihu' })).toEqual({
+      status: 'ok', sourceId: 'zhihu', configured: false,
+    });
+  });
+
   it('forwards updates to Settings and projects the resolved Host DTO', async () => {
     const store = memoryStore();
     const host = createSettingsOperations(createSettings({ store }));

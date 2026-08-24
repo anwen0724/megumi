@@ -14,7 +14,7 @@ export const DISCOVERY_SOURCE_IDS = [
 ] as const;
 
 export function createDiscoverySourceRegistry(input: {
-  readonly webSearch?: WebSearch;
+  readonly webSearch?: WebSearch | (() => WebSearch | undefined);
   readonly webFetch?: WebFetch;
   readonly embeddedBrowser: EmbeddedBrowser;
   readonly zhihuAccessSecret?: () => string | undefined;

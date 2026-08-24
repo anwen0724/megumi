@@ -24,7 +24,7 @@ const providers: Array<{ value: SearchProvider; label: string }> = [
   { value: 'custom', label: '' },
 ];
 
-export function WebSettingsPanel() {
+export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean } = {}) {
   const { t } = useTranslation(['settings', 'common']);
   const [saved, setSaved] = useState<SettingsUiResolved['web']['search']>({ hasApiKey: false, credentialSource: 'missing' });
   const [provider, setProvider] = useState<SearchProvider | ''>('');
@@ -118,10 +118,10 @@ export function WebSettingsPanel() {
 
   return (
     <div className="space-y-6">
-      <SettingsPageHeader
+      {showHeader ? <SettingsPageHeader
         title={t('settings:web.title')}
         description={t('settings:web.description')}
-      />
+      /> : null}
       <form onSubmit={(event) => void save(event)}>
         <SettingsSection
           title={t('settings:web.search')}

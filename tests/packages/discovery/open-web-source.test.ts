@@ -39,6 +39,19 @@ describe('Open Web discovery source', () => {
     expect(result).toMatchObject({ status: 'failed', failure: { code: 'not_configured', retryable: false } });
   });
 
+  it('reflects credentials saved after startup through the injected provider resolver', async () => {
+    let configured: WebSearch | undefined;
+    const source = createOpenWebSource({ webSearch: () => configured });
+    expect(source.getAvailability()).toEqual({ state: 'not_configured' });
+
+    configured = { search: vi.fn(async () => ({ query: 'agent', results: [] })) };
+
+    expect(source.getAvailability()).toEqual({ state: 'ready' });
+    await expect(source.search({
+      query: 'agent', mode: 'relevance', limit: 5, signal: new AbortController().signal,
+    })).resolves.toEqual({ status: 'success', items: [] });
+  });
+
   it.each([
     ['timeout', 'timeout'],
     ['cancelled', 'cancelled'],

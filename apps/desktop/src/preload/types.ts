@@ -19,6 +19,8 @@ import type {
   DiscoveryRecommendationUiDto,
   DiscoverySessionParticipationUiDto,
   DiscoveryConfigurationUiDto,
+  DiscoverySourceCredentialStatusUiResult,
+  DiscoverySourceUiDto,
 } from '@megumi/product-host/host';
 import type {
   SessionBranchDraftCancelPayload,
@@ -42,6 +44,9 @@ import type {
   DiscoverySessionParticipationPayload,
   DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
+  DiscoveryCredentialStatusPayload,
+  DiscoveryCredentialSetPayload,
+  DiscoverySourceConnectPayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
 
@@ -77,6 +82,11 @@ export type DiscoveryConfigurationGetPreloadPayload = DiscoveryConfigurationGetP
 export type DiscoveryConfigurationGetPreloadData = DiscoveryConfigurationUiDto;
 export type DiscoveryConfigurationUpdatePreloadPayload = DiscoveryConfigurationUpdatePayload;
 export type DiscoveryConfigurationUpdatePreloadData = DiscoveryConfigurationUiDto;
+export type DiscoveryCredentialStatusPreloadPayload = DiscoveryCredentialStatusPayload;
+export type DiscoveryCredentialSetPreloadPayload = DiscoveryCredentialSetPayload;
+export type DiscoveryCredentialStatusPreloadData = DiscoverySourceCredentialStatusUiResult;
+export type DiscoverySourceConnectPreloadPayload = DiscoverySourceConnectPayload;
+export type DiscoverySourceConnectPreloadData = DiscoverySourceUiDto;
 export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
 export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
 export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;

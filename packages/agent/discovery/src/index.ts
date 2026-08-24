@@ -126,12 +126,14 @@ export type {
 } from './sources/discovery-source';
 export {
   createDiscoveryConfiguration,
+  ConnectDiscoverySourceRequestSchema,
   DiscoveryConfigurationViewSchema,
   DiscoverySourceViewSchema,
   UpdateDiscoveryConfigurationRequestSchema,
 } from './configuration/discovery-configuration';
 export type {
   DiscoveryConfiguration,
+  ConnectDiscoverySourceRequest,
   DiscoveryConfigurationSettings,
   DiscoveryConfigurationStore,
   DiscoveryConfigurationView,

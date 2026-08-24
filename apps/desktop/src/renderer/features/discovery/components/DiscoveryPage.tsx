@@ -14,9 +14,10 @@ type RecommendationAction = Parameters<Parameters<typeof RecommendationCard>[0][
 
 interface DiscoveryPageProps {
   onStartConversation?(recommendation: DiscoveryRecommendationUiDto): void;
+  onOpenContentSources?(): void;
 }
 
-export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
+export function DiscoveryPage({ onStartConversation, onOpenContentSources }: DiscoveryPageProps) {
   const { t, i18n } = useTranslation('discovery');
   const [home, setHome] = useState<DiscoveryHomeUiResult | null>(null);
   const [mode, setMode] = useState<HomeMode>('timeline');
@@ -211,7 +212,13 @@ export function DiscoveryPage({ onStartConversation }: DiscoveryPageProps) {
         {!activeQuery && home && home.days.length === 0 && hasActiveInterests && !['not_generated', 'running', 'failed'].includes(home.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
       </div>
 
-      <InterestManager open={managerOpen} interests={home?.interests ?? []} onClose={() => setManagerOpen(false)} onChanged={async () => loadHome(mode)} />
+      <InterestManager
+        open={managerOpen}
+        interests={home?.interests ?? []}
+        onClose={() => setManagerOpen(false)}
+        onChanged={async () => loadHome(mode)}
+        onOpenContentSources={onOpenContentSources}
+      />
     </div>
   );
 }

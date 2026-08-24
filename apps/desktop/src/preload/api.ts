@@ -55,6 +55,8 @@ import type {
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
   DiscoveryConfigurationUiDto,
+  DiscoverySourceCredentialStatusUiResult,
+  DiscoverySourceUiDto,
 } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
@@ -103,6 +105,9 @@ import type {
   DiscoveryRecommendationStatePayload,
   DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
+  DiscoveryCredentialStatusPayload,
+  DiscoveryCredentialSetPayload,
+  DiscoverySourceConnectPayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -211,6 +216,18 @@ export const api = {
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>,
     ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, request),
+    getDiscoverySourceCredentialStatus: (
+      request: BusinessRequest<DiscoveryCredentialStatusPayload, typeof IPC_CHANNELS.settings.discoveryCredentialGet>,
+    ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialGet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialGet, request),
+    setDiscoverySourceCredential: (
+      request: BusinessRequest<DiscoveryCredentialSetPayload, typeof IPC_CHANNELS.settings.discoveryCredentialSet>,
+    ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialSet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialSet, request),
+    deleteDiscoverySourceCredential: (
+      request: BusinessRequest<DiscoveryCredentialStatusPayload, typeof IPC_CHANNELS.settings.discoveryCredentialDelete>,
+    ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialDelete>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialDelete, request),
   },
   command: {
     suggestions: (
@@ -343,6 +360,10 @@ export const api = {
       request: BusinessRequest<DiscoveryConfigurationUpdatePayload, typeof IPC_CHANNELS.discovery.configurationUpdate>,
     ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationUpdate>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationUpdate, request),
+    connectSource: (
+      request: BusinessRequest<DiscoverySourceConnectPayload, typeof IPC_CHANNELS.discovery.sourceConnect>,
+    ): Promise<RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceConnect>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceConnect, request),
     changeInterest: (
       request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
     ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>

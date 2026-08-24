@@ -83,7 +83,7 @@ describe('SettingsPage provider settings', () => {
 
     expect(screen.getByRole('tab', { name: 'Models & Providers' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Skills' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Web Access' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Content Sources' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Privacy & Permissions' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Activity & Diagnostics' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'About Megumi' })).toBeInTheDocument();

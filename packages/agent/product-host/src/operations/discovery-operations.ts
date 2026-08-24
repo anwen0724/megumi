@@ -13,11 +13,13 @@ export function createDiscoveryOperations(
     | 'updateRecommendationState'
     | 'getDiscoveryConfiguration'
     | 'updateDiscoveryConfiguration'
+    | 'connectDiscoverySource'
   >,
 ): DiscoveryHost {
   return {
     getConfiguration: () => agent.getDiscoveryConfiguration(),
     updateConfiguration: (request) => agent.updateDiscoveryConfiguration(request),
+    connectSource: (request) => agent.connectDiscoverySource(request),
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
     ensureDaily: (request) => agent.ensureDailyDiscovery(request),

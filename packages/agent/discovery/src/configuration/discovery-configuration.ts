@@ -23,6 +23,9 @@ export const UpdateDiscoveryConfigurationRequestSchema = z.object({
   dailyTargetCount: z.number().int().min(1).max(100).optional(),
   enabledSources: z.array(z.string().trim().min(1)).min(1).optional(),
 }).strict();
+export const ConnectDiscoverySourceRequestSchema = z.object({
+  sourceId: z.string().trim().min(1),
+}).strict();
 
 export const DiscoverySourceViewSchema = z.object({
   sourceId: z.string().trim().min(1),
@@ -44,6 +47,7 @@ export const DiscoveryConfigurationViewSchema = z.object({
 }).strict();
 
 export type UpdateDiscoveryConfigurationRequest = z.infer<typeof UpdateDiscoveryConfigurationRequestSchema>;
+export type ConnectDiscoverySourceRequest = z.infer<typeof ConnectDiscoverySourceRequestSchema>;
 
 export type DiscoverySourceView = z.infer<typeof DiscoverySourceViewSchema>;
 export type DiscoveryConfigurationView = z.infer<typeof DiscoveryConfigurationViewSchema>;
@@ -51,6 +55,7 @@ export type DiscoveryConfigurationView = z.infer<typeof DiscoveryConfigurationVi
 export interface DiscoveryConfiguration {
   get(): Promise<DiscoveryConfigurationView>;
   update(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
+  connectSource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
 }
 
 export function createDiscoveryConfiguration(input: {
@@ -64,16 +69,8 @@ export function createDiscoveryConfiguration(input: {
       conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
       dailyGenerationTime: settings.dailyGenerationTime,
       dailyTargetCount: settings.dailyTargetCount,
-      sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) => ({
-        sourceId: descriptor.id,
-        name: descriptor.name,
-        access: descriptor.access,
-        supportedModes: [...descriptor.supportedModes],
-        supportsRead: descriptor.supportsRead,
-        enabled: enabled.has(descriptor.id),
-        connectionState: availability.state,
-        ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}),
-        ...(availability.retryAt ? { retryAt: availability.retryAt } : {}),
+      sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) => sourceView({
+        descriptor, availability, enabled: enabled.has(descriptor.id),
       })),
     };
   };
@@ -98,5 +95,36 @@ export function createDiscoveryConfiguration(input: {
       });
       return view();
     },
+    async connectSource(request) {
+      const parsed = ConnectDiscoverySourceRequestSchema.parse(request);
+      const source = input.sourceRegistry.get(parsed.sourceId);
+      if (!source || source.descriptor.access !== 'browser_session' || !source.connect) {
+        throw new Error('Discovery source does not provide a login operation.');
+      }
+      await source.connect();
+      return sourceView({
+        descriptor: source.descriptor,
+        availability: source.getAvailability(),
+        enabled: new Set(input.settings.read().enabledSources).has(source.descriptor.id),
+      });
+    },
+  };
+}
+
+function sourceView(input: {
+  readonly descriptor: ReturnType<SourceRegistry['listDescriptors']>[number];
+  readonly availability: ReturnType<SourceRegistry['listSources']>[number]['availability'];
+  readonly enabled: boolean;
+}): DiscoverySourceView {
+  return {
+    sourceId: input.descriptor.id,
+    name: input.descriptor.name,
+    access: input.descriptor.access,
+    supportedModes: [...input.descriptor.supportedModes],
+    supportsRead: input.descriptor.supportsRead,
+    enabled: input.enabled,
+    connectionState: input.availability.state,
+    ...(input.availability.checkedAt ? { checkedAt: input.availability.checkedAt } : {}),
+    ...(input.availability.retryAt ? { retryAt: input.availability.retryAt } : {}),
   };
 }

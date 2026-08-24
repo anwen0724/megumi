@@ -31,6 +31,7 @@ import {
   type SettingsUpdateUiRequest,
   type SettingsUpdateUiResult,
   type SettingsHost,
+  type DiscoverySourceCredentialStatusUiResult,
   type VoiceTtsApiKeyUiRequest,
   type VoiceTtsKeyUiResult,
 } from '../host/settings-host';
@@ -218,6 +219,30 @@ export function createSettingsOperations(
         return { status: 'failed', failure: toHostFailure(result.failure) };
       }
       return readUpdatedVoiceTts(settings, 'deleted');
+    },
+
+    async getDiscoverySourceCredentialStatus(request): Promise<DiscoverySourceCredentialStatusUiResult> {
+      const result = settings.getDiscoverySourceCredentialStatus({ source_id: request.sourceId });
+      return result.status === 'failed'
+        ? { status: 'failed', failure: toHostFailure(result.failure) }
+        : { status: 'ok', sourceId: request.sourceId, configured: result.configured };
+    },
+
+    async setDiscoverySourceCredential(request): Promise<DiscoverySourceCredentialStatusUiResult> {
+      const result = settings.writeDiscoverySourceCredential({
+        source_id: request.sourceId,
+        credential: request.credential,
+      });
+      return result.status === 'failed'
+        ? { status: 'failed', failure: toHostFailure(result.failure) }
+        : { status: 'ok', sourceId: request.sourceId, configured: true };
+    },
+
+    async deleteDiscoverySourceCredential(request): Promise<DiscoverySourceCredentialStatusUiResult> {
+      const result = settings.deleteDiscoverySourceCredential({ source_id: request.sourceId });
+      return result.status === 'failed'
+        ? { status: 'failed', failure: toHostFailure(result.failure) }
+        : { status: 'ok', sourceId: request.sourceId, configured: false };
     },
   };
 }

@@ -23,13 +23,14 @@ interface InterestManagerProps {
   interests: DiscoveryHomeUiResult['interests'];
   onClose(): void;
   onChanged(): Promise<void>;
+  onOpenContentSources?(): void;
 }
 
 type ManagerView = 'interests' | 'settings';
 type DiscoverySettings = DiscoveryConfigurationUiDto;
 const EXIT_SETTLE_MS = 260;
 
-export function InterestManager({ open, interests, onClose, onChanged }: InterestManagerProps) {
+export function InterestManager({ open, interests, onClose, onChanged, onOpenContentSources }: InterestManagerProps) {
   const { t } = useTranslation('discovery');
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -368,7 +369,7 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
               </div>
             </section>
           ) : (
-          <SettingsPanel settings={settings} busy={busy} onUpdate={updateSettings} />
+          <SettingsPanel settings={settings} busy={busy} onUpdate={updateSettings} onOpenContentSources={onOpenContentSources} />
           )}
 
           {error ? <p role="alert" className={cx('mx-6 mb-6 rounded-xl px-4 py-3 text-sm', 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]')}>{error}</p> : null}
@@ -455,10 +456,11 @@ function InterestSummary(props: {
   );
 }
 
-function SettingsPanel({ settings, busy, onUpdate }: {
+function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
   settings: DiscoverySettings | null;
   busy: boolean;
   onUpdate(update: (current: DiscoverySettings) => DiscoverySettings): void;
+  onOpenContentSources?(): void;
 }) {
   const { t } = useTranslation('discovery');
   return (
@@ -492,12 +494,15 @@ function SettingsPanel({ settings, busy, onUpdate }: {
                       <span className="block">{label}</span>
                       <span className="block text-xs text-[var(--color-text-muted)]">{t(sourceStateTranslationKey(source.connectionState))}</span>
                     </span>
-                    <Switch checked={checked} disabled={busy} label={label} onCheckedChange={(nextChecked) => onUpdate((current) => ({
-                      ...current,
-                      sources: current.sources.map((item) => item.sourceId === source.sourceId
-                        ? { ...item, enabled: nextChecked }
-                        : item),
-                    }))} />
+                    <span className="flex items-center gap-1">
+                      <Button type="button" size="sm" variant="ghost" disabled={busy || !onOpenContentSources} onClick={onOpenContentSources}>{t('configureSources')}</Button>
+                      <Switch checked={checked} disabled={busy} label={label} onCheckedChange={(nextChecked) => onUpdate((current) => ({
+                        ...current,
+                        sources: current.sources.map((item) => item.sourceId === source.sourceId
+                          ? { ...item, enabled: nextChecked }
+                          : item),
+                      }))} />
+                    </span>
                   </div>
                 );
               })}

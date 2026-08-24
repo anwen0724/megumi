@@ -26,6 +26,9 @@ export interface SettingsHost {
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
   setVoiceTtsApiKey(request: VoiceTtsApiKeyUiRequest): Promise<VoiceTtsKeyUiResult>;
   deleteVoiceTtsApiKey(request?: Record<string, never>): Promise<VoiceTtsKeyUiResult>;
+  getDiscoverySourceCredentialStatus(request: DiscoverySourceCredentialStatusUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
+  setDiscoverySourceCredential(request: DiscoverySourceCredentialSetUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
+  deleteDiscoverySourceCredential(request: DiscoverySourceCredentialStatusUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
 }
 
 export interface SettingsPermissionOptions {
@@ -523,6 +526,26 @@ export const VoiceTtsApiKeyPayloadSchema = z.object({
   apiKey: z.string().min(1),
 }).strict();
 export type VoiceTtsApiKeyPayload = z.infer<typeof VoiceTtsApiKeyPayloadSchema>;
+
+export const DiscoveryProviderSourceIdUiSchema = z.enum(['zhihu', 'twitter']);
+export const DiscoverySourceCredentialStatusPayloadSchema = z.object({
+  sourceId: DiscoveryProviderSourceIdUiSchema,
+}).strict();
+export const DiscoverySourceCredentialSetPayloadSchema = DiscoverySourceCredentialStatusPayloadSchema.extend({
+  credential: z.string().trim().min(1),
+}).strict();
+export type DiscoverySourceCredentialStatusUiRequest = z.infer<typeof DiscoverySourceCredentialStatusPayloadSchema>;
+export type DiscoverySourceCredentialSetUiRequest = z.infer<typeof DiscoverySourceCredentialSetPayloadSchema>;
+
+export const DiscoverySourceCredentialStatusUiResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('ok'),
+    sourceId: DiscoveryProviderSourceIdUiSchema,
+    configured: z.boolean(),
+  }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export type DiscoverySourceCredentialStatusUiResult = z.infer<typeof DiscoverySourceCredentialStatusUiResultSchema>;
 
 export const VoiceTtsPublicUiDtoSchema = z.object({
   provider: z.enum(['minimax']),
