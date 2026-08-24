@@ -3,7 +3,7 @@ import { Agent, type AgentContextProvider } from '@megumi/agent-core';
 import { type Api, type Model, type Models } from '@megumi/ai';
 import type { Tools } from '@megumi/tools';
 import { discoveryContentIdentity, type DiscoveryCandidate } from './candidate-registry';
-import { createDailyDiscoveryTools } from './daily-discovery-tools';
+import type { DailyDiscoveryAttempts } from './daily-discovery-attempt';
 import { createUnprotectedAgentTool } from '@megumi/execution';
 import {
   EnsureDailyDiscoveryRequestSchema,
@@ -35,6 +35,7 @@ export interface CreateDailyDiscoveryRuntimeOptions {
   readonly repository: DiscoveryRepository;
   readonly sourceRegistry: SourceRegistry;
   readonly tools: Pick<Tools, 'bindExecution'>;
+  readonly attempts: DailyDiscoveryAttempts;
   readonly settings: {
     getDiscoverySettings(): {
       readonly dailyGenerationTime: string;
@@ -125,6 +126,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
         repository: input.repository,
         sourceRegistry: input.sourceRegistry,
         tools: input.tools,
+        attempts: input.attempts,
         models: input.models,
         ids: input.ids,
         now: input.now,
@@ -338,21 +340,21 @@ async function executeDailyBatch(input: {
   readonly repository: DiscoveryRepository;
   readonly sourceRegistry: SourceRegistry;
   readonly tools: Pick<Tools, 'bindExecution'>;
+  readonly attempts: DailyDiscoveryAttempts;
   readonly models: Pick<Models, 'streamSimple'>;
   readonly ids: Pick<CreateDailyDiscoveryRuntimeOptions['ids'], 'createRecommendationId'>;
   readonly now: () => string;
   readonly activeAgents: Map<string, Agent>;
   readonly onFailure: (code: string, message: string, retryable?: boolean) => Promise<void>;
 }): Promise<void> {
-  const dailyTools = createDailyDiscoveryTools(input);
+  input.attempts.start(input);
   const bound = input.tools.bindExecution({
     executionId: input.executionId,
     subject: { kind: 'background' },
-    includeBuiltIns: false,
-    toolSets: [dailyTools.toolSet],
+    toolGroupId: 'daily_discovery',
   });
   if (bound.status === 'failed') {
-    dailyTools.dispose();
+    input.attempts.dispose(input.executionId);
     await input.onFailure('tool_system_failed', bound.failure.message);
     return;
   }
@@ -434,7 +436,11 @@ async function executeDailyBatch(input: {
       );
       return;
     }
-    const toolState = dailyTools.snapshot();
+    const toolState = input.attempts.snapshot(input.executionId);
+    if (!toolState) {
+      await input.onFailure('attempt_not_found', 'Daily discovery attempt state was lost.', false);
+      return;
+    }
     if (!toolState.selected) {
       const code = toolState.invalidSelection ? 'selection_invalid'
         : toolState.candidates.list().length > 0 ? 'selection_missing'
@@ -480,7 +486,7 @@ async function executeDailyBatch(input: {
     input.activeAgents.delete(input.executionId);
     activeModelCall?.close();
     toolExecution.close();
-    dailyTools.dispose();
+    input.attempts.dispose(input.executionId);
   }
 }
 

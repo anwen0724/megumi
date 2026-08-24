@@ -190,7 +190,7 @@ export async function launchAgentExecution(
       sessionId: metadata.sessionId,
       workspaceId: metadata.workspaceId,
     },
-    includeBuiltIns: true,
+    toolGroupId: 'conversation',
   });
   if (toolExecutionResult.status === 'failed') {
     throw new LaunchExecutionError({

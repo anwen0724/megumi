@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTools, type BuiltInToolName, type ToolSet } from '@megumi/tools';
+import { createTools, type BuiltInToolName } from '@megumi/tools';
 
 describe('Tools ModelCall routing', () => {
   it('binds background business tools to one execution without Session, Workspace or Sandbox', async () => {
@@ -24,47 +24,33 @@ describe('Tools ModelCall routing', () => {
         open: openSandbox,
       },
       executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
-    });
-    const toolSet: ToolSet = {
-      source: {
-        sourceId: 'daily-discovery', sourceKind: 'project_local', namespace: 'daily-discovery',
-        displayName: 'Daily discovery', configured: true, enabled: true,
-        availabilityStatus: 'available',
+      dailyDiscoveryTools: {
+        async searchContent(request) {
+          expect(request.signal.aborted).toBe(false);
+          executed.push('search_content');
+          return { outputKind: 'json', content: { status: 'ok' } };
+        },
+        async readCandidate() { return { outputKind: 'json', content: { status: 'ok' } }; },
+        async selectRecommendations() { return { outputKind: 'json', content: { status: 'ok' } }; },
       },
-      tools: [{
-        registrationId: 'daily-discovery:search_content',
-        definition: {
-          name: 'search_content', description: 'Search content.',
-          parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
-        },
-        availability: { status: 'available' },
-        executionMode: 'serial',
-        handler: {
-          toolName: 'search_content',
-          operations: () => [],
-          execute: async (_invocation, options) => {
-            expect(options?.signal?.aborted ?? false).toBe(false);
-            executed.push('search_content');
-            return { outputKind: 'json', content: { status: 'ok' } };
-          },
-        },
-      }],
-    };
+    });
 
     const binding = tools.bindExecution({
       executionId: 'execution:daily',
       subject: { kind: 'background' },
-      includeBuiltIns: false,
-      toolSets: [toolSet],
+      toolGroupId: 'daily_discovery',
     });
     expect(binding.status).toBe('bound');
     if (binding.status !== 'bound') throw new Error('Expected execution binding.');
     const modelCall = binding.binding.prepareModelCall({ modelCallId: 'model-call:daily' });
     expect(modelCall.status).toBe('prepared');
     if (modelCall.status !== 'prepared') throw new Error('Expected ModelCall binding.');
-    expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual(['search_content']);
+    expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual([
+      'search_content', 'read_candidate', 'select_recommendations',
+    ]);
     const routed = modelCall.binding.routeToolCall({
-      toolCallId: 'tool-call:daily', toolName: 'search_content', input: { query: 'Agent' },
+      toolCallId: 'tool-call:daily', toolName: 'search_content',
+      input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 10 },
     });
     expect(routed).toMatchObject({ status: 'routed', operations: [] });
     if (routed.status !== 'routed') throw new Error('Expected routed business tool.');
@@ -127,7 +113,7 @@ describe('Tools ModelCall routing', () => {
     const execution = tools.bindExecution({
       executionId: 'run:1',
       subject: { kind: 'session', sessionId: 'session:1', workspaceId: 'workspace:1' },
-      includeBuiltIns: true,
+      toolGroupId: 'conversation',
     });
     expect(execution.status).toBe('bound');
     if (execution.status !== 'bound') throw new Error('Expected execution binding.');
@@ -193,7 +179,7 @@ describe('Tools ModelCall routing', () => {
     const execution = tools.bindExecution({
       executionId: 'run:plan',
       subject: { kind: 'session', sessionId: 'session:plan', workspaceId: 'workspace:plan' },
-      includeBuiltIns: true,
+      toolGroupId: 'conversation',
     });
     if (execution.status !== 'bound') throw new Error('Expected execution binding.');
     const modelCall = execution.binding.prepareModelCall({ modelCallId: 'model-call:plan' });

@@ -14,7 +14,6 @@ import type {
 } from './tool';
 import type {
   RouteToolCallResult,
-  ToolSet,
   ToolInvocation,
   ToolRegistration,
   ToolRouteScope,
@@ -25,6 +24,10 @@ import { createWebFetch, type WebFetch } from './built-ins/web-fetch';
 import { createWebSearch, type WebSearch, type WebSearchProvider } from './built-ins/web-search';
 import type { ToolProcessDescriptor } from './built-ins/run-command';
 import type { BuiltInToolContext } from './built-ins/workspace-file-access';
+import type { SearchContentOperation } from './built-ins/search-content';
+import type { ReadCandidateOperation } from './built-ins/read-candidate';
+import type { SelectRecommendationsOperation } from './built-ins/select-recommendations';
+import { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 import {
   createCancelledToolResult,
   createFailedToolResult,
@@ -40,7 +43,7 @@ import {
 export interface ModelCallToolScope extends ToolRouteScope {}
 
 export type ToolResolutionFailure = {
-  readonly code: 'workspace_not_found' | 'workspace_unavailable' | 'model_call_scope_conflict';
+  readonly code: 'workspace_not_found' | 'workspace_unavailable' | 'tool_group_unavailable' | 'model_call_scope_conflict';
   readonly message: string;
 };
 
@@ -95,8 +98,7 @@ export type ToolExecutionSubject =
 export interface BindToolExecutionRequest {
   readonly executionId: string;
   readonly subject: ToolExecutionSubject;
-  readonly includeBuiltIns: boolean;
-  readonly toolSets?: readonly ToolSet[];
+  readonly toolGroupId: BuiltInToolGroupId;
 }
 
 export type BindToolExecutionResult =
@@ -150,7 +152,12 @@ export interface CreateToolsRequest {
   readonly sandbox: Sandbox;
   readonly executionPolicy: ToolExecutionPolicy;
   readonly builtInToolAvailability?: BuiltInToolAvailability;
+  readonly dailyDiscoveryTools?: DailyDiscoveryToolOperations;
 }
+
+export type DailyDiscoveryToolOperations = SearchContentOperation
+  & ReadCandidateOperation
+  & SelectRecommendationsOperation;
 
 interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
@@ -162,7 +169,10 @@ interface ModelCallRegistration {
 
 export function createTools(request: CreateToolsRequest): Tools {
   const process = toolProcessDescriptor(request.sandbox);
-  const registry = createBuiltInToolRegistry({ ...(process ? { process } : {}) });
+  const registry = createBuiltInToolRegistry({
+    ...(process ? { process } : {}),
+    ...(request.dailyDiscoveryTools ? { dailyDiscoveryTools: request.dailyDiscoveryTools } : {}),
+  });
   const routers = new Map<string, ModelCallRegistration>();
   const executions = new Map<string, ToolExecutionBinding>();
   const webFetch = createWebFetch();
@@ -172,8 +182,11 @@ export function createTools(request: CreateToolsRequest): Tools {
       if (executions.has(bindingRequest.executionId)) {
         return failedBinding('model_call_scope_conflict', `Tool execution is already bound: ${bindingRequest.executionId}`);
       }
-      if (bindingRequest.includeBuiltIns && bindingRequest.subject.kind === 'background') {
-        return failedBinding('workspace_unavailable', 'Built-in tools require a Session-backed Workspace.');
+      if (bindingRequest.toolGroupId === 'conversation' && bindingRequest.subject.kind !== 'session') {
+        return failedBinding('workspace_unavailable', 'Conversation tools require a Session-backed Workspace.');
+      }
+      if (bindingRequest.toolGroupId === 'daily_discovery' && !request.dailyDiscoveryTools) {
+        return failedBinding('tool_group_unavailable', 'Daily discovery tools are not configured.');
       }
       let closed = false;
       const modelCalls = new Set<string>();
@@ -189,7 +202,7 @@ export function createTools(request: CreateToolsRequest): Tools {
               workspaceId: bindingRequest.subject.workspaceId,
             } : {}),
           };
-          const prepared = prepareModelCall(scope, bindingRequest.includeBuiltIns, bindingRequest.toolSets ?? []);
+          const prepared = prepareModelCall(scope, bindingRequest.toolGroupId);
           if (prepared.status === 'failed') return prepared;
           modelCalls.add(modelCallId);
           let modelCallClosed = false;
@@ -232,7 +245,7 @@ export function createTools(request: CreateToolsRequest): Tools {
     },
 
     resolveModelCallTools(scope) {
-      return prepareModelCall(scope, true, []);
+      return prepareModelCall(scope, 'conversation');
     },
 
     listAvailableTools(input = {}) {
@@ -320,8 +333,7 @@ export function createTools(request: CreateToolsRequest): Tools {
 
   function prepareModelCall(
     scope: ModelCallToolScope,
-    includeBuiltIns: boolean,
-    toolSets: readonly ToolSet[],
+    toolGroupId: BuiltInToolGroupId,
   ): ResolveModelCallToolsResult {
     const existing = routers.get(scope.modelCallId);
     if (existing) {
@@ -335,32 +347,29 @@ export function createTools(request: CreateToolsRequest): Tools {
     let workspaceRoot: string | undefined;
     let webSearch: WebSearch | undefined;
     let selected: readonly import('./tool-handler').RegisteredTool<BuiltInToolContext>[] = [];
-    if (includeBuiltIns) {
+    if (toolGroupId === 'conversation') {
       if (!scope.workspaceId) return failedResolution('workspace_unavailable', 'Built-in tools require a Workspace.');
       const workspace = request.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
       if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
       if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
       workspaceRoot = workspace.workspace.root_path;
       webSearch = resolveConfiguredWebSearch(request.settings);
-      selected = registry.list().filter((tool) => isSelected(tool.registeredToolName, {
+      selected = registry.list().filter((tool) => toolBelongsToGroup(tool.registeredToolName, toolGroupId) && isSelected(tool.registeredToolName, {
         availability: request.builtInToolAvailability,
         processAvailable: process !== undefined,
         webSearchAvailable: webSearch !== undefined,
       }));
+    } else {
+      selected = registry.list().filter((tool) => (
+        toolBelongsToGroup(tool.registeredToolName, toolGroupId)
+        && isSelected(tool.registeredToolName, {
+          availability: request.builtInToolAvailability,
+          processAvailable: process !== undefined,
+          webSearchAvailable: false,
+        })
+      ));
     }
     try {
-      const executionRegistrations = toolSets.flatMap((toolSet) => toolSet.tools.map((tool): ToolRegistration<BuiltInToolContext> => ({
-        registrationId: tool.registrationId,
-        source: toolSet.source,
-        definition: tool.definition,
-        availability: tool.availability,
-        ...(tool.executionMode ? { executionMode: tool.executionMode } : {}),
-        handler: {
-          toolName: tool.handler.toolName,
-          operations: (invocation) => tool.handler.operations(invocation),
-          execute: (_context, invocation, options) => tool.handler.execute(invocation, options),
-        },
-      })));
       const combined = createToolRegistry({
         registrations: [
           ...selected.map((tool): ToolRegistration<BuiltInToolContext> => ({
@@ -371,7 +380,6 @@ export function createTools(request: CreateToolsRequest): Tools {
             availability: tool.availability,
             executionMode: tool.executionMode,
           })),
-          ...executionRegistrations,
         ],
       }).list().filter((tool) => tool.availability.status === 'available');
       const router = createToolRouter({ scope, tools: combined });
@@ -386,7 +394,7 @@ export function createTools(request: CreateToolsRequest): Tools {
     } catch (error) {
       return failedResolution(
         'model_call_scope_conflict',
-        error instanceof Error ? error.message : 'Tool Set registration failed.',
+        error instanceof Error ? error.message : 'Tool Group registration failed.',
       );
     }
   }

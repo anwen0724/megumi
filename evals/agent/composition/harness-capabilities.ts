@@ -21,6 +21,7 @@ import {
 import {
   createDiscoverySourceRegistry,
   createDiscoveryRepository,
+  createDailyDiscoveryAttempts,
   createInterestExtractor,
   type BrowserSourceTaskGateway,
 } from '@megumi/discovery';
@@ -378,6 +379,7 @@ function composeCapabilitiesWithDatabase(
     }
   };
 
+  const dailyDiscoveryAttempts = createDailyDiscoveryAttempts();
   const tools = createTools({
     settings,
     workspaces,
@@ -388,6 +390,7 @@ function composeCapabilitiesWithDatabase(
       maxOutputBytes: 20_000,
       maxProcessCount: 16,
     },
+    dailyDiscoveryTools: dailyDiscoveryAttempts,
     ...(options.builtInToolAvailability
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
@@ -513,6 +516,7 @@ function composeCapabilitiesWithDatabase(
       },
       dailyDiscovery: {
         repository: discoveryRepository,
+        attempts: dailyDiscoveryAttempts,
         sourceRegistry: discoverySources,
         settings: {
           getDiscoverySettings() {

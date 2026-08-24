@@ -88,6 +88,11 @@ export {
   createCandidateRegistry,
   discoveryContentIdentity,
 } from './daily-discovery/candidate-registry';
+export { createDailyDiscoveryAttempts } from './daily-discovery/daily-discovery-attempt';
+export type {
+  DailyDiscoveryAttempts,
+  DailyDiscoveryAttemptState,
+} from './daily-discovery/daily-discovery-attempt';
 export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './daily-discovery/content-identity';
 export type {
   CandidateRegistry,

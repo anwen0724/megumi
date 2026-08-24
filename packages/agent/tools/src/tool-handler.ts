@@ -59,27 +59,6 @@ export interface ToolRouteScope {
   readonly modelCallId: string;
 }
 
-/** Handler already bound to one concrete Agent execution. */
-export interface ExecutionToolHandler {
-  readonly toolName: string;
-  operations(invocation: ToolInvocation): readonly PermissionOperation[];
-  execute(invocation: ToolInvocation, options?: ToolExecutionOptions): Promise<RawToolResult>;
-}
-
-export interface ToolSetToolRegistration {
-  readonly registrationId: string;
-  readonly definition: ToolDefinition;
-  readonly handler: ExecutionToolHandler;
-  readonly availability: ToolAvailability;
-  readonly executionMode?: ToolExecutionMode;
-}
-
-/** A concrete Agent-owned group of tools bound through the shared Tools runtime. */
-export interface ToolSet {
-  readonly source: ToolSource;
-  readonly tools: readonly ToolSetToolRegistration[];
-}
-
 export type RouteToolCallResult =
   | {
       readonly status: 'routed';

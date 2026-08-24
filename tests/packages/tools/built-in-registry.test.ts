@@ -4,7 +4,7 @@ import { createProcessAdapter } from './tool-test-fixtures';
 
 describe('built-in Tool Registry', () => {
   it('binds every built-in Definition to its same-name Handler', () => {
-    const registry = createBuiltInToolRegistry({ process: createProcessAdapter() });
+    const registry = createBuiltInToolRegistry({ process: createProcessAdapter(), dailyDiscoveryTools });
     expect(registry.list().map((tool) => tool.registeredToolName)).toEqual(BUILT_IN_TOOL_NAMES);
     for (const tool of registry.list()) {
       expect(tool.definition.name).toBe(tool.handler.toolName);
@@ -21,7 +21,7 @@ describe('built-in Tool Registry', () => {
   });
 
   it('provides the confirmed prompt metadata for the built-in tools', () => {
-    const registry = createBuiltInToolRegistry({ process: createProcessAdapter() });
+    const registry = createBuiltInToolRegistry({ process: createProcessAdapter(), dailyDiscoveryTools });
     const byName = new Map(registry.list().map((tool) => [tool.registeredToolName, tool.definition]));
 
     // run_command carries the redacted-output behavior guideline.
@@ -41,3 +41,9 @@ describe('built-in Tool Registry', () => {
     expect(byName.get('run_command')?.description).not.toContain('redacted');
   });
 });
+
+const dailyDiscoveryTools = {
+  async searchContent() { return { outputKind: 'json' as const, content: {} }; },
+  async readCandidate() { return { outputKind: 'json' as const, content: {} }; },
+  async selectRecommendations() { return { outputKind: 'json' as const, content: {} }; },
+};

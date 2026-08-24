@@ -165,6 +165,7 @@ function createFixture(
       return stream;
     }),
   } as unknown as Models;
+  const discoveryTools = createDailyDiscoveryTestTools();
   const options: CreateDiscoveryAgentOptions = {
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
@@ -172,7 +173,7 @@ function createFixture(
       createToolExecutionId: () => 'tool:unused', createApprovalId: () => 'approval:unused',
     },
     clock: { now }, terminalRetentionMs: 60_000, events: createEventBus(), models,
-    context: {} as never, tools: createDailyDiscoveryTestTools(), permissions: {} as never, session: {} as never,
+    context: {} as never, tools: discoveryTools.tools, permissions: {} as never, session: {} as never,
     conversation: {
       input: {} as never, sessions: {} as never, history: {} as never, branches: {} as never,
       resolveModel: async () => ({ status: 'ok', model }),
@@ -186,7 +187,7 @@ function createFixture(
       clock: { now },
     },
     dailyDiscovery: {
-      repository, sourceRegistry: createSourceRegistry([source]),
+      repository, attempts: discoveryTools.attempts, sourceRegistry: createSourceRegistry([source]),
       settings: { getDiscoverySettings: () => ({
         dailyGenerationTime: '08:00', dailyTargetCount: 20, enabledSources: ['open_web'],
       }) },

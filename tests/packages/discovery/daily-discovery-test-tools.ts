@@ -1,8 +1,10 @@
 /* Provides the real Tools runtime used by daily discovery execution tests. */
 import { createTools } from '@megumi/tools';
+import { createDailyDiscoveryAttempts } from '@megumi/discovery';
 
 export function createDailyDiscoveryTestTools() {
-  return createTools({
+  const attempts = createDailyDiscoveryAttempts();
+  const tools = createTools({
     settings: {
       resolveWebSearch: () => ({ status: 'failed' }),
       readWebSearchApiKey: () => ({ status: 'missing' }),
@@ -21,5 +23,7 @@ export function createDailyDiscoveryTestTools() {
       open: async () => ({ status: 'unavailable', reason: 'Daily discovery must not open Sandbox.' }),
     },
     executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
+    dailyDiscoveryTools: attempts,
   });
+  return { tools, attempts };
 }
