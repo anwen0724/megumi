@@ -27,10 +27,11 @@ export const UpdateDiscoveryConfigurationRequestSchema = z.object({
 export const DiscoverySourceViewSchema = z.object({
   sourceId: z.string().trim().min(1),
   name: z.string().trim().min(1),
-  access: z.enum(['public', 'browser_session']),
+  access: z.enum(['public_http', 'configured_provider', 'browser_session']),
   supportedModes: z.array(z.enum(['relevance', 'recent'])).min(1),
+  supportsRead: z.boolean(),
   enabled: z.boolean(),
-  connectionState: z.enum(['ready', 'unknown', 'extension_offline', 'login_required', 'risk_controlled', 'not_configured']),
+  connectionState: z.enum(['ready', 'unknown', 'not_configured', 'login_required', 'rate_limited', 'risk_controlled']),
   checkedAt: z.string().datetime({ offset: true }).optional(),
   retryAt: z.string().datetime({ offset: true }).optional(),
 }).strict();
@@ -68,6 +69,7 @@ export function createDiscoveryConfiguration(input: {
         name: descriptor.name,
         access: descriptor.access,
         supportedModes: [...descriptor.supportedModes],
+        supportsRead: descriptor.supportsRead,
         enabled: enabled.has(descriptor.id),
         connectionState: availability.state,
         ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}),

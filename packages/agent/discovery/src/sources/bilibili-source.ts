@@ -9,6 +9,7 @@ import { signBilibiliWbiParameters } from './bilibili-wbi';
 
 const NAV_URL = 'https://api.bilibili.com/x/web-interface/nav';
 const SEARCH_URL = 'https://api.bilibili.com/x/web-interface/wbi/search/type';
+const VIEW_URL = 'https://api.bilibili.com/x/web-interface/view';
 const DEFAULT_KEY_TTL_MS = 6 * 60 * 60 * 1_000;
 const DEFAULT_COOLDOWN_MS = 15 * 60 * 1_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -38,7 +39,13 @@ export function createBilibiliSource(input: {
   let cooldown: { until: number; failure: SourceFailure } | undefined;
 
   const source: DiscoverySource = {
-    descriptor: { id: 'bilibili', name: '哔哩哔哩', access: 'public', supportedModes: ['relevance', 'recent'] },
+    descriptor: {
+      id: 'bilibili',
+      name: '哔哩哔哩',
+      access: 'public_http',
+      supportedModes: ['relevance', 'recent'],
+      supportsRead: true,
+    },
     getAvailability: () => cooldown && cooldown.until > now()
       ? { state: 'risk_controlled', retryAt: new Date(cooldown.until).toISOString() }
       : { state: 'ready' },
@@ -61,6 +68,48 @@ export function createBilibiliSource(input: {
           cooldown = { until: now() + cooldownMs, failure };
         }
         return { status: 'failed', failure };
+      }
+    },
+    async read(request) {
+      const bvid = request.sourceContentId?.trim() || bvidFromUrl(request.url);
+      if (!bvid) {
+        return { status: 'failed', failure: failure('invalid_response', 'Bilibili video id was missing.', false) };
+      }
+      try {
+        const url = new URL(VIEW_URL);
+        url.searchParams.set('bvid', bvid);
+        const payload = await fetchJson(url, request.signal);
+        if (recordNumber(payload, 'code') !== 0) {
+          return { status: 'failed', failure: failure('invalid_response', 'Bilibili returned an unsuccessful detail response.', false) };
+        }
+        const data = recordValue(payload, 'data');
+        const title = recordString(data, 'title');
+        if (!title) {
+          return { status: 'failed', failure: failure('invalid_response', 'Bilibili video detail was invalid.', false) };
+        }
+        const owner = recordValue(data, 'owner');
+        const stat = recordValue(data, 'stat');
+        const publishedSeconds = nonnegativeInteger(recordValue(data, 'pubdate'));
+        const coverUrl = normalizeCoverUrl(recordString(data, 'pic'));
+        const description = recordString(data, 'desc');
+        return {
+          status: 'success',
+          detail: {
+            sourceId: 'bilibili',
+            sourceName: '哔哩哔哩',
+            sourceContentId: bvid,
+            canonicalUrl: `https://www.bilibili.com/video/${bvid}`,
+            contentType: 'video',
+            title,
+            ...(recordString(owner, 'name') ? { author: recordString(owner, 'name') } : {}),
+            ...(publishedSeconds !== undefined ? { publishedAt: new Date(publishedSeconds * 1_000).toISOString() } : {}),
+            ...(description ? { description, contentText: description } : {}),
+            ...(coverUrl ? { coverUrl } : {}),
+            engagement: compactEngagement(stat),
+          },
+        };
+      } catch (error) {
+        return { status: 'failed', failure: normalizeFailure(error, request.signal) };
       }
     },
   };
@@ -212,6 +261,27 @@ function fileKey(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const filename = value.split('/').at(-1);
   return filename?.split('.')[0] || undefined;
+}
+
+function bvidFromUrl(value: string): string | undefined {
+  try {
+    return new URL(value).pathname.match(/\/video\/(BV[\da-z]+)/iu)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function compactEngagement(value: unknown) {
+  const viewCount = nonnegativeInteger(recordValue(value, 'view'));
+  const likeCount = nonnegativeInteger(recordValue(value, 'like'));
+  const commentCount = nonnegativeInteger(recordValue(value, 'reply'));
+  const favoriteCount = nonnegativeInteger(recordValue(value, 'favorite'));
+  return {
+    ...(viewCount !== undefined ? { viewCount } : {}),
+    ...(likeCount !== undefined ? { likeCount } : {}),
+    ...(commentCount !== undefined ? { commentCount } : {}),
+    ...(favoriteCount !== undefined ? { favoriteCount } : {}),
+  };
 }
 
 function containsVoucher(value: unknown): boolean {

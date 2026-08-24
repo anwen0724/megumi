@@ -85,6 +85,33 @@ describe('Bilibili discovery source', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it('reads public video details through the same source', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(json({
+      code: 0,
+      data: {
+        bvid: 'BV1ABC123', title: 'Agent Loop 深入解析', desc: '完整的视频简介',
+        pubdate: 1_700_000_000, pic: '//i0.hdslb.com/detail.jpg',
+        owner: { name: 'Alice' },
+        stat: { view: 100, like: 20, reply: 3, favorite: 8 },
+      },
+    }));
+    const source = createBilibiliSource({ fetch });
+
+    const result = await source.read!({
+      sourceContentId: 'BV1ABC123',
+      url: 'https://www.bilibili.com/video/BV1ABC123',
+      signal: new AbortController().signal,
+    });
+
+    expect(source.descriptor.supportsRead).toBe(true);
+    expect(new URL(String(fetch.mock.calls[0]![0])).pathname).toBe('/x/web-interface/view');
+    expect(result).toEqual({ status: 'success', detail: expect.objectContaining({
+      sourceContentId: 'BV1ABC123', title: 'Agent Loop 深入解析', author: 'Alice',
+      contentText: '完整的视频简介',
+      engagement: { viewCount: 100, likeCount: 20, commentCount: 3, favoriteCount: 8 },
+    }) });
+  });
+
   it('rejects an anonymous nav response only when WBI keys are actually missing', async () => {
     const fetch = vi.fn().mockResolvedValueOnce(json({
       code: -101,

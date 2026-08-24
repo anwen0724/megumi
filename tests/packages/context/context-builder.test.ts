@@ -102,7 +102,10 @@ describe('Context.build', () => {
           material: {
             targetCount: 20,
             interests: [{ interestId: 'interest:1', description: '秋招面试经验' }],
-            sources: [{ id: 'bilibili', name: '哔哩哔哩', access: 'public', supportedModes: ['recent'] }],
+            sources: [{
+              id: 'bilibili', name: '哔哩哔哩', access: 'public_http',
+              supportedModes: ['recent'], supportsRead: false,
+            }],
             recommendationSignals: [],
           },
         },

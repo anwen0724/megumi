@@ -566,8 +566,8 @@ function sourceStateTranslationKey(state: DiscoverySettings['sources'][number]['
   return ({
     ready: 'sourceReady',
     unknown: 'sourceUnknown',
-    extension_offline: 'sourceExtensionOffline',
     login_required: 'sourceLoginRequired',
+    rate_limited: 'sourceRateLimited',
     risk_controlled: 'sourceRiskControlled',
     not_configured: 'sourceNotConfigured',
   } as const)[state];

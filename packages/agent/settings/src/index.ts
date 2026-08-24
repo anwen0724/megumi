@@ -179,12 +179,20 @@ export {
   DiscoverySettingsRawSchema,
   DiscoverySettingsResolvedSchema,
   DiscoverySourceIdSchema,
+  DiscoveryProviderSourceIdSchema,
+  DiscoverySourceCredentialRequestSchema,
+  TwitterAttemptBudgetRawSchema,
+  TwitterAttemptBudgetResolvedSchema,
+  WriteDiscoverySourceCredentialRequestSchema,
   resolveDiscoverySettings,
 } from './discovery-settings';
 export type {
   DiscoverySettingsRaw,
   DiscoverySettingsResolved,
   DiscoverySourceId,
+  DiscoveryProviderSourceId,
+  DiscoverySourceCredentialRequest,
+  WriteDiscoverySourceCredentialRequest,
 } from './discovery-settings';
 export {
   LegacyPermissionSettingsMigrationError,

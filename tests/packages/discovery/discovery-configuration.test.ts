@@ -9,11 +9,11 @@ import {
 
 function source(
   id: string,
-  access: 'public' | 'browser_session',
-  state: 'ready' | 'unknown' | 'extension_offline' = 'ready',
+  access: 'public_http' | 'configured_provider' | 'browser_session',
+  state: 'ready' | 'unknown' | 'not_configured' = 'ready',
 ): DiscoverySource {
   return {
-    descriptor: { id, name: id, access, supportedModes: ['relevance'] },
+    descriptor: { id, name: id, access, supportedModes: ['relevance'], supportsRead: false },
     getAvailability: () => ({ state }),
     async search() { return { status: 'success', items: [] }; },
   };
@@ -30,9 +30,9 @@ describe('Discovery configuration', () => {
     const write = vi.fn(async (next: typeof settings) => { settings = next; });
     const configuration = createDiscoveryConfiguration({
       sourceRegistry: createSourceRegistry([
-        source('bilibili', 'public'),
-        source('open_web', 'public'),
-        source('xiaohongshu', 'browser_session', 'extension_offline'),
+        source('bilibili', 'public_http'),
+        source('open_web', 'configured_provider'),
+        source('xiaohongshu', 'browser_session', 'not_configured'),
       ]),
       settings: { read: () => settings, write },
     });
@@ -44,7 +44,7 @@ describe('Discovery configuration', () => {
       sources: [
         expect.objectContaining({ sourceId: 'bilibili', enabled: true, connectionState: 'ready' }),
         expect.objectContaining({ sourceId: 'open_web', enabled: true, connectionState: 'ready' }),
-        expect.objectContaining({ sourceId: 'xiaohongshu', enabled: false, connectionState: 'extension_offline' }),
+        expect.objectContaining({ sourceId: 'xiaohongshu', enabled: false, connectionState: 'not_configured' }),
       ],
     });
 
@@ -64,7 +64,7 @@ describe('Discovery configuration', () => {
   ])('rejects invalid updates without writing: %j', async (patch) => {
     const write = vi.fn();
     const configuration = createDiscoveryConfiguration({
-      sourceRegistry: createSourceRegistry([source('open_web', 'public')]),
+      sourceRegistry: createSourceRegistry([source('open_web', 'configured_provider')]),
       settings: {
         read: () => ({
           conversationRecognitionEnabled: false,

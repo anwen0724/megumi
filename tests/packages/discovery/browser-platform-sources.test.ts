@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createDouyinSource,
   createXiaohongshuSource,
-  createZhihuSource,
   type BrowserSourceTaskGateway,
 } from '@megumi/discovery';
 
@@ -12,7 +11,6 @@ describe('browser platform sources', () => {
   it.each([
     ['xiaohongshu', createXiaohongshuSource, '小红书', 'post'],
     ['douyin', createDouyinSource, '抖音', 'video'],
-    ['zhihu', createZhihuSource, '知乎', 'article'],
   ] as const)('normalizes %s results through the common gateway', async (sourceId, createSource, name, contentType) => {
     const execute = vi.fn(async () => ({
       status: 'success' as const,
@@ -43,7 +41,7 @@ describe('browser platform sources', () => {
       { status: 'failed' as const, failure: { code: 'login_required' as const, message: 'Login required.' } },
       { status: 'failed' as const, failure: { code: 'risk_control' as const, message: 'Verification required.' } },
     ];
-    const source = createZhihuSource({ gateway: gateway(async () => results.shift()!) });
+    const source = createXiaohongshuSource({ gateway: gateway(async () => results.shift()!) });
     expect(source.getAvailability()).toEqual({ state: 'unknown' });
     await source.search({ query: 'Agent', mode: 'relevance', limit: 5, signal: new AbortController().signal });
     expect(source.getAvailability()).toMatchObject({ state: 'login_required' });

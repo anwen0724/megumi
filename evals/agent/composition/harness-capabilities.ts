@@ -417,6 +417,8 @@ function composeCapabilitiesWithDatabase(
     webSearch: discoveryWebSearch,
     webFetch: createWebFetch(),
     browserGateway: options.browserSourceTaskGateway ?? unavailableBrowserSourceGateway,
+    zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
+    twitterApiKey: () => discoveryCredential(settings, 'twitter'),
   });
 
   const capabilities: ProductCapabilities = {
@@ -560,6 +562,13 @@ function composeCapabilitiesWithDatabase(
                   dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
                   dailyTargetCount: resolved.settings.discovery.daily_target_count,
                   enabledSources: resolved.settings.discovery.enabled_sources,
+                  sourceBudgets: {
+                    twitter: {
+                      maxSearchCalls: resolved.settings.discovery.twitter_budget.max_search_calls,
+                      maxResultsPerSearch: resolved.settings.discovery.twitter_budget.max_results_per_search,
+                      maxResultsPerAttempt: resolved.settings.discovery.twitter_budget.max_results_per_attempt,
+                    },
+                  },
                 }
               : {
                   conversationRecognitionEnabled: false,
@@ -592,6 +601,14 @@ function composeCapabilitiesWithDatabase(
 
 /** Re-exposed so Product and the Host compositions share the same shutdown budget. */
 export { PRODUCT_SHUTDOWN_TIMEOUT_MS };
+
+function discoveryCredential(
+  settings: ReturnType<typeof createSettings>,
+  sourceId: 'zhihu' | 'twitter',
+): string | undefined {
+  const result = settings.readDiscoverySourceCredential({ source_id: sourceId });
+  return result.status === 'found' ? result.credential : undefined;
+}
 
 const unavailableBrowserSourceGateway: BrowserSourceTaskGateway = {
   getConnectionState: () => ({ state: 'not_configured' }),

@@ -84,6 +84,7 @@ export const discovery = {
   sourceExtensionOffline: '浏览器扩展未连接',
   sourceLoginRequired: '需要先在平台登录',
   sourceRiskControlled: '平台暂时限制访问',
+  sourceRateLimited: '平台请求频率受限',
   sourceNotConfigured: '尚未连接',
   connectBrowserExtension: '连接浏览器扩展',
   disconnectBrowserExtension: '断开浏览器扩展',

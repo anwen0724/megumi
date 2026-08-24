@@ -10,10 +10,16 @@ export function createBrowserSource(input: {
   let platformAvailability: SourceAvailability = { state: 'unknown' };
 
   return {
-    descriptor: { id: input.sourceId, name: input.name, access: 'browser_session', supportedModes: ['relevance'] },
+    descriptor: {
+      id: input.sourceId,
+      name: input.name,
+      access: 'browser_session',
+      supportedModes: ['relevance'],
+      supportsRead: false,
+    },
     getAvailability() {
       const connection = input.gateway.getConnectionState();
-      if (connection.state === 'extension_offline') return { state: 'extension_offline', ...(connection.checkedAt ? { checkedAt: connection.checkedAt } : {}) };
+      if (connection.state === 'extension_offline') return { state: 'not_configured' };
       if (connection.state === 'not_configured') return { state: 'not_configured' };
       return platformAvailability;
     },
@@ -32,7 +38,7 @@ export function createBrowserSource(input: {
       if (result.status === 'failed') {
         platformAvailability = failureAvailability(result.failure.code, checkedAt);
         return failed(
-          result.failure.code,
+          result.failure.code === 'extension_offline' ? 'not_configured' : result.failure.code,
           result.failure.message,
           result.failure.code === 'timeout' || result.failure.code === 'network_error',
         );
@@ -65,7 +71,7 @@ export function createBrowserSource(input: {
 function failureAvailability(code: string, checkedAt: string): SourceAvailability {
   if (code === 'login_required') return { state: 'login_required', checkedAt };
   if (code === 'risk_control') return { state: 'risk_controlled', checkedAt };
-  if (code === 'extension_offline') return { state: 'extension_offline', checkedAt };
+  if (code === 'extension_offline') return { state: 'not_configured' };
   return { state: 'unknown', checkedAt };
 }
 

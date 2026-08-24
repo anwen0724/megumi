@@ -3,7 +3,7 @@ import { Agent, type AgentContextProvider } from '@megumi/agent-core';
 import { type Api, type Model, type Models } from '@megumi/ai';
 import type { Tools } from '@megumi/tools';
 import { discoveryContentIdentity, type DiscoveryCandidate } from './candidate-registry';
-import type { DailyDiscoveryAttempts } from './daily-discovery-attempt';
+import type { DailyDiscoveryAttempts, SourceAttemptBudget } from './daily-discovery-attempt';
 import { createUnprotectedAgentTool } from '@megumi/execution';
 import {
   EnsureDailyDiscoveryRequestSchema,
@@ -41,6 +41,7 @@ export interface CreateDailyDiscoveryRuntimeOptions {
       readonly dailyGenerationTime: string;
       readonly dailyTargetCount: number;
       readonly enabledSources: readonly DiscoverySourceId[];
+      readonly sourceBudgets?: Readonly<Record<string, SourceAttemptBudget>>;
     };
   };
   readonly timezone: () => string;
@@ -123,6 +124,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
         interests: snapshot.interests.map(copyInterest),
         descriptors: snapshot.descriptors.map(copyDescriptor),
         signals: signals.map(copySignal),
+        sourceBudgets: snapshot.settings.sourceBudgets ?? {},
         repository: input.repository,
         sourceRegistry: input.sourceRegistry,
         tools: input.tools,
@@ -337,6 +339,7 @@ async function executeDailyBatch(input: {
   readonly interests: readonly Interest[];
   readonly descriptors: readonly SourceDescriptor[];
   readonly signals: readonly RecommendationSelectionSignal[];
+  readonly sourceBudgets: Readonly<Record<string, SourceAttemptBudget>>;
   readonly repository: DiscoveryRepository;
   readonly sourceRegistry: SourceRegistry;
   readonly tools: Pick<Tools, 'bindExecution'>;

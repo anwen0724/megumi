@@ -9,14 +9,18 @@ const TimestampSchema = z.string().datetime({ offset: true });
 
 export const DiscoverySourceIdSchema = z.string().trim().min(1);
 export const SourceSearchModeSchema = z.enum(['relevance', 'recent']);
-export const SourceAccessKindSchema = z.enum(['public', 'browser_session']);
+export const SourceAccessKindSchema = z.enum([
+  'public_http',
+  'configured_provider',
+  'browser_session',
+]);
 export const SourceConnectionStateSchema = z.enum([
   'ready',
   'unknown',
-  'extension_offline',
-  'login_required',
-  'risk_controlled',
   'not_configured',
+  'login_required',
+  'rate_limited',
+  'risk_controlled',
 ]);
 export const DiscoveryContentTypeSchema = z.enum([
   'video',
@@ -33,6 +37,7 @@ export const SourceDescriptorSchema = z.object({
   name: z.string().trim().min(1),
   access: SourceAccessKindSchema,
   supportedModes: z.array(SourceSearchModeSchema).min(1),
+  supportsRead: z.boolean(),
 }).strict();
 
 export const SourceAvailabilitySchema = z.object({
@@ -69,7 +74,6 @@ export const SourceContentDetailSchema = SourceContentSchema.extend({
 export const SourceFailureSchema = z.object({
   code: z.enum([
     'not_configured',
-    'extension_offline',
     'login_required',
     'rate_limited',
     'risk_control',

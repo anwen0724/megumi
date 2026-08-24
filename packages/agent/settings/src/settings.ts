@@ -99,6 +99,13 @@ import {
   type ResolveVoiceTtsSettingsResult,
   type WriteVoiceTtsApiKeyRequest,
 } from './voice-tts-settings';
+import {
+  DiscoverySourceCredentialRequestSchema,
+  WriteDiscoverySourceCredentialRequestSchema,
+  type DiscoveryProviderSourceId,
+  type DiscoverySourceCredentialRequest,
+  type WriteDiscoverySourceCredentialRequest,
+} from './discovery-settings';
 
 export interface CreateSettingsRequest {
   readonly store: SettingsStore;
@@ -135,6 +142,15 @@ export interface Settings {
   readWebSearchApiKey(request: ReadWebSearchApiKeyRequest): ReadApiKeyResult;
   writeWebSearchApiKey(request: WriteWebSearchApiKeyRequest): WriteApiKeyResult;
   deleteWebSearchApiKey(request: DeleteWebSearchApiKeyRequest): DeleteApiKeyResult;
+  getDiscoverySourceCredentialStatus(request: DiscoverySourceCredentialRequest):
+    | { status: 'ok'; configured: boolean }
+    | SettingsFailureResult;
+  readDiscoverySourceCredential(request: DiscoverySourceCredentialRequest):
+    | { status: 'found'; credential: string }
+    | { status: 'missing' }
+    | SettingsFailureResult;
+  writeDiscoverySourceCredential(request: WriteDiscoverySourceCredentialRequest): WriteApiKeyResult;
+  deleteDiscoverySourceCredential(request: DiscoverySourceCredentialRequest): DeleteApiKeyResult;
   resolveVoiceTts(): ResolveVoiceTtsSettingsResult;
   readVoiceTtsApiKey(request: ReadVoiceTtsApiKeyRequest): ReadApiKeyResult;
   writeVoiceTtsApiKey(request: WriteVoiceTtsApiKeyRequest): WriteApiKeyResult;
@@ -485,6 +501,62 @@ class DefaultSettings implements Settings {
     }
   }
 
+  getDiscoverySourceCredentialStatus(request: DiscoverySourceCredentialRequest) {
+    const credential = this.readDiscoverySourceCredential(request);
+    return credential.status === 'failed'
+      ? credential
+      : { status: 'ok' as const, configured: credential.status === 'found' };
+  }
+
+  readDiscoverySourceCredential(request: DiscoverySourceCredentialRequest) {
+    const parsed = DiscoverySourceCredentialRequestSchema.safeParse(request);
+    if (!parsed.success) return failure('settings_read_failed', 'Discovery source credential request is invalid.');
+    try {
+      const credential = discoveryCredential(this.readFile(), parsed.data.source_id);
+      return credential ? { status: 'found' as const, credential } : { status: 'missing' as const };
+    } catch {
+      return failure('settings_read_failed', 'Discovery source credential could not be read.');
+    }
+  }
+
+  writeDiscoverySourceCredential(request: WriteDiscoverySourceCredentialRequest): WriteApiKeyResult {
+    const parsed = WriteDiscoverySourceCredentialRequestSchema.safeParse(request);
+    if (!parsed.success) return failure('settings_write_failed', 'Discovery source credential request is invalid.');
+    try {
+      const file = this.readFile();
+      this.request.store.write(SettingsFileRawSchema.parse({
+        ...file,
+        discovery: {
+          ...(file.discovery ?? {}),
+          [parsed.data.source_id]: {
+            ...(file.discovery?.[parsed.data.source_id] ?? {}),
+            credential: parsed.data.credential,
+          },
+        },
+      }));
+      return { status: 'updated' };
+    } catch {
+      return writeFailure('settings_write_failed', 'Discovery source credential could not be saved.');
+    }
+  }
+
+  deleteDiscoverySourceCredential(request: DiscoverySourceCredentialRequest): DeleteApiKeyResult {
+    const parsed = DiscoverySourceCredentialRequestSchema.safeParse(request);
+    if (!parsed.success) return failure('settings_write_failed', 'Discovery source credential request is invalid.');
+    try {
+      const file = this.readFile();
+      const provider = { ...(file.discovery?.[parsed.data.source_id] ?? {}) };
+      delete provider.credential;
+      this.request.store.write(SettingsFileRawSchema.parse({
+        ...file,
+        discovery: { ...(file.discovery ?? {}), [parsed.data.source_id]: provider },
+      }));
+      return { status: 'deleted' };
+    } catch {
+      return writeFailure('settings_write_failed', 'Discovery source credential could not be deleted.');
+    }
+  }
+
   resolveVoiceTts(): ResolveVoiceTtsSettingsResult {
     try {
       const file = this.readFile();
@@ -559,6 +631,11 @@ class DefaultSettings implements Settings {
   private now(): string {
     return this.request.now?.() ?? new Date().toISOString();
   }
+}
+
+function discoveryCredential(file: SettingsFileRaw, sourceId: DiscoveryProviderSourceId): string | undefined {
+  const credential = file.discovery?.[sourceId]?.credential;
+  return typeof credential === 'string' && credential.trim() ? credential.trim() : undefined;
 }
 
 function failure(settingsCode: string, message: string): SettingsFailureResult {

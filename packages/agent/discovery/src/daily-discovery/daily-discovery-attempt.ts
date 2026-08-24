@@ -27,6 +27,14 @@ interface AttemptRecord {
   rawCandidates: number;
   invalidSelection: boolean;
   readonly sourceFailures: Array<{ readonly sourceId: string; readonly failure: SourceFailure }>;
+  readonly sourceBudgets: Readonly<Record<string, SourceAttemptBudget>>;
+  readonly sourceUsage: Map<string, { searchCalls: number; resultCount: number }>;
+}
+
+export interface SourceAttemptBudget {
+  readonly maxSearchCalls: number;
+  readonly maxResultsPerSearch: number;
+  readonly maxResultsPerAttempt: number;
 }
 
 export interface DailyDiscoveryAttemptState {
@@ -46,6 +54,7 @@ export interface DailyDiscoveryAttempts {
     readonly descriptors: readonly SourceDescriptor[];
     readonly signals: readonly RecommendationSelectionSignal[];
     readonly sourceRegistry: SourceRegistry;
+    readonly sourceBudgets?: Readonly<Record<string, SourceAttemptBudget>>;
   }): void;
   snapshot(executionId: string): DailyDiscoveryAttemptState | undefined;
   dispose(executionId: string): void;
@@ -77,6 +86,8 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
         rawCandidates: 0,
         invalidSelection: false,
         sourceFailures: [],
+        sourceBudgets: request.sourceBudgets ?? {},
+        sourceUsage: new Map(),
       });
     },
 
@@ -117,17 +128,32 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
       } catch (error) {
         return toolError('invalid_search_request', error instanceof Error ? error.message : 'Invalid source.');
       }
+      const budget = attempt.sourceBudgets[parsed.sourceId];
+      const usage = attempt.sourceUsage.get(parsed.sourceId) ?? { searchCalls: 0, resultCount: 0 };
+      if (budget && (usage.searchCalls >= budget.maxSearchCalls || usage.resultCount >= budget.maxResultsPerAttempt)) {
+        return toolError('source_budget_exhausted', `Source ${parsed.sourceId} budget is exhausted.`);
+      }
+      const effectiveLimit = budget
+        ? Math.min(parsed.limit, budget.maxResultsPerSearch, budget.maxResultsPerAttempt - usage.resultCount)
+        : parsed.limit;
+      if (effectiveLimit < 1) return toolError('source_budget_exhausted', `Source ${parsed.sourceId} budget is exhausted.`);
       attempt.searchCount += 1;
-      const result = await source.search({ ...parsed, signal: request.signal });
+      if (budget) {
+        usage.searchCalls += 1;
+        attempt.sourceUsage.set(parsed.sourceId, usage);
+      }
+      const result = await source.search({ ...parsed, limit: effectiveLimit, signal: request.signal });
       if (result.status === 'failed') {
         attempt.failedSearches += 1;
         attempt.sourceFailures.push({ sourceId: parsed.sourceId, failure: result.failure });
         return toolError(result.failure.code, result.failure.message, { failure: result.failure });
       }
       attempt.successfulSearches += 1;
-      attempt.rawCandidates += result.items.length;
+      const resultItems = result.items.slice(0, effectiveLimit);
+      if (budget) usage.resultCount += resultItems.length;
+      attempt.rawCandidates += resultItems.length;
       const available = Math.max(0, MAX_CANDIDATES - attempt.candidates.list().length);
-      const admitted = result.items
+      const admitted = resultItems
         .filter((content) => (
           content.sourceId === source.descriptor.id
           && !attempt.historicalIdentities.has(discoveryContentIdentity(content))
@@ -138,7 +164,7 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
       return toolSuccess({
         status: 'success',
         candidates: inserted.map(candidateSummary),
-        resultCount: result.items.length,
+        resultCount: resultItems.length,
         admittedCount: inserted.length,
         candidateCount: attempt.candidates.list().length,
       });

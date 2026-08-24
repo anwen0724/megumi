@@ -56,6 +56,9 @@ export function publicRawFromFile(file: SettingsFileRaw): SettingsRaw {
         tts: withoutVoiceTtsSecret(file.voice.tts),
       },
     } : {}),
+    ...(file.discovery ? {
+      discovery: withoutDiscoverySecrets(file.discovery),
+    } : {}),
   });
 }
 
@@ -248,4 +251,9 @@ function withoutWebSearchSecret(search: WebSearchSettingsFileRaw) {
 function withoutVoiceTtsSecret(tts: VoiceTtsSettingsFileRaw) {
   const { api_key: _secret, ...publicTts } = tts;
   return publicTts;
+}
+
+function withoutDiscoverySecrets(discovery: Record<string, unknown>) {
+  const { zhihu: _zhihu, twitter: _twitter, ...publicDiscovery } = discovery;
+  return publicDiscovery;
 }

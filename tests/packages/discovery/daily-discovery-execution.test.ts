@@ -403,7 +403,7 @@ function source(
   modes: Array<'relevance' | 'recent'> = ['relevance'],
 ): DiscoverySource {
   return {
-    descriptor: { id, name: id, access: 'public', supportedModes: modes },
+    descriptor: { id, name: id, access: 'public_http', supportedModes: modes, supportsRead: false },
     getAvailability: () => ({ state: 'ready' }),
     async search(request) {
       const result = await search(request.query);

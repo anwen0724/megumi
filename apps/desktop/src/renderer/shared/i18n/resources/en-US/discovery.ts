@@ -81,6 +81,7 @@ export const discovery = {
   sourceExtensionOffline: 'Browser extension offline',
   sourceLoginRequired: 'Sign in on the platform first',
   sourceRiskControlled: 'Temporarily limited by the platform',
+  sourceRateLimited: 'Rate limited by the platform',
   sourceNotConfigured: 'Not connected',
   connectBrowserExtension: 'Connect browser extension',
   disconnectBrowserExtension: 'Disconnect browser extension',
