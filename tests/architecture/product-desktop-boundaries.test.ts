@@ -26,10 +26,11 @@ describe('Product and Desktop final boundaries', () => {
       'packages/settings/src/migrations/legacy-provider-api-settings.ts',
       'packages/voice/src/speech-output/speech-output-wiring.ts',
       'apps/desktop/src/main/packaging/product-resources.ts',
-      'packages/product/src/composition/product-composer.ts',
-      'packages/product/src/composition/product-runtime.ts',
-      'packages/product/src/composition/product-resource-manager.ts',
-      'packages/product/src/composition/product-policy.ts',
+      'apps/desktop/src/main/shell-composition/application-host-composition.ts',
+      'apps/desktop/src/main/shell-composition/application-runtime.ts',
+      'apps/desktop/src/main/shell-composition/application-resource-manager.ts',
+      'apps/desktop/src/main/shell-composition/application-policy.ts',
+      'packages/product/src/create-product-host.ts',
       'packages/product/src/operations/session/session-operations.ts',
       'packages/product/src/operations/session/session-reader.ts',
       'packages/product/src/host/session-host.ts',
@@ -40,6 +41,7 @@ describe('Product and Desktop final boundaries', () => {
     for (const relativePath of [
       'packages/product/src/home',
       'packages/product/src/packaging',
+      'packages/product/src/composition',
       'packages/product/src/composition/speech-output-wiring.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(false);
@@ -62,9 +64,8 @@ describe('Product and Desktop final boundaries', () => {
     }
   });
 
-  it('keeps product rules out of Desktop production source', () => {
+  it('keeps obsolete shadow-service rules out of Desktop production source', () => {
     const desktop = readTree('apps/desktop/src');
-    expect(desktop).not.toContain('runtime.jsonl');
     expect(desktop).not.toContain('DEFAULT_WORKSPACE_FILE_IGNORE_NAMES');
     expect(desktop).not.toContain('workspace:default');
     expect(desktop).not.toContain('createSessionTitleFromPrompt');
@@ -92,7 +93,7 @@ describe('Product and Desktop final boundaries', () => {
   });
 
   it('delegates normal conversation submission to the Discovery Agent owner', () => {
-    const composer = read('packages/product/src/composition/product-composer.ts');
+    const composer = read('apps/desktop/src/main/shell-composition/application-host-composition.ts');
     const sessionOperations = read('packages/product/src/operations/session/session-operations.ts');
 
     expect(fs.existsSync(path.join(
@@ -103,6 +104,18 @@ describe('Product and Desktop final boundaries', () => {
     expect(sessionOperations).toContain('submitConversationInput');
     expect(sessionOperations).not.toContain('.input.process(');
     expect(sessionOperations).not.toContain('.discoveryAgent.start(');
+  });
+
+  it('keeps concrete system construction and lifecycle out of Product', () => {
+    const product = readTree('packages/product/src');
+    for (const forbidden of [
+      'createDatabase(',
+      'createTools(',
+      'createDiscoveryAgent(',
+      'createDiscoverySourceRegistry(',
+      'ProductRuntime',
+    ]) expect(product, forbidden).not.toContain(forbidden);
+    expect(product).toContain('createProductHost');
   });
 });
 

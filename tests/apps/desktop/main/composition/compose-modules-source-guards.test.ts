@@ -10,15 +10,18 @@ function source(relativePath: string): string {
 }
 
 describe('Desktop Main shell composition', () => {
-  it('does not keep product composition modules under desktop main', () => {
+  it('keeps application composition in the Desktop shell-composition root', () => {
     expect(existsSync(join(root, 'apps/desktop/src/main/composition'))).toBe(false);
     expect(existsSync(join(root, 'apps/desktop/src/main/persistence'))).toBe(false);
     expect(existsSync(join(root, 'apps/desktop/src/main/services'))).toBe(false);
     expect(existsSync(join(root, 'apps/desktop/src/main/shell'))).toBe(false);
     expect(existsSync(join(root, 'tests/apps/desktop/main/services'))).toBe(false);
+    expect(existsSync(join(root, 'apps/desktop/src/main/shell-composition/harness-capabilities.ts'))).toBe(true);
+    expect(existsSync(join(root, 'apps/desktop/src/main/shell-composition/application-host-composition.ts'))).toBe(true);
+    expect(existsSync(join(root, 'packages/product/src/composition'))).toBe(false);
   });
 
-  it('connects the Electron UI shell through Product Composition', () => {
+  it('connects the Electron UI shell through its local application composition', () => {
     const desktopComposition = source('apps/desktop/src/main/shell-composition/desktop-main-composition.ts');
 
     expect(desktopComposition).toContain('composeProduct');

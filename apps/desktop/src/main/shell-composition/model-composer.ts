@@ -1,5 +1,5 @@
 /*
- * Creates the product-owned AI Models collection and resolves Settings model
+ * Creates the Host-composed AI Models collection and resolves Settings model
  * configuration into provider-neutral Model values without exposing credentials.
  */
 import type { ResolvedProviderSettings } from '@megumi/settings';

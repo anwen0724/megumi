@@ -5,7 +5,7 @@ import {
   RuntimeEventSchema,
   type AnyEvent,
 } from '@megumi/product/host';
-import type { ProductRuntimeLogger } from '@megumi/product';
+import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
 import { IPC_CHANNELS } from './channels';
 
 export function forwardRuntimeEvent(

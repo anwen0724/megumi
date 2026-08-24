@@ -1,25 +1,5 @@
-/*
- * Narrow default Product entry for composition and host Adapter contracts.
- */
-export {
-  composeProduct,
-  composeProductCapabilities,
-  type ComposeProductOptions,
-  type ComposeProductVoiceOptions,
-  type ProductCapabilitiesInput,
-  type ProductEnvironment,
-  type ProductInputSourceAccess,
-  type ProductObservabilityStorage,
-  type ProductSessionAttachmentFileSystem,
-  type ProductSettingsEnvironment,
-} from './composition/product-composer';
-export type {
-  ProductCapabilities,
-  ProductCapabilitiesOptions,
-  ProductModelResolutionResult,
-  ProductModelResolver,
-} from './composition/product-capabilities';
-export type { ProductRuntime, ProductRuntimeLogger } from './composition/product-runtime';
+/* Narrow default Product entry for Host contracts and the thin Host aggregator. */
+export { createProductHost, type CreateProductHostOptions } from './create-product-host';
 export type { ProductHostInterface } from './host/product-host';
 export type {
   BrowserSourceConnectionAdapter,

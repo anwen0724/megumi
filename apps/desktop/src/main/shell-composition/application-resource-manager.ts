@@ -1,5 +1,5 @@
 /*
- * Owns Product-wide startup rollback and ordered shutdown. It records only
+ * Owns application startup rollback and ordered shutdown. It records only
  * resources created by Composition and never decides module business state.
  */
 import type { DiscoveryAgent } from '@megumi/discovery-agent';
@@ -7,7 +7,7 @@ import type { DatabaseConnection } from '@megumi/database';
 import type { EventSubscription } from '@megumi/events';
 import type { Voice } from '@megumi/voice';
 
-export interface ProductResourceManager {
+export interface ApplicationResourceManager {
   registerDatabase(database: DatabaseConnection): void;
   registerEventSubscription(subscription: EventSubscription): void;
   rollbackStartup(): void;
@@ -25,9 +25,9 @@ interface ProductDisposeFailure {
 }
 
 /** Creates the single lifecycle owner used throughout one Product composition. */
-export function createProductResourceManager(input: {
+export function createApplicationResourceManager(input: {
   readonly shutdownTimeoutMs: number;
-}): ProductResourceManager {
+}): ApplicationResourceManager {
   let database: DatabaseConnection | undefined;
   const eventSubscriptions: EventSubscription[] = [];
 

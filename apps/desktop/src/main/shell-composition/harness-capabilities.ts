@@ -1,8 +1,8 @@
 /*
- * Composes the Product capability instances (Models, Context, Tools,
+ * Composes the shared Harness capability instances (Models, Context, Tools,
  * Permissions, Session, Events, Observability, Workspace and Sandbox) and the
  * Discovery Agent dependency facts. Desktop main and Evaluation compositions
- * call this once, construct the Discovery Agent, and inject both into Product.
+ * call this once and construct the Discovery Agent for their Host.
  */
 import path from 'node:path';
 import type { Api, Model, ProviderStreams } from '@megumi/ai';
@@ -87,7 +87,8 @@ import {
   PRODUCT_TERMINAL_RETENTION_MS,
   resolveAutoCompactPercent,
   resolveModelVisibleOperatingSystem,
-} from './product-policy';
+} from './application-policy';
+import type { ProductWorkspaceFileSystem } from '@megumi/product/host';
 
 export interface ProductCapabilitiesOptions {
   home: InitializeMegumiHomeSyncOptions;
@@ -99,7 +100,7 @@ export interface ProductCapabilitiesOptions {
     readonly platform: string;
     readonly arch: string;
   };
-  workspaceFileSystem: import('../host/capabilities/workspace-file-system').ProductWorkspaceFileSystem;
+  workspaceFileSystem: ProductWorkspaceFileSystem;
   settingsEnvironment?: SettingsEnvironment;
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
@@ -121,7 +122,7 @@ export interface ProductCapabilities {
   readonly settings: ReturnType<typeof createSettings>;
   readonly models: import('@megumi/ai').Models;
   readonly workspaceStore: ReturnType<typeof createWorkspaceStore>;
-  readonly workspaceFileSystem: import('../host/capabilities/workspace-file-system').ProductWorkspaceFileSystem;
+  readonly workspaceFileSystem: ProductWorkspaceFileSystem;
   readonly workspaces: ReturnType<typeof createWorkspaceCatalog>;
   readonly workspaceFiles: ReturnType<typeof createWorkspaceFiles>;
   readonly workspaceChanges: ReturnType<typeof createWorkspaceChanges>;

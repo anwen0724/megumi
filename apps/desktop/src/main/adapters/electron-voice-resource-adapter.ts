@@ -14,7 +14,7 @@ import {
   resolveMegumiHomePath,
   type InitializeMegumiHomeSyncOptions,
 } from '@megumi/home';
-import type { ComposeProductVoiceOptions } from '@megumi/product';
+import type { ComposeProductVoiceOptions } from '../shell-composition/application-host-composition';
 import {
   createFileVoiceModels,
   createMinimaxSynthesizer,

@@ -8,7 +8,7 @@ import {
   rename,
   rm,
 } from "node:fs/promises";
-import type { ProductObservabilityStorage } from '@megumi/product';
+import type { ObservabilityStorage as ProductObservabilityStorage } from '@megumi/observability';
 export const electronObservabilityStorageAdapter: ProductObservabilityStorage = {
   ensureDirectory: (path) =>
     mkdir(path, { recursive: true }).then(() => undefined),

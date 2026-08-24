@@ -136,9 +136,12 @@ vi.mock('@megumi/desktop/main/app/create-window', () => ({
   createMainWindow: mocks.createMainWindow,
 }));
 
-vi.mock('@megumi/product', () => ({
+vi.mock('@megumi/desktop/main/shell-composition/application-host-composition', () => ({
   composeProduct: mocks.composeProduct,
   composeProductCapabilities: mocks.composeProductCapabilities,
+}));
+
+vi.mock('@megumi/home', () => ({
   resolveMegumiHomePath: vi.fn(() => mocks.homePath),
 }));
 

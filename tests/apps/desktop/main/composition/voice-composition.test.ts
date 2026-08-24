@@ -11,10 +11,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ProductCapabilitiesOptions, ProductRuntime } from '@megumi/product';
+import type { ProductCapabilitiesOptions } from '@megumi/desktop/main/shell-composition/harness-capabilities';
+import type { ProductRuntime } from '@megumi/desktop/main/shell-composition/application-runtime';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import type { SpeechInputEvent, SpeechInputRuntime } from '@megumi/voice';
-import { composeTestProduct } from './composition/compose-test-product';
+import { composeTestProduct } from './compose-test-product';
 
 const tempDirectories: string[] = [];
 const composedProducts: ProductRuntime[] = [];

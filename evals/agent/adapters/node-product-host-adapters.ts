@@ -2,15 +2,11 @@
 import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import fs from 'fs-extra';
 import path from 'node:path';
-import {
-  resolveProductSystemSkillsPath,
-  type InitializeMegumiHomeSyncOptions,
-  type ProductEnvironment,
-  type ProductInputSourceAccess,
-  type ProductObservabilityStorage,
-  type ProductSessionAttachmentFileSystem,
-  type ProductSettingsEnvironment,
-} from '@megumi/product';
+import type { InitializeMegumiHomeSyncOptions } from '@megumi/home';
+import type { InputSourceAccess as ProductInputSourceAccess } from '@megumi/input';
+import type { ObservabilityStorage as ProductObservabilityStorage } from '@megumi/observability';
+import type { SessionAttachmentFileSystem as ProductSessionAttachmentFileSystem } from '@megumi/session';
+import type { SettingsEnvironment as ProductSettingsEnvironment } from '@megumi/settings';
 import { resolveOwnedWorkspacePath } from './scoped-workspace-file-system';
 
 export function createNodeSettingsEnvironment(): ProductSettingsEnvironment {
@@ -19,7 +15,7 @@ export function createNodeSettingsEnvironment(): ProductSettingsEnvironment {
   };
 }
 
-export function getNodeProductEnvironment(): ProductEnvironment {
+export function getNodeProductEnvironment(): { appVersion: string; platform: string; arch: string } {
   return {
     appVersion: 'evaluation',
     platform: process.platform,
@@ -42,11 +38,7 @@ export function createEvaluationHomeOptions(homeRoot: string): InitializeMegumiH
     },
     clock: { now: () => new Date() },
     resourceLocator: {
-      resolveBuiltInSystemSkillsPath: () => resolveProductSystemSkillsPath({
-        isPackaged: false,
-        resourcesPath: process.cwd(),
-        cwd: process.cwd(),
-      }),
+      resolveBuiltInSystemSkillsPath: () => path.resolve(process.cwd(), 'packages/skills/built-in-skills'),
     },
   };
 }

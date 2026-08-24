@@ -22,7 +22,7 @@ vi.mock('@megumi/database', async (importOriginal) => ({
 import {
   composeProductCapabilities,
   type ProductCapabilitiesOptions,
-} from '@megumi/product';
+} from '@megumi/desktop/main/shell-composition/harness-capabilities';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 
 const tempDirectories: string[] = [];

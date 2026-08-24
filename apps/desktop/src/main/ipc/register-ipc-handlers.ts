@@ -8,7 +8,7 @@ import { registerSkillHandlers, type SkillHandlersService } from './handlers/ski
 import { registerSettingsHandlers, type SettingsHandlersService } from './handlers/settings.handler';
 import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
 import { registerDiscoveryHandlers, type DiscoveryHandlersService } from './handlers/discovery.handler';
-import type { ProductRuntimeLogger } from '@megumi/product';
+import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
 import { registerVoiceHandlers, type VoiceHandlersService } from './handlers/voice.handler';
 import { registerCharacterHandlers } from './handlers/character.handler';

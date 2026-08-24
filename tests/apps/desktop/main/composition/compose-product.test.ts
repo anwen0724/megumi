@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnyEvent } from '@megumi/events';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import { composeTestProduct } from './compose-test-product';
-import { AssistantMessageEventStream } from '../../../../packages/ai/src/utils/event-stream';
+import { AssistantMessageEventStream } from '../../../../../packages/ai/src/utils/event-stream';
 import {
   type Api,
   type AssistantMessage,

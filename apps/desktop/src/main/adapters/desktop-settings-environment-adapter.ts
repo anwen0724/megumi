@@ -1,6 +1,6 @@
 /* Provides named process-environment reads for Settings without passing the full environment object. */
 
-import type { ProductSettingsEnvironment } from '@megumi/product';
+import type { SettingsEnvironment as ProductSettingsEnvironment } from '@megumi/settings';
 
 export function createDesktopSettingsEnvironment(): ProductSettingsEnvironment {
   return {

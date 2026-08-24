@@ -1,7 +1,7 @@
 /* Registers process-level failures against the Product runtime logger. */
 import { redactHostRuntimeValue } from '@megumi/product/host';
 import { normalizeRuntimeIpcError } from '../ipc/errors';
-import type { ProductRuntimeLogger } from '@megumi/product';
+import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
 
 const noopRuntimeLogger: ProductRuntimeLogger = {
   warn: () => undefined,

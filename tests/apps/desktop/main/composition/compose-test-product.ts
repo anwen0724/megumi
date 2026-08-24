@@ -1,12 +1,12 @@
-/* Shared three-step Product composition for tests: capabilities, Discovery Agent, Product. */
+/* Shared three-step application composition for tests: capabilities, Discovery Agent, Host. */
 import { createDiscoveryAgent } from '@megumi/discovery-agent';
 import {
   composeProduct,
   composeProductCapabilities,
   type ComposeProductOptions,
   type ProductCapabilitiesOptions,
-  type ProductRuntime,
-} from '@megumi/product';
+} from '@megumi/desktop/main/shell-composition/application-host-composition';
+import type { ProductRuntime } from '@megumi/desktop/main/shell-composition/application-runtime';
 
 export function composeTestProduct(
   capabilitiesOptions: ProductCapabilitiesOptions,

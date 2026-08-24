@@ -3,7 +3,7 @@ import { clipboard, dialog } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { AttachmentPicker } from '@megumi/product/host';
-import type { ProductInputSourceAccess } from '@megumi/product';
+import type { InputSourceAccess as ProductInputSourceAccess } from '@megumi/input';
 
 type TransientInputSource =
   | { type: 'file'; filePath: string }

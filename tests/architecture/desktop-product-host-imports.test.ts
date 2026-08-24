@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 
-describe('Desktop Product Host imports', () => {
-  it('keeps Desktop behind Product public entries', () => {
+describe('Desktop and Product Host imports', () => {
+  it('keeps Desktop on Product public Host and Operations entries', () => {
     const source = readTree('apps/desktop/src');
-    expect(source).not.toContain('@megumi/agent');
     expect(source).not.toMatch(/from ['"][^'"]*packages[\\/]product/u);
+    expect(source).not.toMatch(/@megumi\/product\/src/u);
   });
 
   it('keeps the renderer-safe Host entry free of Node-only Product modules', () => {
@@ -26,8 +26,8 @@ describe('Desktop Product Host imports', () => {
 
   it('prevents business Owner Packages from depending back on Product', () => {
     for (const packageName of [
-      'commands', 'context', 'engine', 'events', 'input', 'instructions',
-      'permissions', 'projections', 'session', 'settings', 'skills', 'tools', 'workspace',
+      'commands', 'context', 'events', 'home', 'input', 'instructions',
+      'permissions', 'session', 'settings', 'skills', 'tools', 'voice', 'workspace',
     ]) {
       expect(readTree(`packages/${packageName}`), packageName).not.toContain('@megumi/product');
     }

@@ -1,13 +1,12 @@
 /*
- * Defines the runtime value held by a host process after Product composition.
- * Request-oriented product operations remain on ProductHostInterface.
+ * Defines the runtime value held by a concrete Host process after composition.
  */
 import type { EventFilter, EventHandler, EventSubscription } from '@megumi/events';
 import type {
   SpeechOutputEventListener,
   SpeechOutputSubscription,
 } from '@megumi/voice';
-import type { ProductHostInterface } from '../host/product-host';
+import type { ProductHostInterface } from '@megumi/product/host';
 
 export interface ProductRuntimeLogger {
   info?(event: string, details?: Record<string, unknown>): void;
@@ -24,7 +23,7 @@ export interface ProductRuntime {
 }
 
 /** Creates the host-facing runtime and guarantees that disposal starts once. */
-export function createProductRuntime(input: {
+export function createApplicationRuntime(input: {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
   readonly subscribeRuntimeEvents: ProductRuntime['subscribeRuntimeEvents'];

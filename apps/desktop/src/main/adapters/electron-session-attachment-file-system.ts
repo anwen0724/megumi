@@ -1,6 +1,6 @@
 /* Implements Session managed attachment storage with Node filesystem capabilities. */
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import type { ProductSessionAttachmentFileSystem } from '@megumi/product';
+import type { SessionAttachmentFileSystem as ProductSessionAttachmentFileSystem } from '@megumi/session';
 
 export const electronSessionAttachmentFileSystem: ProductSessionAttachmentFileSystem = {
   ensureDirectory: (directoryPath) => mkdir(directoryPath, { recursive: true }).then(() => undefined),

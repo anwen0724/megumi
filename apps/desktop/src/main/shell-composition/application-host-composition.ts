@@ -1,8 +1,7 @@
 /*
- * Composes the Product entry point from the already-composed capability
+ * Composes the application Host from already-composed capability
  * instances and the already-constructed Discovery Agent public Interface, and
- * owns the Product-wide startup, shutdown, and resource rollback sequence.
- * Product only wires Host requests, DTO conversions and UI event forwarding.
+ * owns process startup, shutdown, and resource rollback for a concrete Host.
  */
 import type { DiscoveryAgent } from '@megumi/discovery-agent';
 import {
@@ -19,41 +18,45 @@ import {
   type VoiceModels,
   onRunEndedForSpeechOutput,
 } from '@megumi/voice';
-import type { AttachmentPicker } from '../host/capabilities/attachment-picker';
-import type { LocalFileAvailability } from '../host/capabilities/local-file-availability';
-import type { DiagnosticBundleSaver } from '../host/capabilities/diagnostic-bundle-saver';
-import type { ProductHostInterface } from '../host/product-host';
-import type { DirectoryPicker } from '../host/capabilities/directory-picker';
-import type { FileOpener } from '../host/capabilities/file-opener';
-import { createApprovalOperations } from '../operations/approval-operations';
-import { createObservabilityOperations } from '../operations/observability-operations';
-import { createSettingsOperations } from '../operations/settings-operations';
-import { createSkillOperations } from '../operations/skill-operations';
-import { createWorkspaceOperations } from '../operations/workspace-operations';
-import { createVoiceOperations } from '../operations/voice-operations';
-import { createDiscoveryOperations } from '../operations/discovery-operations';
-import { createBrowserSourceOperations } from '../operations/browser-source-operations';
-import type { BrowserSourceConnectionAdapter } from '../host/browser-source-host';
-import { createInputSuggestionQuery } from '../operations/session/input-suggestions';
-import { createSessionOperations } from '../operations/session/session-operations';
-import { createSessionReader } from '../operations/session/session-reader';
+import { createProductHost } from '@megumi/product';
+import type {
+  AttachmentPicker,
+  BrowserSourceConnectionAdapter,
+  DiagnosticBundleSaver,
+  DirectoryPicker,
+  FileOpener,
+  LocalFileAvailability,
+} from '@megumi/product/host';
+import {
+  createApprovalOperations,
+  createBrowserSourceOperations,
+  createDiscoveryOperations,
+  createInputSuggestionQuery,
+  createObservabilityOperations,
+  createSessionOperations,
+  createSessionReader,
+  createSettingsOperations,
+  createSkillOperations,
+  createVoiceOperations,
+  createWorkspaceOperations,
+} from '@megumi/product/operations';
 import {
   composeProductCapabilities,
   type ProductCapabilities,
   type ProductCapabilitiesOptions,
-} from './product-capabilities';
+} from './harness-capabilities';
 import {
   PRODUCT_SHUTDOWN_TIMEOUT_MS,
   resolveAutoCompactPercent,
-} from './product-policy';
+} from './application-policy';
 import {
-  createProductResourceManager,
-  type ProductResourceManager,
-} from './product-resource-manager';
+  createApplicationResourceManager,
+  type ApplicationResourceManager,
+} from './application-resource-manager';
 import {
-  createProductRuntime,
+  createApplicationRuntime,
   type ProductRuntime,
-} from './product-runtime';
+} from './application-runtime';
 
 export interface ComposeProductVoiceOptions {
   /** Desktop injects the single Voice Input Adapter that owns the Speech Worker. */
@@ -89,7 +92,7 @@ export type ProductSettingsEnvironment = NonNullable<ProductCapabilitiesOptions[
  * registered before a synchronous composition failure.
  */
 export function composeProduct(options: ComposeProductOptions): ProductRuntime {
-  const resources = createProductResourceManager({
+  const resources = createApplicationResourceManager({
     shutdownTimeoutMs: PRODUCT_SHUTDOWN_TIMEOUT_MS + 2_000,
   });
   try {
@@ -101,10 +104,11 @@ export function composeProduct(options: ComposeProductOptions): ProductRuntime {
 }
 
 export { composeProductCapabilities };
+export type { ProductCapabilities, ProductCapabilitiesOptions } from './harness-capabilities';
 
 function composeProductRuntime(
   options: ComposeProductOptions,
-  resources: ProductResourceManager,
+  resources: ApplicationResourceManager,
 ): ProductRuntime {
   const capabilities = options.capabilities;
   const discoveryAgent = options.discoveryAgent;
@@ -274,7 +278,7 @@ function composeProductRuntime(
       });
     }),
   );
-  const host: ProductHostInterface = {
+  const host = createProductHost({
     discovery: createDiscoveryOperations(discoveryAgent),
     browserSource: createBrowserSourceOperations(options.browserSource ?? unsupportedBrowserSource),
     session,
@@ -295,7 +299,7 @@ function composeProductRuntime(
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
     voice: createVoiceOperations({ voice, speechOutput }),
-  };
+  });
 
   // Product starts the business owner's background lifecycle but does not
   // implement scheduling or recovery rules itself.
@@ -305,7 +309,7 @@ function composeProductRuntime(
     });
   });
 
-  return createProductRuntime({
+  return createApplicationRuntime({
     host,
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),

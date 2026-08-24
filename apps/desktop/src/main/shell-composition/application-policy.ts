@@ -1,5 +1,5 @@
 /*
- * Defines Product-selected defaults that are injected into owning modules.
+ * Defines application defaults injected by concrete Host composition roots.
  * It does not reimplement the policies enforced by those modules.
  */
 import type { RecentEventBufferOptions } from '@megumi/events';

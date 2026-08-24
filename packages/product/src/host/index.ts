@@ -1,6 +1,6 @@
 /*
  * Renderer-safe public Product Host Interface exports.
- * Host factory implementations remain internal to Product Composition.
+ * Concrete composition roots consume these contracts through the public entry.
  */
 export { EventSchema as RuntimeEventSchema } from '@megumi/events';
 export { redactHostRuntimeValue } from './runtime-redaction';
@@ -65,6 +65,7 @@ export type {
 } from './session-host';
 export type { AttachmentPicker } from './capabilities/attachment-picker';
 export type { LocalFileAvailability } from './capabilities/local-file-availability';
+export type { ProductWorkspaceFileSystem } from './capabilities/workspace-file-system';
 export type {
   DisableSkillUiResponse,
   DeleteSkillUiResponse,

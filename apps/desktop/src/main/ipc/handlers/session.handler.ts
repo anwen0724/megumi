@@ -21,7 +21,7 @@ import {
   type ProductHostInterface,
 } from '@megumi/product/host';
 
-import type { ProductRuntimeLogger } from '@megumi/product';
+import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 

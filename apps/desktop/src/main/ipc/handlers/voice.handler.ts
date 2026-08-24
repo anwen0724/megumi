@@ -3,7 +3,7 @@
  * The handler remains a transport controller and never calls Voice internals directly.
  */
 import * as host from '@megumi/product/host';
-import type { ProductRuntimeLogger } from '@megumi/product';
+import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { IPC_CHANNELS } from '../channels';
 import { createIpcRequestHandler } from '../create-request-handler';

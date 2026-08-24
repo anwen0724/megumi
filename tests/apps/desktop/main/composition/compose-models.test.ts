@@ -1,11 +1,11 @@
 // @vitest-environment node
-import { AssistantMessageEventStream } from '../../../../packages/ai/src/utils/event-stream';
+import { AssistantMessageEventStream } from '../../../../../packages/ai/src/utils/event-stream';
 import {
   InMemoryCredentialStore,
   type ProviderStreams,
 } from '@megumi/ai';
 import { builtinProviders } from '@megumi/ai/providers/all';
-import { composeModels, type ProductModelConfig } from '../../../../packages/product/src/composition/model-composer';
+import { composeModels, type ProductModelConfig } from '@megumi/desktop/main/shell-composition/model-composer';
 import { describe, expect, it } from 'vitest';
 
 describe('Product Models composition', () => {

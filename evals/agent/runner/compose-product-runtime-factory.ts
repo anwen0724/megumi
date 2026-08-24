@@ -1,6 +1,11 @@
-/* Creates the production Evaluation runtime exclusively through Product Composition and Host. */
+/* Owns the headless Evaluation composition root and projects it through Product Host contracts. */
 import { createDiscoveryAgent } from '@megumi/discovery-agent';
-import { composeProduct, composeProductCapabilities, type ProductCapabilitiesOptions, type ProductRuntime } from '@megumi/product';
+import {
+  composeProduct,
+  composeProductCapabilities,
+  type ProductCapabilitiesInput as ProductCapabilitiesOptions,
+} from '../../../apps/desktop/src/main/shell-composition/application-host-composition';
+import type { ProductRuntime } from '../../../apps/desktop/src/main/shell-composition/application-runtime';
 import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
 import type { BuiltInToolAvailability } from '@megumi/tools';
 import {
@@ -42,8 +47,7 @@ export function createComposeProductEvaluationFactory(
       const builtInToolAvailability: BuiltInToolAvailability = {
         isAvailable: ({ toolName }) => input.isBuiltInToolAvailable(toolName),
       };
-      // The capability instances are composed once, the Discovery Agent is
-      // constructed from them, and both are injected into Product.
+      // Evaluation selects its Node adapters, then composes the shared Harness and Discovery Agent.
       const capabilities = composeProductCapabilities({
         ...options.productOverrides,
         home: createEvaluationHomeOptions(input.homeRoot),

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import fs from 'fs-extra';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createDatabase } from '@megumi/database';
-import type { ProductCapabilitiesOptions } from '@megumi/product';
+import type { ProductCapabilitiesOptions } from '@megumi/desktop/main/shell-composition/harness-capabilities';
 import { createSessionCatalog, createSessionHistory } from '@megumi/session';
 import { createSessionStore } from '@megumi/session/store';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
