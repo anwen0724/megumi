@@ -1,61 +1,115 @@
-/* Verifies browser-backed platform source normalization and availability mapping. */
+/* Verifies browser-session Sources own platform URLs, page interpretation, and content normalization. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDouyinSource,
   createXiaohongshuSource,
-  type BrowserSourceTaskGateway,
+  type EmbeddedBrowser,
+  type EmbeddedBrowserSnapshot,
 } from '@megumi/discovery';
 
-describe('browser platform sources', () => {
+describe('embedded-browser platform sources', () => {
   it.each([
-    ['xiaohongshu', createXiaohongshuSource, '小红书', 'post'],
-    ['douyin', createDouyinSource, '抖音', 'video'],
-  ] as const)('normalizes %s results through the common gateway', async (sourceId, createSource, name, contentType) => {
-    const execute = vi.fn(async () => ({
-      status: 'success' as const,
-      items: [{
-        sourceContentId: `${sourceId}:1`,
-        url: platformUrl(sourceId),
-        title: 'Result',
-        author: 'Author',
-        contentType,
+    {
+      sourceId: 'xiaohongshu',
+      createSource: createXiaohongshuSource,
+      resultUrl: 'https://www.xiaohongshu.com/explore/abc123?xsec_token=secret',
+      expectedSearch: 'https://www.xiaohongshu.com/search_result?keyword=Agent+Harness&source=web_explore_feed',
+      contentType: 'post',
+    },
+    {
+      sourceId: 'douyin',
+      createSource: createDouyinSource,
+      resultUrl: 'https://www.douyin.com/video/73001',
+      expectedSearch: 'https://www.douyin.com/search/Agent%20Harness?type=general',
+      contentType: 'video',
+    },
+  ] as const)('normalizes $sourceId from a generic document snapshot', async ({ sourceId, createSource, resultUrl, expectedSearch, contentType }) => {
+    const snapshot = vi.fn(async () => successSnapshot({
+      finalUrl: expectedSearch,
+      links: [{
+        href: resultUrl,
+        text: 'Agent 实战内容',
+        contextText: 'Agent 实战内容 作者 Alice 一份深入的工程经验',
+        imageUrl: 'https://example.com/cover.jpg',
       }],
     }));
-    const source = createSource({ gateway: gateway(execute) });
+    const source = createSource({ browser: browser(snapshot) });
 
-    await expect(source.search({
-      query: ' Agent ', mode: 'relevance', limit: 5, signal: new AbortController().signal,
-    })).resolves.toEqual({
-      status: 'success',
-      items: [expect.objectContaining({ sourceId, sourceName: name, title: 'Result', author: 'Author', contentType })],
+    const result = await source.search({
+      query: ' Agent Harness ', mode: 'relevance', limit: 5, signal: new AbortController().signal,
     });
-    expect(execute).toHaveBeenCalledWith(
-      { sourceId, operation: 'search', query: 'Agent', mode: 'relevance', limit: 5 },
-      { signal: expect.any(AbortSignal) },
-    );
+
+    expect(snapshot).toHaveBeenCalledWith(expect.objectContaining({
+      profileId: sourceId,
+      url: expectedSearch,
+      allowedOrigins: expect.arrayContaining([expect.stringContaining(sourceId === 'douyin' ? 'douyin.com' : 'xiaohongshu.com')]),
+      signal: expect.any(AbortSignal),
+    }));
+    expect(result).toEqual({ status: 'success', items: [expect.objectContaining({
+      sourceId, canonicalUrl: resultUrl, title: 'Agent 实战内容', contentType,
+      description: 'Agent 实战内容 作者 Alice 一份深入的工程经验',
+      coverUrl: 'https://example.com/cover.jpg',
+    })] });
+    expect(source.getAvailability()).toMatchObject({ state: 'ready' });
+    expect(source.descriptor.supportsRead).toBe(true);
   });
 
-  it('maps extension, login, and risk facts into source availability', async () => {
-    const results = [
-      { status: 'failed' as const, failure: { code: 'login_required' as const, message: 'Login required.' } },
-      { status: 'failed' as const, failure: { code: 'risk_control' as const, message: 'Verification required.' } },
-    ];
-    const source = createXiaohongshuSource({ gateway: gateway(async () => results.shift()!) });
-    expect(source.getAvailability()).toEqual({ state: 'unknown' });
-    await source.search({ query: 'Agent', mode: 'relevance', limit: 5, signal: new AbortController().signal });
-    expect(source.getAvailability()).toMatchObject({ state: 'login_required' });
-    await source.search({ query: 'Agent', mode: 'relevance', limit: 5, signal: new AbortController().signal });
-    expect(source.getAvailability()).toMatchObject({ state: 'risk_controlled' });
+  it.each([
+    ['https://www.xiaohongshu.com/login', '请登录后继续', 'login_required'],
+    ['https://www.xiaohongshu.com/search_result?keyword=Agent', '访问过于频繁，请完成验证', 'risk_control'],
+  ] as const)('maps platform pages to $failureCode', async (finalUrl, bodyText, failureCode) => {
+    const source = createXiaohongshuSource({ browser: browser(async () => successSnapshot({ finalUrl, bodyText })) });
+    const result = await source.search({
+      query: 'Agent', mode: 'relevance', limit: 5, signal: new AbortController().signal,
+    });
+    expect(result).toMatchObject({ status: 'failed', failure: { code: failureCode } });
+    expect(source.getAvailability()).toMatchObject({
+      state: failureCode === 'login_required' ? 'login_required' : 'risk_controlled',
+    });
+  });
+
+  it('opens a visible persistent-profile login window only after an explicit connect request', async () => {
+    const openLogin = vi.fn(async () => undefined);
+    const source = createDouyinSource({ browser: browser(async () => successSnapshot({}), openLogin) });
+    await expect(source.connect!()).resolves.toBeUndefined();
+    expect(openLogin).toHaveBeenCalledWith(expect.objectContaining({
+      profileId: 'douyin', url: 'https://www.douyin.com/',
+    }));
+  });
+
+  it('uses the same persistent profile to read candidate detail', async () => {
+    const snapshot = vi.fn(async () => successSnapshot({
+      finalUrl: 'https://www.douyin.com/video/73001',
+      title: 'Agent 视频 - 抖音',
+      bodyText: '这是视频详情正文。',
+    }));
+    const source = createDouyinSource({ browser: browser(snapshot) });
+    const result = await source.read!({
+      sourceContentId: '73001', url: 'https://www.douyin.com/video/73001',
+      signal: new AbortController().signal,
+    });
+    expect(result).toEqual({ status: 'success', detail: expect.objectContaining({
+      sourceId: 'douyin', sourceContentId: '73001', title: 'Agent 视频', contentText: '这是视频详情正文。',
+    }) });
   });
 });
 
-function gateway(execute: BrowserSourceTaskGateway['execute']): BrowserSourceTaskGateway {
-  return { getConnectionState: () => ({ state: 'ready' }), execute };
+function browser(
+  snapshot: EmbeddedBrowser['snapshot'],
+  openLogin: EmbeddedBrowser['openLogin'] = async () => undefined,
+): EmbeddedBrowser {
+  return { snapshot, openLogin, shutdown: async () => undefined };
 }
 
-function platformUrl(sourceId: string): string {
-  if (sourceId === 'xiaohongshu') return 'https://www.xiaohongshu.com/explore/abc';
-  if (sourceId === 'douyin') return 'https://www.douyin.com/video/123';
-  return 'https://www.zhihu.com/question/1/answer/2';
+function successSnapshot(input: Partial<EmbeddedBrowserSnapshot>) {
+  return {
+    status: 'success' as const,
+    snapshot: {
+      finalUrl: input.finalUrl ?? 'https://example.com/',
+      ...(input.title ? { title: input.title } : {}),
+      bodyText: input.bodyText ?? '',
+      links: input.links ?? [],
+    },
+  };
 }

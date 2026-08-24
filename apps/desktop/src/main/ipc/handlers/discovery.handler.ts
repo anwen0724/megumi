@@ -2,8 +2,6 @@
 import {
   DiscoveryDailyEnsureResultSchema,
   DiscoveryConfigurationUiDtoSchema,
-  BrowserSourceConnectionViewSchema,
-  BrowserSourcePairingViewSchema,
   DiscoveryHomeUiResultSchema,
   DiscoveryInterestUiDtoSchema,
   DiscoveryRecommendationSearchUiResultSchema,
@@ -20,9 +18,6 @@ import {
   DiscoveryDailyEnsureRequestSchema,
   DiscoveryConfigurationGetRequestSchema,
   DiscoveryConfigurationUpdateRequestSchema,
-  BrowserSourceConnectionGetRequestSchema,
-  BrowserSourcePairingBeginRequestSchema,
-  BrowserSourceConnectionRevokeRequestSchema,
   DiscoveryHomeRequestSchema,
   DiscoveryInterestChangeRequestSchema,
   DiscoveryRecommendationSearchRequestSchema,
@@ -31,7 +26,7 @@ import {
 } from '../schemas';
 
 export interface DiscoveryHandlersService {
-  host: Pick<ProductHostInterface, 'discovery' | 'browserSource'>;
+  host: Pick<ProductHostInterface, 'discovery'>;
 }
 
 export interface RegisterDiscoveryHandlersOptions {
@@ -63,34 +58,6 @@ export function registerDiscoveryHandlers(
     handle: (request) => service.host.discovery.updateConfiguration(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
-  ipcMain.handle(IPC_CHANNELS.browserSource.connectionGet, createIpcRequestHandler({
-    channel: IPC_CHANNELS.browserSource.connectionGet,
-    requestSchema: BrowserSourceConnectionGetRequestSchema,
-    responseSchema: BrowserSourceConnectionViewSchema,
-    responseValidation: 'dev-only',
-    logger: options.logger,
-    handle: () => service.host.browserSource.getConnection(),
-    mapError: mapDiscoveryIpcError,
-  }));
-  ipcMain.handle(IPC_CHANNELS.browserSource.pairingBegin, createIpcRequestHandler({
-    channel: IPC_CHANNELS.browserSource.pairingBegin,
-    requestSchema: BrowserSourcePairingBeginRequestSchema,
-    responseSchema: BrowserSourcePairingViewSchema,
-    responseValidation: 'dev-only',
-    logger: options.logger,
-    handle: () => service.host.browserSource.beginPairing(),
-    mapError: mapDiscoveryIpcError,
-  }));
-  ipcMain.handle(IPC_CHANNELS.browserSource.connectionRevoke, createIpcRequestHandler({
-    channel: IPC_CHANNELS.browserSource.connectionRevoke,
-    requestSchema: BrowserSourceConnectionRevokeRequestSchema,
-    responseSchema: BrowserSourceConnectionViewSchema,
-    responseValidation: 'dev-only',
-    logger: options.logger,
-    handle: () => service.host.browserSource.revokeConnection(),
-    mapError: mapDiscoveryIpcError,
-  }));
-
   ipcMain.handle(IPC_CHANNELS.discovery.interestChange, createIpcRequestHandler({
     channel: IPC_CHANNELS.discovery.interestChange,
     requestSchema: DiscoveryInterestChangeRequestSchema,

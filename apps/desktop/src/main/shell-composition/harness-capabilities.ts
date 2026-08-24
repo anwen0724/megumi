@@ -24,7 +24,7 @@ import {
   createDiscoveryRepository,
   createDailyDiscoveryAttempts,
   createInterestExtractor,
-  type BrowserSourceTaskGateway,
+  type EmbeddedBrowser,
 } from '@megumi/discovery';
 import {
   createEventBus,
@@ -108,7 +108,7 @@ export interface ProductCapabilitiesOptions {
   settingsStorage?: SettingsStore;
   builtInToolAvailability?: BuiltInToolAvailability;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
-  browserSourceTaskGateway?: BrowserSourceTaskGateway;
+  embeddedBrowser?: EmbeddedBrowser;
   instructionContentRoot?: string;
 }
 
@@ -423,7 +423,7 @@ function composeCapabilitiesWithDatabase(
   const discoverySources = createDiscoverySourceRegistry({
     webSearch: discoveryWebSearch,
     webFetch: createWebFetch(),
-    browserGateway: options.browserSourceTaskGateway ?? unavailableBrowserSourceGateway,
+    embeddedBrowser: options.embeddedBrowser ?? unavailableEmbeddedBrowser,
     zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
     twitterApiKey: () => discoveryCredential(settings, 'twitter'),
   });
@@ -617,12 +617,12 @@ function discoveryCredential(
   return result.status === 'found' ? result.credential : undefined;
 }
 
-const unavailableBrowserSourceGateway: BrowserSourceTaskGateway = {
-  getConnectionState: () => ({ state: 'not_configured' }),
-  execute: async () => ({
-    status: 'failed',
-    failure: { code: 'extension_offline', message: 'Browser source tasks are unavailable.' },
+const unavailableEmbeddedBrowser: EmbeddedBrowser = {
+  openLogin: async () => { throw new Error('Embedded browser is unavailable.'); },
+  snapshot: async () => ({
+    status: 'failed', failure: { code: 'network_error', message: 'Embedded browser is unavailable.' },
   }),
+  shutdown: async () => undefined,
 };
 
 /**

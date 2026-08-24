@@ -1,6 +1,5 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
 import { app, BrowserWindow } from 'electron';
-import path from 'node:path';
 import { createDiscoveryAgent } from '@megumi/discovery';
 import { resolveMegumiHomePath } from '@megumi/home';
 import { composeProduct, composeProductCapabilities } from './application-host-composition';
@@ -27,17 +26,13 @@ import {
   type ElectronVoiceInputAdapter,
 } from '../adapters/voice-input/electron-voice-input-adapter';
 import { IPC_CHANNELS } from '../ipc/channels';
-import { createBrowserSourceLoopbackServer } from '../adapters/browser-source/browser-source-loopback-server';
-import { createFileBrowserSourceConnectionStore } from '../adapters/browser-source/file-browser-source-connection-store';
+import { createElectronEmbeddedBrowser } from '../adapters/embedded-browser/electron-embedded-browser';
 import { resolveProductInstructionsPath } from '../packaging/product-resources';
 
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
   const homePath = resolveMegumiHomePath(home);
-  const browserSource = createBrowserSourceLoopbackServer({
-    store: createFileBrowserSourceConnectionStore(path.join(homePath, 'browser-source-connection.json')),
-  });
-  void browserSource.start();
+  const embeddedBrowser = createElectronEmbeddedBrowser();
   const voiceResources = createElectronVoiceOptions(home);
   // The single Voice Input Adapter: injected into Product/Voice composition
   // AND connected to the dedicated PCM IPC; there is no second runtime.
@@ -59,7 +54,7 @@ export function composeDesktopMain() {
     settingsEnvironment: createDesktopSettingsEnvironment(),
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
-    browserSourceTaskGateway: browserSource,
+    embeddedBrowser,
     instructionContentRoot: resolveProductInstructionsPath({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
@@ -76,7 +71,6 @@ export function composeDesktopMain() {
     attachmentPicker: electronInputAttachmentPickerAdapter,
     localFileAvailability: electronLocalFileAvailability,
     voice: { ...voiceResources.voiceOptions, speechInput: voiceInputAdapter },
-    browserSource,
   });
   const runtimeLogger = product.logger;
   const productHost = product.host;
@@ -128,7 +122,7 @@ export function composeDesktopMain() {
       // Product ends the Voice Session (stopping speech input) before the
       // Adapter releases the Worker.
       await product.dispose();
-      await browserSource.stop();
+      await embeddedBrowser.shutdown();
       await voiceInputAdapter.dispose();
     },
   };

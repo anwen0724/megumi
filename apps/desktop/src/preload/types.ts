@@ -19,8 +19,6 @@ import type {
   DiscoveryRecommendationUiDto,
   DiscoverySessionParticipationUiDto,
   DiscoveryConfigurationUiDto,
-  BrowserSourceConnectionView,
-  BrowserSourcePairingView,
 } from '@megumi/product-host/host';
 import type {
   SessionBranchDraftCancelPayload,
@@ -79,8 +77,6 @@ export type DiscoveryConfigurationGetPreloadPayload = DiscoveryConfigurationGetP
 export type DiscoveryConfigurationGetPreloadData = DiscoveryConfigurationUiDto;
 export type DiscoveryConfigurationUpdatePreloadPayload = DiscoveryConfigurationUpdatePayload;
 export type DiscoveryConfigurationUpdatePreloadData = DiscoveryConfigurationUiDto;
-export type BrowserSourceConnectionPreloadData = BrowserSourceConnectionView;
-export type BrowserSourcePairingPreloadData = BrowserSourcePairingView;
 export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
 export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
 export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;

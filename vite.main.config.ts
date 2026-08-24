@@ -12,7 +12,7 @@ export default defineConfig({
   build: {
     outDir: '.vite/build',
     rollupOptions: {
-      external: ['better-sqlite3', 'electron', 'sherpa-onnx-node', 'ws'],
+      external: ['better-sqlite3', 'electron', 'sherpa-onnx-node'],
       output: { entryFileNames: 'index.js' },
     },
   },

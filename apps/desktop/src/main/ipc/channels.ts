@@ -60,11 +60,6 @@ export const IPC_CHANNELS = {
     recommendationsSearch: 'discovery:recommendations:search',
     recommendationStateUpdate: 'discovery:recommendation:state:update',
   },
-  browserSource: {
-    connectionGet: 'browser-source:connection:get',
-    pairingBegin: 'browser-source:pairing:begin',
-    connectionRevoke: 'browser-source:connection:revoke',
-  },
   voice: {
     snapshot: 'voice:snapshot',
     modelStatus: 'voice:model-status',
@@ -168,9 +163,6 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.discovery.homeGet,
   IPC_CHANNELS.discovery.recommendationsSearch,
   IPC_CHANNELS.discovery.recommendationStateUpdate,
-  IPC_CHANNELS.browserSource.connectionGet,
-  IPC_CHANNELS.browserSource.pairingBegin,
-  IPC_CHANNELS.browserSource.connectionRevoke,
   IPC_CHANNELS.voice.snapshot,
   IPC_CHANNELS.voice.modelStatus,
   IPC_CHANNELS.voice.modelCapability,

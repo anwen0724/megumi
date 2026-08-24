@@ -21,7 +21,6 @@ import {
 import { createProductHost } from '@megumi/product-host';
 import type {
   AttachmentPicker,
-  BrowserSourceConnectionAdapter,
   DiagnosticBundleSaver,
   DirectoryPicker,
   FileOpener,
@@ -29,7 +28,6 @@ import type {
 } from '@megumi/product-host/host';
 import {
   createApprovalOperations,
-  createBrowserSourceOperations,
   createDiscoveryOperations,
   createInputSuggestionQuery,
   createObservabilityOperations,
@@ -77,7 +75,6 @@ export interface ComposeProductOptions {
   readonly attachmentPicker?: AttachmentPicker;
   readonly localFileAvailability?: LocalFileAvailability;
   readonly voice?: ComposeProductVoiceOptions;
-  readonly browserSource?: BrowserSourceConnectionAdapter;
 }
 
 export type ProductCapabilitiesInput = ProductCapabilitiesOptions;
@@ -280,7 +277,6 @@ function composeProductRuntime(
   );
   const host = createProductHost({
     discovery: createDiscoveryOperations(discoveryAgent),
-    browserSource: createBrowserSourceOperations(options.browserSource ?? unsupportedBrowserSource),
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
@@ -332,12 +328,6 @@ const unavailableSpeechInput: SpeechInputRuntime = {
   finishManualUtterance() {},
   async stop() {},
   subscribe() { return () => {}; },
-};
-
-const unsupportedBrowserSource: BrowserSourceConnectionAdapter = {
-  getConnection: () => ({ state: 'not_supported' }),
-  beginPairing() { throw new Error('Browser source connection is not supported by this Host.'); },
-  revokeConnection: () => ({ state: 'not_supported' }),
 };
 
 /** Hosts that do not inject a Speech Synthesizer still expose an honest failure. */

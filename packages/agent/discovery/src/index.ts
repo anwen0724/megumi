@@ -76,6 +76,14 @@ export {
   SourceSearchModeSchema,
 } from './sources/discovery-source';
 export { createSourceRegistry } from './sources/source-registry';
+export type {
+  EmbeddedBrowser,
+  EmbeddedBrowserFailure,
+  EmbeddedBrowserLink,
+  EmbeddedBrowserProfileId,
+  EmbeddedBrowserSnapshot,
+  EmbeddedBrowserSnapshotResult,
+} from './sources/embedded-browser';
 export type { SourceRegistry } from './sources/source-registry';
 export { createOpenWebSource } from './sources/open-web-source';
 export { createBilibiliSource } from './sources/bilibili-source';
@@ -122,19 +130,6 @@ export {
   DiscoverySourceViewSchema,
   UpdateDiscoveryConfigurationRequestSchema,
 } from './configuration/discovery-configuration';
-export {
-  BrowserSourceIdSchema,
-  BrowserSourceItemSchema,
-  BrowserSourceTaskRequestSchema,
-  BrowserSourceTaskResultSchema,
-} from './browser-sources/browser-source-contracts';
-export type {
-  BrowserSourceId,
-  BrowserSourceItem,
-  BrowserSourceTaskGateway,
-  BrowserSourceTaskRequest,
-  BrowserSourceTaskResult,
-} from './browser-sources/browser-source-contracts';
 export type {
   DiscoveryConfiguration,
   DiscoveryConfigurationSettings,

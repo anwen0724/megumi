@@ -55,8 +55,6 @@ import type {
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
   DiscoveryConfigurationUiDto,
-  BrowserSourceConnectionView,
-  BrowserSourcePairingView,
 } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
@@ -369,20 +367,6 @@ export const api = {
       request: BusinessRequest<DiscoveryRecommendationStatePayload, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>,
     ): Promise<RuntimeIpcResult<DiscoveryRecommendationUiDto, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
-  },
-  browserSource: {
-    getConnection: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.browserSource.connectionGet>,
-    ): Promise<RuntimeIpcResult<BrowserSourceConnectionView, typeof IPC_CHANNELS.browserSource.connectionGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.browserSource.connectionGet, request),
-    beginPairing: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.browserSource.pairingBegin>,
-    ): Promise<RuntimeIpcResult<BrowserSourcePairingView, typeof IPC_CHANNELS.browserSource.pairingBegin>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.browserSource.pairingBegin, request),
-    revokeConnection: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.browserSource.connectionRevoke>,
-    ): Promise<RuntimeIpcResult<BrowserSourceConnectionView, typeof IPC_CHANNELS.browserSource.connectionRevoke>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.browserSource.connectionRevoke, request),
   },
   voiceInput: {
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {

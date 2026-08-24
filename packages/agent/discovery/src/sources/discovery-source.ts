@@ -109,6 +109,7 @@ export type SourceReadResult =
 export interface DiscoverySource {
   readonly descriptor: SourceDescriptor;
   getAvailability(): SourceAvailability;
+  connect?(): Promise<void>;
   search(request: {
     readonly query: string;
     readonly mode: SourceSearchMode;

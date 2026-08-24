@@ -1,6 +1,5 @@
 /* Public operation factories used by concrete Host composition roots. */
 export * from './approval-operations';
-export * from './browser-source-operations';
 export * from './discovery-operations';
 export * from './observability-operations';
 export * from './settings-operations';

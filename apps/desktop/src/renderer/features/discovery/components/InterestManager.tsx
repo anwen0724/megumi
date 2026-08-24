@@ -46,7 +46,6 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [pairing, setPairing] = useState<{ code: string; port: number; expiresAt: string } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -169,40 +168,6 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
       setSettings(savedSettings);
       setPersistedSettings(savedSettings);
       setSaved(true);
-    } catch {
-      setError(t('actionFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function beginBrowserPairing() {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await window.megumi.browserSource.beginPairing(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.browserSource.pairingBegin, {}),
-      );
-      if (!result.ok) { setError(t('actionFailed')); return; }
-      setPairing(result.data);
-      await refreshSourceAvailability();
-    } catch {
-      setError(t('actionFailed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function revokeBrowserConnection() {
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await window.megumi.browserSource.revokeConnection(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.browserSource.connectionRevoke, {}),
-      );
-      if (!result.ok) { setError(t('actionFailed')); return; }
-      setPairing(null);
-      await refreshSourceAvailability();
     } catch {
       setError(t('actionFailed'));
     } finally {
@@ -403,7 +368,7 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
               </div>
             </section>
           ) : (
-          <SettingsPanel settings={settings} busy={busy} pairing={pairing} onBeginPairing={beginBrowserPairing} onRevokeConnection={revokeBrowserConnection} onUpdate={updateSettings} />
+          <SettingsPanel settings={settings} busy={busy} onUpdate={updateSettings} />
           )}
 
           {error ? <p role="alert" className={cx('mx-6 mb-6 rounded-xl px-4 py-3 text-sm', 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]')}>{error}</p> : null}
@@ -490,12 +455,9 @@ function InterestSummary(props: {
   );
 }
 
-function SettingsPanel({ settings, busy, pairing, onBeginPairing, onRevokeConnection, onUpdate }: {
+function SettingsPanel({ settings, busy, onUpdate }: {
   settings: DiscoverySettings | null;
   busy: boolean;
-  pairing: { code: string; port: number; expiresAt: string } | null;
-  onBeginPairing(): void;
-  onRevokeConnection(): void;
   onUpdate(update: (current: DiscoverySettings) => DiscoverySettings): void;
 }) {
   const { t } = useTranslation('discovery');
@@ -540,21 +502,6 @@ function SettingsPanel({ settings, busy, pairing, onBeginPairing, onRevokeConnec
                 );
               })}
             </div>
-            {settings.sources.some((source) => source.access === 'browser_session') ? (
-              <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="secondary" disabled={busy} onClick={onBeginPairing}>{t('connectBrowserExtension')}</Button>
-                  {settings.sources.some((source) => source.access === 'browser_session' && source.connectionState !== 'not_configured') ? (
-                    <Button type="button" variant="ghost" disabled={busy} onClick={onRevokeConnection}>{t('disconnectBrowserExtension')}</Button>
-                  ) : null}
-                </div>
-                {pairing ? (
-                  <p className="mt-3 text-sm text-[var(--color-text)]">
-                    {t('pairingInstructions', { port: pairing.port, code: pairing.code })}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
           </fieldset>
         </>
       ) : <p className="mt-5 text-sm text-[var(--color-text-muted)]">{t('loading')}</p>}

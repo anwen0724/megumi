@@ -1,12 +1,6 @@
 /* Narrow default Product entry for Host contracts and the thin Host aggregator. */
 export { createProductHost, type CreateProductHostOptions } from './create-product-host';
 export type { ProductHostInterface } from './host/product-host';
-export type {
-  BrowserSourceConnectionAdapter,
-  BrowserSourceConnectionView,
-  BrowserSourceHost,
-  BrowserSourcePairingView,
-} from './host/browser-source-host';
 export type { VoiceHost } from './host/voice-host';
 export type { DirectoryPicker } from './host/capabilities/directory-picker';
 export type { FileOpener } from './host/capabilities/file-opener';
