@@ -11,8 +11,11 @@ describe('DiscoveryPage', () => {
   const updateRecommendationState = vi.fn();
   const changeInterest = vi.fn();
   const ensureDaily = vi.fn();
-  const settingsGet = vi.fn();
-  const settingsUpdate = vi.fn();
+  const configurationGet = vi.fn();
+  const configurationUpdate = vi.fn();
+  const beginPairing = vi.fn();
+  const getBrowserConnection = vi.fn();
+  const revokeBrowserConnection = vi.fn();
 
   beforeEach(async () => {
     await initializeRendererI18n('zh-CN');
@@ -31,20 +34,25 @@ describe('DiscoveryPage', () => {
       userManagedAt: '2026-08-22T08:00:00.000Z', createdAt: '2026-08-22T08:00:00.000Z', updatedAt: '2026-08-22T08:00:00.000Z',
     }));
     ensureDaily.mockReset().mockResolvedValue(ok({ status: 'started', localDate: '2026-08-22', batchId: 'batch:2', executionId: 'execution:2' }));
-    settingsGet.mockReset().mockResolvedValue(ok({
-      status: 'ok',
-      settings: settings(),
-      unknownKeys: [],
-    }));
-    settingsUpdate.mockReset().mockResolvedValue(ok({
-      status: 'updated',
-      settings: settings(),
-    }));
+    configurationGet.mockReset().mockResolvedValue(ok(discoveryConfiguration()));
+    configurationUpdate.mockReset().mockImplementation(async (request) => ok(discoveryConfiguration({
+      dailyTargetCount: request.payload.dailyTargetCount,
+    })));
+    beginPairing.mockReset().mockResolvedValue(ok({ code: '123456', port: 43127, expiresAt: '2026-08-22T08:05:00.000Z' }));
+    getBrowserConnection.mockReset().mockResolvedValue(ok({ state: 'extension_offline', port: 43127 }));
+    revokeBrowserConnection.mockReset().mockResolvedValue(ok({ state: 'not_configured' }));
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
-        discovery: { getHome, searchRecommendations, updateRecommendationState, changeInterest, ensureDaily },
-        settings: { get: settingsGet, update: settingsUpdate },
+        discovery: {
+          getHome, searchRecommendations, updateRecommendationState, changeInterest, ensureDaily,
+          getConfiguration: configurationGet, updateConfiguration: configurationUpdate,
+        },
+        browserSource: {
+          getConnection: getBrowserConnection,
+          beginPairing,
+          revokeConnection: revokeBrowserConnection,
+        },
       },
     });
     vi.spyOn(window, 'open').mockImplementation(() => null);
@@ -198,7 +206,11 @@ describe('DiscoveryPage', () => {
     await user.type(count, '36');
     await user.click(screen.getByRole('button', { name: '保存发现设置' }));
 
-    expect(settingsUpdate.mock.calls.at(-1)?.[0].payload.discovery).toMatchObject({ dailyTargetCount: 36 });
+    expect(configurationUpdate.mock.calls.at(-1)?.[0].payload).toMatchObject({
+      dailyTargetCount: 36,
+      enabledSources: ['bilibili', 'open_web'],
+    });
+    expect(ensureDaily).not.toHaveBeenCalled();
   });
 
   it('keeps interests readable until edited and places destructive actions in an overflow menu', async () => {
@@ -300,21 +312,19 @@ function recommendation(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function settings() {
+function discoveryConfiguration(overrides: Record<string, unknown> = {}) {
   return {
-    language: 'zh-CN' as const,
-    theme: 'megumi-warm' as const,
-    setup: { completed: true }, memory: { enabled: false },
-    voice: {
-      inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto' as const,
-      readAloudEnabled: false, tts: { provider: 'minimax' as const, voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' as const },
-    },
-    web: { search: { hasApiKey: true, credentialSource: 'settings' as const } },
-    discovery: {
-      conversationRecognitionEnabled: false, dailyGenerationTime: '08:00', dailyTargetCount: 20,
-      enabledSources: ['bilibili', 'open_web'],
-    },
-    providers: {}, permissions: { mode: 'ask' as const, rules: [], catalog: { operations: [], tools: [] } },
+    conversationRecognitionEnabled: false,
+    dailyGenerationTime: '08:00',
+    dailyTargetCount: 20,
+    sources: [
+      { sourceId: 'bilibili', name: '哔哩哔哩', access: 'public' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: true, connectionState: 'ready' as const },
+      { sourceId: 'open_web', name: '开放 Web', access: 'public' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: true, connectionState: 'ready' as const },
+      { sourceId: 'xiaohongshu', name: '小红书', access: 'browser_session' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: false, connectionState: 'extension_offline' as const },
+      { sourceId: 'douyin', name: '抖音', access: 'browser_session' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: false, connectionState: 'extension_offline' as const },
+      { sourceId: 'zhihu', name: '知乎', access: 'browser_session' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: false, connectionState: 'extension_offline' as const },
+    ],
+    ...overrides,
   };
 }
 

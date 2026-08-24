@@ -411,7 +411,7 @@ async function executeDailyBatch(input: {
       maxToolCallsPerModelCall: 64,
       maxConcurrentToolCalls: 1,
       modelCallTimeoutMs: 120_000,
-      toolCallTimeoutMs: 30_000,
+      toolCallTimeoutMs: 90_000,
       modelRetryDelayMs: 250,
       maxContextOverflowRecoveries: 1,
     },

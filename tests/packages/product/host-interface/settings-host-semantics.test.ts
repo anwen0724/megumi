@@ -73,32 +73,6 @@ describe('SettingsHost semantics', () => {
     });
   });
 
-  it('round-trips renderer-safe daily discovery settings', async () => {
-    const store = memoryStore();
-    const host = createSettingsOperations(createSettings({ store }));
-
-    const result = await host.update({
-      discovery: {
-        conversationRecognitionEnabled: true,
-        dailyGenerationTime: '09:30',
-        dailyTargetCount: 36,
-        enabledSources: ['bilibili', 'open_web'],
-      },
-    });
-
-    expect(result).toMatchObject({
-      status: 'updated',
-      settings: {
-        discovery: {
-          conversationRecognitionEnabled: true,
-          dailyGenerationTime: '09:30',
-          dailyTargetCount: 36,
-          enabledSources: ['bilibili', 'open_web'],
-        },
-      },
-    });
-  });
-
   it('manages the voice tts api key through dedicated host operations', async () => {
     const store = memoryStore();
     const host = createSettingsOperations(createSettings({ store }));

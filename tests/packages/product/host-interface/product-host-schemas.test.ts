@@ -260,6 +260,6 @@ describe('Product Host runtime schemas', () => {
         dailyTargetCount: 24,
         enabledSources: ['bilibili', 'open_web'],
       },
-    }).success).toBe(true);
+    }).success).toBe(false);
   });
 });

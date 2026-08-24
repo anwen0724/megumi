@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { Check, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryHomeUiResult, SettingsUiResolved } from '@megumi/product/host';
+import type { DiscoveryConfigurationUiDto, DiscoveryHomeUiResult } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';
@@ -26,9 +26,7 @@ interface InterestManagerProps {
 }
 
 type ManagerView = 'interests' | 'settings';
-type DiscoverySettings = SettingsUiResolved['discovery'];
-
-const SOURCE_IDS = ['bilibili', 'open_web'] as const;
+type DiscoverySettings = DiscoveryConfigurationUiDto;
 const EXIT_SETTLE_MS = 260;
 
 export function InterestManager({ open, interests, onClose, onChanged }: InterestManagerProps) {
@@ -48,6 +46,7 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [pairing, setPairing] = useState<{ code: string; port: number; expiresAt: string } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -83,6 +82,12 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
     void loadSettings();
   }, [open]);
 
+  useEffect(() => {
+    if (!open || view !== 'settings') return;
+    const timer = window.setInterval(() => void refreshSourceAvailability(), 15_000);
+    return () => window.clearInterval(timer);
+  }, [open, view]);
+
   const settingsDirty = useMemo(() => (
     settings !== null
     && persistedSettings !== null
@@ -91,11 +96,12 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
 
   async function loadSettings() {
     try {
-      const result = await window.megumi.settings.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}));
-      if (result.ok && result.data.status === 'ok') {
-        const loaded = result.data.settings.discovery;
-        setSettings(loaded);
-        setPersistedSettings(loaded);
+      const result = await window.megumi.discovery.getConfiguration(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationGet, {}),
+      );
+      if (result.ok) {
+        setSettings(result.data);
+        setPersistedSettings(result.data);
       } else {
         setError(t('loadFailed'));
       }
@@ -146,15 +152,20 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
     setError(null);
     setSaved(false);
     try {
-      const result = await window.megumi.settings.update(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.settings.update,
-        { discovery: settings },
+      const result = await window.megumi.discovery.updateConfiguration(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.discovery.configurationUpdate,
+        {
+          conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
+          dailyGenerationTime: settings.dailyGenerationTime,
+          dailyTargetCount: settings.dailyTargetCount,
+          enabledSources: settings.sources.filter((source) => source.enabled).map((source) => source.sourceId),
+        },
       ));
-      if (!result.ok || result.data.status === 'failed') {
+      if (!result.ok) {
         setError(t('actionFailed'));
         return;
       }
-      const savedSettings = result.data.settings.discovery;
+      const savedSettings = result.data;
       setSettings(savedSettings);
       setPersistedSettings(savedSettings);
       setSaved(true);
@@ -163,6 +174,57 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
     } finally {
       setBusy(false);
     }
+  }
+
+  async function beginBrowserPairing() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await window.megumi.browserSource.beginPairing(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.browserSource.pairingBegin, {}),
+      );
+      if (!result.ok) { setError(t('actionFailed')); return; }
+      setPairing(result.data);
+      await refreshSourceAvailability();
+    } catch {
+      setError(t('actionFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeBrowserConnection() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await window.megumi.browserSource.revokeConnection(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.browserSource.connectionRevoke, {}),
+      );
+      if (!result.ok) { setError(t('actionFailed')); return; }
+      setPairing(null);
+      await refreshSourceAvailability();
+    } catch {
+      setError(t('actionFailed'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function refreshSourceAvailability() {
+    const result = await window.megumi.discovery.getConfiguration(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationGet, {}),
+    );
+    if (!result.ok) return;
+    const availability = new Map(result.data.sources.map((source) => [source.sourceId, source]));
+    const mergeAvailability = (current: DiscoverySettings | null) => current ? ({
+      ...current,
+      sources: current.sources.map((source) => {
+        const latest = availability.get(source.sourceId);
+        return latest ? { ...source, connectionState: latest.connectionState, checkedAt: latest.checkedAt, retryAt: latest.retryAt } : source;
+      }),
+    }) : current;
+    setSettings(mergeAvailability);
+    setPersistedSettings(mergeAvailability);
   }
 
   function updateSettings(update: (current: DiscoverySettings) => DiscoverySettings) {
@@ -202,7 +264,7 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
 
   const settingsValid = Boolean(
     settings
-    && settings.enabledSources.length > 0
+    && settings.sources.some((source) => source.enabled)
     && settings.dailyTargetCount >= 1
     && settings.dailyTargetCount <= 100,
   );
@@ -341,7 +403,7 @@ export function InterestManager({ open, interests, onClose, onChanged }: Interes
               </div>
             </section>
           ) : (
-            <SettingsPanel settings={settings} busy={busy} onUpdate={updateSettings} />
+          <SettingsPanel settings={settings} busy={busy} pairing={pairing} onBeginPairing={beginBrowserPairing} onRevokeConnection={revokeBrowserConnection} onUpdate={updateSettings} />
           )}
 
           {error ? <p role="alert" className={cx('mx-6 mb-6 rounded-xl px-4 py-3 text-sm', 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]')}>{error}</p> : null}
@@ -428,9 +490,12 @@ function InterestSummary(props: {
   );
 }
 
-function SettingsPanel({ settings, busy, onUpdate }: {
+function SettingsPanel({ settings, busy, pairing, onBeginPairing, onRevokeConnection, onUpdate }: {
   settings: DiscoverySettings | null;
   busy: boolean;
+  pairing: { code: string; port: number; expiresAt: string } | null;
+  onBeginPairing(): void;
+  onRevokeConnection(): void;
   onUpdate(update: (current: DiscoverySettings) => DiscoverySettings): void;
 }) {
   const { t } = useTranslation('discovery');
@@ -456,27 +521,56 @@ function SettingsPanel({ settings, busy, onUpdate }: {
             <legend className="text-sm font-semibold text-[var(--color-text)]">{t('sources')}</legend>
             <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">{t('sourcesDescription')}</p>
             <div className="mt-3 space-y-2">
-              {SOURCE_IDS.map((sourceId) => {
-                const label = t(sourceId === 'open_web' ? 'openWeb' : 'bilibili');
-                const checked = settings.enabledSources.includes(sourceId);
+              {settings.sources.map((source) => {
+                const label = source.name;
+                const checked = source.enabled;
                 return (
-                  <div key={sourceId} className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
-                    <span className="text-sm text-[var(--color-text)]">{label}</span>
+                  <div key={source.sourceId} className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+                    <span className="min-w-0 text-sm text-[var(--color-text)]">
+                      <span className="block">{label}</span>
+                      <span className="block text-xs text-[var(--color-text-muted)]">{t(sourceStateTranslationKey(source.connectionState))}</span>
+                    </span>
                     <Switch checked={checked} disabled={busy} label={label} onCheckedChange={(nextChecked) => onUpdate((current) => ({
                       ...current,
-                      enabledSources: nextChecked
-                        ? [...new Set([...current.enabledSources, sourceId])]
-                        : current.enabledSources.filter((value) => value !== sourceId),
+                      sources: current.sources.map((item) => item.sourceId === source.sourceId
+                        ? { ...item, enabled: nextChecked }
+                        : item),
                     }))} />
                   </div>
                 );
               })}
             </div>
+            {settings.sources.some((source) => source.access === 'browser_session') ? (
+              <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" disabled={busy} onClick={onBeginPairing}>{t('connectBrowserExtension')}</Button>
+                  {settings.sources.some((source) => source.access === 'browser_session' && source.connectionState !== 'not_configured') ? (
+                    <Button type="button" variant="ghost" disabled={busy} onClick={onRevokeConnection}>{t('disconnectBrowserExtension')}</Button>
+                  ) : null}
+                </div>
+                {pairing ? (
+                  <p className="mt-3 text-sm text-[var(--color-text)]">
+                    {t('pairingInstructions', { port: pairing.port, code: pairing.code })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </fieldset>
         </>
       ) : <p className="mt-5 text-sm text-[var(--color-text-muted)]">{t('loading')}</p>}
     </section>
   );
+}
+
+function sourceStateTranslationKey(state: DiscoverySettings['sources'][number]['connectionState']) {
+  return ({
+    ready: 'sourceReady',
+    unknown: 'sourceUnknown',
+    extension_offline: 'sourceExtensionOffline',
+    login_required: 'sourceLoginRequired',
+    risk_controlled: 'sourceRiskControlled',
+    not_configured: 'sourceNotConfigured',
+  } as const)[state];
 }
 
 function ManagerTab({ active, controls, onClick, children }: { active: boolean; controls: string; onClick(): void; children: string }) {

@@ -18,6 +18,9 @@ import type {
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
   DiscoverySessionParticipationUiDto,
+  DiscoveryConfigurationUiDto,
+  BrowserSourceConnectionView,
+  BrowserSourcePairingView,
 } from '@megumi/product/host';
 import type {
   SessionBranchDraftCancelPayload,
@@ -39,6 +42,8 @@ import type {
   DiscoveryRecommendationSearchPayload,
   DiscoveryRecommendationStatePayload,
   DiscoverySessionParticipationPayload,
+  DiscoveryConfigurationGetPayload,
+  DiscoveryConfigurationUpdatePayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
 
@@ -70,6 +75,12 @@ export type SkillDeletePreloadData = DeleteSkillUiResponse;
 export type SkillRefreshPreloadPayload = SkillRefreshPayload;
 export type SkillRefreshPreloadData = RefreshSkillsUiResponse;
 export type DiscoveryInterestChangePreloadPayload = DiscoveryInterestChangePayload;
+export type DiscoveryConfigurationGetPreloadPayload = DiscoveryConfigurationGetPayload;
+export type DiscoveryConfigurationGetPreloadData = DiscoveryConfigurationUiDto;
+export type DiscoveryConfigurationUpdatePreloadPayload = DiscoveryConfigurationUpdatePayload;
+export type DiscoveryConfigurationUpdatePreloadData = DiscoveryConfigurationUiDto;
+export type BrowserSourceConnectionPreloadData = BrowserSourceConnectionView;
+export type BrowserSourcePairingPreloadData = BrowserSourcePairingView;
 export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
 export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
 export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;

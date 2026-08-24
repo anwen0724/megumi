@@ -54,6 +54,9 @@ import type {
   DiscoveryHomeUiResult,
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
+  DiscoveryConfigurationUiDto,
+  BrowserSourceConnectionView,
+  BrowserSourcePairingView,
 } from '@megumi/product/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
@@ -100,6 +103,8 @@ import type {
   DiscoveryHomePayload,
   DiscoveryRecommendationSearchPayload,
   DiscoveryRecommendationStatePayload,
+  DiscoveryConfigurationGetPayload,
+  DiscoveryConfigurationUpdatePayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -332,6 +337,14 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   discovery: {
+    getConfiguration: (
+      request: BusinessRequest<DiscoveryConfigurationGetPayload, typeof IPC_CHANNELS.discovery.configurationGet>,
+    ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationGet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationGet, request),
+    updateConfiguration: (
+      request: BusinessRequest<DiscoveryConfigurationUpdatePayload, typeof IPC_CHANNELS.discovery.configurationUpdate>,
+    ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationUpdate>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationUpdate, request),
     changeInterest: (
       request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
     ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>
@@ -356,6 +369,20 @@ export const api = {
       request: BusinessRequest<DiscoveryRecommendationStatePayload, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>,
     ): Promise<RuntimeIpcResult<DiscoveryRecommendationUiDto, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
+  },
+  browserSource: {
+    getConnection: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.browserSource.connectionGet>,
+    ): Promise<RuntimeIpcResult<BrowserSourceConnectionView, typeof IPC_CHANNELS.browserSource.connectionGet>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.browserSource.connectionGet, request),
+    beginPairing: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.browserSource.pairingBegin>,
+    ): Promise<RuntimeIpcResult<BrowserSourcePairingView, typeof IPC_CHANNELS.browserSource.pairingBegin>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.browserSource.pairingBegin, request),
+    revokeConnection: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.browserSource.connectionRevoke>,
+    ): Promise<RuntimeIpcResult<BrowserSourceConnectionView, typeof IPC_CHANNELS.browserSource.connectionRevoke>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.browserSource.connectionRevoke, request),
   },
   voiceInput: {
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {
