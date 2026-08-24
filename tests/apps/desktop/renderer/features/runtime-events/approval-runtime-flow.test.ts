@@ -11,11 +11,11 @@ import {
   collectEvents,
   createExecutionFixture,
   launchedExecution,
-} from '../../../../../packages/discovery/execution-test-fixtures';
+} from '../../../../../packages/execution/execution-test-fixtures';
 import {
   permissionService,
   registeredTool,
-} from '../../../../../packages/discovery/tool-call-test-fixtures';
+} from '../../../../../packages/execution/tool-call-test-fixtures';
 
 describe('approval Runtime flow', () => {
   it('projects a Megumi Agent approval event into a resolvable Desktop approval activity', async () => {

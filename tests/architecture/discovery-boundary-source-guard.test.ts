@@ -17,10 +17,10 @@ describe('Megumi discovery architecture boundary', () => {
     expect(configuration).not.toMatch(/@megumi\/engine|packages\/engine|packages\\engine/u);
   });
 
-  it('uses only the public Agent Core entry from discovery', () => {
+  it('keeps Discovery independent of Agent Core', () => {
     const discovery = readTypeScriptTree('packages/agent/discovery/src');
-    expect(discovery).toMatch(/from ['"]@megumi\/agent-core['"]/u);
-    expect(discovery).not.toMatch(/@megumi\/agent-core\/(?:src|internal)/u);
+    expect(discovery).not.toMatch(/@megumi\/agent-core(?:\/[^'"]*)?/u);
+    expect(read('packages/agent/discovery/package.json')).not.toContain('@megumi/agent-core');
   });
 
   it('keeps Agent Core private from Product and Desktop', () => {

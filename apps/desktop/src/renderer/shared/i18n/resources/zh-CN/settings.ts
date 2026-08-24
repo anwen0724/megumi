@@ -189,6 +189,7 @@ export const settings = {
     opening: '正在打开…',
     loginSource: '登录{{name}}',
     saveCredentialFor: '保存{{name}}凭据',
+    twitterApiLink: '打开 TwitterAPI.io',
     states: {
       ready: '可用', unknown: '尚未检查', not_configured: '未配置',
       login_required: '需要登录', rate_limited: '请求受限', risk_controlled: '需要验证',

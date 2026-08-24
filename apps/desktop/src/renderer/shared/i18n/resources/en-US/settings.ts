@@ -186,6 +186,7 @@ export const settings = {
     opening: 'Opening…',
     loginSource: 'Log in to {{name}}',
     saveCredentialFor: 'Save {{name}} credential',
+    twitterApiLink: 'Open TwitterAPI.io',
     states: {
       ready: 'Ready', unknown: 'Not checked', not_configured: 'Not configured',
       login_required: 'Login required', rate_limited: 'Rate limited', risk_controlled: 'Verification required',

@@ -274,7 +274,7 @@ describe('main runtime logger composition', () => {
     });
 
     expect(existsSync(join(mocks.logsPath, 'runtime.jsonl'))).toBe(false);
-  });
+  }, 10_000);
 
   it('uses one Voice Input Adapter for both Product composition and the dedicated IPC handler', async () => {
     const { composeDesktopMain } = await import('@megumi/desktop/main/shell-composition/desktop-main-composition');

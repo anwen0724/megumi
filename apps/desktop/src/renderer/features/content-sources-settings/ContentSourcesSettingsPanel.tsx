@@ -235,7 +235,7 @@ function CredentialSourceRow(props: {
         <Button type="button" variant="ghost" disabled={props.busy || !props.configured} onClick={props.onClear}>{t('contentSources.clear')}</Button>
         <Button type="button" variant="primary" disabled={props.busy || !props.value.trim()} onClick={props.onSave} aria-label={t('contentSources.saveCredentialFor', { name: props.source?.name ?? props.sourceId })}>{t('contentSources.save')}</Button>
       </div>
-      {props.sourceId === 'twitter' ? <a href="https://twitterapi.io/" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--color-accent)] hover:underline">TwitterAPI.io <ExternalLink size={11} aria-hidden="true" /></a> : null}
+      {props.sourceId === 'twitter' ? <a href="https://twitterapi.io/" target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--color-accent)] hover:underline">{t('contentSources.twitterApiLink')} <ExternalLink size={11} aria-hidden="true" /></a> : null}
     </div>
   );
 }
