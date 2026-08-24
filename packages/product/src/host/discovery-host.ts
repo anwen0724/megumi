@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import {
   DiscoveryHomeViewSchema,
+  DiscoveryConfigurationViewSchema,
   EnsureDailyDiscoveryRequestSchema,
   GetDiscoveryHomeRequestSchema,
   InterestSchema,
@@ -10,6 +11,7 @@ import {
   SearchRecommendationsResultSchema,
   SessionParticipationSchema,
   UpdateRecommendationStateRequestSchema,
+  UpdateDiscoveryConfigurationRequestSchema,
 } from '@megumi/discovery-agent';
 
 export const DiscoveryInterestChangePayloadSchema = z.discriminatedUnion('action', [
@@ -27,6 +29,9 @@ export const DiscoveryDailyEnsurePayloadSchema = EnsureDailyDiscoveryRequestSche
 export const DiscoveryHomePayloadSchema = GetDiscoveryHomeRequestSchema;
 export const DiscoveryRecommendationSearchPayloadSchema = SearchRecommendationsRequestSchema;
 export const DiscoveryRecommendationStatePayloadSchema = UpdateRecommendationStateRequestSchema;
+export const DiscoveryConfigurationGetPayloadSchema = z.object({}).strict();
+export const DiscoveryConfigurationUpdatePayloadSchema = UpdateDiscoveryConfigurationRequestSchema;
+export const DiscoveryConfigurationUiDtoSchema = DiscoveryConfigurationViewSchema;
 
 export const DiscoveryInterestUiDtoSchema = InterestSchema;
 export const DiscoverySessionParticipationUiDtoSchema = SessionParticipationSchema;
@@ -52,6 +57,9 @@ export type DiscoveryDailyEnsurePayload = z.infer<typeof DiscoveryDailyEnsurePay
 export type DiscoveryHomePayload = z.infer<typeof DiscoveryHomePayloadSchema>;
 export type DiscoveryRecommendationSearchPayload = z.infer<typeof DiscoveryRecommendationSearchPayloadSchema>;
 export type DiscoveryRecommendationStatePayload = z.infer<typeof DiscoveryRecommendationStatePayloadSchema>;
+export type DiscoveryConfigurationGetPayload = z.infer<typeof DiscoveryConfigurationGetPayloadSchema>;
+export type DiscoveryConfigurationUpdatePayload = z.infer<typeof DiscoveryConfigurationUpdatePayloadSchema>;
+export type DiscoveryConfigurationUiDto = z.infer<typeof DiscoveryConfigurationUiDtoSchema>;
 export type DiscoveryInterestUiDto = z.infer<typeof DiscoveryInterestUiDtoSchema>;
 export type DiscoverySessionParticipationUiDto = z.infer<typeof DiscoverySessionParticipationUiDtoSchema>;
 export type DiscoveryDailyEnsureResult = z.infer<typeof DiscoveryDailyEnsureResultSchema>;
@@ -60,6 +68,8 @@ export type DiscoveryRecommendationSearchUiResult = z.infer<typeof DiscoveryReco
 export type DiscoveryRecommendationUiDto = z.infer<typeof DiscoveryRecommendationUiDtoSchema>;
 
 export interface DiscoveryHost {
+  getConfiguration(request?: DiscoveryConfigurationGetPayload): Promise<DiscoveryConfigurationUiDto>;
+  updateConfiguration(request: DiscoveryConfigurationUpdatePayload): Promise<DiscoveryConfigurationUiDto>;
   changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestUiDto>;
   setSessionParticipation(request: DiscoverySessionParticipationPayload): Promise<DiscoverySessionParticipationUiDto>;
   ensureDaily(request: DiscoveryDailyEnsurePayload): Promise<DiscoveryDailyEnsureResult>;

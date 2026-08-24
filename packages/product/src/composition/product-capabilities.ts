@@ -547,6 +547,40 @@ function composeCapabilitiesWithDatabase(
           createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
         },
       },
+      configuration: {
+        sourceRegistry: discoverySources,
+        settings: {
+          read() {
+            const resolved = settings.resolve();
+            return resolved.status === 'ok'
+              ? {
+                  conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
+                  dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
+                  dailyTargetCount: resolved.settings.discovery.daily_target_count,
+                  enabledSources: resolved.settings.discovery.enabled_sources,
+                }
+              : {
+                  conversationRecognitionEnabled: false,
+                  dailyGenerationTime: '08:00',
+                  dailyTargetCount: 20,
+                  enabledSources: [],
+                };
+          },
+          write(next) {
+            const result = settings.update({
+              patch: {
+                discovery: {
+                  conversation_recognition_enabled: next.conversationRecognitionEnabled,
+                  daily_generation_time: next.dailyGenerationTime,
+                  daily_target_count: next.dailyTargetCount,
+                  enabled_sources: [...next.enabledSources],
+                },
+              },
+            });
+            if (result.status !== 'updated') throw new Error(result.failure.message);
+          },
+        },
+      },
       observability: observability.service,
       policy: PRODUCT_EXECUTION_POLICY,
     },

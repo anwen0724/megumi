@@ -149,7 +149,8 @@ function createFixture(
   let batchNumber = 0;
   let interestNumber = 0;
   const source: DiscoverySource = {
-    descriptor: { id: 'open_web', name: 'Open Web', supportedModes: ['relevance'] },
+    descriptor: { id: 'open_web', name: 'Open Web', access: 'public', supportedModes: ['relevance'] },
+    getAvailability: () => ({ state: 'ready' }),
     async search() {
       return { status: 'success', items: [{
         sourceId: 'open_web', sourceName: 'example.com', sourceContentId: 'item:new',

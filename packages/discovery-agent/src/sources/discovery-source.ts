@@ -9,6 +9,15 @@ const TimestampSchema = z.string().datetime({ offset: true });
 
 export const DiscoverySourceIdSchema = z.string().trim().min(1);
 export const SourceSearchModeSchema = z.enum(['relevance', 'recent']);
+export const SourceAccessKindSchema = z.enum(['public', 'browser_session']);
+export const SourceConnectionStateSchema = z.enum([
+  'ready',
+  'unknown',
+  'extension_offline',
+  'login_required',
+  'risk_controlled',
+  'not_configured',
+]);
 export const DiscoveryContentTypeSchema = z.enum([
   'video',
   'article',
@@ -22,7 +31,14 @@ export const DiscoveryContentTypeSchema = z.enum([
 export const SourceDescriptorSchema = z.object({
   id: DiscoverySourceIdSchema,
   name: z.string().trim().min(1),
+  access: SourceAccessKindSchema,
   supportedModes: z.array(SourceSearchModeSchema).min(1),
+}).strict();
+
+export const SourceAvailabilitySchema = z.object({
+  state: SourceConnectionStateSchema,
+  checkedAt: TimestampSchema.optional(),
+  retryAt: TimestampSchema.optional(),
 }).strict();
 
 export const SourceEngagementSchema = z.object({
@@ -53,6 +69,8 @@ export const SourceContentDetailSchema = SourceContentSchema.extend({
 export const SourceFailureSchema = z.object({
   code: z.enum([
     'not_configured',
+    'extension_offline',
+    'login_required',
     'rate_limited',
     'risk_control',
     'timeout',
@@ -66,6 +84,9 @@ export const SourceFailureSchema = z.object({
 
 export type DiscoverySourceId = z.infer<typeof DiscoverySourceIdSchema>;
 export type SourceSearchMode = z.infer<typeof SourceSearchModeSchema>;
+export type SourceAccessKind = z.infer<typeof SourceAccessKindSchema>;
+export type SourceConnectionState = z.infer<typeof SourceConnectionStateSchema>;
+export type SourceAvailability = z.infer<typeof SourceAvailabilitySchema>;
 export type DiscoveryContentType = z.infer<typeof DiscoveryContentTypeSchema>;
 export type SourceDescriptor = z.infer<typeof SourceDescriptorSchema>;
 export type SourceEngagement = z.infer<typeof SourceEngagementSchema>;
@@ -83,6 +104,7 @@ export type SourceReadResult =
 
 export interface DiscoverySource {
   readonly descriptor: SourceDescriptor;
+  getAvailability(): SourceAvailability;
   search(request: {
     readonly query: string;
     readonly mode: SourceSearchMode;

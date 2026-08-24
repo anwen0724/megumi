@@ -38,7 +38,10 @@ export function createBilibiliSource(input: {
   let cooldown: { until: number; failure: SourceFailure } | undefined;
 
   const source: DiscoverySource = {
-    descriptor: { id: 'bilibili', name: '哔哩哔哩', supportedModes: ['relevance', 'recent'] },
+    descriptor: { id: 'bilibili', name: '哔哩哔哩', access: 'public', supportedModes: ['relevance', 'recent'] },
+    getAvailability: () => cooldown && cooldown.until > now()
+      ? { state: 'risk_controlled', retryAt: new Date(cooldown.until).toISOString() }
+      : { state: 'ready' },
     async search(request) {
       if (cooldown && cooldown.until > now()) return { status: 'failed', failure: cooldown.failure };
       if (cooldown) cooldown = undefined;

@@ -9,7 +9,8 @@ import {
 
 function source(id: string, modes: readonly SourceSearchMode[] = ['relevance']): DiscoverySource {
   return {
-    descriptor: { id, name: `Source ${id}`, supportedModes: [...modes] },
+    descriptor: { id, name: `Source ${id}`, access: 'public', supportedModes: [...modes] },
+    getAvailability: () => ({ state: 'ready', checkedAt: '2026-08-24T08:00:00.000Z' }),
     async search() { return { status: 'success', items: [] }; },
   };
 }
@@ -25,6 +26,14 @@ describe('SourceRegistry', () => {
     expect(registry.listDescriptors().map((entry) => entry.id))
       .toEqual(['open_web', 'bilibili', 'test_source']);
     expect(registry.resolve('test_source', 'recent').descriptor.name).toBe('Source test_source');
+    expect(registry.listSources()).toEqual([
+      expect.objectContaining({
+        descriptor: expect.objectContaining({ id: 'open_web', access: 'public' }),
+        availability: { state: 'ready', checkedAt: '2026-08-24T08:00:00.000Z' },
+      }),
+      expect.objectContaining({ descriptor: expect.objectContaining({ id: 'bilibili' }) }),
+      expect.objectContaining({ descriptor: expect.objectContaining({ id: 'test_source' }) }),
+    ]);
   });
 
   it.each([

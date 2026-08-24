@@ -492,7 +492,12 @@ function dailySystemPrompt(input: {
 
 function enabledDescriptors(registry: SourceRegistry, enabled: readonly DiscoverySourceId[]): SourceDescriptor[] {
   const enabledIds = new Set(enabled);
-  return registry.listDescriptors().filter((descriptor) => enabledIds.has(descriptor.id));
+  return registry.listSources()
+    .filter(({ descriptor, availability }) => (
+      enabledIds.has(descriptor.id)
+      && (availability.state === 'ready' || availability.state === 'unknown')
+    ))
+    .map(({ descriptor }) => descriptor);
 }
 
 function recommendationFromCandidate(input: {

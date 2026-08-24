@@ -11,9 +11,13 @@ export function createDiscoveryOperations(
     | 'getDiscoveryHome'
     | 'searchRecommendations'
     | 'updateRecommendationState'
+    | 'getDiscoveryConfiguration'
+    | 'updateDiscoveryConfiguration'
   >,
 ): DiscoveryHost {
   return {
+    getConfiguration: () => agent.getDiscoveryConfiguration(),
+    updateConfiguration: (request) => agent.updateDiscoveryConfiguration(request),
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
     ensureDaily: (request) => agent.ensureDailyDiscovery(request),

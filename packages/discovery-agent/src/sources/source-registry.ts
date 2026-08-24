@@ -3,12 +3,14 @@ import {
   SourceDescriptorSchema,
   type DiscoverySource,
   type DiscoverySourceId,
+  type SourceAvailability,
   type SourceDescriptor,
   type SourceSearchMode,
 } from './discovery-source';
 
 export interface SourceRegistry {
   listDescriptors(): readonly SourceDescriptor[];
+  listSources(): readonly { readonly descriptor: SourceDescriptor; readonly availability: SourceAvailability }[];
   get(sourceId: DiscoverySourceId): DiscoverySource | undefined;
   resolve(sourceId: DiscoverySourceId, mode: SourceSearchMode): DiscoverySource;
 }
@@ -26,6 +28,10 @@ export function createSourceRegistry(sources: readonly DiscoverySource[]): Sourc
 
   return {
     listDescriptors: () => [...entries.values()].map((entry) => entry.descriptor),
+    listSources: () => [...entries.values()].map((entry) => ({
+      descriptor: entry.descriptor,
+      availability: entry.source.getAvailability(),
+    })),
     get: (sourceId) => entries.get(sourceId.trim())?.source,
     resolve(sourceId, mode) {
       const entry = entries.get(sourceId.trim());

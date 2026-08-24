@@ -401,7 +401,8 @@ function source(
   modes: Array<'relevance' | 'recent'> = ['relevance'],
 ): DiscoverySource {
   return {
-    descriptor: { id, name: id, supportedModes: modes },
+    descriptor: { id, name: id, access: 'public', supportedModes: modes },
+    getAvailability: () => ({ state: 'ready' }),
     async search(request) {
       const result = await search(request.query);
       return Array.isArray(result) ? { status: 'success', items: result } : result as Awaited<ReturnType<DiscoverySource['search']>>;

@@ -58,10 +58,12 @@ describe('Discovery owner contracts', () => {
     expect(SourceDescriptorSchema.parse({
       id: 'youtube',
       name: 'YouTube',
+      access: 'public',
       supportedModes: ['relevance', 'recent'],
     })).toEqual({
       id: 'youtube',
       name: 'YouTube',
+      access: 'public',
       supportedModes: ['relevance', 'recent'],
     });
     expect(SourceContentSchema.parse({

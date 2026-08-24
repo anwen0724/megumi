@@ -68,6 +68,9 @@ export {
   SourceDescriptorSchema,
   SourceEngagementSchema,
   SourceFailureSchema,
+  SourceAccessKindSchema,
+  SourceAvailabilitySchema,
+  SourceConnectionStateSchema,
   SourceSearchModeSchema,
 } from './sources/discovery-source';
 export { createSourceRegistry } from './sources/source-registry';
@@ -87,6 +90,9 @@ export type {
   DiscoveryContentType,
   DiscoverySource,
   DiscoverySourceId,
+  SourceAccessKind,
+  SourceAvailability,
+  SourceConnectionState,
   SourceContent,
   SourceContentDetail,
   SourceDescriptor,
@@ -96,6 +102,20 @@ export type {
   SourceSearchMode,
   SourceSearchResult,
 } from './sources/discovery-source';
+export {
+  createDiscoveryConfiguration,
+  DiscoveryConfigurationViewSchema,
+  DiscoverySourceViewSchema,
+  UpdateDiscoveryConfigurationRequestSchema,
+} from './configuration/discovery-configuration';
+export type {
+  DiscoveryConfiguration,
+  DiscoveryConfigurationSettings,
+  DiscoveryConfigurationStore,
+  DiscoveryConfigurationView,
+  DiscoverySourceView,
+  UpdateDiscoveryConfigurationRequest,
+} from './configuration/discovery-configuration';
 export {
   DailyDiscoveryBatchSchema,
   DailyDiscoveryBatchStatusSchema,

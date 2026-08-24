@@ -41,6 +41,13 @@ import {
   createDailyDiscoveryRuntime,
   type CreateDailyDiscoveryRuntimeOptions,
 } from './daily-discovery/daily-discovery-runtime';
+import {
+  createDiscoveryConfiguration,
+  type DiscoveryConfigurationStore,
+  type DiscoveryConfigurationView,
+  type UpdateDiscoveryConfigurationRequest,
+} from './configuration/discovery-configuration';
+import type { SourceRegistry } from './sources/source-registry';
 import type {
   EnsureDailyDiscoveryRequest,
   EnsureDailyDiscoveryResult,
@@ -88,6 +95,8 @@ export interface DiscoveryAgent {
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
   searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
   updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationView>;
+  getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
+  updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
   start(request: StartExecutionRequest): Promise<StartExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
@@ -236,6 +245,10 @@ export interface CreateDiscoveryAgentOptions {
   readonly conversation: ConversationSubmissionDependencies;
   readonly interests?: CreateInterestRuntimeOptions;
   readonly dailyDiscovery?: Omit<CreateDailyDiscoveryRuntimeOptions, 'tools'>;
+  readonly configuration?: {
+    readonly sourceRegistry: SourceRegistry;
+    readonly settings: DiscoveryConfigurationStore;
+  };
   readonly observability?: ObservabilityService;
   readonly policy: DiscoveryAgentPolicy;
   /** Optional launch override for focused multi-execution tests; production uses the Execute Agent adapter. */
@@ -269,6 +282,9 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
         createExecutionId: options.ids.createExecutionId,
         now: options.clock.now,
       })
+    : undefined;
+  const discoveryConfiguration = options.configuration
+    ? createDiscoveryConfiguration(options.configuration)
     : undefined;
 
   const settleCompletion = (executionId: string, outcome: ExecutionOutcome): void => {
@@ -384,6 +400,12 @@ export function createDiscoveryAgent(options: CreateDiscoveryAgentOptions): Disc
     updateRecommendationState: (request) => dailyDiscoveryRuntime
       ? Promise.resolve(dailyDiscoveryRuntime.updateRecommendationState(request))
       : Promise.reject(new Error('Daily discovery is not configured.')),
+    getDiscoveryConfiguration: () => discoveryConfiguration
+      ? discoveryConfiguration.get()
+      : Promise.reject(new Error('Discovery configuration is not configured.')),
+    updateDiscoveryConfiguration: (request) => discoveryConfiguration
+      ? discoveryConfiguration.update(request)
+      : Promise.reject(new Error('Discovery configuration is not configured.')),
 
     async start(request): Promise<StartExecutionResult> {
       if (!accepting) {

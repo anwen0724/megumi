@@ -1,0 +1,100 @@
+/* Owns validation and projection of source-aware Discovery configuration. */
+import { z } from 'zod';
+import type { DiscoverySourceId } from '../sources/discovery-source';
+import type { SourceRegistry } from '../sources/source-registry';
+
+const LocalTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u);
+
+export interface DiscoveryConfigurationSettings {
+  readonly conversationRecognitionEnabled: boolean;
+  readonly dailyGenerationTime: string;
+  readonly dailyTargetCount: number;
+  readonly enabledSources: readonly DiscoverySourceId[];
+}
+
+export interface DiscoveryConfigurationStore {
+  read(): DiscoveryConfigurationSettings;
+  write(settings: DiscoveryConfigurationSettings): Promise<void> | void;
+}
+
+export const UpdateDiscoveryConfigurationRequestSchema = z.object({
+  conversationRecognitionEnabled: z.boolean().optional(),
+  dailyGenerationTime: LocalTimeSchema.optional(),
+  dailyTargetCount: z.number().int().min(1).max(100).optional(),
+  enabledSources: z.array(z.string().trim().min(1)).min(1).optional(),
+}).strict();
+
+export const DiscoverySourceViewSchema = z.object({
+  sourceId: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  access: z.enum(['public', 'browser_session']),
+  supportedModes: z.array(z.enum(['relevance', 'recent'])).min(1),
+  enabled: z.boolean(),
+  connectionState: z.enum(['ready', 'unknown', 'extension_offline', 'login_required', 'risk_controlled', 'not_configured']),
+  checkedAt: z.string().datetime({ offset: true }).optional(),
+  retryAt: z.string().datetime({ offset: true }).optional(),
+}).strict();
+
+export const DiscoveryConfigurationViewSchema = z.object({
+  conversationRecognitionEnabled: z.boolean(),
+  dailyGenerationTime: LocalTimeSchema,
+  dailyTargetCount: z.number().int().min(1).max(100),
+  sources: z.array(DiscoverySourceViewSchema),
+}).strict();
+
+export type UpdateDiscoveryConfigurationRequest = z.infer<typeof UpdateDiscoveryConfigurationRequestSchema>;
+
+export type DiscoverySourceView = z.infer<typeof DiscoverySourceViewSchema>;
+export type DiscoveryConfigurationView = z.infer<typeof DiscoveryConfigurationViewSchema>;
+
+export interface DiscoveryConfiguration {
+  get(): Promise<DiscoveryConfigurationView>;
+  update(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
+}
+
+export function createDiscoveryConfiguration(input: {
+  readonly sourceRegistry: SourceRegistry;
+  readonly settings: DiscoveryConfigurationStore;
+}): DiscoveryConfiguration {
+  const view = (): DiscoveryConfigurationView => {
+    const settings = input.settings.read();
+    const enabled = new Set(settings.enabledSources);
+    return {
+      conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
+      dailyGenerationTime: settings.dailyGenerationTime,
+      dailyTargetCount: settings.dailyTargetCount,
+      sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) => ({
+        sourceId: descriptor.id,
+        name: descriptor.name,
+        access: descriptor.access,
+        supportedModes: [...descriptor.supportedModes],
+        enabled: enabled.has(descriptor.id),
+        connectionState: availability.state,
+        ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}),
+        ...(availability.retryAt ? { retryAt: availability.retryAt } : {}),
+      })),
+    };
+  };
+
+  return {
+    get: async () => view(),
+    update: async (request) => {
+      const patch = UpdateDiscoveryConfigurationRequestSchema.parse(request);
+      const current = input.settings.read();
+      const enabledSources = patch.enabledSources
+        ? [...new Set(patch.enabledSources.map((sourceId) => sourceId.trim()))]
+        : [...current.enabledSources];
+      const registered = new Set(input.sourceRegistry.listDescriptors().map((source) => source.id));
+      if (enabledSources.some((sourceId) => !registered.has(sourceId))) {
+        throw new Error('Discovery configuration contains an unregistered source.');
+      }
+      await input.settings.write({
+        conversationRecognitionEnabled: patch.conversationRecognitionEnabled ?? current.conversationRecognitionEnabled,
+        dailyGenerationTime: patch.dailyGenerationTime ?? current.dailyGenerationTime,
+        dailyTargetCount: patch.dailyTargetCount ?? current.dailyTargetCount,
+        enabledSources,
+      });
+      return view();
+    },
+  };
+}

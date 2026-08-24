@@ -16,7 +16,8 @@ export function createOpenWebSource(input: {
   readonly webFetch?: WebFetch;
 }): DiscoverySource {
   return {
-    descriptor: { id: 'open_web', name: 'Open Web', supportedModes: ['relevance'] },
+    descriptor: { id: 'open_web', name: 'Open Web', access: 'public', supportedModes: ['relevance'] },
+    getAvailability: () => ({ state: input.webSearch ? 'ready' : 'not_configured' }),
     async search(request) {
       if (!input.webSearch) return failed('not_configured', 'Open Web search is not configured.', false);
       try {
