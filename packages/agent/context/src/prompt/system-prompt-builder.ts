@@ -1,13 +1,12 @@
 /*
- * Materializes the System Prompt in a fixed six-section order: Identity
- * paragraph, Behavior guidelines heading with one bullet per item, Effective
+ * Materializes the System Prompt in a fixed order: profile documents, Effective
  * Instructions, Available tools, Skill Catalog, Execution Environment. Empty
  * optional sections are omitted entirely; attribute values are XML-escaped,
  * body text is kept raw. Sections are paragraphs that may contain bullet lists
  * or XML blocks; grouping inside instructions never leaks into the prompt.
  */
 
-import type { SystemInstruction } from '@megumi/instructions';
+import type { SystemInstructionDocument } from '@megumi/instructions';
 import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
@@ -15,58 +14,39 @@ import type { ExecutionEnvironment } from '../context';
 import { escapeXmlAttribute } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
-  readonly systemInstructions: readonly SystemInstruction[];
-  readonly effectiveInstructions: EffectiveInstructions;
-  readonly skills: SkillView;
-  readonly executionEnvironment: ExecutionEnvironment;
+  readonly systemInstructions: readonly SystemInstructionDocument[];
+  readonly effectiveInstructions?: EffectiveInstructions;
+  readonly skills?: SkillView;
+  readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
+  readonly additionalSections?: readonly string[];
 }
 
 export function buildSystemPrompt(sources: SystemPromptSources): string {
   const sections: string[] = [];
-  const identity = renderIdentity(sources.systemInstructions);
-  if (identity) sections.push(identity);
-  const guidance = renderBehaviorGuidelines(sources.systemInstructions, sources.tools);
+  sections.push(...sources.systemInstructions.map((document) => document.content));
+  sections.push(...(sources.additionalSections ?? []));
+  const guidance = renderToolGuidelines(sources.tools);
   if (guidance) sections.push(guidance);
-  const effective = renderEffectiveInstructions(sources.effectiveInstructions);
+  const effective = sources.effectiveInstructions
+    ? renderEffectiveInstructions(sources.effectiveInstructions)
+    : '';
   if (effective) sections.push(effective);
   const tools = renderAvailableTools(sources.tools);
   if (tools) sections.push(tools);
-  const catalog = renderSkillCatalog(sources.skills);
+  const catalog = sources.skills ? renderSkillCatalog(sources.skills) : '';
   if (catalog) sections.push(catalog);
-  sections.push(renderExecutionEnvironment(sources.executionEnvironment));
+  if (sources.executionEnvironment) {
+    sections.push(renderExecutionEnvironment(sources.executionEnvironment));
+  }
   return sections.join('\n\n');
 }
 
-/** ① Identity paragraph: instructions whose segment is 'identity', items merged into one paragraph. */
-function renderIdentity(instructions: readonly SystemInstruction[]): string {
-  const items = instructions
-    .filter((instruction) => instructionSegment(instruction.instructionId) === 'identity')
-    .flatMap((instruction) => instruction.groups.flatMap((group) => group.items));
-  return items.join(' ');
-}
-
-/**
- * ② Behavior guidelines: fixed heading + one bullet per item. Items come from two
- * sources rendered as one flat list: system instruction guidance items first, then
- * the promptGuidelines of tools visible in this ModelCall (tool order).
- */
-function renderBehaviorGuidelines(
-  instructions: readonly SystemInstruction[],
-  tools: readonly ToolDefinition[],
-): string {
-  const systemItems = instructions
-    .filter((instruction) => instructionSegment(instruction.instructionId) === 'guidance')
-    .flatMap((instruction) => instruction.groups.flatMap((group) => group.items));
-  const toolGuidelines = tools.flatMap((tool) => tool.promptGuidelines ?? []);
-  const items = [...systemItems, ...toolGuidelines];
+/** Tool-specific prompt guidance follows the profile documents. */
+function renderToolGuidelines(tools: readonly ToolDefinition[]): string {
+  const items = tools.flatMap((tool) => tool.promptGuidelines ?? []);
   if (items.length === 0) return '';
   return ['Behavior guidelines:', ...items.map((item) => `- ${item}`)].join('\n');
-}
-
-/** The instruction segment is the last namespace part (identity / guidance). */
-function instructionSegment(instructionId: string): string {
-  return instructionId.split('.').at(-1) ?? '';
 }
 
 /** ④ Available tools: a guidance line plus one line per tool; the promptSnippet wins over the folded, truncated description. */

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { DATABASE_MIGRATIONS_RESOURCE_PATH } from '@megumi/database';
 
 export const PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH = 'product/system-skills';
+export const PRODUCT_INSTRUCTIONS_RESOURCE_PATH = 'product/instructions';
 export const VOICE_RUNTIME_RESOURCE_PATH = 'voice';
 
 export function resolveProductSystemSkillsPath(input: {
@@ -16,8 +17,19 @@ export function resolveProductSystemSkillsPath(input: {
     : path.resolve(input.cwd, 'packages/agent/skills/built-in-skills');
 }
 
+export function resolveProductInstructionsPath(input: {
+  isPackaged: boolean;
+  resourcesPath: string;
+  cwd: string;
+}): string {
+  return input.isPackaged
+    ? path.resolve(input.resourcesPath, PRODUCT_INSTRUCTIONS_RESOURCE_PATH)
+    : path.resolve(input.cwd, 'packages/agent/instructions/content');
+}
+
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
   const systemSkillsPath = path.resolve(cwd, 'packages/agent/skills/built-in-skills');
+  const instructionsPath = path.resolve(cwd, 'packages/agent/instructions/content');
   const voiceManifestPath = path.resolve(cwd, 'packages/agent/voice/resources/model-manifest.json');
   const vadResourcePath = path.resolve(cwd, 'packages/agent/voice/resources/vad');
   return [
@@ -25,6 +37,10 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
       source: systemSkillsPath,
       target: PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH,
     }] : []),
+    {
+      source: instructionsPath,
+      target: PRODUCT_INSTRUCTIONS_RESOURCE_PATH,
+    },
     {
       source: path.resolve(cwd, 'packages/agent/database/migrations'),
       target: DATABASE_MIGRATIONS_RESOURCE_PATH,

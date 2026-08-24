@@ -29,6 +29,7 @@ import {
 import { IPC_CHANNELS } from '../ipc/channels';
 import { createBrowserSourceLoopbackServer } from '../adapters/browser-source/browser-source-loopback-server';
 import { createFileBrowserSourceConnectionStore } from '../adapters/browser-source/file-browser-source-connection-store';
+import { resolveProductInstructionsPath } from '../packaging/product-resources';
 
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
@@ -59,6 +60,11 @@ export function composeDesktopMain() {
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
     browserSourceTaskGateway: browserSource,
+    instructionContentRoot: resolveProductInstructionsPath({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      cwd: process.cwd(),
+    }),
   });
   const discoveryAgent = createDiscoveryAgent(capabilities.discoveryAgentOptions);
   const product = composeProduct({

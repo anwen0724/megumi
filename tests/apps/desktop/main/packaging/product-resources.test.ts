@@ -17,6 +17,7 @@ describe('Product packaging resources', () => {
     roots.push(root);
     for (const relativePath of [
       'packages/agent/database/migrations',
+      'packages/agent/instructions/content',
       'packages/agent/voice/resources/vad',
     ]) fs.mkdirSync(path.join(root, relativePath), { recursive: true });
     fs.writeFileSync(path.join(root, 'packages/agent/voice/resources/model-manifest.json'), '{}');
@@ -26,6 +27,7 @@ describe('Product packaging resources', () => {
     expect(getProductPackagingResources(root)).toEqual(expect.arrayContaining([
       expect.objectContaining({ target: 'voice/model-manifest.json' }),
       expect.objectContaining({ target: 'voice/vad' }),
+      expect.objectContaining({ target: 'product/instructions' }),
     ]));
     const resources = getProductPackagingResources(root);
     expect(resources.some((resource) => resource.target.includes('sidecar'))).toBe(false);

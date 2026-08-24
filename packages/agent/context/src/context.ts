@@ -30,14 +30,48 @@ export interface ContextWorkspaceSource {
   >;
 }
 
-/** Facts that stay constant for the whole accepted Run. */
-export interface RunContext {
+export interface BaseRunContext {
   readonly executionId: string;
+  readonly model: Model<Api>;
+}
+
+/** Session-backed facts that stay constant for one conversation execution. */
+export interface ConversationRunContext extends BaseRunContext {
+  readonly kind: 'conversation';
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly userInput: UserInput;
-  readonly model: Model<Api>;
 }
+
+export interface DailyDiscoveryContextMaterial {
+  readonly targetCount: number;
+  readonly interests: readonly {
+    readonly interestId: string;
+    readonly description: string;
+  }[];
+  readonly sources: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly access: string;
+    readonly supportedModes: readonly string[];
+  }[];
+  readonly recommendationSignals: readonly {
+    readonly contentIdentity: string;
+    readonly sourceName: string;
+    readonly title: string;
+    readonly reaction?: string;
+  }[];
+}
+
+/** Discovery facts are fixed before one daily-discovery execution starts. */
+export interface DailyDiscoveryRunContext extends BaseRunContext {
+  readonly kind: 'daily_discovery';
+  readonly batchId: string;
+  readonly localDate: string;
+  readonly material: DailyDiscoveryContextMaterial;
+}
+
+export type RunContext = ConversationRunContext | DailyDiscoveryRunContext;
 
 /** Facts fixed before one model call; never persisted. */
 export interface ModelCallContext {
@@ -55,6 +89,7 @@ export interface Prompt {
 
 export interface BuildContextRequest {
   readonly modelCallContext: ModelCallContext;
+  readonly currentMessages: readonly Message[];
   readonly signal?: AbortSignal;
 }
 

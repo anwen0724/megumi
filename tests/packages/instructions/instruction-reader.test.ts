@@ -78,13 +78,21 @@ describe('InstructionReader', () => {
       source: new FakeInstructionSource(),
     });
 
-    const first = await reader.getSystemInstructions();
-    const second = await reader.getSystemInstructions();
+    const conversation = await reader.getSystemInstructions('conversation');
+    const discovery = await reader.getSystemInstructions('daily_discovery');
 
-    expect(first).toEqual(EXPECTED_SYSTEM_INSTRUCTIONS);
-    expect(second).toEqual(EXPECTED_SYSTEM_INSTRUCTIONS);
-    expect(first).not.toBe(second);
-    expect(first[0]).not.toBe(second[0]);
+    expect(conversation.map((document) => document.instructionId)).toEqual([
+      'megumi.common',
+      'megumi.conversation',
+    ]);
+    expect(discovery.map((document) => document.instructionId)).toEqual([
+      'megumi.common',
+      'megumi.daily-discovery',
+    ]);
+    expect(conversation[0]?.content).toContain('Megumi');
+    expect(discovery[1]?.content).toContain('select_recommendations');
+    expect(conversation).not.toBe(discovery);
+    expect(conversation[0]).not.toBe(discovery[0]);
   });
 
   it('reads Home, Workspace, and nested exact AGENTS.md sources from far to near', async () => {

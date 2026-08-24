@@ -4,7 +4,7 @@
  * fills the AgentContext, and the Router is released idempotently on every exit.
  */
 import type { AgentContext, AgentContextProvider, AgentError, AgentTool } from '@megumi/agent-core';
-import type { ContextCapabilities } from '@megumi/context';
+import type { ContextCapabilities, RunContext } from '@megumi/context';
 import type { UserInput } from '@megumi/input';
 import type { ModelCallToolBinding, ToolDefinition, ToolExecutionBinding } from '@megumi/tools';
 import type { ExecutionMetadata } from './execution-registry';
@@ -22,6 +22,7 @@ export interface ToolScope {
 export interface ContextAdapterDependencies {
   readonly metadata: ExecutionMetadata;
   readonly userInput: UserInput;
+  readonly runContext?: RunContext;
   readonly context: ContextCapabilities;
   readonly toolExecution: ToolExecutionBinding;
   readonly ids: { createModelCallId(): string };
@@ -38,7 +39,8 @@ export function createContextAdapter(
   dependencies: ContextAdapterDependencies,
   runtime: ContextAdapterRuntime,
 ): AgentContextProvider {
-  const runContext = {
+  const runContext: RunContext = dependencies.runContext ?? {
+    kind: 'conversation',
     executionId: dependencies.metadata.executionId,
     sessionId: dependencies.metadata.sessionId,
     workspaceId: dependencies.metadata.workspaceId,
@@ -46,7 +48,11 @@ export function createContextAdapter(
     model: dependencies.metadata.model,
   };
 
-  const build = async (scope: ToolScope, signal: AbortSignal) => {
+  const build = async (
+    scope: ToolScope,
+    currentMessages: AgentContext['messages'],
+    signal: AbortSignal,
+  ) => {
     try {
       const built = await dependencies.context.build({
         modelCallContext: {
@@ -54,6 +60,7 @@ export function createContextAdapter(
           run: runContext,
           tools: scope.definitions,
         },
+        currentMessages,
         signal,
       });
       if (signal.aborted || (built.status === 'failed' && built.failure.code === 'cancelled')) {
@@ -88,7 +95,7 @@ export function createContextAdapter(
   };
 
   return {
-    async prepare({ signal }) {
+    async prepare({ context, signal }) {
       releaseActiveScope(dependencies, runtime);
       const modelCallId = dependencies.ids.createModelCallId();
       let resolution;
@@ -123,12 +130,12 @@ export function createContextAdapter(
         dependencies.createAgentTool(definition, scope)
       ));
       runtime.activeScope = scope;
-      const result = await build(scope, signal);
+      const result = await build(scope, context.messages, signal);
       if (result.status !== 'ready') releaseActiveScope(dependencies, runtime);
       return result;
     },
 
-    async recoverOverflow({ signal }) {
+    async recoverOverflow({ context, signal }) {
       const scope = runtime.activeScope;
       if (!scope || scope.released) {
         return {
@@ -165,7 +172,7 @@ export function createContextAdapter(
           ),
         };
       }
-      return build(scope, signal);
+      return build(scope, context.messages, signal);
     },
   };
 }

@@ -7,11 +7,10 @@ export {
   type EffectiveInstructions,
   type GetEffectiveInstructionsRequest,
   type GetEffectiveInstructionsResult,
-  type InstructionGroup,
+  type InstructionProfile,
   type InstructionOperationOptions,
   type InstructionReader,
-  type SystemInstruction,
-  type SystemInstructions,
+  type SystemInstructionDocument,
 } from './instructions';
 export {
   createNodeInstructionSource,

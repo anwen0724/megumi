@@ -146,6 +146,7 @@ export function runHistory(index: number): SessionHistoryItem[] {
 
 export function modelCall(overrides: Partial<ModelCallContext> = {}): ModelCallContext {
   const run: RunContext = {
+    kind: 'conversation',
     executionId: 'run:current',
     sessionId: 'session:1',
     workspaceId: 'workspace:1',

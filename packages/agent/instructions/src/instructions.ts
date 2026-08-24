@@ -1,24 +1,19 @@
-/* Defines the Instructions owner API and coordinates policy with an injected source. */
+/* Defines the Instructions owner API and coordinates fixed profile documents with scoped project instructions. */
+import path from 'node:path';
 import {
   createNodeInstructionSource,
   loadInstructionFiles,
   type InstructionSource,
 } from './instruction-files';
-import { getSystemInstructions } from './system-instructions';
+import { loadSystemInstructionDocuments } from './instruction-content-loader';
 
-/** 指令内容分组：稳定组标识 + 有序条目（条目呈现为段落或 bullet）。 */
-export interface InstructionGroup {
-  readonly groupId: string;
-  readonly items: readonly string[];
-}
+export type InstructionProfile = 'conversation' | 'daily_discovery';
 
-/** 一条段级指令：稳定标识 + 内容分组（指令 → 组 → 条目三层，便于读取与管理）。 */
-export interface SystemInstruction {
+export interface SystemInstructionDocument {
   readonly instructionId: string;
-  readonly groups: readonly InstructionGroup[];
+  readonly sourcePath: string;
+  readonly content: string;
 }
-
-export type SystemInstructions = SystemInstruction[];
 
 export interface AgentInstructionSource {
   readonly sourceId: string;
@@ -60,7 +55,7 @@ export type GetEffectiveInstructionsResult =
   | { readonly status: 'cancelled' };
 
 export interface InstructionReader {
-  getSystemInstructions(): Promise<SystemInstructions>;
+  getSystemInstructions(profile: InstructionProfile): Promise<readonly SystemInstructionDocument[]>;
   getEffectiveInstructions(
     request: GetEffectiveInstructionsRequest,
     options?: InstructionOperationOptions,
@@ -70,6 +65,7 @@ export interface InstructionReader {
 export interface CreateInstructionReaderOptions {
   readonly megumiHomePath: string;
   readonly source?: InstructionSource;
+  readonly systemContentRoot?: string;
 }
 
 export function createInstructionReader(
@@ -78,6 +74,7 @@ export function createInstructionReader(
   return new DefaultInstructionReader(
     options.megumiHomePath,
     options.source ?? createNodeInstructionSource(),
+    options.systemContentRoot ?? path.resolve(process.cwd(), 'packages/agent/instructions/content'),
   );
 }
 
@@ -85,10 +82,11 @@ class DefaultInstructionReader implements InstructionReader {
   constructor(
     private readonly megumiHomePath: string,
     private readonly source: InstructionSource,
+    private readonly systemContentRoot: string,
   ) {}
 
-  getSystemInstructions(): Promise<SystemInstructions> {
-    return getSystemInstructions();
+  getSystemInstructions(profile: InstructionProfile): Promise<readonly SystemInstructionDocument[]> {
+    return loadSystemInstructionDocuments({ contentRoot: this.systemContentRoot, profile });
   }
 
   async getEffectiveInstructions(

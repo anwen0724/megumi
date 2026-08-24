@@ -14,10 +14,11 @@ function resolveContext(tools: readonly ToolDefinition[]) {
     workspaceSource: workspace,
     instructionReader: {
       getSystemInstructions: vi.fn(async () => [
-        { instructionId: 'megumi.system.identity', groups: [{ groupId: 'identity', items: ['system'] }] },
+        { instructionId: 'megumi.common', sourcePath: '/instructions/common.md', content: 'system' },
         {
-          instructionId: 'megumi.system.guidance',
-          groups: [{ groupId: 'communication', items: ['Be concise in your responses.'] }],
+          instructionId: 'megumi.conversation',
+          sourcePath: '/instructions/conversation.md',
+          content: 'Be concise in your responses.',
         },
       ]),
       getEffectiveInstructions: vi.fn(async () => ({
@@ -94,8 +95,8 @@ describe('PromptBuilder', () => {
     expect(availableTools).toBeGreaterThan(effective);
     expect(environment).toBeGreaterThan(availableTools);
     expect(text.indexOf('<available_skills>')).toBe(-1);
-    // The guidance section renders as a bullet list without group markers.
-    expect(text).toContain('- Be concise in your responses.');
+    // Profile documents render verbatim without internal group markers.
+    expect(text).toContain('Be concise in your responses.');
     expect(text).not.toContain('communication');
     // Section guidance lines borrowed from pi's system prompt.
     expect(text).toContain('User and project-specific instructions and guidelines:');
@@ -103,12 +104,12 @@ describe('PromptBuilder', () => {
     // Tool snippets render in the available tools section; missing snippets fall back to the folded description.
     expect(text).toContain('- read_file: Read file contents.');
     expect(text).toContain('- run_command: Run a command and return output previews.');
-    // Tool guidelines appear inside the behavior guidelines list after the system items.
+    // Profile content precedes the tool-specific behavior guideline section.
     const behavior = text.indexOf('Behavior guidelines:');
-    const systemItem = text.indexOf('- Be concise in your responses.');
+    const profileContent = text.indexOf('Be concise in your responses.');
     const toolGuideline = text.indexOf('Command output is redacted; sensitive values are replaced before they reach you.');
-    expect(systemItem).toBeGreaterThan(behavior);
-    expect(toolGuideline).toBeGreaterThan(systemItem);
+    expect(profileContent).toBeLessThan(behavior);
+    expect(toolGuideline).toBeGreaterThan(behavior);
   });
 
   it('neither needs a ModelCallContext nor a full Model object', async () => {

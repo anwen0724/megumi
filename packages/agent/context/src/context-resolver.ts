@@ -7,7 +7,7 @@
  */
 
 import type { Api, Model } from '@megumi/ai';
-import type { EffectiveInstructions, InstructionReader, SystemInstruction } from '@megumi/instructions';
+import type { EffectiveInstructions, InstructionReader, SystemInstructionDocument } from '@megumi/instructions';
 import type { SessionHistory, SessionHistoryItem } from '@megumi/session';
 import type { Skills, SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
@@ -26,7 +26,7 @@ export interface ResolveContextRequest {
 export interface ResolvedContext {
   readonly activeSessionHistory: readonly SessionHistoryItem[];
   readonly expectedActiveEntryId: string;
-  readonly systemInstructions: readonly SystemInstruction[];
+  readonly systemInstructions: readonly SystemInstructionDocument[];
   readonly effectiveInstructions: EffectiveInstructions;
   readonly skillView: SkillView;
   readonly executionEnvironment: ExecutionEnvironment;
@@ -177,7 +177,7 @@ async function readSystemInstructions(
   | { status: 'failed'; failure: ContextFailure }
 > {
   try {
-    return { status: 'ok', instructions: await dependencies.instructionReader.getSystemInstructions() };
+    return { status: 'ok', instructions: await dependencies.instructionReader.getSystemInstructions('conversation') };
   } catch (error) {
     return buildFailedContextResult(buildSourceContextFailure({
       code: 'base_instructions_failed',

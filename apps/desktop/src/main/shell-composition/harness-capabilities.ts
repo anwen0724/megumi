@@ -108,6 +108,7 @@ export interface ProductCapabilitiesOptions {
   builtInToolAvailability?: BuiltInToolAvailability;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
   browserSourceTaskGateway?: BrowserSourceTaskGateway;
+  instructionContentRoot?: string;
 }
 
 export interface ProductCapabilities {
@@ -256,7 +257,12 @@ function composeCapabilitiesWithDatabase(
       },
     },
   });
-  const instructions = createInstructionReader({ megumiHomePath: homePaths.homePath });
+  const instructions = createInstructionReader({
+    megumiHomePath: homePaths.homePath,
+    ...(options.instructionContentRoot
+      ? { systemContentRoot: options.instructionContentRoot }
+      : {}),
+  });
   const sandboxCapabilities = sandbox.capabilities();
   // Context resolves its own prompt sources; Product only wires the seams.
   const workspaceSource: ContextWorkspaceSource = {

@@ -24,6 +24,9 @@ import type {
   ContextCompactor,
   ContextFailure,
   ContextWorkspaceSource,
+  ConversationRunContext,
+  DailyDiscoveryContextMaterial,
+  DailyDiscoveryRunContext,
   Prompt,
 } from './context';
 import {
@@ -43,6 +46,7 @@ import {
 import { createContextResolver, type ContextResolver, type ResolvedContext } from './context-resolver';
 import { calculatePromptUsage, type ContextUsageEstimate } from './context-usage-calculator';
 import { createPromptBuilder, type PromptBuilder } from './prompt/prompt-builder';
+import { buildSystemPrompt } from './prompt/system-prompt-builder';
 import type { MaterializedHistory } from './prompt/context-message-builder';
 import {
   executeContextCompaction,
@@ -99,14 +103,21 @@ class DefaultContext implements ContextCapabilities {
   }
 
   async build(request: BuildContextRequest): Promise<BuildContextResult> {
-    const span = startContextSpan(this.options.observability, request.modelCallContext.run.sessionId);
+    const run = request.modelCallContext.run;
+    const correlation = {
+      executionId: run.executionId,
+      ...(run.kind === 'conversation' ? { sessionId: run.sessionId } : {}),
+    };
+    const span = startContextSpan(this.options.observability, correlation);
     const operation = async (): Promise<BuildContextResult> => {
       let result: BuildContextResult;
       try {
-        result = await this.withSessionOperation(
-          request.modelCallContext.run.sessionId,
-          () => this.buildExclusive(request),
-        );
+        result = run.kind === 'conversation'
+          ? await this.withSessionOperation(
+              run.sessionId,
+              () => this.buildExclusive(request, run),
+            )
+          : await this.buildDailyDiscovery(request, run);
       } catch (error) {
         result = buildFailedContextResult(buildUnexpectedContextFailure({
           code: 'context_build_failed',
@@ -120,7 +131,7 @@ class DefaultContext implements ContextCapabilities {
         recordUsedTokensMeasurement(
           this.options.observability,
           this.countUsage(result.prompt).tokens,
-          request.modelCallContext.run.sessionId,
+          correlation,
         );
       }
       return result;
@@ -186,12 +197,15 @@ class DefaultContext implements ContextCapabilities {
     }
   }
 
-  private async buildExclusive(request: BuildContextRequest): Promise<BuildContextResult> {
+  private async buildExclusive(
+    request: BuildContextRequest,
+    run: ConversationRunContext,
+  ): Promise<BuildContextResult> {
     const modelCall = request.modelCallContext;
     const prepared = await this.buildResolvedPrompt({
-      sessionId: modelCall.run.sessionId,
-      workspaceId: modelCall.run.workspaceId,
-      model: modelCall.run.model,
+      sessionId: run.sessionId,
+      workspaceId: run.workspaceId,
+      model: run.model,
       tools: modelCall.tools,
       signal: request.signal,
     });
@@ -204,12 +218,12 @@ class DefaultContext implements ContextCapabilities {
       contextWindowTokens: prepared.capacity.contextWindowTokens,
     })) {
       const compacted = await this.executeCompaction({
-        sessionId: modelCall.run.sessionId,
+        sessionId: run.sessionId,
         context: prepared.resolved,
         materialized: prepared.materialized,
         prompt: prepared.prompt,
         policy: prepared.policy,
-        model: modelCall.run.model,
+        model: run.model,
         trigger: 'threshold',
         signal: request.signal,
       });
@@ -218,9 +232,9 @@ class DefaultContext implements ContextCapabilities {
         // The Summary is now a Session fact: re-read the authoritative history
         // and rebuild the Prompt from it, never from a pre-commit projection.
         const refreshed = await this.buildResolvedPrompt({
-          sessionId: modelCall.run.sessionId,
-          workspaceId: modelCall.run.workspaceId,
-          model: modelCall.run.model,
+          sessionId: run.sessionId,
+          workspaceId: run.workspaceId,
+          model: run.model,
           tools: modelCall.tools,
           signal: request.signal,
         });
@@ -230,6 +244,35 @@ class DefaultContext implements ContextCapabilities {
       }
     }
     return this.finalizePrompt(prepared.prompt, prepared.capacity, estimate);
+  }
+
+  private async buildDailyDiscovery(
+    request: BuildContextRequest,
+    run: DailyDiscoveryRunContext,
+  ): Promise<BuildContextResult> {
+    if (request.signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+    }
+    try {
+      const systemInstructions = await this.options.instructionReader
+        .getSystemInstructions('daily_discovery');
+      const prompt: Prompt = {
+        systemPrompt: buildSystemPrompt({
+          systemInstructions,
+          tools: request.modelCallContext.tools,
+          additionalSections: [renderDailyDiscoveryMaterial(run.localDate, run.material)],
+        }),
+        messages: [...request.currentMessages],
+        tools: [...request.modelCallContext.tools],
+      };
+      const capacity = contextCapacityFromModel(run.model);
+      return this.finalizePrompt(prompt, capacity, this.countUsage(prompt));
+    } catch (error) {
+      if (request.signal?.aborted || isAbortError(error)) {
+        return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+      }
+      return buildFailedContextResult(buildSourceInstructionsFailure(error));
+    }
   }
 
   /**
@@ -367,6 +410,34 @@ class DefaultContext implements ContextCapabilities {
   }
 }
 
+function renderDailyDiscoveryMaterial(
+  localDate: string,
+  material: DailyDiscoveryContextMaterial,
+): string {
+  return [
+    '<daily_discovery_material>',
+    `  <local_date>${escapePromptText(localDate)}</local_date>`,
+    `  <target_count>${material.targetCount}</target_count>`,
+    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
+    `  <recommendation_signals>${escapePromptText(JSON.stringify(material.recommendationSignals))}</recommendation_signals>`,
+    '</daily_discovery_material>',
+  ].join('\n');
+}
+
+function escapePromptText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function buildSourceInstructionsFailure(error: unknown): ContextFailure {
+  return {
+    code: 'base_instructions_failed',
+    message: error instanceof Error ? error.message : 'System Instructions could not be read.',
+    retryable: true,
+    cause: { owner: 'instructions' },
+  };
+}
+
 function spanStatus(result: BuildContextResult): 'ok' | 'cancelled' | 'error' {
   if (result.status === 'ready') return 'ok';
   return result.failure.code === 'cancelled' ? 'cancelled' : 'error';
@@ -377,13 +448,13 @@ function spanStatus(result: BuildContextResult): 'ok' | 'cancelled' | 'error' {
 
 function startContextSpan(
   observability: ObservabilityService | undefined,
-  sessionId: string,
+  correlation: { readonly executionId: string; readonly sessionId?: string },
 ): SpanHandle | undefined {
   if (!observability) return undefined;
   try {
     return observability.startSpan({
       name: 'context.build',
-      correlation: { sessionId },
+      correlation,
     });
   } catch {
     return undefined;
@@ -406,7 +477,7 @@ function endContextSpan(
 function recordUsedTokensMeasurement(
   observability: ObservabilityService | undefined,
   tokens: number,
-  sessionId: string,
+  correlation: { readonly executionId: string; readonly sessionId?: string },
 ): void {
   if (!observability) return;
   try {
@@ -414,7 +485,7 @@ function recordUsedTokensMeasurement(
       name: 'context.used_tokens',
       value: tokens,
       unit: 'token',
-      correlation: { sessionId },
+      correlation,
     });
   } catch {
     // Diagnostics never own the Context outcome.
