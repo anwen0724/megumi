@@ -1,11 +1,13 @@
 /* Exposes only the Discovery Agent public interface, construction entry and operation contracts. */
 export { createDiscoveryAgent } from './discovery-agent';
 export type {
+  CreateDiscoveryAgentOptions,
+  DiscoveryAgent,
+} from './discovery-agent';
+export type {
   ApprovalDecisionRequest,
   CancelExecutionRequest,
   CancelExecutionResult,
-  CreateDiscoveryAgentOptions,
-  DiscoveryAgent,
   GetActiveExecutionRequest,
   GetActiveExecutionResult,
   GetExecutionRequest,
@@ -16,7 +18,7 @@ export type {
   ShutdownResult,
   StartExecutionRequest,
   StartExecutionResult,
-} from './discovery-agent';
+} from '@megumi/execution';
 export type {
   ConversationBranchCommit,
   ConversationModelResolution,
@@ -26,13 +28,13 @@ export type {
   SubmitConversationInputResult,
 } from './conversation/submit-conversation-input';
 export type {
+  DiscoveryAgentPolicy,
   ExecutionClock,
   ExecutionFailure,
   ExecutionFailureCode,
   ExecutionSnapshot,
   ExecutionStatus,
-} from './execution/execution-registry';
-export type { DiscoveryAgentPolicy } from './execution/execute-agent';
+} from '@megumi/execution';
 export {
   InterestCreatedFromSchema,
   InterestDescriptionSchema,

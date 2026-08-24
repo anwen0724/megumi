@@ -16,8 +16,8 @@ import type {
   SessionMessageWithAttachments,
   RecommendationReferenceContent,
 } from '@megumi/session';
-import type { StartExecutionRequest, StartExecutionResult } from '../discovery-agent';
-import type { ExecutionSnapshot } from '../execution/execution-registry';
+import type { StartExecutionRequest, StartExecutionResult } from '@megumi/execution';
+import type { ExecutionSnapshot } from '@megumi/execution';
 
 export interface SubmitConversationInputRequest extends RawUserInput {
   readonly requestId?: string;

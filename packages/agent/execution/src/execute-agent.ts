@@ -29,7 +29,7 @@ import type { Tools } from '@megumi/tools';
 import type {
   LaunchedAgentExecution,
   LaunchAgentExecutionInput,
-} from '../discovery-agent';
+} from './agent-executions';
 import type {
   ExecutionClock,
   ExecutionFailure,

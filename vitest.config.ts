@@ -22,6 +22,7 @@ export default defineConfig({
       '@megumi/session/store': path.resolve(__dirname, 'packages/agent/session/src/session-store.ts'),
       '@megumi/session': path.resolve(__dirname, 'packages/agent/session/src'),
       '@megumi/context': path.resolve(__dirname, 'packages/agent/context/src'),
+      '@megumi/execution': path.resolve(__dirname, 'packages/agent/execution/src'),
       '@megumi/workspace/node': path.resolve(__dirname, 'packages/agent/workspace/src/node-workspace-file-system.ts'),
       '@megumi/workspace/store': path.resolve(__dirname, 'packages/agent/workspace/src/workspace-store.ts'),
       '@megumi/workspace': path.resolve(__dirname, 'packages/agent/workspace/src'),

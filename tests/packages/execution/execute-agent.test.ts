@@ -5,7 +5,7 @@
 import {
   launchAgentExecution,
   type ExecuteAgentDependencies,
-} from '../../../packages/agent/discovery/src/execution/execute-agent';
+} from '@megumi/execution';
 import { describe, expect, it, vi } from 'vitest';
 import type { EventBus } from '@megumi/events';
 import type { PermissionDecision } from '@megumi/permissions';

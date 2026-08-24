@@ -7,8 +7,8 @@ import {
   createExecutionObserver,
   type CreateAgentEventListenerOptions,
   type ExecutionProjectionRuntime,
-} from '../../../packages/agent/discovery/src/execution/execution-observer';
-import type { SessionMessageCommitter } from '../../../packages/agent/discovery/src/execution/session-settlement';
+} from '@megumi/execution';
+import type { SessionMessageCommitter } from '@megumi/execution';
 import { executionMetadata, model } from './execution-test-fixtures';
 
 const metadata = executionMetadata();

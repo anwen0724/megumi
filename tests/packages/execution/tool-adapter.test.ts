@@ -8,9 +8,9 @@ import {
   createAgentTool,
   type DiscoveryAgentToolResultDetails,
   type ToolAdapterDependencies,
-} from '../../../packages/agent/discovery/src/execution/tool-adapter';
-import type { ToolScope } from '../../../packages/agent/discovery/src/execution/context-adapter';
-import type { ExecutionObserver } from '../../../packages/agent/discovery/src/execution/execution-observer';
+} from '@megumi/execution';
+import type { ToolScope } from '@megumi/execution';
+import type { ExecutionObserver } from '@megumi/execution';
 import { executionMetadata } from './execution-test-fixtures';
 import {
   allowDecision,

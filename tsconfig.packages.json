@@ -7,6 +7,7 @@
     { "path": "./packages/agent/context" },
     { "path": "./packages/agent/database" },
     { "path": "./packages/agent/discovery" },
+    { "path": "./packages/agent/execution" },
     { "path": "./packages/agent/events" },
     { "path": "./packages/agent/home" },
     { "path": "./packages/agent/input" },

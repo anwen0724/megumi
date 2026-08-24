@@ -8,9 +8,9 @@ import {
   releaseActiveScope,
   type ContextAdapterDependencies,
   type ContextAdapterRuntime,
-} from '../../../packages/agent/discovery/src/execution/context-adapter';
-import type { ExecutionObserver } from '../../../packages/agent/discovery/src/execution/execution-observer';
-import type { ExecutionMetadata } from '../../../packages/agent/discovery/src/execution/execution-registry';
+} from '@megumi/execution';
+import type { ExecutionObserver } from '@megumi/execution';
+import type { ExecutionMetadata } from '@megumi/execution';
 import { executionMetadata, model } from './execution-test-fixtures';
 
 const metadata = executionMetadata();

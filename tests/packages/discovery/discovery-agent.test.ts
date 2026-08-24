@@ -23,13 +23,11 @@ import {
   type StartExecutionRequest,
 } from '@megumi/discovery';
 import type {
-  LaunchedAgentExecution,
-  LaunchAgentExecutionInput,
-} from '../../../packages/agent/discovery/src/discovery-agent';
-import type {
   ApprovalRequest,
   ExecutionOutcome,
-} from '../../../packages/agent/discovery/src/execution/execution-registry';
+  LaunchedAgentExecution,
+  LaunchAgentExecutionInput,
+} from '@megumi/execution';
 
 const model: Model<Api> = {
   id: 'test-model',

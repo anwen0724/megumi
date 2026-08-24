@@ -8,7 +8,7 @@ import {
   type ExecutionMetadata,
   type ExecutionOutcome,
   type TerminalExecution,
-} from '../../../packages/agent/discovery/src/execution/execution-registry';
+} from '@megumi/execution';
 
 const model: Model<Api> = {
   id: 'test-model',
@@ -407,7 +407,7 @@ function stubUserEntry(): import('@megumi/session').SessionEntry {
   };
 }
 
-function stubFailure(): import('../../../packages/agent/discovery/src/execution/execution-registry').ExecutionFailure {
+function stubFailure(): import('@megumi/execution').ExecutionFailure {
   return { code: 'internal_error', message: 'start failed', retryable: false };
 }
 

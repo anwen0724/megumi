@@ -15,7 +15,7 @@ import type {
 import {
   createSessionMessageCommitter,
   type SessionToolResultCommit,
-} from '../../../packages/agent/discovery/src/execution/session-settlement';
+} from '@megumi/execution';
 
 const userEntry: SessionEntry = {
   entry_id: 'entry:user',

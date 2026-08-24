@@ -24,11 +24,11 @@ import {
   launchAgentExecution,
   type DiscoveryAgentPolicy,
   type ExecuteAgentDependencies,
-} from '../../../packages/agent/discovery/src/execution/execute-agent';
-import type { LaunchedAgentExecution } from '../../../packages/agent/discovery/src/discovery-agent';
+} from '@megumi/execution';
+import type { LaunchedAgentExecution } from '@megumi/execution';
 import type {
   ExecutionMetadata,
-} from '../../../packages/agent/discovery/src/execution/execution-registry';
+} from '@megumi/execution';
 import {
   allowDecision,
   approvalSubjectFor,
@@ -273,7 +273,7 @@ export async function launchedExecution(
   fixture: ExecutionFixture,
   overrides: {
     readonly metadata?: Partial<ExecutionMetadata>;
-    readonly awaitApproval?: (request: { readonly approval: import('../../../packages/agent/discovery/src/execution/execution-registry').ApprovalRequest }) => Promise<import('../../../packages/agent/discovery/src/execution/execution-registry').ApprovalResolution>;
+    readonly awaitApproval?: (request: { readonly approval: import('@megumi/execution').ApprovalRequest }) => Promise<import('@megumi/execution').ApprovalResolution>;
   } = {},
 ): Promise<LaunchedAgentExecution> {
   return launchAgentExecution({

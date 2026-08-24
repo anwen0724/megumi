@@ -4,7 +4,7 @@ import { type Api, type Model, type Models } from '@megumi/ai';
 import type { Tools } from '@megumi/tools';
 import { discoveryContentIdentity, type DiscoveryCandidate } from './candidate-registry';
 import { createDailyDiscoveryTools } from './daily-discovery-tools';
-import { createUnprotectedAgentTool } from '../execution/tool-adapter';
+import { createUnprotectedAgentTool } from '@megumi/execution';
 import {
   EnsureDailyDiscoveryRequestSchema,
   type EnsureDailyDiscoveryRequest,
