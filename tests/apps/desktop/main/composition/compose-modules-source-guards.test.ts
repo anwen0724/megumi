@@ -18,7 +18,7 @@ describe('Desktop Main shell composition', () => {
     expect(existsSync(join(root, 'tests/apps/desktop/main/services'))).toBe(false);
     expect(existsSync(join(root, 'apps/desktop/src/main/shell-composition/harness-capabilities.ts'))).toBe(true);
     expect(existsSync(join(root, 'apps/desktop/src/main/shell-composition/application-host-composition.ts'))).toBe(true);
-    expect(existsSync(join(root, 'packages/product/src/composition'))).toBe(false);
+    expect(existsSync(join(root, 'packages/agent/product-host/src/composition'))).toBe(false);
   });
 
   it('connects the Electron UI shell through its local application composition', () => {

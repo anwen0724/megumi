@@ -3,7 +3,7 @@
  * instances and the already-constructed Discovery Agent public Interface, and
  * owns process startup, shutdown, and resource rollback for a concrete Host.
  */
-import type { DiscoveryAgent } from '@megumi/discovery-agent';
+import type { DiscoveryAgent } from '@megumi/discovery';
 import {
   migrateLegacyPermissionSettingsFile,
   migrateLegacyProviderApiSettingsFile,
@@ -18,7 +18,7 @@ import {
   type VoiceModels,
   onRunEndedForSpeechOutput,
 } from '@megumi/voice';
-import { createProductHost } from '@megumi/product';
+import { createProductHost } from '@megumi/product-host';
 import type {
   AttachmentPicker,
   BrowserSourceConnectionAdapter,
@@ -26,7 +26,7 @@ import type {
   DirectoryPicker,
   FileOpener,
   LocalFileAvailability,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 import {
   createApprovalOperations,
   createBrowserSourceOperations,
@@ -39,7 +39,7 @@ import {
   createSkillOperations,
   createVoiceOperations,
   createWorkspaceOperations,
-} from '@megumi/product/operations';
+} from '@megumi/product-host/operations';
 import {
   composeProductCapabilities,
   type ProductCapabilities,

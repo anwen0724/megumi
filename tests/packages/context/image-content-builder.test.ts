@@ -1,6 +1,6 @@
 /* Verifies image references materialize or degrade according to Model capability. */
 import { describe, expect, it, vi } from 'vitest';
-import { materializeSessionImage } from '../../../packages/context/src/prompt/image-content-builder';
+import { materializeSessionImage } from '../../../packages/agent/context/src/prompt/image-content-builder';
 import type { SessionMessageAttachment } from '@megumi/session';
 
 function imageAttachment(overrides: Partial<SessionMessageAttachment> = {}): SessionMessageAttachment {

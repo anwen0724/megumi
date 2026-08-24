@@ -16,12 +16,12 @@ describe('Product packaging resources', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-product-resources-'));
     roots.push(root);
     for (const relativePath of [
-      'packages/database/migrations',
-      'packages/voice/resources/vad',
+      'packages/agent/database/migrations',
+      'packages/agent/voice/resources/vad',
     ]) fs.mkdirSync(path.join(root, relativePath), { recursive: true });
-    fs.writeFileSync(path.join(root, 'packages/voice/resources/model-manifest.json'), '{}');
-    fs.writeFileSync(path.join(root, 'packages/voice/resources/vad/silero_vad.onnx'), 'vad-model');
-    fs.writeFileSync(path.join(root, 'packages/voice/resources/vad/ATTRIBUTION.md'), 'attribution');
+    fs.writeFileSync(path.join(root, 'packages/agent/voice/resources/model-manifest.json'), '{}');
+    fs.writeFileSync(path.join(root, 'packages/agent/voice/resources/vad/silero_vad.onnx'), 'vad-model');
+    fs.writeFileSync(path.join(root, 'packages/agent/voice/resources/vad/ATTRIBUTION.md'), 'attribution');
 
     expect(getProductPackagingResources(root)).toEqual(expect.arrayContaining([
       expect.objectContaining({ target: 'voice/model-manifest.json' }),
@@ -33,9 +33,9 @@ describe('Product packaging resources', () => {
   });
 
   it('ships the pinned Silero VAD model with an attribution whose checksum matches the file', () => {
-    const modelPath = path.resolve('packages/voice/resources/vad/silero_vad.onnx');
+    const modelPath = path.resolve('packages/agent/voice/resources/vad/silero_vad.onnx');
     const attribution = fs.readFileSync(
-      path.resolve('packages/voice/resources/vad/ATTRIBUTION.md'),
+      path.resolve('packages/agent/voice/resources/vad/ATTRIBUTION.md'),
       'utf8',
     );
     expect(fs.existsSync(modelPath)).toBe(true);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createToolRegistry, type ToolDefinition, type ToolRegistration } from '../../../packages/tools/src';
-import * as PublicTools from '../../../packages/tools/src';
+import { createToolRegistry, type ToolDefinition, type ToolRegistration } from '../../../packages/agent/tools/src';
+import * as PublicTools from '../../../packages/agent/tools/src';
 
 const definition: ToolDefinition = {
   name: 'echo', description: 'Echo one string.',

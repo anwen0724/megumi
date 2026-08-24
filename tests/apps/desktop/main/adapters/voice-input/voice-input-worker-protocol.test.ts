@@ -2,7 +2,7 @@
 /*
  * Guards the private worker protocol: it carries only control requests, PCM
  * frames, frame acks, and Speech Input Events. The worker entry runs the
- * packages/voice runtime and must never write Sessions, submit Input, or
+ * packages/agent/voice runtime and must never write Sessions, submit Input, or
  * advance the Discovery Agent.
  */
 import fs from 'node:fs';
@@ -36,7 +36,7 @@ describe('Voice input worker protocol', () => {
     }
   });
 
-  it('keeps the worker entry a pure packages/voice runtime host', () => {
+  it('keeps the worker entry a pure packages/agent/voice runtime host', () => {
     const source = fs.readFileSync(
       path.resolve('apps/desktop/src/main/adapters/voice-input/voice-input-worker-entry.ts'),
       'utf8',

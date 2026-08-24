@@ -2,7 +2,7 @@
 import { dialog } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { DiagnosticBundleDto } from '@megumi/product';
+import type { DiagnosticBundleDto } from '@megumi/product-host';
 export async function saveDiagnosticBundle(
   bundle: DiagnosticBundleDto,
 ): Promise<

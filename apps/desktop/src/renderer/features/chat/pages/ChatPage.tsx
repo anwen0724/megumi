@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { InputCapabilitiesResult, InputSuggestionQueryResult } from '@megumi/product/host';
+import type { InputCapabilitiesResult, InputSuggestionQueryResult } from '@megumi/product-host/host';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';

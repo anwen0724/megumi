@@ -1,8 +1,8 @@
 /* Verifies the MiniMax T2A adapter: request shape, streaming parse, error mapping, and abort. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createMinimaxSynthesizer } from '../../../packages/voice/src/speech-output/synthesizers/minimax-synthesizer';
-import type { SynthesizeSpeechRequest } from '../../../packages/voice/src/speech';
+import { createMinimaxSynthesizer } from '../../../packages/agent/voice/src/speech-output/synthesizers/minimax-synthesizer';
+import type { SynthesizeSpeechRequest } from '../../../packages/agent/voice/src/speech';
 
 function sseResponse(...events: unknown[]): Response {
   const body = events

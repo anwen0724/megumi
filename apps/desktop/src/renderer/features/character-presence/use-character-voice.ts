@@ -12,7 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { VoiceHostSnapshot } from '@megumi/product/host';
+import type { VoiceHostSnapshot } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { useRunStore } from '../../entities/run';

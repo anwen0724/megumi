@@ -3,7 +3,7 @@
  * It does not reimplement the policies enforced by those modules.
  */
 import type { RecentEventBufferOptions } from '@megumi/events';
-import type { DiscoveryAgentPolicy } from '@megumi/discovery-agent';
+import type { DiscoveryAgentPolicy } from '@megumi/discovery';
 import type { Settings } from '@megumi/settings';
 
 export const PRODUCT_RECENT_EVENT_BUFFER = {

@@ -6,20 +6,20 @@ import {
   createToolRouter,
   type ToolExecutionOptions,
   type ToolExecutionResult,
-} from '../../../packages/tools/src';
-import type { ToolProcessAdapter } from '../../../packages/tools/src/built-ins/run-command';
-import type { WebFetch } from '../../../packages/tools/src/built-ins/web-fetch';
-import type { WebSearch } from '../../../packages/tools/src/built-ins/web-search';
+} from '../../../packages/agent/tools/src';
+import type { ToolProcessAdapter } from '../../../packages/agent/tools/src/built-ins/run-command';
+import type { WebFetch } from '../../../packages/agent/tools/src/built-ins/web-fetch';
+import type { WebSearch } from '../../../packages/agent/tools/src/built-ins/web-search';
 import type {
   BuiltInToolContext,
   WorkspaceFileAccess,
-} from '../../../packages/tools/src/built-ins/workspace-file-access';
+} from '../../../packages/agent/tools/src/built-ins/workspace-file-access';
 import {
   createCancelledToolResult,
   createFailedToolResult,
   normalizeRawToolResult,
   ToolExecutionFailure,
-} from '../../../packages/tools/src/tool-result';
+} from '../../../packages/agent/tools/src/tool-result';
 
 export function createBuiltInTestHarness(request: {
   readonly workspaceFileAccess: WorkspaceFileAccess;

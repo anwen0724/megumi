@@ -69,7 +69,7 @@ export function createElectronVoiceOptions(
 export function resolveVadModelPath(): string {
   const packaged = path.join(process.resourcesPath, 'voice', 'vad', 'silero_vad.onnx');
   if (app.isPackaged && fs.existsSync(packaged)) return packaged;
-  return path.resolve(process.cwd(), 'packages/voice/resources/vad/silero_vad.onnx');
+  return path.resolve(process.cwd(), 'packages/agent/voice/resources/vad/silero_vad.onnx');
 }
 
 const electronVoiceArchiveExtractor: VoiceModelArchiveExtractor = {
@@ -97,5 +97,5 @@ const electronVoiceArchiveExtractor: VoiceModelArchiveExtractor = {
 function resolveVoiceManifestPath(): string {
   const packaged = path.join(process.resourcesPath, 'voice', 'model-manifest.json');
   if (app.isPackaged && fs.existsSync(packaged)) return packaged;
-  return path.resolve(process.cwd(), 'packages/voice/resources/model-manifest.json');
+  return path.resolve(process.cwd(), 'packages/agent/voice/resources/model-manifest.json');
 }

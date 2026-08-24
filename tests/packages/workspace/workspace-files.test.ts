@@ -7,7 +7,7 @@ import {
   createWorkspaceFiles,
   createWorkspacePathPolicy,
   type Workspace,
-} from '../../../packages/workspace/src/index';
+} from '../../../packages/agent/workspace/src/index';
 
 const workspace: Workspace = {
   workspace_id: 'workspace:one',

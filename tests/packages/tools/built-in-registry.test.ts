@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILT_IN_TOOL_NAMES, createBuiltInToolRegistry } from '../../../packages/tools/src';
+import { BUILT_IN_TOOL_NAMES, createBuiltInToolRegistry } from '../../../packages/agent/tools/src';
 import { createProcessAdapter } from './tool-test-fixtures';
 
 describe('built-in Tool Registry', () => {

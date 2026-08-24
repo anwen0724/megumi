@@ -247,12 +247,12 @@ describe('Megumi Home foundation', () => {
 
   it('keeps host resource paths out of the Product Home implementation', () => {
     const source = fs.readFileSync(
-      path.resolve('packages/home/src/home-initializer.ts'),
+      path.resolve('packages/agent/home/src/home-initializer.ts'),
       'utf8',
     );
 
     expect(source).not.toContain('process.cwd()');
     expect(source).not.toContain('built-in-skills');
-    expect(source).not.toContain('packages/agent');
+    expect(source).not.toContain('packages/agent-core');
   });
 });

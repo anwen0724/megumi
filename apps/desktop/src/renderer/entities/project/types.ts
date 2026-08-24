@@ -1,4 +1,4 @@
-import type { WorkspaceProjectUiDto } from '@megumi/product/host';
+import type { WorkspaceProjectUiDto } from '@megumi/product-host/host';
 
 export type ProjectStatus = WorkspaceProjectUiDto['status'];
 export type ProjectRecord = WorkspaceProjectUiDto;

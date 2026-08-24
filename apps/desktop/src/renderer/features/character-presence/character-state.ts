@@ -1,5 +1,5 @@
 /* Maps canonical voice and run facts to the small state vocabulary consumed by character animation. */
-import type { VoiceHostSnapshot } from '@megumi/product/host';
+import type { VoiceHostSnapshot } from '@megumi/product-host/host';
 
 export type CharacterState =
   | 'idle'

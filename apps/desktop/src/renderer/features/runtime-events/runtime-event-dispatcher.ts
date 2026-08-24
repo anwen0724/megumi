@@ -1,4 +1,4 @@
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
 import { useChatUiStore, type RunUiStatus } from '../../entities/chat-ui/store';
 import { useRunStore } from '../../entities/run/store';
 import { useSessionStore } from '../../entities/session/store';

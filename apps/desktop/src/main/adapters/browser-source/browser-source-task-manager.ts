@@ -6,7 +6,7 @@ import {
   type BrowserSourceTaskGateway,
   type BrowserSourceTaskRequest,
   type BrowserSourceTaskResult,
-} from '@megumi/discovery-agent';
+} from '@megumi/discovery';
 
 export interface BrowserSourceClaim {
   readonly task: {

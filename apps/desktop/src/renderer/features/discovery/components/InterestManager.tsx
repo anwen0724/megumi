@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { Check, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryConfigurationUiDto, DiscoveryHomeUiResult } from '@megumi/product/host';
+import type { DiscoveryConfigurationUiDto, DiscoveryHomeUiResult } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';

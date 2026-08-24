@@ -22,7 +22,7 @@ import type {
   ModelSupportLevelUi,
   ProviderCatalogUiDto,
   ProviderPublicStatusUiDto,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 import { useProviderStore } from '../../../entities/provider';
 import {
   Badge,

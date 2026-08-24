@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   databaseTableOwnership,
   databaseTables,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 const root = process.cwd();
 
@@ -21,7 +21,7 @@ describe('Database table ownership', () => {
   it('documents the aggregate repository that owns each table group', () => {
     expect(databaseTableOwnership.session).toMatchObject({
       repository: 'SessionStore',
-      modulePath: 'packages/session',
+      modulePath: 'packages/agent/session',
       tables: [
         'sessions',
         'session_entries',
@@ -34,14 +34,14 @@ describe('Database table ownership', () => {
     expect(databaseTableOwnership.skill).toMatchObject({
       module: 'skills',
       repository: 'SkillRepository',
-      modulePath: 'packages/skills',
+      modulePath: 'packages/agent/skills',
       tables: ['skill_availability'],
     });
 
     expect(databaseTableOwnership.discovery).toMatchObject({
       module: 'discovery-agent',
       repository: 'DiscoveryRepository',
-      modulePath: 'packages/discovery-agent',
+      modulePath: 'packages/agent/discovery',
       tables: [
         'discovery_interests',
         'discovery_interest_evidence',
@@ -70,9 +70,9 @@ describe('Database table ownership', () => {
       'after_hash',
     ];
     const files = [
-      'packages/session/src/session-store.ts',
-      'packages/workspace/src/workspace-store.ts',
-      'packages/database/src/database-tables.ts',
+      'packages/agent/session/src/session-store.ts',
+      'packages/agent/workspace/src/workspace-store.ts',
+      'packages/agent/database/src/database-tables.ts',
     ];
     const violations = files.flatMap((file) => {
       const source = fs.readFileSync(path.join(root, file), 'utf8');

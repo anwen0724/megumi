@@ -4,13 +4,13 @@ import {
   createSessionEntryGraph,
   createSessionHistory,
   type SessionStore,
-} from '../../../packages/session/src/index';
+} from '../../../packages/agent/session/src/index';
 import { createSessionStore } from '@megumi/session/store';
 import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src/index';
+} from '../../../packages/agent/database/src/index';
 
 function createTestDatabase() {
   const database = createDatabase({ filename: ':memory:' });

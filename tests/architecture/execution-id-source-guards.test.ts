@@ -12,7 +12,7 @@ const CODE_EXTENSIONS = ['.ts', '.tsx'];
 /** Files explicitly allowed to reference the legacy run_id/runId names. */
 const ALLOWED_FILES = new Set([
   // Explicit legacy-format compatibility reads of V1 tables that predate the redesign.
-  'packages/database/src/legacy-session-history-migration.ts',
+  'packages/agent/database/src/legacy-session-history-migration.ts',
 ]);
 
 function collectCodeFiles(): string[] {
@@ -51,7 +51,7 @@ describe('execution identity source guards', () => {
   });
 
   it('keeps the active Drizzle schema on execution_id columns and indexes', () => {
-    const schema = fs.readFileSync(path.join(root, 'packages/database/src/database-schema.ts'), 'utf8');
+    const schema = fs.readFileSync(path.join(root, 'packages/agent/database/src/database-schema.ts'), 'utf8');
     expect(schema).toContain("text('execution_id')");
     expect(schema).toContain('idx_session_messages_execution');
     expect(schema).toContain('idx_workspace_changes_execution');
@@ -61,7 +61,7 @@ describe('execution identity source guards', () => {
 
   it('keeps the released rename migration append-only and data-preserving', () => {
     const migration = fs.readFileSync(
-      path.join(root, 'packages/database/migrations/0011_execution_id.sql'),
+      path.join(root, 'packages/agent/database/migrations/0011_execution_id.sql'),
       'utf8',
     );
     expect(migration).toContain('RENAME COLUMN `run_id` TO `execution_id`');

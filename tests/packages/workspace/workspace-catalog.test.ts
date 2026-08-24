@@ -2,7 +2,7 @@
  * Protects Workspace lifecycle, normalized root identity, and authorized root queries.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceCatalog } from '../../../packages/workspace/src/index';
+import { createWorkspaceCatalog } from '../../../packages/agent/workspace/src/index';
 import { createWorkspaceStoreFixture } from './workspace-store-fixture';
 
 const directoryStat = () => ({ isDirectory: () => true });

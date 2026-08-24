@@ -7,13 +7,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createSessionCatalog,
   createSessionHistory,
-} from '../../../packages/session/src/index';
+} from '../../../packages/agent/session/src/index';
 import { createSessionStore } from '@megumi/session/store';
 import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src/index';
+} from '../../../packages/agent/database/src/index';
 
 let temporaryRoot: string | undefined;
 

@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase } from '../../../packages/database/src';
+import { createDatabase, migrateDatabase } from '../../../packages/agent/database/src';
 
-const migrationsRoot = path.join(process.cwd(), 'packages/database/migrations');
+const migrationsRoot = path.join(process.cwd(), 'packages/agent/database/migrations');
 let tempRoot: string | undefined;
 
 afterEach(() => {

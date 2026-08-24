@@ -3,7 +3,7 @@ import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src/index';
+} from '../../../packages/agent/database/src/index';
 import { createSessionStore } from '@megumi/session/store';
 
 function createTestDatabase() {

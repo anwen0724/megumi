@@ -1,7 +1,7 @@
 // Renders `/` input suggestions supplied by Product; this component does not own discovery.
 import { Package, Terminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product/host';
+import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product-host/host';
 
 interface InputSuggestionPanelProps {
   suggestions: InputSuggestionQueryResult;

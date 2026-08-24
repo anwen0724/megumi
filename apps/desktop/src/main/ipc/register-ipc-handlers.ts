@@ -28,7 +28,7 @@ export interface RegisterAllHandlersOptions {
   settings?: SettingsHandlersService;
   approval?: ApprovalHandlersService;
   discovery?: DiscoveryHandlersService;
-  observability?: { host: Pick<import('@megumi/product/host').ProductHostInterface, 'observability'> };
+  observability?: { host: Pick<import('@megumi/product-host/host').ProductHostInterface, 'observability'> };
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
   voiceInput?: { adapter: ElectronVoiceInputAdapter };

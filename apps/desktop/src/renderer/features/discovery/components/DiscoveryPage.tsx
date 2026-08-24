@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
 import { Bookmark, ChevronDown, ChevronUp, Heart, LoaderCircle, Search, Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryHomeUiResult, DiscoveryRecommendationUiDto } from '@megumi/product/host';
+import type { DiscoveryHomeUiResult, DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';

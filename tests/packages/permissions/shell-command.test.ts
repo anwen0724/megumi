@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Verifies shell-aware conservative parsing without making the parser public API. */
 import { describe, expect, it } from 'vitest';
-import { classifyShellCommand } from '../../../packages/permissions/src/shell-command';
+import { classifyShellCommand } from '../../../packages/agent/permissions/src/shell-command';
 
 describe('Shell Command classification', () => {
   it('does not treat operators inside quotes as shell control flow', () => {

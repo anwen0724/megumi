@@ -13,20 +13,20 @@ export function resolveProductSystemSkillsPath(input: {
 }): string {
   return input.isPackaged
     ? path.resolve(input.resourcesPath, PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH)
-    : path.resolve(input.cwd, 'packages/skills/built-in-skills');
+    : path.resolve(input.cwd, 'packages/agent/skills/built-in-skills');
 }
 
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
-  const systemSkillsPath = path.resolve(cwd, 'packages/skills/built-in-skills');
-  const voiceManifestPath = path.resolve(cwd, 'packages/voice/resources/model-manifest.json');
-  const vadResourcePath = path.resolve(cwd, 'packages/voice/resources/vad');
+  const systemSkillsPath = path.resolve(cwd, 'packages/agent/skills/built-in-skills');
+  const voiceManifestPath = path.resolve(cwd, 'packages/agent/voice/resources/model-manifest.json');
+  const vadResourcePath = path.resolve(cwd, 'packages/agent/voice/resources/vad');
   return [
     ...(fs.existsSync(systemSkillsPath) ? [{
       source: systemSkillsPath,
       target: PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH,
     }] : []),
     {
-      source: path.resolve(cwd, 'packages/database/migrations'),
+      source: path.resolve(cwd, 'packages/agent/database/migrations'),
       target: DATABASE_MIGRATIONS_RESOURCE_PATH,
     },
     {

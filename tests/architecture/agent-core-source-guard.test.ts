@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
-const agentRoot = join(root, 'packages/agent');
+const agentRoot = join(root, 'packages/agent-core');
 
 describe('Agent Core architecture boundaries', () => {
   it('keeps the approved six-file source shape', () => {
@@ -49,9 +49,9 @@ describe('Agent Core architecture boundaries', () => {
       '@megumi/permissions',
       '@megumi/events',
       '@megumi/observability',
-      '@megumi/product',
+      '@megumi/product-host',
       '@megumi/database',
-      '@megumi/discovery-agent',
+      '@megumi/discovery',
       'electron',
     ];
     expect(forbiddenImports.filter((term) => source.includes(`from '${term}`))).toEqual([]);

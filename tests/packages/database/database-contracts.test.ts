@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DatabaseStatementError,
   createDatabase,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 describe('Database connection contract', () => {
   it('binds positional and named parameters without exposing driver statements', () => {

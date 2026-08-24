@@ -1,11 +1,11 @@
-﻿/* Exercises canonical workspace file actions through the real Node adapter. */
+/* Exercises canonical workspace file actions through the real Node adapter. */
 // @vitest-environment node
 
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNodeSandboxFileAccess } from '../../../packages/sandbox/src';
+import { createNodeSandboxFileAccess } from '../../../packages/agent/sandbox/src';
 
 const roots: string[] = [];
 

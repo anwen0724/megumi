@@ -1,5 +1,5 @@
 /* Shared three-step application composition for tests: capabilities, Discovery Agent, Host. */
-import { createDiscoveryAgent } from '@megumi/discovery-agent';
+import { createDiscoveryAgent } from '@megumi/discovery';
 import {
   composeProduct,
   composeProductCapabilities,

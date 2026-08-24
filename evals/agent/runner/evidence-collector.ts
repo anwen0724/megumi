@@ -1,7 +1,7 @@
 /* Collects bounded Session, workspace, Runtime Event, and diagnostic evidence. */
 import path from 'node:path';
-import type { ProductHostInterface } from '@megumi/product/host';
-import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
+import type { ProductHostInterface } from '@megumi/product-host/host';
+import type { AnyEvent as RuntimeEvent } from '@megumi/product-host/host';
 import type { EvaluationEvidence, EvaluationWorkspaceFileEvidence } from './evaluation-contracts';
 import { digestOwnedFile, readBoundedOwnedText } from '../adapters/scoped-workspace-file-system';
 

@@ -1,7 +1,7 @@
 /* Verifies Skill persists availability only. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase } from '../../../packages/database/src';
+import { createDatabase, migrateDatabase } from '../../../packages/agent/database/src';
 
 describe('Skill database schema', () => {
   it('owns only skill_availability', () => {

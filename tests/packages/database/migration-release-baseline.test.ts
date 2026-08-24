@@ -5,7 +5,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-const migrationsRoot = path.join(process.cwd(), 'packages/database/migrations');
+const migrationsRoot = path.join(process.cwd(), 'packages/agent/database/migrations');
 const releasedMigrationHashes = {
   '0000_database_foundation_redesign.sql': '204d76f90cf9486ac055afcfea3ab2186155f5ccf67e59ec8c73089281898f3e',
   '0001_skill_system.sql': '54754c80fdf7d031ca5912d88adf0ccf48a7eeea0d67a7287517ff5fc6519b05',

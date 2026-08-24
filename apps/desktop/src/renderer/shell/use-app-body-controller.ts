@@ -4,7 +4,7 @@ import { useSessionStore } from '../entities/session/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
-import type { DiscoveryRecommendationUiDto } from '@megumi/product/host';
+import type { DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
 
 export function useAppBodyController() {
   const [activePage, setActivePage] = useState<'discovery' | 'chat'>('discovery');

@@ -1,5 +1,5 @@
 /* Owns Voice model resources, audio devices, and speech output configuration in the main Settings surface. */
-import type { VoiceHostModelStatus } from '@megumi/product/host';
+import type { VoiceHostModelStatus } from '@megumi/product-host/host';
 import { Activity, CircleCheck, Download, LoaderCircle, Mic2, RefreshCw, Speaker, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

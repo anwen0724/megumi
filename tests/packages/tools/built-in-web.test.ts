@@ -8,12 +8,12 @@ import {
   createFallbackWebSearch,
   createWebFetch,
   createWebSearch,
-} from '../../../packages/tools/src';
+} from '../../../packages/agent/tools/src';
 import { createBuiltInTestHarness } from './built-in-test-harness';
 import {
   isAllowedResolvedAddress,
   isPublicIp,
-} from '../../../packages/tools/src/built-ins/web-fetch';
+} from '../../../packages/agent/tools/src/built-ins/web-fetch';
 import { createLocalWorkspaceFileAccess } from './tool-test-fixtures';
 
 describe('web_search built-in Tool', () => {

@@ -142,7 +142,7 @@ describe('Megumi Home', () => {
   });
 
   it('replaces the managed system Skill directory only after the new copy is ready', async () => {
-    const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
+    const seedPath = path.resolve('C:/repo/packages/agent/skills/built-in-skills');
     const existingSystemSkillsPath = buildMegumiHomePaths(path.resolve('C:/Users/tester', '.megumi')).systemSkillsPath;
     fileSystem.existingPaths.add(seedPath);
     fileSystem.existingPaths.add(existingSystemSkillsPath);
@@ -177,7 +177,7 @@ describe('Megumi Home', () => {
   });
 
   it('preserves the existing system Skill directory when preparing the replacement fails', async () => {
-    const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
+    const seedPath = path.resolve('C:/repo/packages/agent/skills/built-in-skills');
     const existingSystemSkillsPath = buildMegumiHomePaths(path.resolve('C:/Users/tester', '.megumi')).systemSkillsPath;
     fileSystem.existingPaths.add(seedPath);
     fileSystem.existingPaths.add(existingSystemSkillsPath);
@@ -225,7 +225,7 @@ describe('Megumi Home', () => {
     const copiedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
     const existingPaths = new Set<string>();
     const movedDirectories: Array<{ sourcePath: string; targetPath: string }> = [];
-    const seedPath = path.resolve('C:/repo/packages/skills/built-in-skills');
+    const seedPath = path.resolve('C:/repo/packages/agent/skills/built-in-skills');
     const existingSystemSkillsPath = buildMegumiHomePaths(path.resolve('D:/megumi-home')).systemSkillsPath;
     existingPaths.add(seedPath);
     existingPaths.add(existingSystemSkillsPath);

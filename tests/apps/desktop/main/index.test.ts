@@ -145,8 +145,8 @@ vi.mock('@megumi/home', () => ({
   resolveMegumiHomePath: vi.fn(() => mocks.homePath),
 }));
 
-vi.mock('@megumi/discovery-agent', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@megumi/discovery-agent')>(),
+vi.mock('@megumi/discovery', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@megumi/discovery')>(),
   createDiscoveryAgent: mocks.createDiscoveryAgent,
 }));
 

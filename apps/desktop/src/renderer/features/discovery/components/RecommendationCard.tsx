@@ -2,7 +2,7 @@
 import { Bookmark, Clock3, EyeOff, Heart, MessageCircle, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryRecommendationUiDto } from '@megumi/product/host';
+import type { DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
 import { cx } from '../../../shared/ui';
 
 type RecommendationAction =

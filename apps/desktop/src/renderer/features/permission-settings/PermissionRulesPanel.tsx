@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Plus, ShieldAlert, Trash2 } from 'lucide-react';
-import type { PermissionRuleEffectUi, PermissionRuleUiDto, SettingsUiResolved } from '@megumi/product/host';
+import type { PermissionRuleEffectUi, PermissionRuleUiDto, SettingsUiResolved } from '@megumi/product-host/host';
 import { useProjectStore } from '../../entities/project';
 import { useSessionStore } from '../../entities/session';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';

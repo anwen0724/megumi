@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { Message } from '@megumi/ai';
 import {
   planCompaction,
-} from '../../../packages/context/src/compaction/compaction-planner';
-import type { CompactionMessageSource } from '../../../packages/context/src/prompt/context-message-builder';
-import { DEFAULT_COMPACTION_POLICY } from '../../../packages/context/src/index';
+} from '../../../packages/agent/context/src/compaction/compaction-planner';
+import type { CompactionMessageSource } from '../../../packages/agent/context/src/prompt/context-message-builder';
+import { DEFAULT_COMPACTION_POLICY } from '../../../packages/agent/context/src/index';
 
 function source(entryId: string, message: Message): CompactionMessageSource {
   return { entryId, message };

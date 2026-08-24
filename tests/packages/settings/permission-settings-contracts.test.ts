@@ -5,7 +5,7 @@ import {
   RecordSessionPermissionGrantRequestSchema,
   PermissionRulesRawSchema,
   PermissionSettingsSchema,
-} from '../../../packages/settings/src';
+} from '../../../packages/agent/settings/src';
 
 const rule = {
   source: 'session' as const,

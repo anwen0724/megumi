@@ -1,7 +1,7 @@
 /* Verifies Policy merging, validation, threshold and final Context Window rules. */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COMPACTION_POLICY } from '../../../packages/context/src/index';
-import type { ContextCapacity } from '../../../packages/context/src/index';
+import { DEFAULT_COMPACTION_POLICY } from '../../../packages/agent/context/src/index';
+import type { ContextCapacity } from '../../../packages/agent/context/src/index';
 import {
   compactionPolicyFailure,
   finalContextWindowProblem,
@@ -9,7 +9,7 @@ import {
   shouldAutoCompact,
   validateTokenCount,
   type CompactionPolicy,
-} from '../../../packages/context/src/context-policy';
+} from '../../../packages/agent/context/src/context-policy';
 
 const capacity: ContextCapacity = {
   providerId: 'openai',

@@ -3,7 +3,7 @@
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SettingsUiResolved } from '@megumi/product/host';
+import type { SettingsUiResolved } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { localizeRendererError, rendererError, type RendererErrorDescriptor } from '../../../shared/i18n';

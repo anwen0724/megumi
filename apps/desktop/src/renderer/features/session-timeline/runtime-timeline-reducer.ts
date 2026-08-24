@@ -1,5 +1,5 @@
 /* Reduces one live Runtime Event into the Desktop-owned Timeline model. */
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
 import type {
   AnswerTextBlock,
   AssistantTextItem,

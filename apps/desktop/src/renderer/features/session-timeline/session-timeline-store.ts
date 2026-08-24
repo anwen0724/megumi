@@ -3,8 +3,8 @@
  * Async reads and event subscriptions are coordinated by the synchronizer.
  */
 import { create } from 'zustand';
-import type { AnyEvent } from '@megumi/product/host';
-import type { SessionBranchConversationItemDto } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
+import type { SessionBranchConversationItemDto } from '@megumi/product-host/host';
 import { toTimelineBranchSeparator } from './session-timeline-builder';
 import { reduceRuntimeTimelineEvent } from './runtime-timeline-reducer';
 import {

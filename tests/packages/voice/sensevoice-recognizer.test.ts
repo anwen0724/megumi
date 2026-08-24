@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSenseVoiceRecognizer } from '../../../packages/voice/src';
+import { createSenseVoiceRecognizer } from '../../../packages/agent/voice/src';
 
 interface FakeRecognizerInput {
   readonly result?: { readonly text?: string };

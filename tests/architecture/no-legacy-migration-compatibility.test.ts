@@ -75,10 +75,10 @@ describe('migration compatibility removal', () => {
   });
 
   it('keeps Database schema and migrations in the Database Package', () => {
-    expect(fs.existsSync(path.join(root, 'packages/database/src/database-schema.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/database/src/database-migrations.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/database/migrations/meta/_journal.json'))).toBe(true);
-    expect(fs.existsSync(path.join(root, 'packages/agent/persistence'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'packages/agent/database/src/database-schema.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/agent/database/src/database-migrations.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/agent/database/migrations/meta/_journal.json'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'packages/agent-core/persistence'))).toBe(false);
   });
 
   it('lets Desktop compose Database only through its public owner entry', () => {
@@ -86,7 +86,7 @@ describe('migration compatibility removal', () => {
     const forbiddenImports = [
       'drizzle-orm',
       'drizzle-kit',
-      'packages/database/src',
+      'packages/agent/database/src',
       'database-schema',
       'database-migrations',
     ];

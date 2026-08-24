@@ -8,7 +8,7 @@ import {
   type BrowserSourceTaskGateway,
   type BrowserSourceTaskRequest,
   type BrowserSourceTaskResult,
-} from '@megumi/discovery-agent';
+} from '@megumi/discovery';
 import { createBrowserSourceTaskManager } from './browser-source-task-manager';
 
 const PAIRING_TTL_MS = 5 * 60_000;

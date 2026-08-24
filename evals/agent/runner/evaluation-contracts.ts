@@ -1,5 +1,5 @@
 /* Defines immutable execution identity, lifecycle status, and bounded evidence. */
-import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent as RuntimeEvent } from '@megumi/product-host/host';
 
 export type EvaluationExecutionStatus = 'completed' | 'setup_failed' | 'runner_failed';
 

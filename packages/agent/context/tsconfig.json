@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.package.json",
+  "compilerOptions": {
+    "baseUrl": "../../..",
+    "rootDir": "./src",
+    "outDir": "./dist/types",
+    "tsBuildInfoFile": "./dist/types/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../ai" },
+    { "path": "../events" },
+    { "path": "../input" },
+    { "path": "../instructions" },
+    { "path": "../observability" },
+    { "path": "../session" },
+    { "path": "../skills" },
+    { "path": "../tools" }
+  ]
+}

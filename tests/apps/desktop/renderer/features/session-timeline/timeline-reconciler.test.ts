@@ -12,7 +12,7 @@ import type {
 import type {
   SessionMessageDto,
   UserMessageDto,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 
 describe('Timeline reconciler', () => {
   it('keeps live disclosure while accepting the committed final answer', () => {

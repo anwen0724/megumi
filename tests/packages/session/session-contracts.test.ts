@@ -3,7 +3,7 @@ import {
   SessionAssistantReplyPayloadSchema,
   SessionMessageSchema,
   SessionModelResponsePayloadSchema,
-} from '../../../packages/session/src/index';
+} from '../../../packages/agent/session/src/index';
 import type {
   CreateSessionRequest,
   GetActiveHistoryResult,
@@ -18,7 +18,7 @@ import type {
   SessionHistory,
   SessionCompactionRecord,
   SessionConversationItem,
-} from '../../../packages/session/src/index';
+} from '../../../packages/agent/session/src/index';
 
 describe('session contracts v2', () => {
   it('models session business entity fields without hidden metadata', () => {

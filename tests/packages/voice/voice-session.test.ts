@@ -3,7 +3,7 @@ import {
   createVoice,
   type SpeechInputEvent,
   type SpeechInputRuntime,
-} from '../../../packages/voice/src/index';
+} from '../../../packages/agent/voice/src/index';
 
 function createNoopSpeechInput(): SpeechInputRuntime & { start: ReturnType<typeof vi.fn>; emit(event: SpeechInputEvent): void } {
   const listeners = new Set<(event: SpeechInputEvent) => void>();

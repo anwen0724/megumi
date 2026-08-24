@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import {
-} from '../../../packages/tools/src';
+} from '../../../packages/agent/tools/src';
 import { createBuiltInTestHarness } from './built-in-test-harness';
 import { createLocalWorkspaceFileAccess, createProcessAdapter, parsedToolContent } from './tool-test-fixtures';
 

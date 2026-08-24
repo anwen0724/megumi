@@ -11,13 +11,13 @@ const root = process.cwd();
 
 describe('Input package boundary', () => {
   it('does not import Desktop, Product, Discovery Agent, Session, Context or Commands implementations', () => {
-    const source = readTypeScriptTree('packages/input/src');
+    const source = readTypeScriptTree('packages/agent/input/src');
     expect(source).not.toMatch(/@megumi\/(?:desktop|product|discovery-agent|session|context|commands)(?:\/|['"])/u);
     expect(source).not.toMatch(/apps[\\/]desktop/);
   });
 
   it('imports only the Skills Contracts it needs for Skill selection', () => {
-    const source = readTypeScriptTree('packages/input/src');
+    const source = readTypeScriptTree('packages/agent/input/src');
     expect(source).toMatch(/@megumi\/skills/);
     expect(source).not.toContain('createSkills');
   });
@@ -25,7 +25,7 @@ describe('Input package boundary', () => {
 
 describe('Commands package boundary', () => {
   it('does not depend on Skills', () => {
-    const source = readTypeScriptTree('packages/commands/src');
+    const source = readTypeScriptTree('packages/agent/commands/src');
     expect(source).not.toMatch(/@megumi\/skills/);
     expect(source).not.toContain('SkillSelection');
     expect(source).not.toContain('SkillSuggestion');

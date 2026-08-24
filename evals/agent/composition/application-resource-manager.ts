@@ -2,7 +2,7 @@
  * Owns application startup rollback and ordered shutdown. It records only
  * resources created by Composition and never decides module business state.
  */
-import type { DiscoveryAgent } from '@megumi/discovery-agent';
+import type { DiscoveryAgent } from '@megumi/discovery';
 import type { DatabaseConnection } from '@megumi/database';
 import type { EventSubscription } from '@megumi/events';
 import type { Voice } from '@megumi/voice';

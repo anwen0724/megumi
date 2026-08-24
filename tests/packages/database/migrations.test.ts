@@ -10,7 +10,7 @@ import {
   databaseTables,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 let tempDir: string | null = null;
 

@@ -22,122 +22,116 @@
       "@megumi/desktop/*": [
         "apps/desktop/src/*"
       ],
-      "@megumi/product": [
-        "packages/product/src/index.ts"
+      "@megumi/product-host": [
+        "packages/agent/product-host/src/index.ts"
       ],
-      "@megumi/product/*": [
-        "packages/product/src/*"
+      "@megumi/product-host/*": [
+        "packages/agent/product-host/src/*"
       ],
-      "@megumi/agent": [
-        "packages/agent/src/index.ts"
+      "@megumi/agent-core": [
+        "packages/agent-core/src/index.ts"
       ],
-      "@megumi/agent/*": [
-        "packages/agent/src/*"
+      "@megumi/agent-core/*": [
+        "packages/agent-core/src/*"
       ],
-      "@megumi/discovery-agent": [
-        "packages/discovery-agent/src/index.ts"
+      "@megumi/discovery": [
+        "packages/agent/discovery/src/index.ts"
       ],
-      "@megumi/discovery-agent/*": [
-        "packages/discovery-agent/src/*"
+      "@megumi/discovery/*": [
+        "packages/agent/discovery/src/*"
       ],
       "@megumi/input": [
-        "packages/input/src/index.ts"
+        "packages/agent/input/src/index.ts"
       ],
       "@megumi/input/*": [
-        "packages/input/src/*"
+        "packages/agent/input/src/*"
       ],
       "@megumi/commands": [
-        "packages/commands/src/index.ts"
+        "packages/agent/commands/src/index.ts"
       ],
       "@megumi/commands/*": [
-        "packages/commands/src/*"
+        "packages/agent/commands/src/*"
       ],
       "@megumi/instructions": [
-        "packages/instructions/src/index.ts"
+        "packages/agent/instructions/src/index.ts"
       ],
       "@megumi/instructions/*": [
-        "packages/instructions/src/*"
+        "packages/agent/instructions/src/*"
       ],
       "@megumi/tools": [
-        "packages/tools/src/index.ts"
+        "packages/agent/tools/src/index.ts"
       ],
       "@megumi/tools/*": [
-        "packages/tools/src/*"
+        "packages/agent/tools/src/*"
       ],
       "@megumi/permissions": [
-        "packages/permissions/src/index.ts"
+        "packages/agent/permissions/src/index.ts"
       ],
       "@megumi/permissions/*": [
-        "packages/permissions/src/*"
+        "packages/agent/permissions/src/*"
       ],
       "@megumi/database": [
-        "packages/database/src/index.ts"
+        "packages/agent/database/src/index.ts"
       ],
       "@megumi/database/*": [
-        "packages/database/src/*"
+        "packages/agent/database/src/*"
       ],
       "@megumi/events": [
-        "packages/events/src/index.ts"
+        "packages/agent/events/src/index.ts"
       ],
       "@megumi/events/*": [
-        "packages/events/src/*"
+        "packages/agent/events/src/*"
       ],
       "@megumi/session": [
-        "packages/session/src/index.ts"
+        "packages/agent/session/src/index.ts"
       ],
       "@megumi/session/attachment-store": [
-        "packages/session/src/session-attachment.ts"
+        "packages/agent/session/src/session-attachment.ts"
       ],
       "@megumi/session/store": [
-        "packages/session/src/session-store.ts"
+        "packages/agent/session/src/session-store.ts"
       ],
       "@megumi/session/*": [
-        "packages/session/src/*"
+        "packages/agent/session/src/*"
       ],
       "@megumi/context": [
-        "packages/context/src/index.ts"
+        "packages/agent/context/src/index.ts"
       ],
       "@megumi/context/*": [
-        "packages/context/src/*"
+        "packages/agent/context/src/*"
       ],
       "@megumi/workspace/node": [
-        "packages/workspace/src/node-workspace-file-system.ts"
+        "packages/agent/workspace/src/node-workspace-file-system.ts"
       ],
       "@megumi/workspace/store": [
-        "packages/workspace/src/workspace-store.ts"
+        "packages/agent/workspace/src/workspace-store.ts"
       ],
       "@megumi/workspace": [
-        "packages/workspace/src/index.ts"
+        "packages/agent/workspace/src/index.ts"
       ],
       "@megumi/workspace/*": [
-        "packages/workspace/src/*"
+        "packages/agent/workspace/src/*"
       ],
       "@megumi/settings": [
-        "packages/settings/src/index.ts"
+        "packages/agent/settings/src/index.ts"
       ],
       "@megumi/settings/store": [
-        "packages/settings/src/settings-store.ts"
+        "packages/agent/settings/src/settings-store.ts"
       ],
       "@megumi/settings/*": [
-        "packages/settings/src/*"
-      ],
-      "@megumi/projections": [
-        "packages/projections/src/index.ts"
-      ],
-      "@megumi/projections/*": [
-        "packages/projections/src/*"
+        "packages/agent/settings/src/*"
       ],
       "@megumi/sandbox": [
-        "packages/sandbox/src/index.ts"
+        "packages/agent/sandbox/src/index.ts"
       ],
       "@megumi/sandbox/*": [
-        "packages/sandbox/src/*"
+        "packages/agent/sandbox/src/*"
       ],
       "@megumi/skills": [
-        "packages/skills/src/index.ts"
+        "packages/agent/skills/src/index.ts"
       ],
       "@megumi/skills/*": [
-        "packages/skills/src/*"
+        "packages/agent/skills/src/*"
       ],
       "@megumi/ai": [
         "packages/ai/src/index.ts"
@@ -146,19 +140,19 @@
         "packages/ai/src/*"
       ],
       "@megumi/observability": [
-        "packages/observability/src/index.ts"
+        "packages/agent/observability/src/index.ts"
       ],
       "@megumi/observability/*": [
-        "packages/observability/src/*"
+        "packages/agent/observability/src/*"
       ],
       "@megumi/voice": [
-        "packages/voice/src/index.ts"
+        "packages/agent/voice/src/index.ts"
       ],
       "@megumi/voice/*": [
-        "packages/voice/src/*"
+        "packages/agent/voice/src/*"
       ],
       "@megumi/voice/speech-input/*": [
-        "packages/voice/src/speech-input/*"
+        "packages/agent/voice/src/speech-input/*"
       ]
     }
   },

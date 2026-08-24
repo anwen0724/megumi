@@ -2,7 +2,7 @@
  * Protects deterministic command-name and alias conflict resolution.
  */
 import { describe, expect, it } from "vitest";
-import { createCommandCatalog } from "../../../packages/commands/src/command-catalog";
+import { createCommandCatalog } from "../../../packages/agent/commands/src/command-catalog";
 import type { CommandDefinition } from "@megumi/commands";
 
 const handle: CommandDefinition["handle"] = async ({ input }) => ({ type: "not_command", input });

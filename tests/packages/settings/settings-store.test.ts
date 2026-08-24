@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   createSettings,
-} from '../../../packages/settings/src';
+} from '../../../packages/agent/settings/src';
 import {
   SettingsStoreParseError,
   createSettingsStore,

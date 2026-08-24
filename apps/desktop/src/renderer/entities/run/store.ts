@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
 
 export type RendererRunStatus =
   | 'running'

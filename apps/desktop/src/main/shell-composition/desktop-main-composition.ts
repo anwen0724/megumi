@@ -1,7 +1,7 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
-import { createDiscoveryAgent } from '@megumi/discovery-agent';
+import { createDiscoveryAgent } from '@megumi/discovery';
 import { resolveMegumiHomePath } from '@megumi/home';
 import { composeProduct, composeProductCapabilities } from './application-host-composition';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';

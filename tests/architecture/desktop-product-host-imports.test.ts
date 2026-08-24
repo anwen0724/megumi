@@ -13,7 +13,7 @@ describe('Desktop and Product Host imports', () => {
   });
 
   it('keeps the renderer-safe Host entry free of Node-only Product modules', () => {
-    const source = readTree('packages/product/src/host');
+    const source = readTree('packages/agent/product-host/src/host');
     expect(source).not.toMatch(/from ['"]node:/u);
     expect(source).not.toContain("from '../home");
     expect(source).not.toContain("from '../models");
@@ -29,7 +29,7 @@ describe('Desktop and Product Host imports', () => {
       'commands', 'context', 'events', 'home', 'input', 'instructions',
       'permissions', 'session', 'settings', 'skills', 'tools', 'voice', 'workspace',
     ]) {
-      expect(readTree(`packages/${packageName}`), packageName).not.toContain('@megumi/product');
+      expect(readTree(`packages/${packageName}`), packageName).not.toContain('@megumi/product-host');
     }
   });
 });

@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import * as PublicSession from '../../../packages/session/src/index';
+import * as PublicSession from '../../../packages/agent/session/src/index';
 
 const repoRoot = join(__dirname, '../../..');
 const exists = (filePath: string) => existsSync(join(repoRoot, filePath));
@@ -11,22 +11,22 @@ const read = (filePath: string) => readFileSync(join(repoRoot, filePath), 'utf8'
 describe('Session package boundary', () => {
   it('uses only the confirmed concept-oriented source files', () => {
     for (const filePath of [
-      'packages/session/package.json',
-      'packages/session/tsconfig.json',
-      'packages/session/src/index.ts',
-      'packages/session/src/session.ts',
-      'packages/session/src/session-message.ts',
-      'packages/session/src/session-catalog.ts',
-      'packages/session/src/session-history.ts',
-      'packages/session/src/session-entry-graph.ts',
-      'packages/session/src/session-branch-drafts.ts',
-      'packages/session/src/session-attachment.ts',
-      'packages/session/src/session-store.ts',
+      'packages/agent/session/package.json',
+      'packages/agent/session/tsconfig.json',
+      'packages/agent/session/src/index.ts',
+      'packages/agent/session/src/session.ts',
+      'packages/agent/session/src/session-message.ts',
+      'packages/agent/session/src/session-catalog.ts',
+      'packages/agent/session/src/session-history.ts',
+      'packages/agent/session/src/session-entry-graph.ts',
+      'packages/agent/session/src/session-branch-drafts.ts',
+      'packages/agent/session/src/session-attachment.ts',
+      'packages/agent/session/src/session-store.ts',
     ]) expect(exists(filePath)).toBe(true);
 
-    expect(exists('packages/session/src/service')).toBe(false);
-    expect(exists('packages/session/src/repository')).toBe(false);
-    expect(exists('packages/session/src/config')).toBe(false);
+    expect(exists('packages/agent/session/src/service')).toBe(false);
+    expect(exists('packages/agent/session/src/repository')).toBe(false);
+    expect(exists('packages/agent/session/src/config')).toBe(false);
   });
 
   it('keeps concrete implementations, SQL mapping, and graph helpers out of the public entry', () => {
@@ -37,7 +37,7 @@ describe('Session package boundary', () => {
     expect(PublicSession).not.toHaveProperty('createSessionStore');
     expect(PublicSession).not.toHaveProperty('createSessionAttachmentFileStore');
 
-    const source = read('packages/session/src/index.ts');
+    const source = read('packages/agent/session/src/index.ts');
     expect(source).not.toContain('SessionService');
     expect(source).not.toContain('DefaultSession');
     expect(source).not.toContain('buildActivePath');
@@ -45,14 +45,14 @@ describe('Session package boundary', () => {
   });
 
   it('depends only on the allowed Owner packages and keeps SQL in SessionStore', () => {
-    const packageJson = read('packages/session/package.json');
+    const packageJson = read('packages/agent/session/package.json');
     expect(packageJson).toContain('@megumi/ai');
     expect(packageJson).toContain('@megumi/database');
     expect(packageJson).toContain('@megumi/events');
     expect(packageJson).not.toContain('@megumi/engine');
-    expect(packageJson).not.toContain('@megumi/product');
+    expect(packageJson).not.toContain('@megumi/product-host');
 
-    const store = read('packages/session/src/session-store.ts');
+    const store = read('packages/agent/session/src/session-store.ts');
     for (const table of [
       'sessions',
       'session_messages',

@@ -1,6 +1,6 @@
 /* Verifies the Events default entry exposes stable protocols without internal cursors or bridges. */
 import { describe, expect, it } from 'vitest';
-import * as PublicEvents from '../../../packages/events/src/index';
+import * as PublicEvents from '../../../packages/agent/events/src/index';
 
 describe('Events package boundary', () => {
   it('exports the canonical bus creation seam and schema', () => {

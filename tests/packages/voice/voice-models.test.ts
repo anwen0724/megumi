@@ -9,7 +9,7 @@ import {
   createFileVoiceModels,
   type VoiceModelDownloader,
   type VoiceModelManifest,
-} from '../../../packages/voice/src';
+} from '../../../packages/agent/voice/src';
 
 describe('Voice Models', () => {
   const temporaryDirectories: string[] = [];

@@ -21,7 +21,7 @@ import type {
   DiscoveryConfigurationUiDto,
   BrowserSourceConnectionView,
   BrowserSourcePairingView,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,

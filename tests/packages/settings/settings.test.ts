@@ -6,7 +6,7 @@ import {
   createSettings,
   createRecordSettingsEnvironment,
   type SettingsStore,
-} from '../../../packages/settings/src';
+} from '../../../packages/agent/settings/src';
 
 class MemorySettingsStore implements SettingsStore {
   document: Record<string, any> = {};

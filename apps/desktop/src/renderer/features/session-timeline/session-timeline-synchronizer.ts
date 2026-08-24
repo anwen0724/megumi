@@ -2,7 +2,7 @@
  * Synchronizes durable Session facts and live Runtime Events into the Desktop Timeline.
  * It owns the renderer's only Runtime Event subscription and all read/event ordering rules.
  */
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
 import type { SessionMessagePresentationEvent } from '@megumi/desktop/main/ipc/session-message-presentation';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc/runtime-request';

@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { AppLanguage } from '@megumi/product/host';
+import type { AppLanguage } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../ipc';
 import { cx } from '../ui';

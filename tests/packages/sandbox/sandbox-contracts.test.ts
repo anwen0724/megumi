@@ -1,13 +1,13 @@
-﻿/* Verifies Sandbox capability disclosure and scope ownership contracts. */
+/* Verifies Sandbox capability disclosure and scope ownership contracts. */
 
 import { describe, expect, it } from 'vitest';
-import { executeSandboxScope } from '../../../packages/sandbox/src';
+import { executeSandboxScope } from '../../../packages/agent/sandbox/src';
 import type {
   Sandbox,
   SandboxCapabilities,
   SandboxPolicy,
   SandboxScope,
-} from '../../../packages/sandbox/src';
+} from '../../../packages/agent/sandbox/src';
 
 describe('Sandbox contracts', () => {
   it('requires explicit capability disclosure before opening a scope', async () => {

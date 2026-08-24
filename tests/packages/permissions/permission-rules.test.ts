@@ -1,8 +1,8 @@
 // @vitest-environment node
 /* Verifies the resource-specific matching semantics kept internal to Permissions. */
 import { describe, expect, it } from 'vitest';
-import type { PermissionOperation, PermissionRule } from '../../../packages/permissions/src/index';
-import { matchesPermissionRule } from '../../../packages/permissions/src/permission-rules';
+import type { PermissionOperation, PermissionRule } from '../../../packages/agent/permissions/src/index';
+import { matchesPermissionRule } from '../../../packages/agent/permissions/src/permission-rules';
 
 const context = {
   workspaceId: 'workspace_1',

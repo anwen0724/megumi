@@ -8,9 +8,9 @@ import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
-const migrationsRoot = path.join(process.cwd(), 'packages/database/migrations');
+const migrationsRoot = path.join(process.cwd(), 'packages/agent/database/migrations');
 let tempRoot: string | undefined;
 
 afterEach(() => {

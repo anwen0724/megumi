@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import type { GetContextUsageResult } from '@megumi/product/host';
+import type { GetContextUsageResult } from '@megumi/product-host/host';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';

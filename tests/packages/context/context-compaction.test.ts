@@ -7,7 +7,7 @@ import {
   createContext,
   type CreateContextOptions,
   type Prompt,
-} from '../../../packages/context/src/index';
+} from '../../../packages/agent/context/src/index';
 import {
   compactingModel,
   completedMessage,

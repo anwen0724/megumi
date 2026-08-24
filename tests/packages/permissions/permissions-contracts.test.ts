@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Verifies the stable Permissions contracts and the intentionally narrow public entry. */
 import { describe, expect, it } from 'vitest';
-import * as permissionsModule from '../../../packages/permissions/src/index';
+import * as permissionsModule from '../../../packages/agent/permissions/src/index';
 
 const toolIdentity = {
   source_id: 'built_in',

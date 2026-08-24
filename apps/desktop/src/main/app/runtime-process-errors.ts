@@ -1,5 +1,5 @@
 /* Registers process-level failures against the Product runtime logger. */
-import { redactHostRuntimeValue } from '@megumi/product/host';
+import { redactHostRuntimeValue } from '@megumi/product-host/host';
 import { normalizeRuntimeIpcError } from '../ipc/errors';
 import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
 

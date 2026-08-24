@@ -5,7 +5,7 @@ import {
   createRecordSettingsEnvironment,
   createSettings,
   type SettingsStore,
-} from '../../../packages/settings/src';
+} from '../../../packages/agent/settings/src';
 
 class MemorySettingsStore implements SettingsStore {
   constructor(public document: unknown = {}) {}

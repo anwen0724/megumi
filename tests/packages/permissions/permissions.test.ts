@@ -10,8 +10,8 @@ import {
   type PermissionRuleWriter,
   type PermissionSettings,
   type PermissionWorkspacePathClassifier,
-} from '../../../packages/permissions/src/index';
-import type { ToolShellKind } from '../../../packages/tools/src/index';
+} from '../../../packages/agent/permissions/src/index';
+import type { ToolShellKind } from '../../../packages/agent/tools/src/index';
 
 class FakeRuleAccess implements PermissionRuleReader, PermissionRuleWriter {
   readonly writes: unknown[] = [];

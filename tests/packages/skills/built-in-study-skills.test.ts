@@ -10,6 +10,7 @@ import { DEFAULT_SKILLS_POLICY, loadSkills } from '@megumi/skills/skill-loader';
 const BUILT_IN_SKILLS_ROOT = path.resolve(
   process.cwd(),
   'packages',
+  'agent',
   'skills',
   'built-in-skills',
 );

@@ -11,7 +11,7 @@ import type {
   ProductHostInterface,
   SendUserInputPayload,
   SendUserInputRequest,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 import type { ApprovalRequestedPayload } from '@megumi/events';
 import type { EvaluationCase } from '../cases/evaluation-case';
 import type { EvaluationIsolation, ExecutionProfile } from '../config/execution-profile';

@@ -1,6 +1,6 @@
 /* Ensures composer approvals are selected from, not copied out of, canonical Tool Activity state. */
 import { describe, expect, it } from 'vitest';
-import type { TimelineMessage } from '@megumi/product/host';
+import type { TimelineMessage } from '@megumi/product-host/host';
 import { collectPendingApprovalActivities } from '@megumi/desktop/renderer/features/chat/approval-overlay';
 
 describe('collectPendingApprovalActivities', () => {

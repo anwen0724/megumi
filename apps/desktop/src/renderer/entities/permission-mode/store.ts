@@ -1,6 +1,6 @@
 /* Owns the bootstrap, optimistic selection, and Settings persistence of Permission Mode. */
 import { create } from 'zustand';
-import type { PermissionMode } from '@megumi/product/host';
+import type { PermissionMode } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 

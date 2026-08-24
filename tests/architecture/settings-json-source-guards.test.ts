@@ -39,7 +39,7 @@ function offenders(files: string[], pattern: RegExp): string[] {
 describe('settings.json source guards', () => {
   it('keeps Megumi Home user configuration on settings.json instead of config.json', () => {
     const mainFiles = productionFilesUnder('apps', 'desktop', 'src', 'main');
-    const settingsFiles = productionFilesUnder('packages', 'settings', 'src');
+    const settingsFiles = productionFilesUnder('packages', 'agent', 'settings', 'src');
 
     expect(offenders(mainFiles, /\bconfigPath\b|config\.json|config\.schema\.json|MegumiHomeConfigService|MegumiHomeConfigParseError/)).toEqual([]);
     expect(offenders(settingsFiles, /settingsPath|settings\.json|SettingsStore/)).not.toEqual([]);
@@ -58,7 +58,7 @@ describe('settings.json source guards', () => {
 
   it('does not create DB-backed provider or memory settings tables', () => {
     const dbFiles = [
-      ...productionFilesUnder('packages', 'database'),
+      ...productionFilesUnder('packages', 'agent', 'database'),
       ...productionFilesUnder('apps', 'desktop', 'src', 'main'),
     ];
 

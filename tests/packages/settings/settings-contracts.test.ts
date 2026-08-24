@@ -9,7 +9,7 @@ import {
   createSettings,
   createSettingsJsonSchema,
   type SettingsStore,
-} from '../../../packages/settings/src';
+} from '../../../packages/agent/settings/src';
 
 describe('Settings contracts', () => {
   it('accepts sparse secret-free raw settings and resolves defaults', () => {

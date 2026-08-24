@@ -1,12 +1,12 @@
 /* Owns the headless Evaluation composition root and projects it through Product Host contracts. */
-import { createDiscoveryAgent } from '@megumi/discovery-agent';
+import { createDiscoveryAgent } from '@megumi/discovery';
 import {
   composeProduct,
   composeProductCapabilities,
   type ProductCapabilitiesInput as ProductCapabilitiesOptions,
 } from '../composition/application-host-composition';
 import type { ProductRuntime } from '../composition/application-runtime';
-import type { AnyEvent as RuntimeEvent } from '@megumi/product/host';
+import type { AnyEvent as RuntimeEvent } from '@megumi/product-host/host';
 import type { BuiltInToolAvailability } from '@megumi/tools';
 import {
   createEvaluationHomeOptions,

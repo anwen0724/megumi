@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 const root = process.cwd();
 
 const migrationRuntimeFiles = [
-  'packages/database/src/database-migrations.ts',
-  'packages/database/src/migration-resources.ts',
+  'packages/agent/database/src/database-migrations.ts',
+  'packages/agent/database/src/migration-resources.ts',
 ];
 
 describe('database migration runtime contract', () => {
@@ -32,7 +32,7 @@ describe('database migration runtime contract', () => {
 
   it('uses Drizzle migrations as the only schema upgrade mechanism', () => {
     const migrateSource = fs.readFileSync(
-      path.join(root, 'packages/database/src/database-migrations.ts'),
+      path.join(root, 'packages/agent/database/src/database-migrations.ts'),
       'utf8',
     );
 

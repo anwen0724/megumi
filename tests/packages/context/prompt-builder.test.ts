@@ -1,8 +1,8 @@
 /* Verifies PromptBuilder builds the full Prompt from one ResolvedContext alone. */
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolDefinition } from '@megumi/tools';
-import { createPromptBuilder } from '../../../packages/context/src/prompt/prompt-builder';
-import { createContextResolver } from '../../../packages/context/src/context-resolver';
+import { createPromptBuilder } from '../../../packages/agent/context/src/prompt/prompt-builder';
+import { createContextResolver } from '../../../packages/agent/context/src/context-resolver';
 import { history, model, workspaceSource } from './context-test-fixtures';
 
 function resolveContext(tools: readonly ToolDefinition[]) {

@@ -4,7 +4,7 @@ import type {
   SessionMessageDto,
   UserMessageDto,
   WorkspaceChangeSummaryDto,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 import {
   buildCommittedRunTimeline,
   buildSessionTimeline,

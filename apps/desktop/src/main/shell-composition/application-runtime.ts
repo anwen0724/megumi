@@ -6,7 +6,7 @@ import type {
   SpeechOutputEventListener,
   SpeechOutputSubscription,
 } from '@megumi/voice';
-import type { ProductHostInterface } from '@megumi/product/host';
+import type { ProductHostInterface } from '@megumi/product-host/host';
 
 export interface ProductRuntimeLogger {
   info?(event: string, details?: Record<string, unknown>): void;

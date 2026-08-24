@@ -6,12 +6,12 @@ import {
   type SpeechAudioChunk,
   type SpeechSynthesizer,
   type SynthesizeSpeechRequest,
-} from '../../../packages/voice/src/speech';
+} from '../../../packages/agent/voice/src/speech';
 import {
   createSpeechOutputRuntime,
   type SpeechOutputEvent,
-} from '../../../packages/voice/src/speech-output/speech-output-runtime';
-import { SpeechOutputEventSchema, parseSpeechOutputEvent } from '../../../packages/voice/src/speech-output/speech-output-schema';
+} from '../../../packages/agent/voice/src/speech-output/speech-output-runtime';
+import { SpeechOutputEventSchema, parseSpeechOutputEvent } from '../../../packages/agent/voice/src/speech-output/speech-output-schema';
 
 class ControlledSynthesizer implements SpeechSynthesizer {
   readonly calls: Array<{ text: string; aborted: boolean }> = [];

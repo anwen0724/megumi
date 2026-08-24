@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createNodeWorkspaceFileSystem } from '../../../packages/workspace/src/node-workspace-file-system';
+import { createNodeWorkspaceFileSystem } from '../../../packages/agent/workspace/src/node-workspace-file-system';
 
 describe('NodeWorkspaceFileSystem', () => {
   it('keeps the same hash for equal content and changes it for a real modification', async () => {

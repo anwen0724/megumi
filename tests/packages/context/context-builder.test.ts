@@ -4,8 +4,8 @@ import {
   createContext,
   type CreateContextOptions,
   type Prompt,
-} from '../../../packages/context/src/index';
-import { calculatePromptUsage } from '../../../packages/context/src/context-usage-calculator';
+} from '../../../packages/agent/context/src/index';
+import { calculatePromptUsage } from '../../../packages/agent/context/src/context-usage-calculator';
 import {
   compactingModel,
   completedMessage,

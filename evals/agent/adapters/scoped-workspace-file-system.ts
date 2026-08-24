@@ -3,7 +3,7 @@ import { open, readdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import type { ProductWorkspaceFileSystem } from '@megumi/product/host';
+import type { ProductWorkspaceFileSystem } from '@megumi/product-host/host';
 
 export async function createEvaluationWorkspaceFileSystem(workspaceRoot: string): Promise<ProductWorkspaceFileSystem> {
   const lexicalRoot = path.resolve(workspaceRoot);

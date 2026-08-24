@@ -1,4 +1,4 @@
-﻿/* Tests the internal normalization fallback without exposing raw adapter results publicly. */
+/* Tests the internal normalization fallback without exposing raw adapter results publicly. */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,7 +6,7 @@ import {
   createFailedToolResult,
   isSuccessfulToolExecutionResult,
   normalizeRawToolResult,
-} from '../../../packages/tools/src/tool-result';
+} from '../../../packages/agent/tools/src/tool-result';
 
 describe('Tool result normalization', () => {
   it('preserves structured effects on both successful and failed results', () => {

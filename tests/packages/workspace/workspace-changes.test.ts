@@ -6,7 +6,7 @@ import {
   type WorkspaceChangeSet,
   type WorkspaceToolEffectReport,
   type WorkspaceStore,
-} from '../../../packages/workspace/src/index';
+} from '../../../packages/agent/workspace/src/index';
 
 type Result = { type: 'succeeded' | 'failed'; value?: string; effectReport?: WorkspaceToolEffectReport };
 const result = (effectReport?: WorkspaceToolEffectReport, type: Result['type'] = 'succeeded'): Result => ({ type, ...(effectReport ? { effectReport } : {}) });

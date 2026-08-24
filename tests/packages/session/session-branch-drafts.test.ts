@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createEventBus, type AnyEvent } from '../../../packages/events/src/index';
-import { createSessionBranchDrafts } from '../../../packages/session/src/index';
+import { createEventBus, type AnyEvent } from '../../../packages/agent/events/src/index';
+import { createSessionBranchDrafts } from '../../../packages/agent/session/src/index';
 
 describe('SessionBranchDrafts', () => {
   it('creates explicit branch drafts and publishes the branch fact on the bus', () => {

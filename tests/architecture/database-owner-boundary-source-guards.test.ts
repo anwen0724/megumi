@@ -24,7 +24,7 @@ const forbiddenRuntimeTables = [
 
 describe('Database Owner boundaries', () => {
   it('keeps business Store implementations out of Database', () => {
-    const source = readTree('packages/database/src');
+    const source = readTree('packages/agent/database/src');
 
     expect(source).not.toMatch(/@megumi\/(?:commands|context|engine|events|input|instructions|permissions|product|projections|session|settings|skills|tools|workspace)(?:\/|['"])/u);
     expect(source).not.toMatch(/class\s+(?:Workspace|Session|Skill|Tool|Run|Artifact|Memory)Repository/u);
@@ -33,8 +33,8 @@ describe('Database Owner boundaries', () => {
 
   it('keeps transient execution, Artifact, and Memory tables out of the current schema', () => {
     const source = [
-      read('packages/database/src/database-schema.ts'),
-      read('packages/database/src/database-tables.ts'),
+      read('packages/agent/database/src/database-schema.ts'),
+      read('packages/agent/database/src/database-tables.ts'),
     ].join('\n');
     const violations = forbiddenRuntimeTables.filter((table) => containsIdentifier(source, table));
 
@@ -42,9 +42,9 @@ describe('Database Owner boundaries', () => {
   });
 
   it('keeps each business Store in its owning Package', () => {
-    expect(read('packages/workspace/src/workspace-store.ts')).toContain('createWorkspaceStore');
-    expect(read('packages/session/src/session-store.ts')).toContain('createSessionStore');
-    expect(readTree('packages/skills/src')).toContain('createDatabaseSkillAvailabilityStore');
+    expect(read('packages/agent/workspace/src/workspace-store.ts')).toContain('createWorkspaceStore');
+    expect(read('packages/agent/session/src/session-store.ts')).toContain('createSessionStore');
+    expect(readTree('packages/agent/skills/src')).toContain('createDatabaseSkillAvailabilityStore');
   });
 });
 

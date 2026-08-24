@@ -1,5 +1,5 @@
 /*
- * Protects the complete Discovery Agent Event to Desktop approval-control projection.
+ * Protects the complete Megumi Agent Event to Desktop approval-control projection.
  */
 import { EventSchema } from '@megumi/events';
 import type { PermissionDecision } from '@megumi/permissions';
@@ -11,14 +11,14 @@ import {
   collectEvents,
   createExecutionFixture,
   launchedExecution,
-} from '../../../../../packages/discovery-agent/execution-test-fixtures';
+} from '../../../../../packages/discovery/execution-test-fixtures';
 import {
   permissionService,
   registeredTool,
-} from '../../../../../packages/discovery-agent/tool-call-test-fixtures';
+} from '../../../../../packages/discovery/tool-call-test-fixtures';
 
 describe('approval Runtime flow', () => {
-  it('projects a Discovery Agent approval event into a resolvable Desktop approval activity', async () => {
+  it('projects a Megumi Agent approval event into a resolvable Desktop approval activity', async () => {
     const tool = registeredTool('approval-tool');
     const fixture = createExecutionFixture({
       tools: [tool],

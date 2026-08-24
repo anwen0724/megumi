@@ -3,9 +3,9 @@ import {
   createSpeechInputRuntime,
   type SpeechInputEvent,
   type SpeechInputRuntime,
-} from '../../../packages/voice/src/speech-input/speech-input-runtime';
-import type { SpeechVad } from '../../../packages/voice/src/speech-input/sherpa-vad';
-import type { SpeechRecognizer } from '../../../packages/voice/src';
+} from '../../../packages/agent/voice/src/speech-input/speech-input-runtime';
+import type { SpeechVad } from '../../../packages/agent/voice/src/speech-input/sherpa-vad';
+import type { SpeechRecognizer } from '../../../packages/agent/voice/src';
 
 /*
  * Boundary math at 16 kHz with 512-sample frames (32 ms per frame):

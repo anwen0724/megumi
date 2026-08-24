@@ -9,14 +9,14 @@ const read = (relativePath: string) => readFileSync(join(root, relativePath), 'u
 
 describe('Product Host public seam', () => {
   it('does not wildcard re-export Owner Package internals from the Host entry', () => {
-    const source = read('packages/product/src/host/index.ts');
+    const source = read('packages/agent/product-host/src/host/index.ts');
 
     expect(source).not.toMatch(/export\s+(?:type\s+)?\*\s+from\s+['"]@megumi\//u);
     expect(source).not.toMatch(/export\s+(?:type\s+)?\*\s+from\s+['"][^'"]*(?:agent|engine|session|context|projections)[\\/]/u);
   });
 
   it('defines Session Host DTOs and runtime Schemas in one Product Host contract', () => {
-    const contract = read('packages/product/src/host/session-host.ts');
+    const contract = read('packages/agent/product-host/src/host/session-host.ts');
 
     expect(contract).toContain('SessionHost');
     expect(contract).toContain('SendUserInputPayloadSchema');

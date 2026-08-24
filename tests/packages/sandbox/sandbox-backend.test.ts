@@ -6,13 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   type SandboxCapabilities,
   type SandboxProcess,
-} from '../../../packages/sandbox/src';
+} from '../../../packages/agent/sandbox/src';
 import {
   createUnsupportedSandboxBackend,
   resolveSandboxBackend,
   type SandboxBackend,
-} from '../../../packages/sandbox/src/sandbox-backend';
-import { createSandboxWithBackend } from '../../../packages/sandbox/src/sandbox-scope';
+} from '../../../packages/agent/sandbox/src/sandbox-backend';
+import { createSandboxWithBackend } from '../../../packages/agent/sandbox/src/sandbox-scope';
 
 const workspaceAccess = {
   fileSystem: { mode: 'workspace' as const },
@@ -102,7 +102,7 @@ describe('Sandbox Backend', () => {
   });
 
   it('keeps generic Scope source independent from Windows and platform selection', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'packages/sandbox/src/sandbox-scope.ts'), 'utf8');
+    const source = fs.readFileSync(path.join(process.cwd(), 'packages/agent/sandbox/src/sandbox-scope.ts'), 'utf8');
     expect(source).not.toContain('windows-');
     expect(source).not.toContain("'win32'");
     expect(source).not.toContain('process.platform');

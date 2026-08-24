@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
 import {
   sessionTimelineKey,
   useSessionTimelineStore,

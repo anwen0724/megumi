@@ -20,22 +20,22 @@ function readTypeScriptTree(relative: string): string {
 
 describe('Permissions owner boundary', () => {
   it('keeps execution targets out of Permission and Tool contracts', () => {
-    const permissionContracts = read('packages/permissions/src/permission-operation.ts');
-    const toolContracts = read('packages/tools/src/tool.ts');
+    const permissionContracts = read('packages/agent/permissions/src/permission-operation.ts');
+    const toolContracts = read('packages/agent/tools/src/tool.ts');
     expect(permissionContracts).not.toMatch(/execution_targets|PermissionExecutionTargets|NetworkTargetPermissionFacts/);
     expect(toolContracts).not.toMatch(/authorizedTargets|workspacePath\?: \{ absolutePath|resolvedAddresses/);
   });
 
   it('keeps network execution analysis outside Permissions', () => {
-    const permissions = readTypeScriptTree('packages/permissions/src');
+    const permissions = readTypeScriptTree('packages/agent/permissions/src');
     expect(permissions).not.toMatch(/node:(?:dns|net|http|https)/);
     expect(permissions).not.toMatch(/NetworkTargetClassifier|dns\.lookup|resolved_addresses/);
   });
 
   it('does not carry authorization artifacts through Discovery Agent or Tools', () => {
     const source = [
-      readTypeScriptTree('packages/discovery-agent/src'),
-      readTypeScriptTree('packages/tools/src'),
+      readTypeScriptTree('packages/agent/discovery/src'),
+      readTypeScriptTree('packages/agent/tools/src'),
     ].join('\n');
     expect(source).not.toMatch(/authorizedTargets|execution_targets|permissionExecutionTargetsToToolOptions/);
   });

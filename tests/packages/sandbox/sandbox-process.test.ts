@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveSandboxBackend } from '../../../packages/sandbox/src/sandbox-backend';
-import { createSandboxWithBackend } from '../../../packages/sandbox/src/sandbox-scope';
+import { resolveSandboxBackend } from '../../../packages/agent/sandbox/src/sandbox-backend';
+import { createSandboxWithBackend } from '../../../packages/agent/sandbox/src/sandbox-scope';
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));

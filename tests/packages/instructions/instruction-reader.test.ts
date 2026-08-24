@@ -2,7 +2,7 @@
 /* Verifies the Instructions owner reads exact AGENTS.md sources with stable scope and failure semantics. */
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import * as PublicInstructions from '../../../packages/instructions/src/index';
+import * as PublicInstructions from '../../../packages/agent/instructions/src/index';
 import {
   createInstructionReader,
   type InstructionSource,
@@ -13,7 +13,7 @@ import {
   type ReadInstructionFileResult,
   type ResolveInstructionPathRequest,
   type ResolveInstructionPathResult,
-} from '../../../packages/instructions/src/index';
+} from '../../../packages/agent/instructions/src/index';
 
 const EXPECTED_SYSTEM_INSTRUCTIONS = [
   {

@@ -8,7 +8,7 @@ import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 const discoveryTables = [
   'discovery_batches',
@@ -140,7 +140,7 @@ function tableNames(database: DatabaseConnection): string[] {
 }
 
 function createMigrationFolderAt0011(target: string): void {
-  const source = path.join(process.cwd(), 'packages/database/migrations');
+  const source = path.join(process.cwd(), 'packages/agent/database/migrations');
   fs.mkdirSync(path.join(target, 'meta'), { recursive: true });
   for (const filename of fs.readdirSync(source)) {
     if (/^00(?:0\d|1[01])_.+\.sql$/u.test(filename)) {

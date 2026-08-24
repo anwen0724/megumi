@@ -5,7 +5,7 @@ import {
   buildCompactionSummaryRequest,
   COMPACTION_SUMMARY_SYSTEM_PROMPT,
   generateCompactionSummary,
-} from '../../../packages/context/src/compaction/compaction-summary-generator';
+} from '../../../packages/agent/context/src/compaction/compaction-summary-generator';
 import { model } from './context-test-fixtures';
 
 const conversation: Message[] = [

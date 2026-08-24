@@ -1,6 +1,6 @@
 /* Verifies one-pass Session Entry to AI Message materialization with exact mapping. */
 import { describe, expect, it, vi } from 'vitest';
-import { buildContextMessages } from '../../../packages/context/src/prompt/context-message-builder';
+import { buildContextMessages } from '../../../packages/agent/context/src/prompt/context-message-builder';
 import type { SessionHistoryItem } from '@megumi/session';
 
 function userHistory(overrides: {

@@ -42,12 +42,12 @@ describe('Package Owner boundaries', () => {
   });
 
   it('keeps Database independent from every business Owner', () => {
-    const source = readTypeScriptTree('packages/database');
+    const source = readTypeScriptTree('packages/agent/database');
     expect(source).not.toMatch(/@megumi\/(?:commands|context|engine|events|input|instructions|permissions|product|projections|session|settings|skills|tools|workspace)(?:\/|['"])/u);
   });
 
   it('keeps Product Host renderer-safe', () => {
-    const hostSource = readTypeScriptTree('packages/product/src/host');
+    const hostSource = readTypeScriptTree('packages/agent/product-host/src/host');
 
     expect(hostSource).not.toMatch(/from ['"](?:node:|electron(?:\/|['"]))/u);
     expect(hostSource).not.toContain('apps/desktop');
@@ -59,8 +59,8 @@ describe('Package Owner boundaries', () => {
     expect(rendererSource).not.toContain('@megumi/observability');
   });
   it('keeps Host platform capability creation outside Product source', () => {
-    const productSource = readTypeScriptTree('packages/product/src');
-    const productEntry = fs.readFileSync(path.join(root, 'packages/product/src/index.ts'), 'utf8');
+    const productSource = readTypeScriptTree('packages/agent/product-host/src');
+    const productEntry = fs.readFileSync(path.join(root, 'packages/agent/product-host/src/index.ts'), 'utf8');
 
     expect(productSource).not.toMatch(/process\.(?:env|platform)/u);
     expect(productSource).not.toContain('@megumi/workspace/node');
@@ -68,12 +68,12 @@ describe('Package Owner boundaries', () => {
   });
 
   it('keeps the generic Sandbox Scope independent from platform implementations', () => {
-    const scopeSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/sandbox-scope.ts'), 'utf8');
+    const scopeSource = fs.readFileSync(path.join(root, 'packages/agent/sandbox/src/sandbox-scope.ts'), 'utf8');
     expect(scopeSource).not.toMatch(/windows-|process.platform|['"]win32['"]/u);
     expect(scopeSource).toContain('SandboxBackend');
   });
   it('keeps platform Backend selection internal to Sandbox', () => {
-    const publicSource = fs.readFileSync(path.join(root, 'packages/sandbox/src/index.ts'), 'utf8');
+    const publicSource = fs.readFileSync(path.join(root, 'packages/agent/sandbox/src/index.ts'), 'utf8');
     const desktopSource = readTypeScriptTree('apps/desktop');
     const evaluationSource = readTypeScriptTree('evals/agent');
     expect(publicSource).not.toContain('resolveSandboxBackend');

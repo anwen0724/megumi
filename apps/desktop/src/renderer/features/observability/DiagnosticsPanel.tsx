@@ -14,7 +14,7 @@ import type {
   ObservabilityRunTraceDetailUiDto,
   ObservabilityRunTraceSummaryUiDto,
   WorkspaceProjectUiDto,
-} from "@megumi/product/host";
+} from "@megumi/product-host/host";
 import { IPC_CHANNELS } from "../../../main/ipc/channels";
 import { createRendererRuntimeIpcRequest } from "../../shared/ipc/runtime-request";
 import { Button, SettingsPageHeader, cx } from "../../shared/ui";

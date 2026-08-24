@@ -6,7 +6,7 @@ import type {
   Workspace,
   WorkspaceChangedFile,
   WorkspaceChangeSet,
-} from '../../../packages/workspace/src/index';
+} from '../../../packages/agent/workspace/src/index';
 import { createWorkspaceStoreFixture } from './workspace-store-fixture';
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({

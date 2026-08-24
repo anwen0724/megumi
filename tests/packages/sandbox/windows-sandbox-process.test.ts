@@ -5,8 +5,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createWindowsSandboxBackend } from '../../../packages/sandbox/src/windows-sandbox-backend';
-import { createWindowsSandboxProcess } from '../../../packages/sandbox/src/windows-sandbox-process';
+import { createWindowsSandboxBackend } from '../../../packages/agent/sandbox/src/windows-sandbox-backend';
+import { createWindowsSandboxProcess } from '../../../packages/agent/sandbox/src/windows-sandbox-process';
 
 const roots: string[] = [];
 afterEach(async () => Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))));

@@ -1,13 +1,13 @@
 /* Test-only adapters exercise Tools through the same Sandbox file seam used by Product. */
 
-import { createNodeSandboxFileAccess } from '../../../packages/sandbox/src';
+import { createNodeSandboxFileAccess } from '../../../packages/agent/sandbox/src';
 import type {
   ToolProcessAdapter,
   ToolProcessOptions,
   ToolProcessRequest,
   ToolProcessResult,
   WorkspaceFileAccess,
-} from '../../../packages/tools/src';
+} from '../../../packages/agent/tools/src';
 
 export function createLocalWorkspaceFileAccess(root: string): WorkspaceFileAccess {
   return createNodeSandboxFileAccess({ workspaceRoot: root });

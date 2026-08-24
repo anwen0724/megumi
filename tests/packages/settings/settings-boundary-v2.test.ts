@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import * as settingsModule from '../../../packages/settings/src';
+import * as settingsModule from '../../../packages/agent/settings/src';
 
 describe('Settings public boundary', () => {
   it('exports one Settings capability and stable public schemas', () => {
@@ -32,7 +32,7 @@ describe('Settings public boundary', () => {
   });
 
   it('depends only on AI and Permissions business contracts', () => {
-    const manifest = JSON.parse(readFileSync(join(process.cwd(), 'packages/settings/package.json'), 'utf8')) as {
+    const manifest = JSON.parse(readFileSync(join(process.cwd(), 'packages/agent/settings/package.json'), 'utf8')) as {
       dependencies: Record<string, string>;
     };
     expect(manifest.dependencies).toHaveProperty('@megumi/ai');

@@ -1,5 +1,5 @@
 /*
- * Desktop host adapter that runs the packages/voice Speech Input Runtime in a
+ * Desktop host adapter that runs the packages/agent/voice Speech Input Runtime in a
  * Node Speech Worker. Owns the worker lifecycle, the bounded pending-frame
  * queue with ack gating, transfer of PCM ArrayBuffers, Speech Input Event
  * projection, and packaged/dev resource path resolution. It implements the
@@ -365,7 +365,7 @@ export function resolveVoiceInputWorkerEntryPath(input: {
 }
 
 function spawnNodeSpeechWorker(entryPath: string, workerData: VoiceInputWorkerData): VoiceInputWorker {
-  // worker_threads lives inside this host adapter module; packages/voice stays
+  // worker_threads lives inside this host adapter module; packages/agent/voice stays
   // free of Node threading concerns.
   const created = new Worker(entryPath, { workerData });
   return {

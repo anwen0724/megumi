@@ -2,7 +2,7 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { IconButton } from '../shared/ui';
 import { MainOverlays } from './MainOverlays';
 import { PageHost } from './PageHost';
-import type { DiscoveryRecommendationUiDto } from '@megumi/product/host';
+import type { DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
 
 interface MainContentProps {
   title: string;

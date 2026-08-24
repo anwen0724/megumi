@@ -23,7 +23,7 @@ import {
   createDiscoveryRepository,
   createInterestExtractor,
   type BrowserSourceTaskGateway,
-} from '@megumi/discovery-agent';
+} from '@megumi/discovery';
 import {
   createEventBus,
   type EventBus,
@@ -87,7 +87,7 @@ import {
   resolveAutoCompactPercent,
   resolveModelVisibleOperatingSystem,
 } from './application-policy';
-import type { ProductWorkspaceFileSystem } from '@megumi/product/host';
+import type { ProductWorkspaceFileSystem } from '@megumi/product-host/host';
 
 export interface ProductCapabilitiesOptions {
   home: InitializeMegumiHomeSyncOptions;
@@ -138,7 +138,7 @@ export interface ProductCapabilities {
   readonly tools: Tools;
   readonly branches: ReturnType<typeof createSessionBranchDrafts>;
   readonly resolveModel: ProductModelResolver;
-  readonly discoveryAgentOptions: import('@megumi/discovery-agent').CreateDiscoveryAgentOptions;
+  readonly discoveryAgentOptions: import('@megumi/discovery').CreateDiscoveryAgentOptions;
 }
 
 export type ProductModelResolver = (

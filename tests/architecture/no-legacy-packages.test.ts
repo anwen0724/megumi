@@ -7,7 +7,7 @@ const root = process.cwd();
 
 const forbiddenDirectories = [
   'packages/core',
-  'packages/context-management',
+  'packages/agent/context-management',
   'packages/db',
   'packages/memory',
   'packages/security',

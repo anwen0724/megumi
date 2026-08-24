@@ -6,8 +6,8 @@
  *  - consumer failures are isolated (best-effort delivery, run never affected)
  */
 import { describe, expect, it } from 'vitest';
-import { createEventBus } from '../../../packages/events/src/bus';
-import type { Event } from '../../../packages/events/src/event';
+import { createEventBus } from '../../../packages/agent/events/src/bus';
+import type { Event } from '../../../packages/agent/events/src/event';
 
 function publishSequence(events: Event[]): number[] {
   return events.map((event) => event.sequence);

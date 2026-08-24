@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSherpaVad } from '../../../packages/voice/src';
-import { SPEECH_BOUNDARY_CONFIG } from '../../../packages/voice/src/speech-input/speech-input';
+import { createSherpaVad } from '../../../packages/agent/voice/src';
+import { SPEECH_BOUNDARY_CONFIG } from '../../../packages/agent/voice/src/speech-input/speech-input';
 
 describe('Sherpa VAD adapter', () => {
   it('fixes the Silero VAD parameters and per-frame classification mode', async () => {

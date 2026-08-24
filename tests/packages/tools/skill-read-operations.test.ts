@@ -48,7 +48,7 @@ describe('Skill reads through ordinary file Tools', () => {
 
 describe('Tools package boundary', () => {
   it('does not depend on the Skills package in production source', () => {
-    const source = readTypeScriptTree('packages/tools/src');
+    const source = readTypeScriptTree('packages/agent/tools/src');
     expect(source).not.toMatch(/@megumi\/skills/);
     expect(source).not.toContain('SkillReadRoot');
     expect(source).not.toContain('skillReadRoots');

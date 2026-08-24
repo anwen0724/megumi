@@ -1,6 +1,6 @@
 /* Desktop IPC combines Product Host payload schemas with transport envelopes. */
 import { z } from 'zod';
-import * as host from '@megumi/product/host';
+import * as host from '@megumi/product-host/host';
 import { createRuntimeIpcRequestSchema } from './contracts';
 import { IPC_CHANNELS } from './channels';
 

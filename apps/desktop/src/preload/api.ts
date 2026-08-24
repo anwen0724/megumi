@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron';
-import type { AnyEvent } from '@megumi/product/host';
+import type { AnyEvent } from '@megumi/product-host/host';
 import type {
   ApprovalHostResult,
   CancelBranchDraftResult,
@@ -57,7 +57,7 @@ import type {
   DiscoveryConfigurationUiDto,
   BrowserSourceConnectionView,
   BrowserSourcePairingView,
-} from '@megumi/product/host';
+} from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
 import type {

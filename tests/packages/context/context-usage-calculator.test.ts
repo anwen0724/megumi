@@ -2,9 +2,9 @@
 import type { Api, Model } from '@megumi/ai';
 import { estimateMessageTokens, estimateTextTokens } from '@megumi/ai/utils/estimate';
 import { describe, expect, it, vi } from 'vitest';
-import { deriveContextUsage } from '../../../packages/context/src/index';
-import { calculatePromptUsage } from '../../../packages/context/src/context-usage-calculator';
-import type { Prompt } from '../../../packages/context/src/index';
+import { deriveContextUsage } from '../../../packages/agent/context/src/index';
+import { calculatePromptUsage } from '../../../packages/agent/context/src/context-usage-calculator';
+import type { Prompt } from '../../../packages/agent/context/src/index';
 import type { SessionHistoryItem } from '@megumi/session';
 import type { ToolDefinition } from '@megumi/tools';
 

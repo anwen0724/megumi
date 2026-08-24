@@ -1,7 +1,7 @@
 /* Verifies the ContextResolver forms one complete ResolvedContext for Prompt building. */
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolDefinition } from '@megumi/tools';
-import { createContextResolver } from '../../../packages/context/src/context-resolver';
+import { createContextResolver } from '../../../packages/agent/context/src/context-resolver';
 import { history, model, workspaceSource } from './context-test-fixtures';
 
 function dependencies() {

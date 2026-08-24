@@ -2,14 +2,14 @@
  * Protects the stable Workspace Package surface and excludes concrete adapters from it.
  */
 import { describe, expect, it } from 'vitest';
-import * as workspacePackage from '../../../packages/workspace/src/index';
+import * as workspacePackage from '../../../packages/agent/workspace/src/index';
 import type {
   WorkspaceCatalog,
   WorkspaceChanges,
   WorkspaceFiles,
   WorkspacePathPolicy,
   WorkspaceStore,
-} from '../../../packages/workspace/src/index';
+} from '../../../packages/agent/workspace/src/index';
 
 describe('Workspace Package contracts', () => {
   it('exposes distinct capability contracts without Service synonyms', () => {

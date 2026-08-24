@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertDatabaseMigrationsFolder,
   resolveDatabaseMigrationsFolder,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 let tempDir: string | null = null;
 

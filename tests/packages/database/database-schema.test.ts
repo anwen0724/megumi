@@ -6,7 +6,7 @@ import {
   databaseTables,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 describe('final Database schema', () => {
   let database: DatabaseConnection;

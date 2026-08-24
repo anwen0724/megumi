@@ -8,7 +8,7 @@ import {
   DatabaseMigrationError,
   createDatabase,
   migrateDatabase,
-} from '../../../packages/database/src';
+} from '../../../packages/agent/database/src';
 
 let tempDir: string | null = null;
 

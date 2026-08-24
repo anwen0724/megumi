@@ -1,9 +1,9 @@
 /* Verifies the Sandbox execution boundary for an already-routed and authorized ToolInvocation. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { Sandbox, SandboxCapabilities, SandboxScope } from '../../../packages/sandbox/src';
-import type { ToolExecutionResult, ToolInvocation } from '../../../packages/tools/src';
-import { executeSandboxToolInvocation } from '../../../packages/tools/src/sandbox-tool-executor';
+import type { Sandbox, SandboxCapabilities, SandboxScope } from '../../../packages/agent/sandbox/src';
+import type { ToolExecutionResult, ToolInvocation } from '../../../packages/agent/tools/src';
+import { executeSandboxToolInvocation } from '../../../packages/agent/tools/src/sandbox-tool-executor';
 
 const access = {
   fileSystem: { mode: 'workspace' as const },

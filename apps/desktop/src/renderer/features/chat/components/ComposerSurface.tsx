@@ -22,8 +22,8 @@ import {
   Terminal,
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
-import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product/host';
-import type { GetContextUsageResult } from '@megumi/product/host';
+import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/product-host/host';
+import type { GetContextUsageResult } from '@megumi/product-host/host';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
   type ComposerModel,

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Protects lexical and canonical Workspace path boundaries across platforms.
  */
 import { describe, expect, it } from 'vitest';
@@ -6,7 +6,7 @@ import {
   DEFAULT_PROTECTED_WORKSPACE_PATHS,
   DEFAULT_SENSITIVE_WORKSPACE_PATHS,
   createWorkspacePathPolicy,
-} from '../../../packages/workspace/src/index';
+} from '../../../packages/agent/workspace/src/index';
 
 describe('WorkspacePathPolicy', () => {
   const policy = createWorkspacePathPolicy();

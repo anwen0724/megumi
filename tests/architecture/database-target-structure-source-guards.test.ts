@@ -8,7 +8,7 @@ const root = process.cwd();
 
 describe('Database target structure', () => {
   it('provides the confirmed Package and source files', () => {
-    expect(listFiles('packages/database/src')).toEqual([
+    expect(listFiles('packages/agent/database/src')).toEqual([
       'database-migrations.ts',
       'database-schema.ts',
       'database-tables.ts',
@@ -17,19 +17,19 @@ describe('Database target structure', () => {
       'legacy-session-history-migration.ts',
       'migration-resources.ts',
     ]);
-    expect(exists('packages/database/package.json')).toBe(true);
-    expect(exists('packages/database/tsconfig.json')).toBe(true);
-    expect(exists('packages/database/migrations/meta/_journal.json')).toBe(true);
-    expect(exists('packages/database/migrations/0000_database_foundation_redesign.sql')).toBe(true);
-    expect(exists('packages/database/migrations/0007_session_attachment_order.sql')).toBe(true);
+    expect(exists('packages/agent/database/package.json')).toBe(true);
+    expect(exists('packages/agent/database/tsconfig.json')).toBe(true);
+    expect(exists('packages/agent/database/migrations/meta/_journal.json')).toBe(true);
+    expect(exists('packages/agent/database/migrations/0000_database_foundation_redesign.sql')).toBe(true);
+    expect(exists('packages/agent/database/migrations/0007_session_attachment_order.sql')).toBe(true);
   });
 
   it('exports the stable Database entry and explicit physical Schema subpath', () => {
-    const manifest = JSON.parse(read('packages/database/package.json')) as {
+    const manifest = JSON.parse(read('packages/agent/database/package.json')) as {
       name?: string;
       exports?: Record<string, string>;
     };
-    const publicIndex = read('packages/database/src/index.ts');
+    const publicIndex = read('packages/agent/database/src/index.ts');
 
     expect(manifest.name).toBe('@megumi/database');
     expect(manifest.exports).toMatchObject({
@@ -42,8 +42,8 @@ describe('Database target structure', () => {
     expect(publicIndex).not.toContain('drizzle-orm');
   });
 
-  it('removes the former Database location under packages/agent', () => {
-    expect(exists('packages/agent/persistence')).toBe(false);
+  it('removes the former Database location under packages/agent-core', () => {
+    expect(exists('packages/agent-core/persistence')).toBe(false);
   });
 });
 

@@ -8,7 +8,7 @@ const root = process.cwd();
 describe('Product and Desktop final boundaries', () => {
   it('removes legacy owner and shadow-service directories', () => {
     for (const relativePath of [
-      'packages/agent/host-interface',
+      'packages/agent-core/host-interface',
       'apps/desktop/src/main/services',
       'apps/desktop/src/main/shell',
       'tests/apps/desktop/main/services',
@@ -19,30 +19,30 @@ describe('Product and Desktop final boundaries', () => {
 
   it('keeps Home, Settings migrations, Voice wiring, and packaging with their owners', () => {
     for (const relativePath of [
-      'packages/home/src/home-paths.ts',
-      'packages/home/src/home-initializer.ts',
-      'packages/home/src/home-resources.ts',
-      'packages/settings/src/migrations/legacy-permission-settings.ts',
-      'packages/settings/src/migrations/legacy-provider-api-settings.ts',
-      'packages/voice/src/speech-output/speech-output-wiring.ts',
+      'packages/agent/home/src/home-paths.ts',
+      'packages/agent/home/src/home-initializer.ts',
+      'packages/agent/home/src/home-resources.ts',
+      'packages/agent/settings/src/migrations/legacy-permission-settings.ts',
+      'packages/agent/settings/src/migrations/legacy-provider-api-settings.ts',
+      'packages/agent/voice/src/speech-output/speech-output-wiring.ts',
       'apps/desktop/src/main/packaging/product-resources.ts',
       'apps/desktop/src/main/shell-composition/application-host-composition.ts',
       'apps/desktop/src/main/shell-composition/application-runtime.ts',
       'apps/desktop/src/main/shell-composition/application-resource-manager.ts',
       'apps/desktop/src/main/shell-composition/application-policy.ts',
-      'packages/product/src/create-product-host.ts',
-      'packages/product/src/operations/session/session-operations.ts',
-      'packages/product/src/operations/session/session-reader.ts',
-      'packages/product/src/host/session-host.ts',
-      'packages/product/src/host/product-host.ts',
+      'packages/agent/product-host/src/create-product-host.ts',
+      'packages/agent/product-host/src/operations/session/session-operations.ts',
+      'packages/agent/product-host/src/operations/session/session-reader.ts',
+      'packages/agent/product-host/src/host/session-host.ts',
+      'packages/agent/product-host/src/host/product-host.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(true);
     }
     for (const relativePath of [
-      'packages/product/src/home',
-      'packages/product/src/packaging',
-      'packages/product/src/composition',
-      'packages/product/src/composition/speech-output-wiring.ts',
+      'packages/agent/product-host/src/home',
+      'packages/agent/product-host/src/packaging',
+      'packages/agent/product-host/src/composition',
+      'packages/agent/product-host/src/composition/speech-output-wiring.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(false);
     }
@@ -50,15 +50,15 @@ describe('Product and Desktop final boundaries', () => {
 
   it('removes obsolete Product entry and forwarding Host files', () => {
     for (const relativePath of [
-      'packages/product/src/product.ts',
-      'packages/product/src/chat.ts',
-      'packages/product/src/approval.ts',
-      'packages/product/src/input-submission.ts',
-      'packages/product/src/host/chat-contract.ts',
-      'packages/product/src/host/chat-host.ts',
-      'packages/product/src/host/workspace-contract.ts',
-      'packages/product/src/host/settings-contract.ts',
-      'packages/product/src/host/observability-contract.ts',
+      'packages/agent/product-host/src/product.ts',
+      'packages/agent/product-host/src/chat.ts',
+      'packages/agent/product-host/src/approval.ts',
+      'packages/agent/product-host/src/input-submission.ts',
+      'packages/agent/product-host/src/host/chat-contract.ts',
+      'packages/agent/product-host/src/host/chat-host.ts',
+      'packages/agent/product-host/src/host/workspace-contract.ts',
+      'packages/agent/product-host/src/host/settings-contract.ts',
+      'packages/agent/product-host/src/host/observability-contract.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(false);
     }
@@ -73,32 +73,32 @@ describe('Product and Desktop final boundaries', () => {
   });
 
   it('keeps Product imports on Package public entries', () => {
-    const product = readTree('packages/product');
+    const product = readTree('packages/agent/product-host');
     expect(product).not.toMatch(/@megumi\/[^/'"]+\/src\//u);
     expect(product).not.toMatch(/packages[\\/][^\\/]+[\\/]src[\\/]/u);
   });
 
   it('keeps Host files declarative and Operations responsible for implementation', () => {
-    const productHost = read('packages/product/src/host/product-host.ts');
-    const approvalHost = read('packages/product/src/host/approval-host.ts');
-    const approvalOperations = read('packages/product/src/operations/approval-operations.ts');
+    const productHost = read('packages/agent/product-host/src/host/product-host.ts');
+    const approvalHost = read('packages/agent/product-host/src/host/approval-host.ts');
+    const approvalOperations = read('packages/agent/product-host/src/operations/approval-operations.ts');
 
     expect(productHost).toContain('session: SessionHost');
     expect(productHost).not.toContain('chat:');
     expect(approvalHost).not.toContain("from '@megumi/engine'");
     expect(approvalHost).not.toContain('createApprovalOperations');
-    expect(approvalOperations).toContain("from '@megumi/discovery-agent'");
+    expect(approvalOperations).toContain("from '@megumi/discovery'");
     expect(approvalOperations).not.toContain("from '@megumi/engine'");
     expect(approvalOperations).toContain('createApprovalOperations');
   });
 
   it('delegates normal conversation submission to the Discovery Agent owner', () => {
     const composer = read('apps/desktop/src/main/shell-composition/application-host-composition.ts');
-    const sessionOperations = read('packages/product/src/operations/session/session-operations.ts');
+    const sessionOperations = read('packages/agent/product-host/src/operations/session/session-operations.ts');
 
     expect(fs.existsSync(path.join(
       root,
-      'packages/product/src/operations/session/input-submission.ts',
+      'packages/agent/product-host/src/operations/session/input-submission.ts',
     ))).toBe(false);
     expect(composer).not.toContain('createInputSubmission');
     expect(sessionOperations).toContain('submitConversationInput');
@@ -107,7 +107,7 @@ describe('Product and Desktop final boundaries', () => {
   });
 
   it('keeps concrete system construction and lifecycle out of Product', () => {
-    const product = readTree('packages/product/src');
+    const product = readTree('packages/agent/product-host/src');
     for (const forbidden of [
       'createDatabase(',
       'createTools(',

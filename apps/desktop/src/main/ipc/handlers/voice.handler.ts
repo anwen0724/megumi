@@ -2,7 +2,7 @@
  * Exposes Product VoiceHost operations through validated Desktop IPC envelopes.
  * The handler remains a transport controller and never calls Voice internals directly.
  */
-import * as host from '@megumi/product/host';
+import * as host from '@megumi/product-host/host';
 import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { IPC_CHANNELS } from '../channels';

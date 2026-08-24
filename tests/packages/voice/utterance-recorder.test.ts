@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createUtteranceRecorder } from '../../../packages/voice/src/speech-input/utterance-recorder';
-import { SPEECH_BOUNDARY_CONFIG } from '../../../packages/voice/src/speech-input/speech-input';
+import { createUtteranceRecorder } from '../../../packages/agent/voice/src/speech-input/utterance-recorder';
+import { SPEECH_BOUNDARY_CONFIG } from '../../../packages/agent/voice/src/speech-input/speech-input';
 
 /*
  * Boundary math at 16 kHz with 512-sample frames (32 ms per frame):

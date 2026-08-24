@@ -38,7 +38,7 @@ export function createEvaluationHomeOptions(homeRoot: string): InitializeMegumiH
     },
     clock: { now: () => new Date() },
     resourceLocator: {
-      resolveBuiltInSystemSkillsPath: () => path.resolve(process.cwd(), 'packages/skills/built-in-skills'),
+      resolveBuiltInSystemSkillsPath: () => path.resolve(process.cwd(), 'packages/agent/skills/built-in-skills'),
     },
   };
 }

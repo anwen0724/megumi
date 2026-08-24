@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createSettings,
   type SettingsStore,
-} from '../../../packages/settings/src';
+} from '../../../packages/agent/settings/src';
 
 class MemorySettingsStore implements SettingsStore {
   constructor(public document: unknown = {}) {}
