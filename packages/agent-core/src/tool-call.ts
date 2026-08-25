@@ -187,18 +187,20 @@ async function executePrepared(
     },
   }));
   const timeout = setTimeout(() => timeoutController.abort(), input.policy.toolCallTimeoutMs);
+  const abortWaiter = createAbortWaiter(signal);
 
   let outcome: Awaited<ReturnType<AgentTool['execute']>> | undefined;
   let thrown: unknown;
   try {
     outcome = await Promise.race([
       execution,
-      waitForAbort(signal).then(() => undefined),
+      abortWaiter.promise.then(() => undefined),
     ]);
   } catch (error) {
     thrown = error;
   } finally {
     clearTimeout(timeout);
+    abortWaiter.dispose();
     await updateChain;
   }
 
@@ -279,7 +281,22 @@ function compactResults(
   return results.filter((result): result is ToolResultMessage => result !== undefined);
 }
 
-function waitForAbort(signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve();
-  return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+/** Creates a cancellable waiter so the losing Promise.race branch never retains its listener. */
+function createAbortWaiter(signal: AbortSignal): {
+  readonly promise: Promise<void>;
+  readonly dispose: () => void;
+} {
+  if (signal.aborted) return { promise: Promise.resolve(), dispose: () => undefined };
+  let resolveAbort!: () => void;
+  const promise = new Promise<void>((resolve) => { resolveAbort = resolve; });
+  const finish = () => {
+    signal.removeEventListener('abort', finish);
+    resolveAbort();
+  };
+  signal.addEventListener('abort', finish, { once: true });
+  if (signal.aborted) finish();
+  return {
+    promise,
+    dispose: finish,
+  };
 }

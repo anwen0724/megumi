@@ -102,6 +102,27 @@ describe('Agent ToolCall Batch', () => {
     ]);
   });
 
+  it('removes the cancellation waiter after a Tool completes normally', async () => {
+    const addListener = vi.spyOn(AbortSignal.prototype, 'addEventListener');
+    const removeListener = vi.spyOn(AbortSignal.prototype, 'removeEventListener');
+
+    const result = await runToolCallBatch({
+      calls: [call('call-1', 'known')],
+      tools: [tool('known')],
+      signal: new AbortController().signal,
+      executionId: 'execution:tool-1',
+      policy: { maxConcurrentToolCalls: 1, toolCallTimeoutMs: 1_000 },
+      emit: async () => undefined,
+    });
+
+    expect(result.status).toBe('completed');
+    expect(removeListener.mock.calls.filter(([type]) => type === 'abort')).toHaveLength(
+      addListener.mock.calls.filter(([type]) => type === 'abort').length,
+    );
+    addListener.mockRestore();
+    removeListener.mockRestore();
+  });
+
   it('bounds parallel windows, uses sequential calls as barriers, and preserves model order', async () => {
     const gates = new Map<string, ReturnType<typeof deferred<AgentToolResult>>>();
     const starts: string[] = [];

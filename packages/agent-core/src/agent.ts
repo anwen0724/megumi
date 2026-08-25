@@ -139,13 +139,16 @@ export class Agent {
     if (current.status === 'executing') {
       const cancelling: AgentExecutionState = { ...current, status: 'cancelling' };
       this.transition(cancelling);
-      void this.enqueuePublish(async () => {
+      const publication = this.enqueuePublish(async () => {
         await this.publishIsolated({
           type: 'execution_state_changed',
           previous: executionSnapshot(current),
           current: executionSnapshot(cancelling),
         });
       });
+      // Abort is synchronous and cannot return this Promise. Observe the isolated
+      // publication explicitly so an unexpected projection failure is never floating.
+      void publication.catch(() => undefined);
     }
   }
 
@@ -391,6 +394,8 @@ export class Agent {
 
   private enqueuePublish(task: () => Promise<void>): Promise<void> {
     const next = this.publishChain.then(task);
+    // A failed task is returned to its owner, while the private tail recovers so
+    // later state facts are still serialized instead of inheriting the rejection.
     this.publishChain = next.catch(() => undefined);
     return next;
   }

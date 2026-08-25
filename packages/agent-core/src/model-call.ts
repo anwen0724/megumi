@@ -345,11 +345,17 @@ function validateMessage(message: AssistantMessage):
 async function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
   if (delayMs <= 0 || signal.aborted) return;
   await new Promise<void>((resolve) => {
-    const timeout = setTimeout(resolve, delayMs);
-    signal.addEventListener('abort', () => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
+      signal.removeEventListener('abort', finish);
       resolve();
-    }, { once: true });
+    };
+    const timeout = setTimeout(finish, delayMs);
+    signal.addEventListener('abort', finish, { once: true });
+    if (signal.aborted) finish();
   });
 }
 

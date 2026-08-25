@@ -212,6 +212,31 @@ describe('Agent ModelCall', () => {
     expect(attempts[3]).toMatchObject({ type: 'model_call_attempt_ended', attempt: 2, outcome: 'succeeded' });
   });
 
+  it('removes root cancellation listeners after a delayed retry completes', async () => {
+    const failed = assistant([], 'error', '429 rate limit exceeded');
+    const completed = assistant([{ type: 'text', text: 'fresh' }], 'stop');
+    const streams = [terminalStream(failed), completedStream(completed)];
+    const controller = new AbortController();
+    const addListener = vi.spyOn(controller.signal, 'addEventListener');
+    const removeListener = vi.spyOn(controller.signal, 'removeEventListener');
+
+    const result = await runCall({
+      stream: () => streams.shift()!,
+      signal: controller.signal,
+      policy: {
+        maxModelCallAttempts: 2,
+        modelCallTimeoutMs: 1_000,
+        modelRetryDelayMs: 5,
+        maxContextOverflowRecoveries: 0,
+      },
+    });
+
+    expect(result.status).toBe('completed');
+    expect(removeListener.mock.calls.filter(([type]) => type === 'abort')).toHaveLength(
+      addListener.mock.calls.filter(([type]) => type === 'abort').length,
+    );
+  });
+
   it('recovers Context overflow with a new Context while keeping one logical call', async () => {
     const overflow = assistant([], 'error', 'prompt is too long: 9000 tokens > 8192 maximum');
     const completed = assistant([{ type: 'text', text: 'after recovery' }], 'stop');
