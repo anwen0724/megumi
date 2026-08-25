@@ -13,6 +13,11 @@ import {
   type EnsureDailyDiscoveryRequest,
   type EnsureDailyDiscoveryResult,
 } from './daily-discovery';
+import {
+  createDailyDiscoveryScheduler,
+  localDateAt,
+  type DailyDiscoveryScheduler,
+} from './daily-discovery-scheduler';
 import type { Interest } from '../interests/interest';
 import type { DailyBatchRepository } from '../persistence/daily-batch-repository';
 import type { InterestRepository } from '../persistence/interest-repository';
@@ -101,12 +106,10 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
   readonly now: () => string;
 }): DailyDiscoveryRuntime {
   const activePromises = new Set<Promise<void>>();
-  const timers = input.timers ?? defaultTimers();
   let accepting = true;
   let started = false;
-  let timerHandle: unknown;
-  let nextScheduledAt: string | undefined;
   let identitiesMigrated = false;
+  let scheduler: DailyDiscoveryScheduler;
 
   const ensureIdentityMigration = (): void => {
     if (identitiesMigrated) return;
@@ -128,7 +131,6 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
   const track = (
     operation: Promise<void>,
     context: DailyDiscoveryBackgroundErrorContext,
-    afterSettled?: () => void,
   ): void => {
     let tracked!: Promise<void>;
     tracked = (async () => {
@@ -137,11 +139,6 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       } catch (error) {
         reportBackgroundError(error, context);
       } finally {
-        try {
-          afterSettled?.();
-        } catch (error) {
-          reportBackgroundError(error, context);
-        }
         activePromises.delete(tracked);
       }
     })();
@@ -350,24 +347,6 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     });
   };
 
-  const scheduleNext = (): void => {
-    if (!accepting || !started) return;
-    if (timerHandle !== undefined) timers.clearTimeout(timerHandle);
-    const settings = input.settings.getDiscoverySettings();
-    nextScheduledAt = nextScheduledTimestamp(input.now(), input.timezone(), settings.dailyGenerationTime);
-    const delay = Math.max(0, Date.parse(nextScheduledAt) - Date.parse(input.now()));
-    timerHandle = timers.setTimeout(() => {
-      timerHandle = undefined;
-      if (!accepting) return;
-      track(
-        runtime.ensure({ trigger: 'schedule', now: input.now() }).then(() => undefined),
-        { operation: 'scheduled_ensure' },
-        scheduleNext,
-      );
-    }, delay);
-    unrefTimer(timerHandle);
-  };
-
   const runtime: DailyDiscoveryRuntime = {
     async start() {
       if (started || !accepting) return;
@@ -402,16 +381,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
           executionId: batch.executionId,
         });
       }
-      const settings = input.settings.getDiscoverySettings();
-      const scheduledToday = scheduledTimestamp(
-        localDateAt(input.now(), input.timezone()),
-        settings.dailyGenerationTime,
-        input.timezone(),
-      );
-      if (Date.parse(input.now()) >= Date.parse(scheduledToday)) {
-        await runtime.ensure({ trigger: 'startup_catchup', now: input.now() });
-      }
-      scheduleNext();
+      await scheduler.start();
     },
 
     async ensure(request) {
@@ -508,6 +478,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     },
 
     getHome(request) {
+      const nextScheduledAt = scheduler.getNextScheduledAt();
       return input.repository.readHome({
         ...request,
         localDate: localDateAt(input.now(), input.timezone()),
@@ -522,16 +493,22 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       now: input.now(),
     }),
 
-    getNextScheduledAt: () => nextScheduledAt,
+    getNextScheduledAt: () => scheduler.getNextScheduledAt(),
 
     async shutdown() {
       accepting = false;
-      if (timerHandle !== undefined) timers.clearTimeout(timerHandle);
-      timerHandle = undefined;
-      nextScheduledAt = undefined;
+      await scheduler.shutdown();
       while (activePromises.size > 0) await Promise.allSettled([...activePromises]);
     },
   };
+  scheduler = createDailyDiscoveryScheduler({
+    now: input.now,
+    timezone: input.timezone,
+    generationTime: () => input.settings.getDiscoverySettings().dailyGenerationTime,
+    ensure: (request) => runtime.ensure(request),
+    onScheduledError: (error) => reportBackgroundError(error, { operation: 'scheduled_ensure' }),
+    ...(input.timers ? { timers: input.timers } : {}),
+  });
   return runtime;
 }
 
@@ -633,75 +610,6 @@ function sourceSearchFailureMessage(
 
 function isImmediatelyRetryableSourceFailure(failure: SourceFailure): boolean {
   return failure.retryable && (failure.code === 'network_error' || failure.code === 'timeout');
-}
-
-function localDateAt(timestamp: string, timezone: string): string {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date(timestamp));
-  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${value.year}-${value.month}-${value.day}`;
-}
-
-function nextScheduledTimestamp(now: string, timezone: string, generationTime: string): string {
-  const today = localDateAt(now, timezone);
-  const todayScheduled = scheduledTimestamp(today, generationTime, timezone);
-  if (Date.parse(todayScheduled) > Date.parse(now)) return todayScheduled;
-  const date = new Date(`${today}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + 1);
-  return scheduledTimestamp(date.toISOString().slice(0, 10), generationTime, timezone);
-}
-
-function scheduledTimestamp(localDate: string, generationTime: string, timezone: string): string {
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(generationTime)) {
-    throw new Error('Discovery dailyGenerationTime must use HH:mm.');
-  }
-  const dateParts = localDate.split('-').map(Number);
-  const timeParts = generationTime.split(':').map(Number);
-  const year = dateParts[0];
-  const month = dateParts[1];
-  const day = dateParts[2];
-  const hour = timeParts[0];
-  const minute = timeParts[1];
-  if (dateParts.length !== 3 || timeParts.length !== 2
-    || year === undefined || month === undefined || day === undefined
-    || hour === undefined || minute === undefined
-    || ![year, month, day, hour, minute].every(Number.isFinite)) {
-    throw new Error('Discovery schedule contains an invalid date or time.');
-  }
-  const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute);
-  let instant = desiredAsUtc;
-  for (let index = 0; index < 3; index += 1) {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-    }).formatToParts(new Date(instant));
-    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-    const representedAsUtc = Date.UTC(
-      Number(value.year), Number(value.month) - 1, Number(value.day),
-      Number(value.hour), Number(value.minute), Number(value.second),
-    );
-    instant += desiredAsUtc - representedAsUtc;
-  }
-  return new Date(instant).toISOString();
-}
-
-function defaultTimers() {
-  return {
-    setTimeout(callback: () => void, delayMs: number): unknown {
-      return globalThis.setTimeout(callback, Math.min(delayMs, 2_147_483_647));
-    },
-    clearTimeout(handle: unknown): void {
-      globalThis.clearTimeout(handle as ReturnType<typeof globalThis.setTimeout>);
-    },
-  };
-}
-
-function unrefTimer(handle: unknown): void {
-  if (handle && typeof handle === 'object' && 'unref' in handle
-    && typeof (handle as { unref?: unknown }).unref === 'function') {
-    (handle as { unref(): void }).unref();
-  }
 }
 
 function copyInterest(interest: Interest): Interest {
