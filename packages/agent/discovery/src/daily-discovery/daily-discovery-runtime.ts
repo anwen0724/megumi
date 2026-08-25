@@ -14,10 +14,13 @@ import {
   type EnsureDailyDiscoveryResult,
 } from './daily-discovery';
 import type { Interest } from '../interests/interest';
+import type { DailyBatchRepository } from '../persistence/daily-batch-repository';
+import type { InterestRepository } from '../persistence/interest-repository';
 import type {
-  DiscoveryRepository,
   RecommendationSelectionSignal,
-} from '../persistence/discovery-repository';
+  RecommendationRepositoryOperations,
+} from '../persistence/recommendation-repository';
+import type { RecommendationIdentityMigrationResult } from '../persistence/recommendation-identity-migration';
 import type { Recommendation } from '../recommendations/recommendation';
 import type { UpdateRecommendationStateRequest } from '../recommendations/recommendation';
 import type {
@@ -35,7 +38,7 @@ import type {
 import type { SourceRegistry } from '../sources/source-registry';
 
 export interface CreateDailyDiscoveryRuntimeOptions {
-  readonly repository: DiscoveryRepository;
+  readonly repository: DailyDiscoveryRepository;
   readonly sourceRegistry: SourceRegistry;
   readonly attempts: DailyDiscoveryAttempts;
   readonly startExecution: <TRejected>(
@@ -64,6 +67,19 @@ export interface CreateDailyDiscoveryRuntimeOptions {
     clearTimeout(handle: unknown): void;
   };
 }
+
+type DailyDiscoveryRepository = DailyBatchRepository
+  & Pick<InterestRepository, 'listInterests'>
+  & Pick<
+    RecommendationRepositoryOperations,
+    | 'listRecommendationSelectionSignals'
+    | 'readHome'
+    | 'searchRecommendations'
+    | 'updateRecommendationState'
+  >
+  & {
+    migrateRecommendationIdentities(): RecommendationIdentityMigrationResult;
+  };
 
 export interface DailyDiscoveryBackgroundErrorContext {
   readonly operation: 'attempt_settlement' | 'startup_recovery' | 'scheduled_ensure';

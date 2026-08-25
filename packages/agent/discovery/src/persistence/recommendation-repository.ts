@@ -1,4 +1,6 @@
-/* Implements stable local Home/search projections and current Recommendation state mutations. */
+/*
+ * Owns durable Recommendation publication, queries, and user-controlled state.
+ */
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import {
   DiscoveryHomeViewSchema,
@@ -14,11 +16,46 @@ import {
 } from '../discovery-view';
 import { LocalDateSchema } from '../daily-discovery/daily-discovery';
 import {
+  type Recommendation,
   RecommendationReferenceContentSchema,
   UpdateRecommendationStateRequestSchema,
   type RecommendationReferenceContent,
   type UpdateRecommendationStateRequest,
 } from '../recommendations/recommendation';
+
+export interface RecommendationSelectionSignal {
+  readonly contentIdentity: string;
+  readonly sourceName: string;
+  readonly title: string;
+  readonly reaction?: 'liked' | 'disliked';
+}
+
+export interface RecommendationPublicationWriter {
+  /** Inserts a Recommendation inside the caller-owned publication transaction. */
+  insertForPublication(recommendation: Recommendation): void;
+}
+
+export interface RecommendationRepositoryOperations {
+  /** Lists durable selection signals used to avoid repetition and learn from feedback. */
+  listRecommendationSelectionSignals(): readonly RecommendationSelectionSignal[];
+  /** Reads the paginated Discovery Home projection. */
+  readHome(query: ReadHomeQuery): DiscoveryHomeView;
+  /** Searches persisted Recommendations. */
+  searchRecommendations(query: {
+    readonly query: string;
+    readonly cursor?: string;
+    readonly limit?: number;
+  }): SearchRecommendationsResult;
+  /** Applies one user-controlled Recommendation state change atomically. */
+  updateRecommendationState(command: RecommendationStateCommand): RecommendationView;
+  /** Reads the reference content used to start a Recommendation conversation. */
+  readRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
+}
+
+export interface RecommendationRepository {
+  readonly operations: RecommendationRepositoryOperations;
+  readonly publicationWriter: RecommendationPublicationWriter;
+}
 
 export interface ReadHomeQuery {
   readonly mode: DiscoveryHomeMode;
@@ -29,6 +66,41 @@ export interface ReadHomeQuery {
 }
 
 export type RecommendationStateCommand = UpdateRecommendationStateRequest & { readonly now: string };
+
+/** Creates the Recommendation persistence operations and transaction-scoped writer. */
+export function createRecommendationRepository(database: DatabaseConnection): RecommendationRepository {
+  return {
+    operations: {
+      listRecommendationSelectionSignals: () => listRecommendationSelectionSignals(database),
+      readHome: (query) => readHome(database, query),
+      searchRecommendations: (query) => searchRecommendations(database, query),
+      updateRecommendationState: (command) => database.transaction({
+        operation: () => updateRecommendationState(database, command),
+      }),
+      readRecommendationReference: (recommendationId) => (
+        readRecommendationReference(database, recommendationId)
+      ),
+    },
+    publicationWriter: {
+      insertForPublication: (recommendation) => insertRecommendation(database, recommendation),
+    },
+  };
+}
+
+function listRecommendationSelectionSignals(
+  database: DatabaseConnection,
+): readonly RecommendationSelectionSignal[] {
+  return database.prepare<RecommendationSelectionSignalRow>({ sql: `
+    SELECT content_identity, source_name, title, reaction
+    FROM discovery_recommendations
+    ORDER BY published_at, position, recommendation_id
+  ` }).all().map((row) => ({
+    contentIdentity: row.content_identity,
+    sourceName: row.source_name,
+    title: row.title,
+    ...(row.reaction === 'liked' || row.reaction === 'disliked' ? { reaction: row.reaction } : {}),
+  }));
+}
 
 export function readHome(database: DatabaseConnection, query: ReadHomeQuery): DiscoveryHomeView {
   const request = GetDiscoveryHomeRequestSchema.parse({
@@ -237,6 +309,42 @@ export function readRecommendationReference(
   }) : undefined;
 }
 
+function insertRecommendation(database: DatabaseConnection, item: Recommendation): void {
+  database.prepare({ sql: `
+    INSERT INTO discovery_recommendations (
+      recommendation_id, batch_id, content_identity, position,
+      source_id, source_name, canonical_url, title, content_type,
+      source_content_id, author, content_published_at, description, cover_url,
+      recommendation_reason, reaction, hidden_at, favorite_at, watch_later_at,
+      first_opened_at, last_opened_at, published_at, state_updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ` }).run([
+    item.recommendationId,
+    item.batchId,
+    item.contentIdentity,
+    item.position,
+    item.sourceId,
+    item.sourceName,
+    item.canonicalUrl,
+    item.title,
+    item.contentType,
+    item.sourceContentId ?? null,
+    item.author ?? null,
+    item.contentPublishedAt ?? null,
+    item.description ?? null,
+    item.coverUrl ?? null,
+    item.recommendationReason,
+    item.reaction ?? null,
+    item.hiddenAt ?? null,
+    item.favoriteAt ?? null,
+    item.watchLaterAt ?? null,
+    item.firstOpenedAt ?? null,
+    item.lastOpenedAt ?? null,
+    item.publishedAt,
+    item.stateUpdatedAt ?? null,
+  ]);
+}
+
 function recommendationViewFromRow(row: RecommendationRow): RecommendationView {
   return RecommendationViewSchema.parse({
     recommendationId: row.recommendation_id,
@@ -339,6 +447,12 @@ type BatchViewRow = DatabaseRow & {
 };
 
 type CountRow = DatabaseRow & { favorite_count: number | null; watch_later_count: number | null };
+type RecommendationSelectionSignalRow = DatabaseRow & {
+  content_identity: string;
+  source_name: string;
+  title: string;
+  reaction: string | null;
+};
 type InterestViewRow = DatabaseRow & {
   interest_id: string; description: string; status: string; created_from: string;
   user_managed_at: string | null; created_at: string; updated_at: string;

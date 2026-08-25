@@ -163,7 +163,7 @@ export type {
 export type {
   ReadHomeQuery,
   RecommendationStateCommand,
-} from './persistence/discovery-query-repository';
+} from './persistence/recommendation-repository';
 export type {
   DiscoveryDayView,
   DiscoveryHomeMode,

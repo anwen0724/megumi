@@ -15,7 +15,7 @@ import {
   type InterestExtractionQueue,
 } from './interest-extraction-queue';
 import type { InterestExtractor } from './interest-extraction';
-import type { DiscoveryRepository } from '../persistence/discovery-repository';
+import type { InterestRepository } from '../persistence/interest-repository';
 
 export interface ObserveConversationTurnRequest {
   readonly sessionId: string;
@@ -33,7 +33,7 @@ export type ObserveConversationTurnResult =
     };
 
 export interface CreateInterestRuntimeOptions {
-  readonly repository: DiscoveryRepository;
+  readonly repository: InterestRepository;
   readonly settings: {
     getDiscoverySettings(): { readonly conversationRecognitionEnabled: boolean };
   };
