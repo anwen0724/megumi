@@ -236,6 +236,50 @@ describe('Agent', () => {
     });
   });
 
+  it('normalizes an AgentError-shaped exception with an unknown code', async () => {
+    const invalidError = {
+      code: 'provider_secret_leaked',
+      message: 'Unknown errors must not cross the Agent boundary.',
+      retryable: true,
+    };
+    const agent = new Agent(options({
+      context: {
+        prepare: async () => { throw invalidError; },
+      },
+    }));
+
+    const result = await agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: {
+        code: 'internal_error',
+        message: 'Agent Loop failed.',
+        retryable: false,
+        cause: invalidError,
+      },
+    });
+    expect(agent.state.lastError).toMatchObject({ code: 'internal_error' });
+  });
+
+  it('preserves a valid AgentError raised inside the execution', async () => {
+    const contextError = {
+      code: 'context_failed' as const,
+      message: 'Context storage is unavailable.',
+      retryable: true,
+    };
+    const agent = new Agent(options({
+      context: {
+        prepare: async () => { throw contextError; },
+      },
+    }));
+
+    const result = await agent.prompt({ role: 'user', content: 'hello', timestamp: 1 });
+
+    expect(result).toMatchObject({ status: 'failed', error: contextError });
+    expect(agent.state.lastError).toEqual(contextError);
+  });
+
   it('projects pending ToolCall state before Tool lifecycle listeners', async () => {
     const toolMessage: AssistantMessage = {
       ...assistant('', 2),

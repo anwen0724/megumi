@@ -1,5 +1,6 @@
 /* Owns the complete multi-turn state machine for one provider-neutral Agent execution. */
 import type { AssistantMessage, ToolResultMessage } from '@megumi/ai';
+import { isAgentError } from './agent-error';
 import { runModelCall } from './model-call';
 import { runToolCallBatch } from './tool-call';
 import type {
@@ -275,12 +276,4 @@ function normalizeLoopError(error: unknown): AgentError {
     retryable: false,
     cause: error,
   };
-}
-
-function isAgentError(value: unknown): value is AgentError {
-  return typeof value === 'object'
-    && value !== null
-    && typeof (value as AgentError).code === 'string'
-    && typeof (value as AgentError).message === 'string'
-    && typeof (value as AgentError).retryable === 'boolean';
 }

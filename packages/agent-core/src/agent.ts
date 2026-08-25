@@ -1,4 +1,5 @@
 /* Provides the stateful public Agent interface over the execution-scoped Agent Loop. */
+import { isAgentError } from './agent-error';
 import { EventSinkFailure, runAgentLoop } from './agent-loop';
 import type {
   AgentConfiguration,
@@ -413,37 +414,43 @@ export class Agent {
     switch (event.type) {
       case 'agent_start':
         this.lastError = undefined;
-        break;
+        return;
+      case 'execution_state_changed':
+      case 'model_call_attempt_started':
+      case 'model_call_attempt_ended':
+      case 'turn_start':
+      case 'turn_end':
+      case 'tool_execution_update':
+        return;
       case 'message_start':
         if (event.message.role === 'assistant') this.streamingMessage = event.message;
-        break;
+        return;
       case 'message_update':
         this.streamingMessage = event.message;
-        break;
+        return;
       case 'message_end':
         if (event.message.role === 'assistant') this.streamingMessage = undefined;
         this.messages.push(event.message);
-        break;
+        return;
       case 'tool_execution_start': {
         const pending = new Set(this.pendingToolCallIds);
         pending.add(event.toolCallId);
         this.pendingToolCallIds = pending;
-        break;
+        return;
       }
       case 'tool_execution_end': {
         const pending = new Set(this.pendingToolCallIds);
         pending.delete(event.toolCallId);
         this.pendingToolCallIds = pending;
-        break;
+        return;
       }
       case 'agent_end':
         this.streamingMessage = undefined;
         this.pendingToolCallIds = new Set();
         this.lastError = event.result.status === 'failed' ? event.result.error : undefined;
-        break;
-      default:
-        break;
+        return;
     }
+    assertNever(event);
   }
 
   private assertCanStart(): void {
@@ -510,16 +517,12 @@ function normalizeAgentFailure(error: unknown): AgentError {
   };
 }
 
-function isAgentError(value: unknown): value is AgentError {
-  return typeof value === 'object'
-    && value !== null
-    && typeof (value as AgentError).code === 'string'
-    && typeof (value as AgentError).message === 'string'
-    && typeof (value as AgentError).retryable === 'boolean';
-}
-
 function describeState(state: AgentExecutionState): string {
   return state.status === 'idle' ? 'idle' : `${state.status}.${state.phase}`;
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Agent event: ${JSON.stringify(value)}`);
 }
 
 function resolvePolicy(patch: Partial<AgentPolicy> | undefined): AgentPolicy {
