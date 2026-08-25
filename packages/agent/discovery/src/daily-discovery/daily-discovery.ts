@@ -5,23 +5,39 @@ const TimestampSchema = z.string().datetime({ offset: true });
 export const LocalDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 export const DailyDiscoveryBatchStatusSchema = z.enum(['running', 'published', 'failed']);
 
-export const DailyDiscoveryBatchSchema = z.object({
+const DailyDiscoveryBatchBaseShape = {
   batchId: z.string().min(1),
   localDate: LocalDateSchema,
   timezone: z.string().trim().min(1),
-  status: DailyDiscoveryBatchStatusSchema,
   executionId: z.string().min(1),
   targetCount: z.number().int().min(1).max(100),
   attemptCount: z.number().int().min(1),
   automaticRetryCount: z.number().int().min(0).max(2),
-  resultCount: z.number().int().nonnegative(),
-  failureCode: z.string().min(1).optional(),
-  failureMessage: z.string().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
   startedAt: TimestampSchema,
-  publishedAt: TimestampSchema.optional(),
-}).strict();
+};
+
+export const DailyDiscoveryBatchSchema = z.discriminatedUnion('status', [
+  z.object({
+    ...DailyDiscoveryBatchBaseShape,
+    status: z.literal('running'),
+    resultCount: z.literal(0),
+  }).strict(),
+  z.object({
+    ...DailyDiscoveryBatchBaseShape,
+    status: z.literal('published'),
+    resultCount: z.number().int().nonnegative(),
+    publishedAt: TimestampSchema,
+  }).strict(),
+  z.object({
+    ...DailyDiscoveryBatchBaseShape,
+    status: z.literal('failed'),
+    resultCount: z.literal(0),
+    failureCode: z.string().min(1),
+    failureMessage: z.string(),
+  }).strict(),
+]);
 
 export const DiscoveryFailureViewSchema = z.object({
   code: z.string().min(1),

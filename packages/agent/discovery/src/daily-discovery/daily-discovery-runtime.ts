@@ -260,7 +260,8 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       }
       const publishedAt = input.now();
       const recommendations = state.selected.map((selection, position) => {
-        const candidate = state.candidates.get(selection.candidateId)!;
+        const candidate = state.candidates.get(selection.candidateId);
+        if (!candidate) throw new Error(`Selected candidate was not found: ${selection.candidateId}.`);
         return recommendationFromCandidate({
           candidate,
           batchId: request.batchId,
@@ -405,7 +406,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
       if (existing?.status === 'published') {
         return {
           status: 'already_published', localDate, batchId: existing.batchId,
-          resultCount: existing.resultCount, publishedAt: existing.publishedAt!,
+          resultCount: existing.resultCount, publishedAt: existing.publishedAt,
         };
       }
       if (existing?.status === 'running') {
@@ -471,7 +472,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
           if (claimed.status === 'already_published') {
             return {
               status: 'already_published', localDate, batchId: claimed.batch.batchId,
-              resultCount: claimed.batch.resultCount, publishedAt: claimed.batch.publishedAt!,
+              resultCount: claimed.batch.resultCount, publishedAt: claimed.batch.publishedAt,
             };
           }
           if (claimed.status === 'in_progress') {
@@ -639,9 +640,20 @@ function scheduledTimestamp(localDate: string, generationTime: string, timezone:
   if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(generationTime)) {
     throw new Error('Discovery dailyGenerationTime must use HH:mm.');
   }
-  const [year, month, day] = localDate.split('-').map(Number);
-  const [hour, minute] = generationTime.split(':').map(Number);
-  const desiredAsUtc = Date.UTC(year!, month! - 1, day!, hour!, minute!);
+  const dateParts = localDate.split('-').map(Number);
+  const timeParts = generationTime.split(':').map(Number);
+  const year = dateParts[0];
+  const month = dateParts[1];
+  const day = dateParts[2];
+  const hour = timeParts[0];
+  const minute = timeParts[1];
+  if (dateParts.length !== 3 || timeParts.length !== 2
+    || year === undefined || month === undefined || day === undefined
+    || hour === undefined || minute === undefined
+    || ![year, month, day, hour, minute].every(Number.isFinite)) {
+    throw new Error('Discovery schedule contains an invalid date or time.');
+  }
+  const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute);
   let instant = desiredAsUtc;
   for (let index = 0; index < 3; index += 1) {
     const parts = new Intl.DateTimeFormat('en-US', {

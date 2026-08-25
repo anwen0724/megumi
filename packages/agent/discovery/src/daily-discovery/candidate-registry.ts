@@ -42,7 +42,9 @@ export function createCandidateRegistry(): CandidateRegistry {
         const existingId = candidateIdsByIdentity.get(identity)
           ?? candidateIdsBySourceIdentity.get(sourceIdentity);
         if (existingId) {
-          const merged = mergeContent(candidates.get(existingId)!, content);
+          const existing = candidates.get(existingId);
+          if (!existing) throw new Error(`Candidate identity points to an unknown candidate: ${existingId}.`);
+          const merged = mergeContent(existing, content);
           candidates.set(existingId, merged);
           candidateIdsByIdentity.set(identity, existingId);
           candidateIdsBySourceIdentity.set(sourceIdentity, existingId);

@@ -54,6 +54,51 @@ describe('Discovery owner contracts', () => {
     }).success).toBe(false);
   });
 
+  it('accepts only fields that belong to each Daily Discovery Batch state', () => {
+    const base = {
+      batchId: 'batch:1',
+      localDate: '2026-08-22',
+      timezone: 'Asia/Shanghai',
+      executionId: 'execution:1',
+      targetCount: 20,
+      attemptCount: 1,
+      automaticRetryCount: 0,
+      resultCount: 0,
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+    };
+
+    expect(DailyDiscoveryBatchSchema.safeParse({
+      ...base,
+      status: 'running',
+      failureCode: 'impossible',
+      failureMessage: 'Running batches have not failed.',
+    }).success).toBe(false);
+    expect(DailyDiscoveryBatchSchema.safeParse({
+      ...base,
+      status: 'published',
+      resultCount: 2,
+    }).success).toBe(false);
+    expect(DailyDiscoveryBatchSchema.safeParse({
+      ...base,
+      status: 'failed',
+    }).success).toBe(false);
+
+    expect(DailyDiscoveryBatchSchema.parse({
+      ...base,
+      status: 'published',
+      resultCount: 2,
+      publishedAt: now,
+    })).toMatchObject({ status: 'published', publishedAt: now });
+    expect(DailyDiscoveryBatchSchema.parse({
+      ...base,
+      status: 'failed',
+      failureCode: 'source_search_failed',
+      failureMessage: 'No source was available.',
+    })).toMatchObject({ status: 'failed', failureCode: 'source_search_failed' });
+  });
+
   it('keeps source IDs open while validating normalized source content facts', () => {
     expect(SourceDescriptorSchema.parse({
       id: 'youtube',

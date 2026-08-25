@@ -58,19 +58,23 @@ const PublishDailyBatchSchema = z.object({
 export type ClaimDailyBatch = z.infer<typeof ClaimDailyBatchSchema>;
 export type PublishDailyBatch = z.infer<typeof PublishDailyBatchSchema>;
 
+type RunningDailyDiscoveryBatch = Extract<DailyDiscoveryBatch, { readonly status: 'running' }>;
+type PublishedDailyDiscoveryBatch = Extract<DailyDiscoveryBatch, { readonly status: 'published' }>;
+type FailedDailyDiscoveryBatch = Extract<DailyDiscoveryBatch, { readonly status: 'failed' }>;
+
 export type ClaimDailyBatchResult =
-  | { readonly status: 'claimed'; readonly batch: DailyDiscoveryBatch }
-  | { readonly status: 'in_progress'; readonly batch: DailyDiscoveryBatch }
-  | { readonly status: 'already_published'; readonly batch: DailyDiscoveryBatch }
-  | { readonly status: 'failed'; readonly batch: DailyDiscoveryBatch };
+  | { readonly status: 'claimed'; readonly batch: RunningDailyDiscoveryBatch }
+  | { readonly status: 'in_progress'; readonly batch: RunningDailyDiscoveryBatch }
+  | { readonly status: 'already_published'; readonly batch: PublishedDailyDiscoveryBatch }
+  | { readonly status: 'failed'; readonly batch: FailedDailyDiscoveryBatch };
 
 export type PublishDailyBatchResult =
-  | { readonly status: 'published'; readonly batch: DailyDiscoveryBatch; readonly recommendations: readonly Recommendation[] }
+  | { readonly status: 'published'; readonly batch: PublishedDailyDiscoveryBatch; readonly recommendations: readonly Recommendation[] }
   | { readonly status: 'conflict'; readonly reason: 'batch_not_running' | 'execution_mismatch' | 'publication_conflict' };
 
 export type FailDailyAttemptResult =
-  | { readonly status: 'retry_claimed'; readonly batch: DailyDiscoveryBatch }
-  | { readonly status: 'failed'; readonly batch: DailyDiscoveryBatch }
+  | { readonly status: 'retry_claimed'; readonly batch: RunningDailyDiscoveryBatch }
+  | { readonly status: 'failed'; readonly batch: FailedDailyDiscoveryBatch }
   | { readonly status: 'conflict' };
 
 export interface RecommendationSelectionSignal {
@@ -115,7 +119,7 @@ export interface DiscoveryRepository {
   }): SessionParticipation;
   retractSessionEvidence(sessionId: string, retractedAt: string): void;
   getDailyBatch(localDate: string): DailyDiscoveryBatch | undefined;
-  listRunningDailyBatches(): readonly DailyDiscoveryBatch[];
+  listRunningDailyBatches(): readonly RunningDailyDiscoveryBatch[];
   listRecommendationSelectionSignals(): readonly RecommendationSelectionSignal[];
   claimDailyBatch(command: ClaimDailyBatch): ClaimDailyBatchResult;
   publishDailyBatch(command: PublishDailyBatch): PublishDailyBatchResult;
@@ -139,7 +143,7 @@ export interface DiscoveryRepository {
     readonly executionId: string;
     readonly targetCount: number;
     readonly startedAt: string;
-  }): DailyDiscoveryBatch | undefined;
+  }): RunningDailyDiscoveryBatch | undefined;
   readHome(query: ReadHomeQuery): DiscoveryHomeView;
   searchRecommendations(query: {
     readonly query: string;
@@ -229,7 +233,7 @@ export function createDiscoveryRepository(options: {
     listRunningDailyBatches() {
       return options.database.prepare<BatchRow>({ sql: `
         SELECT * FROM discovery_batches WHERE status = 'running' ORDER BY local_date, batch_id
-      ` }).all().map(batchFromRow);
+      ` }).all().map(batchFromRow).map(requireRunningBatch);
     },
 
     listRecommendationSelectionSignals() {
@@ -271,7 +275,7 @@ export function createDiscoveryRepository(options: {
             ]);
             return {
               status: 'claimed' as const,
-              batch: readBatchByIdRequired(options.database, parsed.batchId),
+              batch: requireRunningBatch(readBatchByIdRequired(options.database, parsed.batchId)),
             };
           },
         });
@@ -319,7 +323,7 @@ export function createDiscoveryRepository(options: {
             if (updated.changes !== 1) throw new PublicationConflict('publication_conflict');
             return {
               status: 'published' as const,
-              batch: readBatchByIdRequired(options.database, parsed.batchId),
+              batch: requirePublishedBatch(readBatchByIdRequired(options.database, parsed.batchId)),
               recommendations: parsed.recommendations,
             };
           },
@@ -371,7 +375,10 @@ export function createDiscoveryRepository(options: {
               command.nextExecutionId, command.failedAt, command.failedAt,
               command.batchId, command.executionId,
             ]);
-            return { status: 'retry_claimed' as const, batch: readBatchByIdRequired(options.database, command.batchId) };
+            return {
+              status: 'retry_claimed' as const,
+              batch: requireRunningBatch(readBatchByIdRequired(options.database, command.batchId)),
+            };
           }
           options.database.prepare({ sql: `
             UPDATE discovery_batches
@@ -381,7 +388,10 @@ export function createDiscoveryRepository(options: {
             command.failureCode, command.failureMessage, command.failedAt,
             command.batchId, command.executionId,
           ]);
-          return { status: 'failed' as const, batch: readBatchByIdRequired(options.database, command.batchId) };
+          return {
+            status: 'failed' as const,
+            batch: requireFailedBatch(readBatchByIdRequired(options.database, command.batchId)),
+          };
         },
       });
     },
@@ -405,7 +415,7 @@ export function createDiscoveryRepository(options: {
             command.executionId, command.targetCount, command.startedAt,
             command.startedAt, command.batchId,
           ]);
-          return readBatchByIdRequired(options.database, command.batchId);
+          return requireRunningBatch(readBatchByIdRequired(options.database, command.batchId));
         },
       });
     },
@@ -459,7 +469,8 @@ function migrateRecommendationIdentities(
   let duplicates = 0;
   for (const row of rows) {
     if (row.content_identity.startsWith('content:legacy-duplicate:')) continue;
-    const canonical = canonicalById.get(row.recommendation_id)!;
+    const canonical = canonicalById.get(row.recommendation_id);
+    if (!canonical) throw new Error(`Recommendation identity was not prepared: ${row.recommendation_id}.`);
     const winner = winnerByCanonical.get(canonical);
     if (!winner) winnerByCanonical.set(canonical, row.recommendation_id);
     if (!pendingIds.has(row.recommendation_id)) continue;
@@ -721,6 +732,21 @@ function existingClaimResult(batch: DailyDiscoveryBatch): ClaimDailyBatchResult 
   if (batch.status === 'running') return { status: 'in_progress', batch };
   if (batch.status === 'published') return { status: 'already_published', batch };
   return { status: 'failed', batch };
+}
+
+function requireRunningBatch(batch: DailyDiscoveryBatch): RunningDailyDiscoveryBatch {
+  if (batch.status !== 'running') throw new Error(`Expected a running Batch, received ${batch.status}.`);
+  return batch;
+}
+
+function requirePublishedBatch(batch: DailyDiscoveryBatch): PublishedDailyDiscoveryBatch {
+  if (batch.status !== 'published') throw new Error(`Expected a published Batch, received ${batch.status}.`);
+  return batch;
+}
+
+function requireFailedBatch(batch: DailyDiscoveryBatch): FailedDailyDiscoveryBatch {
+  if (batch.status !== 'failed') throw new Error(`Expected a failed Batch, received ${batch.status}.`);
+  return batch;
 }
 
 function insertRecommendation(database: DatabaseConnection, item: Recommendation): void {

@@ -89,8 +89,14 @@ describe('DiscoveryRepository Home and Recommendation queries', () => {
       recommendationId: 'recommendation:today:1', action: 'set_reaction', reaction: 'liked', now,
     }).reaction).toBe('liked');
     expect(repository.updateRecommendationState({
+      recommendationId: 'recommendation:today:1', action: 'set_favorite', favorite: true, now,
+    }).favorite).toBe(true);
+    expect(repository.updateRecommendationState({
       recommendationId: 'recommendation:today:1', action: 'set_favorite', favorite: false, now,
     }).favorite).toBe(false);
+    expect(repository.updateRecommendationState({
+      recommendationId: 'recommendation:today:1', action: 'set_watch_later', watchLater: true, now,
+    }).watchLater).toBe(true);
     expect(repository.updateRecommendationState({
       recommendationId: 'recommendation:today:1', action: 'set_hidden', hidden: true, now,
     }).hidden).toBe(true);

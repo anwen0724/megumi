@@ -26,7 +26,8 @@ export function createInterestExtractionQueue(options: {
   const drain = async (): Promise<void> => {
     try {
       while (accepting && pending.length > 0) {
-        const job = pending.shift()!;
+        const job = pending.shift();
+        if (!job) break;
         const controller = new AbortController();
         activeController = controller;
         try {

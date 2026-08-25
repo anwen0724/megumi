@@ -109,6 +109,25 @@ describe('DiscoveryRepository foundation', () => {
       recommendations: [recommendation('recommendation:1', 'identity:1', 0)],
     })).toThrow(DatabaseConnectionClosedError);
   });
+
+  it('rejects an impossible persisted Batch state at the read boundary', () => {
+    const repository = createDiscoveryRepository({ database });
+    repository.claimDailyBatch({
+      batchId: 'batch:1',
+      localDate: '2026-08-22',
+      timezone: 'Asia/Shanghai',
+      executionId: 'execution:1',
+      targetCount: 20,
+      now,
+    });
+    database.prepare({ sql: `
+      UPDATE discovery_batches
+      SET status = 'published', result_count = 1, published_at = NULL
+      WHERE batch_id = 'batch:1'
+    ` }).run();
+
+    expect(() => repository.getDailyBatch('2026-08-22')).toThrow();
+  });
 });
 
 function recommendation(recommendationId: string, contentIdentity: string, position: number) {

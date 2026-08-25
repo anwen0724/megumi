@@ -142,32 +142,44 @@ export function updateRecommendationState(
   const { now: _now, ...requestValue } = input;
   const request = UpdateRecommendationStateRequestSchema.parse(requestValue);
   const now = parseTimestamp(input.now);
-  if (request.action === 'opened') {
-    database.prepare({ sql: `
-      UPDATE discovery_recommendations
-      SET first_opened_at = COALESCE(first_opened_at, ?), last_opened_at = ?, state_updated_at = ?
-      WHERE recommendation_id = ?
-    ` }).run([now, now, now, request.recommendationId]);
-  } else if (request.action === 'set_reaction') {
-    database.prepare({ sql: `
-      UPDATE discovery_recommendations SET reaction = ?, state_updated_at = ? WHERE recommendation_id = ?
-    ` }).run([request.reaction, now, request.recommendationId]);
-  } else if (request.action === 'set_hidden') {
-    database.prepare({ sql: `
-      UPDATE discovery_recommendations SET hidden_at = ?, state_updated_at = ? WHERE recommendation_id = ?
-    ` }).run([request.hidden ? now : null, now, request.recommendationId]);
-  } else if (request.action === 'set_favorite') {
-    database.prepare({ sql: `
-      UPDATE discovery_recommendations SET favorite_at = ?, state_updated_at = ? WHERE recommendation_id = ?
-    ` }).run([request.favorite ? now : null, now, request.recommendationId]);
-  } else {
-    database.prepare({ sql: `
-      UPDATE discovery_recommendations SET watch_later_at = ?, state_updated_at = ? WHERE recommendation_id = ?
-    ` }).run([request.watchLater ? now : null, now, request.recommendationId]);
+  switch (request.action) {
+    case 'opened':
+      database.prepare({ sql: `
+        UPDATE discovery_recommendations
+        SET first_opened_at = COALESCE(first_opened_at, ?), last_opened_at = ?, state_updated_at = ?
+        WHERE recommendation_id = ?
+      ` }).run([now, now, now, request.recommendationId]);
+      break;
+    case 'set_reaction':
+      database.prepare({ sql: `
+        UPDATE discovery_recommendations SET reaction = ?, state_updated_at = ? WHERE recommendation_id = ?
+      ` }).run([request.reaction, now, request.recommendationId]);
+      break;
+    case 'set_hidden':
+      database.prepare({ sql: `
+        UPDATE discovery_recommendations SET hidden_at = ?, state_updated_at = ? WHERE recommendation_id = ?
+      ` }).run([request.hidden ? now : null, now, request.recommendationId]);
+      break;
+    case 'set_favorite':
+      database.prepare({ sql: `
+        UPDATE discovery_recommendations SET favorite_at = ?, state_updated_at = ? WHERE recommendation_id = ?
+      ` }).run([request.favorite ? now : null, now, request.recommendationId]);
+      break;
+    case 'set_watch_later':
+      database.prepare({ sql: `
+        UPDATE discovery_recommendations SET watch_later_at = ?, state_updated_at = ? WHERE recommendation_id = ?
+      ` }).run([request.watchLater ? now : null, now, request.recommendationId]);
+      break;
+    default:
+      assertNever(request);
   }
   const row = readRecommendation(database, request.recommendationId);
   if (!row) throw new Error(`Recommendation not found: ${request.recommendationId}.`);
   return recommendationViewFromRow(row);
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled Recommendation action: ${JSON.stringify(value)}`);
 }
 
 function todayView(database: DatabaseConnection, localDate: string) {
