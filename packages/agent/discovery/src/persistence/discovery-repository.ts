@@ -275,10 +275,10 @@ export function createDiscoveryRepository(options: {
             };
           },
         });
-      } catch {
+      } catch (error) {
         const authoritative = readBatchByLocalDate(options.database, parsed.localDate);
         if (authoritative) return existingClaimResult(authoritative);
-        throw new Error('Daily discovery batch could not be claimed.');
+        throw new Error('Daily discovery batch could not be claimed.', { cause: error });
       }
     },
 

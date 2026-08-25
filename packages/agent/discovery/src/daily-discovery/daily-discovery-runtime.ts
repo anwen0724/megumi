@@ -379,12 +379,14 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
 
       try {
         ensureIdentityMigration();
-      } catch {
+      } catch (error) {
         return {
           status: 'failed', localDate,
           failure: {
             code: 'content_identity_migration_failed',
-            message: 'Discovery content identities could not be migrated.',
+            message: error instanceof Error
+              ? `Discovery content identities could not be migrated: ${error.message}`
+              : 'Discovery content identities could not be migrated.',
             retryable: false,
           },
         };
