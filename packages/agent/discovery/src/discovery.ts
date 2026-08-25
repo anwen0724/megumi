@@ -115,8 +115,10 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       ? discoveryConfiguration.connectSource(request)
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     async shutdown() {
-      interestRuntime.shutdown();
-      await dailyDiscoveryRuntime?.shutdown();
+      await Promise.all([
+        interestRuntime.shutdown(),
+        dailyDiscoveryRuntime?.shutdown() ?? Promise.resolve(),
+      ]);
     },
   };
 }

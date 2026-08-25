@@ -287,6 +287,10 @@ export function createDiscoveryRepository(options: {
       if (parsed.recommendations.some((item) => item.batchId !== parsed.batchId)) {
         return { status: 'conflict', reason: 'publication_conflict' };
       }
+      const identities = new Set(parsed.recommendations.map((item) => item.contentIdentity));
+      if (identities.size !== parsed.recommendations.length) {
+        return { status: 'conflict', reason: 'publication_conflict' };
+      }
       try {
         return options.database.transaction({
           operation: () => {
@@ -321,12 +325,10 @@ export function createDiscoveryRepository(options: {
           },
         });
       } catch (error) {
-        return {
-          status: 'conflict',
-          reason: error instanceof PublicationConflict
-            ? error.reason
-            : 'publication_conflict',
-        };
+        if (error instanceof PublicationConflict) {
+          return { status: 'conflict', reason: error.reason };
+        }
+        throw error;
       }
     },
 

@@ -420,6 +420,7 @@ function createFixture(
         createBatchId: () => `batch:${++batchNumber}`,
         createRecommendationId: () => `recommendation:${++recommendationNumber}`,
       },
+      onBackgroundError: () => undefined,
     },
     policy: {
       maxModelCallsPerExecution: 80, maxToolRoundsPerExecution: 50,

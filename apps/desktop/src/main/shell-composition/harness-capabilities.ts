@@ -567,6 +567,18 @@ function composeCapabilitiesWithDatabase(
         createBatchId: () => `discovery-batch:${crypto.randomUUID()}`,
         createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
       },
+      onBackgroundError(error, context) {
+        observability.service.recordLog({
+          level: 'warn',
+          event: 'daily_discovery_background_failed',
+          attributes: {
+            operation: context.operation,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            ...(context.batchId ? { batchId: context.batchId } : {}),
+            ...(context.executionId ? { executionId: context.executionId } : {}),
+          },
+        });
+      },
     },
     configuration: {
       sourceRegistry: discoverySources,

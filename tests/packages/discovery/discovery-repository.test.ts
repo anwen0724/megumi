@@ -1,7 +1,12 @@
 /* Verifies DiscoveryRepository's business surface and atomic batch publication. */
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
+import {
+  createDatabase,
+  DatabaseConnectionClosedError,
+  migrateDatabase,
+  type DatabaseConnection,
+} from '@megumi/database';
 import { createDiscoveryRepository } from '@megumi/discovery';
 
 const now = '2026-08-22T00:00:00.000Z';
@@ -83,6 +88,26 @@ describe('DiscoveryRepository foundation', () => {
     expect(database.prepare<{ count: number }>({
       sql: 'SELECT COUNT(*) AS count FROM discovery_recommendations',
     }).get()?.count).toBe(2);
+  });
+
+  it('propagates database failures instead of reporting a publication conflict', () => {
+    const repository = createDiscoveryRepository({ database });
+    repository.claimDailyBatch({
+      batchId: 'batch:1',
+      localDate: '2026-08-22',
+      timezone: 'Asia/Shanghai',
+      executionId: 'execution:1',
+      targetCount: 20,
+      now,
+    });
+    database.close();
+
+    expect(() => repository.publishDailyBatch({
+      batchId: 'batch:1',
+      executionId: 'execution:1',
+      publishedAt: now,
+      recommendations: [recommendation('recommendation:1', 'identity:1', 0)],
+    })).toThrow(DatabaseConnectionClosedError);
   });
 });
 

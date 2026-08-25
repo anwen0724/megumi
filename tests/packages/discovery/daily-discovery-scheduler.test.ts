@@ -137,6 +137,38 @@ describe('daily discovery scheduler and retry lifecycle', () => {
     expect(timers.pending()).toEqual([]);
     expect(fixture.repository.getDailyBatch('2026-08-22')).toBeUndefined();
   });
+
+  it('observes a scheduled failure once and still schedules the next day', async () => {
+    const timers = fakeTimers();
+    const failures: unknown[] = [];
+    let settingsReads = 0;
+    const fixture = createFixture(
+      database,
+      () => '2026-08-22T07:00:00.000+08:00',
+      successfulStreams(),
+      timers,
+      {
+        onBackgroundError: (error) => { failures.push(error); },
+        getDiscoverySettings() {
+          settingsReads += 1;
+          if (settingsReads === 3) throw new Error('Discovery settings are unavailable.');
+          return {
+            dailyGenerationTime: '08:00',
+            dailyTargetCount: 20,
+            enabledSources: ['open_web'] as const,
+          };
+        },
+      },
+    );
+    addInterest(fixture.repository);
+    await fixture.agent.startBackground();
+
+    timers.fireNext();
+
+    await vi.waitFor(() => expect(failures).toHaveLength(1));
+    expect(failures[0]).toEqual(expect.objectContaining({ message: 'Discovery settings are unavailable.' }));
+    expect(timers.pending()).toHaveLength(1);
+  });
 });
 
 function createFixture(
@@ -144,6 +176,14 @@ function createFixture(
   now: () => string,
   streams: AssistantMessageEventStream[],
   timers?: ReturnType<typeof fakeTimers>,
+  background?: {
+    readonly onBackgroundError: (error: unknown) => void;
+    readonly getDiscoverySettings: () => {
+      readonly dailyGenerationTime: string;
+      readonly dailyTargetCount: number;
+      readonly enabledSources: readonly ['open_web'];
+    };
+  },
 ) {
   const repository = createDiscoveryRepository({ database });
   let executionNumber = 0;
@@ -204,9 +244,10 @@ function createFixture(
     },
     dailyDiscovery: {
       repository, attempts: discoveryTools.attempts, sourceRegistry: createSourceRegistry([source]),
-      settings: { getDiscoverySettings: () => ({
+      settings: { getDiscoverySettings: background?.getDiscoverySettings ?? (() => ({
         dailyGenerationTime: '08:00', dailyTargetCount: 20, enabledSources: ['open_web'],
-      }) },
+      })) },
+      onBackgroundError: background?.onBackgroundError ?? (() => undefined),
       timezone: () => 'Asia/Shanghai', resolveModel: async () => model,
       ids: {
         createBatchId: () => `batch:${++batchNumber}`,

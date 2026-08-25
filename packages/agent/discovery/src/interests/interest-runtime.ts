@@ -57,7 +57,7 @@ export interface InterestRuntime {
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   retractSessionEvidence(sessionId: string): Promise<void>;
-  shutdown(): void;
+  shutdown(): Promise<void>;
 }
 
 export function createInterestRuntime(options: CreateInterestRuntimeOptions): InterestRuntime {
@@ -112,9 +112,9 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
       options.repository.retractSessionEvidence(sessionId, options.clock.now());
     },
 
-    shutdown() {
+    async shutdown() {
       accepting = false;
-      queue.shutdown();
+      await queue.shutdown();
     },
   };
 }
@@ -128,7 +128,7 @@ export function createDisabledInterestRuntime(): InterestRuntime {
     setSessionParticipation: unavailable,
     observeConversationTurn: () => ({ status: 'skipped', reason: 'recognition_disabled' }),
     retractSessionEvidence: async () => undefined,
-    shutdown: () => undefined,
+    shutdown: async () => undefined,
   };
 }
 

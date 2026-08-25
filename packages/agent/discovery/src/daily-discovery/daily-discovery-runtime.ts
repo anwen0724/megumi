@@ -55,10 +55,20 @@ export interface CreateDailyDiscoveryRuntimeOptions {
     createBatchId(): string;
     createRecommendationId(): string;
   };
+  readonly onBackgroundError: (
+    error: unknown,
+    context: DailyDiscoveryBackgroundErrorContext,
+  ) => void;
   readonly timers?: {
     setTimeout(callback: () => void, delayMs: number): unknown;
     clearTimeout(handle: unknown): void;
   };
+}
+
+export interface DailyDiscoveryBackgroundErrorContext {
+  readonly operation: 'attempt_settlement' | 'startup_recovery' | 'scheduled_ensure';
+  readonly batchId?: string;
+  readonly executionId?: string;
 }
 
 export interface DailyDiscoveryRuntime {
@@ -88,9 +98,38 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     identitiesMigrated = true;
   };
 
-  const track = (operation: Promise<void>): void => {
-    activePromises.add(operation);
-    void operation.finally(() => activePromises.delete(operation));
+  const reportBackgroundError = (
+    error: unknown,
+    context: DailyDiscoveryBackgroundErrorContext,
+  ): void => {
+    try {
+      input.onBackgroundError(error, context);
+    } catch {
+      // The observer is the terminal boundary and must not create another rejection.
+    }
+  };
+
+  const track = (
+    operation: Promise<void>,
+    context: DailyDiscoveryBackgroundErrorContext,
+    afterSettled?: () => void,
+  ): void => {
+    let tracked!: Promise<void>;
+    tracked = (async () => {
+      try {
+        await operation;
+      } catch (error) {
+        reportBackgroundError(error, context);
+      } finally {
+        try {
+          afterSettled?.();
+        } catch (error) {
+          reportBackgroundError(error, context);
+        }
+        activePromises.delete(tracked);
+      }
+    })();
+    activePromises.add(tracked);
   };
 
   const snapshotInputs = async () => {
@@ -163,7 +202,11 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
           executionId,
           outcome,
         });
-        track(operation);
+        track(operation, {
+          operation: 'attempt_settlement',
+          batchId: request.batchId,
+          executionId,
+        });
         return operation;
       },
     });
@@ -299,7 +342,11 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     timerHandle = timers.setTimeout(() => {
       timerHandle = undefined;
       if (!accepting) return;
-      void runtime.ensure({ trigger: 'schedule', now: input.now() }).finally(scheduleNext);
+      track(
+        runtime.ensure({ trigger: 'schedule', now: input.now() }).then(() => undefined),
+        { operation: 'scheduled_ensure' },
+        scheduleNext,
+      );
     }, delay);
     unrefTimer(timerHandle);
   };
@@ -332,7 +379,11 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
               : failedResult(batch.localDate, 'attempt_interrupted', 'The interrupted attempt could not be recovered.', false);
           },
         }).then(() => undefined);
-        track(operation);
+        track(operation, {
+          operation: 'startup_recovery',
+          batchId: batch.batchId,
+          executionId: batch.executionId,
+        });
       }
       const settings = input.settings.getDiscoverySettings();
       const scheduledToday = scheduledTimestamp(

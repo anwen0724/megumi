@@ -118,6 +118,7 @@ export {
 } from './daily-discovery/daily-discovery';
 export type {
   CreateDailyDiscoveryRuntimeOptions,
+  DailyDiscoveryBackgroundErrorContext,
   DailyDiscoveryRuntime,
 } from './daily-discovery/daily-discovery-runtime';
 export type {

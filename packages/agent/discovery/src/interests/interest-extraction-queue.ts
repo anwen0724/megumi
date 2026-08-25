@@ -10,7 +10,7 @@ export interface InterestExtractionJob {
 
 export interface InterestExtractionQueue {
   submit(job: Omit<InterestExtractionJob, 'sequence'>): InterestExtractionJob | undefined;
-  shutdown(): void;
+  shutdown(): Promise<void>;
 }
 
 export function createInterestExtractionQueue(options: {
@@ -19,13 +19,11 @@ export function createInterestExtractionQueue(options: {
 }): InterestExtractionQueue {
   const pending: InterestExtractionJob[] = [];
   let accepting = true;
-  let processing = false;
+  let worker: Promise<void> | undefined;
   let sequence = 0;
   let activeController: AbortController | undefined;
 
   const drain = async (): Promise<void> => {
-    if (processing) return;
-    processing = true;
     try {
       while (accepting && pending.length > 0) {
         const job = pending.shift()!;
@@ -34,15 +32,26 @@ export function createInterestExtractionQueue(options: {
         try {
           await options.process(job, controller.signal);
         } catch (error) {
-          if (!controller.signal.aborted) options.onError?.(error, job);
+          if (!controller.signal.aborted) {
+            try {
+              options.onError?.(error, job);
+            } catch {
+              // An error observer cannot create a second unobserved worker failure.
+            }
+          }
         } finally {
           if (activeController === controller) activeController = undefined;
         }
       }
     } finally {
-      processing = false;
-      if (accepting && pending.length > 0) void drain();
+      worker = undefined;
+      if (accepting && pending.length > 0) startWorker();
     }
+  };
+
+  const startWorker = (): void => {
+    if (worker) return;
+    worker = drain();
   };
 
   return {
@@ -50,13 +59,14 @@ export function createInterestExtractionQueue(options: {
       if (!accepting) return undefined;
       const job = Object.freeze({ ...input, sequence: ++sequence });
       pending.push(job);
-      void drain();
+      startWorker();
       return job;
     },
-    shutdown() {
+    async shutdown() {
       accepting = false;
       pending.length = 0;
       activeController?.abort();
+      await worker;
     },
   };
 }
