@@ -12,6 +12,8 @@ export interface ActiveTraceContext {
   readonly lifecycle: {
     sequence: number;
     diagnosticsDropped: boolean;
+    /** Stable product-operation identifiers learned after the Trace started. */
+    rootCorrelation?: TraceCorrelation;
   };
 }
 

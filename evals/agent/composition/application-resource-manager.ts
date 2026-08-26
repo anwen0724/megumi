@@ -3,7 +3,7 @@
  * resources created by Composition and never decides module business state.
  */
 import type { Discovery } from '@megumi/discovery';
-import type { AgentExecutions } from '@megumi/execution';
+import type { AgentExecutions, ConversationSubmission } from '@megumi/execution';
 import type { DatabaseConnection } from '@megumi/database';
 import type { EventSubscription } from '@megumi/events';
 import type { Voice } from '@megumi/voice';
@@ -15,6 +15,7 @@ export interface ApplicationResourceManager {
   dispose(input: {
     readonly discovery: Discovery;
     readonly executions: AgentExecutions;
+    readonly conversation: ConversationSubmission;
     readonly voice: Voice;
     readonly speechOutput: { dispose(): void };
     readonly observability: { shutdown(): Promise<void> };
@@ -22,7 +23,15 @@ export interface ApplicationResourceManager {
 }
 
 interface ProductDisposeFailure {
-  readonly resource: 'discovery' | 'execution' | 'voice' | 'speech-output' | 'events' | 'observability' | 'database';
+  readonly resource:
+    | 'discovery'
+    | 'execution'
+    | 'conversation'
+    | 'voice'
+    | 'speech-output'
+    | 'events'
+    | 'observability'
+    | 'database';
   readonly error: unknown;
 }
 
@@ -60,7 +69,7 @@ export function createApplicationResourceManager(input: {
     },
 
     /** Attempts every shutdown step and reports all failures only after cleanup. */
-    async dispose({ discovery, executions, voice, speechOutput, observability }) {
+    async dispose({ discovery, executions, conversation, voice, speechOutput, observability }) {
       const failures: ProductDisposeFailure[] = [];
       const discoveryShutdown = (async () => {
         try {
@@ -79,6 +88,11 @@ export function createApplicationResourceManager(input: {
         }
       } catch (error) {
         failures.push({ resource: 'execution', error });
+      }
+      try {
+        await conversation.shutdown();
+      } catch (error) {
+        failures.push({ resource: 'conversation', error });
       }
       await discoveryShutdown;
 

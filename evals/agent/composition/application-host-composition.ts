@@ -317,7 +317,14 @@ function composeProductRuntime(
     logger,
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
-    dispose: () => resources.dispose({ discovery, executions, voice, speechOutput, observability }),
+    dispose: () => resources.dispose({
+      discovery,
+      executions,
+      conversation,
+      voice,
+      speechOutput,
+      observability,
+    }),
   });
 }
 

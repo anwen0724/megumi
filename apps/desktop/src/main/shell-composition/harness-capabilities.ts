@@ -480,6 +480,7 @@ function composeCapabilitiesWithDatabase(
       history,
       branches,
       recommendations: discoveryRepository,
+      observability: observability.observability,
       resolveModel: ({ providerId, modelId }) => resolveModel({
         provider_id: providerId,
         model_id: modelId,

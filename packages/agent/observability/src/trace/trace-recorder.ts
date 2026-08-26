@@ -93,7 +93,11 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
         traceId: createId(),
         traceKind: traceOptions.kind,
         correlation: traceOptions.correlation ?? {},
-        lifecycle: { sequence: 0, diagnosticsDropped: false },
+        lifecycle: {
+          sequence: 0,
+          diagnosticsDropped: false,
+          rootCorrelation: traceOptions.correlation ?? {},
+        },
       };
       activeTraces.set(context.traceId, context);
       try {
@@ -143,9 +147,16 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
         return operationPromise;
       };
       const spanId = createId();
+      parent.lifecycle.rootCorrelation = mergeTraceIdentityCorrelation(
+        parent.lifecycle.rootCorrelation,
+        spanOptions.correlation,
+      );
       const child: ActiveTraceContext = {
         ...parent,
-        correlation: mergeCorrelation(parent.correlation, spanOptions.correlation),
+        correlation: mergeCorrelation(
+          mergeCorrelation(parent.correlation, parent.lifecycle.rootCorrelation),
+          spanOptions.correlation,
+        ),
         currentSpanId: spanId,
       };
       enqueue(parent, {
@@ -161,6 +172,10 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
           try {
             const result = await runOnce();
             const completion = classifyResult(spanOptions.classifyResult, result, health);
+            parent.lifecycle.rootCorrelation = mergeTraceIdentityCorrelation(
+              parent.lifecycle.rootCorrelation,
+              completion.correlation,
+            );
             enqueue(parent, {
               ...nextBase(parent),
               type: 'span.ended',
@@ -290,7 +305,10 @@ function resolveLinkTarget(
   if (target.state === 'active') {
     return [...activeTraces.values()].find((candidate) => (
       candidate.traceKind === target.traceKind
-      && correlationContains(candidate.correlation, target.correlation)
+      && correlationContains(
+        mergeCorrelation(candidate.correlation, candidate.lifecycle.rootCorrelation),
+        target.correlation,
+      )
     ))?.traceId;
   }
   try {
@@ -298,6 +316,21 @@ function resolveLinkTarget(
   } catch {
     return undefined;
   }
+}
+
+function mergeTraceIdentityCorrelation(
+  current: TraceCorrelation | undefined,
+  additional: TraceCorrelation | undefined,
+): TraceCorrelation {
+  if (!additional) return current ?? {};
+  return {
+    ...(current ?? {}),
+    ...(additional.requestId ? { requestId: additional.requestId } : {}),
+    ...(additional.executionId ? { executionId: additional.executionId } : {}),
+    ...(additional.sessionId ? { sessionId: additional.sessionId } : {}),
+    ...(additional.workspaceId ? { workspaceId: additional.workspaceId } : {}),
+    ...(additional.batchId ? { batchId: additional.batchId } : {}),
+  };
 }
 
 function correlationContains(candidate: TraceCorrelation, required: TraceCorrelation): boolean {

@@ -6,6 +6,7 @@
 import type { Api, Model } from '@megumi/ai';
 import type { CommandTerminalResult } from '@megumi/commands';
 import type { InputProcessor, RawUserInput } from '@megumi/input';
+import type { Observability, OperationCompletion, TraceCorrelation } from '@megumi/observability';
 import type { PermissionMode } from '@megumi/permissions';
 import type {
   Session,
@@ -16,8 +17,8 @@ import type {
   SessionMessageWithAttachments,
   RecommendationReferenceContent,
 } from '@megumi/session';
-import type { ConversationExecutionInput, StartExecutionResult } from '@megumi/execution';
-import type { ExecutionSnapshot } from '@megumi/execution';
+import type { ConversationExecutionInput, StartExecutionResult } from './agent-executions';
+import type { ExecutionOutcome, ExecutionSnapshot } from './execution-registry';
 
 export interface SubmitConversationInputRequest extends RawUserInput {
   readonly requestId?: string;
@@ -96,49 +97,147 @@ export interface ConversationSubmissionDependencies {
   readonly recommendations?: {
     readRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
   };
+  readonly observability?: Observability;
 }
 
 export interface ConversationSubmission {
   submit(request: SubmitConversationInputRequest): Promise<SubmitConversationInputResult>;
+  /** Waits for every accepted Conversation Trace lifecycle already owned by this coordinator. */
+  shutdown(): Promise<void>;
+}
+
+type StartedConversation = Extract<
+  StartExecutionResult,
+  { readonly status: 'started' | 'already_started' }
+>;
+
+interface PreparedConversationSubmission {
+  readonly result: SubmitConversationInputResult;
+  readonly started?: StartedConversation;
+}
+
+interface ConversationLifecycleResult {
+  readonly result: SubmitConversationInputResult;
+  readonly code: string;
+  readonly correlation: TraceCorrelation;
+  readonly outcome?: ExecutionOutcome;
 }
 
 export function createConversationSubmission(options: {
   readonly dependencies: ConversationSubmissionDependencies;
   readonly startExecution: (request: ConversationExecutionInput) => Promise<StartExecutionResult>;
 }): ConversationSubmission {
+  const activeLifecycles = new Set<Promise<void>>();
+
   return {
-    async submit(request) {
+    submit(request) {
       const requestId = request.requestId ?? `request:${crypto.randomUUID()}`;
-      if (request.sessionId && request.recommendationId) {
-        return failure(
+      const acceptance = deferred<SubmitConversationInputResult>();
+      const lifecycle = observeConversationTrace(
+        options.dependencies.observability,
+        {
           requestId,
-          'recommendation_requires_new_session',
-          'A Recommendation can only start a new Session.',
-        );
-      }
-      const existingSession = request.sessionId
-        ? resolveExistingSession(
-            options.dependencies.sessions,
-            request.sessionId,
-            request.workspaceId,
-          )
-        : undefined;
-      if (existingSession?.status === 'failed') {
-        return failure(requestId, 'session_resolution_failed', existingSession.message);
-      }
+          workspaceId: request.workspaceId,
+          ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+          ...(request.recommendationId ? { recommendationId: request.recommendationId } : {}),
+        },
+        async () => {
+          try {
+            const prepared = await prepareConversationSubmission(options, request, requestId);
+            if (prepared.started?.status === 'already_started') {
+              safeLinkDuplicate(options.dependencies.observability, requestId, prepared.started);
+            }
+            acceptance.resolve(prepared.result);
+            if (!prepared.started || prepared.started.status === 'already_started') {
+              return lifecycleResult(
+                prepared,
+                request,
+                prepared.started?.status ?? conversationResultCode(prepared.result),
+              );
+            }
+            const outcome = await prepared.started.completion;
+            return lifecycleResult(prepared, request, outcome.status, outcome);
+          } catch (error) {
+            acceptance.reject(error);
+            throw error;
+          }
+        },
+      );
+      trackLifecycle(activeLifecycles, lifecycle);
+      return acceptance.promise;
+    },
 
-      const model = await options.dependencies.resolveModel(request.modelSelection);
-      if (model.status === 'failed') {
-        return failure(
-          requestId,
-          model.failure.code,
-          model.failure.message,
-          existingSession?.session,
-          model.failure.retryable,
-        );
+    async shutdown() {
+      while (activeLifecycles.size > 0) {
+        await Promise.all([...activeLifecycles]);
       }
+    },
+  };
+}
 
-      const processed = await options.dependencies.input.process({
+async function prepareConversationSubmission(
+  options: {
+    readonly dependencies: ConversationSubmissionDependencies;
+    readonly startExecution: (request: ConversationExecutionInput) => Promise<StartExecutionResult>;
+  },
+  request: SubmitConversationInputRequest,
+  requestId: string,
+): Promise<PreparedConversationSubmission> {
+  const { dependencies } = options;
+  safeRecordContent(dependencies.observability, 'input.received', toRawUserInput(request), {
+    requestId,
+    workspaceId: request.workspaceId,
+  });
+  if (request.sessionId && request.recommendationId) {
+    return { result: failure(
+      requestId,
+      'recommendation_requires_new_session',
+      'A Recommendation can only start a new Session.',
+    ) };
+  }
+
+  const requestedSessionId = request.sessionId;
+  const existingSession = requestedSessionId
+    ? await observeOperation(
+        dependencies.observability,
+        'session.resolve',
+        { requestId, sessionId: requestedSessionId, workspaceId: request.workspaceId },
+        classifySessionResolution,
+        () => resolveExistingSession(dependencies.sessions, requestedSessionId, request.workspaceId),
+      )
+    : undefined;
+  if (existingSession?.status === 'failed') {
+    return { result: failure(requestId, 'session_resolution_failed', existingSession.message) };
+  }
+
+  const model = await observeOperation(
+    dependencies.observability,
+    'model.resolve',
+    { requestId, workspaceId: request.workspaceId },
+    classifyModelResolution,
+    () => dependencies.resolveModel(request.modelSelection),
+  );
+  if (model.status === 'failed') {
+    return { result: failure(
+      requestId,
+      model.failure.code,
+      model.failure.message,
+      existingSession?.session,
+      model.failure.retryable,
+    ) };
+  }
+
+  const processed = await observeOperation(
+    dependencies.observability,
+    'input.process',
+    {
+      requestId,
+      workspaceId: request.workspaceId,
+      ...(existingSession ? { sessionId: existingSession.session.session_id } : {}),
+    },
+    classifyProcessedInput,
+    async () => {
+      const result = await dependencies.input.process({
         input: toRawUserInput(request),
         context: {
           workspaceId: request.workspaceId,
@@ -146,89 +245,377 @@ export function createConversationSubmission(options: {
           model: model.model,
         },
       });
-      if (processed.status === 'failed') {
-        return failure(
+      safeRecordContent(dependencies.observability, 'input.processed', result, { requestId });
+      return result;
+    },
+  );
+  if (processed.status === 'failed') {
+    return { result: failure(
+      requestId,
+      processed.failure.code,
+      processed.failure.message,
+      existingSession?.session,
+    ) };
+  }
+  if (processed.status === 'completed') {
+    return { result: terminalResult(requestId, processed.result, existingSession?.session) };
+  }
+
+  const requestedRecommendationId = request.recommendationId;
+  const recommendationReference = requestedRecommendationId
+    ? await observeOperation(
+        dependencies.observability,
+        'recommendation.reference.resolve',
+        { requestId, recommendationId: requestedRecommendationId },
+        classifyRecommendationResolution,
+        () => resolveRecommendationReference(dependencies, requestedRecommendationId),
+      )
+    : undefined;
+  if (recommendationReference?.status === 'failed') {
+    return { result: failure(requestId, recommendationReference.code, recommendationReference.message) };
+  }
+
+  const acceptedText = processed.input.displayContent.map((block) => block.text).join('');
+  let activeSession = existingSession?.session;
+  if (!activeSession) {
+    const created = await observeOperation(
+      dependencies.observability,
+      'session.create',
+      { requestId, workspaceId: request.workspaceId },
+      classifySessionCreation,
+      () => createAcceptedSession(dependencies.sessions, request, acceptedText),
+    );
+    if (created.status !== 'created') {
+      return { result: failure(requestId, 'session_creation_failed', 'Session could not be created.') };
+    }
+    activeSession = created.session;
+  }
+
+  const session = activeSession;
+  const requestedBranchMarkerId = request.branchMarkerId;
+  const branch = requestedBranchMarkerId
+    ? await observeOperation(
+        dependencies.observability,
+        'session.branch.resolve',
+        { requestId, sessionId: session.session_id, workspaceId: session.workspace_id },
+        classifyBranchResolution,
+        () => resolveBranch(dependencies.branches, session, requestedBranchMarkerId, requestId),
+      )
+    : { status: 'ok' as const };
+  if (branch.status === 'failed') {
+    return { result: failure(requestId, 'branch_resolution_failed', branch.message, session) };
+  }
+
+  const started = await options.startExecution({
+    kind: 'conversation',
+    requestId,
+    workspaceId: request.workspaceId,
+    sessionId: session.session_id,
+    ...(branch.parentEntryId ? { parentEntryId: branch.parentEntryId } : {}),
+    input: processed.input,
+    ...(recommendationReference ? { recommendationReference: recommendationReference.reference } : {}),
+    model: model.model,
+    permissionMode: request.permissionMode ?? 'ask',
+  });
+  if (started.status !== 'started' && started.status !== 'already_started') {
+    return { result: started.status === 'session_busy'
+      ? failure(
           requestId,
-          processed.failure.code,
-          processed.failure.message,
-          existingSession?.session,
-        );
-      }
-      if (processed.status === 'completed') {
-        return terminalResult(requestId, processed.result, existingSession?.session);
-      }
+          'session_busy',
+          'The session already has an active execution.',
+          session,
+          true,
+        )
+      : {
+          status: 'failed',
+          requestId,
+          session,
+          failure: started.failure,
+        } };
+  }
 
-      const recommendationReference = request.recommendationId
-        ? resolveRecommendationReference(options.dependencies, request.recommendationId)
-        : undefined;
-      if (recommendationReference?.status === 'failed') {
-        return failure(requestId, recommendationReference.code, recommendationReference.message);
-      }
-
-      const acceptedText = processed.input.displayContent.map((block) => block.text).join('');
-      const session = existingSession?.session
-        ?? createAcceptedSession(options.dependencies.sessions, request, acceptedText);
-      if (!session) {
-        return failure(requestId, 'session_creation_failed', 'Session could not be created.');
-      }
-
-      const branch = resolveBranch(
-        options.dependencies.branches,
-        session,
-        request.branchMarkerId,
-        requestId,
-      );
-      if (branch.status === 'failed') {
-        return failure(requestId, 'branch_resolution_failed', branch.message, session);
-      }
-
-      const started = await options.startExecution({
-        kind: 'conversation',
-        requestId,
-        workspaceId: request.workspaceId,
-        sessionId: session.session_id,
-        ...(branch.parentEntryId ? { parentEntryId: branch.parentEntryId } : {}),
-        input: processed.input,
-        ...(recommendationReference ? { recommendationReference: recommendationReference.reference } : {}),
-        model: model.model,
-        permissionMode: request.permissionMode ?? 'ask',
-      });
-      if (started.status !== 'started' && started.status !== 'already_started') {
-        return started.status === 'session_busy'
-          ? failure(
-              requestId,
-              'session_busy',
-              'The session already has an active execution.',
-              session,
-              true,
-            )
-          : {
-              status: 'failed',
-              requestId,
-              session,
-              failure: started.failure,
-            };
-      }
-
-      const branchCommit = request.branchMarkerId
-        ? commitBranch(
-            options.dependencies,
-            request.branchMarkerId,
-            requestId,
-            session,
-            started,
-          )
-        : undefined;
-      return {
-        status: 'agent_started',
-        requestId,
-        session,
-        execution: started.execution,
-        userMessage: started.userMessage,
-        ...(branchCommit ? { branchCommit } : {}),
-      };
+  const branchCommit = requestedBranchMarkerId
+    ? await observeOperation(
+        dependencies.observability,
+        'session.branch.commit',
+        {
+          requestId,
+          executionId: started.execution.executionId,
+          sessionId: session.session_id,
+          workspaceId: session.workspace_id,
+        },
+        classifyBranchCommit,
+        () => commitBranch(
+          dependencies,
+          requestedBranchMarkerId,
+          requestId,
+          session,
+          started,
+        ),
+      )
+    : undefined;
+  return {
+    started,
+    result: {
+      status: 'agent_started',
+      requestId,
+      session,
+      execution: started.execution,
+      userMessage: started.userMessage,
+      ...(branchCommit ? { branchCommit } : {}),
     },
   };
+}
+
+function lifecycleResult(
+  prepared: PreparedConversationSubmission,
+  request: SubmitConversationInputRequest,
+  code: string,
+  outcome?: ExecutionOutcome,
+): ConversationLifecycleResult {
+  const result = prepared.result;
+  return {
+    result,
+    code,
+    correlation: {
+      requestId: result.requestId,
+      workspaceId: request.workspaceId,
+      ...(result.session ? { sessionId: result.session.session_id } : {}),
+      ...(result.status === 'agent_started'
+        ? { executionId: result.execution.executionId }
+        : {}),
+    },
+    ...(outcome ? { outcome } : {}),
+  };
+}
+
+function conversationResultCode(result: SubmitConversationInputResult): string {
+  return result.status === 'failed' ? result.failure.code : result.status;
+}
+
+function classifyConversationLifecycle(result: ConversationLifecycleResult): OperationCompletion {
+  if (result.outcome?.status === 'completed') {
+    return { outcome: { status: 'ok', code: 'completed' }, correlation: result.correlation };
+  }
+  if (result.outcome?.status === 'cancelled') {
+    return { outcome: { status: 'cancelled', code: 'cancelled' }, correlation: result.correlation };
+  }
+  if (result.outcome?.status === 'failed') {
+    return {
+      outcome: {
+        status: 'error',
+        code: result.outcome.failure.code,
+        message: result.outcome.failure.message,
+        retryable: result.outcome.failure.retryable,
+      },
+      correlation: result.correlation,
+    };
+  }
+  if (result.result.status === 'failed') {
+    if (result.result.failure.code === 'input_cancelled') {
+      return {
+        outcome: { status: 'cancelled', code: 'input_cancelled' },
+        correlation: result.correlation,
+      };
+    }
+    return {
+      outcome: {
+        status: 'error',
+        code: result.result.failure.code,
+        message: result.result.failure.message,
+        ...(result.result.failure.retryable === undefined
+          ? {}
+          : { retryable: result.result.failure.retryable }),
+      },
+      correlation: result.correlation,
+    };
+  }
+  return { outcome: { status: 'ok', code: result.code }, correlation: result.correlation };
+}
+
+async function observeConversationTrace(
+  observability: Observability | undefined,
+  correlation: TraceCorrelation,
+  operation: () => Promise<ConversationLifecycleResult>,
+): Promise<ConversationLifecycleResult> {
+  let operationPromise: Promise<ConversationLifecycleResult> | undefined;
+  const runOnce = (): Promise<ConversationLifecycleResult> => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withTrace({
+      kind: 'conversation',
+      correlation,
+      classifyResult: classifyConversationLifecycle,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+async function observeOperation<T>(
+  observability: Observability | undefined,
+  name: Parameters<Observability['withSpan']>[0]['name'],
+  correlation: TraceCorrelation,
+  classifyResult: (result: T) => OperationCompletion,
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  let operationPromise: Promise<T> | undefined;
+  const runOnce = (): Promise<T> => {
+    operationPromise ??= Promise.resolve().then(operation);
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({ name, correlation, classifyResult }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function trackLifecycle(active: Set<Promise<void>>, lifecycle: Promise<unknown>): void {
+  let tracked: Promise<void>;
+  tracked = lifecycle.then(
+    () => undefined,
+    () => undefined,
+  ).finally(() => { active.delete(tracked); });
+  active.add(tracked);
+}
+
+function safeRecordContent(
+  observability: Observability | undefined,
+  kind: 'input.received' | 'input.processed',
+  value: unknown,
+  correlation: TraceCorrelation,
+): void {
+  try {
+    observability?.recordContent({ kind, value, correlation });
+  } catch {
+    // Input processing remains authoritative when diagnostics are unavailable.
+  }
+}
+
+function safeLinkDuplicate(
+  observability: Observability | undefined,
+  requestId: string,
+  started: StartedConversation,
+): void {
+  const executionId = started.execution.executionId;
+  try {
+    observability?.linkTrace({
+      kind: 'duplicate',
+      target: {
+        by: 'correlation',
+        traceKind: 'conversation',
+        correlation: { requestId, executionId },
+        state: 'active',
+      },
+      correlation: { requestId, executionId },
+    });
+  } catch {
+    // Request idempotency never depends on diagnostic link resolution.
+  }
+}
+
+function classifyModelResolution(result: ConversationModelResolution): OperationCompletion {
+  return result.status === 'ok'
+    ? { outcome: { status: 'ok', code: 'resolved' } }
+    : { outcome: {
+        status: 'error',
+        code: result.failure.code,
+        message: result.failure.message,
+        ...(result.failure.retryable === undefined ? {} : { retryable: result.failure.retryable }),
+      } };
+}
+
+type SessionResolution = ReturnType<typeof resolveExistingSession>;
+
+function classifySessionResolution(result: SessionResolution): OperationCompletion {
+  return result.status === 'ok'
+    ? {
+        outcome: { status: 'ok', code: 'resolved' },
+        correlation: {
+          sessionId: result.session.session_id,
+          workspaceId: result.session.workspace_id,
+        },
+      }
+    : { outcome: { status: 'error', code: 'session_resolution_failed', message: result.message } };
+}
+
+type ProcessedInput = Awaited<
+  ReturnType<ConversationSubmissionDependencies['input']['process']>
+>;
+
+function classifyProcessedInput(result: ProcessedInput): OperationCompletion {
+  if (result.status === 'failed') {
+    return { outcome: {
+      status: 'error',
+      code: result.failure.code,
+      message: result.failure.message,
+    } };
+  }
+  if (result.status === 'completed' && result.result.type === 'cancelled') {
+    return { outcome: { status: 'cancelled', code: 'input_cancelled' } };
+  }
+  if (result.status === 'completed' && result.result.type === 'error') {
+    return { outcome: {
+      status: 'error',
+      code: 'input_processing_failed',
+      message: result.result.message,
+    } };
+  }
+  return { outcome: { status: 'ok', code: result.status } };
+}
+
+type RecommendationResolution = ReturnType<typeof resolveRecommendationReference>;
+
+function classifyRecommendationResolution(result: RecommendationResolution): OperationCompletion {
+  return result.status === 'ok'
+    ? {
+        outcome: { status: 'ok', code: 'resolved' },
+        correlation: { recommendationId: result.reference.recommendationId },
+      }
+    : { outcome: { status: 'error', code: result.code, message: result.message } };
+}
+
+type SessionCreation = ReturnType<typeof createAcceptedSession>;
+
+function classifySessionCreation(result: SessionCreation): OperationCompletion {
+  return result.status === 'created'
+    ? {
+        outcome: { status: 'ok', code: 'created' },
+        correlation: {
+          sessionId: result.session.session_id,
+          workspaceId: result.session.workspace_id,
+        },
+      }
+    : { outcome: {
+        status: 'error',
+        code: result.failure.code,
+        message: result.failure.message,
+      } };
+}
+
+type BranchResolution = ReturnType<typeof resolveBranch>;
+
+function classifyBranchResolution(result: BranchResolution): OperationCompletion {
+  return result.status === 'ok'
+    ? { outcome: { status: 'ok', code: 'resolved' } }
+    : { outcome: { status: 'error', code: 'branch_resolution_failed', message: result.message } };
+}
+
+function classifyBranchCommit(result: ConversationBranchCommit | undefined): OperationCompletion {
+  return result
+    ? { outcome: { status: 'ok', code: 'committed' } }
+    : {
+        outcome: {
+          status: 'error',
+          code: 'branch_commit_unavailable',
+          message: 'The committed Branch could not be read.',
+        },
+      };
 }
 
 function resolveRecommendationReference(
@@ -289,13 +676,12 @@ function createAcceptedSession(
   sessions: Pick<SessionCatalog, 'createSession'>,
   request: SubmitConversationInputRequest,
   acceptedText: string,
-): Session | undefined {
-  const result = sessions.createSession({
+): ReturnType<Pick<SessionCatalog, 'createSession'>['createSession']> {
+  return sessions.createSession({
     workspace_id: request.workspaceId,
     initial_user_text: acceptedText,
     ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
   });
-  return result.status === 'created' ? result.session : undefined;
 }
 
 function resolveBranch(
@@ -387,4 +773,18 @@ function failure(
     ...(session ? { session } : {}),
     failure: { code, message, retryable },
   };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+  readonly reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((accept, decline) => {
+    resolve = accept;
+    reject = decline;
+  });
+  return { promise, resolve, reject };
 }
