@@ -4,6 +4,7 @@ export { IconButton } from './IconButton';
 export { Panel, PanelHeader, PanelTitle } from './Panel';
 export { RecoverableErrorBoundary } from './RecoverableErrorBoundary';
 export { SettingsPageHeader, SettingsRow, SettingsSection } from './SettingsLayout';
+export { SecretInput } from './SecretInput';
 export { Tabs } from './Tabs';
 export { TextField } from './TextField';
 export { ToastViewport } from './ToastViewport';

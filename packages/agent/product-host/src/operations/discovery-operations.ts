@@ -15,6 +15,7 @@ export function createDiscoveryOperations(
     | 'updateDiscoveryConfiguration'
     | 'connectDiscoverySource'
     | 'refreshDiscoverySource'
+    | 'refreshDiscoverySources'
   >,
 ): DiscoveryHost {
   return {
@@ -22,6 +23,7 @@ export function createDiscoveryOperations(
     updateConfiguration: (request) => agent.updateDiscoveryConfiguration(request),
     connectSource: (request) => agent.connectDiscoverySource(request),
     refreshSource: (request) => agent.refreshDiscoverySource(request),
+    refreshSources: () => agent.refreshDiscoverySources(),
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
     ensureDaily: (request) => agent.ensureDailyDiscovery(request),

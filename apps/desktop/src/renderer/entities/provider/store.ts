@@ -57,6 +57,7 @@ interface ProviderStoreState {
   loadProviders: () => Promise<void>;
   updateProvider: (input: ProviderUpdateInput) => Promise<void>;
   deleteProvider: (input: ProviderDeleteInput) => Promise<void>;
+  getApiKey: (input: ProviderDeleteApiKeyInput) => Promise<string>;
   setApiKey: (input: ProviderApiKeyInput) => Promise<void>;
   deleteApiKey: (input: ProviderDeleteApiKeyInput) => Promise<void>;
 }
@@ -148,6 +149,26 @@ export const useProviderStore = create<ProviderStoreState>((set, get) => ({
     }
 
     await get().loadProviders();
+  },
+  getApiKey: async (input) => {
+    const result = await window.megumi.provider.getApiKey(
+      createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.settings.providerGetApiKey,
+        input satisfies ProviderDeleteApiKeyPayload,
+      ),
+    );
+
+    if (!result.ok) {
+      set({ error: getRendererRuntimeIpcError(result, 'provider_api_key_read_failed') });
+      return '';
+    }
+    if (result.data.status === 'failed') {
+      set({
+        error: rendererError(result.data.failure.code, result.data.failure.message, undefined, 'provider_api_key_read_failed'),
+      });
+      return '';
+    }
+    return result.data.status === 'found' ? result.data.value : '';
   },
   setApiKey: async (input) => {
     set({ status: 'saving', error: null });

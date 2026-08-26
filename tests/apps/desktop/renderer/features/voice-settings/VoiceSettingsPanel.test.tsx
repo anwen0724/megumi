@@ -49,6 +49,7 @@ describe('VoiceSettingsPanel', () => {
         settings: {
           get: getSettings,
           update: updateSettings,
+          getVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'found', value: 'minimax-secret', source: 'settings' })),
           setVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'updated', tts: resolvedVoice.tts })),
           deleteVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'deleted', tts: resolvedVoice.tts })),
         },

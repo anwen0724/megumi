@@ -1,5 +1,5 @@
 /*
- * Edits Settings-owned web search provider configuration without exposing stored secrets.
+ * Edits Settings-owned web search provider configuration and its local credential.
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,7 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { localizeRendererError, rendererError, type RendererErrorDescriptor } from '../../../shared/i18n';
 import {
   Button,
+  SecretInput,
   SettingsPageHeader,
   SettingsRow,
   SettingsSection,
@@ -30,23 +31,29 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
   const [provider, setProvider] = useState<SearchProvider | ''>('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [apiKeyDirty, setApiKeyDirty] = useState(false);
   const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState<RendererErrorDescriptor | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void window.megumi.settings.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}))
-      .then((result) => {
+    void Promise.all([
+      window.megumi.settings.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {})),
+      window.megumi.settings.getWebSearchApiKey(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.webSearchGetApiKey, {})),
+    ]).then(([result, credentialResult]) => {
         if (cancelled) return;
         if (!result.ok) throw rendererError(result.data.code, result.data.message);
         if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
+        if (!credentialResult.ok) throw rendererError(credentialResult.data.code, credentialResult.data.message);
+        if (credentialResult.data.status === 'failed') throw rendererError(credentialResult.data.failure.code, credentialResult.data.failure.message);
         const search = result.data.settings.web.search;
         setSaved(search);
         setProvider(search.provider ?? '');
         setBaseUrl(search.baseUrl ?? '');
+        setApiKey(credentialResult.data.status === 'found' ? credentialResult.data.value : '');
+        setApiKeyDirty(false);
         setStatus('ready');
-      })
-      .catch((reason: unknown) => {
+      }).catch((reason: unknown) => {
         if (!cancelled) {
           setError(asRendererError(reason, 'settings_load_failed'));
           setStatus('error');
@@ -77,7 +84,7 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
           search: {
             provider,
             baseUrl: provider === 'custom' ? baseUrl.trim() : null,
-            ...(apiKey.trim() ? { apiKey: apiKey.trim() } : provider !== saved.provider ? { apiKey: null } : {}),
+            ...(apiKeyDirty && apiKey.trim() ? { apiKey: apiKey.trim() } : provider !== saved.provider && !apiKey.trim() ? { apiKey: null } : {}),
           },
         },
       }));
@@ -87,7 +94,8 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
       setSaved(search);
       setProvider(search.provider ?? '');
       setBaseUrl(search.baseUrl ?? '');
-      setApiKey('');
+      if (apiKey.trim()) setApiKey(apiKey.trim());
+      setApiKeyDirty(false);
       setStatus('ready');
     } catch (reason) {
       setError(asRendererError(reason, 'settings_update_failed'));
@@ -106,6 +114,7 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
       if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
       setSaved(result.data.settings.web.search);
       setApiKey('');
+      setApiKeyDirty(false);
       setStatus('ready');
     } catch (reason) {
       setError(asRendererError(reason, 'settings_update_failed'));
@@ -168,14 +177,18 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
               title={t('settings:web.apiKey')}
               description={t('settings:web.apiKeyDescription')}
             >
-              <input
-                aria-label={t('settings:web.searchApiKey')}
-                type="password"
-                className={fieldClass}
+              <SecretInput
+                ariaLabel={t('settings:web.searchApiKey')}
+                showLabel={t('settings:provider.showApiKey')}
+                hideLabel={t('settings:provider.hideApiKey')}
                 value={apiKey}
                 disabled={busy}
-                placeholder={saved.hasApiKey ? t('settings:web.configuredCredential') : t('settings:web.enterApiKey')}
-                onChange={(event) => setApiKey(event.target.value)}
+                placeholder={t('settings:web.enterApiKey')}
+                onChange={(value) => {
+                  setApiKey(value);
+                  setApiKeyDirty(true);
+                }}
+                inputClassName={fieldClass}
               />
             </SettingsRow>
           </div>

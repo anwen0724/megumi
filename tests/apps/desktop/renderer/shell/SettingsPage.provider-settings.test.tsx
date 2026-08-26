@@ -37,6 +37,7 @@ describe('SettingsPage provider settings', () => {
               settings: { voice: { inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto', readAloudEnabled: false, tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' } } },
             },
           }),
+          getVoiceTtsApiKey: vi.fn().mockResolvedValue({ ok: true, data: { status: 'missing' } }),
         },
       },
     });
@@ -59,6 +60,7 @@ describe('SettingsPage provider settings', () => {
       loadProviders: vi.fn(),
       updateProvider: vi.fn(),
       deleteProvider: vi.fn(),
+      getApiKey: vi.fn().mockResolvedValue(''),
       setApiKey: vi.fn(),
       deleteApiKey: vi.fn(),
     });

@@ -1,20 +1,20 @@
-/* Protects the write-only Desktop IPC boundary for discovery credentials. */
+/* Protects the dedicated Desktop IPC boundary for discovery credentials. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { registerSettingsHandlers } from '@megumi/desktop/main/ipc/handlers/settings.handler';
 
 describe('discovery credential Settings IPC', () => {
-  it('forwards save and status requests while returning only configured state', async () => {
+  it('forwards save and read requests through the dedicated credential channel', async () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const getDiscoverySourceCredentialStatus = vi.fn(async () => ({
-      status: 'ok' as const, sourceId: 'twitter' as const, configured: true,
+    const getDiscoverySourceCredential = vi.fn(async () => ({
+      status: 'ok' as const, sourceId: 'twitter' as const, configured: true, credential: 'twitter-secret',
     }));
     const setDiscoverySourceCredential = vi.fn(async () => ({
       status: 'ok' as const, sourceId: 'twitter' as const, configured: true,
     }));
     registerSettingsHandlers(
-      { host: { settings: { getDiscoverySourceCredentialStatus, setDiscoverySourceCredential } } as never },
+      { host: { settings: { getDiscoverySourceCredential, setDiscoverySourceCredential } } as never },
       { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
     );
 
@@ -31,7 +31,7 @@ describe('discovery credential Settings IPC', () => {
       sourceId: 'twitter', credential: 'twitter-secret',
     });
     expect(JSON.stringify(saved)).not.toContain('twitter-secret');
-    expect(status).toMatchObject({ ok: true, data: { configured: true } });
+    expect(status).toMatchObject({ ok: true, data: { configured: true, credential: 'twitter-secret' } });
   });
 });
 

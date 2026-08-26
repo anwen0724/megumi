@@ -7,9 +7,11 @@ import { WebSettingsPanel } from '@megumi/desktop/renderer/features/web-settings
 describe('WebSettingsPanel', () => {
   const get = vi.fn();
   const update = vi.fn();
+  const getWebSearchApiKey = vi.fn();
 
   beforeEach(() => {
     get.mockReset().mockResolvedValue(success('ok'));
+    getWebSearchApiKey.mockReset().mockResolvedValue({ ok: true, data: { status: 'found', value: 'stored-secret', source: 'settings' }, meta: {} });
     update.mockReset().mockResolvedValue(success('updated', {
       provider: 'custom',
       baseUrl: 'https://search.example.com/query',
@@ -18,7 +20,7 @@ describe('WebSettingsPanel', () => {
     }));
     Object.defineProperty(window, 'megumi', {
       configurable: true,
-      value: { settings: { get, update } },
+      value: { settings: { get, update, getWebSearchApiKey } },
     });
   });
 
@@ -27,9 +29,11 @@ describe('WebSettingsPanel', () => {
     render(<WebSettingsPanel />);
     const provider = await screen.findByRole('combobox', { name: 'Search provider' });
     expect(provider).toHaveValue('');
+    expect(screen.getByLabelText('Search API key')).toHaveValue('stored-secret');
 
     await user.selectOptions(provider, 'custom');
     await user.type(screen.getByRole('textbox', { name: 'Search Base URL' }), 'https://search.example.com/query');
+    await user.clear(screen.getByLabelText('Search API key'));
     await user.type(screen.getByLabelText('Search API key'), 'secret');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -37,7 +41,7 @@ describe('WebSettingsPanel', () => {
     expect(update.mock.calls[0][0].payload).toMatchObject({
       web: { search: { provider: 'custom', baseUrl: 'https://search.example.com/query', apiKey: 'secret' } },
     });
-    expect(screen.getByLabelText('Search API key')).toHaveValue('');
+    expect(screen.getByLabelText('Search API key')).toHaveValue('secret');
     expect(screen.queryByText('Page access')).not.toBeInTheDocument();
     expect(screen.queryByText('Web page reading')).not.toBeInTheDocument();
   });

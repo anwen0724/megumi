@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
-import { Button, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
+import { Button, SecretInput, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
 import {
   enumerateAudioDevices,
   testMicrophoneLevel,
@@ -95,6 +95,17 @@ export function VoiceSettingsPanel() {
     }
   }, [t]);
 
+  const refreshTtsApiKey = useCallback(async () => {
+    const result = await window.megumi.settings.getVoiceTtsApiKey(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.voiceTtsGetApiKey, {}),
+    );
+    if (!result.ok || result.data.status === 'failed') {
+      setDeviceError(t('voice.ttsApiKeyLoadError'));
+      return;
+    }
+    setTtsApiKey(result.data.status === 'found' ? result.data.value : '');
+  }, [t]);
+
   const updateVoiceSettings = async (patch: VoiceSettingsPatch) => {
     const result = await window.megumi.settings.update(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { voice: patch }),
@@ -133,7 +144,7 @@ export function VoiceSettingsPanel() {
       }
       const { tts } = result.data;
       setVoiceSettings((current) => ({ ...current, tts: { ...current.tts, ...tts } }));
-      setTtsApiKey('');
+      setTtsApiKey(ttsApiKey.trim());
     } catch {
       setDeviceError(t('voice.ttsApiKeySaveError'));
     } finally {
@@ -155,6 +166,7 @@ export function VoiceSettingsPanel() {
       }
       const { tts } = result.data;
       setVoiceSettings((current) => ({ ...current, tts: { ...current.tts, ...tts } }));
+      setTtsApiKey('');
     } catch {
       setDeviceError(t('voice.ttsApiKeyClearError'));
     } finally {
@@ -170,6 +182,7 @@ export function VoiceSettingsPanel() {
   }, []);
 
   useEffect(() => { void refreshVoiceSettings(); }, [refreshVoiceSettings]);
+  useEffect(() => { void refreshTtsApiKey(); }, [refreshTtsApiKey]);
   useEffect(() => { void refreshDevices(false); }, [refreshDevices]);
   useEffect(() => {
     void (async () => {
@@ -411,13 +424,15 @@ export function VoiceSettingsPanel() {
               <span className="text-xs text-[var(--color-text-muted)]">{t(ttsCredentialKey(voiceSettings.tts))}</span>
             </div>
             <div className="flex gap-2">
-              <input
-                type="password"
-                className="h-10 min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
+              <SecretInput
+                ariaLabel={t('voice.ttsApiKey')}
+                showLabel={t('provider.showApiKey')}
+                hideLabel={t('provider.hideApiKey')}
                 value={ttsApiKey}
                 placeholder={t('voice.ttsApiKeyPlaceholder')}
-                onChange={(event) => setTtsApiKey(event.target.value)}
-                aria-label={t('voice.ttsApiKey')}
+                onChange={setTtsApiKey}
+                className="min-w-0 flex-1"
+                inputClassName="h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
               />
               <Button type="button" disabled={!ttsApiKey.trim() || ttsSaving} onClick={() => { void saveTtsApiKey(); }}>
                 {t('voice.ttsApiKeySave')}

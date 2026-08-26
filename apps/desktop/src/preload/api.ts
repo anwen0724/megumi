@@ -19,6 +19,7 @@ import type {
   ReadAttachmentImageResult,
   GetAttachmentFileStatusResult,
   EmptyUiResult,
+  CredentialValueUiResult,
   ProviderListUiResult,
   SettingsData,
   SettingsCompleteSetupPayload,
@@ -66,6 +67,7 @@ import type {
   ProjectOpenPayload,
   ProjectRemovePayload,
   ProviderApiKeyPayload,
+  ProviderGetApiKeyPayload,
   ProviderDeletePayload,
   ProviderDeleteApiKeyPayload,
   ProviderUpdatePayload,
@@ -109,6 +111,7 @@ import type {
   DiscoveryCredentialSetPayload,
   DiscoverySourceConnectPayload,
   DiscoverySourceRefreshPayload,
+  DiscoverySourcesRefreshPayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -187,6 +190,10 @@ export const api = {
       request: BusinessRequest<ProviderDeletePayload, typeof IPC_CHANNELS.settings.providerDelete>,
     ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerDelete>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.providerDelete, request),
+    getApiKey: (
+      request: BusinessRequest<ProviderGetApiKeyPayload, typeof IPC_CHANNELS.settings.providerGetApiKey>,
+    ): Promise<RuntimeIpcResult<CredentialValueUiResult, typeof IPC_CHANNELS.settings.providerGetApiKey>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.providerGetApiKey, request),
     setApiKey: (
       request: BusinessRequest<ProviderApiKeyPayload, typeof IPC_CHANNELS.settings.providerSetApiKey>,
     ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerSetApiKey>> =>
@@ -209,6 +216,14 @@ export const api = {
       request: BusinessRequest<SettingsCompleteSetupPayload, typeof IPC_CHANNELS.settings.completeSetup>,
     ): Promise<RuntimeIpcResult<SettingsCompleteSetupUiResult, typeof IPC_CHANNELS.settings.completeSetup>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.completeSetup, request),
+    getWebSearchApiKey: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.webSearchGetApiKey>,
+    ): Promise<RuntimeIpcResult<CredentialValueUiResult, typeof IPC_CHANNELS.settings.webSearchGetApiKey>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.webSearchGetApiKey, request),
+    getVoiceTtsApiKey: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.voiceTtsGetApiKey>,
+    ): Promise<RuntimeIpcResult<CredentialValueUiResult, typeof IPC_CHANNELS.settings.voiceTtsGetApiKey>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsGetApiKey, request),
     setVoiceTtsApiKey: (
       request: BusinessRequest<VoiceTtsApiKeyUiRequest, typeof IPC_CHANNELS.settings.voiceTtsSetApiKey>,
     ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsSetApiKey>> =>
@@ -217,7 +232,7 @@ export const api = {
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>,
     ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, request),
-    getDiscoverySourceCredentialStatus: (
+    getDiscoverySourceCredential: (
       request: BusinessRequest<DiscoveryCredentialStatusPayload, typeof IPC_CHANNELS.settings.discoveryCredentialGet>,
     ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialGet>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialGet, request),
@@ -369,6 +384,10 @@ export const api = {
       request: BusinessRequest<DiscoverySourceRefreshPayload, typeof IPC_CHANNELS.discovery.sourceRefresh>,
     ): Promise<RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceRefresh>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceRefresh, request),
+    refreshSources: (
+      request: BusinessRequest<DiscoverySourcesRefreshPayload, typeof IPC_CHANNELS.discovery.sourcesRefresh>,
+    ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.sourcesRefresh>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.sourcesRefresh, request),
     changeInterest: (
       request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
     ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>

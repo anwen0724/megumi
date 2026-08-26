@@ -2,6 +2,7 @@
  * Implements Product Settings operations using the Settings public interface.
  */
 import type {
+  ReadApiKeyResult,
   Settings,
   SettingsFailureResult,
   SettingsResolved,
@@ -17,6 +18,7 @@ import {
   toSettingsUiResolved,
   toVoiceTtsPublicUiDto,
   type EmptyUiResult,
+  type CredentialValueUiResult,
   type ProviderDeleteApiKeyUiRequest,
   type ProviderDeleteUiRequest,
   type ProviderListUiRequest,
@@ -186,6 +188,10 @@ export function createSettingsOperations(
         : { status: 'deleted', providerId: result.provider_id };
     },
 
+    async getProviderApiKey(request): Promise<CredentialValueUiResult> {
+      return toCredentialValueUiResult(settings.readProviderApiKey({ provider_id: request.providerId }));
+    },
+
     async setProviderApiKey(request) {
       const result = settings.writeProviderApiKey({
         provider_id: request.providerId,
@@ -205,6 +211,14 @@ export function createSettingsOperations(
       return readUpdatedProvider(settings, request.providerId);
     },
 
+    async getWebSearchApiKey(): Promise<CredentialValueUiResult> {
+      return toCredentialValueUiResult(settings.readWebSearchApiKey({}));
+    },
+
+    async getVoiceTtsApiKey(): Promise<CredentialValueUiResult> {
+      return toCredentialValueUiResult(settings.readVoiceTtsApiKey({}));
+    },
+
     async setVoiceTtsApiKey(request: VoiceTtsApiKeyUiRequest): Promise<VoiceTtsKeyUiResult> {
       const result = settings.writeVoiceTtsApiKey({ api_key: request.apiKey });
       if (result.status === 'failed') {
@@ -221,11 +235,13 @@ export function createSettingsOperations(
       return readUpdatedVoiceTts(settings, 'deleted');
     },
 
-    async getDiscoverySourceCredentialStatus(request): Promise<DiscoverySourceCredentialStatusUiResult> {
-      const result = settings.getDiscoverySourceCredentialStatus({ source_id: request.sourceId });
+    async getDiscoverySourceCredential(request): Promise<DiscoverySourceCredentialStatusUiResult> {
+      const result = settings.readDiscoverySourceCredential({ source_id: request.sourceId });
       return result.status === 'failed'
         ? { status: 'failed', failure: toHostFailure(result.failure) }
-        : { status: 'ok', sourceId: request.sourceId, configured: result.configured };
+        : result.status === 'found'
+          ? { status: 'ok', sourceId: request.sourceId, configured: true, credential: result.credential }
+          : { status: 'ok', sourceId: request.sourceId, configured: false };
     },
 
     async setDiscoverySourceCredential(request): Promise<DiscoverySourceCredentialStatusUiResult> {
@@ -244,6 +260,17 @@ export function createSettingsOperations(
         ? { status: 'failed', failure: toHostFailure(result.failure) }
         : { status: 'ok', sourceId: request.sourceId, configured: false };
     },
+  };
+}
+
+function toCredentialValueUiResult(result: ReadApiKeyResult): CredentialValueUiResult {
+  if (result.status === 'failed') return { status: 'failed', failure: toHostFailure(result.failure) };
+  if (result.status === 'missing') return { status: 'missing' };
+  return {
+    status: 'found',
+    value: result.api_key,
+    source: result.source,
+    ...(result.env_name ? { envName: result.env_name } : {}),
   };
 }
 

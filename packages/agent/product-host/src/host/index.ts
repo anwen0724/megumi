@@ -80,6 +80,7 @@ export type {
   AppLanguage,
   AppThemeName,
   EmptyUiResult,
+  CredentialValueUiResult,
   ModelCapabilitiesUiDto,
   ModelSupportLevelUi,
   ProviderModelSettingsUiDto,
@@ -237,5 +238,6 @@ export {
   SettingsCompleteSetupUiResultSchema,
   ProviderListUiResultSchema,
   EmptyUiResultSchema,
+  CredentialValueUiResultSchema,
 } from './settings-host';
 export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './approval-host';

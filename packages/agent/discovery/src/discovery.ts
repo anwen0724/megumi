@@ -69,6 +69,8 @@ export interface Discovery {
   connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
   /** Rechecks one Source without opening its interactive connection flow. */
   refreshDiscoverySource(request: RefreshDiscoverySourceRequest): Promise<DiscoverySourceView>;
+  /** Rechecks every registered Source and returns one complete projection. */
+  refreshDiscoverySources(): Promise<DiscoveryConfigurationView>;
   /** Stops and drains every background activity owned by Discovery. */
   shutdown(): Promise<void>;
 }
@@ -136,6 +138,9 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     refreshDiscoverySource: (request) => discoveryConfiguration
       ? discoveryConfiguration.refreshSource(request)
+      : Promise.reject(new Error('Discovery configuration is not configured.')),
+    refreshDiscoverySources: () => discoveryConfiguration
+      ? discoveryConfiguration.refreshSources()
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     async shutdown() {
       await Promise.all([

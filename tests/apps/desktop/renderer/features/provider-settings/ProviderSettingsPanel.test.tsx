@@ -65,6 +65,7 @@ describe('ProviderSettingsPanel', () => {
       loadProviders: vi.fn(),
       updateProvider: vi.fn(),
       deleteProvider: vi.fn(),
+      getApiKey: vi.fn().mockResolvedValue(''),
       setApiKey: vi.fn(),
       deleteApiKey: vi.fn(),
     });
@@ -282,24 +283,26 @@ describe('ProviderSettingsPanel', () => {
     });
   });
 
-  it('accepts a replacement API key without revealing stored plaintext', async () => {
+  it('loads a saved API key masked, reveals it on demand, and keeps replacements visible to the form', async () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn();
     const setApiKey = vi.fn();
-    useProviderStore.setState({ updateProvider, setApiKey });
+    useProviderStore.setState({ updateProvider, setApiKey, getApiKey: vi.fn().mockResolvedValue('sk-stored-key') });
 
     render(<ProviderSettingsPanel />);
 
+    expect(await screen.findByLabelText('API Key')).toHaveValue('sk-stored-key');
     expect(screen.getByLabelText('API Key')).toHaveAttribute('type', 'password');
     await user.click(screen.getByRole('button', { name: 'Show API key' }));
     expect(screen.getByLabelText('API Key')).toHaveAttribute('type', 'text');
-    expect(screen.getByLabelText('API Key')).toHaveValue('');
+    expect(screen.getByLabelText('API Key')).toHaveValue('sk-stored-key');
+    await user.clear(screen.getByLabelText('API Key'));
     await user.type(screen.getByLabelText('API Key'), 'sk-new-key');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'DeepSeek' }));
     expect(setApiKey).toHaveBeenCalledWith({ providerId: 'DeepSeek', apiKey: 'sk-new-key' });
-    expect(screen.getByLabelText('API Key')).toHaveValue('');
+    expect(screen.getByLabelText('API Key')).toHaveValue('sk-new-key');
   });
 
   it('deletes the selected provider configuration', async () => {

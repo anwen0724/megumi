@@ -2,6 +2,7 @@
  * Desktop IPC handlers for settings and provider configuration.
  */
 import {
+  CredentialValueUiResultSchema,
   EmptyUiResultSchema,
   ProviderListUiResultSchema,
   SettingsCompleteSetupUiResultSchema,
@@ -18,6 +19,7 @@ import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
   ProviderApiKeyRequestSchema,
+  ProviderGetApiKeyRequestSchema,
   ProviderDeleteRequestSchema,
   ProviderDeleteApiKeyRequestSchema,
   ProviderListRequestSchema,
@@ -26,10 +28,12 @@ import {
   SettingsCompleteSetupRequestSchema,
   SettingsUpdateRequestSchema,
   VoiceTtsApiKeyRequestSchema,
+  VoiceTtsGetApiKeyRequestSchema,
   VoiceTtsDeleteApiKeyRequestSchema,
   DiscoveryCredentialGetRequestSchema,
   DiscoveryCredentialSetRequestSchema,
   DiscoveryCredentialDeleteRequestSchema,
+  WebSearchGetApiKeyRequestSchema,
 } from '../schemas';
 
 export interface SettingsHandlersService {
@@ -101,6 +105,15 @@ export function registerSettingsHandlers(
     mapError: mapSettingsIpcError,
   }));
 
+  ipcMain.handle(IPC_CHANNELS.settings.providerGetApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.providerGetApiKey,
+    requestSchema: ProviderGetApiKeyRequestSchema,
+    responseSchema: CredentialValueUiResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.settings.getProviderApiKey(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
   ipcMain.handle(IPC_CHANNELS.settings.providerSetApiKey, createIpcRequestHandler({
     channel: IPC_CHANNELS.settings.providerSetApiKey,
     requestSchema: ProviderApiKeyRequestSchema,
@@ -116,6 +129,24 @@ export function registerSettingsHandlers(
     responseSchema: EmptyUiResultSchema,
     logger: options.logger,
     handle: (request) => service.host.settings.deleteProviderApiKey(request.payload),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.webSearchGetApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.webSearchGetApiKey,
+    requestSchema: WebSearchGetApiKeyRequestSchema,
+    responseSchema: CredentialValueUiResultSchema,
+    logger: options.logger,
+    handle: () => service.host.settings.getWebSearchApiKey(),
+    mapError: mapSettingsIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.settings.voiceTtsGetApiKey, createIpcRequestHandler({
+    channel: IPC_CHANNELS.settings.voiceTtsGetApiKey,
+    requestSchema: VoiceTtsGetApiKeyRequestSchema,
+    responseSchema: CredentialValueUiResultSchema,
+    logger: options.logger,
+    handle: () => service.host.settings.getVoiceTtsApiKey(),
     mapError: mapSettingsIpcError,
   }));
 
@@ -142,7 +173,7 @@ export function registerSettingsHandlers(
     requestSchema: DiscoveryCredentialGetRequestSchema,
     responseSchema: DiscoverySourceCredentialStatusUiResultSchema,
     logger: options.logger,
-    handle: (request) => service.host.settings.getDiscoverySourceCredentialStatus(request.payload),
+    handle: (request) => service.host.settings.getDiscoverySourceCredential(request.payload),
     mapError: mapSettingsIpcError,
   }));
 

@@ -4,21 +4,42 @@ import { createSettings, type SettingsStore } from '@megumi/settings';
 import { createSettingsOperations } from '../../../../packages/agent/product-host/src/operations/settings-operations';
 
 describe('SettingsHost semantics', () => {
-  it('manages discovery provider credentials without ever returning their value', async () => {
+  it('returns locally stored discovery credentials through the dedicated credential operation', async () => {
     const store = memoryStore({});
     const host = createSettingsOperations(createSettings({ store }));
 
-    expect(await host.getDiscoverySourceCredentialStatus({ sourceId: 'zhihu' })).toEqual({
+    expect(await host.getDiscoverySourceCredential({ sourceId: 'zhihu' })).toEqual({
       status: 'ok', sourceId: 'zhihu', configured: false,
     });
     const saved = await host.setDiscoverySourceCredential({
       sourceId: 'zhihu', credential: 'zhihu-secret',
     });
     expect(saved).toEqual({ status: 'ok', sourceId: 'zhihu', configured: true });
-    expect(JSON.stringify(saved)).not.toContain('zhihu-secret');
+    expect(await host.getDiscoverySourceCredential({ sourceId: 'zhihu' })).toEqual({
+      status: 'ok', sourceId: 'zhihu', configured: true, credential: 'zhihu-secret',
+    });
     expect(await host.deleteDiscoverySourceCredential({ sourceId: 'zhihu' })).toEqual({
       status: 'ok', sourceId: 'zhihu', configured: false,
     });
+  });
+
+  it('returns Provider, Web Search, and Voice keys only through dedicated credential operations', async () => {
+    const settings = createSettings({ store: memoryStore({}) });
+    settings.writeProviderApiKey({ provider_id: 'deepseek', api_key: 'provider-secret' });
+    settings.writeWebSearchApiKey({ api_key: 'web-secret' });
+    settings.writeVoiceTtsApiKey({ api_key: 'voice-secret' });
+    const host = createSettingsOperations(settings);
+
+    expect(await host.getProviderApiKey({ providerId: 'deepseek' })).toEqual({
+      status: 'found', value: 'provider-secret', source: 'settings',
+    });
+    expect(await host.getWebSearchApiKey()).toEqual({
+      status: 'found', value: 'web-secret', source: 'settings',
+    });
+    expect(await host.getVoiceTtsApiKey()).toEqual({
+      status: 'found', value: 'voice-secret', source: 'settings',
+    });
+    expect(JSON.stringify(await host.get())).not.toContain('secret');
   });
 
   it('forwards updates to Settings and projects the resolved Host DTO', async () => {

@@ -7,8 +7,6 @@ import { useTranslation } from 'react-i18next';
 import {
   Bot,
   ChevronDown,
-  Eye,
-  EyeOff,
   Pencil,
   Plus,
   RefreshCw,
@@ -28,6 +26,7 @@ import {
   Badge,
   Button,
   IconButton,
+  SecretInput,
   SettingsPageHeader,
   cx,
 } from '../../../shared/ui';
@@ -158,11 +157,12 @@ export function ProviderSettingsPanel() {
   const loadProviders = useProviderStore((state) => state.loadProviders);
   const updateProvider = useProviderStore((state) => state.updateProvider);
   const deleteProvider = useProviderStore((state) => state.deleteProvider);
+  const getApiKey = useProviderStore((state) => state.getApiKey);
   const setApiKey = useProviderStore((state) => state.setApiKey);
+  const deleteApiKey = useProviderStore((state) => state.deleteApiKey);
   const [query, setQuery] = useState('');
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [forms, setForms] = useState<Record<string, ProviderFormState>>({});
-  const [showApiKey, setShowApiKey] = useState(false);
   const [modelEditor, setModelEditor] = useState<ModelEditorState | null>(null);
 
   useEffect(() => {
@@ -231,7 +231,6 @@ export function ProviderSettingsPanel() {
   }, [entries, selectedProviderId]);
 
   useEffect(() => {
-    setShowApiKey(false);
     setModelEditor(null);
   }, [selectedProviderId]);
 
@@ -261,6 +260,23 @@ export function ProviderSettingsPanel() {
   );
   const isCreating = selectedProviderId === newProviderId;
   const isSaving = status === 'saving';
+
+  useEffect(() => {
+    if (!selectedProvider) return undefined;
+    let cancelled = false;
+    void getApiKey({ providerId: selectedProvider.providerId }).then((apiKey) => {
+      if (cancelled) return;
+      setForms((current) => ({
+        ...current,
+        [selectedProvider.providerId]: {
+          ...(current[selectedProvider.providerId] ?? createInitialFormState(selectedProvider, selectedCatalogEntry)),
+          apiKey,
+          apiKeyDirty: false,
+        },
+      }));
+    });
+    return () => { cancelled = true; };
+  }, [getApiKey, selectedCatalogEntry, selectedProvider]);
 
   function startAddProvider() {
     setForms((current) => ({
@@ -358,7 +374,7 @@ export function ProviderSettingsPanel() {
 
     if (selectedForm.apiKeyDirty && selectedForm.apiKey.trim()) {
       await setApiKey({ providerId: providerName, apiKey: selectedForm.apiKey.trim() });
-      updateForm({ apiKey: '', apiKeyDirty: false });
+      updateForm({ apiKey: selectedForm.apiKey.trim(), apiKeyDirty: false });
     }
 
     if (isCreating || selectedEntry?.source === 'quick') {
@@ -374,6 +390,12 @@ export function ProviderSettingsPanel() {
   async function handleDeleteProvider() {
     if (!selectedProvider || isSaving) return;
     await deleteProvider({ providerId: selectedProvider.providerId });
+  }
+
+  async function handleClearApiKey() {
+    if (!selectedProvider || isSaving) return;
+    await deleteApiKey({ providerId: selectedProvider.providerId });
+    updateForm({ apiKey: '', apiKeyDirty: false });
   }
 
   return (
@@ -491,23 +513,21 @@ export function ProviderSettingsPanel() {
 
                 <FormGroup title={t('provider.authentication')} bordered className="shrink-0">
                   <FieldRow label={t('provider.apiKey')}>
-                    <div className="relative">
-                      <input
-                        aria-label={t('provider.apiKey')}
-                        type={showApiKey ? 'text' : 'password'}
+                    <div className="flex items-center gap-2">
+                      <SecretInput
+                        key={selectedFormKey}
+                        ariaLabel={t('provider.apiKey')}
+                        showLabel={t('provider.showApiKey')}
+                        hideLabel={t('provider.hideApiKey')}
                         value={selectedForm.apiKey}
-                        onChange={(event) => updateForm({ apiKey: event.target.value, apiKeyDirty: true })}
-                        className={cx(fieldClassName, 'pr-11')}
+                        onChange={(value) => updateForm({ apiKey: value, apiKeyDirty: true })}
+                        className="min-w-0 flex-1"
+                        inputClassName={fieldClassName}
                         placeholder={t('provider.apiKeyPlaceholder')}
                       />
-                      <button
-                        type="button"
-                        aria-label={showApiKey ? t('provider.hideApiKey') : t('provider.showApiKey')}
-                        onClick={() => setShowApiKey((visible) => !visible)}
-                        className="absolute right-1.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text)]"
-                      >
-                        {showApiKey ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
-                      </button>
+                      <Button type="button" variant="ghost" disabled={!selectedProvider?.hasApiKey || isSaving} onClick={() => void handleClearApiKey()}>
+                        {t('provider.clearApiKey')}
+                      </Button>
                     </div>
                   </FieldRow>
                 </FormGroup>

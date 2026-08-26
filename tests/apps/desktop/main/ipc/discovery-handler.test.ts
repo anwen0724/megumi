@@ -108,6 +108,27 @@ describe('registerDiscoveryHandlers', () => {
     expect(refreshSource).toHaveBeenCalledWith({ sourceId: 'xiaohongshu' });
     expect(response).toMatchObject({ ok: true, data: { connectionState: 'ready' } });
   });
+
+  it('refreshes every source through one configuration projection', async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    const refreshSources = vi.fn(async () => ({
+      conversationRecognitionEnabled: true,
+      dailyGenerationTime: '08:00',
+      dailyTargetCount: 20,
+      sources: [],
+    }));
+    registerDiscoveryHandlers(
+      { host: { discovery: { refreshSources } } as never },
+      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
+    );
+
+    const response = await handlers.get(IPC_CHANNELS.discovery.sourcesRefresh)?.({}, request(
+      IPC_CHANNELS.discovery.sourcesRefresh, {},
+    ));
+
+    expect(refreshSources).toHaveBeenCalledOnce();
+    expect(response).toMatchObject({ ok: true, data: { sources: [] } });
+  });
 });
 
 function request(channel: string, payload: unknown) {

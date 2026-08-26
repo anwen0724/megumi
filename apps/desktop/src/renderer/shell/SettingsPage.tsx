@@ -162,9 +162,9 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
           <section
             role="tabpanel"
             aria-label={t(`categories.${activeCategory.id}.label`)}
-            className="min-w-0 h-full overflow-y-auto px-8 py-8"
+            className="h-full min-w-0 overflow-y-auto px-8 [scrollbar-gutter:stable]"
           >
-            <div className="mx-auto h-full max-w-5xl">
+            <div className="mx-auto min-h-full max-w-5xl py-8">
               {category === 'appearance' ? (
                 <div className="space-y-6">
                   <SettingsPageHeader

@@ -22,11 +22,18 @@ export interface SettingsHost {
   listProviders(request?: ProviderListUiRequest): Promise<ProviderListUiResult>;
   updateProvider(request: ProviderUpdateUiRequest): Promise<EmptyUiResult>;
   deleteProvider(request: ProviderDeleteUiRequest): Promise<EmptyUiResult>;
+  /** Reads one resolved Provider key for the local credential editor. */
+  getProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<CredentialValueUiResult>;
   setProviderApiKey(request: ProviderSetApiKeyUiRequest): Promise<EmptyUiResult>;
   deleteProviderApiKey(request: ProviderDeleteApiKeyUiRequest): Promise<EmptyUiResult>;
+  /** Reads the resolved Web Search key for the local credential editor. */
+  getWebSearchApiKey(request?: Record<string, never>): Promise<CredentialValueUiResult>;
+  /** Reads the resolved Voice TTS key for the local credential editor. */
+  getVoiceTtsApiKey(request?: Record<string, never>): Promise<CredentialValueUiResult>;
   setVoiceTtsApiKey(request: VoiceTtsApiKeyUiRequest): Promise<VoiceTtsKeyUiResult>;
   deleteVoiceTtsApiKey(request?: Record<string, never>): Promise<VoiceTtsKeyUiResult>;
-  getDiscoverySourceCredentialStatus(request: DiscoverySourceCredentialStatusUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
+  /** Reads one Discovery Source credential for its dedicated settings row. */
+  getDiscoverySourceCredential(request: DiscoverySourceCredentialStatusUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
   setDiscoverySourceCredential(request: DiscoverySourceCredentialSetUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
   deleteDiscoverySourceCredential(request: DiscoverySourceCredentialStatusUiRequest): Promise<DiscoverySourceCredentialStatusUiResult>;
 }
@@ -154,6 +161,26 @@ export const ProviderUpdatePayloadSchema = z.object({
 export const ProviderDeletePayloadSchema = z.object({ providerId: z.string().min(1) }).strict();
 export const ProviderApiKeyPayloadSchema = z.object({ providerId: z.string().min(1), apiKey: z.string().min(1) }).strict();
 export const ProviderDeleteApiKeyPayloadSchema = ProviderDeletePayloadSchema;
+
+/** Dedicated secret-bearing response used only by local credential editors. */
+export const CredentialValueUiResultSchema = z.discriminatedUnion('status', [
+  z.object({
+    status: z.literal('found'),
+    value: z.string().min(1),
+    source: z.enum(['settings', 'environment']),
+    envName: z.string().min(1).optional(),
+  }).strict(),
+  z.object({ status: z.literal('missing') }).strict(),
+  z.object({
+    status: z.literal('failed'),
+    failure: z.object({
+      code: z.string().min(1),
+      message: z.string(),
+      retryable: z.boolean().optional(),
+    }).strict(),
+  }).strict(),
+]);
+export type CredentialValueUiResult = z.infer<typeof CredentialValueUiResultSchema>;
 
 const ProviderSettingsUiDtoSchema = z.object({
   enabled: z.boolean(),
@@ -542,6 +569,7 @@ export const DiscoverySourceCredentialStatusUiResultSchema = z.discriminatedUnio
     status: z.literal('ok'),
     sourceId: DiscoveryProviderSourceIdUiSchema,
     configured: z.boolean(),
+    credential: z.string().min(1).optional(),
   }).strict(),
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
