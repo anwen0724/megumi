@@ -1,4 +1,4 @@
-/* Guards the completed Trace migration against legacy APIs, formats, and reverse dependencies. */
+/* Guards the Trace system against removed APIs, compatibility readers, and reverse dependencies. */
 // @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,24 +28,24 @@ describe('Trace system architecture boundaries', () => {
       'packages/agent/observability/src/service',
       'packages/agent/observability/src/storage',
       'packages/agent/observability/src/runtime-logger.ts',
+      'packages/agent/observability/src/query/legacy-trace-reader.ts',
       'tests/packages/observability/observability-system.test.ts',
       'tests/packages/observability/redaction.test.ts',
+      'tests/packages/observability/legacy-trace-reader.test.ts',
       'tests/packages/execution/execution-observer.test.ts',
     ]) {
       expect(fs.existsSync(path.join(root, relativePath)), relativePath).toBe(false);
     }
   });
 
-  it('keeps legacy format markers inside the read-only Legacy Reader', () => {
-    const markers = ['observability.jsonl', 'legacy diagnostic', 'LegacyObservabilityRecord'];
-    for (const marker of markers) {
-      expect(filesContaining('packages/agent/observability/src', marker)).toEqual([
-        'packages/agent/observability/src/query/legacy-trace-reader.ts',
-      ]);
+  it('removes the old-format compatibility seam across production owners', () => {
+    const production = readTrees(productionRoots);
+    for (const marker of [
+      'LegacyTraceReader', 'LegacyDiagnostic', 'LegacyObservabilityRecord',
+      'listLegacyDiagnostics', 'legacyDirectoryPath', 'observability:legacy',
+    ]) {
+      expect(production, marker).not.toContain(marker);
     }
-    const legacyReader = read('packages/agent/observability/src/query/legacy-trace-reader.ts');
-    expect(legacyReader).not.toContain("from './trace-projector'");
-    expect(legacyReader).not.toContain('projectTrace(');
   });
 
   it('keeps the write API to five callback-scoped operations with closed Span and Event types', () => {
@@ -120,13 +120,6 @@ function readTrees(relativeRoots: readonly string[]): string {
   return relativeRoots.flatMap((relativeRoot) => sourceFiles(path.join(root, relativeRoot)))
     .map((file) => fs.readFileSync(file, 'utf8'))
     .join('\n');
-}
-
-function filesContaining(relativeRoot: string, marker: string): string[] {
-  return sourceFiles(path.join(root, relativeRoot))
-    .filter((file) => fs.readFileSync(file, 'utf8').includes(marker))
-    .map((file) => path.relative(root, file).replaceAll('\\', '/'))
-    .sort();
 }
 
 function sourceFiles(target: string): string[] {

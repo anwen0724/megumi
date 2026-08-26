@@ -15,7 +15,6 @@ import {
   ObservabilityContentPayloadSchema,
   ObservabilityCorrelationSchema,
   ObservabilityEmptyPayloadSchema,
-  ObservabilityLegacyListPayloadSchema,
   ObservabilityListPayloadSchema,
   ObservabilityTracePayloadSchema,
   type ObservabilityContentCheckpointUiDto,
@@ -81,27 +80,6 @@ export function createObservabilityOperations(request: {
         return rebuilt
           ? { status: 'rebuilt' }
           : { status: 'failed', message: 'Trace index rebuild failed.' };
-      } catch (error) {
-        return failedResult(error);
-      }
-    },
-    async listLegacyDiagnostics(input) {
-      try {
-        const payload = ObservabilityLegacyListPayloadSchema.parse(input);
-        const diagnostics = await request.queries.listLegacyDiagnostics();
-        return {
-          status: 'ok',
-          diagnostics: diagnostics.slice(0, payload.limit ?? 50).map((item) => ({
-            kind: 'legacy' as const,
-            traceId: item.traceId,
-            ...(item.executionId ? { executionId: item.executionId } : {}),
-            status: item.status,
-            ...(item.startedAt ? { startedAt: item.startedAt } : {}),
-            ...(item.endedAt ? { endedAt: item.endedAt } : {}),
-            contentAvailable: false as const,
-            recordCount: item.records.length,
-          })),
-        };
       } catch (error) {
         return failedResult(error);
       }

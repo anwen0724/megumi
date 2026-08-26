@@ -5,7 +5,6 @@ import type { ContentKind } from '../content/content-contract';
 import type { ContentStoreReadResult } from '../content/content-store';
 import type { ObservabilityHealthSnapshot } from '../runtime/observability-health';
 import type { TraceDiagnosticBundle } from './diagnostic-bundle';
-import type { LegacyDiagnostic } from './legacy-trace-reader';
 import type { SpanName, TraceCorrelation, TraceKind } from '../trace/trace-contract';
 import type { TraceProjection } from './trace-projector';
 
@@ -37,8 +36,6 @@ export type CreateTraceDiagnosticBundleResult =
   | { readonly status: 'failed' };
 
 export interface ObservabilityQueries extends TraceReader {
-  /** Lists bounded old-format records separately from current Trace projections. */
-  listLegacyDiagnostics(): Promise<readonly LegacyDiagnostic[]>;
   /** Returns process-local diagnostic health without reading business state. */
   getHealth(): ObservabilityHealthSnapshot;
   /** Builds one explicitly requested single-Trace export bundle. */

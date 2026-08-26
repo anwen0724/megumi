@@ -11,7 +11,6 @@ describe('DiagnosticsPanel', () => {
   const getContent = vi.fn();
   const getHealth = vi.fn();
   const rebuildIndex = vi.fn();
-  const listLegacy = vi.fn();
   const createBundle = vi.fn();
 
   beforeEach(() => {
@@ -36,13 +35,12 @@ describe('DiagnosticsPanel', () => {
       },
     }));
     rebuildIndex.mockReset();
-    listLegacy.mockReset().mockResolvedValue(success({ status: 'ok', diagnostics: [] }));
     createBundle.mockReset();
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
         observability: {
-          list, get, getContent, getHealth, rebuildIndex, listLegacy, createBundle,
+          list, get, getContent, getHealth, rebuildIndex, createBundle,
         },
       },
     });

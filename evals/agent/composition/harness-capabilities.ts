@@ -163,7 +163,6 @@ export function composeProductCapabilities(options: ProductCapabilitiesOptions):
   const observabilityRoot = path.join(homePaths.logsPath, 'observability');
   const observability = composeObservability({
     rootDirectory: observabilityRoot,
-    legacyDirectoryPath: homePaths.logsPath,
     storage: options.observabilityStorage ?? noopObservabilityStorage,
     ...(options.observabilityStorage
       ? {

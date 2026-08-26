@@ -59,9 +59,6 @@ export const ObservabilityContentPayloadSchema = z.object({
   traceId: z.string().min(1), sequence: z.number().int().nonnegative(),
 }).strict();
 export const ObservabilityEmptyPayloadSchema = z.object({}).strict();
-export const ObservabilityLegacyListPayloadSchema = z.object({
-  limit: z.number().int().min(1).max(200).optional(),
-}).strict();
 
 const CaptureIssueSchema = z.object({
   path: z.string(), kind: z.enum(['redacted', 'unavailable']), reason: z.string(),
@@ -180,17 +177,6 @@ export const ObservabilityRebuildResultSchema = z.discriminatedUnion('status', [
 ]);
 export type ObservabilityRebuildResult = z.infer<typeof ObservabilityRebuildResultSchema>;
 
-const LegacyDiagnosticSchema = z.object({
-  kind: z.literal('legacy'), traceId: z.string(), executionId: z.string().optional(),
-  status: TraceStatusSchema, startedAt: z.string().optional(), endedAt: z.string().optional(),
-  contentAvailable: z.literal(false), recordCount: z.number().int().nonnegative(),
-}).strict();
-export const ObservabilityLegacyListResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok'), diagnostics: z.array(LegacyDiagnosticSchema) }).strict(),
-  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
-]);
-export type ObservabilityLegacyListResult = z.infer<typeof ObservabilityLegacyListResultSchema>;
-
 export interface DiagnosticBundleFileDto {
   readonly relativePath: string;
   readonly content: string | Uint8Array;
@@ -213,9 +199,6 @@ export interface ObservabilityHost {
   getContent(payload: z.infer<typeof ObservabilityContentPayloadSchema>): Promise<ObservabilityGetContentResult>;
   getHealth(payload: z.infer<typeof ObservabilityEmptyPayloadSchema>): Promise<ObservabilityHealthResult>;
   rebuildIndex(payload: z.infer<typeof ObservabilityEmptyPayloadSchema>): Promise<ObservabilityRebuildResult>;
-  listLegacyDiagnostics(
-    payload: z.infer<typeof ObservabilityLegacyListPayloadSchema>,
-  ): Promise<ObservabilityLegacyListResult>;
   flush(): Promise<void>;
   exportDiagnosticBundle(
     payload: z.infer<typeof ObservabilityTracePayloadSchema>,

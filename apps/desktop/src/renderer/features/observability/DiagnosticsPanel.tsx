@@ -8,7 +8,6 @@ import { Activity, Download, RefreshCw, RotateCcw } from 'lucide-react';
 import type {
   ObservabilityGetContentResult,
   ObservabilityHealthUiDto,
-  ObservabilityLegacyListResult,
   ObservabilityTraceDetailUiDto,
   ObservabilityTraceSummaryUiDto,
 } from '@megumi/product-host/host';
@@ -20,18 +19,12 @@ import { correlationFromFilter } from './diagnostics-format';
 import { TraceDetail } from './TraceDetail';
 import { TraceList } from './TraceList';
 
-type LegacyDiagnosticUiDto = Extract<
-  ObservabilityLegacyListResult,
-  { readonly status: 'ok' }
->['diagnostics'][number];
-
 export function DiagnosticsPanel() {
   const { t } = useTranslation('settings');
   const [traces, setTraces] = useState<readonly ObservabilityTraceSummaryUiDto[]>([]);
   const [selected, setSelected] = useState<ObservabilityTraceDetailUiDto>();
   const [contentBySequence, setContentBySequence] = useState<Readonly<Record<number, ObservabilityGetContentResult | 'loading'>>>({});
   const [health, setHealth] = useState<ObservabilityHealthUiDto>();
-  const [legacy, setLegacy] = useState<readonly LegacyDiagnosticUiDto[]>([]);
   const [traceKind, setTraceKind] = useState('all');
   const [status, setStatus] = useState('all');
   const [correlation, setCorrelation] = useState('');
@@ -46,15 +39,12 @@ export function DiagnosticsPanel() {
     const payload = createListPayload({
       traceKind, status, correlation, startedAtOrAfter, startedBefore,
     });
-    const [listResult, healthResult, legacyResult] = await Promise.all([
+    const [listResult, healthResult] = await Promise.all([
       window.megumi.observability.list(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.list, payload),
       ),
       window.megumi.observability.getHealth(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.health, {}),
-      ),
-      window.megumi.observability.listLegacy(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.legacy, { limit: 50 }),
       ),
     ]);
     if (!listResult.ok || listResult.data.status !== 'ok') {
@@ -67,7 +57,6 @@ export function DiagnosticsPanel() {
       }
     }
     if (healthResult.ok && healthResult.data.status === 'ok') setHealth(healthResult.data.health);
-    if (legacyResult.ok && legacyResult.data.status === 'ok') setLegacy(legacyResult.data.diagnostics);
     setLoading(false);
   };
 
@@ -214,21 +203,6 @@ export function DiagnosticsPanel() {
         </div>
       </section>
 
-      <details className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
-        <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text)]">
-          {t('diagnostics.legacy')} · {legacy.length}
-        </summary>
-        <p className="mt-2 text-xs text-[var(--color-text-muted)]">{t('diagnostics.legacyDescription')}</p>
-        <div className="mt-3 space-y-1.5">
-          {legacy.map((item) => (
-            <div key={item.traceId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--color-surface-muted)] px-3 py-2 font-mono text-xs">
-              <span>{item.traceId}</span>
-              <span>{t('diagnostics.legacyRecordSummary', { status: item.status, count: item.recordCount })}</span>
-            </div>
-          ))}
-          {legacy.length === 0 ? <div className="text-xs text-[var(--color-text-muted)]">{t('diagnostics.noLegacy')}</div> : null}
-        </div>
-      </details>
     </div>
   );
 }

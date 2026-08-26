@@ -8,7 +8,6 @@ import type { ObservabilityStorage } from './persistence/observability-storage';
 import { createTraceIndex, type TraceIndex } from './persistence/trace-index';
 import { createTraceJournal } from './persistence/trace-journal';
 import { createTraceDiagnosticBundle } from './query/diagnostic-bundle';
-import { createLegacyTraceReader } from './query/legacy-trace-reader';
 import type { ObservabilityQueries } from './query/trace-query';
 import { createTraceReader } from './query/trace-reader';
 import {
@@ -22,7 +21,6 @@ import { createTraceRecorder } from './trace/trace-recorder';
 
 export interface ComposeObservabilityOptions {
   readonly rootDirectory: string;
-  readonly legacyDirectoryPath?: string;
   readonly storage: ObservabilityStorage;
   readonly openIndexDatabase?: () => DatabaseConnection;
   readonly now?: () => Date;
@@ -110,14 +108,8 @@ function composeLocalObservability(options: ComposeObservabilityOptions): Compos
     contentStore,
     ...(indexResource.index ? { index: indexResource.index } : {}),
   });
-  const legacyReader = createLegacyTraceReader({
-    directoryPath: options.legacyDirectoryPath ?? options.rootDirectory,
-    storage: options.storage,
-    ...(options.now ? { now: options.now } : {}),
-  });
   const queries: ObservabilityQueries = {
     ...reader,
-    listLegacyDiagnostics: () => legacyReader.list(),
     getHealth: () => health.snapshot(),
     async createDiagnosticBundle(traceId) {
       try {
@@ -223,7 +215,6 @@ function createNoopComposition(): ComposedObservability {
     getTrace: async () => undefined,
     readContent: async () => ({ status: 'missing' }),
     rebuildIndex: async () => false,
-    listLegacyDiagnostics: async () => [],
     getHealth: () => health.snapshot(),
     createDiagnosticBundle: async () => ({ status: 'not_found' }),
   };

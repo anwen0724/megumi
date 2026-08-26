@@ -81,7 +81,6 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.observability.content,
   IPC_CHANNELS.observability.health,
   IPC_CHANNELS.observability.rebuildIndex,
-  IPC_CHANNELS.observability.legacy,
   IPC_CHANNELS.observability.bundle,
 ] as const;
 

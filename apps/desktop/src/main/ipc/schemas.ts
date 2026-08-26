@@ -78,7 +78,6 @@ export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_C
 export const ObservabilityContentRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.content, host.ObservabilityContentPayloadSchema);
 export const ObservabilityHealthRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.health, host.ObservabilityEmptyPayloadSchema);
 export const ObservabilityRebuildIndexRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.rebuildIndex, host.ObservabilityEmptyPayloadSchema);
-export const ObservabilityLegacyListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.legacy, host.ObservabilityLegacyListPayloadSchema);
 export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityTracePayloadSchema);
 
 /** Dedicated PCM frame payload on the Renderer MessagePort; travels on a bounded
@@ -149,4 +148,3 @@ export type ObservabilityListPayload = z.infer<typeof host.ObservabilityListPayl
 export type ObservabilityTracePayload = z.infer<typeof host.ObservabilityTracePayloadSchema>;
 export type ObservabilityContentPayload = z.infer<typeof host.ObservabilityContentPayloadSchema>;
 export type ObservabilityEmptyPayload = z.infer<typeof host.ObservabilityEmptyPayloadSchema>;
-export type ObservabilityLegacyListPayload = z.infer<typeof host.ObservabilityLegacyListPayloadSchema>;

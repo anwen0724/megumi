@@ -4,7 +4,6 @@ import {
   ObservabilityGetContentResultSchema,
   ObservabilityGetTraceResultSchema,
   ObservabilityHealthResultSchema,
-  ObservabilityLegacyListResultSchema,
   ObservabilityListResultSchema,
   ObservabilityRebuildResultSchema,
   type ProductHostInterface,
@@ -18,7 +17,6 @@ import {
   ObservabilityContentRequestSchema,
   ObservabilityGetRequestSchema,
   ObservabilityHealthRequestSchema,
-  ObservabilityLegacyListRequestSchema,
   ObservabilityListRequestSchema,
   ObservabilityRebuildIndexRequestSchema,
 } from '../schemas';
@@ -76,15 +74,6 @@ export function registerObservabilityHandlers(
     responseValidation: 'dev-only',
     logger: options.logger,
     handle: (request) => service.host.observability.rebuildIndex(request.payload),
-    mapError,
-  }));
-  ipcMain.handle(IPC_CHANNELS.observability.legacy, createIpcRequestHandler({
-    channel: IPC_CHANNELS.observability.legacy,
-    requestSchema: ObservabilityLegacyListRequestSchema,
-    responseSchema: ObservabilityLegacyListResultSchema,
-    responseValidation: 'dev-only',
-    logger: options.logger,
-    handle: (request) => service.host.observability.listLegacyDiagnostics(request.payload),
     mapError,
   }));
   ipcMain.handle(IPC_CHANNELS.observability.bundle, createIpcRequestHandler({

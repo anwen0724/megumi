@@ -130,7 +130,7 @@ describe('ObservabilityHost', () => {
     });
   });
 
-  it('exposes health, rebuild and Legacy diagnostics as closed results', async () => {
+  it('exposes health and index rebuild as closed results', async () => {
     const queries = queryFixture();
     const host = createObservabilityOperations({ queries, flush: async () => undefined });
 
@@ -139,14 +139,6 @@ describe('ObservabilityHost', () => {
       health: { droppedRecords: 2, captureFailures: 1 },
     });
     await expect(host.rebuildIndex({})).resolves.toEqual({ status: 'rebuilt' });
-    await expect(host.listLegacyDiagnostics({ limit: 10 })).resolves.toEqual({
-      status: 'ok',
-      diagnostics: [expect.objectContaining({
-        kind: 'legacy',
-        traceId: 'legacy:1',
-        contentAvailable: false,
-      })],
-    });
   });
 });
 
@@ -160,15 +152,6 @@ function queryFixture(): ObservabilityQueries {
       bytes: new Uint8Array([0, 1, 2, 3]),
     })),
     rebuildIndex: vi.fn(async () => true),
-    listLegacyDiagnostics: vi.fn(async () => [{
-      kind: 'legacy diagnostic' as const,
-      traceId: 'legacy:1',
-      executionId: 'execution:legacy',
-      status: 'incomplete' as const,
-      startedAt: '2026-08-25T00:00:00.000Z',
-      contentAvailable: false as const,
-      records: [],
-    }]),
     getHealth: vi.fn(() => ({
       droppedRecords: 2,
       recordsDroppedByType: { content: 1, event: 1, lifecycle: 0, runtime: 0 },

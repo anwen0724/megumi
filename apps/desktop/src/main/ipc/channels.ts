@@ -114,7 +114,6 @@ export const IPC_CHANNELS = {
     content: 'observability:content',
     health: 'observability:health',
     rebuildIndex: 'observability:rebuild-index',
-    legacy: 'observability:legacy',
     bundle: 'observability:bundle',
   },
   runtime: {
@@ -221,7 +220,6 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.observability.content,
   IPC_CHANNELS.observability.health,
   IPC_CHANNELS.observability.rebuildIndex,
-  IPC_CHANNELS.observability.legacy,
   IPC_CHANNELS.observability.bundle,
   IPC_CHANNELS.runtime.event,
 ] as const;

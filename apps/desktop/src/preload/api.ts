@@ -43,7 +43,6 @@ import type {
   ObservabilityGetContentResult,
   ObservabilityGetTraceResult,
   ObservabilityHealthResult,
-  ObservabilityLegacyListResult,
   ObservabilityListResult,
   ObservabilityRebuildResult,
   VoiceHostModelCapabilityStatus,
@@ -94,7 +93,6 @@ import type {
   WorkspaceFilesListPayload,
   ObservabilityContentPayload,
   ObservabilityEmptyPayload,
-  ObservabilityLegacyListPayload,
   ObservabilityListPayload,
   ObservabilityTracePayload,
   ImageInputCapabilitiesPayload,
@@ -553,7 +551,6 @@ export const api = {
     getContent: (request: BusinessRequest<ObservabilityContentPayload, typeof IPC_CHANNELS.observability.content>): Promise<RuntimeIpcResult<ObservabilityGetContentResult, typeof IPC_CHANNELS.observability.content>> => invokeRuntimeIpc(IPC_CHANNELS.observability.content, request),
     getHealth: (request: BusinessRequest<ObservabilityEmptyPayload, typeof IPC_CHANNELS.observability.health>): Promise<RuntimeIpcResult<ObservabilityHealthResult, typeof IPC_CHANNELS.observability.health>> => invokeRuntimeIpc(IPC_CHANNELS.observability.health, request),
     rebuildIndex: (request: BusinessRequest<ObservabilityEmptyPayload, typeof IPC_CHANNELS.observability.rebuildIndex>): Promise<RuntimeIpcResult<ObservabilityRebuildResult, typeof IPC_CHANNELS.observability.rebuildIndex>> => invokeRuntimeIpc(IPC_CHANNELS.observability.rebuildIndex, request),
-    listLegacy: (request: BusinessRequest<ObservabilityLegacyListPayload, typeof IPC_CHANNELS.observability.legacy>): Promise<RuntimeIpcResult<ObservabilityLegacyListResult, typeof IPC_CHANNELS.observability.legacy>> => invokeRuntimeIpc(IPC_CHANNELS.observability.legacy, request),
     createBundle: (request: BusinessRequest<ObservabilityTracePayload, typeof IPC_CHANNELS.observability.bundle>): Promise<RuntimeIpcResult<ObservabilityExportResult, typeof IPC_CHANNELS.observability.bundle>> => invokeRuntimeIpc(IPC_CHANNELS.observability.bundle, request),
   },
   runtime: {

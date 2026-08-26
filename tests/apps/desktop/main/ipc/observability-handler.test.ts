@@ -19,7 +19,6 @@ describe('registerObservabilityHandlers', () => {
       IPC_CHANNELS.observability.content,
       IPC_CHANNELS.observability.health,
       IPC_CHANNELS.observability.rebuildIndex,
-      IPC_CHANNELS.observability.legacy,
       IPC_CHANNELS.observability.bundle,
     ]);
 
