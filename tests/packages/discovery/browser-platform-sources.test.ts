@@ -27,11 +27,15 @@ describe('embedded-browser platform sources', () => {
   ] as const)('normalizes $sourceId from a generic document snapshot', async ({ sourceId, createSource, resultUrl, expectedSearch, contentType }) => {
     const snapshot = vi.fn(async () => successSnapshot({
       finalUrl: expectedSearch,
+      bodyText: '登录后可以查看更多个性化内容。',
       links: [{
         href: resultUrl,
         text: 'Agent 实战内容',
         contextText: 'Agent 实战内容 作者 Alice 一份深入的工程经验',
         imageUrl: 'https://example.com/cover.jpg',
+      }, {
+        href: sourceId === 'douyin' ? 'https://passport.douyin.com/login' : 'https://passport.xiaohongshu.com/login',
+        text: '登录',
       }],
     }));
     const source = createSource({ browser: browser(snapshot) });
@@ -67,6 +71,18 @@ describe('embedded-browser platform sources', () => {
     expect(source.getAvailability()).toMatchObject({
       state: failureCode === 'login_required' ? 'login_required' : 'risk_controlled',
     });
+  });
+
+  it.each([
+    [createXiaohongshuSource, 'https://www.xiaohongshu.com/', 'https://passport.xiaohongshu.com/login'],
+    [createDouyinSource, 'https://www.douyin.com/', 'https://passport.douyin.com/login'],
+  ] as const)('recognizes a structural login link during an explicit availability check', async (createSource, finalUrl, loginUrl) => {
+    const source = createSource({ browser: browser(async () => successSnapshot({
+      finalUrl,
+      links: [{ href: loginUrl, text: '登录' }],
+    })) });
+
+    await expect(source.checkAvailability!()).resolves.toMatchObject({ state: 'login_required' });
   });
 
   it('opens a visible persistent-profile login window only after an explicit connect request', async () => {

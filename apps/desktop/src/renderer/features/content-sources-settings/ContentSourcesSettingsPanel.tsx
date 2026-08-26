@@ -1,6 +1,6 @@
 /* Presents all discovery-source configuration without exposing stored credentials. */
 import { useEffect, useState } from 'react';
-import { CheckCircle2, CircleAlert, ExternalLink, KeyRound, LogIn } from 'lucide-react';
+import { CheckCircle2, CircleAlert, ExternalLink, KeyRound, LogIn, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DiscoveryConfigurationUiDto } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
@@ -105,6 +105,25 @@ export function ContentSourcesSettingsPanel() {
     }
   }
 
+  async function refreshSource(sourceId: string) {
+    setBusySource(sourceId);
+    setError(null);
+    try {
+      const result = await window.megumi.discovery.refreshSource(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.discovery.sourceRefresh, { sourceId },
+      ));
+      if (!result.ok) throw new Error(result.data.message);
+      setConfiguration((current) => current ? ({
+        ...current,
+        sources: current.sources.map((source) => source.sourceId === sourceId ? result.data : source),
+      }) : current);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t('settings:contentSources.loadFailed'));
+    } finally {
+      setBusySource(null);
+    }
+  }
+
   async function refreshConfiguration() {
     const result = await window.megumi.discovery.getConfiguration(createRendererRuntimeIpcRequest(
       IPC_CHANNELS.discovery.configurationGet, {},
@@ -128,9 +147,9 @@ export function ContentSourcesSettingsPanel() {
         description={t('settings:contentSources.platformDescription')}
       >
         <div className="divide-y divide-[var(--color-border)]">
-          <StatusSourceRow source={source('bilibili')} />
-          <BrowserSourceRow source={source('xiaohongshu')} busy={busySource === 'xiaohongshu'} onLogin={() => void connectSource('xiaohongshu')} />
-          <BrowserSourceRow source={source('douyin')} busy={busySource === 'douyin'} onLogin={() => void connectSource('douyin')} />
+          <StatusSourceRow source={source('bilibili')} busy={busySource === 'bilibili'} onRefresh={() => void refreshSource('bilibili')} />
+          <BrowserSourceRow source={source('xiaohongshu')} busy={busySource === 'xiaohongshu'} onLogin={() => void connectSource('xiaohongshu')} onRefresh={() => void refreshSource('xiaohongshu')} />
+          <BrowserSourceRow source={source('douyin')} busy={busySource === 'douyin'} onLogin={() => void connectSource('douyin')} onRefresh={() => void refreshSource('douyin')} />
           <CredentialSourceRow
             source={source('zhihu')}
             sourceId="zhihu"
@@ -178,28 +197,52 @@ function SourceIdentity({ source }: { source?: SourceView }) {
           ready ? 'bg-[var(--color-success-soft)] text-[var(--color-success)]' : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]',
         )}>
           {ready ? <CheckCircle2 size={11} aria-hidden="true" /> : <CircleAlert size={11} aria-hidden="true" />}
-          {t(`contentSources.states.${source.connectionState}`)}
+          {t(`contentSources.states.${source.connectionState}`)}{ready && source.provider ? `（${source.provider}）` : ''}
         </span>
       </div>
+      {source.checkedAt ? <p className="mt-1 text-[0.7rem] text-[var(--color-text-subtle)]">{t('contentSources.checkedAt', { time: formatSourceTime(source.checkedAt) })}</p> : null}
+      {source.retryAt ? <p className="mt-0.5 text-[0.7rem] text-[var(--color-text-subtle)]">{t('contentSources.retryAt', { time: formatSourceTime(source.retryAt) })}</p> : null}
     </div>
   );
 }
 
-function StatusSourceRow({ source }: { source?: SourceView }) {
-  const { t } = useTranslation('settings');
-  return <div className="flex min-h-20 items-center justify-between gap-4 px-5 py-4"><SourceIdentity source={source} /><span className="text-xs text-[var(--color-text-muted)]">{t('contentSources.noConfiguration')}</span></div>;
-}
-
-function BrowserSourceRow({ source, busy, onLogin }: { source?: SourceView; busy: boolean; onLogin(): void }) {
+function StatusSourceRow({ source, busy, onRefresh }: { source?: SourceView; busy: boolean; onRefresh(): void }) {
   const { t } = useTranslation('settings');
   return (
-    <div data-source-id={source?.sourceId} className="flex min-h-20 items-center justify-between gap-4 px-5 py-4">
+    <div className="flex min-h-20 items-center justify-between gap-4 px-5 py-4">
       <SourceIdentity source={source} />
-      <Button type="button" variant="ghost" disabled={busy || !source} onClick={onLogin} aria-label={source ? t('contentSources.loginSource', { name: source.name }) : undefined}>
-        <LogIn size={14} aria-hidden="true" />{busy ? t('contentSources.opening') : t('contentSources.login')}
+      <Button type="button" variant="ghost" disabled={busy || !source} onClick={onRefresh}>
+        <RefreshCw size={14} aria-hidden="true" />{busy ? t('contentSources.checking') : t('contentSources.recheck')}
       </Button>
     </div>
   );
+}
+
+function BrowserSourceRow({ source, busy, onLogin, onRefresh }: {
+  source?: SourceView;
+  busy: boolean;
+  onLogin(): void;
+  onRefresh(): void;
+}) {
+  const { t } = useTranslation('settings');
+  const loginAction = source?.connectionState === 'login_required'
+    || (source?.connectionState === 'unknown' && !source.checkedAt);
+  const label = source?.connectionState === 'login_required'
+    ? t('contentSources.reLogin')
+    : loginAction ? t('contentSources.login') : t('contentSources.recheck');
+  return (
+    <div data-source-id={source?.sourceId} className="flex min-h-20 items-center justify-between gap-4 px-5 py-4">
+      <SourceIdentity source={source} />
+      <Button type="button" variant="ghost" disabled={busy || !source} onClick={loginAction ? onLogin : onRefresh} aria-label={source ? `${label} ${source.name}` : undefined}>
+        {loginAction ? <LogIn size={14} aria-hidden="true" /> : <RefreshCw size={14} aria-hidden="true" />}
+        {busy ? t(loginAction ? 'contentSources.opening' : 'contentSources.checking') : label}
+      </Button>
+    </div>
+  );
+}
+
+function formatSourceTime(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
 function CredentialSourceRow(props: {

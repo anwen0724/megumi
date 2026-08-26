@@ -14,15 +14,29 @@ const HOME_URL = 'https://www.douyin.com/';
 /** Creates the Douyin Source backed by Megumi's embedded browser session. */
 export function createDouyinSource(input: { readonly browser: EmbeddedBrowser }): DiscoverySource {
   let availability: ReturnType<DiscoverySource['getAvailability']> = { state: 'unknown' };
+  const checkAvailability = async () => {
+    const checkedAt = new Date().toISOString();
+    const result = await input.browser.snapshot({
+      profileId: 'douyin', url: HOME_URL, allowedOrigins: ALLOWED_ORIGINS,
+      signal: new AbortController().signal,
+    });
+    if (result.status === 'failed') {
+      availability = { state: 'unknown', checkedAt };
+      return availability;
+    }
+    availability = availabilityFromPage(result.snapshot, checkedAt);
+    return availability;
+  };
   return {
     descriptor: {
       id: 'douyin', name: '抖音', access: 'browser_session',
       supportedModes: ['relevance'], supportsRead: true,
     },
     getAvailability: () => availability,
+    checkAvailability,
     async connect() {
       await input.browser.openLogin({ profileId: 'douyin', url: HOME_URL, allowedOrigins: ALLOWED_ORIGINS });
-      availability = { state: 'unknown' };
+      await checkAvailability();
     },
     async search(request) {
       if (request.mode !== 'relevance') return failed('invalid_response', 'Douyin does not support recent search.', false);
@@ -31,8 +45,16 @@ export function createDouyinSource(input: { readonly browser: EmbeddedBrowser })
       const result = await input.browser.snapshot({
         profileId: 'douyin', url: url.toString(), allowedOrigins: ALLOWED_ORIGINS, signal: request.signal,
       });
-      if (result.status === 'failed') return failed(result.failure.code, result.failure.message, result.failure.code !== 'cancelled');
-      const pageFailure = pageState(result.snapshot);
+      if (result.status === 'failed') {
+        availability = { state: 'unknown', checkedAt: new Date().toISOString() };
+        return failed(result.failure.code, result.failure.message, result.failure.code !== 'cancelled');
+      }
+      const items = searchItems(result.snapshot, request.limit);
+      if (items.length > 0) {
+        availability = { state: 'ready', checkedAt: new Date().toISOString() };
+        return { status: 'success', items };
+      }
+      const pageFailure = blockingPageState(result.snapshot);
       if (pageFailure) {
         availability = pageFailure.code === 'login_required'
           ? { state: 'login_required', checkedAt: new Date().toISOString() }
@@ -40,25 +62,6 @@ export function createDouyinSource(input: { readonly browser: EmbeddedBrowser })
         return failed(pageFailure.code, pageFailure.message, false);
       }
       availability = { state: 'ready', checkedAt: new Date().toISOString() };
-      const seen = new Set<string>();
-      const items = result.snapshot.links.flatMap((link) => {
-        try {
-          const canonicalUrl = new URL(link.href, result.snapshot.finalUrl).toString();
-          const id = videoId(canonicalUrl);
-          const title = link.text.trim();
-          if (!id || !title || seen.has(id)) return [];
-          seen.add(id);
-          return [SourceContentSchema.parse({
-            sourceId: 'douyin', sourceName: '抖音', sourceContentId: id,
-            canonicalUrl, contentType: 'video', title,
-            ...(link.contextText?.trim() ? { description: link.contextText.trim() } : {}),
-            ...(httpUrl(link.imageUrl) ? { coverUrl: httpUrl(link.imageUrl) } : {}),
-          })];
-        } catch {
-          // One malformed page link must not discard otherwise usable search results.
-          return [];
-        }
-      }).slice(0, request.limit);
       return { status: 'success', items };
     },
     async read(request) {
@@ -66,7 +69,7 @@ export function createDouyinSource(input: { readonly browser: EmbeddedBrowser })
         profileId: 'douyin', url: request.url, allowedOrigins: ALLOWED_ORIGINS, signal: request.signal,
       });
       if (result.status === 'failed') return failed(result.failure.code, result.failure.message, result.failure.code !== 'cancelled');
-      const pageFailure = pageState(result.snapshot);
+      const pageFailure = blockingPageState(result.snapshot);
       if (pageFailure) return failed(pageFailure.code, pageFailure.message, false);
       const title = cleanTitle(result.snapshot.title, '抖音') || result.snapshot.bodyText.split(/\r?\n/u)[0]?.trim();
       if (!title) return failed('invalid_response', 'Douyin detail title was missing.', false);
@@ -80,11 +83,57 @@ export function createDouyinSource(input: { readonly browser: EmbeddedBrowser })
   };
 }
 
-function pageState(snapshot: EmbeddedBrowserSnapshot): { code: 'login_required' | 'risk_control'; message: string } | undefined {
-  const text = `${snapshot.finalUrl}\n${snapshot.bodyText}`;
-  if (/\/login\b|登录后|请登录|扫码登录/iu.test(text)) return { code: 'login_required', message: 'Douyin login is required.' };
-  if (/访问过于频繁|安全验证|完成验证|验证码|risk|captcha/iu.test(text)) return { code: 'risk_control', message: 'Douyin requires verification.' };
+function searchItems(snapshot: EmbeddedBrowserSnapshot, limit: number) {
+  const seen = new Set<string>();
+  return snapshot.links.flatMap((link) => {
+    try {
+      const canonicalUrl = new URL(link.href, snapshot.finalUrl).toString();
+      const id = videoId(canonicalUrl);
+      const title = link.text.trim();
+      if (!id || !title || seen.has(id)) return [];
+      seen.add(id);
+      return [SourceContentSchema.parse({
+        sourceId: 'douyin', sourceName: '抖音', sourceContentId: id,
+        canonicalUrl, contentType: 'video', title,
+        ...(link.contextText?.trim() ? { description: link.contextText.trim() } : {}),
+        ...(httpUrl(link.imageUrl) ? { coverUrl: httpUrl(link.imageUrl) } : {}),
+      })];
+    } catch {
+      // One malformed page link must not discard otherwise usable search results.
+      return [];
+    }
+  }).slice(0, limit);
+}
+
+function availabilityFromPage(snapshot: EmbeddedBrowserSnapshot, checkedAt: string) {
+  const failure = blockingPageState(snapshot);
+  if (failure?.code === 'login_required') return { state: 'login_required' as const, checkedAt };
+  if (failure) return { state: 'risk_controlled' as const, checkedAt };
+  return { state: 'ready' as const, checkedAt };
+}
+
+function blockingPageState(snapshot: EmbeddedBrowserSnapshot): { code: 'login_required' | 'risk_control'; message: string } | undefined {
+  const url = new URL(snapshot.finalUrl);
+  if (url.hostname === 'passport.douyin.com' || url.hostname === 'sso.douyin.com' || /^\/login(?:\/|$)/u.test(url.pathname)) {
+    return { code: 'login_required', message: 'Douyin login is required.' };
+  }
+  if (snapshot.links.some((link) => isLoginLink(link.href, snapshot.finalUrl, ['passport.douyin.com', 'sso.douyin.com']))) {
+    return { code: 'login_required', message: 'Douyin login is required.' };
+  }
+  if (/扫码登录|请先登录|请登录后继续/iu.test(snapshot.bodyText)) {
+    return { code: 'login_required', message: 'Douyin login is required.' };
+  }
+  if (/访问过于频繁|安全验证|完成验证|验证码|risk|captcha/iu.test(snapshot.bodyText)) return { code: 'risk_control', message: 'Douyin requires verification.' };
   return undefined;
+}
+
+function isLoginLink(value: string, baseUrl: string, loginHosts: readonly string[]): boolean {
+  try {
+    const url = new URL(value, baseUrl);
+    return loginHosts.includes(url.hostname) || /^\/login(?:\/|$)/u.test(url.pathname);
+  } catch {
+    return false;
+  }
 }
 
 function videoId(value: string): string | undefined {

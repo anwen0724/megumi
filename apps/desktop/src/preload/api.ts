@@ -108,6 +108,7 @@ import type {
   DiscoveryCredentialStatusPayload,
   DiscoveryCredentialSetPayload,
   DiscoverySourceConnectPayload,
+  DiscoverySourceRefreshPayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -364,6 +365,10 @@ export const api = {
       request: BusinessRequest<DiscoverySourceConnectPayload, typeof IPC_CHANNELS.discovery.sourceConnect>,
     ): Promise<RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceConnect>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceConnect, request),
+    refreshSource: (
+      request: BusinessRequest<DiscoverySourceRefreshPayload, typeof IPC_CHANNELS.discovery.sourceRefresh>,
+    ): Promise<RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceRefresh>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceRefresh, request),
     changeInterest: (
       request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
     ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>

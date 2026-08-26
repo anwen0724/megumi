@@ -38,15 +38,17 @@ describe('Electron embedded browser', () => {
       url: 'https://www.xiaohongshu.com/',
       allowedOrigins: ['https://www.xiaohongshu.com'],
     };
-    await browser.openLogin(request);
-    await browser.openLogin(request);
+    const first = browser.openLogin(request);
+    const second = browser.openLogin(request);
+    await Promise.resolve();
 
     expect(windows).toHaveLength(1);
     expect(windows[0]!.options.show).toBe(true);
     expect(windows[0]!.show).toHaveBeenCalledTimes(2);
     expect(windows[0]!.focus).toHaveBeenCalledTimes(1);
+    windows[0]!.closedHandler?.();
+    await Promise.all([first, second]);
     await browser.shutdown();
-    expect(windows[0]!.destroy).toHaveBeenCalled();
   });
 
   it('returns only the fixed document snapshot and destroys the temporary page', async () => {

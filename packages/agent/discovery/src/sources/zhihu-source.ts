@@ -32,7 +32,17 @@ export function createZhihuSource(input: {
       supportsRead: false,
     },
     getAvailability() {
-      if (!input.accessSecret()?.trim()) return { state: 'not_configured' };
+      if (!input.accessSecret()?.trim()) {
+        return { state: 'not_configured', ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}) };
+      }
+      if (availability.state === 'not_configured') return { state: 'unknown', ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}) };
+      return availability;
+    },
+    async checkAvailability() {
+      availability = {
+        state: input.accessSecret()?.trim() ? 'ready' : 'not_configured',
+        checkedAt: new Date(now()).toISOString(),
+      };
       return availability;
     },
     async search(request) {

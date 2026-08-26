@@ -98,6 +98,7 @@ export type {
 export {
   createDiscoveryConfiguration,
   ConnectDiscoverySourceRequestSchema,
+  RefreshDiscoverySourceRequestSchema,
   DiscoveryConfigurationViewSchema,
   DiscoverySourceViewSchema,
   UpdateDiscoveryConfigurationRequestSchema,
@@ -105,6 +106,7 @@ export {
 export type {
   DiscoveryConfiguration,
   ConnectDiscoverySourceRequest,
+  RefreshDiscoverySourceRequest,
   DiscoveryConfigurationSettings,
   DiscoveryConfigurationStore,
   DiscoveryConfigurationView,

@@ -40,6 +40,15 @@ export function createBilibiliSource(input: {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let keys: WbiKeys | undefined;
   let cooldown: { until: number; failure: SourceFailure } | undefined;
+  let checkedAt: string | undefined;
+
+  const availability = () => cooldown && cooldown.until > now()
+    ? {
+        state: 'risk_controlled' as const,
+        ...(checkedAt ? { checkedAt } : {}),
+        retryAt: new Date(cooldown.until).toISOString(),
+      }
+    : { state: 'ready' as const, ...(checkedAt ? { checkedAt } : {}) };
 
   const source: DiscoverySource = {
     descriptor: {
@@ -49,9 +58,11 @@ export function createBilibiliSource(input: {
       supportedModes: ['relevance', 'recent'],
       supportsRead: true,
     },
-    getAvailability: () => cooldown && cooldown.until > now()
-      ? { state: 'risk_controlled', retryAt: new Date(cooldown.until).toISOString() }
-      : { state: 'ready' },
+    getAvailability: availability,
+    async checkAvailability() {
+      checkedAt = new Date(now()).toISOString();
+      return availability();
+    },
     async search(request) {
       if (cooldown && cooldown.until > now()) return { status: 'failed', failure: cooldown.failure };
       if (cooldown) cooldown = undefined;
@@ -64,12 +75,14 @@ export function createBilibiliSource(input: {
           keys = undefined;
           result = await searchOnce(request.query, request.mode, request.limit, request.signal, true);
         }
+        checkedAt = new Date(now()).toISOString();
         return { status: 'success', items: normalizeSearchItems(result) };
       } catch (error) {
         const failure = normalizeFailure(error, request.signal);
         if (failure.code === 'risk_control' || failure.code === 'rate_limited') {
           cooldown = { until: now() + cooldownMs, failure };
         }
+        checkedAt = new Date(now()).toISOString();
         return { status: 'failed', failure };
       }
     },

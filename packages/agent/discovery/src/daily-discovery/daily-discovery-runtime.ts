@@ -162,6 +162,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
   const snapshotInputs = async () => {
     const interests = input.repository.listInterests().filter((interest) => interest.status === 'active');
     const settings = input.settings.getDiscoverySettings();
+    await input.sourceRegistry.checkSources(settings.enabledSources);
     const descriptors = enabledDescriptors(input.sourceRegistry, settings.enabledSources);
     const model = await input.resolveModel();
     return { interests, settings, descriptors, model };
@@ -300,7 +301,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
           publishedAt,
         });
       });
-      const published = input.repository.publishDailyBatch({
+      const published = publishRecommendations({
         batchId: request.batchId,
         executionId: request.executionId,
         publishedAt,
@@ -312,6 +313,39 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     } finally {
       input.attempts.dispose(request.executionId);
     }
+  };
+
+  /** Publishes one selected set and delegates unexpected persistence failures to Batch finalization. */
+  const publishRecommendations = (
+    command: Parameters<DailyBatchRepository['publishDailyBatch']>[0],
+  ): ReturnType<DailyBatchRepository['publishDailyBatch']> => {
+    try {
+      return input.repository.publishDailyBatch(command);
+    } catch (error) {
+      return terminatePublicationFailure(command, error);
+    }
+  };
+
+  /** Closes a failed publication without hiding its original infrastructure error. */
+  const terminatePublicationFailure = (
+    request: { readonly batchId: string; readonly executionId: string },
+    publicationError: unknown,
+  ): never => {
+    try {
+      input.repository.failDailyBatch({
+        batchId: request.batchId,
+        executionId: request.executionId,
+        failureCode: 'publication_failed',
+        failureMessage: 'Daily discovery recommendations could not be published.',
+        failedAt: input.now(),
+      });
+    } catch (finalizationError) {
+      throw new AggregateError(
+        [publicationError, finalizationError],
+        'Daily discovery publication and Batch finalization both failed.',
+      );
+    }
+    throw publicationError;
   };
 
   /** Applies the bounded automatic retry policy without creating a second execution lifecycle. */
@@ -534,7 +568,7 @@ function enabledDescriptors(registry: SourceRegistry, enabled: readonly Discover
   return registry.listSources()
     .filter(({ descriptor, availability }) => (
       enabledIds.has(descriptor.id)
-      && (availability.state === 'ready' || availability.state === 'unknown')
+      && availability.state === 'ready'
     ))
     .map(({ descriptor }) => descriptor);
 }

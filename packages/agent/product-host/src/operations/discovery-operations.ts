@@ -14,12 +14,14 @@ export function createDiscoveryOperations(
     | 'getDiscoveryConfiguration'
     | 'updateDiscoveryConfiguration'
     | 'connectDiscoverySource'
+    | 'refreshDiscoverySource'
   >,
 ): DiscoveryHost {
   return {
     getConfiguration: () => agent.getDiscoveryConfiguration(),
     updateConfiguration: (request) => agent.updateDiscoveryConfiguration(request),
     connectSource: (request) => agent.connectDiscoverySource(request),
+    refreshSource: (request) => agent.refreshDiscoverySource(request),
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
     ensureDaily: (request) => agent.ensureDailyDiscovery(request),

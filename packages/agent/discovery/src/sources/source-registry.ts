@@ -17,6 +17,11 @@ export interface SourceRegistry {
   listSources(): readonly { readonly descriptor: SourceDescriptor; readonly availability: SourceAvailability }[];
   /** Returns a registered Source without imposing a search mode. */
   get(sourceId: DiscoverySourceId): DiscoverySource | undefined;
+  /** Rechecks selected Sources and returns their latest availability snapshots. */
+  checkSources(sourceIds: readonly DiscoverySourceId[]): Promise<readonly {
+    readonly descriptor: SourceDescriptor;
+    readonly availability: SourceAvailability;
+  }[]>;
   /** Resolves a registered Source and validates support for the requested mode. */
   resolve(sourceId: DiscoverySourceId, mode: SourceSearchMode): DiscoverySource;
 }
@@ -40,6 +45,15 @@ export function createSourceRegistry(sources: readonly DiscoverySource[]): Sourc
       availability: entry.source.getAvailability(),
     })),
     get: (sourceId) => entries.get(sourceId.trim())?.source,
+    async checkSources(sourceIds) {
+      const selected = new Set(sourceIds.map((sourceId) => sourceId.trim()));
+      const targets = [...entries.values()].filter((entry) => selected.has(entry.descriptor.id));
+      await Promise.all(targets.map((entry) => entry.source.checkAvailability?.()));
+      return targets.map((entry) => ({
+        descriptor: entry.descriptor,
+        availability: entry.source.getAvailability(),
+      }));
+    },
     resolve(sourceId, mode) {
       const entry = entries.get(sourceId.trim());
       if (!entry) throw new Error(`Unknown source: ${sourceId}.`);

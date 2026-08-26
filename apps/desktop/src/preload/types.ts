@@ -47,6 +47,7 @@ import type {
   DiscoveryCredentialStatusPayload,
   DiscoveryCredentialSetPayload,
   DiscoverySourceConnectPayload,
+  DiscoverySourceRefreshPayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
 
@@ -87,6 +88,8 @@ export type DiscoveryCredentialSetPreloadPayload = DiscoveryCredentialSetPayload
 export type DiscoveryCredentialStatusPreloadData = DiscoverySourceCredentialStatusUiResult;
 export type DiscoverySourceConnectPreloadPayload = DiscoverySourceConnectPayload;
 export type DiscoverySourceConnectPreloadData = DiscoverySourceUiDto;
+export type DiscoverySourceRefreshPreloadPayload = DiscoverySourceRefreshPayload;
+export type DiscoverySourceRefreshPreloadData = DiscoverySourceUiDto;
 export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
 export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
 export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;

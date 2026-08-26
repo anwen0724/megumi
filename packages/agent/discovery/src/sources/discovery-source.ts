@@ -44,6 +44,7 @@ export const SourceDescriptorSchema = z.object({
 
 export const SourceAvailabilitySchema = z.object({
   state: SourceConnectionStateSchema,
+  provider: z.string().trim().min(1).optional(),
   checkedAt: TimestampSchema.optional(),
   retryAt: TimestampSchema.optional(),
 }).strict();
@@ -112,6 +113,8 @@ export interface DiscoverySource {
   readonly descriptor: SourceDescriptor;
   /** Reports current connection or provider availability without initiating work. */
   getAvailability(): SourceAvailability;
+  /** Rechecks the Source's current availability and records the result. */
+  checkAvailability?(): Promise<SourceAvailability>;
   /** Opens an interactive login flow when the Source requires a browser session. */
   connect?(): Promise<void>;
   /** Searches the Source and returns normalized, boundary-validated content. */

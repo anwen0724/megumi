@@ -25,7 +25,18 @@ export function createTwitterSource(input: {
       supportsRead: false,
     },
     getAvailability() {
-      return input.apiKey()?.trim() ? availability : { state: 'not_configured' };
+      if (!input.apiKey()?.trim()) {
+        return { state: 'not_configured', ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}) };
+      }
+      if (availability.state === 'not_configured') return { state: 'unknown', ...(availability.checkedAt ? { checkedAt: availability.checkedAt } : {}) };
+      return availability;
+    },
+    async checkAvailability() {
+      availability = {
+        state: input.apiKey()?.trim() ? 'ready' : 'not_configured',
+        checkedAt: new Date().toISOString(),
+      };
+      return availability;
     },
     async search(request) {
       const apiKey = input.apiKey()?.trim();

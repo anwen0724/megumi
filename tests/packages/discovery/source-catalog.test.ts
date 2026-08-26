@@ -9,6 +9,7 @@ describe('production Discovery source catalog', () => {
     expect(registry.listDescriptors().map((source) => source.id)).toEqual([
       'bilibili', 'open_web', 'xiaohongshu', 'douyin', 'zhihu', 'twitter',
     ]);
+    expect(registry.get('open_web')?.getAvailability()).toMatchObject({ state: 'ready', provider: 'Bing' });
   });
 });
 

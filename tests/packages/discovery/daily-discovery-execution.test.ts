@@ -272,14 +272,17 @@ describe('daily discovery Agent execution', () => {
     },
     {
       streams: [
+        toolStream('search:1', 'search_content', { sourceId: 'open_web', query: 'Agent', mode: 'relevance', limit: 5 }),
         toolStream('call:1', 'select_recommendations', {
           items: [{ candidateId: 'missing', recommendationReason: 'invalid' }],
         }),
         textStream('done'),
+        toolStream('search:2', 'search_content', { sourceId: 'open_web', query: 'Agent', mode: 'relevance', limit: 5 }),
         toolStream('call:2', 'select_recommendations', {
           items: [{ candidateId: 'missing', recommendationReason: 'invalid' }],
         }),
         textStream('done'),
+        toolStream('search:3', 'search_content', { sourceId: 'open_web', query: 'Agent', mode: 'relevance', limit: 5 }),
         toolStream('call:3', 'select_recommendations', {
           items: [{ candidateId: 'missing', recommendationReason: 'invalid' }],
         }),
@@ -323,6 +326,68 @@ describe('daily discovery Agent execution', () => {
     });
   });
 
+  it('fails the Batch and reports the original error when publication throws', async () => {
+    const fixture = createFixture(database, [source('open_web', async () => [content('one', 'First')])], [
+      toolStream('call:1', 'search_content', {
+        sourceId: 'open_web', query: 'Agent', mode: 'relevance', limit: 5,
+      }),
+      toolStream('call:2', 'select_recommendations', {
+        items: [{ candidateId: 'candidate:1', recommendationReason: 'Useful.' }],
+      }),
+      textStream('done'),
+    ]);
+    const publicationError = new Error('publication storage failed');
+    vi.spyOn(fixture.repository, 'publishDailyBatch').mockImplementation(() => { throw publicationError; });
+    addInterest(fixture.repository, 'interest:1', 'Agent');
+
+    await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
+    await waitForBatch(database, 'failed');
+    await vi.waitFor(() => expect(fixture.backgroundErrors).toHaveLength(1));
+
+    expect(readBatch(database)).toMatchObject({
+      status: 'failed',
+      automatic_retry_count: 0,
+      failure_code: 'publication_failed',
+      failure_message: 'Daily discovery recommendations could not be published.',
+    });
+    expect(readRecommendations(database)).toEqual([]);
+    expect(fixture.backgroundErrors[0]).toEqual({
+      error: publicationError,
+      context: {
+        operation: 'attempt_settlement',
+        batchId: 'batch:1',
+        executionId: 'execution:1',
+      },
+    });
+  });
+
+  it('reports publication and Batch-finalization errors together when persistence is unavailable', async () => {
+    const fixture = createFixture(database, [source('open_web', async () => [content('one', 'First')])], [
+      toolStream('call:1', 'search_content', {
+        sourceId: 'open_web', query: 'Agent', mode: 'relevance', limit: 5,
+      }),
+      toolStream('call:2', 'select_recommendations', {
+        items: [{ candidateId: 'candidate:1', recommendationReason: 'Useful.' }],
+      }),
+      textStream('done'),
+    ]);
+    const publicationError = new Error('publication storage failed');
+    const finalizationError = new Error('Batch finalization failed');
+    vi.spyOn(fixture.repository, 'publishDailyBatch').mockImplementation(() => { throw publicationError; });
+    vi.spyOn(fixture.repository, 'failDailyBatch').mockImplementation(() => { throw finalizationError; });
+    addInterest(fixture.repository, 'interest:1', 'Agent');
+
+    await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now });
+    await vi.waitFor(() => expect(fixture.backgroundErrors).toHaveLength(1));
+
+    expect(readBatch(database)).toMatchObject({ status: 'running' });
+    expect(fixture.backgroundErrors[0]?.error).toBeInstanceOf(AggregateError);
+    expect((fixture.backgroundErrors[0]?.error as AggregateError).errors).toEqual([
+      publicationError,
+      finalizationError,
+    ]);
+  });
+
   it('rejects content identities that have already been published globally', async () => {
     seedPublishedRecommendation(database, 'open_web:id:seen');
     const adapter = source('open_web', async () => [
@@ -353,6 +418,7 @@ function createFixture(
   targetCount = 20,
 ) {
   const repository = createDiscoveryRepository({ database });
+  const backgroundErrors: Array<{ error: unknown; context: unknown }> = [];
   let executionNumber = 0;
   let batchNumber = 0;
   let recommendationNumber = 0;
@@ -420,7 +486,7 @@ function createFixture(
         createBatchId: () => `batch:${++batchNumber}`,
         createRecommendationId: () => `recommendation:${++recommendationNumber}`,
       },
-      onBackgroundError: () => undefined,
+      onBackgroundError: (error, context) => { backgroundErrors.push({ error, context }); },
     },
     policy: {
       maxModelCallsPerExecution: 80, maxToolRoundsPerExecution: 50,
@@ -446,7 +512,7 @@ function createFixture(
       now: options.clock.now,
     },
   });
-  return { agent, executions, repository };
+  return { agent, executions, repository, backgroundErrors };
 }
 
 function source(

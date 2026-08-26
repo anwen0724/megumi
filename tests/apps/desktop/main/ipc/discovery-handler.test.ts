@@ -88,6 +88,26 @@ describe('registerDiscoveryHandlers', () => {
     expect(connectSource).toHaveBeenCalledWith({ sourceId: 'xiaohongshu' });
     expect(response).toMatchObject({ ok: true, data: { sourceId: 'xiaohongshu' } });
   });
+
+  it('forwards an explicit source availability refresh', async () => {
+    const handlers = new Map<string, (...args: unknown[]) => unknown>();
+    const refreshSource = vi.fn(async () => ({
+      sourceId: 'xiaohongshu', name: '小红书', access: 'browser_session' as const,
+      supportedModes: ['relevance' as const], supportsRead: true, enabled: true,
+      connectionState: 'ready' as const, checkedAt: '2026-08-26T08:00:00.000Z',
+    }));
+    registerDiscoveryHandlers(
+      { host: { discovery: { refreshSource } } as never },
+      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
+    );
+
+    const response = await handlers.get(IPC_CHANNELS.discovery.sourceRefresh)?.({}, request(
+      IPC_CHANNELS.discovery.sourceRefresh, { sourceId: 'xiaohongshu' },
+    ));
+
+    expect(refreshSource).toHaveBeenCalledWith({ sourceId: 'xiaohongshu' });
+    expect(response).toMatchObject({ ok: true, data: { connectionState: 'ready' } });
+  });
 });
 
 function request(channel: string, payload: unknown) {

@@ -84,7 +84,7 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
 
   useEffect(() => {
     if (!open || view !== 'settings') return;
-    const timer = window.setInterval(() => void refreshSourceAvailability(), 15_000);
+    const timer = window.setInterval(() => void refreshSourceProjection(), 15_000);
     return () => window.clearInterval(timer);
   }, [open, view]);
 
@@ -176,21 +176,19 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     }
   }
 
-  async function refreshSourceAvailability() {
+  /** Refreshes time-derived UI state such as Bilibili cooldown expiry without probing platforms. */
+  async function refreshSourceProjection() {
     const result = await window.megumi.discovery.getConfiguration(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationGet, {}),
     );
     if (!result.ok) return;
-    const availability = new Map(result.data.sources.map((source) => [source.sourceId, source]));
-    const mergeAvailability = (current: DiscoverySettings | null) => current ? ({
+    const latestById = new Map(result.data.sources.map((source) => [source.sourceId, source]));
+    const merge = (current: DiscoverySettings | null) => current ? ({
       ...current,
-      sources: current.sources.map((source) => {
-        const latest = availability.get(source.sourceId);
-        return latest ? { ...source, connectionState: latest.connectionState, checkedAt: latest.checkedAt, retryAt: latest.retryAt } : source;
-      }),
+      sources: current.sources.map((source) => latestById.get(source.sourceId) ?? source),
     }) : current;
-    setSettings(mergeAvailability);
-    setPersistedSettings(mergeAvailability);
+    setSettings(merge);
+    setPersistedSettings(merge);
   }
 
   function updateSettings(update: (current: DiscoverySettings) => DiscoverySettings) {
@@ -492,7 +490,13 @@ function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
                   <div key={source.sourceId} className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
                     <span className="min-w-0 text-sm text-[var(--color-text)]">
                       <span className="block">{label}</span>
-                      <span className="block text-xs text-[var(--color-text-muted)]">{t(sourceStateTranslationKey(source.connectionState))}</span>
+                      <span className="block text-xs text-[var(--color-text-muted)]">
+                        {source.connectionState === 'ready' && source.provider
+                          ? t('sourceReadyWithProvider', { provider: source.provider })
+                          : t(sourceStateTranslationKey(source.connectionState))}
+                      </span>
+                      {source.checkedAt ? <span className="mt-0.5 block text-[0.68rem] text-[var(--color-text-subtle)]">{t('sourceCheckedAt', { time: formatSourceTime(source.checkedAt) })}</span> : null}
+                      {source.retryAt ? <span className="mt-0.5 block text-[0.68rem] text-[var(--color-text-subtle)]">{t('sourceRetryAt', { time: formatSourceTime(source.retryAt) })}</span> : null}
                     </span>
                     <span className="flex items-center gap-1">
                       <Button type="button" size="sm" variant="ghost" disabled={busy || !onOpenContentSources} onClick={onOpenContentSources}>{t('configureSources')}</Button>
@@ -523,6 +527,10 @@ function sourceStateTranslationKey(state: DiscoverySettings['sources'][number]['
     risk_controlled: 'sourceRiskControlled',
     not_configured: 'sourceNotConfigured',
   } as const)[state];
+}
+
+function formatSourceTime(value: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
 }
 
 function ManagerTab({ active, controls, onClick, children }: { active: boolean; controls: string; onClick(): void; children: string }) {

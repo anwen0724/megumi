@@ -8,6 +8,7 @@ import {
   type DiscoveryConfigurationStore,
   type DiscoveryConfigurationView,
   type DiscoverySourceView,
+  type RefreshDiscoverySourceRequest,
   type UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
 import type {
@@ -66,6 +67,8 @@ export interface Discovery {
   updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
   /** Starts the interactive connection flow for one browser-session Source. */
   connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
+  /** Rechecks one Source without opening its interactive connection flow. */
+  refreshDiscoverySource(request: RefreshDiscoverySourceRequest): Promise<DiscoverySourceView>;
   /** Stops and drains every background activity owned by Discovery. */
   shutdown(): Promise<void>;
 }
@@ -98,7 +101,10 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
-    startBackground: () => dailyDiscoveryRuntime?.start() ?? Promise.resolve(),
+    async startBackground() {
+      await discoveryConfiguration?.refreshSources();
+      await dailyDiscoveryRuntime?.start();
+    },
     ensureDailyDiscovery: (request) => dailyDiscoveryRuntime
       ? dailyDiscoveryRuntime.ensure(request)
       : Promise.resolve({
@@ -127,6 +133,9 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     connectDiscoverySource: (request) => discoveryConfiguration
       ? discoveryConfiguration.connectSource(request)
+      : Promise.reject(new Error('Discovery configuration is not configured.')),
+    refreshDiscoverySource: (request) => discoveryConfiguration
+      ? discoveryConfiguration.refreshSource(request)
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     async shutdown() {
       await Promise.all([

@@ -17,7 +17,17 @@ import {
 export function createOpenWebSource(input: {
   readonly webSearch?: WebSearch | (() => WebSearch | undefined);
   readonly webFetch?: WebFetch;
+  readonly provider?: () => string | undefined;
 }): DiscoverySource {
+  let checkedAt: string | undefined;
+  const availability = () => {
+    const provider = input.provider?.();
+    return {
+      state: resolveWebSearch(input.webSearch) ? 'ready' as const : 'not_configured' as const,
+      ...(provider ? { provider } : {}),
+      ...(checkedAt ? { checkedAt } : {}),
+    };
+  };
   return {
     descriptor: {
       id: 'open_web',
@@ -26,7 +36,11 @@ export function createOpenWebSource(input: {
       supportedModes: ['relevance'],
       supportsRead: Boolean(input.webFetch),
     },
-    getAvailability: () => ({ state: resolveWebSearch(input.webSearch) ? 'ready' : 'not_configured' }),
+    getAvailability: availability,
+    async checkAvailability() {
+      checkedAt = new Date().toISOString();
+      return availability();
+    },
     async search(request) {
       const webSearch = resolveWebSearch(input.webSearch);
       if (!webSearch) return failed('not_configured', 'Open Web search is not configured.', false);
@@ -52,8 +66,10 @@ export function createOpenWebSource(input: {
             return [];
           }
         });
+        checkedAt = new Date().toISOString();
         return { status: 'success', items };
       } catch (error) {
+        checkedAt = new Date().toISOString();
         return { status: 'failed', failure: toolFailure(error, request.signal) };
       }
     },

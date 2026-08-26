@@ -31,6 +31,7 @@ interface AttemptRecord {
   readonly sourceFailures: Array<{ readonly sourceId: string; readonly failure: SourceFailure }>;
   readonly sourceBudgets: Readonly<Record<string, SourceAttemptBudget>>;
   readonly sourceUsage: Map<string, { searchCalls: number; resultCount: number }>;
+  readonly attemptedSources: Set<string>;
 }
 
 export interface SourceAttemptBudget {
@@ -97,6 +98,7 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
         sourceFailures: [],
         sourceBudgets: request.sourceBudgets ?? {},
         sourceUsage: new Map(),
+        attemptedSources: new Set(),
       });
     },
 
@@ -147,6 +149,7 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
         : parsed.limit;
       if (effectiveLimit < 1) return toolError('source_budget_exhausted', `Source ${parsed.sourceId} budget is exhausted.`);
       attempt.searchCount += 1;
+      attempt.attemptedSources.add(parsed.sourceId);
       if (budget) {
         usage.searchCalls += 1;
         attempt.sourceUsage.set(parsed.sourceId, usage);
@@ -211,6 +214,16 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
       const attempt = requireAttempt(request.executionId);
       if (!attempt) return toolError('attempt_not_found', 'Daily discovery attempt was not found.');
       if (attempt.selected) return toolError('selection_frozen', 'The first valid selection is already frozen.');
+      const missingSources = attempt.descriptors
+        .map((descriptor) => descriptor.id)
+        .filter((sourceId) => !attempt.attemptedSources.has(sourceId));
+      if (missingSources.length > 0) {
+        return toolError(
+          'source_coverage_incomplete',
+          `Search every available source before selection. Missing: ${missingSources.join(', ')}.`,
+          { sourceIds: missingSources },
+        );
+      }
       const parsed = parseSelection(request.input, attempt.targetCount, attempt.candidates);
       if (!parsed.ok) {
         attempt.invalidSelection = true;

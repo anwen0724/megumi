@@ -30,6 +30,7 @@ export const UpdateDiscoveryConfigurationRequestSchema = z.object({
 export const ConnectDiscoverySourceRequestSchema = z.object({
   sourceId: z.string().trim().min(1),
 }).strict();
+export const RefreshDiscoverySourceRequestSchema = ConnectDiscoverySourceRequestSchema;
 
 export const DiscoverySourceViewSchema = z.object({
   sourceId: z.string().trim().min(1),
@@ -39,6 +40,7 @@ export const DiscoverySourceViewSchema = z.object({
   supportsRead: z.boolean(),
   enabled: z.boolean(),
   connectionState: z.enum(['ready', 'unknown', 'not_configured', 'login_required', 'rate_limited', 'risk_controlled']),
+  provider: z.string().trim().min(1).optional(),
   checkedAt: z.string().datetime({ offset: true }).optional(),
   retryAt: z.string().datetime({ offset: true }).optional(),
 }).strict();
@@ -52,6 +54,7 @@ export const DiscoveryConfigurationViewSchema = z.object({
 
 export type UpdateDiscoveryConfigurationRequest = z.infer<typeof UpdateDiscoveryConfigurationRequestSchema>;
 export type ConnectDiscoverySourceRequest = z.infer<typeof ConnectDiscoverySourceRequestSchema>;
+export type RefreshDiscoverySourceRequest = z.infer<typeof RefreshDiscoverySourceRequestSchema>;
 
 export type DiscoverySourceView = z.infer<typeof DiscoverySourceViewSchema>;
 export type DiscoveryConfigurationView = z.infer<typeof DiscoveryConfigurationViewSchema>;
@@ -63,6 +66,10 @@ export interface DiscoveryConfiguration {
   update(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
   /** Opens the connection flow for one browser-session Source. */
   connectSource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
+  /** Rechecks one Source without opening an interactive connection flow. */
+  refreshSource(request: RefreshDiscoverySourceRequest): Promise<DiscoverySourceView>;
+  /** Rechecks selected Sources and returns the complete current projection. */
+  refreshSources(sourceIds?: readonly DiscoverySourceId[]): Promise<DiscoveryConfigurationView>;
 }
 
 /** Creates user-facing Discovery configuration operations over Settings and Sources. */
@@ -116,6 +123,21 @@ export function createDiscoveryConfiguration(input: {
         enabled: new Set(input.settings.read().enabledSources).has(source.descriptor.id),
       });
     },
+    async refreshSource(request) {
+      const parsed = RefreshDiscoverySourceRequestSchema.parse(request);
+      const source = input.sourceRegistry.get(parsed.sourceId);
+      if (!source) throw new Error('Discovery source was not found.');
+      await input.sourceRegistry.checkSources([source.descriptor.id]);
+      return sourceView({
+        descriptor: source.descriptor,
+        availability: source.getAvailability(),
+        enabled: new Set(input.settings.read().enabledSources).has(source.descriptor.id),
+      });
+    },
+    async refreshSources(sourceIds) {
+      await input.sourceRegistry.checkSources(sourceIds ?? input.sourceRegistry.listDescriptors().map((source) => source.id));
+      return view();
+    },
   };
 }
 
@@ -132,6 +154,7 @@ function sourceView(input: {
     supportsRead: input.descriptor.supportsRead,
     enabled: input.enabled,
     connectionState: input.availability.state,
+    ...(input.availability.provider ? { provider: input.availability.provider } : {}),
     ...(input.availability.checkedAt ? { checkedAt: input.availability.checkedAt } : {}),
     ...(input.availability.retryAt ? { retryAt: input.availability.retryAt } : {}),
   };

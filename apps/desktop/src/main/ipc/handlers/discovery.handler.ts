@@ -25,6 +25,7 @@ import {
   DiscoveryRecommendationStateRequestSchema,
   DiscoverySessionParticipationRequestSchema,
   DiscoverySourceConnectRequestSchema,
+  DiscoverySourceRefreshRequestSchema,
 } from '../schemas';
 
 export interface DiscoveryHandlersService {
@@ -67,6 +68,15 @@ export function registerDiscoveryHandlers(
     responseValidation: 'dev-only',
     logger: options.logger,
     handle: (request) => service.host.discovery.connectSource(request.payload),
+    mapError: mapDiscoveryIpcError,
+  }));
+  ipcMain.handle(IPC_CHANNELS.discovery.sourceRefresh, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.sourceRefresh,
+    requestSchema: DiscoverySourceRefreshRequestSchema,
+    responseSchema: DiscoverySourceUiDtoSchema,
+    responseValidation: 'dev-only',
+    logger: options.logger,
+    handle: (request) => service.host.discovery.refreshSource(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
   ipcMain.handle(IPC_CHANNELS.discovery.interestChange, createIpcRequestHandler({

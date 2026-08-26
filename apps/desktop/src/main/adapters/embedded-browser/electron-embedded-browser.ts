@@ -39,7 +39,10 @@ export function createElectronEmbeddedBrowser(input: {
   const createWindow = input.createWindow ?? ((options) => new BrowserWindow(options));
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const settleDelayMs = input.settleDelayMs ?? DEFAULT_SETTLE_DELAY_MS;
-  const loginWindows = new Map<EmbeddedBrowserProfileId, BrowserWindow>();
+  const loginWindows = new Map<EmbeddedBrowserProfileId, {
+    readonly window: BrowserWindow;
+    readonly closed: Promise<void>;
+  }>();
   const taskWindows = new Set<BrowserWindow>();
   const queues = new Map<EmbeddedBrowserProfileId, Promise<void>>();
   let shuttingDown = false;
@@ -49,19 +52,25 @@ export function createElectronEmbeddedBrowser(input: {
       requireAllowedUrl(request.url, request.allowedOrigins);
       if (shuttingDown) throw new Error('Embedded browser is shutting down.');
       const current = loginWindows.get(request.profileId);
-      if (current && !current.isDestroyed()) {
-        await current.loadURL(request.url);
-        current.show();
-        current.focus();
-        return;
+      if (current && !current.window.isDestroyed()) {
+        await current.window.loadURL(request.url);
+        current.window.show();
+        current.window.focus();
+        return current.closed;
       }
       const window = createWindow(embeddedBrowserWindowOptions(request.profileId, true));
-      loginWindows.set(request.profileId, window);
+      const closed = new Promise<void>((resolve) => {
+        window.once('closed', () => {
+          loginWindows.delete(request.profileId);
+          resolve();
+        });
+      });
+      loginWindows.set(request.profileId, { window, closed });
       secureWindow(window, request.allowedOrigins);
-      window.once('closed', () => loginWindows.delete(request.profileId));
       try {
         await window.loadURL(request.url);
         window.show();
+        await closed;
       } catch (error) {
         loginWindows.delete(request.profileId);
         if (!window.isDestroyed()) window.destroy();
@@ -109,7 +118,7 @@ export function createElectronEmbeddedBrowser(input: {
     },
     async shutdown() {
       shuttingDown = true;
-      for (const window of [...taskWindows, ...loginWindows.values()]) {
+      for (const window of [...taskWindows, ...[...loginWindows.values()].map((entry) => entry.window)]) {
         if (!window.isDestroyed()) window.destroy();
       }
       taskWindows.clear();

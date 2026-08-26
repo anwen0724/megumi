@@ -1,6 +1,6 @@
 /* Verifies extensible source registration and mode validation. */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createSourceRegistry,
   type DiscoverySource,
@@ -22,6 +22,28 @@ function source(id: string, modes: readonly SourceSearchMode[] = ['relevance']):
 }
 
 describe('SourceRegistry', () => {
+  it('rechecks only requested sources before returning their current states', async () => {
+    let state: 'unknown' | 'ready' = 'unknown';
+    const checkAvailability = vi.fn(async () => {
+      state = 'ready';
+      return { state, checkedAt: '2026-08-26T08:00:00.000Z' } as const;
+    });
+    const checked: DiscoverySource = {
+      ...source('xiaohongshu'),
+      getAvailability: () => ({ state }),
+      checkAvailability,
+    };
+    const registry = createSourceRegistry([checked, source('open_web')]);
+
+    await expect(registry.checkSources(['xiaohongshu'])).resolves.toEqual([
+      expect.objectContaining({
+        descriptor: expect.objectContaining({ id: 'xiaohongshu' }),
+        availability: { state: 'ready' },
+      }),
+    ]);
+    expect(checkAvailability).toHaveBeenCalledOnce();
+  });
+
   it('accepts a third adapter without changing any shared contract', () => {
     const registry = createSourceRegistry([
       source('open_web'),

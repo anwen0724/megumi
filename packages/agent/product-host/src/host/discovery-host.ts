@@ -5,6 +5,7 @@ import {
   DiscoveryConfigurationViewSchema,
   DiscoverySourceViewSchema,
   ConnectDiscoverySourceRequestSchema,
+  RefreshDiscoverySourceRequestSchema,
   EnsureDailyDiscoveryRequestSchema,
   GetDiscoveryHomeRequestSchema,
   InterestSchema,
@@ -34,6 +35,7 @@ export const DiscoveryRecommendationStatePayloadSchema = UpdateRecommendationSta
 export const DiscoveryConfigurationGetPayloadSchema = z.object({}).strict();
 export const DiscoveryConfigurationUpdatePayloadSchema = UpdateDiscoveryConfigurationRequestSchema;
 export const DiscoverySourceConnectPayloadSchema = ConnectDiscoverySourceRequestSchema;
+export const DiscoverySourceRefreshPayloadSchema = RefreshDiscoverySourceRequestSchema;
 export const DiscoveryConfigurationUiDtoSchema = DiscoveryConfigurationViewSchema;
 export const DiscoverySourceUiDtoSchema = DiscoverySourceViewSchema;
 
@@ -64,6 +66,7 @@ export type DiscoveryRecommendationStatePayload = z.infer<typeof DiscoveryRecomm
 export type DiscoveryConfigurationGetPayload = z.infer<typeof DiscoveryConfigurationGetPayloadSchema>;
 export type DiscoveryConfigurationUpdatePayload = z.infer<typeof DiscoveryConfigurationUpdatePayloadSchema>;
 export type DiscoverySourceConnectPayload = z.infer<typeof DiscoverySourceConnectPayloadSchema>;
+export type DiscoverySourceRefreshPayload = z.infer<typeof DiscoverySourceRefreshPayloadSchema>;
 export type DiscoveryConfigurationUiDto = z.infer<typeof DiscoveryConfigurationUiDtoSchema>;
 export type DiscoverySourceUiDto = z.infer<typeof DiscoverySourceUiDtoSchema>;
 export type DiscoveryInterestUiDto = z.infer<typeof DiscoveryInterestUiDtoSchema>;
@@ -77,6 +80,7 @@ export interface DiscoveryHost {
   getConfiguration(request?: DiscoveryConfigurationGetPayload): Promise<DiscoveryConfigurationUiDto>;
   updateConfiguration(request: DiscoveryConfigurationUpdatePayload): Promise<DiscoveryConfigurationUiDto>;
   connectSource(request: DiscoverySourceConnectPayload): Promise<DiscoverySourceUiDto>;
+  refreshSource(request: DiscoverySourceRefreshPayload): Promise<DiscoverySourceUiDto>;
   changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestUiDto>;
   setSessionParticipation(request: DiscoverySessionParticipationPayload): Promise<DiscoverySessionParticipationUiDto>;
   ensureDaily(request: DiscoveryDailyEnsurePayload): Promise<DiscoveryDailyEnsureResult>;

@@ -48,6 +48,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.discovery.configurationGet,
   IPC_CHANNELS.discovery.configurationUpdate,
   IPC_CHANNELS.discovery.sourceConnect,
+  IPC_CHANNELS.discovery.sourceRefresh,
   IPC_CHANNELS.discovery.sessionParticipationSet,
   IPC_CHANNELS.discovery.dailyEnsure,
   IPC_CHANNELS.discovery.homeGet,

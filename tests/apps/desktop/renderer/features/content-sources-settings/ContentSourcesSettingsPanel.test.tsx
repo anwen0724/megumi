@@ -12,6 +12,7 @@ describe('ContentSourcesSettingsPanel', () => {
   const deleteCredential = vi.fn();
   const getConfiguration = vi.fn();
   const connectSource = vi.fn();
+  const refreshSource = vi.fn();
 
   beforeEach(() => {
     getSettings.mockReset().mockResolvedValue(ok({
@@ -33,6 +34,9 @@ describe('ContentSourcesSettingsPanel', () => {
     connectSource.mockReset().mockImplementation(async (request) => ok(
       configuration().sources.find((source) => source.sourceId === request.payload.sourceId),
     ));
+    refreshSource.mockReset().mockImplementation(async (request) => ok(
+      configuration().sources.find((source) => source.sourceId === request.payload.sourceId),
+    ));
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
@@ -43,7 +47,7 @@ describe('ContentSourcesSettingsPanel', () => {
           setDiscoverySourceCredential: setCredential,
           deleteDiscoverySourceCredential: deleteCredential,
         },
-        discovery: { getConfiguration, connectSource },
+        discovery: { getConfiguration, connectSource, refreshSource },
       },
     });
   });
@@ -63,9 +67,14 @@ describe('ContentSourcesSettingsPanel', () => {
     expect(screen.queryByDisplayValue('zhihu-secret')).not.toBeInTheDocument();
     expect(screen.getByText('Configured', { selector: '[data-source-id="zhihu"] *' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Log in to 小红书' }));
+    await user.click(screen.getByRole('button', { name: 'Log in again 小红书' }));
     expect(connectSource).toHaveBeenCalledWith(expect.objectContaining({
       payload: { sourceId: 'xiaohongshu' },
+    }));
+
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+    expect(refreshSource).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { sourceId: 'bilibili' },
     }));
   });
 });
