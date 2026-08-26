@@ -36,7 +36,7 @@ export function Button({
     <button
       type={type}
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-md border font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-2 rounded-md border font-medium shadow-[0_1px_0_rgba(0,0,0,0.05)] transition-[background-color,border-color,color,box-shadow,filter,transform] duration-150 active:translate-y-px active:scale-[0.98] active:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:translate-y-0 disabled:scale-100 disabled:opacity-50',
         variantClassNames[variant],
         sizeClassNames[size],
         className,

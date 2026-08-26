@@ -49,6 +49,7 @@ export type {
   WorkspaceChangeSummaryDto,
   SessionReadDiagnosticDto,
   SessionRuntimeEventRangeDto,
+  UserMessageSummaryDto,
   InputSuggestionQueryItem,
   InputSuggestionQueryResult,
   PermissionMode,

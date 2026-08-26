@@ -118,7 +118,7 @@ export function Tabs<TValue extends string>({
             onClick={() => onValueChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
             className={cx(
-              'rounded px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:opacity-50',
+              'rounded px-3 py-1.5 text-xs font-medium transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] disabled:cursor-not-allowed disabled:scale-100 disabled:opacity-50',
               selected
                 ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',

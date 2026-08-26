@@ -248,6 +248,7 @@ async function validateProjectionContent(
           code: 'content_hash_mismatch',
           sequence: checkpoint.sequence,
           contentId: checkpoint.content.contentId,
+          contentKind: checkpoint.kind,
         });
       }
       continue;
@@ -259,24 +260,28 @@ async function validateProjectionContent(
         code: 'missing_content',
         sequence: checkpoint.sequence,
         contentId: checkpoint.content.contentId,
+        contentKind: checkpoint.kind,
       });
     } else if (read.status === 'corrupt') {
       issues.push({
         code: 'content_hash_mismatch',
         sequence: checkpoint.sequence,
         contentId: checkpoint.content.contentId,
+        contentKind: checkpoint.kind,
       });
     } else if (read.status === 'failed') {
       issues.push({
         code: 'content_read_failed',
         sequence: checkpoint.sequence,
         contentId: checkpoint.content.contentId,
+        contentKind: checkpoint.kind,
       });
     } else if (read.bytes.byteLength !== checkpoint.content.byteLength) {
       issues.push({
         code: 'content_length_mismatch',
         sequence: checkpoint.sequence,
         contentId: checkpoint.content.contentId,
+        contentKind: checkpoint.kind,
       });
     }
   }

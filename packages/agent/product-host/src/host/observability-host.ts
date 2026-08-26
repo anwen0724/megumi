@@ -106,6 +106,7 @@ const ObservabilityLinkSchema = z.object({
 const ObservabilityIssueSchema = z.object({
   code: z.string(), sequence: z.number().int().nonnegative().optional(),
   spanId: z.string().optional(), contentId: z.string().optional(), sourceFile: z.string().optional(),
+  contentKind: z.string().optional(), captureIssues: z.array(CaptureIssueSchema).optional(),
 }).strict();
 
 export const ObservabilityTraceDetailSchema = z.object({

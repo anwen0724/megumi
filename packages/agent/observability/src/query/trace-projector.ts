@@ -1,7 +1,7 @@
 /*
  * Folds ordered Journal facts into a readable Trace while preserving diagnostic incompleteness.
  */
-import type { ContentKind, CapturedContent } from '../content/content-contract';
+import type { CaptureIssue, ContentKind, CapturedContent } from '../content/content-contract';
 import type { TraceJournalRecord } from '../persistence/trace-journal-record';
 import type {
   RecordedOutcome,
@@ -31,6 +31,7 @@ export type TraceReadIssueCode =
   | 'content_hash_mismatch'
   | 'content_length_mismatch'
   | 'content_read_failed'
+  | 'partial_content_capture'
   | 'unavailable_content'
   | 'unavailable_outcome'
   | 'diagnostics_dropped';
@@ -41,6 +42,8 @@ export interface TraceReadIssue {
   readonly spanId?: string;
   readonly contentId?: string;
   readonly sourceFile?: string;
+  readonly contentKind?: ContentKind;
+  readonly captureIssues?: readonly CaptureIssue[];
 }
 
 export interface InvalidJournalFact {
@@ -135,14 +138,24 @@ export function projectTrace(input: ProjectTraceInput): TraceProjection {
     if (record.spanId && !spanIds.has(record.spanId)) {
       issues.push({ code: 'orphan_content', sequence: record.sequence, spanId: record.spanId });
     }
-    const hasUnavailableIssue = (
+    const unavailableCaptureIssues = (
       record.content.mode === 'inline' || record.content.mode === 'stored'
-    ) && record.content.issues?.some((issue) => issue.kind === 'unavailable');
-    if (record.content.mode === 'unavailable' || hasUnavailableIssue) {
+    )
+      ? record.content.issues?.filter((issue) => issue.kind === 'unavailable') ?? []
+      : [];
+    if (record.content.mode === 'unavailable') {
       issues.push({
         code: 'unavailable_content',
         sequence: record.sequence,
+        contentKind: record.kind,
+      });
+    } else if (unavailableCaptureIssues.length > 0) {
+      issues.push({
+        code: 'partial_content_capture',
+        sequence: record.sequence,
+        contentKind: record.kind,
         ...(record.content.mode === 'stored' ? { contentId: record.content.contentId } : {}),
+        captureIssues: unavailableCaptureIssues,
       });
     }
     return [{
@@ -179,7 +192,7 @@ export function projectTrace(input: ProjectTraceInput): TraceProjection {
   return {
     traceId: input.traceId,
     traceKind: starts[0]?.traceKind ?? 'unknown',
-    status: incomplete ? 'incomplete' : outcomeStatus(end?.outcome),
+    status: outcomeStatus(end?.outcome),
     diagnostics: incomplete ? 'incomplete' : 'complete',
     correlations,
     ...(starts[0] ? { startedAt: starts[0].timestamp } : {}),
@@ -201,7 +214,6 @@ export function addTraceReadIssues(
   if (additionalIssues.length === 0) return projection;
   return {
     ...projection,
-    status: 'incomplete',
     diagnostics: 'incomplete',
     issues: [...projection.issues, ...additionalIssues],
   };

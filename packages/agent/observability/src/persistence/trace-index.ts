@@ -9,7 +9,7 @@ import type {
 import type { TraceListQuery } from '../query/trace-query';
 import type { TraceProjection } from '../query/trace-projector';
 
-export const TRACE_INDEX_SCHEMA_VERSION = 1;
+export const TRACE_INDEX_SCHEMA_VERSION = 2;
 
 const SCALAR_CORRELATION_KEYS = [
   'requestId',

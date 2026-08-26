@@ -10,6 +10,7 @@ import {
   PanelHeader,
   PanelTitle,
   SettingsSection,
+  Select,
   Tabs,
   TextField,
 } from '@megumi/desktop/renderer/shared/ui';
@@ -19,6 +20,28 @@ describe('shared UI primitives', () => {
     render(<Button variant="primary">Send</Button>);
 
     expect(screen.getByRole('button', { name: 'Send' }).className).toContain('bg-[var(--color-accent)]');
+    expect(screen.getByRole('button', { name: 'Send' }).className).toContain('active:scale-[0.98]');
+  });
+
+  it('opens a styled listbox and selects an option', async () => {
+    const onValueChange = vi.fn();
+    render(
+      <Select
+        label="Execution result"
+        value="all"
+        options={[
+          { value: 'all', label: 'All results' },
+          { value: 'error', label: 'Failed' },
+        ]}
+        onValueChange={onValueChange}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Execution result' }));
+    expect(screen.getByRole('listbox', { name: 'Execution result' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'Failed' }));
+
+    expect(onValueChange).toHaveBeenCalledWith('error');
   });
 
   it('renders a settings section header action on the title row', () => {

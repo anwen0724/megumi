@@ -155,7 +155,12 @@ function projectDetail(trace: TraceProjection): ObservabilityTraceDetailUiDto {
         ? { correlation: ObservabilityCorrelationSchema.parse(link.correlation) }
         : {}),
     })),
-    issues: trace.issues.map((issue) => ({ ...issue })),
+    issues: trace.issues.map(({ captureIssues, ...issue }) => ({
+      ...issue,
+      ...(captureIssues
+        ? { captureIssues: captureIssues.map((captureIssue) => ({ ...captureIssue })) }
+        : {}),
+    })),
     sourceFiles: [...trace.sourceFiles],
   };
 }

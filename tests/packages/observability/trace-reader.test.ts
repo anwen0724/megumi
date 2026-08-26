@@ -70,7 +70,7 @@ describe('Trace Reader', () => {
     });
   });
 
-  it('marks structural and Content evidence gaps incomplete without rewriting business outcome', async () => {
+  it('keeps the recorded business outcome while marking structural and Content evidence gaps incomplete', async () => {
     const storage = new ObservabilityMemoryStorage();
     const traceId = '00000000-0000-4000-8000-000000000101';
     const missingContentId = 'a'.repeat(64);
@@ -108,7 +108,8 @@ describe('Trace Reader', () => {
 
     const detail = await reader.getTrace(traceId);
 
-    expect(detail?.status).toBe('incomplete');
+    expect(detail?.status).toBe('error');
+    expect(detail?.diagnostics).toBe('incomplete');
     expect(detail?.recordedOutcome).toEqual({
       status: 'error',
       code: 'model_failed',
@@ -180,9 +181,57 @@ describe('Trace Reader', () => {
 
     const detail = await reader.getTrace(traceId);
 
-    expect(detail?.status).toBe('incomplete');
+    expect(detail?.status).toBe('ok');
+    expect(detail?.diagnostics).toBe('incomplete');
     expect(detail?.recordedOutcome).toEqual({ status: 'ok' });
     expect(detail?.issues).toContainEqual(expect.objectContaining({ code: 'content_hash_mismatch' }));
+  });
+
+  it('reports unavailable nested fields as partial capture without declaring the Content unavailable', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const traceId = '00000000-0000-4000-8000-000000000204';
+    const value = 'provider request';
+    const records: TraceJournalRecord[] = [
+      started(traceId, 1),
+      {
+        ...base(traceId, 2),
+        type: 'content.recorded',
+        kind: 'model.provider_request',
+        content: {
+          mode: 'inline',
+          contentId: sha256(new TextEncoder().encode(value)),
+          mediaType: 'text/plain;charset=utf-8',
+          value,
+          issues: [
+            { path: '/prompt_cache_key', kind: 'unavailable', reason: 'unsupported_value' },
+            { path: '/prompt_cache_retention', kind: 'unavailable', reason: 'unsupported_value' },
+          ],
+        },
+        correlation: {},
+      },
+      {
+        ...base(traceId, 3),
+        type: 'trace.ended',
+        outcome: { status: 'ok', code: 'completed' },
+        diagnostics: 'complete',
+      },
+    ];
+    seedSegment(storage, '2026-08-26', 1, records);
+    const reader = createTraceReader({ rootDirectory: 'observability', storage });
+
+    const detail = await reader.getTrace(traceId);
+
+    expect(detail).toMatchObject({ status: 'ok', diagnostics: 'incomplete' });
+    expect(detail?.issues).toContainEqual({
+      code: 'partial_content_capture',
+      sequence: 2,
+      contentKind: 'model.provider_request',
+      captureIssues: [
+        { path: '/prompt_cache_key', kind: 'unavailable', reason: 'unsupported_value' },
+        { path: '/prompt_cache_retention', kind: 'unavailable', reason: 'unsupported_value' },
+      ],
+    });
+    expect(detail?.issues).not.toContainEqual(expect.objectContaining({ code: 'unavailable_content' }));
   });
 
   it('keeps streaming Journal reads available when every Derived Index operation fails', async () => {
