@@ -1,4 +1,6 @@
-/* Defines the extensible content-source boundary used by daily discovery. */
+/*
+ * Defines the extensible content-source boundary used by Daily Discovery.
+ */
 import { z } from 'zod';
 
 const HttpUrlSchema = z.string().url().refine((value) => {
@@ -108,14 +110,18 @@ export type SourceReadResult =
 
 export interface DiscoverySource {
   readonly descriptor: SourceDescriptor;
+  /** Reports current connection or provider availability without initiating work. */
   getAvailability(): SourceAvailability;
+  /** Opens an interactive login flow when the Source requires a browser session. */
   connect?(): Promise<void>;
+  /** Searches the Source and returns normalized, boundary-validated content. */
   search(request: {
     readonly query: string;
     readonly mode: SourceSearchMode;
     readonly limit: number;
     readonly signal: AbortSignal;
   }): Promise<SourceSearchResult>;
+  /** Reads normalized detail content when the Source supports detail retrieval. */
   read?(request: {
     readonly sourceContentId?: string;
     readonly url: string;

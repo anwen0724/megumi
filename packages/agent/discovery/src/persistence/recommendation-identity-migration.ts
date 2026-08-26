@@ -18,6 +18,7 @@ export function migrateRecommendationIdentities(
   });
 }
 
+/** Rewrites pending identities while preserving one deterministic winner per canonical URL. */
 function migrateRecommendationIdentitiesInTransaction(
   database: DatabaseConnection,
 ): RecommendationIdentityMigrationResult {

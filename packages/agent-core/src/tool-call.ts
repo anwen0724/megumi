@@ -1,4 +1,6 @@
-/* Executes one model-ordered ToolCall batch with validation, concurrency, timeout, and cancellation. */
+/*
+ * Executes one model-ordered ToolCall batch with validation, concurrency, timeout, and cancellation.
+ */
 import {
   validateToolArguments,
   type ToolResultMessage,
@@ -46,6 +48,7 @@ type ExecutionResult =
       readonly error: AgentError;
     };
 
+/** Executes one model-ordered ToolCall batch under the configured cancellation and concurrency policy. */
 export async function runToolCallBatch(
   input: RunToolCallBatchInput,
 ): Promise<ToolCallBatchResult> {
@@ -134,6 +137,7 @@ export async function runToolCallBatch(
   return { status: 'completed', results: compactResults(results) };
 }
 
+/** Validates one model ToolCall and resolves its registered implementation. */
 function prepareCall(
   tools: readonly AgentTool[],
   call: AgentToolCall,
@@ -156,6 +160,7 @@ function prepareCall(
   }
 }
 
+/** Executes one prepared ToolCall and converts every terminal path into one ordered result. */
 async function executePrepared(
   input: RunToolCallBatchInput,
   prepared: PreparedCall,

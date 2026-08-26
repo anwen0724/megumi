@@ -1,4 +1,6 @@
-/* Owns the one production catalog of Megumi's built-in discovery sources. */
+/*
+ * Owns the production catalog of Megumi's built-in Discovery Sources.
+ */
 import type { WebFetch, WebSearch } from '@megumi/tools';
 import type { EmbeddedBrowser } from './embedded-browser';
 import { createBilibiliSource } from './bilibili-source';
@@ -13,6 +15,7 @@ export const DISCOVERY_SOURCE_IDS = [
   'bilibili', 'open_web', 'xiaohongshu', 'douyin', 'zhihu', 'twitter',
 ] as const;
 
+/** Creates Megumi's production Source catalog and returns its validated registry. */
 export function createDiscoverySourceRegistry(input: {
   readonly webSearch?: WebSearch | (() => WebSearch | undefined);
   readonly webFetch?: WebFetch;

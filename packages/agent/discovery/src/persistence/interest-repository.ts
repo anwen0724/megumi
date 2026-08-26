@@ -104,6 +104,7 @@ export function createInterestRepository(database: DatabaseConnection): Interest
   };
 }
 
+/** Applies one already-validated Interest state transition inside the caller transaction. */
 function changeInterest(database: DatabaseConnection, command: ValidatedInterestCommand): Interest {
   if (command.action === 'create') {
     const description = InterestDescriptionSchema.parse(command.description);
@@ -149,6 +150,7 @@ function changeInterest(database: DatabaseConnection, command: ValidatedInterest
   return readInterestRequired(database, command.interestId);
 }
 
+/** Applies extracted Evidence and its deterministic Interest effects in one transaction. */
 function applyInterestExtraction(
   database: DatabaseConnection,
   command: ApplyInterestExtraction,
@@ -243,6 +245,7 @@ function insertConversationInterest(
   ` }).run([interestId, description, now, now]);
 }
 
+/** Retracts one Session's Evidence and deletes inferred Interests that lose all support. */
 function retractSessionEvidence(
   database: DatabaseConnection,
   sessionId: string,

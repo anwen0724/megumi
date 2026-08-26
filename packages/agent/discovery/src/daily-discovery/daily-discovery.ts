@@ -1,4 +1,6 @@
-/* Defines daily batch state, triggers, and public execution results. */
+/*
+ * Defines Daily Discovery Batch state, triggers, and public execution results.
+ */
 import { z } from 'zod';
 
 const TimestampSchema = z.string().datetime({ offset: true });

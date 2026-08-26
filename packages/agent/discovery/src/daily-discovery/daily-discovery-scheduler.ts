@@ -98,6 +98,7 @@ export function localDateAt(timestamp: string, timezone: string): string {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
+/** Executes the scheduled callback at the background error-observation boundary. */
 async function runScheduledEnsure(options: CreateDailyDiscoverySchedulerOptions): Promise<void> {
   try {
     await options.ensure({ trigger: 'schedule', now: options.now() });
@@ -126,6 +127,7 @@ function nextScheduledTimestamp(now: string, timezone: string, generationTime: s
   return scheduledTimestamp(date.toISOString().slice(0, 10), generationTime, timezone);
 }
 
+/** Resolves a local wall-clock generation time to a stable UTC timestamp across timezones. */
 function scheduledTimestamp(localDate: string, generationTime: string, timezone: string): string {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(generationTime)) {
     throw new Error('Discovery dailyGenerationTime must use HH:mm.');

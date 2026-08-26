@@ -1,4 +1,6 @@
-/* Keeps normalized discovery candidates private to one daily Agent execution. */
+/*
+ * Keeps normalized Discovery candidates private to one daily Agent execution.
+ */
 import {
   SourceContentDetailSchema,
   SourceContentSchema,
@@ -13,13 +15,19 @@ export type DiscoveryCandidate = SourceContent & {
 };
 
 export interface CandidateRegistry {
+  /** Validates, deduplicates, and merges normalized Source results. */
   add(contents: readonly SourceContent[]): readonly DiscoveryCandidate[];
+  /** Reads one candidate by its execution-local id. */
   get(candidateId: string): DiscoveryCandidate | undefined;
+  /** Lists current candidates in insertion order. */
   list(): readonly DiscoveryCandidate[];
+  /** Validates and attaches detail content to the matching candidate. */
   attachDetail(candidateId: string, detail: SourceContentDetail): DiscoveryCandidate;
+  /** Invalidates the registry and releases all execution-scoped candidates. */
   dispose(): void;
 }
 
+/** Creates the execution-scoped registry that deduplicates and merges Source candidates. */
 export function createCandidateRegistry(): CandidateRegistry {
   const candidates = new Map<string, DiscoveryCandidate>();
   const candidateIdsByIdentity = new Map<string, string>();
@@ -89,6 +97,7 @@ export function createCandidateRegistry(): CandidateRegistry {
   };
 }
 
+/** Resolves the strongest available identity for one normalized Source result. */
 export function discoveryContentIdentity(content: SourceContent): string {
   return canonicalContentIdentity(content);
 }

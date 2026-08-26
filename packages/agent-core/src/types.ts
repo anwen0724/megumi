@@ -1,4 +1,6 @@
-/* Defines the provider-neutral contracts shared across the Agent package seam. */
+/*
+ * Defines the provider-neutral contracts shared across the Agent Core package seam.
+ */
 import type {
   Api,
   AssistantMessage,
@@ -31,6 +33,7 @@ export type AgentToolExecutionOutcome<TDetails = unknown> =
 
 export interface AgentTool<TDetails = unknown> extends Tool {
   readonly executionMode?: 'sequential' | 'parallel';
+  /** Executes one validated ToolCall and reports optional streaming updates. */
   execute(input: {
     readonly toolCallId: string;
     readonly arguments: unknown;
@@ -146,7 +149,9 @@ export type PrepareAgentContextResult =
   | { readonly status: 'cancelled' };
 
 export interface AgentContextProvider {
+  /** Prepares the trusted Context used for the next ModelCall. */
   prepare(input: PrepareAgentContextInput): Promise<PrepareAgentContextResult>;
+  /** Recovers a smaller trusted Context after provider overflow when supported. */
   recoverOverflow?(input: RecoverAgentContextInput): Promise<PrepareAgentContextResult>;
 }
 

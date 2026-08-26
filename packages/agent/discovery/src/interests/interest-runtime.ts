@@ -1,4 +1,6 @@
-/* Coordinates public Interest operations and the post-conversation extraction worker. */
+/*
+ * Coordinates public Interest operations and the post-conversation extraction worker.
+ */
 import type { Api, Model } from '@megumi/ai';
 import type { SessionCatalog, SessionHistory } from '@megumi/session';
 import { sessionMessageText } from '@megumi/session';
@@ -53,13 +55,19 @@ export interface CreateInterestRuntimeOptions {
 }
 
 export interface InterestRuntime {
+  /** Applies one explicit user Interest command. */
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
+  /** Changes whether one Session contributes future Interest Evidence. */
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
+  /** Enqueues one eligible completed turn without blocking conversation completion. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
+  /** Retracts one Session's Evidence and unsupported inferred Interests. */
   retractSessionEvidence(sessionId: string): Promise<void>;
+  /** Stops and drains the owned extraction worker. */
   shutdown(): Promise<void>;
 }
 
+/** Creates Interest commands and the owned post-conversation extraction worker. */
 export function createInterestRuntime(options: CreateInterestRuntimeOptions): InterestRuntime {
   let accepting = true;
   const queue = createInterestExtractionQueue({
@@ -119,6 +127,7 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
   };
 }
 
+/** Creates the no-op Interest boundary used when conversation recognition is unavailable. */
 export function createDisabledInterestRuntime(): InterestRuntime {
   const unavailable = async (): Promise<never> => {
     throw new Error('Interest runtime is not configured.');
@@ -148,6 +157,7 @@ function canProcess(
   return undefined;
 }
 
+/** Loads one committed turn, invokes extraction, and atomically applies validated Evidence. */
 async function processJob(
   options: CreateInterestRuntimeOptions,
   job: InterestExtractionJob,

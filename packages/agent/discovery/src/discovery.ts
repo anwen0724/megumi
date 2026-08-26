@@ -42,18 +42,31 @@ import type { UpdateRecommendationStateRequest } from './recommendations/recomme
 import type { SourceRegistry } from './sources/source-registry';
 
 export interface Discovery {
+  /** Applies one explicit user Interest change. */
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
+  /** Controls whether one Session contributes Interest Evidence. */
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
+  /** Enqueues one completed conversation turn for Interest extraction when eligible. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
+  /** Retracts the Evidence contributed by one Session. */
   retractSessionEvidence(sessionId: string): Promise<void>;
+  /** Starts owned background recovery and Daily Discovery scheduling. */
   startBackground(): Promise<void>;
+  /** Ensures the requested Daily Discovery Batch according to its trigger semantics. */
   ensureDailyDiscovery(request: EnsureDailyDiscoveryRequest): Promise<EnsureDailyDiscoveryResult>;
+  /** Reads the persisted Discovery Home projection. */
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
+  /** Searches persisted Recommendations rather than external Sources. */
   searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
+  /** Applies one user-controlled Recommendation state change. */
   updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationView>;
+  /** Reads the current user-facing Discovery configuration. */
   getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
+  /** Validates and persists user-facing Discovery configuration changes. */
   updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
+  /** Starts the interactive connection flow for one browser-session Source. */
   connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
+  /** Stops and drains every background activity owned by Discovery. */
   shutdown(): Promise<void>;
 }
 
@@ -68,6 +81,7 @@ export interface CreateDiscoveryOptions {
   };
 }
 
+/** Composes Megumi's Discovery business operations from its optional capabilities. */
 export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
   const interestRuntime = options.interests
     ? createInterestRuntime(options.interests)

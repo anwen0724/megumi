@@ -1,4 +1,6 @@
-/* Defines durable Interest, Evidence, and Session participation contracts. */
+/*
+ * Defines durable Interest, Evidence, and Session participation contracts.
+ */
 import { z } from 'zod';
 
 const TimestampSchema = z.string().datetime({ offset: true });

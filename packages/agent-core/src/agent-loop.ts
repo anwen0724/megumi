@@ -1,4 +1,6 @@
-/* Owns the complete multi-turn state machine for one provider-neutral Agent execution. */
+/*
+ * Owns the complete multi-turn state machine for one provider-neutral Agent execution.
+ */
 import type { AssistantMessage, ToolResultMessage } from '@megumi/ai';
 import { isAgentError } from './agent-error';
 import { runModelCall } from './model-call';
@@ -37,6 +39,7 @@ interface LoopCounters {
   toolCalls: number;
 }
 
+/** Identifies an event-publication failure that must terminate the current Agent Execution. */
 export class EventSinkFailure extends Error {
   readonly cause: unknown;
 
@@ -47,6 +50,7 @@ export class EventSinkFailure extends Error {
   }
 }
 
+/** Runs the complete provider-neutral multi-turn loop for one accepted Agent Execution. */
 export async function runAgentLoop(input: RunAgentLoopInput): Promise<AgentExecutionResult> {
   const workingMessages = [...input.messages];
   const newMessages: AgentMessage[] = [];
@@ -81,6 +85,7 @@ export async function runAgentLoop(input: RunAgentLoopInput): Promise<AgentExecu
   return result;
 }
 
+/** Advances ModelCall and ToolCall turns until one terminal execution result is fixed. */
 async function executeTurns(
   input: RunAgentLoopInput,
   workingMessages: AgentMessage[],
@@ -204,6 +209,7 @@ async function executeTurns(
   }
 }
 
+/** Publishes and appends ordered ToolCall results to the working conversation. */
 async function appendToolResults(
   results: readonly ToolResultMessage[],
   workingMessages: AgentMessage[],

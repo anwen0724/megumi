@@ -1,4 +1,6 @@
-/* Implements Bilibili's public WBI parameter signing without cookies or account state. */
+/*
+ * Implements Bilibili's public WBI parameter signing without cookies or account state.
+ */
 import { createHash } from 'node:crypto';
 
 const MIXIN_KEY_INDEXES = [
@@ -10,6 +12,7 @@ const MIXIN_KEY_INDEXES = [
 
 type WbiParameter = string | number | boolean;
 
+/** Signs one Bilibili WBI query using the current navigation image keys. */
 export function signBilibiliWbiParameters(input: {
   readonly params: Readonly<Record<string, WbiParameter>>;
   readonly imgKey: string;

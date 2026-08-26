@@ -1,4 +1,6 @@
-/* Builds and executes the provider-neutral model request for one conversation turn. */
+/*
+ * Builds and executes the provider-neutral Interest extraction request for one conversation turn.
+ */
 import type { Api, Model, Models } from '@megumi/ai';
 import {
   InterestExtractionResultSchema,
@@ -19,9 +21,11 @@ export interface InterestExtractionInput {
 }
 
 export interface InterestExtractor {
+  /** Extracts validated Evidence and Interest effects from one completed conversation turn. */
   extract(input: InterestExtractionInput): Promise<InterestExtractionResult>;
 }
 
+/** Creates the provider-neutral extractor for one completed conversation turn. */
 export function createInterestExtractor(options: {
   readonly models: Pick<Models, 'completeSimple'>;
 }): InterestExtractor {

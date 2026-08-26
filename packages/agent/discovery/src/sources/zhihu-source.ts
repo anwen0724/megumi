@@ -1,4 +1,6 @@
-/* Owns Zhihu Open Platform search, authentication, and SourceContent normalization. */
+/*
+ * Owns Zhihu Open Platform search, authentication, and SourceContent normalization.
+ */
 import {
   SourceContentSchema,
   type DiscoveryContentType,
@@ -11,6 +13,7 @@ const MAX_RESULTS = 10;
 
 type FetchImplementation = typeof globalThis.fetch;
 
+/** Creates the Zhihu Source backed by the user-configured Open Platform credential. */
 export function createZhihuSource(input: {
   readonly accessSecret: () => string | undefined;
   readonly fetch?: FetchImplementation;
@@ -73,9 +76,15 @@ export function createZhihuSource(input: {
   }
 }
 
+/** Normalizes either documented JSON or legacy XML responses at the provider boundary. */
 function normalizeResponse(text: string) {
   let value: unknown;
-  try { value = JSON.parse(text); } catch { value = text; }
+  try {
+    value = JSON.parse(text);
+  } catch {
+    // The Open Platform has returned XML payloads in addition to documented JSON.
+    value = text;
+  }
   const entries = typeof value === 'string'
     ? parseXmlEntries(value)
     : arrayValue(value, 'data') ?? arrayValue(value, 'results') ?? [];
@@ -101,6 +110,7 @@ function normalizeResponse(text: string) {
         ...(description ? { description } : {}),
       })];
     } catch {
+      // One malformed provider entry must not discard the rest of the response.
       return [];
     }
   });

@@ -1,4 +1,6 @@
-/* Defines persisted recommendation snapshots, user-state commands, and chat references. */
+/*
+ * Defines persisted Recommendation snapshots, user-state commands, and conversation references.
+ */
 import { z } from 'zod';
 import {
   RecommendationReferenceContentSchema,

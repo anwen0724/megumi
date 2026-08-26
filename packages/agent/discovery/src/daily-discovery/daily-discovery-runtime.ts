@@ -1,4 +1,6 @@
-/* Owns daily preflight, Batch/Attempt facts, result publication, retries, and scheduling. */
+/*
+ * Owns daily preflight, Batch and Attempt lifecycle, publication, and retry coordination.
+ */
 import { type Api, type Model } from '@megumi/ai';
 import type { DailyDiscoveryContextMaterial } from '@megumi/context';
 import type {
@@ -93,15 +95,23 @@ export interface DailyDiscoveryBackgroundErrorContext {
 }
 
 export interface DailyDiscoveryRuntime {
+  /** Starts identity migration, interrupted-Attempt recovery, and scheduling exactly once. */
   start(): Promise<void>;
+  /** Ensures the local-date Batch according to the requested trigger. */
   ensure(request: EnsureDailyDiscoveryRequest): Promise<EnsureDailyDiscoveryResult>;
+  /** Reads the current local Home projection with scheduling metadata. */
   getHome(request: GetDiscoveryHomeRequest): DiscoveryHomeView;
+  /** Searches already persisted Recommendations. */
   searchRecommendations(request: SearchRecommendationsRequest): SearchRecommendationsResult;
+  /** Applies one user-controlled Recommendation state change. */
   updateRecommendationState(request: UpdateRecommendationStateRequest): RecommendationView;
+  /** Returns the next scheduled generation timestamp when scheduling is active. */
   getNextScheduledAt(): string | undefined;
+  /** Stops scheduling and drains owned Attempt settlement and recovery work. */
   shutdown(): Promise<void>;
 }
 
+/** Creates the Daily Discovery coordinator over the shared Agent Execution entry point. */
 export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOptions & {
   readonly now: () => string;
 }): DailyDiscoveryRuntime {
@@ -111,12 +121,14 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
   let identitiesMigrated = false;
   let scheduler: DailyDiscoveryScheduler;
 
+  /** Runs the idempotent identity migration before any read or generation work. */
   const ensureIdentityMigration = (): void => {
     if (identitiesMigrated) return;
     input.repository.migrateRecommendationIdentities();
     identitiesMigrated = true;
   };
 
+  /** Delivers background failures to the terminal observer without creating a second failure. */
   const reportBackgroundError = (
     error: unknown,
     context: DailyDiscoveryBackgroundErrorContext,
@@ -128,6 +140,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     }
   };
 
+  /** Owns a background Promise until settlement and reports its rejection exactly once. */
   const track = (
     operation: Promise<void>,
     context: DailyDiscoveryBackgroundErrorContext,
@@ -145,6 +158,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     activePromises.add(tracked);
   };
 
+  /** Captures stable generation inputs before an Attempt enters the shared Agent Execution path. */
   const snapshotInputs = async () => {
     const interests = input.repository.listInterests().filter((interest) => interest.status === 'active');
     const settings = input.settings.getDiscoverySettings();
@@ -153,6 +167,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     return { interests, settings, descriptors, model };
   };
 
+  /** Starts one Agent Execution and binds its acceptance and settlement to one Batch Attempt. */
   const startAttempt = async (request: {
     readonly batchId: string;
     readonly localDate: string;
@@ -235,6 +250,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     };
   };
 
+  /** Converts one terminal Agent outcome into publication or the existing retry policy. */
   const settleAttempt = async (request: {
     readonly batchId: string;
     readonly localDate: string;
@@ -298,6 +314,7 @@ export function createDailyDiscoveryRuntime(input: CreateDailyDiscoveryRuntimeOp
     }
   };
 
+  /** Applies the bounded automatic retry policy without creating a second execution lifecycle. */
   const handleAttemptFailure = async (
     request: { readonly batchId: string; readonly localDate: string; readonly targetCount: number; readonly executionId: string },
     code: string,
@@ -522,6 +539,7 @@ function enabledDescriptors(registry: SourceRegistry, enabled: readonly Discover
     .map(({ descriptor }) => descriptor);
 }
 
+/** Builds the immutable business Context material supplied to Daily Discovery instructions. */
 function discoveryMaterial(input: {
   readonly targetCount: number;
   readonly interests: readonly Interest[];
@@ -553,6 +571,7 @@ function failedResult(
   return { status: 'failed', localDate, failure: { code, message, retryable } };
 }
 
+/** Freezes one selected execution candidate into its durable Recommendation snapshot. */
 function recommendationFromCandidate(input: {
   readonly candidate: DiscoveryCandidate;
   readonly batchId: string;
@@ -593,6 +612,7 @@ function failureMessage(code: string): string {
   return messages[code] ?? 'Daily discovery failed.';
 }
 
+/** Preserves distinct Source failures so operators can diagnose an empty Daily Batch. */
 function sourceSearchFailureMessage(
   failures: readonly { readonly sourceId: string; readonly failure: SourceFailure }[],
 ): string {

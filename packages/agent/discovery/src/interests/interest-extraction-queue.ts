@@ -1,4 +1,6 @@
-/* Owns the single-process FIFO and one-worker lifecycle for Interest extraction. */
+/*
+ * Owns the single-process FIFO and one-worker lifecycle for Interest extraction.
+ */
 export interface InterestExtractionJob {
   readonly sessionId: string;
   readonly executionId: string;
@@ -9,10 +11,13 @@ export interface InterestExtractionJob {
 }
 
 export interface InterestExtractionQueue {
+  /** Appends one job when the queue still accepts work. */
   submit(job: Omit<InterestExtractionJob, 'sequence'>): InterestExtractionJob | undefined;
+  /** Stops acceptance, cancels active work, and drains the owned worker. */
   shutdown(): Promise<void>;
 }
 
+/** Creates the owned single-worker queue for post-conversation Interest extraction. */
 export function createInterestExtractionQueue(options: {
   readonly process: (job: InterestExtractionJob, signal: AbortSignal) => Promise<void>;
   readonly onError?: (error: unknown, job: InterestExtractionJob) => void;
@@ -23,6 +28,7 @@ export function createInterestExtractionQueue(options: {
   let sequence = 0;
   let activeController: AbortController | undefined;
 
+  /** Serially drains accepted jobs while keeping the worker Promise owned by this queue. */
   const drain = async (): Promise<void> => {
     try {
       while (accepting && pending.length > 0) {

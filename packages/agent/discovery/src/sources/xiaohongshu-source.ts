@@ -1,4 +1,6 @@
-/* Owns Xiaohongshu browser URLs, page-state interpretation, and content normalization. */
+/*
+ * Owns Xiaohongshu browser URLs, page-state interpretation, and content normalization.
+ */
 import { SourceContentDetailSchema, SourceContentSchema, type DiscoverySource, type SourceFailure } from './discovery-source';
 import type { EmbeddedBrowser, EmbeddedBrowserSnapshot } from './embedded-browser';
 
@@ -9,6 +11,7 @@ const ALLOWED_ORIGINS = [
 ] as const;
 const HOME_URL = 'https://www.xiaohongshu.com/';
 
+/** Creates the Xiaohongshu Source backed by Megumi's embedded browser session. */
 export function createXiaohongshuSource(input: { readonly browser: EmbeddedBrowser }): DiscoverySource {
   let availability: ReturnType<DiscoverySource['getAvailability']> = { state: 'unknown' };
   return {
@@ -52,7 +55,10 @@ export function createXiaohongshuSource(input: { readonly browser: EmbeddedBrows
             ...(link.contextText?.trim() ? { description: link.contextText.trim() } : {}),
             ...(httpUrl(link.imageUrl) ? { coverUrl: httpUrl(link.imageUrl) } : {}),
           })];
-        } catch { return []; }
+        } catch {
+          // One malformed page link must not discard otherwise usable search results.
+          return [];
+        }
       }).slice(0, request.limit);
       return { status: 'success', items };
     },
@@ -83,7 +89,11 @@ function pageState(snapshot: EmbeddedBrowserSnapshot): { code: 'login_required' 
 }
 
 function noteId(value: string): string | undefined {
-  try { return new URL(value).pathname.match(/\/(?:explore|search_result)\/([\da-z]+)/iu)?.[1]; } catch { return undefined; }
+  try {
+    return new URL(value).pathname.match(/\/(?:explore|search_result)\/([\da-z]+)/iu)?.[1];
+  } catch {
+    return undefined;
+  }
 }
 
 function cleanTitle(value: string | undefined, suffix: string): string | undefined {
@@ -93,7 +103,12 @@ function cleanTitle(value: string | undefined, suffix: string): string | undefin
 
 function httpUrl(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  try { const url = new URL(value); return /^https?:$/u.test(url.protocol) ? url.toString() : undefined; } catch { return undefined; }
+  try {
+    const url = new URL(value);
+    return /^https?:$/u.test(url.protocol) ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function failed(code: SourceFailure['code'], message: string, retryable: boolean) {

@@ -102,7 +102,8 @@ function listRecommendationSelectionSignals(
   }));
 }
 
-export function readHome(database: DatabaseConnection, query: ReadHomeQuery): DiscoveryHomeView {
+/** Reads the stable renderer-facing Home projection from published Recommendations. */
+function readHome(database: DatabaseConnection, query: ReadHomeQuery): DiscoveryHomeView {
   const request = GetDiscoveryHomeRequestSchema.parse({
     mode: query.mode,
     ...(query.cursor ? { cursor: query.cursor } : {}),
@@ -165,7 +166,8 @@ export function readHome(database: DatabaseConnection, query: ReadHomeQuery): Di
   });
 }
 
-export function searchRecommendations(
+/** Searches persisted visible Recommendations with stable cursor pagination. */
+function searchRecommendations(
   database: DatabaseConnection,
   input: { readonly query: string; readonly cursor?: string; readonly limit?: number },
 ): SearchRecommendationsResult {
@@ -207,7 +209,8 @@ export function searchRecommendations(
   });
 }
 
-export function updateRecommendationState(
+/** Applies one validated Recommendation action and returns the updated projection. */
+function updateRecommendationState(
   database: DatabaseConnection,
   input: RecommendationStateCommand,
 ): RecommendationView {
@@ -283,7 +286,7 @@ function readRecommendation(database: DatabaseConnection, recommendationId: stri
 }
 
 /** Reads one currently published, visible Recommendation for a new conversation. */
-export function readRecommendationReference(
+function readRecommendationReference(
   database: DatabaseConnection,
   recommendationId: string,
 ): RecommendationReferenceContent | undefined {

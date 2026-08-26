@@ -1,4 +1,6 @@
-/* Provides the stateful public Agent interface over the execution-scoped Agent Loop. */
+/*
+ * Provides the stateful public Agent interface over the execution-scoped Agent Loop.
+ */
 import { isAgentError } from './agent-error';
 import { EventSinkFailure, runAgentLoop } from './agent-loop';
 import type {
@@ -47,6 +49,7 @@ interface ActiveExecution {
   readonly executionId: string;
 }
 
+/** Reports invalid public Agent operations without converting them into execution failures. */
 export class AgentOperationError extends Error {
   readonly code: AgentOperationErrorCode;
 
@@ -57,6 +60,7 @@ export class AgentOperationError extends Error {
   }
 }
 
+/** Owns one Agent's mutable state and serializes its provider-neutral Executions. */
 export class Agent {
   private configuration: AgentConfiguration;
   private messages: AgentMessage[];
@@ -75,6 +79,7 @@ export class Agent {
   /** Serializes Agent-owned event publications so state facts stay ordered. */
   private publishChain: Promise<void> = Promise.resolve();
 
+  /** Creates an Agent from its initial configuration, context seam, and execution policy. */
   constructor(options: AgentOptions) {
     this.configuration = copyConfiguration(options.initialState.configuration);
     this.messages = [...(options.initialState.messages ?? [])];
@@ -84,6 +89,7 @@ export class Agent {
     this.settlement = options.settlement;
   }
 
+  /** Returns an immutable snapshot of the current public Agent state. */
   get state(): AgentState {
     return {
       configuration: copyConfiguration(this.configuration),
@@ -95,16 +101,19 @@ export class Agent {
     };
   }
 
+  /** Updates idle Agent configuration without changing execution-scoped facts. */
   configure(patch: AgentConfigurationPatch): void {
     this.assertIdleMutation();
     this.configuration = copyConfiguration({ ...this.configuration, ...patch });
   }
 
+  /** Replaces idle conversation history with a defensive copy. */
   replaceMessages(messages: readonly AgentMessage[]): void {
     this.assertIdleMutation();
     this.messages = [...messages];
   }
 
+  /** Starts one Agent Execution with one or more new input messages. */
   async prompt(
     input: AgentMessage | readonly AgentMessage[],
     options?: AgentExecutionOptions,
@@ -117,6 +126,7 @@ export class Agent {
     return this.execute(messages, options);
   }
 
+  /** Continues an incomplete history that already ends in user or tool input. */
   async continue(options?: AgentExecutionOptions): Promise<AgentExecutionResult> {
     this.assertCanStart();
     const lastMessage = this.messages.at(-1);
@@ -129,6 +139,7 @@ export class Agent {
     return this.execute([], options);
   }
 
+  /** Requests cancellation without changing an already fixed execution result. */
   abort(): void {
     const active = this.activeExecution;
     if (!active || this.resultFixed) return;
@@ -152,10 +163,12 @@ export class Agent {
     }
   }
 
+  /** Resolves after the active Execution has completely settled. */
   waitForIdle(): Promise<void> {
     return this.activeExecution?.completion ?? Promise.resolve();
   }
 
+  /** Clears idle execution artifacts and conversation messages. */
   reset(): void {
     this.assertIdleMutation();
     this.messages = [];
@@ -164,6 +177,7 @@ export class Agent {
     this.lastError = undefined;
   }
 
+  /** Subscribes to ordered events and returns an idempotent unsubscribe callback. */
   subscribe(listener: AgentEventListener): () => void {
     this.listeners.add(listener);
     let subscribed = true;
@@ -174,6 +188,7 @@ export class Agent {
     };
   }
 
+  /** Owns one public Execution from acceptance through final state settlement. */
   private async execute(
     input: readonly AgentMessage[],
     options?: AgentExecutionOptions,
@@ -289,6 +304,7 @@ export class Agent {
     })
   );
 
+  /** Validates Loop progress against the single explicit Agent execution state machine. */
   private applyProgress(progress: AgentExecutionProgress): AgentExecutionState {
     const current = this.execution;
     if (current.status === 'idle') {
@@ -310,6 +326,7 @@ export class Agent {
   }
 
   /** The single transition implementation: illegal moves fail loudly in development. */
+  /** Applies one legal execution-state transition before publishing its observable fact. */
   private transition(next: AgentExecutionState): void {
     const current = this.execution;
     if (current.status === 'idle') {
@@ -363,6 +380,7 @@ export class Agent {
     throw new Error(`Invalid Agent Execution transition to ${describeState(next)}.`);
   }
 
+  /** Rejects phase moves that would violate the current execution lifecycle. */
   private assertPhaseMove(from: AgentExecutionPhase, to: AgentExecutionPhase): void {
     const allowed = ALLOWED_PHASE_TRANSITIONS[from];
     if (!allowed.includes(to)) {
@@ -371,6 +389,7 @@ export class Agent {
   }
 
   /** Publishes one pre-final event; listener failures fail the execution loudly. */
+  /** Publishes an event whose listener failure must fail the active Execution. */
   private async publishNecessary(event: AgentEvent): Promise<void> {
     try {
       await this.processEvent(event, this.activeSignal());
@@ -380,6 +399,7 @@ export class Agent {
   }
 
   /** Publishes one fixed-fact event; observer failures are isolated and never change the result. */
+  /** Publishes a best-effort terminal event after the execution result is already fixed. */
   private async publishIsolated(event: AgentEvent): Promise<void> {
     this.projectEvent(event);
     const signal = this.activeSignal();
@@ -392,6 +412,7 @@ export class Agent {
     }
   }
 
+  /** Serializes Agent-owned publications while allowing the queue to recover after failure. */
   private enqueuePublish(task: () => Promise<void>): Promise<void> {
     const next = this.publishChain.then(task);
     // A failed task is returned to its owner, while the private tail recovers so
@@ -408,6 +429,7 @@ export class Agent {
     return NEVER_ABORTED_SIGNAL;
   }
 
+  /** Projects one Loop event before notifying external listeners in stable order. */
   private async processEvent(event: AgentEvent, signal: AbortSignal): Promise<void> {
     this.projectEvent(event);
     for (const listener of [...this.listeners]) {
@@ -415,6 +437,7 @@ export class Agent {
     }
   }
 
+  /** Exhaustively projects observable Loop facts into the current Agent state snapshot. */
   private projectEvent(event: AgentEvent): void {
     switch (event.type) {
       case 'agent_start':

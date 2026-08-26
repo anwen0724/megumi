@@ -1,4 +1,6 @@
-/* Adapts the existing provider-neutral Web Search and Web Fetch interfaces as a discovery source. */
+/*
+ * Adapts the provider-neutral Web Search and Web Fetch interfaces as a Discovery Source.
+ */
 import {
   ToolExecutionFailure,
   type WebFetch,
@@ -11,6 +13,7 @@ import {
   type SourceFailure,
 } from './discovery-source';
 
+/** Creates the Open Web Source from the configured Harness search and fetch capabilities. */
 export function createOpenWebSource(input: {
   readonly webSearch?: WebSearch | (() => WebSearch | undefined);
   readonly webFetch?: WebFetch;
@@ -45,6 +48,7 @@ export function createOpenWebSource(input: {
               ...(entry.snippet.trim() ? { description: entry.snippet } : {}),
             })];
           } catch {
+            // One malformed provider result must not discard the rest of the search response.
             return [];
           }
         });
@@ -87,6 +91,7 @@ function failed(code: SourceFailure['code'], message: string, retryable: boolean
   return { status: 'failed' as const, failure: { code, message, retryable } };
 }
 
+/** Converts Harness Tool failures into the stable Discovery Source failure contract. */
 function toolFailure(error: unknown, signal: AbortSignal): SourceFailure {
   if (signal.aborted) return { code: 'cancelled', message: 'Open Web request was cancelled.', retryable: false };
   if (error instanceof ToolExecutionFailure) {

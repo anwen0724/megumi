@@ -1,22 +1,27 @@
-/* Produces stable source and cross-source identities for discovered content. */
+/*
+ * Produces stable source and cross-source identities for discovered content.
+ */
 import type { SourceContent } from '../sources/discovery-source';
 
 const TRACKING_PARAMETERS = new Set([
   'from', 'from_source', 'share_source', 'share_token', 'source', 'spm_id_from',
 ]);
 
+/** Creates a Source-local identity when a stable provider content id exists. */
 export function sourceContentIdentity(content: SourceContent): string {
   return content.sourceContentId
     ? `source:${content.sourceId}:id:${content.sourceContentId}`
     : `source:${content.sourceId}:url:${normalizeContentUrl(content.canonicalUrl)}`;
 }
 
+/** Creates the cross-source identity from a normalized canonical URL. */
 export function canonicalContentIdentity(content: Pick<SourceContent, 'canonicalUrl'>): string {
   const url = new URL(content.canonicalUrl);
   const platform = platformIdentity(url);
   return platform ?? `content:v2:url:${normalizeContentUrl(url.toString())}`;
 }
 
+/** Normalizes an HTTP(S) URL for stable cross-source content comparison. */
 export function normalizeContentUrl(value: string): string {
   const url = new URL(value);
   url.hash = '';

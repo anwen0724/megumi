@@ -1,4 +1,6 @@
-/* Owns validation and projection of source-aware Discovery configuration. */
+/*
+ * Owns validation and projection of source-aware Discovery configuration.
+ */
 import { z } from 'zod';
 import type { DiscoverySourceId } from '../sources/discovery-source';
 import type { SourceRegistry } from '../sources/source-registry';
@@ -13,7 +15,9 @@ export interface DiscoveryConfigurationSettings {
 }
 
 export interface DiscoveryConfigurationStore {
+  /** Reads the current validated configuration snapshot. */
   read(): DiscoveryConfigurationSettings;
+  /** Persists one complete validated configuration snapshot. */
   write(settings: DiscoveryConfigurationSettings): Promise<void> | void;
 }
 
@@ -53,11 +57,15 @@ export type DiscoverySourceView = z.infer<typeof DiscoverySourceViewSchema>;
 export type DiscoveryConfigurationView = z.infer<typeof DiscoveryConfigurationViewSchema>;
 
 export interface DiscoveryConfiguration {
+  /** Reads the configuration and current Source availability projection. */
   get(): Promise<DiscoveryConfigurationView>;
+  /** Applies one validated partial configuration update. */
   update(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
+  /** Opens the connection flow for one browser-session Source. */
   connectSource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
 }
 
+/** Creates user-facing Discovery configuration operations over Settings and Sources. */
 export function createDiscoveryConfiguration(input: {
   readonly sourceRegistry: SourceRegistry;
   readonly settings: DiscoveryConfigurationStore;

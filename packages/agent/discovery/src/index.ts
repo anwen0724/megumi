@@ -1,4 +1,6 @@
-/* Exposes Megumi's content-discovery business interface and contracts. */
+/*
+ * Exposes Megumi's content-discovery business interface and contracts.
+ */
 export { createDiscovery } from './discovery';
 export type {
   CreateDiscoveryOptions,

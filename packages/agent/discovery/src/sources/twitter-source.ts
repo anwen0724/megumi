@@ -1,4 +1,6 @@
-/* Owns TwitterAPI.io Advanced Search, cursor paging, and Tweet normalization. */
+/*
+ * Owns TwitterAPI.io Advanced Search, cursor paging, and Tweet normalization.
+ */
 import { SourceContentSchema, type DiscoverySource, type SourceFailure } from './discovery-source';
 
 const SEARCH_URL = 'https://api.twitterapi.io/twitter/tweet/advanced_search';
@@ -6,6 +8,7 @@ const PROVIDER_PAGE_LIMIT = 20;
 
 type FetchImplementation = typeof globalThis.fetch;
 
+/** Creates the TwitterAPI.io Source from the user-configured API key. */
 export function createTwitterSource(input: {
   readonly apiKey: () => string | undefined;
   readonly fetch?: FetchImplementation;
@@ -70,6 +73,7 @@ export function createTwitterSource(input: {
   };
 }
 
+/** Validates one untrusted TwitterAPI.io entry without failing sibling results. */
 function normalizeTweet(value: unknown) {
   if (!isRecord(value)) return [];
   const id = stringValue(value.id);
@@ -100,6 +104,7 @@ function normalizeTweet(value: unknown) {
       ...(Object.keys(engagement).length > 0 ? { engagement } : {}),
     })];
   } catch {
+    // One malformed Tweet must not discard other valid results from the same page.
     return [];
   }
 }

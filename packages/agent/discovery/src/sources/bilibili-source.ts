@@ -1,4 +1,6 @@
-/* Searches Bilibili public videos through WBI with bounded retry and risk-control cooldown. */
+/*
+ * Searches Bilibili public videos through WBI with bounded retry and risk-control cooldown.
+ */
 import {
   SourceContentSchema,
   type DiscoverySource,
@@ -23,6 +25,7 @@ class BilibiliFailure extends Error {
   }
 }
 
+/** Creates the public Bilibili WBI Source with bounded retry and cooldown state. */
 export function createBilibiliSource(input: {
   readonly fetch?: FetchImplementation;
   readonly now?: () => number;
@@ -214,6 +217,7 @@ export function createBilibiliSource(input: {
   return source;
 }
 
+/** Validates the provider result boundary and maps public video fields into SourceContent. */
 function normalizeSearchItems(value: unknown) {
   if (!Array.isArray(value)) {
     throw new BilibiliFailure(failure('invalid_response', 'Bilibili search results were invalid.', false));
@@ -247,6 +251,7 @@ function normalizeSearchItems(value: unknown) {
   });
 }
 
+/** Converts Bilibili and cancellation failures into the stable Source failure contract. */
 function normalizeFailure(error: unknown, signal: AbortSignal): SourceFailure {
   if (error instanceof BilibiliFailure) return error.failure;
   if (signal.aborted) return failure('cancelled', 'Bilibili request was cancelled.', false);

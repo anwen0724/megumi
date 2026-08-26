@@ -1,4 +1,6 @@
-/* Defines the Host-neutral, script-free browser capability used by browser-session Sources. */
+/*
+ * Defines the Host-neutral, script-free browser capability used by browser-session Sources.
+ */
 export type EmbeddedBrowserProfileId = 'xiaohongshu' | 'douyin';
 
 export interface EmbeddedBrowserLink {
@@ -25,16 +27,19 @@ export type EmbeddedBrowserSnapshotResult =
   | { readonly status: 'failed'; readonly failure: EmbeddedBrowserFailure };
 
 export interface EmbeddedBrowser {
+  /** Opens the isolated persistent profile for an interactive Source login. */
   openLogin(request: {
     readonly profileId: EmbeddedBrowserProfileId;
     readonly url: string;
     readonly allowedOrigins: readonly string[];
   }): Promise<void>;
+  /** Navigates an isolated profile and returns a script-free page snapshot. */
   snapshot(request: {
     readonly profileId: EmbeddedBrowserProfileId;
     readonly url: string;
     readonly allowedOrigins: readonly string[];
     readonly signal: AbortSignal;
   }): Promise<EmbeddedBrowserSnapshotResult>;
+  /** Closes browser profiles and releases Host resources. */
   shutdown(): Promise<void>;
 }

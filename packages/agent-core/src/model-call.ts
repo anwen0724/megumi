@@ -1,4 +1,6 @@
-/* Runs one logical ModelCall, including streaming, retry, timeout, and overflow recovery. */
+/*
+ * Runs one logical ModelCall, including streaming, retry, timeout, and overflow recovery.
+ */
 import {
   isContextOverflow,
   isRetryableAssistantError,
@@ -45,6 +47,7 @@ type AttemptResult =
   | { readonly status: 'failed'; readonly message?: AssistantMessage; readonly error: AgentError }
   | { readonly status: 'cancelled'; readonly partial?: AssistantMessage };
 
+/** Runs one logical ModelCall and returns its terminal provider-neutral result. */
 export async function runModelCall(input: RunModelCallInput): Promise<ModelCallResult> {
   let context = input.context;
   let attempt = 1;
@@ -183,6 +186,7 @@ export async function runModelCall(input: RunModelCallInput): Promise<ModelCallR
   return { status: 'cancelled' };
 }
 
+/** Runs one provider stream attempt under the shared timeout and cancellation signal. */
 async function runAttempt(
   input: RunModelCallInput,
   context: AgentContext,
@@ -259,6 +263,7 @@ async function runAttempt(
   return { status: 'completed', message: terminal };
 }
 
+/** Consumes one provider stream while preserving partial output and iterator cleanup. */
 async function consumeStream(
   stream: AssistantMessageEventStream,
   onProjection: (message: AssistantMessage) => Promise<void>,
@@ -278,13 +283,18 @@ async function consumeStream(
   } finally {
     const returned = iterator.return?.();
     if (returned) {
-      if (signal.aborted) void returned.catch(() => undefined);
+      if (signal.aborted) {
+        // Cancellation has already fixed the ModelCall result; iterator cleanup is
+        // best effort because some providers block or reject while tearing down.
+        void returned.catch(() => undefined);
+      }
       else await returned;
     }
   }
   return terminal;
 }
 
+/** Races one iterator step against cancellation without retaining the losing listener. */
 async function nextWithAbort<T>(
   iterator: AsyncIterator<T>,
   signal: AbortSignal,
@@ -300,6 +310,8 @@ async function nextWithAbort<T>(
     };
     const onAbort = () => settle({ done: true, value: undefined });
     signal.addEventListener('abort', onAbort, { once: true });
+    // The provider step can outlive the abort race, so observe both terminal paths
+    // even when cancellation has already settled the caller-facing Promise.
     void iterator.next().then(settle, (error) => {
       if (settled) return;
       settled = true;
@@ -342,6 +354,7 @@ function validateMessage(message: AssistantMessage):
   return { status: 'valid', toolCalls: calls };
 }
 
+/** Waits for retry backoff while cleaning both the timer and Abort listener on every path. */
 async function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
   if (delayMs <= 0 || signal.aborted) return;
   await new Promise<void>((resolve) => {

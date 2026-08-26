@@ -1,4 +1,6 @@
-/* Defines stable renderer-facing views for discovery history and search. */
+/*
+ * Defines stable renderer-facing views for Discovery history and search.
+ */
 import { z } from 'zod';
 import { DiscoveryFailureViewSchema, LocalDateSchema } from './daily-discovery/daily-discovery';
 import { InterestCreatedFromSchema, InterestDescriptionSchema } from './interests/interest';

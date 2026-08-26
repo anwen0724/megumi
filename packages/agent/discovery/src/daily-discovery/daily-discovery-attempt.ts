@@ -1,4 +1,6 @@
-/* Owns execution-scoped candidate, search-budget, and selection facts used by discovery built-in tools. */
+/*
+ * Owns execution-scoped candidate, search-budget, and selection facts used by Discovery tools.
+ */
 import type { RawToolResult } from '@megumi/tools';
 import {
   createCandidateRegistry,
@@ -48,6 +50,7 @@ export interface DailyDiscoveryAttemptState {
 }
 
 export interface DailyDiscoveryAttempts {
+  /** Registers one accepted Daily Discovery Agent Execution. */
   start(request: {
     readonly executionId: string;
     readonly targetCount: number;
@@ -56,13 +59,19 @@ export interface DailyDiscoveryAttempts {
     readonly sourceRegistry: SourceRegistry;
     readonly sourceBudgets?: Readonly<Record<string, SourceAttemptBudget>>;
   }): void;
+  /** Returns the current immutable-facing Attempt facts for settlement. */
   snapshot(executionId: string): DailyDiscoveryAttemptState | undefined;
+  /** Releases every execution-scoped candidate and budget fact. */
   dispose(executionId: string): void;
+  /** Executes the search_content tool against one registered Attempt. */
   searchContent(request: { readonly executionId: string; readonly input: unknown; readonly signal: AbortSignal }): Promise<RawToolResult>;
+  /** Executes the read_candidate tool against one registered Attempt. */
   readCandidate(request: { readonly executionId: string; readonly input: unknown; readonly signal: AbortSignal }): Promise<RawToolResult>;
+  /** Validates and records the terminal Recommendation selection. */
   selectRecommendations(request: { readonly executionId: string; readonly input: unknown; readonly signal: AbortSignal }): Promise<RawToolResult>;
 }
 
+/** Creates the execution-scoped Attempt store used by Discovery's built-in tools. */
 export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
   const records = new Map<string, AttemptRecord>();
 

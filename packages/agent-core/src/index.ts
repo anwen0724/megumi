@@ -1,4 +1,6 @@
-/* Exposes the stable public Agent interface without leaking execution internals. */
+/*
+ * Exposes the stable public Agent interface without leaking execution internals.
+ */
 export { Agent, AgentOperationError } from './agent';
 
 export type {
