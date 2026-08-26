@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@megumi/desktop/renderer/app/App';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
@@ -95,5 +96,16 @@ describe('App setup gate', () => {
     act(() => requestSettings?.());
 
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+  });
+
+  it('opens the first Settings category from the sidebar Settings button', async () => {
+    installMegumiMock();
+    useSetupWizardStore.getState().applyBootstrapSettings({ language: 'en-US', setupCompleted: true });
+    render(<App />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Settings' }));
+
+    expect(screen.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('radiogroup', { name: 'Language' })).toBeInTheDocument();
   });
 });

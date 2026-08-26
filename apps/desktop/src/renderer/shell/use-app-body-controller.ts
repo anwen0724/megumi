@@ -108,11 +108,19 @@ export function useAppBodyController() {
     })();
   }, [setActiveSession]);
 
-  const openSettings = useCallback((category: 'appearance' | 'sources' = 'appearance') => {
+  const showSettingsCategory = useCallback((category: 'appearance' | 'sources') => {
     setRightSidebarOpen(false);
     setSettingsCategory(category);
     setSettingsOpen(true);
   }, []);
+
+  const openSettings = useCallback(() => {
+    showSettingsCategory('appearance');
+  }, [showSettingsCategory]);
+
+  const openContentSources = useCallback(() => {
+    showSettingsCategory('sources');
+  }, [showSettingsCategory]);
 
   const openDiscovery = useCallback(() => {
     setRightSidebarOpen(false);
@@ -159,7 +167,7 @@ export function useAppBodyController() {
     handleOpenProject,
     handleRemoveProject,
     openSettings,
-    openContentSources: () => openSettings('sources'),
+    openContentSources,
     openDiscovery,
     handleStartRecommendationConversation,
     closeSettings,
