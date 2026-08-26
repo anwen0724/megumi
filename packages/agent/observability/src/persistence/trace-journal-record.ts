@@ -75,3 +75,13 @@ export const TraceJournalRecordSchema = z.discriminatedUnion('type', [
 
 export type TraceJournalRecord = z.infer<typeof TraceJournalRecordSchema>;
 
+/** Validates and encodes one schema v1 Journal Record without a trailing newline. */
+export function encodeTraceJournalRecord(record: TraceJournalRecord): string {
+  return JSON.stringify(TraceJournalRecordSchema.parse(record));
+}
+
+/** Parses one JSONL line and rejects unknown schema majors, fields, and invalid values. */
+export function decodeTraceJournalLine(line: string): TraceJournalRecord {
+  const value: unknown = JSON.parse(line);
+  return TraceJournalRecordSchema.parse(value);
+}

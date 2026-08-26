@@ -2,7 +2,9 @@
 /* Verifies that diagnostics failures never alter product callback semantics. */
 import { describe, expect, it, vi } from 'vitest';
 import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTraceJournal } from '../../../packages/agent/observability/src/persistence/trace-journal';
 import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Observability failure isolation', () => {
   it('returns the original result and executes once when every record write fails', async () => {
@@ -38,5 +40,30 @@ describe('Observability failure isolation', () => {
     expect(records.find((record) => record.type === 'content.recorded')).toMatchObject({
       content: { mode: 'unavailable', reason: 'serialization_failed' },
     });
+  });
+
+  it('returns the business result without waiting for terminal Journal disk flush', async () => {
+    let releaseAppend = (): void => undefined;
+    const appendGate = new Promise<void>((resolve) => {
+      releaseAppend = resolve;
+    });
+    const storage = new ObservabilityMemoryStorage();
+    storage.appendGate = appendGate;
+    const journal = createTraceJournal({
+      rootDirectory: 'observability',
+      storage,
+      drainIntervalMs: 60_000,
+    });
+    const observability = createTraceRecorder({ enqueue: journal.enqueue });
+
+    await expect(observability.withTrace(
+      { kind: 'conversation' },
+      async () => 'business-completed',
+    )).resolves.toBe('business-completed');
+    expect(storage.filePaths()).toEqual([]);
+
+    releaseAppend();
+    await journal.shutdown();
+    expect(storage.filePaths().some((path) => path.endsWith('.jsonl'))).toBe(true);
   });
 });

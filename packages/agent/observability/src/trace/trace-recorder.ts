@@ -1,7 +1,10 @@
 /*
  * Implements callback-scoped Trace recording while preserving business execution exactly once.
  */
-import type { CapturedContent } from '../content/content-contract';
+import {
+  captureContent,
+  type CapturedContentPayload,
+} from '../content/content-capture';
 import { normalizeDiagnosticError } from '../diagnostic-error';
 import type { TraceJournalRecord } from '../persistence/trace-journal-record';
 import {
@@ -16,7 +19,11 @@ import type {
   SpanOptions,
   TraceOptions,
 } from './observability';
-import { createTraceContext, type ActiveTraceContext } from './trace-context';
+import {
+  createTraceContext,
+  type ActiveTraceContext,
+  type TraceContext,
+} from './trace-context';
 import type {
   RecordedOutcome,
   TraceCorrelation,
@@ -25,7 +32,8 @@ import type {
 } from './trace-contract';
 
 export interface TraceRecordSink {
-  enqueue(record: TraceJournalRecord): void;
+  /** Accepts one already sequenced Record and optional bytes for a stored Content reference. */
+  enqueue(record: TraceJournalRecord, storedBytes?: Uint8Array): boolean | void;
 }
 
 export interface TraceLinkResolver {
@@ -36,9 +44,10 @@ export interface CreateTraceRecorderOptions {
   readonly enqueue: TraceRecordSink['enqueue'];
   readonly now?: () => Date;
   readonly createId?: () => string;
-  readonly capture?: (input: RecordContentInput) => CapturedContent;
+  readonly capture?: (input: RecordContentInput) => CapturedContentPayload;
   readonly links?: TraceLinkResolver;
   readonly health?: ObservabilityHealth;
+  readonly context?: TraceContext;
 }
 
 /** Creates the callback-scoped Observability writer used by product Modules. */
@@ -46,12 +55,19 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
   const now = options.now ?? (() => new Date());
   const createId = options.createId ?? (() => crypto.randomUUID());
   const health = options.health ?? createObservabilityHealth();
-  const contexts = createTraceContext();
+  const contexts = options.context ?? createTraceContext();
   const activeTraces = new Map<string, ActiveTraceContext>();
 
-  const enqueue = (context: ActiveTraceContext, record: TraceJournalRecord): void => {
+  const enqueue = (
+    context: ActiveTraceContext,
+    record: TraceJournalRecord,
+    storedBytes?: Uint8Array,
+  ): void => {
     try {
-      options.enqueue(record);
+      const accepted = options.enqueue(record, storedBytes);
+      if (accepted === false) {
+        context.lifecycle.diagnosticsDropped = true;
+      }
     } catch {
       context.lifecycle.diagnosticsDropped = true;
       health.recordDrop();
@@ -173,25 +189,24 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
     recordContent(input): void {
       const context = contexts.current();
       if (!context) return;
-      let content: CapturedContent;
+      let captured: CapturedContentPayload;
       try {
-        content = options.capture?.(input) ?? {
-          mode: 'unavailable',
-          reason: 'serialization_failed',
-        };
+        captured = options.capture?.(input) ?? captureContent(input);
       } catch {
         health.recordCaptureFailure();
         context.lifecycle.diagnosticsDropped = true;
-        content = { mode: 'unavailable', reason: 'serialization_failed' };
+        captured = {
+          content: { mode: 'unavailable', reason: 'serialization_failed' },
+        };
       }
       enqueue(context, {
         ...nextBase(context),
         type: 'content.recorded',
         ...(context.currentSpanId ? { spanId: context.currentSpanId } : {}),
         kind: input.kind,
-        content,
+        content: captured.content,
         correlation: mergeCorrelation(context.correlation, input.correlation),
-      });
+      }, captured.storedBytes);
     },
 
     recordEvent(event: TraceEvent): void {
@@ -220,6 +235,12 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
     },
   };
   return observability;
+}
+
+function recordPriority(record: TraceJournalRecord): 'content' | 'event' | 'lifecycle' {
+  if (record.type === 'content.recorded') return 'content';
+  if (record.type === 'span.event') return 'event';
+  return 'lifecycle';
 }
 
 function classifyResult<T>(

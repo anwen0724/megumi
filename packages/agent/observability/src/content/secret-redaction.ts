@@ -2,6 +2,8 @@
  * Owns deterministic secret-field classification and text redaction before content hashing.
  */
 import type { RedactionReason } from './content-contract';
+import type { DiagnosticError } from '../diagnostic-error';
+import type { DiagnosticJsonValue } from '../diagnostic-value';
 
 const REDACTED = '[redacted]';
 const AUTHORIZATION_FIELD_PATTERN = /authorization/i;
@@ -74,4 +76,42 @@ export function redactDiagnosticText(value: string): RedactedDiagnosticText {
     changed,
     entirelyRedacted: changed && redacted.trim() === REDACTED,
   };
+}
+
+/** Removes known credential fields and patterns from already JSON-safe Runtime Log data. */
+export function redactDiagnosticJsonValue(value: DiagnosticJsonValue): DiagnosticJsonValue {
+  if (typeof value === 'string') {
+    return redactDiagnosticText(value).value;
+  }
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (isDiagnosticArray(value)) {
+    return value.map((item) => redactDiagnosticJsonValue(item));
+  }
+
+  const redacted: Record<string, DiagnosticJsonValue> = {};
+  for (const [key, item] of Object.entries(value)) {
+    redacted[key] = classifySecretField(key)
+      ? REDACTED
+      : redactDiagnosticJsonValue(item);
+  }
+  return redacted;
+}
+
+/** Removes credential patterns from a bounded DiagnosticError tree. */
+export function redactDiagnosticError(error: DiagnosticError): DiagnosticError {
+  return {
+    name: redactDiagnosticText(error.name).value,
+    message: redactDiagnosticText(error.message).value,
+    ...(error.code ? { code: redactDiagnosticText(error.code).value } : {}),
+    ...(error.stack ? { stack: redactDiagnosticText(error.stack).value } : {}),
+    ...(error.cause ? { cause: redactDiagnosticError(error.cause) } : {}),
+  };
+}
+
+function isDiagnosticArray(
+  value: DiagnosticJsonValue,
+): value is readonly DiagnosticJsonValue[] {
+  return Array.isArray(value);
 }

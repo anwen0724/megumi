@@ -43,8 +43,9 @@ export const electronObservabilityStorageAdapter: ElectronObservabilityStorage =
             }))]
           : [];
       }));
-    } catch {
-      return [];
+    } catch (error) {
+      if (isMissingPathError(error)) return [];
+      throw error;
     }
   },
   async listFiles(path) {
@@ -77,11 +78,18 @@ export const electronObservabilityStorageAdapter: ElectronObservabilityStorage =
       return kind
         ? { kind, size: value.size, modifiedAtMs: value.mtimeMs }
         : undefined;
-    } catch {
-      return undefined;
+    } catch (error) {
+      if (isMissingPathError(error)) return undefined;
+      throw error;
     }
   },
   move: (source, destination) => rename(source, destination),
   removeFile: (path) => rm(path, { force: true }),
   remove: (path) => rm(path, { force: true }),
 };
+
+function isMissingPathError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+  return Boolean(descriptor && 'value' in descriptor && descriptor.value === 'ENOENT');
+}
