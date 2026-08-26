@@ -24,9 +24,21 @@ export async function saveDiagnosticBundle(
     await mkdir(directory, { recursive: true });
     for (const file of bundle.files) {
       const target = path.resolve(directory, file.relativePath);
-      if (path.dirname(target) !== path.resolve(directory))
+      const relative = path.relative(path.resolve(directory), target);
+      if (
+        relative.length === 0
+        || relative === '..'
+        || relative.startsWith(`..${path.sep}`)
+        || path.isAbsolute(relative)
+      ) {
         throw new Error("Invalid diagnostic bundle path.");
-      await writeFile(target, file.content, "utf8");
+      }
+      await mkdir(path.dirname(target), { recursive: true });
+      if (typeof file.content === 'string') {
+        await writeFile(target, file.content, 'utf8');
+      } else {
+        await writeFile(target, file.content);
+      }
     }
     return { status: "saved", directory };
   } catch (error) {

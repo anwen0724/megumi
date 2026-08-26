@@ -1,12 +1,54 @@
 // @vitest-environment node
 /* Verifies that diagnostics failures never alter product callback semantics. */
 import { describe, expect, it, vi } from 'vitest';
+import { composeObservability } from '@megumi/observability';
 import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 import { createTraceJournal } from '../../../packages/agent/observability/src/persistence/trace-journal';
 import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Observability failure isolation', () => {
+  it('composes one local runtime whose Writer and Reader share Journal truth', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const composed = composeObservability({
+      rootDirectory: 'observability',
+      storage,
+      now: () => new Date('2026-08-26T00:00:00.000Z'),
+    });
+
+    await composed.observability.withTrace({
+      kind: 'conversation',
+      correlation: { requestId: 'request:1' },
+    }, async () => 'completed');
+    await composed.flush();
+
+    const traces = await composed.queries.listTraces();
+    expect(traces).toHaveLength(1);
+    expect(traces[0]).toMatchObject({
+      traceKind: 'conversation',
+      status: 'ok',
+      correlations: [{ requestId: 'request:1' }],
+    });
+    await expect(composed.shutdown()).resolves.toBeUndefined();
+    await expect(composed.shutdown()).resolves.toBeUndefined();
+  });
+
+  it('keeps the streaming Reader available when the disposable Index cannot open', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const composed = composeObservability({
+      rootDirectory: 'observability',
+      storage,
+      openIndexDatabase: () => { throw new Error('Index unavailable.'); },
+    });
+
+    await composed.observability.withTrace({ kind: 'daily_discovery' }, async () => 'settled');
+    await composed.flush();
+
+    await expect(composed.queries.listTraces()).resolves.toHaveLength(1);
+    expect(composed.queries.getHealth().indexProjectionFailures).toBe(1);
+    await composed.shutdown();
+  });
+
   it('returns the original result and executes once when every record write fails', async () => {
     const operation = vi.fn(async () => ({ status: 'accepted' as const }));
     const observability = createTraceRecorder({

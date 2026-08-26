@@ -12,6 +12,12 @@ import type {
   SessionHistory,
 } from '@megumi/session';
 import type { Usage } from '@megumi/ai';
+import {
+  createContentDigest,
+  type Observability,
+  type OperationCompletion,
+  type TraceCorrelation,
+} from '@megumi/observability';
 
 /** Assistant reply metadata passthrough kept identical to the Session save contract. */
 export interface AssistantReplyMetadata {
@@ -90,6 +96,7 @@ export interface CreateSessionMessageCommitterOptions {
     'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
   readonly ids: { createSessionMessageId(): string };
+  readonly observability?: Observability;
 }
 
 /** A Session commit failure surfaced through the Agent listener or settlement seam. */
@@ -109,7 +116,7 @@ export function createSessionMessageCommitter(
 
   return {
     async commitModelResponse(input) {
-      const saved = await options.session.saveModelResponse({
+      const request: Parameters<typeof options.session.saveModelResponse>[0] = {
         message_id: input.messageId,
         session_id: input.sessionId,
         execution_id: input.executionId,
@@ -119,7 +126,12 @@ export function createSessionMessageCommitter(
         stop_reason: input.stopReason,
         ...input.metadata,
         completed_at: input.completedAt,
-      });
+      };
+      const saved = await commitSessionMessage(
+        options.observability,
+        commitCorrelation(input, request.content),
+        () => options.session.saveModelResponse(request),
+      );
       if (saved.status === 'failed') {
         return { status: 'failed', failure: { message: saved.failure.message } };
       }
@@ -132,7 +144,7 @@ export function createSessionMessageCommitter(
       // advances one entry per committed result.
       const items: CommittedToolResult[] = [];
       for (const result of [...input.results].sort((left, right) => left.callOrder - right.callOrder)) {
-        const saved = await options.session.saveToolResultMessage({
+        const request: Parameters<typeof options.session.saveToolResultMessage>[0] = {
           message_id: options.ids.createSessionMessageId(),
           session_id: input.sessionId,
           execution_id: input.executionId,
@@ -143,7 +155,17 @@ export function createSessionMessageCommitter(
           ...(result.error ? { error: result.error } : {}),
           content: [{ type: 'text', text: result.content }],
           completed_at: result.completedAt,
-        });
+        };
+        const saved = await commitSessionMessage(
+          options.observability,
+          commitCorrelation({
+            sessionId: input.sessionId,
+            executionId: input.executionId,
+            messageId: request.message_id,
+            toolCallId: result.toolCallId,
+          }, request.content),
+          () => options.session.saveToolResultMessage(request),
+        );
         if (saved.status === 'failed') {
           // The chain stays on the last real successful commit; the partial
           // successes are still returned because they are real Session facts.
@@ -164,7 +186,7 @@ export function createSessionMessageCommitter(
     },
 
     async commitAssistantReply(input) {
-      const saved = await options.session.saveAssistantReply({
+      const request: Parameters<typeof options.session.saveAssistantReply>[0] = {
         // Reuse the streaming identity when a message lifecycle was started;
         // otherwise settle a fresh reply for the execution.
         message_id: input.messageId ?? options.ids.createSessionMessageId(),
@@ -176,12 +198,74 @@ export function createSessionMessageCommitter(
         ...(input.reasonCode ? { reason_code: input.reasonCode } : {}),
         ...input.metadata,
         completed_at: input.completedAt,
-      });
+      };
+      const saved = await commitSessionMessage(
+        options.observability,
+        commitCorrelation({ ...input, messageId: request.message_id }, request.content),
+        () => options.session.saveAssistantReply(request),
+      );
       if (saved.status === 'failed') {
         return { status: 'failed', failure: { message: saved.failure.message } };
       }
       lastCommittedEntryId = saved.entry.entry_id;
       return { status: 'saved', messageId: saved.message.message_id, entryId: saved.entry.entry_id };
+    },
+  };
+}
+
+interface CommitIdentity {
+  readonly sessionId: string;
+  readonly executionId: string;
+  readonly messageId: string;
+  readonly toolCallId?: string;
+}
+
+interface SessionSaveResult {
+  readonly status: 'saved' | 'failed';
+  readonly failure?: { readonly code: string; readonly message: string };
+}
+
+function commitCorrelation(identity: CommitIdentity, content: unknown): TraceCorrelation {
+  const contentDigest = createContentDigest(content);
+  return {
+    sessionId: identity.sessionId,
+    executionId: identity.executionId,
+    messageId: identity.messageId,
+    ...(identity.toolCallId ? { toolCallId: identity.toolCallId } : {}),
+    ...(contentDigest ? { contentDigest } : {}),
+  };
+}
+
+/** Keeps Session authoritative and single-shot even if an injected diagnostic adapter fails. */
+async function commitSessionMessage<T extends SessionSaveResult>(
+  observability: Observability | undefined,
+  correlation: TraceCorrelation,
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  let operationPromise: Promise<T> | undefined;
+  const runOnce = (): Promise<T> => {
+    operationPromise ??= Promise.resolve().then(operation);
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'session.message.commit',
+      correlation,
+      classifyResult: classifySessionCommit,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function classifySessionCommit(result: SessionSaveResult): OperationCompletion {
+  if (result.status === 'saved') return { outcome: { status: 'ok', code: 'saved' } };
+  return {
+    outcome: {
+      status: 'error',
+      code: result.failure?.code ?? 'session_commit_failed',
+      message: result.failure?.message ?? 'Session message commit failed.',
     },
   };
 }

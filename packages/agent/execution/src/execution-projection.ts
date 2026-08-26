@@ -1,26 +1,14 @@
 /*
- * Owns the Discovery Agent's observability and Runtime Event projections: the
- * execution trace and root span, ModelCall, ToolCall and Approval spans,
- * attempt, usage, duration and retry measurements, and the message, turn and
- * tool execution events projected from AgentEvent facts. Every operation is
- * best-effort and never drives the Agent execution, the Session commits or
- * the outcome.
+ * Projects Agent Events into Runtime Events and Session settlement facts.
+ * It contains no Trace, Log, Measurement, or diagnostic lifecycle ownership.
  */
-import type { AssistantMessage, ToolResultMessage, Usage } from '@megumi/ai';
+import type { AssistantMessage, ToolResultMessage } from '@megumi/ai';
 import type { AgentError, AgentEvent, AgentEventListener } from '@megumi/agent-core';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
-import type {
-  MeasurementUnit,
-  ObservabilityService,
-  ObservabilitySpanName,
-  SpanHandle,
-  TraceHandle,
-} from '@megumi/observability';
 import type { SessionAssistantContent } from '@megumi/session';
 import type {
   ConversationExecutionMetadata,
   ExecutionClock,
-  ExecutionMetadata,
 } from './execution-registry';
 import type {
   AssistantReplyMetadata,
@@ -30,145 +18,6 @@ import type {
 import { SessionCommitError } from './session-settlement';
 import type { AgentToolResultDetails, AgentToolUpdateDetails } from './tool-adapter';
 import type { ToolScope } from './context-adapter';
-
-// ---------------------------------------------------------------------------
-// Observability adapter
-// ---------------------------------------------------------------------------
-
-export interface CreateExecutionObserverOptions {
-  readonly metadata: ExecutionMetadata;
-  readonly observability?: ObservabilityService;
-}
-
-export interface ExecutionObserver {
-  /** Opens the execution trace and root span; never throws. */
-  start(): void;
-  /** Closes every open span, the root span and the trace with the real outcome; never throws. */
-  end(status: 'ok' | 'error' | 'cancelled'): void;
-  /** Opens a span with the caller's identity facts (modelCallId, toolCallId, ...). */
-  startSpan(name: ObservabilitySpanName, attributes?: Record<string, unknown>): SpanHandle | undefined;
-  endSpan(span: SpanHandle | undefined, status: 'ok' | 'error' | 'cancelled'): void;
-  recordLog(input: {
-    readonly level: 'info' | 'warn' | 'error';
-    readonly event: string;
-    readonly attributes?: Record<string, unknown>;
-  }): void;
-  recordMeasurement(input: {
-    readonly name: string;
-    readonly value: number;
-    readonly unit: MeasurementUnit;
-    readonly attributes?: Record<string, unknown>;
-  }): void;
-}
-
-export function createExecutionObserver(options: CreateExecutionObserverOptions): ExecutionObserver {
-  const service = options.observability;
-  let trace: TraceHandle | undefined;
-  let rootSpan: SpanHandle | undefined;
-  let ended = false;
-  const openSpans = new Set<SpanHandle>();
-
-  const correlation = () => ({
-    ...(trace ? { traceId: trace.traceId } : {}),
-    ...(rootSpan ? { spanId: rootSpan.spanId } : {}),
-    executionId: options.metadata.executionId,
-    ...(options.metadata.kind === 'conversation' ? {
-      sessionId: options.metadata.sessionId,
-      workspaceId: options.metadata.workspaceId,
-    } : {}),
-    requestId: options.metadata.requestId,
-  });
-
-  return {
-    start() {
-      if (!service || ended) return;
-      try {
-        trace = service.startTrace({
-          traceId: options.metadata.executionId,
-          name: 'agent_run',
-          executionId: options.metadata.executionId,
-          ...(options.metadata.kind === 'conversation' ? {
-            sessionId: options.metadata.sessionId,
-            workspaceId: options.metadata.workspaceId,
-          } : {}),
-          requestId: options.metadata.requestId,
-          attributes: {
-            providerId: String(options.metadata.model.provider),
-            modelId: options.metadata.model.id,
-          },
-        });
-        rootSpan = service.runInTraceContext(trace, () => (
-          service.startSpan({ name: 'agent_run' })
-        ));
-      } catch {
-        // Diagnostics never own the outcome.
-      }
-    },
-
-    end(status) {
-      if (!service || ended) return;
-      ended = true;
-      for (const span of [...openSpans]) {
-        endSpanBestEffort(service, span, status);
-      }
-      openSpans.clear();
-      try {
-        endSpanBestEffort(service, rootSpan, status);
-        if (trace) service.endTrace({ trace, status });
-      } catch {
-        // Diagnostics never own the outcome.
-      }
-    },
-
-    startSpan(name, attributes) {
-      if (!service || ended) return undefined;
-      try {
-        const span = service.startSpan({ name, correlation: correlation(), ...(attributes ? { attributes } : {}) });
-        openSpans.add(span);
-        return span;
-      } catch {
-        return undefined;
-      }
-    },
-
-    endSpan(span, status) {
-      if (!service || !span || ended) return;
-      if (openSpans.has(span)) openSpans.delete(span);
-      endSpanBestEffort(service, span, status);
-    },
-
-    recordLog(input) {
-      if (!service || ended) return;
-      try {
-        service.recordLog({ ...input, correlation: correlation() });
-      } catch {
-        // Diagnostics never own the outcome.
-      }
-    },
-
-    recordMeasurement(input) {
-      if (!service || ended) return;
-      try {
-        service.recordMeasurement({ ...input, correlation: correlation() });
-      } catch {
-        // Diagnostics never own the outcome.
-      }
-    },
-  };
-}
-
-function endSpanBestEffort(
-  service: ObservabilityService,
-  span: SpanHandle | undefined,
-  status: 'ok' | 'error' | 'cancelled',
-): void {
-  if (!span) return;
-  try {
-    service.endSpan({ span, status });
-  } catch {
-    // Diagnostics never own the outcome.
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Turn projection state
@@ -182,9 +31,6 @@ export interface TurnState {
   attemptNumber: number;
   retryAttempts: number[];
   overflowRecoveryPending: boolean;
-  readonly attemptStartedAt: Map<number, string>;
-  readonly attemptUsage: Map<number, Usage>;
-  modelSpans: Array<ReturnType<ExecutionObserver['startSpan']>>;
   messageEnded: boolean;
   lastThinking: string;
 }
@@ -215,7 +61,6 @@ export interface CreateAgentEventListenerOptions {
   readonly committer: SessionMessageCommitter;
   readonly ids: { createSessionMessageId(): string };
   readonly clock: ExecutionClock;
-  readonly observer: ExecutionObserver;
   readonly runtime: ExecutionProjectionRuntime;
   /** Releases the active Tool Router scope; invoked on agent_end and settlement. */
   readonly onAgentEnd: () => void;
@@ -234,9 +79,6 @@ export function createAgentEventListener(options: CreateAgentEventListenerOption
           attemptNumber: 0,
           retryAttempts: [],
           overflowRecoveryPending: false,
-          attemptStartedAt: new Map(),
-          attemptUsage: new Map(),
-          modelSpans: [],
           messageEnded: false,
           lastThinking: '',
         };
@@ -255,12 +97,10 @@ export function createAgentEventListener(options: CreateAgentEventListenerOption
         break;
       case 'message_update':
         publishAssistantProjection(event.message, options);
-        recordAttemptUsage(event.message, options.runtime.activeTurn);
         break;
       case 'message_end':
         if (event.message.role === 'assistant' && options.runtime.activeTurn) {
           options.runtime.activeTurn.assistant = event.message;
-          recordAttemptUsage(event.message, options.runtime.activeTurn);
           if (toolCallIds(event.message).length > 0) {
             publishMessageEnded(event.message, options.runtime.activeTurn.messageId, options);
             options.runtime.activeTurn.messageEnded = true;
@@ -268,10 +108,10 @@ export function createAgentEventListener(options: CreateAgentEventListenerOption
         }
         break;
       case 'model_call_attempt_started':
-        recordAttemptStarted(event.turn, event.attempt, options);
+        recordAttemptStarted(event.attempt, options);
         break;
       case 'model_call_attempt_ended':
-        recordAttemptEnded(event.turn, event.attempt, event.outcome, event.error, options);
+        recordAttemptEnded(event.attempt, event.outcome, event.error, options);
         break;
       case 'tool_execution_start': {
         const modelCallId = options.runtime.activeTurn?.modelCallId ?? options.runtime.activeScope?.modelCallId;
@@ -402,43 +242,23 @@ async function settleTurn(
 }
 
 function recordAttemptStarted(
-  turnNumber: number,
   attemptNumber: number,
   options: CreateAgentEventListenerOptions,
 ): void {
   const turn = options.runtime.activeTurn;
   if (!turn) return;
   turn.attemptNumber += 1;
-  turn.attemptStartedAt.set(attemptNumber, options.clock.now());
-  options.observer.recordMeasurement({
-    name: 'model.call.attempt',
-    value: attemptNumber,
-    unit: 'count',
-    attributes: { modelCallId: turn.modelCallId },
-  });
   if (attemptNumber > 1 && !turn.overflowRecoveryPending) {
     turn.retryAttempts.push(attemptNumber);
     emitRuntime(options, 'turn.retry.started', {
       attemptNumber,
       retryKind: 'model_call',
     });
-    options.observer.recordMeasurement({
-      name: 'model.call.retry',
-      value: 1,
-      unit: 'count',
-      attributes: { modelCallId: turn.modelCallId, attemptNumber },
-    });
   }
   turn.overflowRecoveryPending = false;
-  const span = options.observer.startSpan('model.call', {
-    modelCallId: turn.modelCallId,
-    attemptNumber,
-  });
-  turn.modelSpans.push(span);
 }
 
 function recordAttemptEnded(
-  turnNumber: number,
   attemptNumber: number,
   outcome: 'succeeded' | 'retrying' | 'failed' | 'cancelled',
   error: AgentError | undefined,
@@ -446,47 +266,10 @@ function recordAttemptEnded(
 ): void {
   const turn = options.runtime.activeTurn;
   if (!turn || turn.attemptNumber !== attemptNumber) return;
-  const span = turn.modelSpans.pop();
-  options.observer.endSpan(
-    span,
-    outcome === 'succeeded' ? 'ok' : outcome === 'cancelled' ? 'cancelled' : 'error',
-  );
   if (outcome === 'retrying' && !error) {
     // Context Overflow recovery is a real attempt boundary but never a retry.
     turn.overflowRecoveryPending = true;
   }
-  const startedAt = turn.attemptStartedAt.get(attemptNumber) ?? options.clock.now();
-  const durationMs = Math.max(0, Date.parse(options.clock.now()) - Date.parse(startedAt));
-  const usage = turn.attemptUsage.get(attemptNumber);
-  options.observer.recordLog({
-    level: 'info',
-    event: 'model.call.attempt.finished',
-    attributes: {
-      modelCallId: turn.modelCallId,
-      attemptNumber,
-      outcome,
-      inputTokens: usage?.input ?? 0,
-      outputTokens: usage?.output ?? 0,
-      durationMs,
-    },
-  });
-  options.observer.recordMeasurement({
-    name: 'model.call.usage',
-    value: (usage?.input ?? 0) + (usage?.output ?? 0),
-    unit: 'token',
-    attributes: {
-      modelCallId: turn.modelCallId,
-      attemptNumber,
-      inputTokens: usage?.input ?? 0,
-      outputTokens: usage?.output ?? 0,
-    },
-  });
-  options.observer.recordMeasurement({
-    name: 'model.call.duration_ms',
-    value: durationMs,
-    unit: 'ms',
-    attributes: { modelCallId: turn.modelCallId, attemptNumber },
-  });
   if (turn.retryAttempts.length === 0) return;
   if (outcome === 'succeeded') publishRetryCompleted(turn, options);
   else if (outcome === 'failed' || outcome === 'cancelled') {
@@ -494,19 +277,9 @@ function recordAttemptEnded(
   }
 }
 
-function recordAttemptUsage(message: AssistantMessage, turn: TurnState | undefined): void {
-  if (!turn || turn.attemptNumber === 0) return;
-  turn.attemptUsage.set(turn.attemptNumber, message.usage);
-}
-
 function publishRetryCompleted(turn: TurnState, options: CreateAgentEventListenerOptions): void {
   for (const attemptNumber of turn.retryAttempts) {
     emitRuntime(options, 'turn.retry.completed', { attemptNumber });
-    options.observer.recordLog({
-      level: 'info',
-      event: 'model.call.retry.completed',
-      attributes: { retryAttemptNumber: attemptNumber },
-    });
   }
   turn.retryAttempts = [];
 }
@@ -516,11 +289,6 @@ function publishRetryFailed(turn: TurnState, message: string, options: CreateAge
     emitRuntime(options, 'turn.retry.failed', {
       attemptNumber,
       error: { message, code: 'model_call_failed' },
-    });
-    options.observer.recordLog({
-      level: 'warn',
-      event: 'model.call.retry.failed',
-      attributes: { retryAttemptNumber: attemptNumber },
     });
   }
   turn.retryAttempts = [];

@@ -9,7 +9,6 @@ import {
   type ContextAdapterDependencies,
   type ContextAdapterRuntime,
 } from '@megumi/execution';
-import type { ExecutionObserver } from '@megumi/execution';
 import type { ExecutionMetadata } from '@megumi/execution';
 import { executionMetadata, model } from './execution-test-fixtures';
 
@@ -25,14 +24,6 @@ function createAdapter(overrides: {
   released: string[];
 } {
   const released: string[] = [];
-  const observer: ExecutionObserver = {
-    start: () => undefined,
-    end: () => undefined,
-    startSpan: () => undefined,
-    endSpan: () => undefined,
-    recordLog: () => undefined,
-    recordMeasurement: () => undefined,
-  };
   const dependencies: ContextAdapterDependencies = {
     metadata,
     userInput: {
@@ -69,7 +60,6 @@ function createAdapter(overrides: {
       close: () => undefined,
     } satisfies ToolExecutionBinding,
     ids: { createModelCallId: () => 'model-call:1' },
-    observer,
     createAgentTool: (definition) => ({
       ...definition,
       parameters: definition.parameters as never,
@@ -174,7 +164,6 @@ describe('Context Adapter', () => {
       context: {} as ContextCapabilities,
       toolExecution: {} as ToolExecutionBinding,
       ids: { createModelCallId: () => 'model-call:1' },
-      observer: { recordLog: () => undefined } as unknown as ExecutionObserver,
       createAgentTool: () => ({} as never),
     } as ContextAdapterDependencies;
     const runtime: ContextAdapterRuntime = {

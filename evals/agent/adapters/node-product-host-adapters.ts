@@ -4,7 +4,10 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import type { InitializeMegumiHomeSyncOptions } from '@megumi/home';
 import type { InputSourceAccess as ProductInputSourceAccess } from '@megumi/input';
-import type { ObservabilityStorage as ProductObservabilityStorage } from '@megumi/observability';
+import type {
+  ObservabilityEntryKind,
+  ObservabilityPersistenceStorage as ProductObservabilityStorage,
+} from '@megumi/observability';
 import type { SessionAttachmentFileSystem as ProductSessionAttachmentFileSystem } from '@megumi/session';
 import type { SettingsEnvironment as ProductSettingsEnvironment } from '@megumi/settings';
 import { resolveOwnedWorkspacePath } from './scoped-workspace-file-system';
@@ -47,28 +50,57 @@ export const nodeObservabilityStorage: ProductObservabilityStorage = {
   ensureDirectory: (directoryPath) => mkdir(directoryPath, { recursive: true }).then(() => undefined),
   appendText: (filePath, content) => appendFile(filePath, content, 'utf8'),
   readText: (filePath) => readFile(filePath, 'utf8'),
-  async listFiles(directoryPath) {
-    const entries = await readdir(directoryPath, { withFileTypes: true });
-    const output = [];
-    for (const entry of entries) {
-      if (!entry.isFile()) continue;
-      const details = await stat(path.join(directoryPath, entry.name));
-      output.push({ name: entry.name, size: details.size, modifiedAtMs: details.mtimeMs });
+  readBytes: (filePath) => readFile(filePath),
+  writeBytes: (filePath, bytes) => writeFile(filePath, bytes),
+  async listEntries(directoryPath) {
+    let entries;
+    try {
+      entries = await readdir(directoryPath, { withFileTypes: true });
+    } catch (error) {
+      if (errorCode(error) === 'ENOENT') return [];
+      throw error;
     }
-    return output;
+    return Promise.all(entries.flatMap((entry) => {
+      const kind: ObservabilityEntryKind | undefined = entry.isFile()
+        ? 'file'
+        : entry.isDirectory()
+          ? 'directory'
+          : undefined;
+      return kind
+        ? [stat(path.join(directoryPath, entry.name)).then((details) => ({
+            name: entry.name,
+            kind,
+            size: details.size,
+            modifiedAtMs: details.mtimeMs,
+          }))]
+        : [];
+    }));
   },
   async stat(filePath) {
     try {
       const details = await stat(filePath);
-      return { size: details.size, modifiedAtMs: details.mtimeMs };
+      const kind: ObservabilityEntryKind | undefined = details.isFile()
+        ? 'file'
+        : details.isDirectory()
+          ? 'directory'
+          : undefined;
+      return kind ? { kind, size: details.size, modifiedAtMs: details.mtimeMs } : undefined;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      if (errorCode(error) === 'ENOENT') return undefined;
       throw error;
     }
   },
   move: (sourcePath, destinationPath) => rename(sourcePath, destinationPath),
-  remove: (filePath) => rm(filePath, { force: true }),
+  removeFile: (filePath) => rm(filePath, { force: true }),
 };
+
+function errorCode(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const descriptor = Object.getOwnPropertyDescriptor(error, 'code');
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : undefined;
+}
 
 export function createEvaluationInputSourceAccess(workspaceRoot: string): ProductInputSourceAccess {
   return {

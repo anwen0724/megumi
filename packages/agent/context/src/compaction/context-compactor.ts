@@ -2,7 +2,7 @@
  * Owns one compaction transaction for Threshold, Overflow and Manual triggers:
  * planning, Summary generation, the in-memory projected ResolvedContext, the
  * candidate Prompt through PromptBuilder, full-Prompt Usage comparison, the
- * optimistic Session commit, Events and Observability all live here. The
+ * optimistic Session commit, Events and Trace checkpoints all live here. The
  * projection is never returned or persisted: only the committed Summary is a
  * Session fact, and ContextBuilder re-reads the authoritative history after.
  */
@@ -10,7 +10,7 @@
 import type { Api, Model, Models, Usage } from '@megumi/ai';
 import { estimateMessageTokens } from '@megumi/ai/utils/estimate';
 import type { EventBus } from '@megumi/events';
-import type { ObservabilityService } from '@megumi/observability';
+import type { Observability, OperationCompletion } from '@megumi/observability';
 import type { SessionHistory } from '@megumi/session';
 import type { ContextFailure, ContextCompactionProgress, CompactionTrigger, CompactContextResult } from '../context';
 import type { CompactionPolicy } from '../context-policy';
@@ -52,7 +52,7 @@ export interface ExecuteCompactionInput {
   readonly promptBuilder: PromptBuilder;
   /** The one complete-Prompt usage entry shared with ContextBuilder. */
   readonly calculatePromptUsage: (prompt: Prompt) => ContextUsageEstimate;
-  readonly observability?: ObservabilityService;
+  readonly observability?: Observability;
   readonly now: () => string;
   readonly createCompactionId: () => string;
   /** Bus injected once at Context creation; compaction lifecycle facts are published here. */
@@ -111,16 +111,21 @@ export async function executeContextCompaction(
   }
   reportProgress(input.onProgress, { status: 'started', ...progressBase });
   publishCompactionStarted(input.events, input.sessionId, input.trigger, compactionId);
-  recordCompactionLog(input.observability, {
-    level: 'info',
-    event: 'context.compaction.started',
-    correlation: { sessionId: input.sessionId },
-    attributes: {
-      beforeTokens,
-      trigger: input.trigger,
-      keptMessages: keptCompactableMessageCount(input, plan.plan),
+  recordEvent(input.observability, {
+    type: 'context.compaction.triggered',
+    compactionId,
+    trigger: input.trigger,
+  });
+  recordContent(input.observability, {
+    kind: 'context.compaction.source',
+    value: {
+      previousSummary: input.materialized.previousSummary,
+      messages: plan.plan.summarizedMessages,
+      turnPrefixMessages: plan.plan.turnPrefixMessages,
+      coveredUntilEntryId: plan.plan.coveredUntilEntryId,
       firstKeptEntryId: plan.plan.firstKeptEntryId,
     },
+    correlation: { sessionId: input.sessionId, compactionId },
   });
   const settleFailure = (
     failure: ContextFailure,
@@ -163,16 +168,18 @@ export async function executeContextCompaction(
   };
 
   try {
-    const generated = await generateCompactionSummary({
-      models: input.models,
-      model: input.model,
-      sessionId: input.sessionId,
-      previousSummary: input.materialized.previousSummary,
-      messages: plan.plan.summarizedMessages,
-      turnPrefixMessages: plan.plan.turnPrefixMessages,
-      timestamp: Date.parse(startedAt),
-      ...(input.signal ? { signal: input.signal } : {}),
-    });
+    const generated = await observeCompactionModelCall(input, compactionId, () => (
+      generateCompactionSummary({
+        models: input.models,
+        model: input.model,
+        sessionId: input.sessionId,
+        previousSummary: input.materialized.previousSummary,
+        messages: plan.plan.summarizedMessages,
+        turnPrefixMessages: plan.plan.turnPrefixMessages,
+        timestamp: Date.parse(startedAt),
+        ...(input.signal ? { signal: input.signal } : {}),
+      })
+    ));
     if (generated.status === 'cancelled') {
       return settleFailure(
         buildCancelledContextFailure('Context compaction was cancelled.'),
@@ -182,6 +189,12 @@ export async function executeContextCompaction(
     if (generated.status === 'failed') {
       return settleFailure(buildSummaryModelContextFailure(generated.failure), 'failed');
     }
+    recordContent(input.observability, {
+      kind: 'context.compaction.summary',
+      value: generated.content,
+      mediaType: 'text/plain;charset=utf-8',
+      correlation: { sessionId: input.sessionId, compactionId },
+    });
 
     const projected = await projectCandidate(
       input,
@@ -224,18 +237,13 @@ export async function executeContextCompaction(
     }
     reportProgress(input.onProgress, { status: 'completed', ...progressBase });
     publishCompactionEnded(input.events, input.sessionId, { status: 'completed', compactionId });
-    recordCompactionLog(input.observability, {
-      level: 'info',
-      event: 'context.compaction.completed',
-      correlation: { sessionId: input.sessionId },
-      attributes: { beforeTokens, afterTokens: projectedUsage.tokens, trigger: input.trigger },
-    });
-    recordCompactionMeasurement(input.observability, {
-      name: 'context.compaction.after_tokens',
-      value: projectedUsage.tokens,
-      unit: 'token',
-      correlation: { sessionId: input.sessionId },
-    });
+    if (saved.entry) {
+      recordEvent(input.observability, {
+        type: 'context.compaction.persisted',
+        compactionId,
+        messageId: saved.entry.entry_id,
+      });
+    }
     return {
       status: 'compacted',
       compactionId,
@@ -316,42 +324,74 @@ async function projectCandidate(
   return { status: 'built', prompt: built.prompt };
 }
 
-/** The compactable history messages that genuinely stay in the candidate Prompt. */
-function keptCompactableMessageCount(
-  input: ExecuteCompactionInput,
-  plan: CompactionPlan,
-): number {
-  return input.materialized.compactableSources.length - plan.summarizedMessages.length;
-}
-
 function failed(failure: ContextFailure): Extract<ExecuteCompactionResult, { status: 'failed' }> {
   return { status: 'failed', failure };
 }
 
-// Observability is diagnostic: compaction logs and measurements are best-effort
-// and must never change the compaction outcome.
+type CompactionSummaryResult = Awaited<ReturnType<typeof generateCompactionSummary>>;
 
-function recordCompactionLog(
-  observability: ObservabilityService | undefined,
-  request: Parameters<ObservabilityService['recordLog']>[0],
-): void {
-  if (!observability) return;
+async function observeCompactionModelCall(
+  input: ExecuteCompactionInput,
+  compactionId: string,
+  operation: () => Promise<CompactionSummaryResult>,
+): Promise<CompactionSummaryResult> {
+  let operationPromise: Promise<CompactionSummaryResult> | undefined;
+  const runOnce = (): Promise<CompactionSummaryResult> => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!input.observability) return runOnce();
   try {
-    observability.recordLog(request);
+    return await input.observability.withSpan({
+      name: 'model.call',
+      correlation: { sessionId: input.sessionId, compactionId },
+      classifyResult: classifySummaryResult,
+    }, runOnce);
   } catch {
-    // Diagnostics never own the compaction outcome.
+    return runOnce();
   }
 }
 
-function recordCompactionMeasurement(
-  observability: ObservabilityService | undefined,
-  request: Parameters<ObservabilityService['recordMeasurement']>[0],
+function classifySummaryResult(
+  result: CompactionSummaryResult,
+): OperationCompletion {
+  if (result.status !== 'failed' || !result.failure) {
+    return result.status === 'cancelled'
+      ? { outcome: { status: 'cancelled' } }
+      : { outcome: { status: 'ok' } };
+  }
+  return {
+    outcome: {
+      status: 'error',
+      code: 'compaction_summary_failed',
+      message: result.failure instanceof Error
+        ? result.failure.message
+        : typeof result.failure === 'string'
+          ? result.failure
+          : 'Compaction summary generation failed.',
+    },
+  };
+}
+
+function recordContent(
+  observability: Observability | undefined,
+  content: Parameters<Observability['recordContent']>[0],
 ): void {
-  if (!observability) return;
   try {
-    observability.recordMeasurement(request);
+    observability?.recordContent(content);
   } catch {
-    // Diagnostics never own the compaction outcome.
+    // Diagnostic capture cannot change compaction settlement.
+  }
+}
+
+function recordEvent(
+  observability: Observability | undefined,
+  event: Parameters<Observability['recordEvent']>[0],
+): void {
+  try {
+    observability?.recordEvent(event);
+  } catch {
+    // Diagnostic capture cannot change compaction settlement.
   }
 }
 

@@ -3,6 +3,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
+import { captureContent } from '../content/content-capture';
 import {
   redactDiagnosticError,
   redactDiagnosticJsonValue,
@@ -64,6 +65,16 @@ export interface CreateRuntimeLoggerOptions {
   readonly drainIntervalMs?: number;
   readonly maxSegmentBytes?: number;
   readonly retention?: Pick<RetentionCleaner, 'ensureCapacity' | 'maintain'>;
+}
+
+/** Safely converts an untrusted host details value before it enters Runtime Log data. */
+export function captureRuntimeLogData(value: unknown): DiagnosticJsonValue {
+  const captured = captureContent({
+    value,
+    mediaType: 'application/json',
+    inlineThresholdBytes: Number.MAX_SAFE_INTEGER,
+  }).content;
+  return captured.mode === 'inline' ? captured.value : null;
 }
 
 /** Creates the independent bounded Runtime Log writer. */

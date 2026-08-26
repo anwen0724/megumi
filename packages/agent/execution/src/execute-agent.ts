@@ -22,7 +22,12 @@ import {
 import { materializeRecommendationReference, type ContextCapabilities } from '@megumi/context';
 import type { EventBus } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
-import type { ObservabilityService } from '@megumi/observability';
+import type {
+  Observability,
+  OperationCompletion,
+  StructuredRuntimeLogger,
+} from '@megumi/observability';
+import { createContentDigest } from '@megumi/observability';
 import type { Permissions } from '@megumi/permissions';
 import type { SessionHistory } from '@megumi/session';
 import type { Tools } from '@megumi/tools';
@@ -45,13 +50,11 @@ import {
 } from './context-adapter';
 import {
   createAgentEventListener,
-  createExecutionObserver,
   publishMessageEnded,
   publishTurnEndedProjection,
   type CreateAgentEventListenerOptions,
-  type ExecutionObserver,
   type ExecutionProjectionRuntime,
-} from './execution-observer';
+} from './execution-projection';
 import {
   createSessionMessageCommitter,
   SessionCommitError,
@@ -90,7 +93,8 @@ export interface ExecuteAgentDependencies {
     'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
   >;
   readonly events: EventBus;
-  readonly observability?: ObservabilityService;
+  readonly observability?: Observability;
+  readonly runtimeLogger?: Pick<StructuredRuntimeLogger, 'write'>;
   readonly ids: {
     createModelCallId(): string;
     createToolExecutionId(): string;
@@ -114,7 +118,6 @@ export class LaunchExecutionError extends Error {
 
 interface ExecutionRuntime extends ExecutionProjectionRuntime, ContextAdapterRuntime {
   readonly committer: SessionMessageCommitter;
-  readonly observer: ExecutionObserver;
   assistantMessageId?: string;
 }
 
@@ -134,7 +137,7 @@ export async function launchAgentExecution(
     : [];
 
   // 1. The User Message commits before the Agent exists; failure fails the start.
-  const saved = await dependencies.session.saveUserMessage({
+  const userMessageRequest = {
     message_id: metadata.userMessageId,
     session_id: metadata.sessionId,
     execution_id: metadata.executionId,
@@ -165,7 +168,22 @@ export async function launchAgentExecution(
     )),
     ...(metadata.parentEntryId ? { parent_entry_id: metadata.parentEntryId } : {}),
     created_at: metadata.createdAt,
-  });
+  };
+  const saved = await observeSessionMessageCommit(
+    dependencies.observability,
+    {
+      requestId: metadata.requestId,
+      executionId: metadata.executionId,
+      sessionId: metadata.sessionId,
+      messageId: metadata.userMessageId,
+      workspaceId: metadata.workspaceId,
+      ...contentDigestCorrelation({
+        displayContent: userMessageRequest.display_content,
+        modelContent: userMessageRequest.model_content,
+      }),
+    },
+    () => dependencies.session.saveUserMessage(userMessageRequest),
+  );
   if (saved.status === 'failed') {
     throw new LaunchExecutionError({
       code: 'session_failed',
@@ -176,7 +194,6 @@ export async function launchAgentExecution(
   }
 
   // 2. Build the per-execution runtime and its adapters.
-  const observer = createExecutionObserver({ metadata, observability: dependencies.observability });
   const runtime: ExecutionRuntime = {
     toolRequests: new Map(),
     toolSystemFailures: new Map(),
@@ -184,8 +201,8 @@ export async function launchAgentExecution(
       userEntry: saved.entry,
       session: dependencies.session,
       ids: dependencies.ids,
+      ...(dependencies.observability ? { observability: dependencies.observability } : {}),
     }),
-    observer,
   };
 
   const toolExecutionResult = dependencies.tools.bindExecution({
@@ -213,7 +230,6 @@ export async function launchAgentExecution(
     ids: dependencies.ids,
     clock: dependencies.clock,
     events: dependencies.events,
-    observer,
     awaitApproval: input.awaitApproval,
     toolSystemFailures: runtime.toolSystemFailures,
   });
@@ -223,7 +239,7 @@ export async function launchAgentExecution(
     context: dependencies.context,
     toolExecution,
     ids: dependencies.ids,
-    observer,
+    ...(dependencies.runtimeLogger ? { runtimeLogger: dependencies.runtimeLogger } : {}),
     createAgentTool: toolAdapter,
   };
   const contextProvider = createContextAdapter(contextDependencies, runtime);
@@ -234,7 +250,6 @@ export async function launchAgentExecution(
     committer: runtime.committer,
     ids: dependencies.ids,
     clock: dependencies.clock,
-    observer,
     runtime,
     onAgentEnd: () => {
       releaseActiveScope(contextDependencies, runtime);
@@ -268,7 +283,11 @@ export async function launchAgentExecution(
     agent,
     userMessage: saved.message,
     userEntry: saved.entry,
-    execute: () => executeAgentExecution(agent, runtime, contextDependencies, metadata, toolExecution),
+    execute: () => observeAgentExecution(
+      dependencies.observability,
+      metadata,
+      () => executeAgentExecution(agent, runtime, contextDependencies, metadata, toolExecution),
+    ),
   };
 }
 
@@ -277,7 +296,6 @@ async function launchDailyDiscoveryExecution(
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   const { metadata } = input;
-  const observer = createExecutionObserver({ metadata, observability: dependencies.observability });
   const runtime: ContextAdapterRuntime = {};
   const toolExecutionResult = dependencies.tools.bindExecution({
     executionId: metadata.executionId,
@@ -299,7 +317,7 @@ async function launchDailyDiscoveryExecution(
     context: dependencies.context,
     toolExecution,
     ids: dependencies.ids,
-    observer,
+    ...(dependencies.runtimeLogger ? { runtimeLogger: dependencies.runtimeLogger } : {}),
     createAgentTool: (definition: import('@megumi/tools').ToolDefinition, scope: import('./context-adapter').ToolScope) => (
       createUnprotectedAgentTool(definition, scope.binding)
     ),
@@ -326,8 +344,7 @@ async function launchDailyDiscoveryExecution(
 
   return {
     agent,
-    execute: async () => {
-      observer.start();
+    execute: () => observeAgentExecution(dependencies.observability, metadata, async () => {
       let outcome: ExecutionOutcome | undefined;
       try {
         const result = await agent.continue({ executionId: metadata.executionId });
@@ -343,13 +360,8 @@ async function launchDailyDiscoveryExecution(
       } finally {
         releaseActiveScope(contextDependencies, runtime);
         toolExecution.close();
-        observer.end(
-          outcome?.status === 'completed' ? 'ok'
-            : outcome?.status === 'cancelled' ? 'cancelled'
-              : 'error',
-        );
       }
-    },
+    }),
   };
 }
 
@@ -360,7 +372,6 @@ async function executeAgentExecution(
   metadata: ConversationExecutionMetadata,
   toolExecution: import('@megumi/tools').ToolExecutionBinding,
 ): Promise<ExecutionOutcome> {
-  runtime.observer.start();
   let final: ExecutionOutcome | undefined;
   try {
     const result = await agent.continue({ executionId: metadata.executionId });
@@ -375,12 +386,97 @@ async function executeAgentExecution(
   } finally {
     releaseActiveScope(contextDependencies, runtime);
     toolExecution.close();
-    runtime.observer.end(
-      final?.status === 'completed' ? 'ok'
-        : final?.status === 'cancelled' ? 'cancelled'
-        : 'error',
-    );
   }
+}
+
+/** Keeps the real Agent Promise single-shot even if an injected diagnostic adapter fails. */
+async function observeAgentExecution(
+  observability: Observability | undefined,
+  metadata: ExecutionMetadata,
+  operation: () => Promise<ExecutionOutcome>,
+): Promise<ExecutionOutcome> {
+  let operationPromise: Promise<ExecutionOutcome> | undefined;
+  const runOnce = (): Promise<ExecutionOutcome> => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'agent.execution',
+      correlation: executionCorrelation(metadata),
+      classifyResult: classifyExecutionOutcome,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function executionCorrelation(metadata: ExecutionMetadata) {
+  return {
+    requestId: metadata.requestId,
+    executionId: metadata.executionId,
+    ...(metadata.kind === 'conversation'
+      ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId }
+      : { batchId: metadata.batchId }),
+  };
+}
+
+function classifyExecutionOutcome(outcome: ExecutionOutcome): OperationCompletion {
+  if (outcome.status === 'completed') return { outcome: { status: 'ok' } };
+  if (outcome.status === 'cancelled') return { outcome: { status: 'cancelled' } };
+  return {
+    outcome: {
+      status: 'error',
+      code: outcome.failure.code,
+      message: outcome.failure.message,
+      retryable: outcome.failure.retryable,
+    },
+  };
+}
+
+function contentDigestCorrelation(value: unknown): { readonly contentDigest?: string } {
+  const contentDigest = createContentDigest(value);
+  return contentDigest ? { contentDigest } : {};
+}
+
+interface SessionMessageSaveResult {
+  readonly status: 'saved' | 'failed';
+  readonly failure?: { readonly code: string; readonly message: string };
+}
+
+/** Keeps the actual User Message save single-shot when diagnostics are unavailable. */
+async function observeSessionMessageCommit<T extends SessionMessageSaveResult>(
+  observability: Observability | undefined,
+  correlation: Parameters<Observability['withSpan']>[0]['correlation'],
+  operation: () => T | Promise<T>,
+): Promise<T> {
+  let operationPromise: Promise<T> | undefined;
+  const runOnce = (): Promise<T> => {
+    operationPromise ??= Promise.resolve().then(operation);
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'session.message.commit',
+      ...(correlation ? { correlation } : {}),
+      classifyResult: classifySessionMessageSave,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function classifySessionMessageSave(result: SessionMessageSaveResult): OperationCompletion {
+  if (result.status === 'saved') return { outcome: { status: 'ok', code: 'saved' } };
+  return {
+    outcome: {
+      status: 'error',
+      code: result.failure?.code ?? 'session_commit_failed',
+      message: result.failure?.message ?? 'Session message commit failed.',
+    },
+  };
 }
 
 /**

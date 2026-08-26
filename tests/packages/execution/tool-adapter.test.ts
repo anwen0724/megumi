@@ -10,7 +10,6 @@ import {
   type ToolAdapterDependencies,
 } from '@megumi/execution';
 import type { ToolScope } from '@megumi/execution';
-import type { ExecutionObserver } from '@megumi/execution';
 import { executionMetadata } from './execution-test-fixtures';
 import {
   allowDecision,
@@ -22,15 +21,6 @@ import {
 } from './tool-call-test-fixtures';
 
 const metadata = executionMetadata();
-
-const observer: ExecutionObserver = {
-  start: () => undefined,
-  end: () => undefined,
-  startSpan: () => undefined,
-  endSpan: () => undefined,
-  recordLog: () => undefined,
-  recordMeasurement: () => undefined,
-};
 
 type TestDependencies = ToolAdapterDependencies & { readonly binding: ModelCallToolBinding };
 
@@ -75,7 +65,6 @@ function toolDependencies(
     },
     clock: { now: () => '2026-07-31T00:00:00.000Z' },
     events: eventsBus,
-    observer,
     awaitApproval: async () => ({ status: 'cancelled' as const }),
     toolSystemFailures: new Map(),
     ...dependencyOverrides,

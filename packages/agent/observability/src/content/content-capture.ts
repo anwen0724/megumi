@@ -103,6 +103,18 @@ export function captureContent(input: CaptureContentInput): CapturedContentPaylo
   }
 }
 
+/** Returns the same safe canonical identity used by Captured Content, without persisting bytes. */
+export function createContentDigest(value: unknown): string | undefined {
+  try {
+    const captured = captureContent({ value }).content;
+    return captured.mode === 'inline' || captured.mode === 'stored'
+      ? captured.contentId
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Recursively narrows one runtime value while sharing bounded traversal state. */
 function visitValue(
   value: unknown,

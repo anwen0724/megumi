@@ -34,7 +34,6 @@ import type {
   ConversationExecutionMetadata,
   ExecutionClock,
 } from './execution-registry';
-import type { ExecutionObserver } from './execution-observer';
 import type { SessionToolResultCommit } from './session-settlement';
 import type { ToolScope } from './context-adapter';
 
@@ -64,7 +63,6 @@ export interface ToolAdapterDependencies {
   readonly ids: { createToolExecutionId(): string; createApprovalId(): string };
   readonly clock: ExecutionClock;
   readonly events: EventBus;
-  readonly observer: ExecutionObserver;
   /** The Discovery Agent's approval wait seam; the original ToolCall Promise awaits it in place. */
   readonly awaitApproval: (request: { readonly approval: ApprovalRequest }) => Promise<ApprovalResolution>;
   readonly toolSystemFailures: Map<string, AgentError>;
@@ -256,10 +254,6 @@ async function runToolInvocation(
 ): Promise<AgentToolExecutionOutcome<AgentToolResultDetails>> {
   if (signal.aborted) return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
   const toolExecutionId = dependencies.ids.createToolExecutionId();
-  const span = dependencies.observer.startSpan('tool.call', {
-    modelCallId: invocation.modelCallId,
-    toolCallId: invocation.toolCallId,
-  });
   onUpdate({
     content: [],
     isError: false,
@@ -305,7 +299,6 @@ async function runToolInvocation(
   closed = true;
   const completedAt = dependencies.clock.now();
   if (!execution) {
-    dependencies.observer.endSpan(span, signal.aborted ? 'cancelled' : 'error');
     return completedToolOutcome(signal.aborted
       ? cancelledToolResult(completedAt, toolExecutionId)
       : settledToolResult({
@@ -317,7 +310,6 @@ async function runToolInvocation(
       }));
   }
   if (execution.type === 'succeeded') {
-    dependencies.observer.endSpan(span, 'ok');
     return completedToolOutcome(settledToolResult({
       status: 'success',
       content: execution.normalizedResult.content,
@@ -327,10 +319,8 @@ async function runToolInvocation(
     }));
   }
   if (execution.error.code === 'tool_cancelled') {
-    dependencies.observer.endSpan(span, 'cancelled');
     return completedToolOutcome(cancelledToolResult(completedAt, toolExecutionId));
   }
-  dependencies.observer.endSpan(span, 'error');
   return completedToolOutcome(settledToolResult({
     status: 'failure',
     content: execution.normalizedResult.content,
@@ -350,12 +340,7 @@ async function requestApproval(
   const approval = createApprovalRequest(invocation, decision, dependencies);
   const wait = dependencies.awaitApproval({ approval });
   emitApprovalRequested(approval, dependencies);
-  const span = dependencies.observer.startSpan('approval.wait', {
-    approvalId: approval.approvalId,
-    toolCallId: approval.toolCallId,
-  });
   const resolution = await wait;
-  dependencies.observer.endSpan(span, resolution.status === 'cancelled' ? 'cancelled' : 'ok');
   emitApprovalResolved(approval, resolution, dependencies);
   return resolution;
 }

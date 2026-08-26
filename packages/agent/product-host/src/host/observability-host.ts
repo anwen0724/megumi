@@ -35,13 +35,31 @@ export type ObservabilityAttributesUiDto = Readonly<
 >;
 
 export type ObservabilitySpanName =
-  | 'agent_run'
+  | 'model.resolve'
+  | 'input.process'
+  | 'session.resolve'
+  | 'session.create'
+  | 'session.branch.resolve'
+  | 'session.branch.commit'
+  | 'session.message.commit'
+  | 'recommendation.reference.resolve'
+  | 'agent.execution'
   | 'context.build'
+  | 'context.resolve'
   | 'context.compact'
+  | 'prompt.build'
   | 'model.call'
   | 'tool.call'
-  | 'approval.wait'
-  | 'session.append_message';
+  | 'permission.await'
+  | 'discovery.preflight'
+  | 'source.availability.check'
+  | 'discovery.batch.claim'
+  | 'discovery.attempt'
+  | 'source.search'
+  | 'source.read'
+  | 'discovery.selection'
+  | 'discovery.attempt.settle'
+  | 'recommendation.publish';
 
 export type ObservabilityMeasurementUnit = 'count' | 'ms' | 'token' | 'ratio' | 'byte';
 
@@ -103,8 +121,8 @@ export type ObservabilityGetRunTraceUiResult =
   | { status: 'failed'; message: string };
 
 export interface DiagnosticBundleFileDto {
-  relativePath: 'manifest.json' | 'run-traces.jsonl' | 'environment.json';
-  content: string;
+  relativePath: string;
+  content: string | Uint8Array;
 }
 
 export interface DiagnosticBundleDto {

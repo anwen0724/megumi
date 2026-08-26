@@ -13,12 +13,9 @@ import { join } from 'node:path';
 import type {
   ObservabilityEntryKind,
   ObservabilityPersistenceStorage,
-  ObservabilityStorage as LegacyObservabilityStorage,
 } from '@megumi/observability';
 
-type ElectronObservabilityStorage = LegacyObservabilityStorage & ObservabilityPersistenceStorage;
-
-export const electronObservabilityStorageAdapter: ElectronObservabilityStorage = {
+export const electronObservabilityStorageAdapter: ObservabilityPersistenceStorage = {
   ensureDirectory: (path) =>
     mkdir(path, { recursive: true }).then(() => undefined),
   appendText: (path, content) => appendFile(path, content, "utf8"),
@@ -48,25 +45,6 @@ export const electronObservabilityStorageAdapter: ElectronObservabilityStorage =
       throw error;
     }
   },
-  async listFiles(path) {
-    try {
-      const entries = await readdir(path, { withFileTypes: true });
-      return Promise.all(
-        entries
-          .filter((e) => e.isFile())
-          .map(async (e) => {
-            const value = await stat(join(path, e.name));
-            return {
-              name: e.name,
-              size: value.size,
-              modifiedAtMs: value.mtimeMs,
-            };
-          }),
-      );
-    } catch {
-      return [];
-    }
-  },
   async stat(path) {
     try {
       const value = await stat(path);
@@ -85,7 +63,6 @@ export const electronObservabilityStorageAdapter: ElectronObservabilityStorage =
   },
   move: (source, destination) => rename(source, destination),
   removeFile: (path) => rm(path, { force: true }),
-  remove: (path) => rm(path, { force: true }),
 };
 
 function isMissingPathError(error: unknown): boolean {

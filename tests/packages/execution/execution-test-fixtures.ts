@@ -10,7 +10,7 @@ import type {
 import type { ContextCapabilities, Prompt } from '@megumi/context';
 import { createEventBus, type AnyEvent, type EventBus } from '@megumi/events';
 import type { Permissions } from '@megumi/permissions';
-import type { ObservabilityService } from '@megumi/observability';
+import type { Observability } from '@megumi/observability';
 import type {
   SaveAssistantReplyRequest,
   SaveModelResponseRequest,
@@ -99,7 +99,7 @@ export function createExecutionFixture(input: {
   readonly contextBuild?: ExecuteAgentDependencies['context']['build'];
   readonly contextCompact?: ExecuteAgentDependencies['context']['compact'];
   readonly failUserMessageSave?: boolean;
-  readonly observability?: ObservabilityService;
+  readonly observability?: Observability;
 } = {}): ExecutionFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];

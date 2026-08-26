@@ -10,6 +10,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EventBus } from '@megumi/events';
 import type { PermissionDecision } from '@megumi/permissions';
 import type { SessionHistory } from '@megumi/session';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
 import {
   assistantStream,
   collectEvents,
@@ -20,7 +22,6 @@ import {
   launchedExecution,
   neverEndingStream,
   partialThinkingStream,
-  retryableFailedStream,
   type ExecutionFixture,
 } from './execution-test-fixtures';
 import { permissionService, registeredTool } from './tool-call-test-fixtures';
@@ -28,6 +29,37 @@ import { permissionService, registeredTool } from './tool-call-test-fixtures';
 const NOW = '2026-07-31T00:00:00.000Z';
 
 describe('Execute Agent', () => {
+  it('traces the accepted User Message commit and the real Agent execution without duplicating message bodies', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const fixture = createExecutionFixture({
+      streams: [assistantStream('done')],
+      observability,
+    });
+
+    const outcome = await observability.withTrace({ kind: 'conversation' }, async () => {
+      const launched = await launchWith(fixture, fixture.dependencies);
+      return launched.execute();
+    });
+
+    expect(outcome.status).toBe('completed');
+    const started = records.filter((record) => record.type === 'span.started');
+    expect(started.map((record) => record.name)).toEqual([
+      'session.message.commit',
+      'agent.execution',
+      'session.message.commit',
+    ]);
+    expect(started[0]?.correlation).toMatchObject({
+      sessionId: 'session:1',
+      executionId: 'execution:1',
+      messageId: 'message:user',
+      contentDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(records.some((record) => (
+      record.type === 'content.recorded' && record.kind === 'session.message.committed'
+    ))).toBe(false);
+  });
+
   it('persists a Recommendation reference and presents it to the first model call', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
     const launched = await launchAgentExecution({
@@ -442,47 +474,6 @@ describe('Execute Agent', () => {
         parameters: expect.objectContaining({ type: 'object' }),
       }),
     ]);
-  });
-
-  it('projects real model retries and records every finished Attempt', async () => {
-    const recordLog = vi.fn();
-    const recordMeasurement = vi.fn();
-    const observability = {
-      startTrace: vi.fn(() => ({ traceId: 'trace:1' })),
-      endTrace: vi.fn(),
-      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
-      endSpan: vi.fn(),
-      runInTraceContext: vi.fn((_trace: unknown, operation: () => unknown) => operation()),
-      runInSpanContext: vi.fn((_span: unknown, operation: () => unknown) => operation()),
-      getCurrentTrace: vi.fn(),
-      getCurrentSpan: vi.fn(),
-      recordLog,
-      recordMeasurement,
-      flush: vi.fn(async () => undefined),
-    } as never;
-    const fixture = createExecutionFixture({
-      streams: [retryableFailedStream('retry me'), assistantStream('done')],
-      policy: { maxModelCallAttempts: 2 },
-      observability,
-    });
-    const launched = await launchedExecution(fixture);
-    const outcome = await launched.execute();
-
-    expect(outcome.status).toBe('completed');
-    expect(fixture.published.map((event) => event.type)).toEqual(expect.arrayContaining([
-      'turn.retry.started',
-      'turn.retry.completed',
-    ]));
-    expect(recordLog.mock.calls.filter((call) => (
-      (call[0] as { event: string }).event === 'model.call.attempt.finished'
-    ))).toHaveLength(2);
-    const measurements = recordMeasurement.mock.calls.map((call) => call[0] as { name: string });
-    expect(measurements.filter((item) => item.name === 'model.call.attempt')).toHaveLength(2);
-    expect(measurements.map((item) => item.name)).toEqual(expect.arrayContaining([
-      'model.call.usage',
-      'model.call.duration_ms',
-      'model.call.retry',
-    ]));
   });
 
   it('publishes ordered message and turn runtime events for one completed execution', async () => {

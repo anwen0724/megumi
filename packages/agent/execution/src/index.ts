@@ -55,16 +55,13 @@ export type {
 } from './context-adapter';
 export {
   createAgentEventListener,
-  createExecutionObserver,
   publishMessageEnded,
   publishTurnEndedProjection,
-} from './execution-observer';
+} from './execution-projection';
 export type {
   CreateAgentEventListenerOptions,
-  CreateExecutionObserverOptions,
-  ExecutionObserver,
   ExecutionProjectionRuntime,
-} from './execution-observer';
+} from './execution-projection';
 export { ExecutionRegistry } from './execution-registry';
 export type {
   ActiveExecution,

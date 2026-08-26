@@ -195,24 +195,26 @@ function composeProductRuntime(
           event,
         );
         if (result.status === 'ignored') return;
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'info',
-          event: 'speech_output.read',
-          attributes: {
-            executionId: event.executionId,
-            sessionId: event.sessionId,
+          module: 'voice',
+          code: 'speech_output_read',
+          message: 'Speech output evaluated a completed execution.',
+          correlation: { executionId: event.executionId, sessionId: event.sessionId },
+          data: {
             ...(result.status === 'read' ? { outcome: 'read' } : {}),
             ...(result.status === 'stopped' ? { outcome: 'stopped', reason: result.reason } : {}),
             ...(result.status === 'skipped' ? { outcome: 'skipped', reason: result.reason } : {}),
           },
         });
       } catch (error) {
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'warn',
-          event: 'speech_output_read_failed',
-          attributes: {
-            executionId: event.executionId,
-            sessionId: event.sessionId,
+          module: 'voice',
+          code: 'speech_output_read_failed',
+          message: 'Speech output could not read a completed execution.',
+          correlation: { executionId: event.executionId, sessionId: event.sessionId },
+          data: {
             errorMessage: error instanceof Error ? error.message : String(error),
           },
         });
@@ -225,21 +227,24 @@ function composeProductRuntime(
   resources.registerEventSubscription(
     speechOutput.subscribe((event) => {
       if (event.type === 'synthesis-started') {
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'info',
-          event: 'speech_output.synthesis_started',
-          attributes: { executionId: event.executionId, sessionId: event.sessionId },
+          module: 'voice',
+          code: 'speech_output_synthesis_started',
+          message: 'Speech output synthesis started.',
+          correlation: { executionId: event.executionId, sessionId: event.sessionId },
         });
         return;
       }
       if (event.type === 'audio-chunk') {
         if (event.sequence !== 1) return;
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'info',
-          event: 'speech_output.first_chunk',
-          attributes: {
-            executionId: event.executionId,
-            sessionId: event.sessionId,
+          module: 'voice',
+          code: 'speech_output_first_chunk',
+          message: 'Speech output produced its first audio chunk.',
+          correlation: { executionId: event.executionId, sessionId: event.sessionId },
+          data: {
             format: event.format,
             sampleRate: event.sampleRate,
           },
@@ -247,30 +252,33 @@ function composeProductRuntime(
         return;
       }
       if (event.type === 'completed') {
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'info',
-          event: 'speech_output.completed',
-          attributes: { executionId: event.executionId, sessionId: event.sessionId },
+          module: 'voice',
+          code: 'speech_output_completed',
+          message: 'Speech output completed.',
+          correlation: { executionId: event.executionId, sessionId: event.sessionId },
         });
         return;
       }
       if (event.type === 'stopped') {
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'info',
-          event: 'speech_output.stopped',
-          attributes: { executionId: event.executionId, sessionId: event.sessionId, reason: event.reason },
+          module: 'voice',
+          code: 'speech_output_stopped',
+          message: 'Speech output stopped.',
+          correlation: { executionId: event.executionId, sessionId: event.sessionId },
+          data: { reason: event.reason },
         });
         return;
       }
-      observability.service.recordLog({
+      observability.runtimeLogger.write({
         level: 'warn',
-        event: 'speech_output.failed',
-        attributes: {
-          executionId: event.executionId,
-          sessionId: event.sessionId,
-          code: event.failure.code,
-          message: event.failure.message,
-        },
+        module: 'voice',
+        code: 'speech_output_failed',
+        message: 'Speech output failed.',
+        correlation: { executionId: event.executionId, sessionId: event.sessionId },
+        data: { failureCode: event.failure.code, failureMessage: event.failure.message },
       });
     }),
   );
@@ -289,7 +297,7 @@ function composeProductRuntime(
     }),
     approval: createApprovalOperations(executions),
     observability: createObservabilityOperations({
-      queries: observability.queryService,
+      queries: observability.queries,
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),

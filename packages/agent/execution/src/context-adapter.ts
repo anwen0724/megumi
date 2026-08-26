@@ -6,9 +6,9 @@
 import type { AgentContext, AgentContextProvider, AgentError, AgentTool } from '@megumi/agent-core';
 import type { ContextCapabilities, RunContext } from '@megumi/context';
 import type { UserInput } from '@megumi/input';
+import type { StructuredRuntimeLogger } from '@megumi/observability';
 import type { ModelCallToolBinding, ToolDefinition, ToolExecutionBinding } from '@megumi/tools';
 import type { ExecutionMetadata } from './execution-registry';
-import type { ExecutionObserver } from './execution-observer';
 
 /** One ModelCall's fixed Tool Router scope; released exactly once. */
 export interface ToolScope {
@@ -26,7 +26,7 @@ export interface ContextAdapterDependencies {
   readonly context: ContextCapabilities;
   readonly toolExecution: ToolExecutionBinding;
   readonly ids: { createModelCallId(): string };
-  readonly observer: ExecutionObserver;
+  readonly runtimeLogger?: Pick<StructuredRuntimeLogger, 'write'>;
   /** Builds the AgentTool for one definition on the active scope. */
   readonly createAgentTool: (definition: ToolDefinition, scope: ToolScope) => AgentTool;
 }
@@ -212,11 +212,22 @@ function safeReleaseModelCallTools(
   try {
     scope.binding.close();
   } catch (error) {
-    dependencies.observer.recordLog({
+    dependencies.runtimeLogger?.write({
       level: 'error',
-      event: 'tool.router.release_failed',
-      attributes: {
+      module: 'execution',
+      code: 'tool_router_release_failed',
+      message: 'Tool Router scope could not be released.',
+      correlation: {
+        executionId: dependencies.metadata.executionId,
         modelCallId: scope.modelCallId,
+        ...(dependencies.metadata.kind === 'conversation'
+          ? {
+              sessionId: dependencies.metadata.sessionId,
+              workspaceId: dependencies.metadata.workspaceId,
+            }
+          : { batchId: dependencies.metadata.batchId }),
+      },
+      data: {
         errorMessage: error instanceof Error ? error.message : String(error),
       },
     });

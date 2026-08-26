@@ -5,7 +5,8 @@ import {
   type CreateContextOptions,
   type Prompt,
 } from '../../../packages/agent/context/src/index';
-import { calculatePromptUsage } from '../../../packages/agent/context/src/context-usage-calculator';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 import {
   compactingModel,
   completedMessage,
@@ -306,25 +307,18 @@ describe('Context.build', () => {
     });
   });
 
-  it('records the used_tokens Measurement from the same full-Prompt usage calculation', async () => {
-    const observability = {
-      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
-      endSpan: vi.fn(),
-      runInSpanContext: vi.fn(async (_span: unknown, operation: () => Promise<unknown>) => operation()),
-      recordMeasurement: vi.fn(),
-    } as unknown as NonNullable<CreateContextOptions['observability']>;
+  it('records real resolve and final Prompt checkpoints under the Context build Span', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
     const options = { ...fixture(50), observability };
-    const result = await createContext(options).build({ modelCallContext: modelCall() });
+    const result = await observability.withTrace({ kind: 'conversation' }, () => (
+      createContext(options).build({ modelCallContext: modelCall() })
+    ));
     expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    const expected = calculatePromptUsage({
-      prompt: result.prompt,
-      estimator: options.contextTokenEstimator,
-    }).tokens;
-    expect(observability.recordMeasurement).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'context.used_tokens',
-      value: expected,
-    }));
+    expect(records.filter((record) => record.type === 'span.started').map((record) => record.name))
+      .toEqual(['context.build', 'context.resolve', 'prompt.build']);
+    expect(records.filter((record) => record.type === 'content.recorded').map((record) => record.kind))
+      .toEqual(['context.resolved', 'prompt.final']);
   });
 
   it('never degrades known source, attachment, protocol and policy failures into a generic build failure', async () => {
@@ -408,11 +402,12 @@ describe('Context.build', () => {
 
   it('keeps the business result when Observability throws', async () => {
     const throwingObservability = {
-      startSpan: vi.fn(() => { throw new Error('span broken'); }),
-      endSpan: vi.fn(() => { throw new Error('span broken'); }),
-      runInSpanContext: vi.fn(() => { throw new Error('span broken'); }),
-      recordMeasurement: vi.fn(() => { throw new Error('measurement broken'); }),
-    } as unknown as NonNullable<CreateContextOptions['observability']>;
+      withTrace: vi.fn(() => { throw new Error('trace broken'); }),
+      withSpan: vi.fn(() => { throw new Error('span broken'); }),
+      recordContent: vi.fn(() => { throw new Error('capture broken'); }),
+      recordEvent: vi.fn(() => { throw new Error('event broken'); }),
+      linkTrace: vi.fn(() => { throw new Error('link broken'); }),
+    } satisfies NonNullable<CreateContextOptions['observability']>;
     const result = await createContext({ ...fixture(), observability: throwingObservability }).build({
       modelCallContext: modelCall(),
     });
@@ -427,16 +422,17 @@ describe('Context.build', () => {
       return { status: 'ok' as const, history: history() };
     });
     const observability = {
-      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
-      endSpan: vi.fn(),
-      runInSpanContext: vi.fn(async (_span: unknown, operation: () => Promise<unknown>) => {
+      withTrace: vi.fn(() => { throw new Error('unused'); }),
+      withSpan: vi.fn(async (_options: unknown, operation: () => Promise<unknown>) => {
         // The wrapper starts the business operation, then breaks.
         const started = operation();
         started.catch(() => undefined);
         throw new Error('span context broken after starting the operation');
       }),
-      recordMeasurement: vi.fn(),
-    } as unknown as NonNullable<CreateContextOptions['observability']>;
+      recordContent: vi.fn(),
+      recordEvent: vi.fn(),
+      linkTrace: vi.fn(),
+    } satisfies NonNullable<CreateContextOptions['observability']>;
 
     const result = await createContext({ ...options, observability }).build({ modelCallContext: modelCall() });
     // The first business result wins; the source reads and build ran once.
@@ -505,28 +501,35 @@ describe('Context.build', () => {
     }
   });
 
-  it('ends the main Span with the matching status for failure and cancellation', async () => {
-    const ended: Array<{ status: string }> = [];
-    const observability = {
-      startSpan: vi.fn(() => ({ spanId: 'span:1' })),
-      endSpan: vi.fn((input: { status: string }) => { ended.push(input); }),
-      runInSpanContext: vi.fn(async (_span: unknown, operation: () => Promise<unknown>) => operation()),
-      recordMeasurement: vi.fn(),
-    } as unknown as NonNullable<CreateContextOptions['observability']>;
+  it('classifies failed and cancelled Context build Span outcomes', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
 
     const failedOptions = { ...fixture(), observability };
     failedOptions.sessionHistory.getActiveHistory = vi.fn(() => {
       throw new Error('database unavailable');
     });
-    await createContext(failedOptions).build({ modelCallContext: modelCall() });
+    await observability.withTrace({ kind: 'conversation' }, () => (
+      createContext(failedOptions).build({ modelCallContext: modelCall() })
+    ));
 
     const controller = new AbortController();
     controller.abort();
-    await createContext({ ...fixture(), observability }).build({
-      modelCallContext: modelCall(),
-      signal: controller.signal,
+    await observability.withTrace({ kind: 'conversation' }, () => (
+      createContext({ ...fixture(), observability }).build({
+        modelCallContext: modelCall(),
+        signal: controller.signal,
+      })
+    ));
+    const contextEnds = records.filter((record): record is Extract<TraceJournalRecord, {
+      readonly type: 'span.ended';
+    }> => record.type === 'span.ended').filter((record) => {
+      const started = records.find((candidate) => (
+        candidate.type === 'span.started' && candidate.spanId === record.spanId
+      ));
+      return started?.type === 'span.started' && started.name === 'context.build';
     });
-    expect(ended.map((entry) => entry.status)).toEqual(['error', 'cancelled']);
+    expect(contextEnds.map((record) => record.outcome.status)).toEqual(['error', 'cancelled']);
   });
 
   it('re-reads the authoritative Session after automatic compaction and rebuilds the final Prompt', async () => {

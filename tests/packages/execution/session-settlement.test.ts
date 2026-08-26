@@ -4,6 +4,7 @@
  * committer never publishes Runtime Events.
  */
 import { describe, expect, it, vi } from 'vitest';
+import type { Observability } from '@megumi/observability';
 import type {
   SaveAssistantReplyRequest,
   SaveMessageResult,
@@ -16,6 +17,8 @@ import {
   createSessionMessageCommitter,
   type SessionToolResultCommit,
 } from '@megumi/execution';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
 
 const userEntry: SessionEntry = {
   entry_id: 'entry:user',
@@ -29,7 +32,7 @@ function createRecordingCommitter(overrides: {
   failModelResponse?: boolean;
   failToolResultAt?: number;
   failAssistantReply?: boolean;
-} = {}) {
+} = {}, observability?: Observability) {
   let toolCalls = 0;
   let modelCalls = 0;
   let replyCalls = 0;
@@ -74,6 +77,7 @@ function createRecordingCommitter(overrides: {
     userEntry,
     session,
     ids: { createSessionMessageId: () => `message:${++messageNumber}` },
+    ...(observability ? { observability } : {}),
   });
   return { committer, session };
 }
@@ -247,5 +251,74 @@ describe('SessionMessageCommitter', () => {
     });
     // No events bus is involved: the committer's only collaborator is Session.
     expect(session.saveModelResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('records each real Session save as a commit span with identity and digest only', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const { committer } = createRecordingCommitter({}, observability);
+
+    await observability.withTrace({ kind: 'conversation' }, async () => {
+      await committer.commitModelResponse({
+        sessionId: 'session:1',
+        executionId: 'run:1',
+        messageId: 'message:model',
+        content: [{ type: 'text', text: 'using tools' }],
+        stopReason: 'toolUse',
+        completedAt: '2026-07-31T00:00:00.001Z',
+      });
+      await committer.commitToolResults({
+        sessionId: 'session:1',
+        executionId: 'run:1',
+        results: [toolResult({ callOrder: 0, toolCallId: 'call:1' })],
+      });
+      await committer.commitAssistantReply({
+        sessionId: 'session:1',
+        executionId: 'run:1',
+        status: 'completed',
+        content: [{ type: 'text', text: 'done' }],
+        completedAt: '2026-07-31T00:00:00.002Z',
+      });
+    });
+
+    const started = records.filter((record) => record.type === 'span.started');
+    expect(started).toHaveLength(3);
+    expect(started.map((record) => record.name)).toEqual([
+      'session.message.commit',
+      'session.message.commit',
+      'session.message.commit',
+    ]);
+    expect(started.map((record) => record.correlation.messageId)).toEqual([
+      'message:model',
+      'message:1',
+      'message:2',
+    ]);
+    expect(started.every((record) => /^[a-f0-9]{64}$/.test(record.correlation.contentDigest ?? ''))).toBe(true);
+    expect(records.some((record) => record.type === 'content.recorded')).toBe(false);
+    expect(records.filter((record) => record.type === 'span.ended').every((record) => (
+      record.outcome.status === 'ok' && record.outcome.code === 'saved'
+    ))).toBe(true);
+  });
+
+  it('keeps a Session save single-shot when the diagnostic wrapper throws before invoking it', async () => {
+    const observability: Observability = {
+      withTrace: (_options, operation) => operation(),
+      withSpan: async () => { throw new Error('diagnostics unavailable'); },
+      recordContent: () => undefined,
+      recordEvent: () => undefined,
+      linkTrace: () => undefined,
+    };
+    const { committer, session } = createRecordingCommitter({}, observability);
+
+    const result = await committer.commitAssistantReply({
+      sessionId: 'session:1',
+      executionId: 'run:1',
+      status: 'completed',
+      content: [{ type: 'text', text: 'done' }],
+      completedAt: '2026-07-31T00:00:00.002Z',
+    });
+
+    expect(result.status).toBe('saved');
+    expect(session.saveAssistantReply).toHaveBeenCalledTimes(1);
   });
 });

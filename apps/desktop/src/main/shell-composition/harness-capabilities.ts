@@ -41,11 +41,11 @@ import {
 import { createInputProcessor, type InputSourceAccess } from '@megumi/input';
 import { createInstructionReader } from '@megumi/instructions';
 import {
+  captureRuntimeLogData,
   composeObservability,
-  createObservabilityRuntimeLogger,
-  type ObservabilityService,
-  type ObservabilityStorage,
-  type RuntimeLogger,
+  type ComposedObservability,
+  type ObservabilityPersistenceStorage,
+  type StructuredRuntimeLogger,
 } from '@megumi/observability';
 import { createPermissions, type Permissions } from '@megumi/permissions';
 import { createSandbox } from '@megumi/sandbox';
@@ -96,12 +96,13 @@ import {
   resolveModelVisibleOperatingSystem,
 } from './application-policy';
 import type { ProductWorkspaceFileSystem } from '@megumi/product-host/host';
+import type { ProductRuntimeLogger } from './application-runtime';
 
 export interface ProductCapabilitiesOptions {
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
-  observabilityStorage?: ObservabilityStorage;
+  observabilityStorage?: ObservabilityPersistenceStorage;
   productEnvironment?: {
     readonly appVersion: string;
     readonly platform: string;
@@ -120,12 +121,8 @@ export interface ProductCapabilitiesOptions {
 
 export interface ProductCapabilities {
   readonly homePaths: MegumiHomePaths;
-  readonly observability: {
-    readonly service: ObservabilityService;
-    readonly queryService: import('@megumi/observability').ObservabilityQueryService;
-    readonly flush: () => Promise<void>;
-  };
-  readonly logger: RuntimeLogger;
+  readonly observability: ComposedObservability;
+  readonly logger: ProductRuntimeLogger;
   readonly database: DatabaseConnection;
   readonly settings: ReturnType<typeof createSettings>;
   readonly models: import('@megumi/ai').Models;
@@ -163,14 +160,21 @@ export type ProductModelResolutionResult =
 /** Composes the capability instances once per Host process. */
 export function composeProductCapabilities(options: ProductCapabilitiesOptions): ProductCapabilities {
   const homePaths = initializeMegumiHomeSync(options.home);
+  const observabilityRoot = path.join(homePaths.logsPath, 'observability');
   const observability = composeObservability({
-    directoryPath: `${homePaths.logsPath}/observability`,
+    rootDirectory: observabilityRoot,
+    legacyDirectoryPath: homePaths.logsPath,
     storage: options.observabilityStorage ?? noopObservabilityStorage,
-    appVersion: options.productEnvironment?.appVersion ?? 'unknown',
-    platform: options.productEnvironment?.platform ?? 'unknown',
-    arch: options.productEnvironment?.arch ?? 'unknown',
+    ...(options.observabilityStorage
+      ? {
+          openIndexDatabase: () => {
+            options.home.fileSystem.ensureDirSync(observabilityRoot);
+            return createDatabase({ filename: path.join(observabilityRoot, 'index.sqlite') });
+          },
+        }
+      : {}),
   });
-  const logger = createObservabilityRuntimeLogger(observability.service);
+  const logger = createProductRuntimeLogger(observability.runtimeLogger);
 
   const database = createDatabase({ filename: path.join(homePaths.sqlitePath, 'megumi.sqlite') });
   try {
@@ -188,6 +192,7 @@ export function composeProductCapabilities(options: ProductCapabilitiesOptions):
   } catch (error) {
     // Any later capability failure still closes the already-open Database.
     database.close();
+    void observability.shutdown();
     throw error;
   }
 }
@@ -224,12 +229,14 @@ function composeCapabilitiesWithDatabase(
   const events = createEventBus({
     recentEvents: PRODUCT_RECENT_EVENT_BUFFER,
     onConsumerError: ({ eventType, sessionId, sequence, error }) => {
-      observability.service.recordLog({
+      observability.runtimeLogger.write({
         level: 'warn',
-        event: 'runtime_event_consumer_failed',
-        attributes: {
+        module: 'events',
+        code: 'runtime_event_consumer_failed',
+        message: 'A Runtime Event consumer failed.',
+        correlation: { sessionId },
+        data: {
           eventType,
-          sessionId,
           sequence,
           errorMessage: error instanceof Error ? error.message : String(error),
         },
@@ -300,7 +307,7 @@ function composeCapabilitiesWithDatabase(
     instructionReader: instructions,
     skills,
     models: modelComposition.models,
-    observability: observability.service,
+    observability: observability.observability,
     events,
   });
   const permissions = createPermissions({
@@ -448,7 +455,8 @@ function composeCapabilitiesWithDatabase(
       tools,
       permissions,
       session: history,
-      observability: observability.service,
+      observability: observability.observability,
+      runtimeLogger: observability.runtimeLogger,
       policy: PRODUCT_EXECUTION_POLICY,
     }),
     onSettled(execution, outcome) {
@@ -514,12 +522,16 @@ function composeCapabilitiesWithDatabase(
       },
       clock,
       onError(error, job) {
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'warn',
-          event: 'interest_extraction_failed',
-          attributes: {
-            errorMessage: error instanceof Error ? error.message : String(error),
+          module: 'discovery',
+          code: 'interest_extraction_failed',
+          message: 'Conversation interest extraction failed.',
+          correlation: {
             ...(job ? { executionId: job.executionId, sessionId: job.sessionId } : {}),
+          },
+          data: {
+            errorMessage: error instanceof Error ? error.message : String(error),
           },
         });
       },
@@ -568,14 +580,18 @@ function composeCapabilitiesWithDatabase(
         createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
       },
       onBackgroundError(error, context) {
-        observability.service.recordLog({
+        observability.runtimeLogger.write({
           level: 'warn',
-          event: 'daily_discovery_background_failed',
-          attributes: {
-            operation: context.operation,
-            errorMessage: error instanceof Error ? error.message : String(error),
+          module: 'discovery',
+          code: 'daily_discovery_background_failed',
+          message: 'Daily discovery background work failed.',
+          correlation: {
             ...(context.batchId ? { batchId: context.batchId } : {}),
             ...(context.executionId ? { executionId: context.executionId } : {}),
+          },
+          data: {
+            operation: context.operation,
+            errorMessage: error instanceof Error ? error.message : String(error),
           },
         });
       },
@@ -702,12 +718,37 @@ const unavailableInputSourceAccess: InputSourceAccess = {
   async resolveDocument() { throw new Error('Host document file resolution is unavailable.'); },
 };
 
-const noopObservabilityStorage: ObservabilityStorage = {
+function createProductRuntimeLogger(
+  runtimeLogger: Pick<StructuredRuntimeLogger, 'write'>,
+): ProductRuntimeLogger {
+  const write = (
+    level: 'info' | 'warn' | 'error',
+    code: string,
+    details?: Record<string, unknown>,
+  ): void => {
+    runtimeLogger.write({
+      level,
+      module: 'product',
+      code,
+      message: code,
+      ...(details ? { data: captureRuntimeLogData(details) } : {}),
+    });
+  };
+  return {
+    info: (code, details) => write('info', code, details),
+    warn: (code, details) => write('warn', code, details),
+    error: (code, details) => write('error', code, details),
+  };
+}
+
+const noopObservabilityStorage: ObservabilityPersistenceStorage = {
   ensureDirectory: async () => undefined,
   appendText: async () => undefined,
   readText: async () => '',
-  listFiles: async () => [],
+  readBytes: async () => new Uint8Array(),
+  writeBytes: async () => undefined,
+  listEntries: async () => [],
   stat: async () => undefined,
   move: async () => undefined,
-  remove: async () => undefined,
+  removeFile: async () => undefined,
 };

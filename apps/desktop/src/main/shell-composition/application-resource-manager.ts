@@ -17,7 +17,7 @@ export interface ApplicationResourceManager {
     readonly executions: AgentExecutions;
     readonly voice: Voice;
     readonly speechOutput: { dispose(): void };
-    readonly observability: { flush(): Promise<void> };
+    readonly observability: { shutdown(): Promise<void> };
   }): Promise<void>;
 }
 
@@ -102,7 +102,7 @@ export function createApplicationResourceManager(input: {
         }
       }
       try {
-        await observability.flush();
+        await observability.shutdown();
       } catch (error) {
         failures.push({ resource: 'observability', error });
       }

@@ -8,6 +8,8 @@ import {
   type CreateContextOptions,
   type Prompt,
 } from '../../../packages/agent/context/src/index';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 import {
   compactingModel,
   completedMessage,
@@ -87,6 +89,13 @@ function fixture(
           status: 'completed' as const,
           startedAt: '2026-07-12T00:00:00.000Z',
           completedAt: request.completedAt,
+        },
+        entry: {
+          entry_id: `entry:${request.compactionId}`,
+          session_id: request.sessionId,
+          entry_type: 'compaction' as const,
+          compaction_id: request.compactionId,
+          created_at: request.completedAt,
         },
       })),
       endCompaction: vi.fn((request) => ({
@@ -305,30 +314,20 @@ describe('Context compaction', () => {
     });
   });
 
-  it('records manual compaction lifecycle and resulting token usage', async () => {
-    const observability = {
-      getCurrentTrace: vi.fn(() => undefined),
-      recordLog: vi.fn(),
-      recordMeasurement: vi.fn(),
-    } as unknown as NonNullable<CreateContextOptions['observability']>;
+  it('records manual compaction source, Summary, lifecycle Events, and its real model call', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
     const options: CreateContextOptions = { ...fixture(), observability };
 
-    await expect(createContext(options).compact(manualRequest())).resolves.toMatchObject({ status: 'compacted' });
-    expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
-      event: 'context.compaction.started',
-    }));
-    // The started log reports the messages that truly stay in the candidate
-    // Prompt: the kept compactable history including the Turn Prefix.
-    expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
-      event: 'context.compaction.started',
-      attributes: expect.objectContaining({ keptMessages: 4 }),
-    }));
-    expect(observability.recordLog).toHaveBeenCalledWith(expect.objectContaining({
-      event: 'context.compaction.completed',
-    }));
-    expect(observability.recordMeasurement).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'context.compaction.after_tokens',
-    }));
+    await expect(observability.withTrace({ kind: 'conversation' }, () => (
+      createContext(options).compact(manualRequest())
+    ))).resolves.toMatchObject({ status: 'compacted' });
+    expect(records.filter((record) => record.type === 'span.started').map((record) => record.name))
+      .toEqual(['context.resolve', 'prompt.build', 'context.compact', 'model.call']);
+    expect(records.filter((record) => record.type === 'content.recorded').map((record) => record.kind))
+      .toEqual(['context.resolved', 'context.compaction.source', 'context.compaction.summary']);
+    expect(records.filter((record) => record.type === 'span.event').map((record) => record.event.type))
+      .toEqual(['context.compaction.triggered', 'context.compaction.persisted']);
   });
 
   it('records distinct lifecycle start and completion times', async () => {
