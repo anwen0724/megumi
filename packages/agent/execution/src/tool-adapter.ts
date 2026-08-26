@@ -85,6 +85,7 @@ export function createAgentTool(
       dependencies.metadata,
       scope.modelCallId,
       input.toolCallId,
+      definition.name,
       () => executeProtectedAgentTool(definition, scope, input, dependencies),
     ),
   });
@@ -154,6 +155,7 @@ export function createUnprotectedAgentTool(
       trace?.metadata,
       binding.modelCallId,
       input.toolCallId,
+      definition.name,
       async () => {
         const { toolCallId, arguments: argumentsValue, signal } = input;
         const correlation = trace?.metadata
@@ -615,6 +617,7 @@ async function observeToolCall<TDetails>(
   metadata: ExecutionMetadata | undefined,
   modelCallId: string,
   toolCallId: string,
+  toolName: string,
   operation: () => Promise<AgentToolExecutionOutcome<TDetails>>,
 ): Promise<AgentToolExecutionOutcome<TDetails>> {
   let operationPromise: Promise<AgentToolExecutionOutcome<TDetails>> | undefined;
@@ -626,6 +629,7 @@ async function observeToolCall<TDetails>(
   try {
     return await observability.withSpan({
       name: 'tool.call',
+      metadata: { kind: 'tool_call', toolName },
       correlation: metadata
         ? toolCorrelation(metadata, modelCallId, toolCallId)
         : { modelCallId, toolCallId },

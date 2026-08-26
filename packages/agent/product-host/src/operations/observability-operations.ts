@@ -137,6 +137,7 @@ function projectDetail(trace: TraceProjection): ObservabilityTraceDetailUiDto {
         spanId: span.spanId,
         ...(span.parentSpanId ? { parentSpanId: span.parentSpanId } : {}),
         name: span.name,
+        ...(span.metadata ? { metadata: { ...span.metadata } } : {}),
         correlation: ObservabilityCorrelationSchema.parse(span.correlation),
         startedAt: span.startedAt,
         ...(span.endedAt ? { endedAt: span.endedAt } : {}),

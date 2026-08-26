@@ -31,6 +31,10 @@ describe('Trace Journal', () => {
     expect(() => decodeTraceJournalLine(JSON.stringify({ ...record, schemaVersion: 2 }))).toThrow();
     expect(() => decodeTraceJournalLine(JSON.stringify({ ...record, sequence: 0 }))).toThrow();
     expect(() => decodeTraceJournalLine(JSON.stringify({ ...record, unknown: true }))).toThrow();
+    expect(() => decodeTraceJournalLine(JSON.stringify({
+      ...allJournalRecordTypes()[2],
+      metadata: { kind: 'tool_call', toolName: 'write_file' },
+    }))).toThrow();
   });
 
   it('round-trips every one of the seven closed Journal record types', () => {

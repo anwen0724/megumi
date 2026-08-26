@@ -132,6 +132,8 @@ describe('Tool Adapter', () => {
     expect(result.status).toBe('completed');
     expect(records.filter((record) => record.type === 'span.started').map((record) => record.name))
       .toEqual(['tool.call']);
+    expect(records.find((record) => record.type === 'span.started' && record.name === 'tool.call'))
+      .toMatchObject({ metadata: { kind: 'tool_call', toolName: 'lookup' } });
     expect(records.filter((record) => record.type === 'content.recorded').map((record) => record.kind))
       .toEqual(['tool.request', 'tool.arguments', 'tool.handler_result', 'tool.result']);
     expect(records.filter((record) => record.type === 'span.event').map((record) => record.event))

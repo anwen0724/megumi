@@ -5,6 +5,7 @@ import type { CaptureIssue, ContentKind, CapturedContent } from '../content/cont
 import type { TraceJournalRecord } from '../persistence/trace-journal-record';
 import type {
   RecordedOutcome,
+  SpanMetadata,
   SpanName,
   TraceCorrelation,
   TraceEvent,
@@ -56,6 +57,7 @@ export interface TraceSpanProjection {
   readonly spanId: string;
   readonly parentSpanId?: string;
   readonly name: SpanName;
+  readonly metadata?: SpanMetadata;
   readonly correlation: TraceCorrelation;
   readonly startedAt: string;
   readonly endedAt?: string;
@@ -261,6 +263,7 @@ function projectSpans(facts: ReadonlyMap<string, SpanFacts>): TraceSpanProjectio
       spanId,
       ...(start.parentSpanId ? { parentSpanId: start.parentSpanId } : {}),
       name: start.name,
+      ...(start.metadata ? { metadata: start.metadata } : {}),
       correlation: start.correlation,
       startedAt: start.timestamp,
       ...(end ? { endedAt: end.timestamp, outcome: end.outcome } : {}),

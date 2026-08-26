@@ -50,6 +50,8 @@ export function TraceDetail({
     !span.parentSpanId || !trace.spans.some((candidate) => candidate.spanId === span.parentSpanId)
   )), [trace.spans]);
   const rootContents = trace.contents.filter((content) => !content.spanId);
+  const modelCallCount = trace.spans.filter((span) => span.name === 'model.call').length;
+  const toolCallCount = trace.spans.filter((span) => span.name === 'tool.call').length;
 
   function locateSequence(sequence: number | undefined) {
     if (sequence === undefined) return;
@@ -108,6 +110,10 @@ export function TraceDetail({
           <span className="ml-1 text-xs text-[var(--color-text-muted)]">{formatTraceTime(trace.summary.startedAt)}</span>
           <span className="text-xs text-[var(--color-text-muted)]">·</span>
           <span className="font-mono text-xs text-[var(--color-text-muted)]">{formatTraceDuration(trace.summary.durationMs)}</span>
+        </div>
+
+        <div className="mt-3 text-xs font-medium text-[var(--color-text-muted)]">
+          {t('diagnostics.invocationCounts', { modelCount: modelCallCount, toolCount: toolCallCount })}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-[0.68rem] text-[var(--color-text-muted)]">
@@ -284,6 +290,10 @@ function SpanNode({
   const { t } = useTranslation('settings');
   const children = trace.spans.filter((candidate) => candidate.parentSpanId === span.spanId);
   const contents = trace.contents.filter((content) => content.spanId === span.spanId);
+  const events = span.events.filter((event) => !(
+    event.type === 'tool.permission.resolved'
+    && children.some((child) => child.name === 'permission.await')
+  ));
   return (
     <article className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 shadow-[0_1px_0_rgba(0,0,0,0.025)]">
       <div className="flex items-start gap-3">
@@ -291,19 +301,25 @@ function SpanNode({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-sm font-semibold text-[var(--color-text)]">{spanName(span.name, t)}</div>
+              <div className="text-sm font-semibold text-[var(--color-text)]">{spanDisplayName(span, t)}</div>
               <div className="mt-0.5 font-mono text-[0.66rem] text-[var(--color-text-muted)]">{span.name}</div>
             </div>
-            <span className="shrink-0 font-mono text-[0.7rem] text-[var(--color-text-muted)]">
-              {formatTraceDuration(span.durationMs)}
-            </span>
+            <div className="flex shrink-0 items-center gap-1.5 text-[0.7rem] text-[var(--color-text-muted)]">
+              {span.name === 'tool.call' ? (
+                <>
+                  <span className="font-medium">{t(`diagnostics.status.${spanStatus(span)}`)}</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
+              <span className="font-mono">{formatTraceDuration(span.durationMs)}</span>
+            </div>
           </div>
 
-          {span.events.length > 0 ? (
+          {events.length > 0 ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {span.events.map((event) => (
+              {events.map((event) => (
                 <span key={event.sequence} className="rounded-md bg-[var(--color-surface-muted)] px-2 py-1 font-mono text-[0.64rem] text-[var(--color-text-muted)]">
-                  {event.type}
+                  {eventDisplayName(event, t)}
                 </span>
               ))}
             </div>
@@ -508,6 +524,59 @@ function spanName(name: string, t: TFunction<'settings'>): string {
     case 'recommendation.publish': return t('diagnostics.spanNames.recommendationPublish');
     default: return name;
   }
+}
+
+function spanDisplayName(
+  span: ObservabilitySpanUiDto,
+  t: TFunction<'settings'>,
+): string {
+  if (span.name === 'tool.call' && span.metadata?.kind === 'tool_call') {
+    return span.metadata.toolName;
+  }
+  if (span.name !== 'permission.await') return spanName(span.name, t);
+  const decision = permissionOutcomeName(span, t);
+  return decision
+    ? t('diagnostics.permissionResolution', { decision })
+    : spanName(span.name, t);
+}
+
+function spanStatus(span: ObservabilitySpanUiDto): 'ok' | 'error' | 'cancelled' | 'incomplete' {
+  if (!span.outcome || span.outcome.status === 'unavailable') return 'incomplete';
+  return span.outcome.status;
+}
+
+function eventDisplayName(
+  event: ObservabilitySpanUiDto['events'][number],
+  t: TFunction<'settings'>,
+): string {
+  if (event.type !== 'tool.permission.resolved') return event.type;
+  const decision = permissionDecisionName(event.detail.decision, t);
+  return decision ? t('diagnostics.permissionEvent', { decision }) : event.type;
+}
+
+function permissionOutcomeName(
+  span: ObservabilitySpanUiDto,
+  t: TFunction<'settings'>,
+): string | undefined {
+  const outcome = span.outcome;
+  if (!outcome || outcome.status === 'unavailable') return undefined;
+  if (outcome.status === 'cancelled' || outcome.code === 'approval_cancelled') {
+    return t('diagnostics.permissionDecisions.cancelled');
+  }
+  if (outcome.code === 'approved') return t('diagnostics.permissionDecisions.userAllow');
+  if (outcome.code === 'denied') return t('diagnostics.permissionDecisions.userDeny');
+  return undefined;
+}
+
+function permissionDecisionName(
+  decision: string | number | boolean | null | undefined,
+  t: TFunction<'settings'>,
+): string | undefined {
+  if (decision === 'automatic_allow') return t('diagnostics.permissionDecisions.automaticAllow');
+  if (decision === 'automatic_deny') return t('diagnostics.permissionDecisions.automaticDeny');
+  if (decision === 'user_allow') return t('diagnostics.permissionDecisions.userAllow');
+  if (decision === 'user_deny') return t('diagnostics.permissionDecisions.userDeny');
+  return undefined;
 }
 
 function contentName(kind: string, t: TFunction<'settings'>): string {

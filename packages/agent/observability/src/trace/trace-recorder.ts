@@ -165,6 +165,7 @@ export function createTraceRecorder(options: CreateTraceRecorderOptions): Observ
         spanId,
         ...(parent.currentSpanId ? { parentSpanId: parent.currentSpanId } : {}),
         name: spanOptions.name,
+        ...(spanOptions.metadata ? { metadata: spanOptions.metadata } : {}),
         correlation: child.correlation,
       });
       try {

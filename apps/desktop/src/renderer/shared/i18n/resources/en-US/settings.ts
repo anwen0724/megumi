@@ -277,6 +277,12 @@ export const settings = {
     binaryContent: 'Binary content is shown as metadata only', contentUnavailable: 'Content is unavailable.', checksum: 'SHA-256', byteUnit: 'B',
       traceLinks: 'Related Traces', unknownTraceKind: 'Unknown', healthHealthy: 'Trace system healthy', healthWarning: 'Trace system needs attention', healthUnavailable: 'Trace system status unavailable',
     healthSummary: '{{dropped}} dropped · {{failures}} failures',
+    invocationCounts: '{{modelCount}} model calls · {{toolCount}} tool calls',
+    permissionResolution: 'Permission: {{decision}}', permissionEvent: 'Permission: {{decision}}',
+    permissionDecisions: {
+      automaticAllow: 'Automatically allowed', automaticDeny: 'Automatically denied', userAllow: 'User allowed',
+      userDeny: 'User denied', cancelled: 'Cancelled',
+    },
     traceKinds: { conversation: 'Conversation', dailyDiscovery: 'Daily discovery' },
     spanCount: '{{count}} spans', eventCount: '{{count}} events', contentCount: '{{count}} content checkpoints',
     status: { ok: 'Completed', error: 'Failed', cancelled: 'Cancelled', incomplete: 'Did not finish normally' },

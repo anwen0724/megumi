@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { CapturedContentSchema } from '../content/content-contract';
 import {
   RecordedOutcomeSchema,
+  SpanMetadataSchema,
   SpanNameSchema,
   TraceCorrelationSchema,
   TraceEventSchema,
@@ -37,6 +38,7 @@ export const TraceJournalRecordSchema = z.discriminatedUnion('type', [
     spanId: z.string().uuid(),
     parentSpanId: z.string().uuid().optional(),
     name: SpanNameSchema,
+    metadata: SpanMetadataSchema.optional(),
     correlation: TraceCorrelationSchema,
   }).strict(),
   TraceJournalRecordBaseSchema.extend({
@@ -71,7 +73,19 @@ export const TraceJournalRecordSchema = z.discriminatedUnion('type', [
     correlation: TraceCorrelationSchema.optional(),
     diagnostics: z.enum(['complete', 'dropped']),
   }).strict(),
-]);
+]).superRefine((record, context) => {
+  if (
+    record.type === 'span.started'
+    && record.metadata?.kind === 'tool_call'
+    && record.name !== 'tool.call'
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['metadata'],
+      message: 'tool_call metadata is only valid for tool.call spans.',
+    });
+  }
+});
 
 export type TraceJournalRecord = z.infer<typeof TraceJournalRecordSchema>;
 

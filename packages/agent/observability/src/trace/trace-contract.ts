@@ -38,6 +38,14 @@ export const TRACE_SPAN_NAMES = [
 export const SpanNameSchema = z.enum(TRACE_SPAN_NAMES);
 export type SpanName = z.infer<typeof SpanNameSchema>;
 
+export const SpanMetadataSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('tool_call'),
+    toolName: z.string().min(1),
+  }).strict(),
+]);
+export type SpanMetadata = z.infer<typeof SpanMetadataSchema>;
+
 export const TraceLinkKindSchema = z.enum(['duplicate', 'retries', 'continues']);
 export type TraceLinkKind = z.infer<typeof TraceLinkKindSchema>;
 

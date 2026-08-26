@@ -83,6 +83,9 @@ export type ObservabilityEventUiDto = z.infer<typeof ObservabilityEventSchema>;
 
 const ObservabilitySpanSchema = z.object({
   spanId: z.string(), parentSpanId: z.string().optional(), name: z.string(),
+  metadata: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('tool_call'), toolName: z.string().min(1) }).strict(),
+  ]).optional(),
   correlation: ObservabilityCorrelationSchema, startedAt: z.string(), endedAt: z.string().optional(),
   durationMs: z.number().nonnegative().optional(), outcome: TraceOutcomeSchema.optional(),
   events: z.array(ObservabilityEventSchema),

@@ -4,6 +4,7 @@
 import type { ContentKind } from '../content/content-contract';
 import type {
   RecordedOutcome,
+  SpanMetadata,
   SpanName,
   TraceCorrelation,
   TraceEvent,
@@ -25,6 +26,7 @@ export interface TraceOptions<T> {
 
 export interface SpanOptions<T> {
   readonly name: SpanName;
+  readonly metadata?: SpanMetadata;
   readonly correlation?: TraceCorrelation;
   readonly classifyResult?: (result: T) => OperationCompletion;
 }
@@ -54,4 +56,3 @@ export interface Observability {
   /** Links the current Trace to a concrete or correlation-selected prior Trace. */
   linkTrace(input: LinkTraceInput): void;
 }
-

@@ -57,6 +57,8 @@ describe('Trace Reader', () => {
         event: { type: 'model.output.started', providerAttempt: 1 },
       }),
     ]);
+    expect(detail?.spans.find((span) => span.spanId === secondChildId)?.metadata)
+      .toEqual({ kind: 'tool_call', toolName: 'write_file' });
     expect(detail?.correlations).toContainEqual({ requestId: `request-${traceId.slice(-3)}` });
     expect(detail?.links).toEqual([expect.objectContaining({ linkKind: 'retries' })]);
     expect(detail?.contents.map((content) => content.kind)).toEqual([
@@ -277,7 +279,10 @@ function completeRecords(
     started(traceId, 1),
     spanStarted(traceId, 2, rootSpanId, undefined, 'agent.execution'),
     spanStarted(traceId, 3, firstChildId, rootSpanId, 'model.call'),
-    spanStarted(traceId, 4, secondChildId, rootSpanId, 'tool.call'),
+    {
+      ...spanStarted(traceId, 4, secondChildId, rootSpanId, 'tool.call'),
+      metadata: { kind: 'tool_call', toolName: 'write_file' },
+    },
     {
       ...base(traceId, 5),
       type: 'span.event',
