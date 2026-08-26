@@ -7,6 +7,8 @@ export type {
   CompactContextResult,
   CompactionTrigger,
   ConversationRunContext,
+  CandidateSupplyContextMaterial,
+  CandidateSupplyRunContext,
   ContextBuilder,
   ContextCompactionProgress,
   ContextCompactor,

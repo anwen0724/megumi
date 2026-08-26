@@ -6,6 +6,7 @@ import type { Skills } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 import type {
   ContextFailure,
+  CandidateSupplyContextMaterial,
   ContextWorkspaceSource,
   DailyDiscoveryContextMaterial,
 } from './context';
@@ -17,8 +18,13 @@ import {
   createDailyDiscoveryContextResolver,
   type DailyDiscoveryResolvedContext,
 } from './resolvers/daily-discovery-context-resolver';
+import {
+  createCandidateSupplyContextResolver,
+  type CandidateSupplyResolvedContext,
+} from './resolvers/candidate-supply-context-resolver';
 
-export type ResolvedContext = ConversationResolvedContext | DailyDiscoveryResolvedContext;
+export type ResolvedContext = ConversationResolvedContext | DailyDiscoveryResolvedContext
+  | CandidateSupplyResolvedContext;
 
 export type ResolveContextRequest =
   | {
@@ -33,6 +39,14 @@ export type ResolveContextRequest =
       readonly kind: 'daily_discovery';
       readonly localDate: string;
       readonly material: DailyDiscoveryContextMaterial;
+      readonly currentMessages: readonly Message[];
+      readonly tools: readonly ToolDefinition[];
+      readonly signal?: AbortSignal;
+    }
+  | {
+      readonly kind: 'candidate_supply';
+      readonly startedAt: string;
+      readonly material: CandidateSupplyContextMaterial;
       readonly currentMessages: readonly Message[];
       readonly tools: readonly ToolDefinition[];
       readonly signal?: AbortSignal;
@@ -58,11 +72,15 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
   const dailyDiscovery = createDailyDiscoveryContextResolver({
     instructionReader: dependencies.instructionReader,
   });
+  const candidateSupply = createCandidateSupplyContextResolver({
+    instructionReader: dependencies.instructionReader,
+  });
   return {
     resolve(request) {
-      return request.kind === 'conversation'
-        ? conversation.resolve(request)
-        : dailyDiscovery.resolve(request);
+      if (request.kind === 'conversation') return conversation.resolve(request);
+      return request.kind === 'daily_discovery'
+        ? dailyDiscovery.resolve(request)
+        : candidateSupply.resolve(request);
     },
   };
 }

@@ -221,6 +221,51 @@ function approvalRequest(executionId: string, approvalId: string): ApprovalReque
 }
 
 describe('Agent Executions and conversation submission', () => {
+  it('starts Candidate Supply as a background execution with its fixed Run Context', async () => {
+    let launched: LaunchAgentExecutionInput | undefined;
+    const settled = vi.fn();
+    const executions = createAgentExecutions({
+      ids: { createExecutionId: () => 'execution:supply', createSessionMessageId: () => 'unused' },
+      clock,
+      terminalRetentionMs: 60_000,
+      events: createEventBus(),
+      launch: async (input) => {
+        launched = input;
+        const agent = new Agent({
+          initialState: {
+            configuration: { systemPrompt: '', model, thinkingLevel: 'minimal', tools: [] },
+            messages: [],
+          },
+          stream: () => new AssistantMessageEventStream(),
+        });
+        return { agent, execute: async () => ({ status: 'completed' }) };
+      },
+    });
+    const started = await executions.start({
+      kind: 'candidate_supply', requestId: 'request:supply', model,
+      material: {
+        pool: {
+          counts: { available: 0 }, lowWatermark: 10, target: 20, hardLimit: 40,
+          totalShortfall: 20, uncoveredInterestIds: [], consumerShortfalls: [],
+        },
+        interests: [], negativeConstraints: [], sources: [], recentQueryOutcomes: [], pendingCandidates: [],
+        budget: { searchesRemaining: 12, readsRemaining: 40, rawResultsRemaining: 200 },
+      },
+      accept: async () => ({ status: 'accepted' }),
+      onSettled: settled,
+    });
+
+    expect(started.status).toBe('started');
+    expect(launched).toMatchObject({
+      kind: 'candidate_supply',
+      runContext: { kind: 'candidate_supply', executionId: 'execution:supply' },
+    });
+    if (started.status === 'started') await started.completion;
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({
+      executionId: 'execution:supply', outcome: { status: 'completed' },
+    }));
+  });
+
   it('does not create a Session or start an execution when Input completes the request', async () => {
     const createSession = vi.fn();
     const { runtime, testLaunch } = fixture({

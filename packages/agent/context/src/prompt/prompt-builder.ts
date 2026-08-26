@@ -11,6 +11,7 @@ import type { ContextFailure, Prompt } from '../context';
 import type { ResolvedContext } from '../context-resolver';
 import type { ConversationResolvedContext } from '../resolvers/conversation-context-resolver';
 import type { DailyDiscoveryResolvedContext } from '../resolvers/daily-discovery-context-resolver';
+import type { CandidateSupplyResolvedContext } from '../resolvers/candidate-supply-context-resolver';
 import { buildContextMessages, type MaterializedHistory } from './context-message-builder';
 import { buildSystemPrompt } from './system-prompt-builder';
 
@@ -30,6 +31,11 @@ export type BuildPromptResult =
       readonly kind: 'daily_discovery';
       readonly prompt: Prompt;
     }
+  | {
+      readonly status: 'built';
+      readonly kind: 'candidate_supply';
+      readonly prompt: Prompt;
+    }
   | { readonly status: 'failed'; readonly failure: ContextFailure };
 
 export interface PromptBuilder {
@@ -42,9 +48,33 @@ export interface PromptBuilder {
 export function createPromptBuilder(dependencies: PromptBuilderDependencies): PromptBuilder {
   return {
     async build(request) {
-      return request.context.kind === 'conversation'
-        ? buildConversationPrompt(request.context, dependencies, request.signal)
-        : buildDailyDiscoveryPrompt(request.context);
+      if (request.context.kind === 'conversation') {
+        return buildConversationPrompt(request.context, dependencies, request.signal);
+      }
+      return request.context.kind === 'daily_discovery'
+        ? buildDailyDiscoveryPrompt(request.context)
+        : buildCandidateSupplyPrompt(request.context);
+    },
+  };
+}
+
+function buildCandidateSupplyPrompt(
+  context: CandidateSupplyResolvedContext,
+): BuildPromptResult {
+  return {
+    status: 'built',
+    kind: 'candidate_supply',
+    prompt: {
+      systemPrompt: buildSystemPrompt({
+        systemInstructions: context.systemInstructions,
+        candidateSupplyMaterial: {
+          startedAt: context.startedAt,
+          material: context.material,
+        },
+        tools: context.tools,
+      }),
+      messages: [...context.currentMessages],
+      tools: [...context.tools],
     },
   };
 }

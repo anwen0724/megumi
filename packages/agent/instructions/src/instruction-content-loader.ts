@@ -9,6 +9,7 @@ import type {
 const PROFILE_FILES: Record<InstructionProfile, string> = {
   conversation: 'conversation.md',
   daily_discovery: 'daily-discovery.md',
+  candidate_supply: 'candidate-supply.md',
 };
 
 export interface LoadSystemInstructionDocumentsRequest {

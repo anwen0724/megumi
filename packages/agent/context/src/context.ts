@@ -63,6 +63,42 @@ export interface DailyDiscoveryContextMaterial {
   }[];
 }
 
+export interface CandidateSupplyContextMaterial {
+  readonly pool: {
+    readonly counts: Readonly<Record<string, number>>;
+    readonly lowWatermark: number;
+    readonly target: number;
+    readonly hardLimit: number;
+    readonly totalShortfall: number;
+    readonly uncoveredInterestIds: readonly string[];
+    readonly consumerShortfalls: readonly {
+      readonly consumer: 'daily' | 'proactive';
+      readonly count: number;
+    }[];
+  };
+  readonly interests: readonly {
+    readonly interestId: string;
+    readonly description: string;
+  }[];
+  readonly negativeConstraints: readonly string[];
+  readonly sources: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly access: string;
+    readonly supportedModes: readonly string[];
+    readonly supportsRead: boolean;
+    readonly availability: string;
+    readonly retryAt?: string;
+  }[];
+  readonly recentQueryOutcomes: readonly unknown[];
+  readonly pendingCandidates: readonly unknown[];
+  readonly budget: {
+    readonly searchesRemaining: number;
+    readonly readsRemaining: number;
+    readonly rawResultsRemaining: number;
+  };
+}
+
 /** Discovery facts are fixed before one daily-discovery execution starts. */
 export interface DailyDiscoveryRunContext extends BaseRunContext {
   readonly kind: 'daily_discovery';
@@ -71,7 +107,14 @@ export interface DailyDiscoveryRunContext extends BaseRunContext {
   readonly material: DailyDiscoveryContextMaterial;
 }
 
-export type RunContext = ConversationRunContext | DailyDiscoveryRunContext;
+/** Candidate Supply facts are snapshotted before one Supply execution starts. */
+export interface CandidateSupplyRunContext extends BaseRunContext {
+  readonly kind: 'candidate_supply';
+  readonly startedAt: string;
+  readonly material: CandidateSupplyContextMaterial;
+}
+
+export type RunContext = ConversationRunContext | DailyDiscoveryRunContext | CandidateSupplyRunContext;
 
 /** Facts fixed before one model call; never persisted. */
 export interface ModelCallContext {

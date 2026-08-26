@@ -31,6 +31,13 @@ describe('Tool public contracts', () => {
     expect(Object.keys(definition)).toEqual(['name', 'description', 'parameters']);
   });
 
+  it('publishes the typed Candidate admission Tool definition', () => {
+    expect(PublicTools.commitCandidateAdmissionToolDefinition).toMatchObject({
+      name: 'commit_candidate_admission',
+      parameters: { type: 'object' },
+    });
+  });
+
   it('exposes a typed pre-normalization Handler result observation option', () => {
     const observed: import('@megumi/tools').RawToolResult[] = [];
     const options: import('@megumi/tools').ToolExecutionOptions = {

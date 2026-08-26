@@ -51,6 +51,7 @@ export {
   type BuiltInToolAvailability,
   type CreateToolsRequest,
   type DailyDiscoveryToolOperations,
+  type CandidateSupplyToolOperations,
   type ExecuteToolInvocationRequest,
   type ListAvailableToolsRequest,
   type ListAvailableToolsResult,
@@ -62,6 +63,10 @@ export {
   type ToolExecutionBinding,
   type ToolExecutionSubject,
 } from './tools';
+export {
+  commitCandidateAdmissionToolDefinition,
+  type CommitCandidateAdmissionOperation,
+} from './built-ins/commit-candidate-admission';
 export { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 export type { WorkspaceFileAccess } from './built-ins/workspace-file-access';
 export {

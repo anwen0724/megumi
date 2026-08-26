@@ -4,6 +4,11 @@ import type { ToolDefinition, ToolSource } from '../tool';
 import type { ToolHandler, ToolRegistration } from '../tool-handler';
 import { createToolRegistry, type ToolRegistry } from '../tool-registry';
 import { createDirectoryToolDefinition, createDirectoryToolHandler } from './create-directory';
+import {
+  commitCandidateAdmissionToolDefinition,
+  createCommitCandidateAdmissionToolHandler,
+  type CommitCandidateAdmissionOperation,
+} from './commit-candidate-admission';
 import { copyPathToolDefinition, copyPathToolHandler } from './copy-path';
 import { deletePathToolDefinition, deletePathToolHandler } from './delete-path';
 import { editFileToolDefinition, editFileToolHandler } from './edit-file';
@@ -31,6 +36,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'create_directory', 'copy_path', 'move_path', 'delete_path', 'run_command',
   'web_search', 'web_fetch', 'update_plan',
   'search_content', 'read_candidate', 'select_recommendations',
+  'commit_candidate_admission',
 ] as const;
 
 export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
@@ -47,7 +53,9 @@ const BUILT_IN_TOOL_SOURCE: ToolSource = {
 
 export function createBuiltInToolRegistry(request: {
   readonly process?: ToolProcessDescriptor;
-  readonly dailyDiscoveryTools?: SearchContentOperation & ReadCandidateOperation & SelectRecommendationsOperation;
+  readonly contentTools?: SearchContentOperation & ReadCandidateOperation;
+  readonly dailySelectionTools?: SelectRecommendationsOperation;
+  readonly candidateAdmissionTools?: CommitCandidateAdmissionOperation;
 }): ToolRegistry<BuiltInToolContext> {
   const pairs: Array<{
     readonly definition: ToolDefinition;
@@ -72,11 +80,18 @@ export function createBuiltInToolRegistry(request: {
     { definition: webSearchToolDefinition, handler: webSearchToolHandler },
     { definition: webFetchToolDefinition, handler: webFetchToolHandler },
     { definition: updatePlanToolDefinition, handler: updatePlanToolHandler, executionMode: 'serial' },
-    ...(request.dailyDiscoveryTools ? [
-      { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.dailyDiscoveryTools), executionMode: 'serial' as const },
-      { definition: readCandidateToolDefinition, handler: createReadCandidateToolHandler(request.dailyDiscoveryTools), executionMode: 'serial' as const },
-      { definition: selectRecommendationsToolDefinition, handler: createSelectRecommendationsToolHandler(request.dailyDiscoveryTools), executionMode: 'serial' as const },
+    ...(request.contentTools ? [
+      { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.contentTools), executionMode: 'serial' as const },
+      { definition: readCandidateToolDefinition, handler: createReadCandidateToolHandler(request.contentTools), executionMode: 'serial' as const },
     ] : []),
+    ...(request.dailySelectionTools ? [
+      { definition: selectRecommendationsToolDefinition, handler: createSelectRecommendationsToolHandler(request.dailySelectionTools), executionMode: 'serial' as const },
+    ] : []),
+    ...(request.candidateAdmissionTools ? [{
+      definition: commitCandidateAdmissionToolDefinition,
+      handler: createCommitCandidateAdmissionToolHandler(request.candidateAdmissionTools),
+      executionMode: 'serial' as const,
+    }] : []),
   ];
   return createToolRegistry({
     registrations: pairs.map((pair): ToolRegistration<BuiltInToolContext> => ({

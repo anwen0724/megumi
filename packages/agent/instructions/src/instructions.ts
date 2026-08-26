@@ -7,7 +7,7 @@ import {
 } from './instruction-files';
 import { loadSystemInstructionDocuments } from './instruction-content-loader';
 
-export type InstructionProfile = 'conversation' | 'daily_discovery';
+export type InstructionProfile = 'conversation' | 'daily_discovery' | 'candidate_supply';
 
 export interface SystemInstructionDocument {
   readonly instructionId: string;

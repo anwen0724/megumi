@@ -44,7 +44,12 @@ export interface DailyDiscoveryExecutionMetadata extends BaseExecutionMetadata {
   readonly localDate: string;
 }
 
-export type ExecutionMetadata = ConversationExecutionMetadata | DailyDiscoveryExecutionMetadata;
+export interface CandidateSupplyExecutionMetadata extends BaseExecutionMetadata {
+  readonly kind: 'candidate_supply';
+}
+
+export type ExecutionMetadata = ConversationExecutionMetadata | DailyDiscoveryExecutionMetadata
+  | CandidateSupplyExecutionMetadata;
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'cancelled';
 

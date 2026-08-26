@@ -2,6 +2,8 @@
 import type { Agent } from '@megumi/agent-core';
 import type { Api, Model } from '@megumi/ai';
 import type {
+  CandidateSupplyContextMaterial,
+  CandidateSupplyRunContext,
   DailyDiscoveryContextMaterial,
   DailyDiscoveryRunContext,
 } from '@megumi/context';
@@ -22,6 +24,7 @@ import {
   ExecutionMetadata,
   ExecutionOutcome,
   type ConversationExecutionMetadata,
+  type CandidateSupplyExecutionMetadata,
   type DailyDiscoveryExecutionMetadata,
   type ExecutionSnapshot,
 } from './execution-registry';
@@ -42,9 +45,16 @@ export interface LaunchDailyDiscoveryExecutionInput {
   readonly runContext: DailyDiscoveryRunContext;
 }
 
+export interface LaunchCandidateSupplyExecutionInput {
+  readonly kind: 'candidate_supply';
+  readonly metadata: CandidateSupplyExecutionMetadata;
+  readonly runContext: CandidateSupplyRunContext;
+}
+
 export type LaunchAgentExecutionInput =
   | LaunchConversationAgentExecutionInput
-  | LaunchDailyDiscoveryExecutionInput;
+  | LaunchDailyDiscoveryExecutionInput
+  | LaunchCandidateSupplyExecutionInput;
 
 export interface LaunchedAgentExecution {
   readonly agent: Agent;
@@ -86,7 +96,23 @@ export interface DailyDiscoveryExecutionInput<TRejected = unknown> {
   }): void | Promise<void>;
 }
 
-export type StartExecutionRequest = ConversationExecutionInput | DailyDiscoveryExecutionInput;
+export interface CandidateSupplyExecutionInput<TRejected = unknown> {
+  readonly kind: 'candidate_supply';
+  readonly requestId: string;
+  readonly material: CandidateSupplyContextMaterial;
+  readonly model: Model<Api>;
+  accept(request: { readonly executionId: string }): Promise<
+    | { readonly status: 'accepted' }
+    | { readonly status: 'rejected'; readonly reason: TRejected }
+  >;
+  onSettled(request: {
+    readonly executionId: string;
+    readonly outcome: ExecutionOutcome;
+  }): void | Promise<void>;
+}
+
+export type StartExecutionRequest = ConversationExecutionInput | DailyDiscoveryExecutionInput
+  | CandidateSupplyExecutionInput;
 
 export type StartExecutionResult =
   | { readonly status: 'started'; readonly execution: ConversationExecutionSnapshot; readonly completion: Promise<ExecutionOutcome>; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
@@ -99,6 +125,9 @@ export type StartDailyDiscoveryExecutionResult<TRejected = unknown> =
   | { readonly status: 'already_started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
   | { readonly status: 'rejected'; readonly reason: TRejected }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
+
+export type StartCandidateSupplyExecutionResult<TRejected = unknown> =
+  StartDailyDiscoveryExecutionResult<TRejected>;
 
 export interface ResolveApprovalRequest {
   readonly approvalId: string;
@@ -143,6 +172,7 @@ export type ConversationExecutionSnapshot = Extract<ExecutionSnapshot, { kind: '
 export interface AgentExecutions {
   start(request: ConversationExecutionInput): Promise<StartExecutionResult>;
   start<TRejected>(request: DailyDiscoveryExecutionInput<TRejected>): Promise<StartDailyDiscoveryExecutionResult<TRejected>>;
+  start<TRejected>(request: CandidateSupplyExecutionInput<TRejected>): Promise<StartCandidateSupplyExecutionResult<TRejected>>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
   get(request: GetExecutionRequest): GetExecutionResult;
@@ -161,7 +191,10 @@ export interface CreateAgentExecutionsOptions {
 
 export function createAgentExecutions(options: CreateAgentExecutionsOptions): AgentExecutions {
   const store = new ExecutionRegistry({ clock: options.clock, terminalRetentionMs: options.terminalRetentionMs });
-  const dailySettlementHandlers = new Map<string, DailyDiscoveryExecutionInput['onSettled']>();
+  const backgroundSettlementHandlers = new Map<
+    string,
+    DailyDiscoveryExecutionInput['onSettled'] | CandidateSupplyExecutionInput['onSettled']
+  >();
   let accepting = true;
 
   const publish = <TType extends EventType>(
@@ -208,10 +241,10 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
       if (!terminal) return;
       publishEnded(terminal, outcome);
       void Promise.resolve(options.onSettled?.(terminal, outcome)).catch(() => undefined);
-      const dailySettled = dailySettlementHandlers.get(executionId);
-      dailySettlementHandlers.delete(executionId);
-      if (dailySettled) {
-        void Promise.resolve(dailySettled({ executionId, outcome })).catch(() => undefined);
+      const backgroundSettled = backgroundSettlementHandlers.get(executionId);
+      backgroundSettlementHandlers.delete(executionId);
+      if (backgroundSettled) {
+        void Promise.resolve(backgroundSettled({ executionId, outcome })).catch(() => undefined);
       }
     } catch {
       // Settlement diagnostics must not alter the Agent Core outcome.
@@ -238,14 +271,15 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
   };
 
   const startExecution = async (
-    request: ConversationExecutionInput | DailyDiscoveryExecutionInput,
-  ): Promise<StartExecutionResult | StartDailyDiscoveryExecutionResult> => {
+    request: ConversationExecutionInput | DailyDiscoveryExecutionInput | CandidateSupplyExecutionInput,
+  ): Promise<StartExecutionResult | StartDailyDiscoveryExecutionResult | StartCandidateSupplyExecutionResult> => {
     if (!accepting) {
       return { status: 'failed', failure: executionFailure('Agent execution service is shutting down.', 'execution_shutting_down') };
     }
-    return request.kind === 'conversation'
-      ? startConversationExecution(request)
-      : startDailyDiscoveryExecution(request);
+    if (request.kind === 'conversation') return startConversationExecution(request);
+    return request.kind === 'daily_discovery'
+      ? startDailyDiscoveryExecution(request)
+      : startCandidateSupplyExecution(request);
   };
 
   async function startConversationExecution(request: ConversationExecutionInput): Promise<StartExecutionResult> {
@@ -371,7 +405,39 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
       await request.onSettled({ executionId, outcome: { status: 'failed', failure } });
       return { status: 'failed', failure };
     }
-    dailySettlementHandlers.set(executionId, request.onSettled);
+    backgroundSettlementHandlers.set(executionId, request.onSettled);
+    const completion = attachExecution(metadata, launched);
+    const execution = store.getExecution(executionId)!;
+    return { status: 'started', execution, completion };
+  }
+
+  async function startCandidateSupplyExecution(
+    request: CandidateSupplyExecutionInput,
+  ): Promise<StartCandidateSupplyExecutionResult> {
+    const createdAt = options.clock.now();
+    const executionId = options.ids.createExecutionId();
+    const metadata: CandidateSupplyExecutionMetadata = {
+      kind: 'candidate_supply', executionId, requestId: request.requestId,
+      model: request.model, createdAt, startedAt: createdAt,
+    };
+    const accepted = await request.accept({ executionId });
+    if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
+
+    let launched: LaunchedAgentExecution;
+    try {
+      launched = await options.launch({
+        kind: 'candidate_supply', metadata,
+        runContext: {
+          kind: 'candidate_supply', executionId, startedAt: createdAt,
+          material: request.material, model: request.model,
+        },
+      });
+    } catch (error) {
+      const failure = launchFailure(error);
+      await request.onSettled({ executionId, outcome: { status: 'failed', failure } });
+      return { status: 'failed', failure };
+    }
+    backgroundSettlementHandlers.set(executionId, request.onSettled);
     const completion = attachExecution(metadata, launched);
     const execution = store.getExecution(executionId)!;
     return { status: 'started', execution, completion };

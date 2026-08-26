@@ -34,6 +34,7 @@ import type { SessionHistory } from '@megumi/session';
 import type { Tools } from '@megumi/tools';
 import type {
   LaunchedAgentExecution,
+  LaunchCandidateSupplyExecutionInput,
   LaunchDailyDiscoveryExecutionInput,
   LaunchAgentExecutionInput,
 } from './agent-executions';
@@ -131,8 +132,8 @@ export async function launchAgentExecution(
   input: LaunchAgentExecutionInput,
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
-  if (input.kind === 'daily_discovery') {
-    return launchDailyDiscoveryExecution(input, dependencies);
+  if (input.kind !== 'conversation') {
+    return launchBackgroundExecution(input, dependencies);
   }
   const { metadata } = input;
   const referenceContent = input.recommendationReference
@@ -299,8 +300,8 @@ export async function launchAgentExecution(
   };
 }
 
-async function launchDailyDiscoveryExecution(
-  input: LaunchDailyDiscoveryExecutionInput,
+async function launchBackgroundExecution(
+  input: LaunchDailyDiscoveryExecutionInput | LaunchCandidateSupplyExecutionInput,
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   const { metadata } = input;
@@ -308,7 +309,7 @@ async function launchDailyDiscoveryExecution(
   const toolExecutionResult = dependencies.tools.bindExecution({
     executionId: metadata.executionId,
     subject: { kind: 'background' },
-    toolGroupId: 'daily_discovery',
+    toolGroupId: input.kind,
   });
   if (toolExecutionResult.status === 'failed') {
     throw new LaunchExecutionError({
@@ -344,7 +345,9 @@ async function launchDailyDiscoveryExecution(
       },
       messages: [{
         role: 'user',
-        content: '开始本次每日发现执行。',
+        content: input.kind === 'daily_discovery'
+          ? '开始本次每日发现执行。'
+          : '开始本次 Candidate Supply 执行。',
         timestamp: timestampFrom(metadata.createdAt),
       }],
     },
@@ -431,7 +434,9 @@ function executionCorrelation(metadata: ExecutionMetadata) {
     executionId: metadata.executionId,
     ...(metadata.kind === 'conversation'
       ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId }
-      : { batchId: metadata.batchId }),
+      : metadata.kind === 'daily_discovery'
+        ? { batchId: metadata.batchId }
+        : {}),
   };
 }
 

@@ -88,6 +88,53 @@ function fixture(tokens = 50): CreateContextOptions {
 }
 
 describe('Context.build', () => {
+  it('builds Candidate Supply from one fixed snapshot and accumulated Tool messages', async () => {
+    const options = fixture();
+    const currentMessages = [{
+      role: 'toolResult' as const,
+      toolCallId: 'call:search',
+      toolName: 'search_content',
+      content: [{ type: 'text' as const, text: '{"candidates":["candidate:1"]}' }],
+      isError: false,
+      timestamp: 1,
+    }];
+    const result = await createContext(options).build({
+      modelCallContext: {
+        modelCallId: 'model-call:supply',
+        run: {
+          kind: 'candidate_supply', executionId: 'execution:supply', startedAt: '2026-08-27T00:00:00.000Z',
+          model,
+          material: {
+            pool: {
+              counts: { available: 0 }, lowWatermark: 10, target: 20, hardLimit: 40,
+              totalShortfall: 20, uncoveredInterestIds: ['interest:1'], consumerShortfalls: [],
+            },
+            interests: [{ interestId: 'interest:1', description: 'Agent architecture' }],
+            negativeConstraints: ['不要纯营销内容'],
+            sources: [{
+              id: 'open_web', name: 'Open Web', access: 'public_http', supportedModes: ['relevance'],
+              supportsRead: true, availability: 'ready',
+            }],
+            recentQueryOutcomes: [], pendingCandidates: [],
+            budget: { searchesRemaining: 12, readsRemaining: 40, rawResultsRemaining: 200 },
+          },
+        },
+        tools: [],
+      },
+      currentMessages,
+    });
+
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(options.instructionReader.getSystemInstructions).toHaveBeenCalledWith('candidate_supply');
+    expect(options.sessionHistory.getActiveHistory).not.toHaveBeenCalled();
+    expect(options.workspaceSource.readWorkspace).not.toHaveBeenCalled();
+    expect(result.prompt.messages).toEqual(currentMessages);
+    expect(result.prompt.systemPrompt).toContain('<candidate_supply_material>');
+    expect(result.prompt.systemPrompt).toContain('Agent architecture');
+    expect(result.prompt.systemPrompt).toContain('"totalShortfall":20');
+  });
+
   it('preserves the original conversation System Prompt organization through the public Context seam', async () => {
     const options = fixture();
     options.instructionReader.getSystemInstructions = vi.fn(async () => [

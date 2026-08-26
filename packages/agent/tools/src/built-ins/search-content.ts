@@ -21,6 +21,7 @@ export const searchContentToolDefinition = {
     query: Type.String(),
     mode: Type.Union([Type.Literal('relevance'), Type.Literal('recent')]),
     limit: Type.Integer({ minimum: 1, maximum: 20 }),
+    targetInterestIds: Type.Optional(Type.Array(Type.String())),
   }) as unknown as JsonSchemaObject,
 };
 

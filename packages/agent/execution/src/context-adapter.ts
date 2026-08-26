@@ -139,12 +139,12 @@ export function createContextAdapter(
           }),
         };
       }
-      if (runContext.kind === 'daily_discovery') {
+      if (runContext.kind !== 'conversation') {
         return {
           status: 'failed',
-          error: contextAgentError('Daily discovery context exceeded the model window.', false, {
+          error: contextAgentError('Background Agent context exceeded the model window.', false, {
             owner: 'context',
-            code: 'daily_discovery_context_overflow',
+            code: `${runContext.kind}_context_overflow`,
           }),
         };
       }
@@ -225,7 +225,9 @@ function safeReleaseModelCallTools(
               sessionId: dependencies.metadata.sessionId,
               workspaceId: dependencies.metadata.workspaceId,
             }
-          : { batchId: dependencies.metadata.batchId }),
+            : dependencies.metadata.kind === 'daily_discovery'
+              ? { batchId: dependencies.metadata.batchId }
+              : {}),
       },
       data: {
         errorMessage: error instanceof Error ? error.message : String(error),

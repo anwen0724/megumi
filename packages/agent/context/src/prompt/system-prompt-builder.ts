@@ -10,7 +10,11 @@ import type { SystemInstructionDocument } from '@megumi/instructions';
 import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
-import type { DailyDiscoveryContextMaterial, ExecutionEnvironment } from '../context';
+import type {
+  CandidateSupplyContextMaterial,
+  DailyDiscoveryContextMaterial,
+  ExecutionEnvironment,
+} from '../context';
 import { escapeXmlAttribute } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
@@ -22,6 +26,10 @@ export interface SystemPromptSources {
   readonly dailyDiscoveryMaterial?: {
     readonly localDate: string;
     readonly material: DailyDiscoveryContextMaterial;
+  };
+  readonly candidateSupplyMaterial?: {
+    readonly startedAt: string;
+    readonly material: CandidateSupplyContextMaterial;
   };
 }
 
@@ -41,6 +49,12 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
       sources.dailyDiscoveryMaterial.material,
     ));
   }
+  if (sources.candidateSupplyMaterial) {
+    sections.push(renderCandidateSupplyMaterial(
+      sources.candidateSupplyMaterial.startedAt,
+      sources.candidateSupplyMaterial.material,
+    ));
+  }
   const guidance = conversationDocument ? '' : renderToolGuidelines(sources.tools);
   if (guidance) sections.push(guidance);
   const effective = sources.effectiveInstructions
@@ -55,6 +69,24 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
     sections.push(renderExecutionEnvironment(sources.executionEnvironment));
   }
   return sections.join('\n\n');
+}
+
+function renderCandidateSupplyMaterial(
+  startedAt: string,
+  material: CandidateSupplyContextMaterial,
+): string {
+  return [
+    '<candidate_supply_material>',
+    `  <started_at>${escapePromptText(startedAt)}</started_at>`,
+    `  <pool>${escapePromptText(JSON.stringify(material.pool))}</pool>`,
+    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <negative_constraints>${escapePromptText(JSON.stringify(material.negativeConstraints))}</negative_constraints>`,
+    `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
+    `  <recent_query_outcomes>${escapePromptText(JSON.stringify(material.recentQueryOutcomes))}</recent_query_outcomes>`,
+    `  <pending_candidates>${escapePromptText(JSON.stringify(material.pendingCandidates))}</pending_candidates>`,
+    `  <budget>${escapePromptText(JSON.stringify(material.budget))}</budget>`,
+    '</candidate_supply_material>',
+  ].join('\n');
 }
 
 function renderDailyDiscoveryMaterial(

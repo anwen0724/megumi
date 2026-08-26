@@ -2,6 +2,53 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTools, type BuiltInToolName } from '@megumi/tools';
 
 describe('Tools ModelCall routing', () => {
+  it('routes Candidate Supply search, read, and admission through its own Tool Group', async () => {
+    const calls: string[] = [];
+    const tools = createTools({
+      settings: { resolveWebSearch: () => ({ status: 'failed' }), readWebSearchApiKey: () => ({ status: 'missing' }) },
+      workspaces: { getWorkspace: () => { throw new Error('not used'); } },
+      workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
+      sandbox: {
+        capabilities: () => ({
+          platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,
+          fileWriteBoundary: true, environmentIsolation: true, networkIsolation: true,
+          processTreeTermination: true, timeLimit: true, outputLimit: true,
+          processCountLimit: true, cpuLimit: false, memoryLimit: false,
+        }),
+        open: async () => ({ status: 'unavailable', reason: 'not used' }),
+      },
+      executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
+      candidateSupplyTools: {
+        ownsExecution: (executionId) => executionId === 'execution:supply',
+        async searchContent() { calls.push('search'); return { outputKind: 'json', content: { status: 'ok' } }; },
+        async readCandidate() { calls.push('read'); return { outputKind: 'json', content: { status: 'ok' } }; },
+        async commitCandidateAdmission() { calls.push('commit'); return { outputKind: 'json', content: { status: 'ok' } }; },
+      },
+    });
+    const execution = tools.bindExecution({
+      executionId: 'execution:supply', subject: { kind: 'background' }, toolGroupId: 'candidate_supply',
+    });
+    expect(execution.status).toBe('bound');
+    if (execution.status !== 'bound') return;
+    const modelCall = execution.binding.prepareModelCall({ modelCallId: 'model-call:supply' });
+    expect(modelCall.status).toBe('prepared');
+    if (modelCall.status !== 'prepared') return;
+    expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual([
+      'search_content', 'read_candidate', 'commit_candidate_admission',
+    ]);
+    const invocations = [
+      { toolName: 'search_content', input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 10, targetInterestIds: [] } },
+      { toolName: 'read_candidate', input: { candidateId: 'candidate:1' } },
+      { toolName: 'commit_candidate_admission', input: { decisions: [{ candidateId: 'candidate:1', decision: 'needs_detail', reason: 'Need detail.' }] } },
+    ];
+    for (const { toolName, input } of invocations) {
+      const routed = modelCall.binding.routeToolCall({ toolCallId: `call:${toolName}`, toolName, input });
+      expect(routed.status).toBe('routed');
+      if (routed.status === 'routed') await modelCall.binding.executeToolInvocation({ invocation: routed.invocation });
+    }
+    expect(calls).toEqual(['search', 'read', 'commit']);
+  });
+
   it('binds background business tools to one execution without Session, Workspace or Sandbox', async () => {
     const openSandbox = vi.fn(async () => ({ status: 'unavailable' as const, reason: 'Must not be opened.' }));
     const executed: string[] = [];

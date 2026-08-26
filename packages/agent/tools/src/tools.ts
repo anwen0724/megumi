@@ -27,6 +27,7 @@ import type { BuiltInToolContext } from './built-ins/workspace-file-access';
 import type { SearchContentOperation } from './built-ins/search-content';
 import type { ReadCandidateOperation } from './built-ins/read-candidate';
 import type { SelectRecommendationsOperation } from './built-ins/select-recommendations';
+import type { CommitCandidateAdmissionOperation } from './built-ins/commit-candidate-admission';
 import { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 import {
   createCancelledToolResult,
@@ -153,11 +154,17 @@ export interface CreateToolsRequest {
   readonly executionPolicy: ToolExecutionPolicy;
   readonly builtInToolAvailability?: BuiltInToolAvailability;
   readonly dailyDiscoveryTools?: DailyDiscoveryToolOperations;
+  readonly candidateSupplyTools?: CandidateSupplyToolOperations;
 }
 
 export type DailyDiscoveryToolOperations = SearchContentOperation
   & ReadCandidateOperation
   & SelectRecommendationsOperation;
+
+export type CandidateSupplyToolOperations = SearchContentOperation
+  & ReadCandidateOperation
+  & CommitCandidateAdmissionOperation
+  & { ownsExecution(executionId: string): boolean };
 
 interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
@@ -169,9 +176,12 @@ interface ModelCallRegistration {
 
 export function createTools(request: CreateToolsRequest): Tools {
   const process = toolProcessDescriptor(request.sandbox);
+  const contentTools = createContentToolMultiplexer(request);
   const registry = createBuiltInToolRegistry({
     ...(process ? { process } : {}),
-    ...(request.dailyDiscoveryTools ? { dailyDiscoveryTools: request.dailyDiscoveryTools } : {}),
+    ...(contentTools ? { contentTools } : {}),
+    ...(request.dailyDiscoveryTools ? { dailySelectionTools: request.dailyDiscoveryTools } : {}),
+    ...(request.candidateSupplyTools ? { candidateAdmissionTools: request.candidateSupplyTools } : {}),
   });
   const routers = new Map<string, ModelCallRegistration>();
   const executions = new Map<string, ToolExecutionBinding>();
@@ -187,6 +197,9 @@ export function createTools(request: CreateToolsRequest): Tools {
       }
       if (bindingRequest.toolGroupId === 'daily_discovery' && !request.dailyDiscoveryTools) {
         return failedBinding('tool_group_unavailable', 'Daily discovery tools are not configured.');
+      }
+      if (bindingRequest.toolGroupId === 'candidate_supply' && !request.candidateSupplyTools) {
+        return failedBinding('tool_group_unavailable', 'Candidate supply tools are not configured.');
       }
       let closed = false;
       const modelCalls = new Set<string>();
@@ -398,6 +411,31 @@ export function createTools(request: CreateToolsRequest): Tools {
       );
     }
   }
+}
+
+function createContentToolMultiplexer(
+  request: Pick<CreateToolsRequest, 'dailyDiscoveryTools' | 'candidateSupplyTools'>,
+): (SearchContentOperation & ReadCandidateOperation) | undefined {
+  if (!request.dailyDiscoveryTools && !request.candidateSupplyTools) return undefined;
+  return {
+    searchContent(input) {
+      return request.candidateSupplyTools?.ownsExecution(input.executionId)
+        ? request.candidateSupplyTools.searchContent(input)
+        : requireDailyDiscoveryTools(request).searchContent(input);
+    },
+    readCandidate(input) {
+      return request.candidateSupplyTools?.ownsExecution(input.executionId)
+        ? request.candidateSupplyTools.readCandidate(input)
+        : requireDailyDiscoveryTools(request).readCandidate(input);
+    },
+  };
+}
+
+function requireDailyDiscoveryTools(
+  request: Pick<CreateToolsRequest, 'dailyDiscoveryTools'>,
+): DailyDiscoveryToolOperations {
+  if (!request.dailyDiscoveryTools) throw new Error('Daily discovery Tool execution is not configured.');
+  return request.dailyDiscoveryTools;
 }
 
 async function executeHandler(
