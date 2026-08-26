@@ -192,15 +192,76 @@ describe('Tools ModelCall routing', () => {
     expect(routed).toMatchObject({ status: 'routed', operations: [] });
     if (routed.status !== 'routed') throw new Error('Expected routed update_plan');
     const notifications: unknown[] = [];
+    const handlerResults: unknown[] = [];
     const result = await modelCall.binding.executeToolInvocation(
       { invocation: routed.invocation },
-      { onNotification: (notification) => notifications.push(notification) },
+      {
+        onNotification: (notification) => notifications.push(notification),
+        onHandlerResult: (handlerResult) => handlerResults.push(handlerResult),
+      },
     );
     expect(result).toMatchObject({ type: 'succeeded', toolName: 'update_plan' });
     expect(notifications).toEqual([{
       type: 'plan_updated',
       plan: [{ step: 'Implement', status: 'in_progress' }],
     }]);
+    expect(handlerResults).toEqual([{
+      outputKind: 'text',
+      content: 'Plan updated',
+    }]);
+    execution.binding.close();
+  });
+
+  it('keeps Tool normalization and settlement unchanged when Handler observation throws', async () => {
+    const tools = createTools({
+      settings: {
+        resolveWebSearch: () => ({ status: 'failed' }),
+        readWebSearchApiKey: () => ({ status: 'missing' }),
+      },
+      workspaces: {
+        getWorkspace: () => { throw new Error('Background Tool must not resolve Workspace.'); },
+      },
+      workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
+      sandbox: {
+        capabilities: () => ({
+          platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,
+          fileWriteBoundary: true, environmentIsolation: true, networkIsolation: true,
+          processTreeTermination: true, timeLimit: true, outputLimit: true,
+          processCountLimit: true, cpuLimit: false, memoryLimit: false,
+        }),
+        open: async () => ({ status: 'unavailable', reason: 'Must not be opened.' }),
+      },
+      executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
+      dailyDiscoveryTools: {
+        async searchContent() { return { outputKind: 'json', content: { actual: true } }; },
+        async readCandidate() { return { outputKind: 'json', content: {} }; },
+        async selectRecommendations() { return { outputKind: 'json', content: {} }; },
+      },
+    });
+    const execution = tools.bindExecution({
+      executionId: 'execution:observed',
+      subject: { kind: 'background' },
+      toolGroupId: 'daily_discovery',
+    });
+    if (execution.status !== 'bound') throw new Error('Expected execution binding.');
+    const modelCall = execution.binding.prepareModelCall({ modelCallId: 'model-call:observed' });
+    if (modelCall.status !== 'prepared') throw new Error('Expected ModelCall binding.');
+    const routed = modelCall.binding.routeToolCall({
+      toolCallId: 'tool-call:observed',
+      toolName: 'search_content',
+      input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 1 },
+    });
+    if (routed.status !== 'routed') throw new Error('Expected routed Tool.');
+
+    const result = await modelCall.binding.executeToolInvocation(
+      { invocation: routed.invocation },
+      { onHandlerResult: () => { throw new Error('diagnostics failed'); } },
+    );
+
+    expect(result).toMatchObject({
+      type: 'succeeded',
+      normalizedResult: { kind: 'json', content: expect.stringContaining('"actual": true') },
+    });
     execution.binding.close();
   });
 });

@@ -9,6 +9,7 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import type { EventBus } from '@megumi/events';
 import type { PermissionDecision } from '@megumi/permissions';
+import type { Observability } from '@megumi/observability';
 import type { SessionHistory } from '@megumi/session';
 import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
@@ -47,6 +48,7 @@ describe('Execute Agent', () => {
     expect(started.map((record) => record.name)).toEqual([
       'session.message.commit',
       'agent.execution',
+      'model.call',
       'session.message.commit',
     ]);
     expect(started[0]?.correlation).toMatchObject({
@@ -58,6 +60,92 @@ describe('Execute Agent', () => {
     expect(records.some((record) => (
       record.type === 'content.recorded' && record.kind === 'session.message.committed'
     ))).toBe(false);
+  });
+
+  it('keeps one model.call span while recording Provider attempts, retry, response, and final Model response', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const fixture = createExecutionFixture({
+      streams: [assistantStream('provider final')],
+      observability,
+    });
+    const originalStream = fixture.dependencies.models.streamSimple.bind(fixture.dependencies.models);
+    const dependencies = dependenciesFrom(fixture, {
+      models: {
+        ...fixture.dependencies.models,
+        streamSimple: ((model, context, options) => {
+          options?.onProviderExchange?.({
+            type: 'request', attempt: 1, payload: { messages: ['provider request 1'] },
+          });
+          options?.onProviderExchange?.({
+            type: 'retry_scheduled', currentAttempt: 1, nextAttempt: 2, reasonCode: 'http_429',
+          });
+          options?.onProviderExchange?.({
+            type: 'request', attempt: 2, payload: { messages: ['provider request 2'] },
+          });
+          options?.onProviderExchange?.({ type: 'output_started', attempt: 2 });
+          options?.onProviderExchange?.({
+            type: 'response', attempt: 2, payload: { id: 'provider-response:1', text: 'provider final' },
+          });
+          return originalStream(model, context, options);
+        }) as ExecuteAgentDependencies['models']['streamSimple'],
+      },
+    });
+
+    await observability.withTrace({ kind: 'conversation' }, async () => {
+      const launched = await launchWith(fixture, dependencies);
+      await launched.execute();
+    });
+
+    const modelSpans = records.filter((record) => (
+      record.type === 'span.started' && record.name === 'model.call'
+    ));
+    expect(modelSpans).toHaveLength(1);
+    expect(modelSpans[0]?.correlation.modelCallId).toBe('model-call:1');
+    const modelContent = records.filter((record) => record.type === 'content.recorded');
+    expect(modelContent.map((record) => record.kind)).toEqual([
+      'model.request',
+      'model.provider_request',
+      'model.provider_request',
+      'model.provider_response',
+      'model.response',
+    ]);
+    expect(modelContent.filter((record) => record.kind === 'model.provider_request').map((record) => (
+      record.correlation.providerAttempt
+    ))).toEqual([1, 2]);
+    expect(records.filter((record) => record.type === 'span.event').map((record) => record.event)).toEqual([
+      {
+        type: 'model.retry.scheduled',
+        currentAttempt: 1,
+        nextAttempt: 2,
+        reasonCode: 'http_429',
+      },
+      { type: 'model.output.started', providerAttempt: 2 },
+    ]);
+    const modelRequest = modelContent.find((record) => record.kind === 'model.request');
+    expect(modelRequest?.content.mode).toBe('inline');
+    if (modelRequest?.content.mode !== 'inline') throw new Error('Expected inline Model request.');
+    const request = modelRequest.content.value as { context?: { tools?: Record<string, unknown>[] } };
+    expect(request.context?.tools?.every((tool) => !('execute' in tool))).toBe(true);
+  });
+
+  it('executes the Model once and preserves its outcome when Observability fails', async () => {
+    const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
+    const streamSimple = vi.fn(fixture.dependencies.models.streamSimple.bind(fixture.dependencies.models));
+    const dependencies = dependenciesFrom(fixture, {
+      observability: throwingObservability(),
+      models: {
+        ...fixture.dependencies.models,
+        streamSimple,
+      } as ExecuteAgentDependencies['models'],
+    });
+
+    const launched = await launchWith(fixture, dependencies);
+    const outcome = await launched.execute();
+
+    expect(outcome.status).toBe('completed');
+    expect(streamSimple).toHaveBeenCalledOnce();
+    expect(fixture.assistantReplies).toHaveLength(1);
   });
 
   it('persists a Recommendation reference and presents it to the first model call', async () => {
@@ -599,4 +687,15 @@ function captureModelContexts(models: import('@megumi/ai').Models, captured: unk
       return models.streamSimple(modelInput, context, options);
     },
   } as import('@megumi/ai').Models;
+}
+
+function throwingObservability(): Observability {
+  const failure = () => { throw new Error('observability unavailable'); };
+  return {
+    withTrace: failure,
+    withSpan: failure,
+    recordContent: failure,
+    recordEvent: failure,
+    linkTrace: failure,
+  } as Observability;
 }

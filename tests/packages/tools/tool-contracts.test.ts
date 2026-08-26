@@ -31,6 +31,15 @@ describe('Tool public contracts', () => {
     expect(Object.keys(definition)).toEqual(['name', 'description', 'parameters']);
   });
 
+  it('exposes a typed pre-normalization Handler result observation option', () => {
+    const observed: import('@megumi/tools').RawToolResult[] = [];
+    const options: import('@megumi/tools').ToolExecutionOptions = {
+      onHandlerResult: (result) => observed.push(result),
+    };
+    options.onHandlerResult?.({ outputKind: 'json', content: { actual: true } });
+    expect(observed).toEqual([{ outputKind: 'json', content: { actual: true } }]);
+  });
+
   it('rejects duplicate names and Definition/Handler mismatches', () => {
     expect(() => createToolRegistry({ registrations: [registration(), registration()] })).toThrow('Duplicate registered Tool name');
     expect(() => createToolRegistry({ registrations: [{

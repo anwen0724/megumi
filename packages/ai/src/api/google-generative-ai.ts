@@ -24,6 +24,7 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { providerHeadersToRecord } from "../utils/headers.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
+import { notifyProviderExchange } from "../utils/provider-exchange.ts";
 import type { GoogleThinkingLevel } from "./google-shared.ts";
 import {
 	convertMessages,
@@ -74,6 +75,8 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
 			stopReason: "pending",
 			timestamp: Date.now(),
 		};
+		let providerAttempt = 1;
+		let semanticOutputStarted = false;
 
 		try {
 			if (options?.fetch && options.fetch !== globalThis.fetch) {
@@ -89,13 +92,24 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
 			if (nextParams !== undefined) {
 				params = nextParams as GenerateContentParameters;
 			}
-			const googleStream = await retryGoogleRequest(() => client.models.generateContentStream(params), options);
+			const googleStream = await retryGoogleRequest((attempt) => {
+				providerAttempt = attempt;
+				notifyProviderExchange(options?.onProviderExchange, { type: "request", attempt, payload: params });
+				return client.models.generateContentStream(params);
+			}, options);
 
 			stream.push({ type: "start", partial: output });
 			let currentBlock: TextContent | ThinkingContent | null = null;
 			const blocks = output.content;
 			const blockIndex = () => blocks.length - 1;
 			for await (const chunk of googleStream) {
+				if (!semanticOutputStarted) {
+					semanticOutputStarted = true;
+					notifyProviderExchange(options?.onProviderExchange, {
+						type: "output_started",
+						attempt: providerAttempt,
+					});
+				}
 				// @google/genai documents GenerateContentResponse.responseId as an output-only field
 				// used to identify each response. Keep the first non-empty one from the stream.
 				output.responseId ||= chunk.responseId;
@@ -274,6 +288,11 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
 				throw new Error(errorMessage);
 			}
 
+			notifyProviderExchange(options?.onProviderExchange, {
+				type: "response",
+				attempt: providerAttempt,
+				payload: output,
+			});
 			stream.push({ type: "done", reason: output.stopReason, message: output });
 			stream.end();
 		} catch (error) {
@@ -285,6 +304,14 @@ export const stream: StreamFunction<"google-generative-ai", GoogleOptions> = (
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 			output.errorMessage = formatProviderError(normalizeProviderError(error));
+			if (semanticOutputStarted) {
+				notifyProviderExchange(options?.onProviderExchange, {
+					type: "stream_interrupted",
+					attempt: providerAttempt,
+					reasonCode: output.stopReason === "aborted" ? "aborted" : "stream_error",
+					partialResponse: output,
+				});
+			}
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}

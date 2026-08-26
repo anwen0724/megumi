@@ -408,6 +408,7 @@ async function executeHandler(
 ): Promise<ToolExecutionResult> {
   try {
     const rawResult = await handler.execute(context, invocation, options);
+    notifyHandlerResult(options.onHandlerResult, rawResult);
     return normalizeRawToolResult({ toolName: invocation.toolName, rawResult });
   } catch (error) {
     const terminationUnconfirmed = error instanceof ToolExecutionFailure && error.code === 'termination_unconfirmed';
@@ -419,6 +420,17 @@ async function executeHandler(
       message: cancelled ? 'Tool execution was cancelled' : error instanceof ToolExecutionFailure ? error.message : 'Tool execution failed',
       ...(!cancelled && error instanceof ToolExecutionFailure && error.details ? { details: error.details } : {}),
     });
+  }
+}
+
+function notifyHandlerResult(
+  observer: ToolExecutionOptions['onHandlerResult'],
+  result: import('./tool').RawToolResult,
+): void {
+  try {
+    observer?.(result);
+  } catch {
+    // Handler settlement and normalization never depend on diagnostics.
   }
 }
 

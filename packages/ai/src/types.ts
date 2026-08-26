@@ -103,6 +103,8 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
 	 * Optional callback invoked after an HTTP response is received.
 	 */
 	onResponse?: (response: ProviderResponse, model: TModel) => void | Promise<void>;
+	/** Receives credential-free semantic adapter boundaries and cannot replace the request payload. */
+	onProviderExchange?: import("./utils/provider-exchange.ts").ProviderExchangeObserver;
 	/**
 	 * Optional custom HTTP headers to include in API requests.
 	 * Merged with provider defaults; caller values override default headers.

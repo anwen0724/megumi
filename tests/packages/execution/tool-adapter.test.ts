@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentToolExecutionOutcome } from '@megumi/agent-core';
 import { createEventBus, type AnyEvent } from '@megumi/events';
 import type { PermissionDecision, Permissions } from '@megumi/permissions';
+import type { Observability } from '@megumi/observability';
 import type { ModelCallToolBinding, ToolDefinition } from '@megumi/tools';
 import {
   createAgentTool,
@@ -10,6 +11,8 @@ import {
   type ToolAdapterDependencies,
 } from '@megumi/execution';
 import type { ToolScope } from '@megumi/execution';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
 import { executionMetadata } from './execution-test-fixtures';
 import {
   allowDecision,
@@ -109,6 +112,57 @@ async function execute(
 }
 
 describe('Tool Adapter', () => {
+  it('records request, validated arguments, raw Handler result, and model-facing result in one tool.call', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const dependencies = toolDependencies({
+      observability,
+      binding: {
+        executeToolInvocation: (async (_request, options) => {
+          options?.onHandlerResult?.({ outputKind: 'json', content: { actual: true } });
+          return succeeded('lookup');
+        }) as ModelCallToolBinding['executeToolInvocation'],
+      },
+    });
+
+    const result = await observability.withTrace({ kind: 'conversation' }, () => (
+      execute(dependencies, { name: 'lookup' })
+    ));
+
+    expect(result.status).toBe('completed');
+    expect(records.filter((record) => record.type === 'span.started').map((record) => record.name))
+      .toEqual(['tool.call']);
+    expect(records.filter((record) => record.type === 'content.recorded').map((record) => record.kind))
+      .toEqual(['tool.request', 'tool.arguments', 'tool.handler_result', 'tool.result']);
+    expect(records.filter((record) => record.type === 'span.event').map((record) => record.event))
+      .toEqual([{
+        type: 'tool.permission.resolved',
+        toolCallId: 'call:1',
+        decision: 'automatic_allow',
+      }]);
+  });
+
+  it('routes and executes once with the same result when Observability fails', async () => {
+    const routeToolCall = vi.fn(toolDependencies().binding.routeToolCall);
+    const executeToolInvocation = vi.fn(async () => succeeded('lookup'));
+    const dependencies = toolDependencies({
+      observability: throwingObservability(),
+      binding: {
+        routeToolCall: routeToolCall as ModelCallToolBinding['routeToolCall'],
+        executeToolInvocation: executeToolInvocation as ModelCallToolBinding['executeToolInvocation'],
+      },
+    });
+
+    const result = await execute(dependencies, { name: 'lookup' });
+
+    expect(result).toMatchObject({
+      status: 'completed',
+      result: { isError: false, details: { status: 'success' } },
+    });
+    expect(routeToolCall).toHaveBeenCalledOnce();
+    expect(executeToolInvocation).toHaveBeenCalledOnce();
+  });
+
   it('routes and executes an allowed Tool with settled details', async () => {
     const updates: unknown[] = [];
     const dependencies = toolDependencies();
@@ -167,6 +221,8 @@ describe('Tool Adapter', () => {
   });
 
   it('awaits the approval decision inside the original AgentTool Promise before executing', async () => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
     const events: AnyEvent[] = [];
     const eventsBus = createEventBus();
     eventsBus.subscribe({}, (event) => { events.push(event); });
@@ -209,9 +265,12 @@ describe('Tool Adapter', () => {
       }),
       events: eventsBus,
       awaitApproval,
+      observability,
     });
 
-    const result = await execute(dependencies, { name: 'lookup' });
+    const result = await observability.withTrace({ kind: 'conversation' }, () => (
+      execute(dependencies, { name: 'lookup' })
+    ));
     expect(awaitApproval).toHaveBeenCalledOnce();
     expect(result).toMatchObject({
       status: 'completed',
@@ -219,6 +278,14 @@ describe('Tool Adapter', () => {
     });
     expect(events.map((event) => event.type)).toEqual(['approval.requested', 'approval.resolved']);
     expect(events[0]).toMatchObject({ payload: { approvalRequestId: 'approval:1' }, executionId: 'execution:1' });
+    expect(records.filter((record) => record.type === 'span.started').map((record) => record.name))
+      .toEqual(['tool.call', 'permission.await']);
+    expect(records.filter((record) => record.type === 'span.event').map((record) => record.event))
+      .toEqual([{
+        type: 'tool.permission.resolved',
+        toolCallId: 'call:1',
+        decision: 'user_allow',
+      }]);
   });
 
   it('turns a denied approval into a model-visible rejection', async () => {
@@ -358,3 +425,14 @@ describe('Tool Adapter', () => {
     });
   });
 });
+
+function throwingObservability(): Observability {
+  const failure = () => { throw new Error('observability unavailable'); };
+  return {
+    withTrace: failure,
+    withSpan: failure,
+    recordContent: failure,
+    recordEvent: failure,
+    linkTrace: failure,
+  } as Observability;
+}

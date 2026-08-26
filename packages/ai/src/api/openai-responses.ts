@@ -21,6 +21,7 @@ import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { notifyProviderExchange } from "../utils/provider-exchange.ts";
 import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
@@ -124,6 +125,8 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
 			stopReason: "pending",
 			timestamp: Date.now(),
 		};
+		let providerAttempt = 1;
+		let semanticOutputStarted = false;
 
 		try {
 			// Create OpenAI client
@@ -147,16 +150,29 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
 				maxRetries: 0,
 			};
 			const { data: openaiStream, response } = await retryProviderRequest(
-				() => client.responses.create(params, requestOptions).withResponse(),
+				(attempt) => {
+					providerAttempt = attempt;
+					notifyProviderExchange(options?.onProviderExchange, { type: "request", attempt, payload: params });
+					return client.responses.create(params, requestOptions).withResponse();
+				},
 				{
 					maxRetries: options?.maxRetries,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
 					signal: options?.signal,
+					onRetryScheduled: (event) => notifyProviderExchange(options?.onProviderExchange, {
+						type: "retry_scheduled",
+						...event,
+					}),
 				},
 			);
 			await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
 			stream.push({ type: "start", partial: output });
 
+			semanticOutputStarted = true;
+			notifyProviderExchange(options?.onProviderExchange, {
+				type: "output_started",
+				attempt: providerAttempt,
+			});
 			await processResponsesStream(openaiStream, output, stream, model, {
 				serviceTier: options?.serviceTier,
 				grammarToolInputProperties,
@@ -174,6 +190,11 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
 				throw new Error(output.errorMessage || "An unknown error occurred");
 			}
 
+			notifyProviderExchange(options?.onProviderExchange, {
+				type: "response",
+				attempt: providerAttempt,
+				payload: output,
+			});
 			stream.push({ type: "done", reason: output.stopReason, message: output });
 			stream.end();
 		} catch (error) {
@@ -185,6 +206,14 @@ export const stream: StreamFunction<"openai-responses", OpenAIResponsesOptions> 
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 			output.errorMessage = formatOpenAIResponsesError(error);
+			if (semanticOutputStarted) {
+				notifyProviderExchange(options?.onProviderExchange, {
+					type: "stream_interrupted",
+					attempt: providerAttempt,
+					reasonCode: output.stopReason === "aborted" ? "aborted" : "stream_error",
+					partialResponse: output,
+				});
+			}
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}

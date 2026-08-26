@@ -72,6 +72,8 @@ export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;
   readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
   readonly onNotification?: (notification: ToolExecutionNotification) => void;
+  /** Observes the actual Handler result before normalization; callback failure is ignored. */
+  readonly onHandlerResult?: (result: RawToolResult) => void;
   readonly executionAccess?: ToolExecutionAccess;
 }
 

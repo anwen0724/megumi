@@ -391,13 +391,13 @@ export function mapStopReasonString(reason: string): StopReason {
  * rethrowing.
  */
 export function retryGoogleRequest<T>(
-	request: () => Promise<T>,
-	options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+	request: (attempt: number) => Promise<T>,
+	options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal" | "onProviderExchange">,
 ): Promise<T> {
 	return retryProviderRequest(
-		async () => {
+		async (attempt) => {
 			try {
-				return await request();
+				return await request(attempt);
 			} catch (error) {
 				if (error instanceof Error && "status" in error && !("headers" in error)) {
 					(error as { headers?: Headers }).headers = undefined;
@@ -409,6 +409,13 @@ export function retryGoogleRequest<T>(
 			maxRetries: options?.maxRetries,
 			maxRetryDelayMs: options?.maxRetryDelayMs,
 			signal: options?.signal,
+			onRetryScheduled: (event) => {
+				try {
+					options?.onProviderExchange?.({ type: "retry_scheduled", ...event });
+				} catch {
+					// Provider retries never depend on diagnostic observation.
+				}
+			},
 		},
 	);
 }

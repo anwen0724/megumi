@@ -12,6 +12,7 @@ import type {
 } from '@megumi/agent-core';
 import type { JsonValue } from '@megumi/ai';
 import type { EventBus } from '@megumi/events';
+import type { Observability, OperationCompletion, TraceCorrelation } from '@megumi/observability';
 import type {
   ApprovalDecision,
   ApprovalSubject,
@@ -33,6 +34,7 @@ import type {
   ApprovalResolution,
   ConversationExecutionMetadata,
   ExecutionClock,
+  ExecutionMetadata,
 } from './execution-registry';
 import type { SessionToolResultCommit } from './session-settlement';
 import type { ToolScope } from './context-adapter';
@@ -66,6 +68,7 @@ export interface ToolAdapterDependencies {
   /** The Discovery Agent's approval wait seam; the original ToolCall Promise awaits it in place. */
   readonly awaitApproval: (request: { readonly approval: ApprovalRequest }) => Promise<ApprovalResolution>;
   readonly toolSystemFailures: Map<string, AgentError>;
+  readonly observability?: Observability;
 }
 
 export function createAgentTool(
@@ -77,32 +80,60 @@ export function createAgentTool(
     ...definition,
     parameters: definition.parameters as AgentTool['parameters'],
     executionMode: definition.executionMode === 'serial' ? 'sequential' : 'parallel',
-    execute: async ({ toolCallId, arguments: argumentsValue, signal, onUpdate }) => {
-      const routed = scope.binding.routeToolCall({
-        toolCallId,
-        toolName: definition.name,
-        input: argumentsValue,
-      });
-      if (routed.status === 'failed') {
-        return completedToolOutcome(settledToolResult({
-          status: 'failure',
-          content: routed.error.message,
-          completedAt: dependencies.clock.now(),
-          error: routed.error,
-        }));
-      }
-      // The internal flow publishes update details of several kinds; the
-      // execute() result itself always carries the settled details type.
-      return executeRoutedTool(
-        routed.invocation,
-        routed.operations,
-        signal,
-        onUpdate as (update: AgentToolResult) => void,
-        dependencies,
-        scope.binding,
-      );
-    },
+    execute: (input) => observeToolCall(
+      dependencies.observability,
+      dependencies.metadata,
+      scope.modelCallId,
+      input.toolCallId,
+      () => executeProtectedAgentTool(definition, scope, input, dependencies),
+    ),
   });
+}
+
+async function executeProtectedAgentTool(
+  definition: ToolDefinition,
+  scope: ToolScope,
+  input: Parameters<AgentTool<AgentToolResultDetails>['execute']>[0],
+  dependencies: ToolAdapterDependencies,
+): Promise<AgentToolExecutionOutcome<AgentToolResultDetails>> {
+  const correlation = toolCorrelation(
+    dependencies.metadata,
+    scope.modelCallId,
+    input.toolCallId,
+  );
+  safeRecordToolContent(dependencies.observability, 'tool.request', {
+    toolCallId: input.toolCallId,
+    toolName: definition.name,
+    arguments: input.arguments,
+  }, correlation);
+  const routed = scope.binding.routeToolCall({
+    toolCallId: input.toolCallId,
+    toolName: definition.name,
+    input: input.arguments,
+  });
+  if (routed.status === 'failed') {
+    return recordToolResult(dependencies.observability, correlation, completedToolOutcome(settledToolResult({
+      status: 'failure',
+      content: routed.error.message,
+      completedAt: dependencies.clock.now(),
+      error: routed.error,
+    })));
+  }
+  safeRecordToolContent(
+    dependencies.observability,
+    'tool.arguments',
+    routed.invocation.input,
+    correlation,
+  );
+  const outcome = await executeRoutedTool(
+    routed.invocation,
+    routed.operations,
+    input.signal,
+    input.onUpdate as (update: AgentToolResult) => void,
+    dependencies,
+    scope.binding,
+  );
+  return recordToolResult(dependencies.observability, correlation, outcome);
 }
 
 /**
@@ -112,36 +143,65 @@ export function createAgentTool(
 export function createUnprotectedAgentTool(
   definition: ToolDefinition,
   binding: ModelCallToolBinding,
+  trace?: { readonly observability?: Observability; readonly metadata: ExecutionMetadata },
 ): AgentTool {
   return {
     ...definition,
     parameters: definition.parameters as AgentTool['parameters'],
     executionMode: definition.executionMode === 'serial' ? 'sequential' : 'parallel',
-    async execute({ toolCallId, arguments: input, signal }) {
-      const routed = binding.routeToolCall({ toolCallId, toolName: definition.name, input });
-      if (routed.status === 'failed') {
-        return completedToolOutcome({
-          content: [{ type: 'text', text: routed.error.message }],
-          isError: true,
+    execute: (input) => observeToolCall(
+      trace?.observability,
+      trace?.metadata,
+      binding.modelCallId,
+      input.toolCallId,
+      async () => {
+        const { toolCallId, arguments: argumentsValue, signal } = input;
+        const correlation = trace?.metadata
+          ? toolCorrelation(trace.metadata, binding.modelCallId, toolCallId)
+          : { modelCallId: binding.modelCallId, toolCallId };
+        safeRecordToolContent(trace?.observability, 'tool.request', {
+          toolCallId,
+          toolName: definition.name,
+          arguments: argumentsValue,
+        }, correlation);
+        const routed = binding.routeToolCall({
+          toolCallId,
+          toolName: definition.name,
+          input: argumentsValue,
         });
-      }
-      if (routed.operations.length > 0) {
-        return {
-          status: 'system_failed',
-          error: {
-            code: 'tool_system_failed',
-            message: `Background Tool requires unsupported authorization: ${definition.name}`,
-            retryable: false,
-            cause: { owner: 'permissions', code: 'background_authorization_required' },
-          },
-        };
-      }
-      const result = await binding.executeToolInvocation({ invocation: routed.invocation }, { signal });
-      return completedToolOutcome({
-        content: [{ type: 'text', text: result.normalizedResult.content }],
-        isError: result.type === 'failed' || result.normalizedResult.isError,
-      });
-    },
+        if (routed.status === 'failed') {
+          return recordToolResult(trace?.observability, correlation, completedToolOutcome({
+            content: [{ type: 'text', text: routed.error.message }],
+            isError: true,
+          }));
+        }
+        safeRecordToolContent(trace?.observability, 'tool.arguments', routed.invocation.input, correlation);
+        if (routed.operations.length > 0) {
+          return recordToolResult(trace?.observability, correlation, {
+            status: 'system_failed',
+            error: {
+              code: 'tool_system_failed',
+              message: `Background Tool requires unsupported authorization: ${definition.name}`,
+              retryable: false,
+              cause: { owner: 'permissions', code: 'background_authorization_required' },
+            },
+          });
+        }
+        const result = await binding.executeToolInvocation({ invocation: routed.invocation }, {
+          signal,
+          onHandlerResult: (handlerResult) => safeRecordToolContent(
+            trace?.observability,
+            'tool.handler_result',
+            handlerResult,
+            correlation,
+          ),
+        });
+        return recordToolResult(trace?.observability, correlation, completedToolOutcome({
+          content: [{ type: 'text', text: result.normalizedResult.content }],
+          isError: result.type === 'failed' || result.normalizedResult.isError,
+        }));
+      },
+    ),
   };
 }
 
@@ -188,6 +248,12 @@ async function executeRoutedTool(
       );
     }
     if (permission.decision.type === 'deny') {
+      safeRecordPermissionEvent(dependencies.observability, {
+        type: 'tool.permission.resolved',
+        toolCallId: invocation.toolCallId,
+        decision: 'automatic_deny',
+        reasonCode: permission.decision.denialCode,
+      });
       return completedToolOutcome(settledToolResult({
         status: 'permission_denied',
         content: permission.decision.reason,
@@ -202,6 +268,12 @@ async function executeRoutedTool(
       if (resolution.status === 'cancelled' || signal.aborted) {
         return completedToolOutcome(cancelledToolResult(dependencies.clock.now()));
       }
+      safeRecordPermissionEvent(dependencies.observability, {
+        type: 'tool.permission.resolved',
+        toolCallId: invocation.toolCallId,
+        decision: resolution.status === 'approved' ? 'user_allow' : 'user_deny',
+        ...(resolution.status === 'denied' ? { reasonCode: 'user_rejected' } : {}),
+      });
       const applied = await applyApprovalDecision(
         invocation,
         operations,
@@ -229,6 +301,11 @@ async function executeRoutedTool(
       }
       executionAccess = applied.executionAccess;
     } else {
+      safeRecordPermissionEvent(dependencies.observability, {
+        type: 'tool.permission.resolved',
+        toolCallId: invocation.toolCallId,
+        decision: 'automatic_allow',
+      });
       if (!permission.executionAccess) {
         return systemToolFailure(
           dependencies,
@@ -291,6 +368,16 @@ async function runToolInvocation(
           details: { kind: 'plan_updated', notification } satisfies AgentToolUpdateDetails,
         });
       },
+      onHandlerResult: (handlerResult) => safeRecordToolContent(
+        dependencies.observability,
+        'tool.handler_result',
+        handlerResult,
+        toolCorrelation(
+          dependencies.metadata,
+          invocation.modelCallId,
+          invocation.toolCallId,
+        ),
+      ),
       ...(executionAccess ? { executionAccess } : {}),
     });
   } catch {
@@ -338,9 +425,16 @@ async function requestApproval(
 ): Promise<ApprovalResolution> {
   if (signal.aborted) return { status: 'cancelled' };
   const approval = createApprovalRequest(invocation, decision, dependencies);
-  const wait = dependencies.awaitApproval({ approval });
   emitApprovalRequested(approval, dependencies);
-  const resolution = await wait;
+  const resolution = await observePermissionWait(
+    dependencies.observability,
+    toolCorrelation(
+      dependencies.metadata,
+      invocation.modelCallId,
+      invocation.toolCallId,
+    ),
+    () => dependencies.awaitApproval({ approval }),
+  );
   emitApprovalResolved(approval, resolution, dependencies);
   return resolution;
 }
@@ -513,6 +607,158 @@ function systemToolFailure(
   return {
     status: 'system_failed' as const,
     error,
+  };
+}
+
+async function observeToolCall<TDetails>(
+  observability: Observability | undefined,
+  metadata: ExecutionMetadata | undefined,
+  modelCallId: string,
+  toolCallId: string,
+  operation: () => Promise<AgentToolExecutionOutcome<TDetails>>,
+): Promise<AgentToolExecutionOutcome<TDetails>> {
+  let operationPromise: Promise<AgentToolExecutionOutcome<TDetails>> | undefined;
+  const runOnce = (): Promise<AgentToolExecutionOutcome<TDetails>> => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'tool.call',
+      correlation: metadata
+        ? toolCorrelation(metadata, modelCallId, toolCallId)
+        : { modelCallId, toolCallId },
+      classifyResult: classifyToolOutcome,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function classifyToolOutcome<TDetails>(
+  outcome: AgentToolExecutionOutcome<TDetails>,
+): OperationCompletion {
+  if (outcome.status === 'system_failed') {
+    return {
+      outcome: {
+        status: 'error',
+        code: outcome.error.code,
+        message: outcome.error.message,
+        retryable: outcome.error.retryable,
+      },
+    };
+  }
+  const status = diagnosticDetailStatus(outcome.result.details);
+  if (status === 'cancelled') {
+    return { outcome: { status: 'cancelled', code: 'tool_cancelled' } };
+  }
+  if (outcome.result.isError) {
+    return {
+      outcome: {
+        status: 'error',
+        code: status ?? 'tool_result_error',
+        message: toolResultText(outcome.result) || 'Tool call failed.',
+      },
+    };
+  }
+  return { outcome: { status: 'ok', code: status ?? 'success' } };
+}
+
+function diagnosticDetailStatus(value: unknown): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, 'status');
+    return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+      ? descriptor.value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toolResultText(result: AgentToolResult): string {
+  return result.content.flatMap((item) => item.type === 'text' ? [item.text] : []).join('');
+}
+
+async function observePermissionWait(
+  observability: Observability | undefined,
+  correlation: TraceCorrelation,
+  operation: () => Promise<ApprovalResolution>,
+): Promise<ApprovalResolution> {
+  let operationPromise: Promise<ApprovalResolution> | undefined;
+  const runOnce = (): Promise<ApprovalResolution> => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'permission.await',
+      correlation,
+      classifyResult: (resolution) => resolution.status === 'cancelled'
+        ? { outcome: { status: 'cancelled', code: 'approval_cancelled' } }
+        : { outcome: { status: 'ok', code: resolution.status } },
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function recordToolResult<TDetails>(
+  observability: Observability | undefined,
+  correlation: TraceCorrelation,
+  outcome: AgentToolExecutionOutcome<TDetails>,
+): AgentToolExecutionOutcome<TDetails> {
+  safeRecordToolContent(
+    observability,
+    'tool.result',
+    outcome.status === 'completed' ? outcome.result : outcome,
+    correlation,
+  );
+  return outcome;
+}
+
+function safeRecordToolContent(
+  observability: Observability | undefined,
+  kind: 'tool.request' | 'tool.arguments' | 'tool.handler_result' | 'tool.result',
+  value: unknown,
+  correlation: TraceCorrelation,
+): void {
+  try {
+    observability?.recordContent({ kind, value, correlation });
+  } catch {
+    // Tool routing, Handler execution, and normalization remain authoritative.
+  }
+}
+
+function safeRecordPermissionEvent(
+  observability: Observability | undefined,
+  event: Parameters<Observability['recordEvent']>[0],
+): void {
+  try {
+    observability?.recordEvent(event);
+  } catch {
+    // Permission decisions never depend on diagnostic recording.
+  }
+}
+
+function toolCorrelation(
+  metadata: ExecutionMetadata,
+  modelCallId: string,
+  toolCallId: string,
+): TraceCorrelation {
+  return {
+    requestId: metadata.requestId,
+    executionId: metadata.executionId,
+    modelCallId,
+    toolCallId,
+    ...(metadata.kind === 'conversation'
+      ? {
+          sessionId: metadata.sessionId,
+          workspaceId: metadata.workspaceId,
+        }
+      : { batchId: metadata.batchId }),
   };
 }
 

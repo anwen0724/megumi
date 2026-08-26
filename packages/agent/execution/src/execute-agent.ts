@@ -18,6 +18,7 @@ import {
   type AssistantMessage,
   type AssistantMessageEventStream,
   type Models,
+  type ProviderExchange,
 } from '@megumi/ai';
 import { materializeRecommendationReference, type ContextCapabilities } from '@megumi/context';
 import type { EventBus } from '@megumi/events';
@@ -118,7 +119,12 @@ export class LaunchExecutionError extends Error {
 
 interface ExecutionRuntime extends ExecutionProjectionRuntime, ContextAdapterRuntime {
   readonly committer: SessionMessageCommitter;
+  readonly modelPumps: Set<Promise<void>>;
   assistantMessageId?: string;
+}
+
+interface ModelTraceRuntime extends ContextAdapterRuntime {
+  readonly modelPumps: Set<Promise<void>>;
 }
 
 export async function launchAgentExecution(
@@ -197,6 +203,7 @@ export async function launchAgentExecution(
   const runtime: ExecutionRuntime = {
     toolRequests: new Map(),
     toolSystemFailures: new Map(),
+    modelPumps: new Set(),
     committer: createSessionMessageCommitter({
       userEntry: saved.entry,
       session: dependencies.session,
@@ -232,6 +239,7 @@ export async function launchAgentExecution(
     events: dependencies.events,
     awaitApproval: input.awaitApproval,
     toolSystemFailures: runtime.toolSystemFailures,
+    ...(dependencies.observability ? { observability: dependencies.observability } : {}),
   });
   const contextDependencies = {
     metadata,
@@ -272,7 +280,7 @@ export async function launchAgentExecution(
         timestamp: timestampFrom(metadata.createdAt),
       }],
     },
-    stream: createStreamAdapter(dependencies, metadata),
+    stream: createStreamAdapter(dependencies, metadata, runtime),
     context: contextProvider,
     policy: toAgentPolicy(dependencies.policy),
     settlement,
@@ -296,7 +304,7 @@ async function launchDailyDiscoveryExecution(
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   const { metadata } = input;
-  const runtime: ContextAdapterRuntime = {};
+  const runtime: ModelTraceRuntime = { modelPumps: new Set() };
   const toolExecutionResult = dependencies.tools.bindExecution({
     executionId: metadata.executionId,
     subject: { kind: 'background' },
@@ -319,7 +327,10 @@ async function launchDailyDiscoveryExecution(
     ids: dependencies.ids,
     ...(dependencies.runtimeLogger ? { runtimeLogger: dependencies.runtimeLogger } : {}),
     createAgentTool: (definition: import('@megumi/tools').ToolDefinition, scope: import('./context-adapter').ToolScope) => (
-      createUnprotectedAgentTool(definition, scope.binding)
+      createUnprotectedAgentTool(definition, scope.binding, {
+        metadata,
+        ...(dependencies.observability ? { observability: dependencies.observability } : {}),
+      })
     ),
   };
   const contextProvider = createContextAdapter(contextDependencies, runtime);
@@ -337,7 +348,7 @@ async function launchDailyDiscoveryExecution(
         timestamp: timestampFrom(metadata.createdAt),
       }],
     },
-    stream: createStreamAdapter(dependencies, metadata),
+    stream: createStreamAdapter(dependencies, metadata, runtime),
     context: contextProvider,
     policy: toAgentPolicy(dependencies.policy),
   });
@@ -358,6 +369,7 @@ async function launchDailyDiscoveryExecution(
         outcome = { status: 'failed', failure: internalFailure(error) };
         return outcome;
       } finally {
+        await drainModelPumps(runtime);
         releaseActiveScope(contextDependencies, runtime);
         toolExecution.close();
       }
@@ -384,6 +396,7 @@ async function executeAgentExecution(
     };
     return final;
   } finally {
+    await drainModelPumps(runtime);
     releaseActiveScope(contextDependencies, runtime);
     toolExecution.close();
   }
@@ -634,25 +647,234 @@ function agentCause(value: unknown): ExecutionFailure['cause'] {
 function createStreamAdapter(
   dependencies: ExecuteAgentDependencies,
   metadata: ExecutionMetadata,
+  runtime: ModelTraceRuntime,
 ): AgentStreamFunction {
-  return async (model, context, options) => {
+  return (model, context, options) => {
+    const wrapped = createAssistantMessageEventStream();
+    let tracked: Promise<void>;
+    tracked = observeModelCall(
+      dependencies,
+      metadata,
+      runtime.activeScope?.modelCallId,
+      model,
+      context,
+      options,
+      wrapped,
+    ).finally(() => { runtime.modelPumps.delete(tracked); });
+    runtime.modelPumps.add(tracked);
+    return wrapped;
+  };
+}
+
+async function observeModelCall(
+  dependencies: ExecuteAgentDependencies,
+  metadata: ExecutionMetadata,
+  modelCallId: string | undefined,
+  model: Parameters<AgentStreamFunction>[0],
+  context: Parameters<AgentStreamFunction>[1],
+  options: Parameters<AgentStreamFunction>[2],
+  target: AssistantMessageEventStream,
+): Promise<void> {
+  const operation = async (): Promise<AssistantMessage | undefined> => {
+    safeRecordContent(dependencies.observability, {
+      kind: 'model.request',
+      value: {
+        model: {
+          id: model.id,
+          api: model.api,
+          provider: model.provider,
+          reasoning: model.reasoning,
+        },
+        context: modelRequestContext(context),
+        options: {
+          ...(model.reasoning && options.reasoning ? { reasoning: options.reasoning } : {}),
+          maxRetries: dependencies.policy.providerRequestMaxRetries,
+          maxRetryDelayMs: dependencies.policy.providerRequestMaxRetryDelayMs,
+        },
+      },
+      correlation: modelCallCorrelation(metadata, modelCallId),
+    });
     const source = await dependencies.models.streamSimple(model, context, {
       ...options,
       ...(model.reasoning && options.reasoning ? { reasoning: options.reasoning } : {}),
       maxRetries: dependencies.policy.providerRequestMaxRetries,
       maxRetryDelayMs: dependencies.policy.providerRequestMaxRetryDelayMs,
+      onProviderExchange: (exchange) => recordProviderExchange(
+        dependencies.observability,
+        metadata,
+        modelCallId,
+        exchange,
+      ),
     });
-    const wrapped = createAssistantMessageEventStream();
-    void pumpStream(source, wrapped, metadata.model);
-    return wrapped;
+    const terminal = await pumpStream(source, target, metadata.model);
+    if (terminal) {
+      safeRecordContent(dependencies.observability, {
+        kind: 'model.response',
+        value: terminal,
+        correlation: modelCallCorrelation(metadata, modelCallId),
+      });
+    }
+    return terminal;
   };
+  let operationPromise: Promise<AssistantMessage | undefined> | undefined;
+  const runOnce = (): Promise<AssistantMessage | undefined> => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!dependencies.observability) {
+    await runOnce();
+    return;
+  }
+  try {
+    await dependencies.observability.withSpan({
+      name: 'model.call',
+      correlation: modelCallCorrelation(metadata, modelCallId),
+      classifyResult: classifyModelResponse,
+    }, runOnce);
+  } catch {
+    await runOnce();
+  }
+}
+
+/** Removes Execution-only Tool callbacks from the provider-neutral Model request snapshot. */
+function modelRequestContext(context: Parameters<AgentStreamFunction>[1]) {
+  return {
+    ...(context.systemPrompt === undefined ? {} : { systemPrompt: context.systemPrompt }),
+    messages: context.messages,
+    ...(context.tools === undefined ? {} : {
+      tools: context.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        ...(tool.constrainedSampling === undefined
+          ? {}
+          : { constrainedSampling: tool.constrainedSampling }),
+      })),
+    }),
+  };
+}
+
+function recordProviderExchange(
+  observability: Observability | undefined,
+  metadata: ExecutionMetadata,
+  modelCallId: string | undefined,
+  exchange: ProviderExchange,
+): void {
+  const correlation = {
+    ...modelCallCorrelation(metadata, modelCallId),
+    providerAttempt: exchange.type === 'retry_scheduled'
+      ? exchange.currentAttempt
+      : exchange.attempt,
+  };
+  if (exchange.type === 'request') {
+    safeRecordContent(observability, {
+      kind: 'model.provider_request',
+      value: exchange.payload,
+      correlation,
+    });
+    return;
+  }
+  if (exchange.type === 'response') {
+    safeRecordContent(observability, {
+      kind: 'model.provider_response',
+      value: exchange.payload,
+      correlation,
+    });
+    return;
+  }
+  if (exchange.type === 'output_started') {
+    safeRecordEvent(observability, {
+      type: 'model.output.started',
+      providerAttempt: exchange.attempt,
+    });
+    return;
+  }
+  if (exchange.type === 'retry_scheduled') {
+    safeRecordEvent(observability, {
+      type: 'model.retry.scheduled',
+      currentAttempt: exchange.currentAttempt,
+      nextAttempt: exchange.nextAttempt,
+      reasonCode: exchange.reasonCode,
+    });
+    return;
+  }
+  if (exchange.partialResponse !== undefined) {
+    safeRecordContent(observability, {
+      kind: 'model.provider_response',
+      value: exchange.partialResponse,
+      correlation,
+    });
+  }
+  safeRecordEvent(observability, {
+    type: 'model.stream.interrupted',
+    providerAttempt: exchange.attempt,
+    reasonCode: exchange.reasonCode,
+  });
+}
+
+function modelCallCorrelation(metadata: ExecutionMetadata, modelCallId: string | undefined) {
+  return {
+    ...executionCorrelation(metadata),
+    ...(modelCallId ? { modelCallId } : {}),
+  };
+}
+
+function classifyModelResponse(response: AssistantMessage | undefined): OperationCompletion {
+  if (!response) {
+    return {
+      outcome: {
+        status: 'error',
+        code: 'model_stream_missing_terminal',
+        message: 'Model stream ended without a terminal response.',
+      },
+    };
+  }
+  if (response.stopReason === 'aborted') {
+    return { outcome: { status: 'cancelled', code: 'aborted', message: response.errorMessage } };
+  }
+  if (response.stopReason === 'error') {
+    return {
+      outcome: {
+        status: 'error',
+        code: 'model_call_failed',
+        message: response.errorMessage ?? 'Model call failed.',
+      },
+    };
+  }
+  return { outcome: { status: 'ok', code: response.stopReason } };
+}
+
+function safeRecordContent(
+  observability: Observability | undefined,
+  input: Parameters<Observability['recordContent']>[0],
+): void {
+  try {
+    observability?.recordContent(input);
+  } catch {
+    // Capturing diagnostics cannot alter the Model stream.
+  }
+}
+
+function safeRecordEvent(
+  observability: Observability | undefined,
+  event: Parameters<Observability['recordEvent']>[0],
+): void {
+  try {
+    observability?.recordEvent(event);
+  } catch {
+    // Event diagnostics cannot alter Provider retry or stream settlement.
+  }
+}
+
+async function drainModelPumps(runtime: ModelTraceRuntime): Promise<void> {
+  await Promise.allSettled([...runtime.modelPumps]);
 }
 
 async function pumpStream(
   source: AssistantMessageEventStream,
   target: AssistantMessageEventStream,
   model: ExecutionMetadata['model'],
-): Promise<void> {
+): Promise<AssistantMessage | undefined> {
   let terminal: AssistantMessage | undefined;
   try {
     for await (const event of source) {
@@ -666,6 +888,7 @@ async function pumpStream(
   } finally {
     target.end(terminal);
   }
+  return terminal;
 }
 
 function toAgentPolicy(policy: AgentExecutionPolicy): Partial<AgentPolicy> {

@@ -154,4 +154,12 @@ describe('adapter wiring: cancellable retry with SDK retries disabled', () => {
       expect(source).toContain(marker);
     }
   });
+
+  it.each(adapters)('reports credential-free semantic exchanges in $file', ({ file }) => {
+    const source = fs.readFileSync(path.join(packageRoot, 'src', 'api', file), 'utf8');
+    expect(source).toContain('notifyProviderExchange(');
+    expect(source).toContain('type: "request"');
+    expect(source).toContain('type: "response"');
+    expect(source).not.toMatch(/notifyProviderExchange\([^)]*(headers|apiKey|client)/s);
+  });
 });
