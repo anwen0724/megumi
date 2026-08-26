@@ -1,4 +1,6 @@
-/* Guards the Agent Core's physical shape, dependency direction, and private implementation surface. */
+/*
+ * Guards Agent Core's physical shape, dependency direction, and private implementation surface.
+ */
 // @vitest-environment node
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -8,8 +10,9 @@ const root = process.cwd();
 const agentRoot = join(root, 'packages/agent-core');
 
 describe('Agent Core architecture boundaries', () => {
-  it('keeps the approved six-file source shape', () => {
+  it('keeps the approved seven-file source shape', () => {
     expect(readdirSync(join(agentRoot, 'src')).sort()).toEqual([
+      'agent-error.ts',
       'agent-loop.ts',
       'agent.ts',
       'index.ts',
@@ -22,7 +25,7 @@ describe('Agent Core architecture boundaries', () => {
   it('does not export internal execution modules from the package index', () => {
     const index = read('src/index.ts');
     expect(index).not.toMatch(/runAgentLoop|runModelCall|runToolCallBatch/u);
-    expect(index).not.toMatch(/from ['"]\.\/(?:agent-loop|model-call|tool-call)['"]/u);
+    expect(index).not.toMatch(/from ['"]\.\/(?:agent-error|agent-loop|model-call|tool-call)['"]/u);
   });
 
   it('depends and references only the provider-neutral AI package', () => {
