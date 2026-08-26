@@ -19,6 +19,12 @@ export * from './diagnostic-value';
 export * from './runtime/observability-health';
 export * from './trace/observability';
 export * from './trace/trace-contract';
+export * from './persistence/trace-index';
+export * from './query/diagnostic-bundle';
+export * from './query/legacy-trace-reader';
+export * from './query/trace-projector';
+export * from './query/trace-query';
+export * from './query/trace-reader';
 export type {
   ObservabilityEntryKind,
   ObservabilityStorage as ObservabilityPersistenceStorage,
