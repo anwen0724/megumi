@@ -99,6 +99,13 @@
       "when": 1787548800000,
       "tag": "0013_discovery_content_identity_v2",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1787635200000,
+      "tag": "0014_candidate_supply",
+      "breakpoints": true
     }
   ]
 }

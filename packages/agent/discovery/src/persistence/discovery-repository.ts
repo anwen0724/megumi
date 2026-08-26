@@ -3,6 +3,10 @@
  */
 import type { DatabaseConnection } from '@megumi/database';
 import {
+  createCandidateSupplyRepository,
+} from './candidate-supply-repository';
+import type { CandidateSupplyRepository } from '../candidate-supply/candidate-supply';
+import {
   createDailyBatchRepository,
   type DailyBatchRepository,
 } from './daily-batch-repository';
@@ -33,7 +37,8 @@ export type {
 export type { RecommendationSelectionSignal } from './recommendation-repository';
 
 export interface DiscoveryRepository
-  extends InterestRepository, DailyBatchRepository, RecommendationRepositoryOperations {
+  extends InterestRepository, DailyBatchRepository, RecommendationRepositoryOperations,
+    CandidateSupplyRepository {
   /** Migrates legacy Recommendation identities before normal Discovery work begins. */
   migrateRecommendationIdentities(): RecommendationIdentityMigrationResult;
 }
@@ -43,6 +48,7 @@ export function createDiscoveryRepository(options: {
   readonly database: DatabaseConnection;
 }): DiscoveryRepository {
   const interests = createInterestRepository(options.database);
+  const candidateSupply = createCandidateSupplyRepository(options.database);
   const recommendations = createRecommendationRepository(options.database);
   const batches = createDailyBatchRepository(options.database, recommendations.publicationWriter);
 
@@ -50,6 +56,7 @@ export function createDiscoveryRepository(options: {
     ...interests,
     ...batches,
     ...recommendations.operations,
+    ...candidateSupply,
     migrateRecommendationIdentities: () => migrateRecommendationIdentities(options.database),
   };
 }

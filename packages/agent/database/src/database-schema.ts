@@ -258,3 +258,128 @@ export const discoveryRecommendations = sqliteTable('discovery_recommendations',
   index('idx_discovery_recommendations_favorite_at').on(table.favoriteAt),
   index('idx_discovery_recommendations_watch_later_at').on(table.watchLaterAt),
 ]);
+
+export const discoveryCandidateQueries = sqliteTable('discovery_candidate_queries', {
+  queryId: text('query_id').primaryKey(),
+  executionId: text('execution_id').notNull(),
+  queryKey: text('query_key').notNull(),
+  sourceId: text('source_id').notNull(),
+  queryText: text('query_text').notNull(),
+  normalizedQuery: text('normalized_query').notNull(),
+  mode: text('mode').notNull(),
+  targetInterestIdsJson: jsonText('target_interest_ids_json').notNull(),
+  status: text('status').notNull(),
+  rawResultCount: integer('raw_result_count').notNull().default(0),
+  invalidResultCount: integer('invalid_result_count').notNull().default(0),
+  newCandidateCount: integer('new_candidate_count').notNull().default(0),
+  mergedCandidateCount: integer('merged_candidate_count').notNull().default(0),
+  alreadyRecommendedCount: integer('already_recommended_count').notNull().default(0),
+  capacityRejectedCount: integer('capacity_rejected_count').notNull().default(0),
+  failureCode: text('failure_code'),
+  failureMessage: text('failure_message'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
+}, (table) => [
+  check('check_discovery_candidate_queries_mode', sql`${table.mode} IN ('relevance', 'recent')`),
+  check('check_discovery_candidate_queries_status', sql`${table.status} IN ('running', 'succeeded', 'failed', 'cancelled', 'interrupted')`),
+  index('idx_discovery_candidate_queries_execution').on(table.executionId),
+  index('idx_discovery_candidate_queries_key_completed').on(table.queryKey, table.completedAt),
+  index('idx_discovery_candidate_queries_source_completed').on(table.sourceId, table.completedAt),
+]);
+
+export const discoveryCandidates = sqliteTable('discovery_candidates', {
+  candidateId: text('candidate_id').primaryKey(),
+  contentIdentity: text('content_identity').notNull(),
+  status: text('status').notNull(),
+  primarySourceId: text('primary_source_id').notNull(),
+  primarySourceName: text('primary_source_name').notNull(),
+  sourceContentId: text('source_content_id'),
+  canonicalUrl: text('canonical_url').notNull(),
+  contentType: text('content_type').notNull(),
+  title: text('title').notNull(),
+  author: text('author'),
+  contentPublishedAt: text('content_published_at'),
+  description: text('description'),
+  contentText: text('content_text'),
+  coverUrl: text('cover_url'),
+  firstSeenAt: text('first_seen_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  statusUpdatedAt: text('status_updated_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_discovery_candidates_content_identity').on(table.contentIdentity),
+  check('check_discovery_candidates_status', sql`${table.status} IN ('preparing', 'pending_admission', 'available', 'reserved', 'consumed', 'rejected', 'expired')`),
+  check('check_discovery_candidates_content_type', sql`${table.contentType} IN ('video', 'article', 'news', 'project', 'post', 'page', 'other')`),
+  index('idx_discovery_candidates_status_expires').on(table.status, table.expiresAt),
+]);
+
+export const discoveryCandidateSources = sqliteTable('discovery_candidate_sources', {
+  candidateSourceId: text('candidate_source_id').primaryKey(),
+  candidateId: text('candidate_id').notNull().references(() => discoveryCandidates.candidateId, { onDelete: 'cascade' }),
+  sourceIdentity: text('source_identity').notNull(),
+  sourceId: text('source_id').notNull(),
+  sourceName: text('source_name').notNull(),
+  sourceContentId: text('source_content_id'),
+  canonicalUrl: text('canonical_url').notNull(),
+  firstSeenAt: text('first_seen_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+}, (table) => [
+  uniqueIndex('idx_discovery_candidate_sources_identity').on(table.sourceIdentity),
+  index('idx_discovery_candidate_sources_candidate').on(table.candidateId),
+]);
+
+export const discoveryCandidateQueryResults = sqliteTable('discovery_candidate_query_results', {
+  queryId: text('query_id').notNull().references(() => discoveryCandidateQueries.queryId, { onDelete: 'cascade' }),
+  candidateId: text('candidate_id').notNull().references(() => discoveryCandidates.candidateId, { onDelete: 'cascade' }),
+  resultKind: text('result_kind').notNull(),
+}, (table) => [
+  uniqueIndex('idx_discovery_candidate_query_results_key').on(table.queryId, table.candidateId),
+  check('check_discovery_candidate_query_results_kind', sql`${table.resultKind} IN ('created', 'merged')`),
+  index('idx_discovery_candidate_query_results_candidate').on(table.candidateId),
+]);
+
+export const discoveryCandidateAssessments = sqliteTable('discovery_candidate_assessments', {
+  assessmentId: text('assessment_id').primaryKey(),
+  candidateId: text('candidate_id').notNull().references(() => discoveryCandidates.candidateId, { onDelete: 'cascade' }),
+  executionId: text('execution_id').notNull(),
+  assessmentVersion: text('assessment_version').notNull(),
+  decision: text('decision').notNull(),
+  relevance: text('relevance'),
+  matchedInterestIdsJson: jsonText('matched_interest_ids_json').notNull(),
+  contentValue: text('content_value'),
+  novelty: text('novelty'),
+  temporalValidity: text('temporal_validity'),
+  negativeConstraint: text('negative_constraint'),
+  duplicateOfCandidateId: text('duplicate_of_candidate_id').references(() => discoveryCandidates.candidateId),
+  duplicateOfRecommendationId: text('duplicate_of_recommendation_id').references(() => discoveryRecommendations.recommendationId),
+  reasonCode: text('reason_code'),
+  reason: text('reason').notNull(),
+  active: integer('active').notNull().default(1),
+  assessedAt: text('assessed_at').notNull(),
+}, (table) => [
+  check('check_discovery_candidate_assessments_decision', sql`${table.decision} IN ('admit', 'needs_detail', 'reject')`),
+  check('check_discovery_candidate_assessments_active', sql`${table.active} IN (0, 1)`),
+  uniqueIndex('idx_discovery_candidate_assessments_active').on(table.candidateId).where(sql`${table.active} = 1`),
+  index('idx_discovery_candidate_assessments_execution').on(table.executionId),
+]);
+
+export const discoveryCandidateInterests = sqliteTable('discovery_candidate_interests', {
+  candidateId: text('candidate_id').notNull().references(() => discoveryCandidates.candidateId, { onDelete: 'cascade' }),
+  interestId: text('interest_id').notNull().references(() => discoveryInterests.interestId, { onDelete: 'cascade' }),
+  assessmentId: text('assessment_id').notNull().references(() => discoveryCandidateAssessments.assessmentId, { onDelete: 'cascade' }),
+  relationKind: text('relation_kind').notNull(),
+}, (table) => [
+  uniqueIndex('idx_discovery_candidate_interests_key').on(table.candidateId, table.interestId),
+  check('check_discovery_candidate_interests_relation', sql`${table.relationKind} IN ('direct', 'adjacent')`),
+  index('idx_discovery_candidate_interests_interest').on(table.interestId, table.candidateId),
+]);
+
+export const discoveryCandidateSupplyState = sqliteTable('discovery_candidate_supply_state', {
+  stateId: text('state_id').primaryKey(),
+  consecutiveZeroYieldCount: integer('consecutive_zero_yield_count').notNull().default(0),
+  retryAt: text('retry_at'),
+  nextRecheckAt: text('next_recheck_at'),
+  updatedAt: text('updated_at').notNull(),
+}, (table) => [
+  check('check_discovery_candidate_supply_state_singleton', sql`${table.stateId} = 'candidate_supply'`),
+]);

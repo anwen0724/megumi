@@ -75,6 +75,36 @@ export type {
   SourceAttemptBudget,
 } from './daily-discovery/daily-discovery-attempt';
 export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './daily-discovery/content-identity';
+export {
+  CandidateAdmissionDecisionSchema,
+  CandidateSchema,
+  CandidateStatusSchema,
+  CandidateSupplyCommitInputSchema,
+  CandidateSupplySearchInputSchema,
+} from './candidate-supply/candidate-supply';
+export {
+  assertCandidateTransition,
+  candidateExpiresAt,
+  candidatePoolGap,
+  candidateQueryKey,
+  candidateSupplyThresholds,
+  hasCandidatePoolGap,
+  isCandidateContentAssessable,
+  normalizeCandidateQuery,
+} from './candidate-supply/candidate-pool';
+export type {
+  Candidate,
+  CandidateAdmissionDecision,
+  CandidateMaterialResult,
+  CandidatePoolGap,
+  CandidatePoolSnapshot,
+  CandidateQueryOutcome,
+  CandidateStatus,
+  CandidateSupplyCommitInput,
+  CandidateSupplyRepository,
+  CandidateSupplySearchInput,
+  CandidateSupplyThresholds,
+} from './candidate-supply/candidate-supply';
 export type {
   CandidateAdmission,
   CandidateDecision,

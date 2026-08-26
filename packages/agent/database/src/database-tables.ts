@@ -14,6 +14,13 @@ export const databaseTables = [
   'discovery_session_policies',
   'discovery_batches',
   'discovery_recommendations',
+  'discovery_candidate_queries',
+  'discovery_candidates',
+  'discovery_candidate_sources',
+  'discovery_candidate_query_results',
+  'discovery_candidate_assessments',
+  'discovery_candidate_interests',
+  'discovery_candidate_supply_state',
 ] as const;
 
 export type DatabaseTable = (typeof databaseTables)[number];
@@ -66,6 +73,13 @@ export const databaseTableOwnership = {
       'discovery_session_policies',
       'discovery_batches',
       'discovery_recommendations',
+      'discovery_candidate_queries',
+      'discovery_candidates',
+      'discovery_candidate_sources',
+      'discovery_candidate_query_results',
+      'discovery_candidate_assessments',
+      'discovery_candidate_interests',
+      'discovery_candidate_supply_state',
     ],
   },
 } as const satisfies Record<string, DatabaseTableOwner>;
