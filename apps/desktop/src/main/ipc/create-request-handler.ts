@@ -40,6 +40,10 @@ export function createIpcRequestHandler<
       : 'request:invalid';
 
     if (!parsed.success) {
+      options.logger?.warn?.('ipc_request_validation_failed', {
+        channel: options.channel,
+        validation: sanitizeZodIssues(parsed.error),
+      });
       return failureResult(options.channel, requestId, {
         code: 'ipc_invalid_request',
         message: 'IPC request payload is invalid.',

@@ -1,535 +1,307 @@
-/* Joins local Run traces with canonical Project, Session, and user-message facts for diagnostics. */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  CheckCircle2,
-  CircleSlash,
-  Clock3,
-  Download,
-  RefreshCw,
-  XCircle,
-} from "lucide-react";
+/*
+ * Owns the Desktop Trace diagnostics query state and explicit diagnostic actions.
+ * It reads only Product Host observability contracts and never joins business state.
+ */
+import { useEffect, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Activity, Download, RefreshCw, RotateCcw } from 'lucide-react';
 import type {
-  SessionDto,
-  ObservabilityRunTraceDetailUiDto,
-  ObservabilityRunTraceSummaryUiDto,
-  WorkspaceProjectUiDto,
-} from "@megumi/product-host/host";
-import { IPC_CHANNELS } from "../../../main/ipc/channels";
-import { createRendererRuntimeIpcRequest } from "../../shared/ipc/runtime-request";
-import { Button, SettingsPageHeader, cx } from "../../shared/ui";
-import { formatDate, formatNumber, formatPercent, rendererI18n } from "../../shared/i18n";
+  ObservabilityGetContentResult,
+  ObservabilityHealthUiDto,
+  ObservabilityLegacyListResult,
+  ObservabilityTraceDetailUiDto,
+  ObservabilityTraceSummaryUiDto,
+} from '@megumi/product-host/host';
+import { IPC_CHANNELS } from '../../../main/ipc/channels';
+import type { ObservabilityListPayload } from '../../../main/ipc/schemas';
+import { createRendererRuntimeIpcRequest } from '../../shared/ipc/runtime-request';
+import { Button, SettingsPageHeader } from '../../shared/ui';
+import { correlationFromFilter } from './diagnostics-format';
+import { TraceDetail } from './TraceDetail';
+import { TraceList } from './TraceList';
 
-const ALL_FILTER = "__all__";
-const NO_PROJECT_FILTER = "__no_project__";
-const NO_SESSION_FILTER = "__no_session__";
+type LegacyDiagnosticUiDto = Extract<
+  ObservabilityLegacyListResult,
+  { readonly status: 'ok' }
+>['diagnostics'][number];
 
 export function DiagnosticsPanel() {
   const { t } = useTranslation('settings');
-  const [traces, setTraces] = useState<ObservabilityRunTraceSummaryUiDto[]>([]);
-  const [projects, setProjects] = useState<WorkspaceProjectUiDto[]>([]);
-  const [sessions, setSessions] = useState<SessionDto[]>([]);
-  const [runInputById, setRunInputById] = useState<Record<string, string>>({});
-  const [projectFilter, setProjectFilter] = useState(ALL_FILTER);
-  const [sessionFilter, setSessionFilter] = useState(ALL_FILTER);
-  const [selected, setSelected] = useState<ObservabilityRunTraceDetailUiDto>();
+  const [traces, setTraces] = useState<readonly ObservabilityTraceSummaryUiDto[]>([]);
+  const [selected, setSelected] = useState<ObservabilityTraceDetailUiDto>();
+  const [contentBySequence, setContentBySequence] = useState<Readonly<Record<number, ObservabilityGetContentResult | 'loading'>>>({});
+  const [health, setHealth] = useState<ObservabilityHealthUiDto>();
+  const [legacy, setLegacy] = useState<readonly LegacyDiagnosticUiDto[]>([]);
+  const [traceKind, setTraceKind] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [correlation, setCorrelation] = useState('');
+  const [startedAtOrAfter, setStartedAtOrAfter] = useState('');
+  const [startedBefore, setStartedBefore] = useState('');
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState<'unavailable' | 'exported' | 'exportFailed'>();
+  const [message, setMessage] = useState<'unavailable' | 'exported' | 'exportFailed' | 'rebuilt'>();
 
   const load = async () => {
     setLoading(true);
     setMessage(undefined);
-    const [traceResult, projectResult, sessionResult] = await Promise.all([
+    const payload = createListPayload({
+      traceKind, status, correlation, startedAtOrAfter, startedBefore,
+    });
+    const [listResult, healthResult, legacyResult] = await Promise.all([
       window.megumi.observability.list(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.list, {
-          limit: 50,
-        }),
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.list, payload),
       ),
-      window.megumi.project.list(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.projectList, {}),
+      window.megumi.observability.getHealth(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.health, {}),
       ),
-      window.megumi.session.list(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionList, {}),
+      window.megumi.observability.listLegacy(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.legacy, { limit: 50 }),
       ),
     ]);
-
-    if (!traceResult.ok || traceResult.data.status !== "ok") {
+    if (!listResult.ok || listResult.data.status !== 'ok') {
       setMessage('unavailable');
-      setLoading(false);
-      return;
+    } else {
+      setTraces(listResult.data.traces);
+      if (selected && !listResult.data.traces.some((trace) => trace.traceId === selected.summary.traceId)) {
+        setSelected(undefined);
+        setContentBySequence({});
+      }
     }
-
-    const nextTraces = traceResult.data.traces;
-    setTraces(nextTraces);
-    setProjects(projectResult.ok ? projectResult.data.projects : []);
-    setSessions(
-      sessionResult.ok && sessionResult.data.status === "ok"
-        ? sessionResult.data.sessions
-        : [],
-    );
-    setRunInputById(await loadRunInputLabels(nextTraces));
+    if (healthResult.ok && healthResult.data.status === 'ok') setHealth(healthResult.data.health);
+    if (legacyResult.ok && legacyResult.data.status === 'ok') setLegacy(legacyResult.data.diagnostics);
     setLoading(false);
   };
 
   useEffect(() => {
     void load();
+    // Filters are submitted explicitly through Refresh, not on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const projectNameById = useMemo(
-    () => new Map(projects.map((project) => [project.projectId, project.name])),
-    [projects],
-  );
-  const sessionById = useMemo(
-    () => new Map(sessions.map((session) => [session.id, session])),
-    [sessions],
-  );
-  const projectIds = useMemo(
-    () => unique(traces.map(projectFilterValue)),
-    [traces],
-  );
-  const sessionIds = useMemo(
-    () => unique(
-      traces
-        .filter((trace) => projectFilter === ALL_FILTER || projectFilterValue(trace) === projectFilter)
-        .map(sessionFilterValue),
-    ),
-    [projectFilter, traces],
-  );
-  const filteredTraces = useMemo(
-    () => traces.filter((trace) => (
-      (projectFilter === ALL_FILTER || projectFilterValue(trace) === projectFilter)
-      && (sessionFilter === ALL_FILTER || sessionFilterValue(trace) === sessionFilter)
-    )),
-    [projectFilter, sessionFilter, traces],
-  );
-
-  const inspect = async (executionId: string) => {
+  const inspect = async (traceId: string) => {
+    setContentBySequence({});
     const result = await window.megumi.observability.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.get, {
-        executionId,
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.get, { traceId }),
+    );
+    if (result.ok && result.data.status === 'found') setSelected(result.data.trace);
+  };
+
+  const readContent = async (sequence: number) => {
+    if (!selected) return;
+    setContentBySequence((current) => ({ ...current, [sequence]: 'loading' }));
+    const result = await window.megumi.observability.getContent(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.content, {
+        traceId: selected.summary.traceId,
+        sequence,
       }),
     );
-    if (result.ok && result.data.status === "found")
-      setSelected(result.data.trace);
+    setContentBySequence((current) => ({
+      ...current,
+      [sequence]: result.ok
+        ? result.data
+        : { status: 'failed', message: result.data.message },
+    }));
   };
+
+  const rebuildIndex = async () => {
+    const result = await window.megumi.observability.rebuildIndex(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.rebuildIndex, {}),
+    );
+    if (result.ok && result.data.status === 'rebuilt') {
+      await load();
+      setMessage('rebuilt');
+    } else {
+      setMessage('unavailable');
+    }
+  };
+
   const exportBundle = async () => {
     if (!selected) return;
     const result = await window.megumi.observability.createBundle(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.bundle, {
-        executionId: selected.summary.executionId,
+        traceId: selected.summary.traceId,
       }),
     );
-    if (result.ok)
-      setMessage(
-        result.data.status === "saved"
-          ? 'exported'
-          : result.data.status === "cancelled"
-            ? undefined
-            : 'exportFailed',
-      );
+    setMessage(
+      result.ok && result.data.status === 'saved'
+        ? 'exported'
+        : result.ok && result.data.status === 'cancelled'
+          ? undefined
+          : 'exportFailed',
+    );
   };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <SettingsPageHeader
         title={t('diagnostics.title')}
         description={t('diagnostics.description')}
         action={(
-          <Button size="sm" variant="secondary" onClick={() => void load()}>
-            <RefreshCw size={14} aria-hidden="true" />
-            {t('diagnostics.refresh')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={() => void rebuildIndex()}>
+              <RotateCcw size={14} aria-hidden="true" />{t('diagnostics.rebuildIndex')}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => void load()}>
+              <RefreshCw size={14} aria-hidden="true" />{t('diagnostics.refresh')}
+            </Button>
+          </div>
         )}
       />
-      {loading ? (
-        <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-12 text-center text-sm text-[var(--color-text-muted)]">
-          {t('diagnostics.loading')}
+
+      <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <FilterSelect label={t('diagnostics.traceKind')} value={traceKind} onChange={setTraceKind}>
+            <option value="all">{t('diagnostics.allKinds')}</option>
+            <option value="conversation">conversation</option>
+            <option value="daily_discovery">daily_discovery</option>
+          </FilterSelect>
+          <FilterSelect label={t('diagnostics.statusLabel')} value={status} onChange={setStatus}>
+            <option value="all">{t('diagnostics.allStatuses')}</option>
+            <option value="ok">ok</option><option value="error">error</option>
+            <option value="cancelled">cancelled</option><option value="incomplete">incomplete</option>
+          </FilterSelect>
+          <FilterInput label={t('diagnostics.correlation')} value={correlation} onChange={setCorrelation} placeholder="execution:… / batch:…" />
+          <FilterInput label={t('diagnostics.startedAfter')} value={startedAtOrAfter} onChange={setStartedAtOrAfter} type="datetime-local" />
+          <FilterInput label={t('diagnostics.startedBefore')} value={startedBefore} onChange={setStartedBefore} type="datetime-local" />
         </div>
-      ) : message ? (
-        <p role="status" className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-muted)]">
-          {t(`diagnostics.${message}`)}
-        </p>
-      ) : (
-        <div className="grid min-h-[28rem] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] lg:grid-cols-[minmax(17rem,0.72fr)_minmax(0,1.28fr)]">
-          <section className="border-b border-[var(--color-border)] p-4 lg:border-b-0 lg:border-r">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('diagnostics.recentRuns')}</h2>
-              <span className="text-xs text-[var(--color-text-subtle)]">
-                {filteredTraces.length === traces.length
-                  ? traces.length
-                  : t('diagnostics.filteredCount', { filtered: filteredTraces.length, total: traces.length })}
-              </span>
-            </div>
-            <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <DiagnosticFilter
-                label={t('diagnostics.project')}
-                value={projectFilter}
-                onChange={(value) => {
-                  setProjectFilter(value);
-                  setSessionFilter(ALL_FILTER);
-                  setSelected(undefined);
-                }}
-              >
-                <option value={ALL_FILTER}>{t('diagnostics.allProjects')}</option>
-                {projectIds.map((projectId) => (
-                  <option key={projectId} value={projectId}>
-                    {projectId === NO_PROJECT_FILTER
-                      ? t('diagnostics.noProject')
-                      : projectNameById.get(projectId) ?? t('diagnostics.unavailableProject')}
-                  </option>
-                ))}
-              </DiagnosticFilter>
-              <DiagnosticFilter
-                label={t('diagnostics.session')}
-                value={sessionFilter}
-                onChange={(value) => {
-                  setSessionFilter(value);
-                  setSelected(undefined);
-                }}
-              >
-                <option value={ALL_FILTER}>{t('diagnostics.allSessions')}</option>
-                {sessionIds.map((sessionId) => {
-                  const session = sessionById.get(sessionId);
-                  const projectName = session
-                    ? projectNameById.get(session.projectId)
-                    : undefined;
-                  return (
-                    <option key={sessionId} value={sessionId}>
-                      {sessionId === NO_SESSION_FILTER
-                        ? t('diagnostics.noSession')
-                        : projectFilter === ALL_FILTER && projectName
-                          ? `${projectName} / ${session?.title ?? t('diagnostics.unavailableSession')}`
-                          : session?.title ?? t('diagnostics.unavailableSession')}
-                    </option>
-                  );
-                })}
-              </DiagnosticFilter>
-            </div>
-            {traces.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
-                {t('diagnostics.empty')}
-              </p>
-            ) : filteredTraces.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
-                {t('diagnostics.noMatches')}
-              </p>
-            ) : (
-              <div className="space-y-1.5">
-                {filteredTraces.map((trace) => (
-                <button
-                  key={trace.executionId}
-                  onClick={() => void inspect(trace.executionId)}
-                  aria-label={runInputById[trace.executionId] ?? formatRunFallback(trace)}
-                  className={cx(
-                    "relative w-full cursor-pointer rounded-lg border p-3 text-left transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]",
-                    selected?.summary.executionId === trace.executionId
-                      ? "border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]"
-                      : "border-transparent hover:bg-[var(--color-surface-muted)]",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-sm font-medium text-[var(--color-text)]">
-                      {runInputById[trace.executionId] ?? formatRunFallback(trace)}
-                    </span>
-                    <RunStatusIcon status={trace.status} />
-                  </div>
-                  <div className="mt-1 text-xs text-[var(--color-text-muted)]">
-                    {formatRunTime(trace.startedAt)}
-                  </div>
-                </button>
-                ))}
-              </div>
-            )}
-          </section>
-          <section className="min-w-0 p-5">
-            {!selected ? (
-              <div className="grid min-h-[24rem] place-items-center text-center">
-                <div>
-                  <h2 className="text-sm font-medium text-[var(--color-text)]">{t('diagnostics.selectRun')}</h2>
-                  <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-                    {t('diagnostics.selectHint')}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-3">
-                      <h2 className="truncate text-base font-semibold text-[var(--color-text)]">
-                        {runInputById[selected.summary.executionId] ?? formatRunFallback(selected.summary)}
-                      </h2>
-                      <RunStatusIcon status={selected.summary.status} />
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                      {formatRunSource(selected.summary, projectNameById, sessionById)}
-                    </p>
-                    <p className="mt-1 font-mono text-xs text-[var(--color-text-subtle)]">
-                      {selected.summary.executionId}
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => void exportBundle()}
-                  >
-                    <Download size={14} aria-hidden="true" />
-                    {t('diagnostics.export')}
-                  </Button>
-                </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                  <DiagnosticMetric
-                    label={t('diagnostics.duration')}
-                    value={formatDuration(selected.summary.durationMs)}
-                    detail={t('diagnostics.totalRunTime')}
-                  />
-                  <DiagnosticMetric
-                    label={t('diagnostics.modelCalls')}
-                    value={formatNumber(selected.summary.modelCallCount)}
-                    detail={t('diagnostics.providerRequests')}
-                  />
-                  <DiagnosticMetric
-                    label={t('diagnostics.toolCalls')}
-                    value={formatNumber(selected.summary.toolCallCount)}
-                    detail={t('diagnostics.toolExecutions')}
-                  />
-                  <DiagnosticMetric
-                    label={t('diagnostics.contextCapacity')}
-                    value={formatContextCapacity(selected.summary)}
-                    detail={formatContextRatio(
-                      selected.summary.contextUsedRatio,
-                    )}
-                  />
-                  <DiagnosticMetric
-                    label={t('diagnostics.providerUsage')}
-                    value={formatProviderUsage(selected.summary)}
-                    detail={t('diagnostics.modelCallCount', { count: selected.summary.modelCallCount })}
-                  />
-                </div>
-                <h3 className="mt-5 text-sm font-semibold text-[var(--color-text)]">
-                  {t('diagnostics.executionTimeline')}
-                </h3>
-                <ol className="mt-2 space-y-1">
-                  {selected.spans.map((span) => (
-                    <li
-                      key={span.spanId}
-                      className="flex min-h-10 items-center justify-between gap-4 border-l-2 border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-surface-muted)]"
-                    >
-                      <span className="text-[var(--color-text)]">{formatSpanName(span.name)}</span>
-                      <span className="shrink-0 font-mono text-xs tabular-nums text-[var(--color-text-muted)]">
-                        {span.durationMs === undefined
-                          ? t('diagnostics.durationUnavailable')
-                          : `${Math.round(span.durationMs)} ms`}{" "}
-                        · {formatStatus(span.status)}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </>
-            )}
-          </section>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] pt-3">
+          <HealthSummary health={health} />
+          {message ? <span className="text-xs text-[var(--color-text-muted)]">{t(`diagnostics.${message}`)}</span> : null}
         </div>
-      )}
+      </section>
+
+      <section className="grid min-h-[34rem] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)]">
+        <div className="border-b border-[var(--color-border)] lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('diagnostics.recentTraces')}</h2>
+              <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{t('diagnostics.traceCount', { count: traces.length })}</p>
+            </div>
+            {loading ? <RefreshCw size={14} className="animate-spin text-[var(--color-text-muted)]" /> : null}
+          </div>
+          <div className="max-h-[42rem] overflow-auto">
+            <TraceList
+              traces={traces}
+              selectedTraceId={selected?.summary.traceId}
+              emptyLabel={loading ? t('diagnostics.loading') : t('diagnostics.empty')}
+              onSelect={(traceId) => void inspect(traceId)}
+            />
+          </div>
+        </div>
+        <div className="min-w-0 overflow-auto">
+          {selected ? (
+            <>
+              <div className="flex justify-end border-b border-[var(--color-border)] px-5 py-2.5">
+                <Button size="sm" variant="secondary" onClick={() => void exportBundle()}>
+                  <Download size={14} aria-hidden="true" />{t('diagnostics.export')}
+                </Button>
+              </div>
+              <TraceDetail
+                key={selected.summary.traceId}
+                trace={selected}
+                contentBySequence={contentBySequence}
+                onReadContent={(sequence) => void readContent(sequence)}
+              />
+            </>
+          ) : (
+            <div className="flex min-h-[34rem] flex-col items-center justify-center px-6 text-center">
+              <div className="rounded-full bg-[var(--color-surface-muted)] p-3 text-[var(--color-text-muted)]"><Activity size={20} /></div>
+              <h3 className="mt-3 text-sm font-semibold text-[var(--color-text)]">{t('diagnostics.selectTrace')}</h3>
+              <p className="mt-1 max-w-sm text-xs leading-5 text-[var(--color-text-muted)]">{t('diagnostics.selectHint')}</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <details className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+        <summary className="cursor-pointer text-sm font-semibold text-[var(--color-text)]">
+          {t('diagnostics.legacy')} · {legacy.length}
+        </summary>
+        <p className="mt-2 text-xs text-[var(--color-text-muted)]">{t('diagnostics.legacyDescription')}</p>
+        <div className="mt-3 space-y-1.5">
+          {legacy.map((item) => (
+            <div key={item.traceId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--color-surface-muted)] px-3 py-2 font-mono text-xs">
+              <span>{item.traceId}</span><span>{item.status} · {item.recordCount} records · no content</span>
+            </div>
+          ))}
+          {legacy.length === 0 ? <div className="text-xs text-[var(--color-text-muted)]">{t('diagnostics.noLegacy')}</div> : null}
+        </div>
+      </details>
     </div>
   );
 }
 
-function DiagnosticFilter({
-  label,
-  value,
-  onChange,
-  children,
+function FilterSelect({
+  label, value, onChange, children,
 }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: ReactNode;
+  readonly label: string; readonly value: string; readonly onChange: (value: string) => void;
+  readonly children: ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-[0.68rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-        {label}
-      </span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 text-xs text-[var(--color-text)] outline-none transition-colors focus:border-[var(--color-focus)]"
-      >
+    <label className="grid gap-1.5 text-xs font-medium text-[var(--color-text-muted)]">
+      {label}
+      <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="h-9 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]">
         {children}
       </select>
     </label>
   );
 }
 
-function RunStatusIcon({ status }: { status: string }) {
-  const label = formatStatus(status);
-  const iconClassName = cx("h-4 w-4", statusClassName(status));
-  const icon = status === "ok"
-    ? <CheckCircle2 className={iconClassName} aria-hidden="true" />
-    : status === "error"
-      ? <XCircle className={iconClassName} aria-hidden="true" />
-      : status === "cancelled"
-        ? <CircleSlash className={iconClassName} aria-hidden="true" />
-        : <Clock3 className={iconClassName} aria-hidden="true" />;
+function FilterInput({
+  label, value, onChange, placeholder, type = 'text',
+}: {
+  readonly label: string; readonly value: string; readonly onChange: (value: string) => void;
+  readonly placeholder?: string; readonly type?: string;
+}) {
   return (
-    <span role="img" aria-label={label} title={label} className="inline-flex shrink-0 items-center self-center">
-      {icon}
-    </span>
+    <label className="grid gap-1.5 text-xs font-medium text-[var(--color-text-muted)]">
+      {label}
+      <input aria-label={label} type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="h-9 min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2 font-mono text-xs text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)]" />
+    </label>
   );
 }
 
-function DiagnosticMetric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
+function HealthSummary({ health }: { readonly health?: ObservabilityHealthUiDto }) {
+  const { t } = useTranslation('settings');
+  const failures = health ? health.journalWriteFailures + health.contentWriteFailures
+    + health.flushFailures + health.rotationFailures + health.retentionCleanupFailures
+    + health.indexProjectionFailures + health.classifierFailures + health.contextFailures
+    + health.captureFailures : 0;
   return (
-    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2.5">
-      <div className="text-[0.68rem] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-medium text-[var(--color-text)]">
-        {value}
-      </div>
-      <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-        {detail}
-      </div>
+    <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+      <span className={`size-2 rounded-full ${failures > 0 || (health?.droppedRecords ?? 0) > 0 ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-success)]'}`} />
+      {t('diagnostics.healthSummary', { dropped: health?.droppedRecords ?? 0, failures })}
     </div>
   );
 }
 
-function formatContextCapacity(summary: ObservabilityRunTraceSummaryUiDto): string {
+function toIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+}
+
+function createListPayload(input: {
+  readonly traceKind: string;
+  readonly status: string;
+  readonly correlation: string;
+  readonly startedAtOrAfter: string;
+  readonly startedBefore: string;
+}): ObservabilityListPayload {
+  const payload: ObservabilityListPayload = { limit: 50 };
+  if (input.traceKind === 'conversation' || input.traceKind === 'daily_discovery') {
+    payload.traceKind = input.traceKind;
+  }
   if (
-    summary.contextUsedTokens === undefined
-    || summary.contextWindowTokens === undefined
+    input.status === 'ok' || input.status === 'error'
+    || input.status === 'cancelled' || input.status === 'incomplete'
   ) {
-    return rendererI18n.t('settings:diagnostics.unavailableValue');
+    payload.status = input.status;
   }
-  return `${formatTokens(summary.contextUsedTokens)} / ${formatTokens(summary.contextWindowTokens)}`;
-}
-
-function formatContextRatio(ratio: number | undefined): string {
-  return ratio === undefined
-    ? rendererI18n.t('settings:diagnostics.contextNotRecorded')
-    : rendererI18n.t('settings:diagnostics.contextRatio', { percent: formatPercent(ratio) });
-}
-
-function formatProviderUsage(summary: ObservabilityRunTraceSummaryUiDto): string {
-  const input = summary.providerInputTokens;
-  const output = summary.providerOutputTokens;
-  if (input === undefined && output === undefined) return rendererI18n.t('settings:diagnostics.notReported');
-  const inputLabel = input === undefined ? "—" : formatTokens(input);
-  const outputLabel = output === undefined ? "—" : formatTokens(output);
-  return rendererI18n.t('settings:diagnostics.providerUsageValue', { input: inputLabel, output: outputLabel });
-}
-
-function formatTokens(value: number): string {
-  return formatNumber(value);
-}
-
-async function loadRunInputLabels(
-  traces: readonly ObservabilityRunTraceSummaryUiDto[],
-): Promise<Record<string, string>> {
-  const executionIds = unique(traces.map((trace) => trace.executionId));
-  if (executionIds.length === 0) return {};
-  let result;
-  try {
-    result = await window.megumi.session.message.list(
-      createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.session.sessionMessageList,
-        { executionIds },
-      ),
-    );
-  } catch {
-    return {};
-  }
-  const labels: Record<string, string> = {};
-  if (!result.ok || result.data.status !== "ok") return labels;
-  for (const item of result.data.messages) {
-    if (item.role !== "user" || !item.executionId || labels[item.executionId]) continue;
-    const summary = summarizeUserInput(item.text);
-    if (summary) labels[item.executionId] = summary;
-  }
-  return labels;
-}
-
-function summarizeUserInput(value: string): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length > 80 ? `${normalized.slice(0, 79)}…` : normalized;
-}
-
-function formatRunFallback(_trace: ObservabilityRunTraceSummaryUiDto): string {
-  return rendererI18n.t('settings:diagnostics.userMessageUnavailable');
-}
-
-function formatRunSource(
-  trace: ObservabilityRunTraceSummaryUiDto,
-  projectNameById: ReadonlyMap<string, string>,
-  sessionById: ReadonlyMap<string, SessionDto>,
-): string {
-  const projectName = trace.workspaceId
-    ? projectNameById.get(trace.workspaceId) ?? rendererI18n.t('settings:diagnostics.unavailableProject')
-    : rendererI18n.t('settings:diagnostics.noProject');
-  const sessionTitle = trace.sessionId
-    ? sessionById.get(trace.sessionId)?.title ?? rendererI18n.t('settings:diagnostics.unavailableSession')
-    : rendererI18n.t('settings:diagnostics.noSession');
-  return `${projectName} / ${sessionTitle} · ${formatRunTime(trace.startedAt)}`;
-}
-
-function formatRunTime(value: string): string {
-  return formatDate(value, undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }) ?? rendererI18n.t('settings:diagnostics.unavailableValue');
-}
-
-function formatDuration(value: number | undefined): string {
-  if (value === undefined) return rendererI18n.t('settings:diagnostics.unavailableValue');
-  return value >= 1_000
-    ? `${(value / 1_000).toFixed(value >= 10_000 ? 1 : 2)} s`
-    : `${Math.round(value)} ms`;
-}
-
-function projectFilterValue(trace: ObservabilityRunTraceSummaryUiDto): string {
-  return trace.workspaceId ?? NO_PROJECT_FILTER;
-}
-
-function sessionFilterValue(trace: ObservabilityRunTraceSummaryUiDto): string {
-  return trace.sessionId ?? NO_SESSION_FILTER;
-}
-
-function unique(values: readonly string[]): string[] {
-  return [...new Set(values)];
-}
-
-function formatSpanName(name: string): string {
-  const names: Record<string, string> = {
-    agent_run: rendererI18n.t('settings:diagnostics.spans.agentRun'),
-    "context.build": rendererI18n.t('settings:diagnostics.spans.prepareContext'),
-    "context.compact": rendererI18n.t('settings:diagnostics.spans.compact'),
-    "model.call": rendererI18n.t('settings:diagnostics.spans.modelCall'),
-    "tool.call": rendererI18n.t('settings:diagnostics.spans.toolCall'),
-    "approval.wait": rendererI18n.t('settings:diagnostics.spans.approval'),
-    "session.append_message": rendererI18n.t('settings:diagnostics.spans.saveMessage'),
-  };
-  return names[name] ?? name;
-}
-
-function formatStatus(status: string): string {
-  if (status === "ok") return rendererI18n.t('settings:diagnostics.status.ok');
-  if (status === "error") return rendererI18n.t('settings:diagnostics.status.error');
-  if (status === "cancelled") return rendererI18n.t('settings:diagnostics.status.cancelled');
-  return rendererI18n.t('settings:diagnostics.status.incomplete');
-}
-
-function statusClassName(status: string): string {
-  if (status === "ok") return "text-[var(--color-success)]";
-  if (status === "error") return "text-[var(--color-danger)]";
-  return "text-[var(--color-text-muted)]";
+  const after = toIso(input.startedAtOrAfter);
+  const before = toIso(input.startedBefore);
+  const traceCorrelation = correlationFromFilter(input.correlation);
+  if (after) payload.startedAtOrAfter = after;
+  if (before) payload.startedBefore = before;
+  if (traceCorrelation) payload.correlation = traceCorrelation;
+  return payload;
 }

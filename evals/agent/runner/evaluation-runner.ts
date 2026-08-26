@@ -39,7 +39,7 @@ export type EvaluationHost = {
   };
   settings: Pick<ProductHostInterface['settings'], 'get'>;
   skill: Pick<ProductHostInterface['skill'], 'listSkills'>;
-  observability: Pick<ProductHostInterface['observability'], 'getRunTrace' | 'flush'>;
+  observability: Pick<ProductHostInterface['observability'], 'listTraces' | 'getTrace' | 'flush'>;
 };
 
 export interface EvaluationChatHost {

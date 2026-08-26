@@ -17,7 +17,7 @@ export async function collectEvaluationEvidence(input: {
   runtimeEventsComplete: boolean;
   runtimeEventsTruncated?: boolean;
   executionId?: string;
-  observabilityHost?: Pick<ProductHostInterface['observability'], 'getRunTrace'>;
+  observabilityHost?: Pick<ProductHostInterface['observability'], 'listTraces' | 'getTrace'>;
   initialWorkspaceFiles?: Record<string, { exists: boolean; content?: string; digest?: string }>;
 }): Promise<EvaluationEvidence> {
   const maximumFileBytes = input.maximumFileBytes ?? 64 * 1024;
@@ -98,22 +98,33 @@ export async function collectEvaluationEvidence(input: {
 }
 
 async function collectDiagnostics(
-  host: Pick<ProductHostInterface['observability'], 'getRunTrace'> | undefined,
+  host: Pick<ProductHostInterface['observability'], 'listTraces' | 'getTrace'> | undefined,
   executionId: string | undefined,
 ): Promise<EvaluationEvidence['diagnostics'] | undefined> {
   if (!host || !executionId) return undefined;
   try {
-    const result = await host.getRunTrace({ executionId });
+    const listed = await host.listTraces({ correlation: { executionId }, limit: 1 });
+    if (listed.status !== 'ok' || !listed.traces[0]) {
+      return { available: false, error: `Conversation Trace list is ${listed.status}.` };
+    }
+    const result = await host.getTrace({ traceId: listed.traces[0].traceId });
     return result.status === 'found'
       ? { available: true, records: [{
           summary: result.trace.summary,
-          spans: result.trace.spans.slice(0, 200).map((span) => ({ name: span.name, status: span.status, durationMs: span.durationMs })),
-          logs: result.trace.logs.slice(0, 200).map((log) => ({ timestamp: log.timestamp, level: log.level, event: log.event })),
-          measurements: result.trace.measurements.slice(0, 200).map((measurement) => ({ name: measurement.name, value: measurement.value, unit: measurement.unit })),
-          droppedRecordCount: result.trace.droppedRecordCount,
-          truncated: result.trace.spans.length > 200 || result.trace.logs.length > 200 || result.trace.measurements.length > 200,
+          spans: result.trace.spans.slice(0, 200).map((span) => ({
+            name: span.name,
+            status: span.outcome?.status ?? 'incomplete',
+            durationMs: span.durationMs,
+            events: span.events.slice(0, 200),
+          })),
+          contents: result.trace.contents.slice(0, 200),
+          issues: result.trace.issues.slice(0, 200),
+          truncated: result.trace.spans.length > 200
+            || result.trace.contents.length > 200
+            || result.trace.issues.length > 200
+            || result.trace.spans.some((span) => span.events.length > 200),
         }] }
-      : { available: false, error: `Run trace is ${result.status}.` };
+      : { available: false, error: `Conversation Trace is ${result.status}.` };
   } catch (error) {
     return { available: false, error: errorMessage(error) };
   }

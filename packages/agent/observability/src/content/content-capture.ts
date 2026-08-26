@@ -65,9 +65,7 @@ export function captureContent(input: CaptureContentInput): CapturedContentPaylo
   }
 
   try {
-    const serialized = typeof result.value === 'string'
-      ? result.value
-      : canonicalStringify(result.value);
+    const serialized = serializeCapturedContentValue(result.value);
     const bytes = new TextEncoder().encode(serialized);
     const mediaType = input.mediaType ?? (
       typeof result.value === 'string' ? TEXT_MEDIA_TYPE : JSON_MEDIA_TYPE
@@ -274,6 +272,11 @@ function captureNestedValue(
 function appendJsonPointer(path: string, segment: string): string {
   const escaped = segment.replace(/~/g, '~0').replace(/\//g, '~1');
   return `${path}/${escaped}`;
+}
+
+/** Serializes an inline diagnostic value exactly as Content identity and stored bytes do. */
+export function serializeCapturedContentValue(value: DiagnosticJsonValue): string {
+  return typeof value === 'string' ? value : canonicalStringify(value);
 }
 
 function canonicalStringify(value: DiagnosticJsonValue): string {

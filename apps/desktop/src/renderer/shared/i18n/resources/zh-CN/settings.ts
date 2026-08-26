@@ -20,7 +20,7 @@ export const settings = {
     skills: { label: '技能', description: '查看和管理 Megumi 可用于任务的工作流程。' },
     sources: { label: '内容来源', description: '连接 Megumi 生成每日发现时搜索的服务。' },
     security: { label: '隐私与权限', description: '查看密钥和受限工具操作的保护方式。' },
-    diagnostics: { label: '活动与诊断', description: '检查最近活动、token 用量、工具调用和错误。' },
+    diagnostics: { label: 'Trace 诊断', description: '检查本机执行 Trace 与捕获的诊断内容。' },
     about: { label: '关于 Megumi', description: '应用与运行环境信息。' },
   },
   appearance: {
@@ -254,8 +254,9 @@ export const settings = {
     modelCount_other: '{{count}} 个模型',
   },
   diagnostics: {
-    title: '活动与诊断', description: '检查保存在此设备上的最近活动、token 用量、工具调用和错误。',
+    title: 'Trace 诊断', description: '检查本机真实执行路径、耗时、事件以及捕获的输入输出检查点。',
     refresh: '刷新', loading: '正在加载最近活动…', unavailable: '诊断信息不可用。', exported: '诊断包已导出。', exportFailed: '诊断包导出失败。',
+    rebuilt: 'Trace 索引已重建。', rebuildIndex: '重建索引', traceKind: 'Trace 类型', allKinds: '全部类型', statusLabel: '状态', allStatuses: '全部状态', correlation: '关联标识', startedAfter: '开始时间不早于', startedBefore: '开始时间早于', recentTraces: '最近 Trace', traceCount: '保留 {{count}} 条', selectTrace: '选择一条 Trace', spanFilter: 'Span 名称', allSpans: '全部 Span 名称', contentFilter: 'Content 类型', allContent: '全部 Content 类型', spanTree: 'Span 耗时', noSpans: '没有记录 Span。', sequenceTimeline: 'Event 与 Content 顺序', noTimeline: '没有记录 Event 或 Content 检查点。', viewContent: '查看内容', loadingContent: '正在读取…', binaryContent: '二进制内容只显示元数据', contentUnavailable: '内容不可用。', traceLinks: 'Trace 关联', issues: '诊断问题', healthSummary: '丢弃 {{dropped}} 条 · 失败 {{failures}} 次', legacy: '旧版诊断', legacyDescription: '旧格式诊断保持只读，无法查看 Content。', noLegacy: '没有保留的旧版诊断。',
     recentRuns: '最近运行', filteredCount: '{{filtered}} / {{total}}', project: '项目', session: '会话', allProjects: '所有项目', allSessions: '所有会话', noProject: '无项目', noSession: '无会话', unavailableProject: '项目不可用', unavailableSession: '会话不可用',
     empty: '暂无活动记录。', noMatches: '没有符合筛选条件的运行。', selectRun: '选择一次运行', selectHint: '选择最近活动以检查耗时和用量。', export: '导出诊断',
     duration: '耗时', totalRunTime: 'Run 总耗时', modelCalls: '模型调用', providerRequests: 'Provider 请求', toolCalls: '工具调用', toolExecutions: '工具执行', contextCapacity: '上下文容量', providerUsage: 'Provider 用量', executionTimeline: '执行时间线', durationUnavailable: '耗时不可用',

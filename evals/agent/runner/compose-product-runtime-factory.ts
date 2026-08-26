@@ -148,7 +148,8 @@ function createEvaluationHost(
     settings: { get: product.host.settings.get },
     skill: { listSkills: product.host.skill.listSkills },
     observability: {
-      getRunTrace: product.host.observability.getRunTrace,
+      listTraces: product.host.observability.listTraces,
+      getTrace: product.host.observability.getTrace,
       flush: product.host.observability.flush,
     },
   };

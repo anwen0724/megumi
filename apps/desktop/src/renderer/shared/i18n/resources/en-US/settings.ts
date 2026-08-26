@@ -17,7 +17,7 @@ export const settings = {
     skills: { label: 'Skills', description: 'Review and manage the workflows Megumi can use for a task.' },
     sources: { label: 'Content Sources', description: 'Connect the services Megumi searches for daily discoveries.' },
     security: { label: 'Privacy & Permissions', description: 'Review how keys and restricted tool actions are protected.' },
-    diagnostics: { label: 'Activity & Diagnostics', description: 'Inspect recent activity, token usage, tool calls, and errors.' },
+    diagnostics: { label: 'Trace Diagnostics', description: 'Inspect local execution traces and captured diagnostic content.' },
     about: { label: 'About Megumi', description: 'Application and environment information.' },
   },
   appearance: {
@@ -251,8 +251,9 @@ export const settings = {
     modelCount_other: '{{count}} models',
   },
   diagnostics: {
-    title: 'Activity & Diagnostics', description: 'Inspect recent activity, token usage, tool calls, and errors stored locally on this device.',
+    title: 'Trace Diagnostics', description: 'Inspect the exact local execution path, timing, events, and captured input or output checkpoints.',
     refresh: 'Refresh', loading: 'Loading recent activity…', unavailable: 'Diagnostics are unavailable.', exported: 'Diagnostic bundle exported.', exportFailed: 'Diagnostic bundle export failed.',
+    rebuilt: 'Trace index rebuilt.', rebuildIndex: 'Rebuild index', traceKind: 'Trace kind', allKinds: 'All kinds', statusLabel: 'Status', allStatuses: 'All statuses', correlation: 'Correlation', startedAfter: 'Started after', startedBefore: 'Started before', recentTraces: 'Recent Traces', traceCount: '{{count}} retained', selectTrace: 'Select a Trace', spanFilter: 'Span name', allSpans: 'All Span names', contentFilter: 'Content kind', allContent: 'All Content kinds', spanTree: 'Span timing', noSpans: 'No spans recorded.', sequenceTimeline: 'Event & Content sequence', noTimeline: 'No events or Content checkpoints recorded.', viewContent: 'View content', loadingContent: 'Reading…', binaryContent: 'Binary content is shown as metadata only', contentUnavailable: 'Content is unavailable.', traceLinks: 'Trace links', issues: 'Diagnostic issues', healthSummary: '{{dropped}} dropped · {{failures}} failures', legacy: 'Legacy diagnostics', legacyDescription: 'Old-format diagnostics remain read-only and cannot expose Content.', noLegacy: 'No retained Legacy diagnostics.',
     recentRuns: 'Recent runs', filteredCount: '{{filtered}} of {{total}}', project: 'Project', session: 'Session', allProjects: 'All projects', allSessions: 'All sessions', noProject: 'No project', noSession: 'No session', unavailableProject: 'Unavailable project', unavailableSession: 'Unavailable session',
     empty: 'No activity recorded yet.', noMatches: 'No runs match these filters.', selectRun: 'Select a run', selectHint: 'Choose recent activity to inspect its timing and usage.', export: 'Export diagnostics',
     duration: 'Duration', totalRunTime: 'Total Run time', modelCalls: 'Model calls', providerRequests: 'Provider requests', toolCalls: 'Tool calls', toolExecutions: 'Tool executions', contextCapacity: 'Context capacity', providerUsage: 'Provider usage', executionTimeline: 'Execution timeline', durationUnavailable: 'Duration unavailable',

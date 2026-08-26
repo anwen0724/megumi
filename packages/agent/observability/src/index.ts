@@ -1,7 +1,7 @@
 /* Public exports for Megumi's standalone Observability package. */
 export * from './compose-observability';
 export * from './content/content-contract';
-export { createContentDigest } from './content/content-capture';
+export { createContentDigest, serializeCapturedContentValue } from './content/content-capture';
 export * from './diagnostic-error';
 export * from './diagnostic-value';
 export * from './runtime/observability-health';

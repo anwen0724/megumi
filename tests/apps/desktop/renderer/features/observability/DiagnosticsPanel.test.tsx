@@ -1,144 +1,122 @@
+/* Verifies the Trace-native diagnostics console and explicit lazy Content read. */
 // @vitest-environment jsdom
-/* Verifies that Run diagnostics join canonical navigation labels and usage facts. */
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DiagnosticsPanel } from "@megumi/desktop/renderer/features/observability";
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DiagnosticsPanel } from '@megumi/desktop/renderer/features/observability';
 
-describe("DiagnosticsPanel", () => {
+describe('DiagnosticsPanel', () => {
   const list = vi.fn();
   const get = vi.fn();
+  const getContent = vi.fn();
+  const getHealth = vi.fn();
+  const rebuildIndex = vi.fn();
+  const listLegacy = vi.fn();
   const createBundle = vi.fn();
-  const projectList = vi.fn();
-  const sessionList = vi.fn();
-  const messageList = vi.fn();
 
   beforeEach(() => {
-    list.mockReset().mockResolvedValue({
-      ok: true,
-      data: {
-        status: "ok",
-        traces: [summary],
+    list.mockReset().mockResolvedValue(success({ status: 'ok', traces: [summary] }));
+    get.mockReset().mockResolvedValue(success({ status: 'found', trace: detail }));
+    getContent.mockReset().mockResolvedValue(success({
+      status: 'available',
+      content: {
+        encoding: 'text', contentId: 'a'.repeat(64), mediaType: 'text/plain;charset=utf-8',
+        byteLength: 13, text: 'actual prompt',
       },
-      meta: {},
-    });
-    get.mockReset().mockResolvedValue({
-      ok: true,
-      data: {
-        status: "found",
-        trace: {
-          summary,
-          spans: [
-            {
-              spanId: "span-1",
-              name: "context.build",
-              status: "ok",
-              startedAt: "2026-07-14T00:00:00.000Z",
-              endedAt: "2026-07-14T00:00:00.010Z",
-              durationMs: 10,
-              attributes: {},
-            },
-          ],
-          logs: [],
-          measurements: [],
-          droppedRecordCount: 0,
-        },
+    }));
+    getHealth.mockReset().mockResolvedValue(success({
+      status: 'ok',
+      health: {
+        droppedRecords: 0,
+        recordsDroppedByType: { content: 0, event: 0, lifecycle: 0, runtime: 0 },
+        contentBytesDropped: 0, writerQueueHighWaterBytes: 0, journalWriteFailures: 0,
+        contentWriteFailures: 0, flushFailures: 0, rotationFailures: 0,
+        retentionCleanupFailures: 0, indexProjectionFailures: 0, classifierFailures: 0,
+        contextFailures: 0, captureFailures: 0,
       },
-      meta: {},
-    });
+    }));
+    rebuildIndex.mockReset();
+    listLegacy.mockReset().mockResolvedValue(success({ status: 'ok', diagnostics: [] }));
     createBundle.mockReset();
-    projectList.mockReset().mockResolvedValue({
-      ok: true,
-      data: {
-        projects: [{
-          projectId: "workspace-1",
-          name: "Megumi",
-          rootPath: "C:/work/megumi",
-          status: "available",
-        }],
-      },
-      meta: {},
-    });
-    sessionList.mockReset().mockResolvedValue({
-      ok: true,
-      data: {
-        status: "ok",
-        sessions: [{
-          id: "session-1",
-          projectId: "workspace-1",
-          title: "Context design",
-          status: "active",
-          createdAt: "2026-07-14T00:00:00.000Z",
-          updatedAt: "2026-07-14T00:00:00.000Z",
-        }],
-      },
-      meta: {},
-    });
-    messageList.mockReset().mockResolvedValue({
-      ok: true,
-      data: {
-        status: "ok",
-        messages: [{
-          id: "message-1",
-          sessionId: "session-1",
-          executionId: "run-1",
-          role: "user",
-          text: "How does context usage work?",
-          createdAt: "2026-07-14T00:00:00.000Z",
-        }],
-      },
-      meta: {},
-    });
-    Object.defineProperty(window, "megumi", {
+    Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
-        observability: { list, get, createBundle },
-        project: { list: projectList },
-        session: {
-          list: sessionList,
-          message: { list: messageList },
+        observability: {
+          list, get, getContent, getHealth, rebuildIndex, listLegacy, createBundle,
         },
       },
     });
   });
 
-  it("shows Context capacity and provider-reported tokens separately", async () => {
+  it('reads Trace facts without joining Project, Session, or message business state', async () => {
     const user = userEvent.setup();
     render(<DiagnosticsPanel />);
 
-    await user.click(await screen.findByRole("button", { name: "How does context usage work?" }));
+    expect(await screen.findByText('trace:conversation:1')).toBeInTheDocument();
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ payload: { limit: 50 } }));
+    await user.click(screen.getByRole('button', { name: /trace:conversation:1/i }));
 
-    expect(await screen.findByText("14,335 / 1,000,000")).toBeInTheDocument();
-    expect(screen.getByText("1.43% of the context window")).toBeInTheDocument();
-    expect(screen.getByText("14,480 in · 620 out")).toBeInTheDocument();
-    expect(screen.getByText("Build context")).toBeInTheDocument();
-    expect(screen.queryByText("context.build")).not.toBeInTheDocument();
-    expect(screen.getAllByRole("img", { name: "Completed" })).toHaveLength(2);
-    expect(screen.getByRole("option", { name: "Megumi" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Megumi / Context design" })).toBeInTheDocument();
-    expect(screen.getAllByText(/Megumi \/ Context design/)).toHaveLength(2);
-    expect(messageList).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { executionIds: ["run-1"] },
+    expect((await screen.findAllByText('model.call')).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('model.output.started')).toBeInTheDocument();
+    expect(screen.getAllByText('prompt.final')).toHaveLength(2);
+    expect(screen.queryByText('actual prompt')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'View content' }));
+    expect(await screen.findByText('actual prompt')).toBeInTheDocument();
+    expect(getContent).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { traceId: 'trace:conversation:1', sequence: 4 },
     }));
+  });
 
-    await user.selectOptions(screen.getByLabelText("Project"), "workspace-1");
-    expect(screen.getByRole("option", { name: "Context design" })).toBeInTheDocument();
+  it('sends fixed Trace filters to the Reader instead of filtering through business data', async () => {
+    const user = userEvent.setup();
+    render(<DiagnosticsPanel />);
+    await screen.findByText('trace:conversation:1');
+
+    await user.selectOptions(screen.getByLabelText('Trace kind'), 'daily_discovery');
+    await user.selectOptions(screen.getByLabelText('Status'), 'error');
+    await user.type(screen.getByLabelText('Correlation'), 'batch:42');
+    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    await waitFor(() => expect(list).toHaveBeenLastCalledWith(expect.objectContaining({
+      payload: {
+        traceKind: 'daily_discovery',
+        status: 'error',
+        correlation: { batchId: 'batch:42' },
+        limit: 50,
+      },
+    })));
   });
 });
 
+function success<T extends object>(data: T) {
+  return { ok: true as const, data, meta: {} };
+}
+
 const summary = {
-  traceId: "run-1",
-  executionId: "run-1",
-  sessionId: "session-1",
-  workspaceId: "workspace-1",
-  status: "ok" as const,
-  startedAt: "2026-07-14T00:00:00.000Z",
-  durationMs: 100,
-  modelCallCount: 1,
-  toolCallCount: 0,
-  contextUsedTokens: 14_335,
-  contextWindowTokens: 1_000_000,
-  contextUsedRatio: 14_335 / 1_000_000,
-  providerInputTokens: 14_480,
-  providerOutputTokens: 620,
+  traceId: 'trace:conversation:1', traceKind: 'conversation' as const,
+  status: 'ok' as const, diagnostics: 'complete' as const,
+  correlation: { requestId: 'request:1', executionId: 'execution:1', sessionId: 'session:1' },
+  startedAt: '2026-08-26T00:00:00.000Z', endedAt: '2026-08-26T00:00:01.000Z',
+  durationMs: 1_000, spanCount: 1, eventCount: 1, contentCount: 1, issueCount: 0,
+};
+
+const detail = {
+  summary,
+  outcome: { status: 'ok' as const, code: 'completed' },
+  spans: [{
+    spanId: 'span:1', name: 'model.call', correlation: { modelCallId: 'model-call:1' },
+    startedAt: '2026-08-26T00:00:00.100Z', endedAt: '2026-08-26T00:00:00.900Z',
+    durationMs: 800, outcome: { status: 'ok' as const },
+    events: [{
+      sequence: 3, timestamp: '2026-08-26T00:00:00.200Z',
+      type: 'model.output.started', detail: { providerAttempt: 1 },
+    }],
+  }],
+  contents: [{
+    sequence: 4, timestamp: '2026-08-26T00:00:00.300Z', spanId: 'span:1',
+    kind: 'prompt.final', mode: 'inline' as const, contentId: 'a'.repeat(64),
+    mediaType: 'text/plain;charset=utf-8', byteLength: 13, correlation: { executionId: 'execution:1' },
+  }],
+  links: [], issues: [], sourceFiles: ['trace.jsonl'],
 };

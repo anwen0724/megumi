@@ -74,6 +74,12 @@ export const ProjectRemoveRequestSchema = createRuntimeIpcRequestSchema(IPC_CHAN
 export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesList, host.WorkspaceFilesListPayloadSchema);
 export const WorkspaceFileOpenRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesOpen, host.WorkspaceFileOpenPayloadSchema);
 export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.list, host.ObservabilityListPayloadSchema);
+export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityTracePayloadSchema);
+export const ObservabilityContentRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.content, host.ObservabilityContentPayloadSchema);
+export const ObservabilityHealthRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.health, host.ObservabilityEmptyPayloadSchema);
+export const ObservabilityRebuildIndexRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.rebuildIndex, host.ObservabilityEmptyPayloadSchema);
+export const ObservabilityLegacyListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.legacy, host.ObservabilityLegacyListPayloadSchema);
+export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityTracePayloadSchema);
 
 /** Dedicated PCM frame payload on the Renderer MessagePort; travels on a bounded
  *  channel, not the business envelope. The Float32Array arrives via structured
@@ -89,9 +95,6 @@ export const VoiceInputFramePayloadSchema = z
   })
   .strict();
 export type VoiceInputFramePayload = z.infer<typeof VoiceInputFramePayloadSchema>;
-export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityRunPayloadSchema);
-export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityRunPayloadSchema);
-
 export type InputSuggestionsPayload = z.infer<typeof host.InputSuggestionsPayloadSchema>;
 export type SkillListPayload = z.infer<typeof host.SkillListPayloadSchema>;
 export type SkillGetPayload = z.infer<typeof host.SkillGetPayloadSchema>;
@@ -143,4 +146,7 @@ export type ProjectRemovePayload = z.infer<typeof host.ProjectRemovePayloadSchem
 export type WorkspaceFilesListPayload = z.infer<typeof host.WorkspaceFilesListPayloadSchema>;
 export type WorkspaceFileOpenPayload = z.infer<typeof host.WorkspaceFileOpenPayloadSchema>;
 export type ObservabilityListPayload = z.infer<typeof host.ObservabilityListPayloadSchema>;
-export type ObservabilityRunPayload = z.infer<typeof host.ObservabilityRunPayloadSchema>;
+export type ObservabilityTracePayload = z.infer<typeof host.ObservabilityTracePayloadSchema>;
+export type ObservabilityContentPayload = z.infer<typeof host.ObservabilityContentPayloadSchema>;
+export type ObservabilityEmptyPayload = z.infer<typeof host.ObservabilityEmptyPayloadSchema>;
+export type ObservabilityLegacyListPayload = z.infer<typeof host.ObservabilityLegacyListPayloadSchema>;

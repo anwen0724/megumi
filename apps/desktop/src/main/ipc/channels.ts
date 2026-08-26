@@ -111,6 +111,10 @@ export const IPC_CHANNELS = {
   observability: {
     list: 'observability:list',
     get: 'observability:get',
+    content: 'observability:content',
+    health: 'observability:health',
+    rebuildIndex: 'observability:rebuild-index',
+    legacy: 'observability:legacy',
     bundle: 'observability:bundle',
   },
   runtime: {
@@ -214,6 +218,10 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.workspace.filesOpen,
   IPC_CHANNELS.observability.list,
   IPC_CHANNELS.observability.get,
+  IPC_CHANNELS.observability.content,
+  IPC_CHANNELS.observability.health,
+  IPC_CHANNELS.observability.rebuildIndex,
+  IPC_CHANNELS.observability.legacy,
   IPC_CHANNELS.observability.bundle,
   IPC_CHANNELS.runtime.event,
 ] as const;
