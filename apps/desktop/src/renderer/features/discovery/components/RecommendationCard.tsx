@@ -41,7 +41,7 @@ export function RecommendationCard({ recommendation, onAction, onChat }: Recomme
         type="button"
         aria-label={t('openOriginal', { title: recommendation.title })}
         onClick={openOriginal}
-        className="relative block aspect-[16/9] w-full overflow-hidden bg-[var(--color-surface-muted)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-focus)]"
+        className="relative block aspect-[16/9] w-full overflow-hidden bg-[var(--color-surface-muted)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-focus)] max-2xl:aspect-[2/1]"
       >
         {showCover ? (
           <img
@@ -63,7 +63,7 @@ export function RecommendationCard({ recommendation, onAction, onChat }: Recomme
         </span>
       </button>
 
-      <div className="flex flex-1 flex-col p-4.5">
+      <div className="flex flex-1 flex-col p-4.5 max-2xl:p-3.5">
         <button type="button" onClick={openOriginal} className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]">
           <h3 className="line-clamp-2 text-[1.05rem] font-semibold leading-[1.35] tracking-[-0.018em] text-[var(--color-text)] group-hover:text-[var(--color-accent)]">
             {recommendation.title}
@@ -71,16 +71,16 @@ export function RecommendationCard({ recommendation, onAction, onChat }: Recomme
         </button>
         {sourceMeta ? <p className="mt-1.5 truncate text-xs text-[var(--color-text-muted)]">{sourceMeta}</p> : null}
         {recommendation.description ? (
-          <p className="mt-3 line-clamp-3 text-sm leading-6 text-[var(--color-text-muted)]">{recommendation.description}</p>
+          <p className="mt-3 line-clamp-3 text-sm leading-6 text-[var(--color-text-muted)] max-2xl:mt-2 max-2xl:line-clamp-2 max-2xl:leading-5">{recommendation.description}</p>
         ) : null}
-        <div className="mt-4 rounded-xl bg-[var(--color-surface-muted)] px-3.5 py-3">
+        <div className="mt-4 rounded-xl bg-[var(--color-surface-muted)] px-3.5 py-3 max-2xl:mt-3 max-2xl:px-3 max-2xl:py-2.5">
           <p className="mb-1 text-[0.66rem] font-semibold uppercase tracking-[0.13em] text-[var(--color-text-subtle)]">
             {t('recommendationReason')}
           </p>
-          <p className="line-clamp-3 text-sm leading-5 text-[var(--color-text)]">{recommendation.recommendationReason}</p>
+          <p className="line-clamp-3 text-sm leading-5 text-[var(--color-text)] max-2xl:line-clamp-2">{recommendation.recommendationReason}</p>
         </div>
 
-        <div className="mt-auto flex items-center gap-1 pt-4">
+        <div className="mt-auto flex items-center gap-1 pt-4 max-2xl:pt-3">
           <CardAction
             label={t('like', { title: recommendation.title })}
             tooltip={t('likeTooltip')}
