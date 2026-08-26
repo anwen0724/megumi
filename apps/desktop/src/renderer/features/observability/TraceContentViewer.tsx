@@ -14,6 +14,8 @@ interface TraceContentViewerProps {
     readonly loading: string;
     readonly binary: string;
     readonly unavailable: string;
+    readonly checksum: string;
+    readonly byteUnit: string;
   };
   readonly onRead: () => void;
 }
@@ -34,11 +36,11 @@ export function TraceContentViewer({ checkpoint, result, labels, onRead }: Trace
           </div>
           <div className="mt-1 truncate font-mono text-[0.68rem] text-[var(--color-text-muted)]">
             {checkpoint.mediaType ?? checkpoint.reason ?? '—'}
-            {checkpoint.byteLength === undefined ? '' : ` · ${checkpoint.byteLength} B`}
+            {checkpoint.byteLength === undefined ? '' : ` · ${checkpoint.byteLength} ${labels.byteUnit}`}
           </div>
           {checkpoint.contentId ? (
             <div className="mt-0.5 break-all font-mono text-[0.62rem] text-[var(--color-text-muted)]">
-              sha256:{checkpoint.contentId}
+              {labels.checksum}:{checkpoint.contentId}
             </div>
           ) : null}
         </div>
@@ -73,7 +75,7 @@ function ContentResult({
   if (result.content.encoding === 'binary') {
     return (
       <div className="border-t border-[var(--color-border)] px-3 py-3 text-xs text-[var(--color-text-muted)]">
-        {labels.binary} · {result.content.mediaType} · {result.content.byteLength} B
+        {labels.binary} · {result.content.mediaType} · {result.content.byteLength} {labels.byteUnit}
       </div>
     );
   }

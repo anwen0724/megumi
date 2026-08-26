@@ -1,6 +1,7 @@
 /* Renders product Trace summaries without consulting business-state projections. */
 import { AlertTriangle, CheckCircle2, CircleSlash, XCircle } from 'lucide-react';
 import type { ObservabilityTraceSummaryUiDto } from '@megumi/product-host/host';
+import { useTranslation } from 'react-i18next';
 import { cx } from '../../shared/ui';
 import {
   formatTraceDuration,
@@ -17,6 +18,7 @@ interface TraceListProps {
 }
 
 export function TraceList({ traces, selectedTraceId, emptyLabel, onSelect }: TraceListProps) {
+  const { t } = useTranslation('settings');
   if (traces.length === 0) {
     return <div className="px-4 py-10 text-center text-sm text-[var(--color-text-muted)]">{emptyLabel}</div>;
   }
@@ -54,7 +56,11 @@ export function TraceList({ traces, selectedTraceId, emptyLabel, onSelect }: Tra
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-3 text-[0.7rem] text-[var(--color-text-muted)]">
                 <span>{formatTraceTime(trace.startedAt)}</span>
-                <span>{trace.spanCount} spans · {trace.contentCount} content · {trace.issueCount} issues</span>
+                <span>{t('diagnostics.traceCounts', {
+                  spans: trace.spanCount,
+                  content: trace.contentCount,
+                  issues: trace.issueCount,
+                })}</span>
               </div>
             </div>
           </div>

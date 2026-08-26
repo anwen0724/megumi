@@ -66,9 +66,9 @@ export function TraceDetail({ trace, contentBySequence, onReadContent }: TraceDe
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-[var(--color-text-muted)]">
           <span>{formatTraceTime(trace.summary.startedAt)}</span>
           <span>{formatTraceDuration(trace.summary.durationMs)}</span>
-          <span>{trace.summary.spanCount} spans</span>
-          <span>{trace.summary.eventCount} events</span>
-          <span>{trace.summary.contentCount} content</span>
+          <span>{t('diagnostics.spanCount', { count: trace.summary.spanCount })}</span>
+          <span>{t('diagnostics.eventCount', { count: trace.summary.eventCount })}</span>
+          <span>{t('diagnostics.contentCount', { count: trace.summary.contentCount })}</span>
         </div>
       </header>
 
@@ -106,7 +106,7 @@ export function TraceDetail({ trace, contentBySequence, onReadContent }: TraceDe
             <div key={`event:${item.event.sequence}`} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded bg-[var(--color-surface-muted)] px-1.5 py-0.5 font-mono text-[0.65rem] text-[var(--color-text-muted)]">
-                  #{item.event.sequence} · event
+                  {t('diagnostics.eventSequence', { sequence: item.event.sequence })}
                 </span>
                 <span className="font-mono text-xs font-semibold text-[var(--color-text)]">
                   {item.event.type}
@@ -130,6 +130,8 @@ export function TraceDetail({ trace, contentBySequence, onReadContent }: TraceDe
                 loading: t('diagnostics.loadingContent'),
                 binary: t('diagnostics.binaryContent'),
                 unavailable: t('diagnostics.contentUnavailable'),
+                checksum: t('diagnostics.checksum'),
+                byteUnit: t('diagnostics.byteUnit'),
               }}
             />
           ))}

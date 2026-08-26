@@ -151,15 +151,17 @@ export function DiagnosticsPanel() {
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <FilterSelect label={t('diagnostics.traceKind')} value={traceKind} onChange={setTraceKind}>
             <option value="all">{t('diagnostics.allKinds')}</option>
-            <option value="conversation">conversation</option>
-            <option value="daily_discovery">daily_discovery</option>
+            <option value="conversation">{t('diagnostics.traceKinds.conversation')}</option>
+            <option value="daily_discovery">{t('diagnostics.traceKinds.dailyDiscovery')}</option>
           </FilterSelect>
           <FilterSelect label={t('diagnostics.statusLabel')} value={status} onChange={setStatus}>
             <option value="all">{t('diagnostics.allStatuses')}</option>
-            <option value="ok">ok</option><option value="error">error</option>
-            <option value="cancelled">cancelled</option><option value="incomplete">incomplete</option>
+            <option value="ok">{t('diagnostics.status.ok')}</option>
+            <option value="error">{t('diagnostics.status.error')}</option>
+            <option value="cancelled">{t('diagnostics.status.cancelled')}</option>
+            <option value="incomplete">{t('diagnostics.status.incomplete')}</option>
           </FilterSelect>
-          <FilterInput label={t('diagnostics.correlation')} value={correlation} onChange={setCorrelation} placeholder="execution:… / batch:…" />
+          <FilterInput label={t('diagnostics.correlation')} value={correlation} onChange={setCorrelation} placeholder={t('diagnostics.correlationPlaceholder')} />
           <FilterInput label={t('diagnostics.startedAfter')} value={startedAtOrAfter} onChange={setStartedAtOrAfter} type="datetime-local" />
           <FilterInput label={t('diagnostics.startedBefore')} value={startedBefore} onChange={setStartedBefore} type="datetime-local" />
         </div>
@@ -220,7 +222,8 @@ export function DiagnosticsPanel() {
         <div className="mt-3 space-y-1.5">
           {legacy.map((item) => (
             <div key={item.traceId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--color-surface-muted)] px-3 py-2 font-mono text-xs">
-              <span>{item.traceId}</span><span>{item.status} · {item.recordCount} records · no content</span>
+              <span>{item.traceId}</span>
+              <span>{t('diagnostics.legacyRecordSummary', { status: item.status, count: item.recordCount })}</span>
             </div>
           ))}
           {legacy.length === 0 ? <div className="text-xs text-[var(--color-text-muted)]">{t('diagnostics.noLegacy')}</div> : null}
