@@ -35,5 +35,5 @@ export function registerRuntimeProcessErrorHandlers(
 function createDetails(error: unknown): Record<string, unknown> {
   return redactHostRuntimeValue({
     error: normalizeRuntimeIpcError(error, 'Megumi runtime encountered an unexpected error.'),
-  }) as Record<string, unknown>;
+  });
 }

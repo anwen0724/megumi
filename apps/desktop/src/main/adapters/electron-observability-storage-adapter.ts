@@ -7,13 +7,46 @@ import {
   stat,
   rename,
   rm,
+  writeFile,
 } from "node:fs/promises";
-import type { ObservabilityStorage as ProductObservabilityStorage } from '@megumi/observability';
-export const electronObservabilityStorageAdapter: ProductObservabilityStorage = {
+import { join } from 'node:path';
+import type {
+  ObservabilityEntryKind,
+  ObservabilityPersistenceStorage,
+  ObservabilityStorage as LegacyObservabilityStorage,
+} from '@megumi/observability';
+
+type ElectronObservabilityStorage = LegacyObservabilityStorage & ObservabilityPersistenceStorage;
+
+export const electronObservabilityStorageAdapter: ElectronObservabilityStorage = {
   ensureDirectory: (path) =>
     mkdir(path, { recursive: true }).then(() => undefined),
   appendText: (path, content) => appendFile(path, content, "utf8"),
   readText: (path) => readFile(path, "utf8"),
+  readBytes: (path) => readFile(path),
+  writeBytes: (path, bytes) => writeFile(path, bytes),
+  async listEntries(path) {
+    try {
+      const entries = await readdir(path, { withFileTypes: true });
+      return Promise.all(entries.flatMap((entry) => {
+        const kind: ObservabilityEntryKind | undefined = entry.isFile()
+          ? 'file'
+          : entry.isDirectory()
+            ? 'directory'
+            : undefined;
+        return kind
+          ? [stat(join(path, entry.name)).then((value) => ({
+              name: entry.name,
+              kind,
+              size: value.size,
+              modifiedAtMs: value.mtimeMs,
+            }))]
+          : [];
+      }));
+    } catch {
+      return [];
+    }
+  },
   async listFiles(path) {
     try {
       const entries = await readdir(path, { withFileTypes: true });
@@ -21,7 +54,7 @@ export const electronObservabilityStorageAdapter: ProductObservabilityStorage = 
         entries
           .filter((e) => e.isFile())
           .map(async (e) => {
-            const value = await stat(`${path}/${e.name}`);
+            const value = await stat(join(path, e.name));
             return {
               name: e.name,
               size: value.size,
@@ -36,11 +69,19 @@ export const electronObservabilityStorageAdapter: ProductObservabilityStorage = 
   async stat(path) {
     try {
       const value = await stat(path);
-      return { size: value.size, modifiedAtMs: value.mtimeMs };
+      const kind: ObservabilityEntryKind | undefined = value.isFile()
+        ? 'file'
+        : value.isDirectory()
+          ? 'directory'
+          : undefined;
+      return kind
+        ? { kind, size: value.size, modifiedAtMs: value.mtimeMs }
+        : undefined;
     } catch {
       return undefined;
     }
   },
   move: (source, destination) => rename(source, destination),
+  removeFile: (path) => rm(path, { force: true }),
   remove: (path) => rm(path, { force: true }),
 };

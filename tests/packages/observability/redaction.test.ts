@@ -99,4 +99,18 @@ describe('redaction', () => {
       message: 'Failed with Bearer [redacted]',
     });
   });
+
+  it('does not invoke runtime detail accessors or redact usage counters', () => {
+    let getterCalls = 0;
+    const value = {
+      inputTokens: 64,
+      get unsafe() {
+        getterCalls += 1;
+        return 'must-not-read';
+      },
+    };
+
+    expect(redactRuntimeValue(value)).toEqual({ inputTokens: 64, unsafe: null });
+    expect(getterCalls).toBe(0);
+  });
 });

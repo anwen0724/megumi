@@ -19,3 +19,7 @@ export * from './diagnostic-value';
 export * from './runtime/observability-health';
 export * from './trace/observability';
 export * from './trace/trace-contract';
+export type {
+  ObservabilityEntryKind,
+  ObservabilityStorage as ObservabilityPersistenceStorage,
+} from './persistence/observability-storage';
