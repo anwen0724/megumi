@@ -278,6 +278,7 @@ export const settings = {
       traceLinks: 'Related Traces', unknownTraceKind: 'Unknown', healthHealthy: 'Trace system healthy', healthWarning: 'Trace system needs attention', healthUnavailable: 'Trace system status unavailable',
     healthSummary: '{{dropped}} dropped · {{failures}} failures',
     invocationCounts: '{{modelCount}} model calls · {{toolCount}} tool calls',
+    toolCallLabel: 'Call {{toolName}}',
     permissionResolution: 'Permission: {{decision}}', permissionEvent: 'Permission: {{decision}}',
     permissionDecisions: {
       automaticAllow: 'Automatically allowed', automaticDeny: 'Automatically denied', userAllow: 'User allowed',

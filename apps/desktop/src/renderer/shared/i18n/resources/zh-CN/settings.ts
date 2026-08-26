@@ -281,6 +281,7 @@ export const settings = {
       traceLinks: '关联 Trace', unknownTraceKind: '未知类型', healthHealthy: 'Trace 系统正常', healthWarning: 'Trace 系统需要关注', healthUnavailable: 'Trace 系统状态暂不可用',
     healthSummary: '丢弃 {{dropped}} 条 · 失败 {{failures}} 次',
     invocationCounts: '模型调用 {{modelCount}} 次 · 工具调用 {{toolCount}} 次',
+    toolCallLabel: '调用 {{toolName}}',
     permissionResolution: '权限确认：{{decision}}', permissionEvent: '权限：{{decision}}',
     permissionDecisions: {
       automaticAllow: '自动允许', automaticDeny: '自动拒绝', userAllow: '用户允许',

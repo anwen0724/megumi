@@ -531,7 +531,7 @@ function spanDisplayName(
   t: TFunction<'settings'>,
 ): string {
   if (span.name === 'tool.call' && span.metadata?.kind === 'tool_call') {
-    return span.metadata.toolName;
+    return t('diagnostics.toolCallLabel', { toolName: span.metadata.toolName });
   }
   if (span.name !== 'permission.await') return spanName(span.name, t);
   const decision = permissionOutcomeName(span, t);
