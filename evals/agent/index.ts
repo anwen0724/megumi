@@ -19,3 +19,4 @@ export * from './reporters/report-writer';
 export * from './reporters/baseline-comparator';
 export * from './adapters/source-state';
 export * from './runner/evaluation-suite-runner';
+export * from './candidate-supply';
