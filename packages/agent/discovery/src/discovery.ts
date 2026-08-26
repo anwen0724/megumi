@@ -3,6 +3,10 @@
  * injected as a capability; this module never creates or owns Agent runs.
  */
 import {
+  createCandidateSupplyRuntime,
+  type CreateCandidateSupplyRuntimeOptions,
+} from './candidate-supply/candidate-supply-runtime';
+import {
   createDiscoveryConfiguration,
   type ConnectDiscoverySourceRequest,
   type DiscoveryConfigurationStore,
@@ -80,6 +84,7 @@ export interface CreateDiscoveryOptions {
   readonly dailyDiscovery?: CreateDailyDiscoveryRuntimeOptions & {
     readonly now: () => string;
   };
+  readonly candidateSupply?: CreateCandidateSupplyRuntimeOptions;
   readonly configuration?: {
     readonly sourceRegistry: SourceRegistry;
     readonly settings: DiscoveryConfigurationStore;
@@ -94,17 +99,29 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
   const dailyDiscoveryRuntime = options.dailyDiscovery
     ? createDailyDiscoveryRuntime(options.dailyDiscovery)
     : undefined;
+  const candidateSupplyRuntime = options.candidateSupply
+    ? createCandidateSupplyRuntime(options.candidateSupply)
+    : undefined;
   const discoveryConfiguration = options.configuration
     ? createDiscoveryConfiguration(options.configuration)
     : undefined;
 
   return {
-    changeInterest: (request) => interestRuntime.changeInterest(request),
+    async changeInterest(request) {
+      const interest = await interestRuntime.changeInterest(request);
+      options.candidateSupply?.repository.invalidateAdmissions({
+        interestIds: [interest.interestId],
+        now: options.candidateSupply.now(),
+      });
+      candidateSupplyRuntime?.notify('interest_changed');
+      return interest;
+    },
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
     async startBackground() {
       await discoveryConfiguration?.refreshSources();
+      await candidateSupplyRuntime?.start();
       await dailyDiscoveryRuntime?.start();
     },
     ensureDailyDiscovery: (request) => dailyDiscoveryRuntime
@@ -130,22 +147,35 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     getDiscoveryConfiguration: () => discoveryConfiguration
       ? discoveryConfiguration.get()
       : Promise.reject(new Error('Discovery configuration is not configured.')),
-    updateDiscoveryConfiguration: (request) => discoveryConfiguration
-      ? discoveryConfiguration.update(request)
-      : Promise.reject(new Error('Discovery configuration is not configured.')),
-    connectDiscoverySource: (request) => discoveryConfiguration
-      ? discoveryConfiguration.connectSource(request)
-      : Promise.reject(new Error('Discovery configuration is not configured.')),
-    refreshDiscoverySource: (request) => discoveryConfiguration
-      ? discoveryConfiguration.refreshSource(request)
-      : Promise.reject(new Error('Discovery configuration is not configured.')),
-    refreshDiscoverySources: () => discoveryConfiguration
-      ? discoveryConfiguration.refreshSources()
-      : Promise.reject(new Error('Discovery configuration is not configured.')),
+    async updateDiscoveryConfiguration(request) {
+      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
+      const view = await discoveryConfiguration.update(request);
+      candidateSupplyRuntime?.notify('configuration_changed');
+      return view;
+    },
+    async connectDiscoverySource(request) {
+      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
+      const view = await discoveryConfiguration.connectSource(request);
+      candidateSupplyRuntime?.notify('configuration_changed');
+      return view;
+    },
+    async refreshDiscoverySource(request) {
+      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
+      const view = await discoveryConfiguration.refreshSource(request);
+      candidateSupplyRuntime?.notify('configuration_changed');
+      return view;
+    },
+    async refreshDiscoverySources() {
+      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
+      const view = await discoveryConfiguration.refreshSources();
+      candidateSupplyRuntime?.notify('configuration_changed');
+      return view;
+    },
     async shutdown() {
       await Promise.all([
         interestRuntime.shutdown(),
         dailyDiscoveryRuntime?.shutdown() ?? Promise.resolve(),
+        candidateSupplyRuntime?.shutdown() ?? Promise.resolve(),
       ]);
     },
   };

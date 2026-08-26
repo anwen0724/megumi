@@ -92,18 +92,29 @@ export {
   isCandidateContentAssessable,
   normalizeCandidateQuery,
 } from './candidate-supply/candidate-pool';
+export { createCandidateSupplyAttempts } from './candidate-supply/candidate-supply-attempts';
+export type { CandidateSupplyAttempts } from './candidate-supply/candidate-supply-attempts';
+export { createCandidateSupplyRuntime } from './candidate-supply/candidate-supply-runtime';
+export type {
+  CandidateSupplyRuntime,
+  CandidateSupplyTrigger,
+  CreateCandidateSupplyRuntimeOptions,
+} from './candidate-supply/candidate-supply-runtime';
 export type {
   Candidate,
   CandidateAdmissionDecision,
   CandidateMaterialResult,
   CandidatePoolGap,
   CandidatePoolSnapshot,
+  CandidatePotentialDuplicate,
   CandidateQueryOutcome,
   CandidateStatus,
   CandidateSupplyCommitInput,
   CandidateSupplyRepository,
   CandidateSupplySearchInput,
   CandidateSupplyThresholds,
+  CandidateSupplyState,
+  CandidateSourceState,
 } from './candidate-supply/candidate-supply';
 export type {
   CandidateAdmission,

@@ -139,6 +139,28 @@ export interface CandidateMaterialResult {
   readonly candidates: readonly Candidate[];
 }
 
+export interface CandidatePotentialDuplicate {
+  readonly kind: 'candidate' | 'recommendation';
+  readonly id: string;
+  readonly title: string;
+  readonly description?: string;
+}
+
+export interface CandidateSupplyState {
+  readonly consecutiveZeroYieldCount: number;
+  readonly retryAt?: string;
+  readonly nextRecheckAt?: string;
+  readonly updatedAt: string;
+}
+
+export interface CandidateSourceState {
+  readonly sourceId: string;
+  readonly consecutiveFailureCount: number;
+  readonly retryAt?: string;
+  readonly lastFailureCode?: string;
+  readonly updatedAt: string;
+}
+
 export interface CandidateSupplyRepository {
   beginQuery(input: {
     readonly queryId: string;
@@ -165,6 +187,8 @@ export interface CandidateSupplyRepository {
   }): CandidateQueryOutcome;
   interruptRunningQueries(now: string): number;
   readCandidate(candidateId: string): Candidate | undefined;
+  listPotentialDuplicates(candidateId: string, limit: number): readonly CandidatePotentialDuplicate[];
+  listNegativeConstraints(): readonly string[];
   commitCandidateDetail(input: {
     readonly candidateId: string;
     readonly detail: SourceContentDetail;
@@ -195,6 +219,20 @@ export interface CandidateSupplyRepository {
     readonly targetInterestIds: readonly string[];
     readonly now: string;
   }): boolean;
+  readSupplyState(): CandidateSupplyState | undefined;
+  writeSupplyState(state: CandidateSupplyState): void;
+  readSourceState(sourceId: string): CandidateSourceState | undefined;
+  settleSourceAttempt(input: {
+    readonly sourceId: string;
+    readonly result: 'success' | 'failed' | 'cancelled' | 'persistence_error';
+    readonly failureCode?: string;
+    readonly providerRetryAt?: string;
+    readonly now: string;
+  }): CandidateSourceState;
+  invalidateAdmissions(input: {
+    readonly interestIds: readonly string[];
+    readonly now: string;
+  }): number;
 }
 
 export interface CandidateSupplyContextSource {

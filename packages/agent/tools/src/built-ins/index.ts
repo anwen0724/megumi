@@ -81,8 +81,8 @@ export function createBuiltInToolRegistry(request: {
     { definition: webFetchToolDefinition, handler: webFetchToolHandler },
     { definition: updatePlanToolDefinition, handler: updatePlanToolHandler, executionMode: 'serial' },
     ...(request.contentTools ? [
-      { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.contentTools), executionMode: 'serial' as const },
-      { definition: readCandidateToolDefinition, handler: createReadCandidateToolHandler(request.contentTools), executionMode: 'serial' as const },
+      { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.contentTools) },
+      { definition: readCandidateToolDefinition, handler: createReadCandidateToolHandler(request.contentTools) },
     ] : []),
     ...(request.dailySelectionTools ? [
       { definition: selectRecommendationsToolDefinition, handler: createSelectRecommendationsToolHandler(request.dailySelectionTools), executionMode: 'serial' as const },

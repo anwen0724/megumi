@@ -21,6 +21,7 @@ import {
 import {
   createDiscoverySourceRegistry,
   createDiscoveryRepository,
+  createCandidateSupplyAttempts,
   createDailyDiscoveryAttempts,
   createDiscovery,
   createInterestExtractor,
@@ -403,6 +404,9 @@ function composeCapabilitiesWithDatabase(
   const dailyDiscoveryAttempts = createDailyDiscoveryAttempts({
     observability: observability.observability,
   });
+  const candidateSupplyAttempts = createCandidateSupplyAttempts({
+    observability: observability.observability,
+  });
   const tools = createTools({
     settings,
     workspaces,
@@ -414,6 +418,7 @@ function composeCapabilitiesWithDatabase(
       maxProcessCount: 16,
     },
     dailyDiscoveryTools: dailyDiscoveryAttempts,
+    candidateSupplyTools: candidateSupplyAttempts,
     ...(options.builtInToolAvailability
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
@@ -490,6 +495,37 @@ function composeCapabilitiesWithDatabase(
     },
     startExecution: (request) => executions.start(request),
   });
+  const discoveryConfigurationSettings = {
+    read() {
+      const resolved = settings.resolve();
+      return resolved.status === 'ok'
+        ? {
+            conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
+            dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
+            dailyTargetCount: resolved.settings.discovery.daily_target_count,
+            enabledSources: resolved.settings.discovery.enabled_sources,
+          }
+        : {
+            conversationRecognitionEnabled: false,
+            dailyGenerationTime: '08:00',
+            dailyTargetCount: 20,
+            enabledSources: [],
+          };
+    },
+    write(next: import('@megumi/discovery').DiscoveryConfigurationSettings) {
+      const result = settings.update({
+        patch: {
+          discovery: {
+            conversation_recognition_enabled: next.conversationRecognitionEnabled,
+            daily_generation_time: next.dailyGenerationTime,
+            daily_target_count: next.dailyTargetCount,
+            enabled_sources: [...next.enabledSources],
+          },
+        },
+      });
+      if (result.status !== 'updated') throw new Error(result.failure.message);
+    },
+  };
   discovery = createDiscovery({
     interests: {
       repository: discoveryRepository,
@@ -600,39 +636,36 @@ function composeCapabilitiesWithDatabase(
         });
       },
     },
+    candidateSupply: {
+      repository: discoveryRepository,
+      attempts: candidateSupplyAttempts,
+      sourceRegistry: discoverySources,
+      settings: discoveryConfigurationSettings,
+      startExecution: (request) => executions.start(request),
+      now: clock.now,
+      observability: observability.observability,
+      async resolveModel() {
+        const resolved = settings.resolve();
+        const selection = resolved.status === 'ok' ? resolved.settings.model_selection : undefined;
+        if (!selection) {
+          return { status: 'failed', code: 'model_not_configured', message: 'The default model is not configured.' };
+        }
+        const result = await resolveModel(selection);
+        return result.status === 'ok'
+          ? result
+          : { status: 'failed', code: result.failure.code, message: result.failure.message };
+      },
+      onBackgroundError(error) {
+        observability.runtimeLogger.write({
+          level: 'warn', module: 'discovery', code: 'candidate_supply_background_failed',
+          message: 'Candidate Supply background work failed.',
+          data: { errorMessage: error instanceof Error ? error.message : String(error) },
+        });
+      },
+    },
     configuration: {
       sourceRegistry: discoverySources,
-      settings: {
-        read() {
-          const resolved = settings.resolve();
-          return resolved.status === 'ok'
-            ? {
-                conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
-                dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
-                dailyTargetCount: resolved.settings.discovery.daily_target_count,
-                enabledSources: resolved.settings.discovery.enabled_sources,
-              }
-            : {
-                conversationRecognitionEnabled: false,
-                dailyGenerationTime: '08:00',
-                dailyTargetCount: 20,
-                enabledSources: [],
-              };
-        },
-        write(next) {
-          const result = settings.update({
-            patch: {
-              discovery: {
-                conversation_recognition_enabled: next.conversationRecognitionEnabled,
-                daily_generation_time: next.dailyGenerationTime,
-                daily_target_count: next.dailyTargetCount,
-                enabled_sources: [...next.enabledSources],
-              },
-            },
-          });
-          if (result.status !== 'updated') throw new Error(result.failure.message);
-        },
-      },
+      settings: discoveryConfigurationSettings,
     },
   });
 

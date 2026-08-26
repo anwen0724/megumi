@@ -125,6 +125,19 @@ describe('CandidateSupplyRepository', () => {
       sourceId: 'open_web', query: 'same query', mode: 'relevance', targetInterestIds: [], now,
     })).toBe(true);
   });
+
+  it('persists Source failure backoff and clears it after success', () => {
+    expect(repository.settleSourceAttempt({
+      sourceId: 'source:1', result: 'failed', failureCode: 'network_error', now,
+    })).toMatchObject({
+      consecutiveFailureCount: 1,
+      retryAt: '2026-08-27T00:05:00.000Z',
+    });
+    expect(repository.settleSourceAttempt({
+      sourceId: 'source:1', result: 'success', now: '2026-08-27T00:06:00.000Z',
+    })).toMatchObject({ consecutiveFailureCount: 0 });
+    expect(repository.readSourceState('source:1')?.retryAt).toBeUndefined();
+  });
 });
 
 function searchOne(

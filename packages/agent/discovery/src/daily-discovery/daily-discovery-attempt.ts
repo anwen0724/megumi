@@ -43,6 +43,7 @@ interface AttemptRecord {
   readonly sourceBudgets: Readonly<Record<string, SourceAttemptBudget>>;
   readonly sourceUsage: Map<string, { searchCalls: number; resultCount: number }>;
   readonly attemptedSources: Set<string>;
+  readonly sourceTails: Map<string, Promise<void>>;
 }
 
 export interface SourceAttemptBudget {
@@ -117,6 +118,7 @@ export function createDailyDiscoveryAttempts(options: {
         sourceBudgets: request.sourceBudgets ?? {},
         sourceUsage: new Map(),
         attemptedSources: new Set(),
+        sourceTails: new Map(),
       });
     },
 
@@ -179,7 +181,7 @@ export function createDailyDiscoveryAttempts(options: {
           mode: parsed.mode,
           limit: effectiveLimit,
         }, correlation);
-        const result = await source.search({
+        const result = await withSourceLock(attempt, parsed.sourceId, () => source.search({
           ...parsed,
           limit: effectiveLimit,
           signal: request.signal,
@@ -189,7 +191,7 @@ export function createDailyDiscoveryAttempts(options: {
             response,
             correlation,
           ),
-        });
+        }));
         safeRecordContent(options.observability, 'source.result', result, correlation);
         if (result.status === 'failed') {
           attempt.failedSearches += 1;
@@ -442,4 +444,23 @@ function recordString(value: unknown, key: string): string | undefined {
 
 function recordNumber(value: unknown, key: string): number | undefined {
   return isRecord(value) && typeof value[key] === 'number' ? value[key] : undefined;
+}
+
+async function withSourceLock<T>(
+  attempt: AttemptRecord,
+  sourceId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const previous = attempt.sourceTails.get(sourceId) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.catch(() => undefined).then(() => gate);
+  attempt.sourceTails.set(sourceId, tail);
+  await previous.catch(() => undefined);
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (attempt.sourceTails.get(sourceId) === tail) attempt.sourceTails.delete(sourceId);
+  }
 }

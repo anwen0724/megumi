@@ -383,3 +383,11 @@ export const discoveryCandidateSupplyState = sqliteTable('discovery_candidate_su
 }, (table) => [
   check('check_discovery_candidate_supply_state_singleton', sql`${table.stateId} = 'candidate_supply'`),
 ]);
+
+export const discoveryCandidateSourceState = sqliteTable('discovery_candidate_source_state', {
+  sourceId: text('source_id').primaryKey(),
+  consecutiveFailureCount: integer('consecutive_failure_count').notNull().default(0),
+  retryAt: text('retry_at'),
+  lastFailureCode: text('last_failure_code'),
+  updatedAt: text('updated_at').notNull(),
+});

@@ -130,3 +130,11 @@ CREATE TABLE `discovery_candidate_supply_state` (
 	`updated_at` text NOT NULL,
 	CONSTRAINT `check_discovery_candidate_supply_state_singleton` CHECK(`state_id` = 'candidate_supply')
 );
+--> statement-breakpoint
+CREATE TABLE `discovery_candidate_source_state` (
+	`source_id` text PRIMARY KEY NOT NULL,
+	`consecutive_failure_count` integer DEFAULT 0 NOT NULL,
+	`retry_at` text,
+	`last_failure_code` text,
+	`updated_at` text NOT NULL
+);

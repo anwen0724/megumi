@@ -13,6 +13,8 @@ export interface TraceDisplayLabels {
   readonly unassignedSession: string;
   readonly dailyDiscovery: string;
   readonly scheduledDiscovery: string;
+  readonly candidateSupply: string;
+  readonly candidateSupplyRun: string;
 }
 
 export interface TraceDisplayItem {
@@ -20,20 +22,20 @@ export interface TraceDisplayItem {
   readonly title: string;
   readonly groupId: string;
   readonly groupTitle: string;
-  readonly groupKind: 'conversation' | 'daily_discovery';
+  readonly groupKind: 'conversation' | 'daily_discovery' | 'candidate_supply';
   readonly sessionId?: string;
 }
 
 export interface TraceDisplayGroup {
   readonly id: string;
   readonly title: string;
-  readonly kind: 'conversation' | 'daily_discovery';
+  readonly kind: 'conversation' | 'daily_discovery' | 'candidate_supply';
   readonly items: readonly TraceDisplayItem[];
 }
 
 export interface TraceDisplayFilters {
   readonly query: string;
-  readonly traceKind: 'all' | 'conversation' | 'daily_discovery';
+  readonly traceKind: 'all' | 'conversation' | 'daily_discovery' | 'candidate_supply';
   readonly sessionId: string;
   readonly status: 'all' | ObservabilityTraceSummaryUiDto['status'];
   readonly issuesOnly: boolean;
@@ -68,6 +70,16 @@ export function createTraceDisplayItems(input: {
         groupKind: 'daily_discovery',
       };
     }
+    if (summary.traceKind === 'candidate_supply') {
+      const day = formatTraceDay(summary.startedAt, input.locale);
+      return {
+        summary,
+        title: input.labels.candidateSupplyRun,
+        groupId: `candidate-supply:${day}`,
+        groupTitle: `${input.labels.candidateSupply} · ${day}`,
+        groupKind: 'candidate_supply',
+      };
+    }
 
     const sessionId = summary.correlation.sessionId;
     const session = sessionId ? sessionsById.get(sessionId) : undefined;
@@ -100,7 +112,7 @@ export function filterTraceDisplayItems(
   return items.filter((item) => {
     if (filters.traceKind !== 'all' && item.summary.traceKind !== filters.traceKind) return false;
     if (
-      filters.traceKind !== 'daily_discovery'
+      (filters.traceKind === 'all' || filters.traceKind === 'conversation')
       && filters.sessionId !== 'all'
       && item.sessionId !== filters.sessionId
     ) return false;

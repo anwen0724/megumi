@@ -12,9 +12,12 @@ import {
   type CandidateAdmissionDecision,
   type CandidateMaterialResult,
   type CandidatePoolSnapshot,
+  type CandidatePotentialDuplicate,
   type CandidateQueryOutcome,
   type CandidateStatus,
   type CandidateSupplyRepository,
+  type CandidateSupplyState,
+  type CandidateSourceState,
 } from '../candidate-supply/candidate-supply';
 import {
   assertCandidateTransition,
@@ -55,6 +58,11 @@ export function createCandidateSupplyRepository(
       WHERE status = 'running'
     ` }).run([parseTimestamp(now)]).changes,
     readCandidate: (candidateId) => readCandidate(database, candidateId),
+    listPotentialDuplicates: (candidateId, limit) => listPotentialDuplicates(database, candidateId, limit),
+    listNegativeConstraints: () => database.prepare<{ description: string }>({ sql: `
+      SELECT DISTINCT description FROM discovery_interest_evidence
+      WHERE effect = 'reject' AND status = 'applied' ORDER BY created_at DESC LIMIT 50
+    ` }).all().map((row) => row.description),
     commitCandidateDetail: (input) => database.transaction({
       operation: () => commitCandidateDetail(database, input),
     }),
@@ -66,6 +74,15 @@ export function createCandidateSupplyRepository(
     }),
     listRecentQueryOutcomes: (input) => listRecentQueryOutcomes(database, input),
     isQueryCoolingDown: (input) => isQueryCoolingDown(database, input),
+    readSupplyState: () => readSupplyState(database),
+    writeSupplyState: (state) => writeSupplyState(database, state),
+    readSourceState: (sourceId) => readSourceState(database, sourceId),
+    settleSourceAttempt: (input) => database.transaction({
+      operation: () => settleSourceAttempt(database, input),
+    }),
+    invalidateAdmissions: (input) => database.transaction({
+      operation: () => invalidateAdmissions(database, input),
+    }),
   };
 }
 
@@ -114,8 +131,11 @@ function commitSearchResult(
     }
     const existing = findCandidate(database, contentIdentity, sourceIdentity);
     if (!existing && activeCount >= input.hardLimit) {
-      capacityRejectedCount += 1;
-      continue;
+      if (!makeCandidateCapacity(database, input.hardLimit, completedAt)) {
+        capacityRejectedCount += 1;
+        continue;
+      }
+      activeCount = countActiveCandidates(database);
     }
     const candidate = existing
       ? mergeCandidate(database, existing, item, completedAt)
@@ -504,6 +524,186 @@ function findCandidate(
   return row ? candidateFromRow(row) : undefined;
 }
 
+function listPotentialDuplicates(
+  database: DatabaseConnection,
+  candidateId: string,
+  limit: number,
+): readonly CandidatePotentialDuplicate[] {
+  const candidate = requireCandidate(database, candidateId);
+  const tokens = candidate.title.normalize('NFKC').split(/[\s\p{P}\p{S}]+/u)
+    .map((token) => token.trim()).filter((token) => token.length >= 2).slice(0, 4);
+  if (tokens.length === 0) return [];
+  const pattern = `%${tokens[0]!.replace(/[\\%_]/gu, (match) => `\\${match}`)}%`;
+  const candidateRows = database.prepare<CandidateRow>({ sql: `
+    SELECT * FROM discovery_candidates
+    WHERE candidate_id <> ? AND status <> 'consumed' AND title LIKE ? ESCAPE '\\'
+    ORDER BY last_seen_at DESC, candidate_id LIMIT ?
+  ` }).all([candidateId, pattern, Math.max(1, Math.min(20, limit))]);
+  const remaining = Math.max(0, Math.min(20, limit) - candidateRows.length);
+  const recommendationRows = remaining > 0
+    ? database.prepare<PotentialRecommendationRow>({ sql: `
+        SELECT recommendation_id, title, description FROM discovery_recommendations
+        WHERE title LIKE ? ESCAPE '\\' ORDER BY published_at DESC, recommendation_id LIMIT ?
+      ` }).all([pattern, remaining])
+    : [];
+  return [
+    ...candidateRows.map((row) => ({
+      kind: 'candidate' as const, id: row.candidate_id, title: row.title,
+      ...(row.description ? { description: row.description } : {}),
+    })),
+    ...recommendationRows.map((row) => ({
+      kind: 'recommendation' as const, id: row.recommendation_id, title: row.title,
+      ...(row.description ? { description: row.description } : {}),
+    })),
+  ];
+}
+
+function readSupplyState(database: DatabaseConnection): CandidateSupplyState | undefined {
+  const row = database.prepare<SupplyStateRow>({
+    sql: "SELECT * FROM discovery_candidate_supply_state WHERE state_id = 'candidate_supply'",
+  }).get();
+  return row ? {
+    consecutiveZeroYieldCount: row.consecutive_zero_yield_count,
+    ...(row.retry_at ? { retryAt: row.retry_at } : {}),
+    ...(row.next_recheck_at ? { nextRecheckAt: row.next_recheck_at } : {}),
+    updatedAt: row.updated_at,
+  } : undefined;
+}
+
+function writeSupplyState(database: DatabaseConnection, state: CandidateSupplyState): void {
+  database.prepare({ sql: `
+    INSERT INTO discovery_candidate_supply_state (
+      state_id, consecutive_zero_yield_count, retry_at, next_recheck_at, updated_at
+    ) VALUES ('candidate_supply', ?, ?, ?, ?)
+    ON CONFLICT(state_id) DO UPDATE SET
+      consecutive_zero_yield_count = excluded.consecutive_zero_yield_count,
+      retry_at = excluded.retry_at, next_recheck_at = excluded.next_recheck_at,
+      updated_at = excluded.updated_at
+  ` }).run([
+    state.consecutiveZeroYieldCount, state.retryAt ?? null, state.nextRecheckAt ?? null,
+    parseTimestamp(state.updatedAt),
+  ]);
+}
+
+function readSourceState(
+  database: DatabaseConnection,
+  sourceId: string,
+): CandidateSourceState | undefined {
+  const row = database.prepare<SourceStateRow>({
+    sql: 'SELECT * FROM discovery_candidate_source_state WHERE source_id = ?',
+  }).get([sourceId]);
+  return row ? sourceStateFromRow(row) : undefined;
+}
+
+function settleSourceAttempt(
+  database: DatabaseConnection,
+  input: Parameters<CandidateSupplyRepository['settleSourceAttempt']>[0],
+): CandidateSourceState {
+  const now = parseTimestamp(input.now);
+  const current = readSourceState(database, input.sourceId);
+  const changesFailureState = input.result === 'failed'
+    && input.failureCode !== 'cancelled'
+    && input.failureCode !== 'persistence_error';
+  const consecutive = input.result === 'success'
+    ? 0
+    : changesFailureState
+      ? (current?.consecutiveFailureCount ?? 0) + 1
+      : current?.consecutiveFailureCount ?? 0;
+  const retryAt = input.result === 'success'
+    ? undefined
+    : changesFailureState
+      ? sourceRetryAt({
+          failureCode: input.failureCode ?? 'unknown',
+          providerRetryAt: input.providerRetryAt,
+          consecutiveFailures: consecutive,
+          now,
+        })
+      : current?.retryAt;
+  const state: CandidateSourceState = {
+    sourceId: input.sourceId,
+    consecutiveFailureCount: consecutive,
+    ...(retryAt ? { retryAt } : {}),
+    ...(input.failureCode ? { lastFailureCode: input.failureCode } : {}),
+    updatedAt: now,
+  };
+  database.prepare({ sql: `
+    INSERT INTO discovery_candidate_source_state (
+      source_id, consecutive_failure_count, retry_at, last_failure_code, updated_at
+    ) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(source_id) DO UPDATE SET
+      consecutive_failure_count = excluded.consecutive_failure_count,
+      retry_at = excluded.retry_at, last_failure_code = excluded.last_failure_code,
+      updated_at = excluded.updated_at
+  ` }).run([
+    state.sourceId, state.consecutiveFailureCount, state.retryAt ?? null,
+    state.lastFailureCode ?? null, state.updatedAt,
+  ]);
+  return state;
+}
+
+function sourceRetryAt(input: {
+  readonly failureCode: string;
+  readonly providerRetryAt?: string;
+  readonly consecutiveFailures: number;
+  readonly now: string;
+}): string | undefined {
+  if (input.providerRetryAt && Number.isFinite(Date.parse(input.providerRetryAt))) {
+    return input.providerRetryAt;
+  }
+  const delays: Readonly<Record<string, number | undefined>> = {
+    rate_limited: 60 * 60_000,
+    risk_control: 6 * 60 * 60_000,
+    invalid_response: 60 * 60_000,
+  };
+  const network = [5 * 60_000, 15 * 60_000, 60 * 60_000, 6 * 60 * 60_000];
+  const delay = input.failureCode === 'timeout' || input.failureCode === 'network_error'
+    ? network[Math.min(input.consecutiveFailures, network.length) - 1]
+    : delays[input.failureCode];
+  return delay === undefined ? undefined : new Date(Date.parse(input.now) + delay).toISOString();
+}
+
+function sourceStateFromRow(row: SourceStateRow): CandidateSourceState {
+  return {
+    sourceId: row.source_id,
+    consecutiveFailureCount: row.consecutive_failure_count,
+    ...(row.retry_at ? { retryAt: row.retry_at } : {}),
+    ...(row.last_failure_code ? { lastFailureCode: row.last_failure_code } : {}),
+    updatedAt: row.updated_at,
+  };
+}
+
+function invalidateAdmissions(
+  database: DatabaseConnection,
+  input: Parameters<CandidateSupplyRepository['invalidateAdmissions']>[0],
+): number {
+  const now = parseTimestamp(input.now);
+  const ids = [...new Set(input.interestIds)];
+  if (ids.length === 0) return 0;
+  const placeholders = ids.map(() => '?').join(', ');
+  const candidates = database.prepare<{ candidate_id: string }>({ sql: `
+    SELECT DISTINCT c.candidate_id
+    FROM discovery_candidates c
+    JOIN discovery_candidate_interests ci ON ci.candidate_id = c.candidate_id
+    WHERE c.status IN ('available', 'rejected') AND ci.interest_id IN (${placeholders})
+  ` }).all(ids);
+  for (const candidate of candidates) {
+    database.prepare({ sql: `
+      UPDATE discovery_candidate_assessments SET active = 0
+      WHERE candidate_id = ? AND active = 1
+    ` }).run([candidate.candidate_id]);
+    database.prepare({ sql: 'DELETE FROM discovery_candidate_interests WHERE candidate_id = ?' })
+      .run([candidate.candidate_id]);
+    const current = requireCandidate(database, candidate.candidate_id);
+    database.prepare({ sql: `
+      UPDATE discovery_candidates SET status = 'pending_admission', status_updated_at = ?, expires_at = ?
+      WHERE candidate_id = ?
+    ` }).run([
+      now, candidateExpiresAt(current.contentType, now, 'pending_admission'), candidate.candidate_id,
+    ]);
+  }
+  return candidates.length;
+}
+
 function recommendationExists(database: DatabaseConnection, contentIdentity: string): boolean {
   return Boolean(database.prepare<{ recommendation_id: string }>({
     sql: 'SELECT recommendation_id FROM discovery_recommendations WHERE content_identity = ? LIMIT 1',
@@ -515,6 +715,40 @@ function countActiveCandidates(database: DatabaseConnection): number {
     SELECT COUNT(*) AS count FROM discovery_candidates
     WHERE status IN ('preparing', 'pending_admission', 'available', 'reserved')
   ` }).get()?.count ?? 0;
+}
+
+function makeCandidateCapacity(
+  database: DatabaseConnection,
+  hardLimit: number,
+  now: string,
+): boolean {
+  database.prepare({ sql: `
+    UPDATE discovery_candidates SET status = 'expired', status_updated_at = ?
+    WHERE status IN ('preparing', 'pending_admission', 'available') AND expires_at <= ?
+  ` }).run([now, now]);
+  if (countActiveCandidates(database) < hardLimit) return true;
+  const candidates = database.prepare<{ candidate_id: string }>({ sql: `
+    SELECT candidate_id FROM discovery_candidates
+    WHERE status = 'available' ORDER BY last_seen_at, candidate_id
+  ` }).all();
+  for (const candidate of candidates) {
+    const wouldRemoveCoverage = database.prepare<{ count: number }>({ sql: `
+      SELECT COUNT(*) AS count
+      FROM discovery_candidate_interests ci
+      JOIN discovery_interests i ON i.interest_id = ci.interest_id AND i.status = 'active'
+      WHERE ci.candidate_id = ? AND NOT EXISTS (
+        SELECT 1 FROM discovery_candidate_interests other
+        JOIN discovery_candidates c ON c.candidate_id = other.candidate_id AND c.status = 'available'
+        WHERE other.interest_id = ci.interest_id AND other.candidate_id <> ci.candidate_id
+      )
+    ` }).get([candidate.candidate_id])?.count ?? 0;
+    if (wouldRemoveCoverage > 0) continue;
+    database.prepare({ sql: `
+      UPDATE discovery_candidates SET status = 'expired', status_updated_at = ? WHERE candidate_id = ?
+    ` }).run([now, candidate.candidate_id]);
+    return true;
+  }
+  return false;
 }
 
 function assertActiveInterests(database: DatabaseConnection, interestIds: readonly string[]): void {
@@ -665,3 +899,14 @@ type CandidateRow = DatabaseRow & {
 type StatusCountRow = DatabaseRow & { status: string; count: number };
 type InterestIdRow = DatabaseRow & { interest_id: string };
 type ExpiryRow = DatabaseRow & { candidate_id: string; expires_at: string };
+type PotentialRecommendationRow = DatabaseRow & {
+  recommendation_id: string; title: string; description: string | null;
+};
+type SupplyStateRow = DatabaseRow & {
+  consecutive_zero_yield_count: number; retry_at: string | null;
+  next_recheck_at: string | null; updated_at: string;
+};
+type SourceStateRow = DatabaseRow & {
+  source_id: string; consecutive_failure_count: number; retry_at: string | null;
+  last_failure_code: string | null; updated_at: string;
+};

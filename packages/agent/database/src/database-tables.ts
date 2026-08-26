@@ -21,6 +21,7 @@ export const databaseTables = [
   'discovery_candidate_assessments',
   'discovery_candidate_interests',
   'discovery_candidate_supply_state',
+  'discovery_candidate_source_state',
 ] as const;
 
 export type DatabaseTable = (typeof databaseTables)[number];
@@ -80,6 +81,7 @@ export const databaseTableOwnership = {
       'discovery_candidate_assessments',
       'discovery_candidate_interests',
       'discovery_candidate_supply_state',
+      'discovery_candidate_source_state',
     ],
   },
 } as const satisfies Record<string, DatabaseTableOwner>;

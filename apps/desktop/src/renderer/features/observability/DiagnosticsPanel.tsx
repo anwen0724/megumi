@@ -24,7 +24,7 @@ import {
   type TraceDisplayItem,
 } from './trace-display';
 
-type TraceKindFilter = 'all' | 'conversation' | 'daily_discovery';
+type TraceKindFilter = 'all' | 'conversation' | 'daily_discovery' | 'candidate_supply';
 type TraceStatusFilter = 'all' | ObservabilityTraceSummaryUiDto['status'];
 type ActiveAction = 'refresh' | 'rebuild' | 'export';
 
@@ -56,6 +56,8 @@ export function DiagnosticsPanel() {
       unassignedSession: t('diagnostics.unassignedSession'),
       dailyDiscovery: t('diagnostics.traceKinds.dailyDiscovery'),
       scheduledDiscovery: t('diagnostics.scheduledDiscovery'),
+      candidateSupply: t('diagnostics.traceKinds.candidateSupply'),
+      candidateSupplyRun: t('diagnostics.candidateSupplyRun'),
     },
   }), [i18n.language, i18n.resolvedLanguage, messages, sessions, t, traces]);
   const filteredItems = useMemo(() => filterTraceDisplayItems(displayItems, {
@@ -264,10 +266,11 @@ export function DiagnosticsPanel() {
               { value: 'all', label: t('diagnostics.allKinds') },
               { value: 'conversation', label: t('diagnostics.traceKinds.conversation') },
               { value: 'daily_discovery', label: t('diagnostics.traceKinds.dailyDiscovery') },
+              { value: 'candidate_supply', label: t('diagnostics.traceKinds.candidateSupply') },
             ]}
             onValueChange={setTraceKind}
           />
-          {traceKind !== 'daily_discovery' ? (
+          {traceKind === 'all' || traceKind === 'conversation' ? (
             <Select label={t('diagnostics.session')} value={sessionId} options={sessionOptions} onValueChange={setSessionId} />
           ) : <div />}
           <Select
