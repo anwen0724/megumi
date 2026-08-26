@@ -23,7 +23,7 @@ const TOKEN_FIELD_NAMES = new Set([
 const SECRET_TEXT_PATTERNS: readonly RegExp[] = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/g,
   /\bsk-[A-Za-z0-9._-]{8,}\b/g,
-  /\b(apiKey|api_key|token|secret|password)=([^&\s]+)/gi,
+  /\b([A-Za-z0-9_-]*(?:api[_-]?key|token|secret|password))=([^&\s]+)/gi,
   /\b(token|secret|password):\s*([^,\s]+)/gi,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
 ];

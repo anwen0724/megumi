@@ -123,11 +123,27 @@ export interface DiscoverySource {
     readonly mode: SourceSearchMode;
     readonly limit: number;
     readonly signal: AbortSignal;
+    /** Reports the raw upstream payload before Source normalization. */
+    readonly onProviderResponse?: (response: unknown) => void;
   }): Promise<SourceSearchResult>;
   /** Reads normalized detail content when the Source supports detail retrieval. */
   read?(request: {
     readonly sourceContentId?: string;
     readonly url: string;
     readonly signal: AbortSignal;
+    /** Reports the raw upstream payload before Source normalization. */
+    readonly onProviderResponse?: (response: unknown) => void;
   }): Promise<SourceReadResult>;
+}
+
+/** Reports one raw Source payload without allowing diagnostics to alter Source behavior. */
+export function reportSourceProviderResponse(
+  observer: ((response: unknown) => void) | undefined,
+  response: unknown,
+): void {
+  try {
+    observer?.(response);
+  } catch {
+    // The upstream response remains authoritative when diagnostics are unavailable.
+  }
 }

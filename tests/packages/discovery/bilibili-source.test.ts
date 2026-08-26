@@ -46,9 +46,14 @@ describe('Bilibili discovery source', () => {
         favorites: 8,
       }] } }));
     const source = createBilibiliSource({ fetch, now: () => 1_700_000_100_000 });
+    const providerResponses: unknown[] = [];
 
     const result = await source.search({
       query: 'Agent Harness', mode: 'recent', limit: 10, signal: new AbortController().signal,
+      onProviderResponse: (response) => {
+        providerResponses.push(response);
+        throw new Error('diagnostics unavailable');
+      },
     });
 
     const [, request] = fetch.mock.calls;
@@ -70,6 +75,7 @@ describe('Bilibili discovery source', () => {
       coverUrl: 'https://i0.hdslb.com/cover.jpg',
       engagement: { viewCount: 120, favoriteCount: 8 },
     }] });
+    expect(providerResponses).toEqual([expect.objectContaining({ code: 0 })]);
   });
 
   it('uses anonymous nav WBI keys even when Bilibili reports code -101', async () => {

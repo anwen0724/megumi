@@ -1,9 +1,10 @@
 /* Provides the real Tools runtime used by daily discovery execution tests. */
 import { createTools } from '@megumi/tools';
 import { createDailyDiscoveryAttempts } from '@megumi/discovery';
+import type { Observability } from '@megumi/observability';
 
-export function createDailyDiscoveryTestTools() {
-  const attempts = createDailyDiscoveryAttempts();
+export function createDailyDiscoveryTestTools(observability?: Observability) {
+  const attempts = createDailyDiscoveryAttempts({ observability });
   const tools = createTools({
     settings: {
       resolveWebSearch: () => ({ status: 'failed' }),

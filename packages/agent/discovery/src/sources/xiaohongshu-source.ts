@@ -1,7 +1,13 @@
 /*
  * Owns Xiaohongshu browser URLs, page-state interpretation, and content normalization.
  */
-import { SourceContentDetailSchema, SourceContentSchema, type DiscoverySource, type SourceFailure } from './discovery-source';
+import {
+  reportSourceProviderResponse,
+  SourceContentDetailSchema,
+  SourceContentSchema,
+  type DiscoverySource,
+  type SourceFailure,
+} from './discovery-source';
 import type { EmbeddedBrowser, EmbeddedBrowserSnapshot } from './embedded-browser';
 
 const ALLOWED_ORIGINS = [
@@ -46,6 +52,7 @@ export function createXiaohongshuSource(input: { readonly browser: EmbeddedBrows
       const result = await input.browser.snapshot({
         profileId: 'xiaohongshu', url: url.toString(), allowedOrigins: ALLOWED_ORIGINS, signal: request.signal,
       });
+      reportSourceProviderResponse(request.onProviderResponse, result);
       if (result.status === 'failed') {
         availability = { state: 'unknown', checkedAt: new Date().toISOString() };
         return failed(result.failure.code, result.failure.message, result.failure.code !== 'cancelled');
@@ -69,6 +76,7 @@ export function createXiaohongshuSource(input: { readonly browser: EmbeddedBrows
       const result = await input.browser.snapshot({
         profileId: 'xiaohongshu', url: request.url, allowedOrigins: ALLOWED_ORIGINS, signal: request.signal,
       });
+      reportSourceProviderResponse(request.onProviderResponse, result);
       if (result.status === 'failed') return failed(result.failure.code, result.failure.message, result.failure.code !== 'cancelled');
       const pageFailure = blockingPageState(result.snapshot);
       if (pageFailure) return failed(pageFailure.code, pageFailure.message, false);

@@ -12,6 +12,7 @@
     "@megumi/context": "0.1.0",
     "@megumi/database": "0.1.0",
     "@megumi/execution": "0.1.0",
+    "@megumi/observability": "0.1.0",
     "@megumi/session": "0.1.0",
     "zod": "^3.25.76"
   }

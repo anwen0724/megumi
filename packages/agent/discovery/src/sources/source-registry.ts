@@ -9,6 +9,7 @@ import {
   type SourceDescriptor,
   type SourceSearchMode,
 } from './discovery-source';
+import type { Observability, OperationCompletion } from '@megumi/observability';
 
 export interface SourceRegistry {
   /** Lists validated descriptors in registration order. */
@@ -18,7 +19,7 @@ export interface SourceRegistry {
   /** Returns a registered Source without imposing a search mode. */
   get(sourceId: DiscoverySourceId): DiscoverySource | undefined;
   /** Rechecks selected Sources and returns their latest availability snapshots. */
-  checkSources(sourceIds: readonly DiscoverySourceId[]): Promise<readonly {
+  checkSources(sourceIds: readonly DiscoverySourceId[], observability?: Observability): Promise<readonly {
     readonly descriptor: SourceDescriptor;
     readonly availability: SourceAvailability;
   }[]>;
@@ -27,7 +28,10 @@ export interface SourceRegistry {
 }
 
 /** Creates the validated registry used to resolve all configured Discovery Sources. */
-export function createSourceRegistry(sources: readonly DiscoverySource[]): SourceRegistry {
+export function createSourceRegistry(
+  sources: readonly DiscoverySource[],
+  options: { readonly observability?: Observability } = {},
+): SourceRegistry {
   const entries = new Map<DiscoverySourceId, { source: DiscoverySource; descriptor: SourceDescriptor }>();
   for (const source of sources) {
     const sourceId = source.descriptor.id.trim();
@@ -45,10 +49,15 @@ export function createSourceRegistry(sources: readonly DiscoverySource[]): Sourc
       availability: entry.source.getAvailability(),
     })),
     get: (sourceId) => entries.get(sourceId.trim())?.source,
-    async checkSources(sourceIds) {
+    async checkSources(sourceIds, observability) {
       const selected = new Set(sourceIds.map((sourceId) => sourceId.trim()));
       const targets = [...entries.values()].filter((entry) => selected.has(entry.descriptor.id));
-      await Promise.all(targets.map((entry) => entry.source.checkAvailability?.()));
+      await Promise.all(targets.map(async (entry) => {
+        await observeAvailability(observability ?? options.observability, entry.descriptor.id, async () => {
+          await entry.source.checkAvailability?.();
+          return entry.source.getAvailability();
+        });
+      }));
       return targets.map((entry) => ({
         descriptor: entry.descriptor,
         availability: entry.source.getAvailability(),
@@ -61,6 +70,40 @@ export function createSourceRegistry(sources: readonly DiscoverySource[]): Sourc
         throw new Error(`Source ${sourceId} does not support search mode ${mode}.`);
       }
       return entry.source;
+    },
+  };
+}
+
+async function observeAvailability(
+  observability: Observability | undefined,
+  sourceId: string,
+  operation: () => Promise<SourceAvailability>,
+): Promise<SourceAvailability> {
+  let operationPromise: Promise<SourceAvailability> | undefined;
+  const runOnce = () => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'source.availability.check',
+      correlation: { sourceId },
+      classifyResult: classifyAvailability,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function classifyAvailability(availability: SourceAvailability): OperationCompletion {
+  if (availability.state === 'ready') return { outcome: { status: 'ok', code: 'ready' } };
+  return {
+    outcome: {
+      status: 'error',
+      code: availability.state,
+      message: `Source availability is ${availability.state}.`,
+      retryable: availability.state !== 'not_configured',
     },
   };
 }

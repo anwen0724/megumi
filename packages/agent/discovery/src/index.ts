@@ -76,6 +76,8 @@ export type {
 } from './daily-discovery/daily-discovery-attempt';
 export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './daily-discovery/content-identity';
 export type {
+  CandidateAdmission,
+  CandidateDecision,
   CandidateRegistry,
   DiscoveryCandidate,
 } from './daily-discovery/candidate-registry';

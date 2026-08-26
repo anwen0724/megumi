@@ -39,9 +39,14 @@ describe('embedded-browser platform sources', () => {
       }],
     }));
     const source = createSource({ browser: browser(snapshot) });
+    const providerResponses: unknown[] = [];
 
     const result = await source.search({
       query: ' Agent Harness ', mode: 'relevance', limit: 5, signal: new AbortController().signal,
+      onProviderResponse: (response) => {
+        providerResponses.push(response);
+        throw new Error('diagnostics unavailable');
+      },
     });
 
     expect(snapshot).toHaveBeenCalledWith(expect.objectContaining({
@@ -57,6 +62,7 @@ describe('embedded-browser platform sources', () => {
     })] });
     expect(source.getAvailability()).toMatchObject({ state: 'ready' });
     expect(source.descriptor.supportsRead).toBe(true);
+    expect(providerResponses).toEqual([expect.objectContaining({ status: 'success' })]);
   });
 
   it.each([

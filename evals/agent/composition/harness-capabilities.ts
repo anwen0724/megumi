@@ -399,7 +399,9 @@ function composeCapabilitiesWithDatabase(
     }
   };
 
-  const dailyDiscoveryAttempts = createDailyDiscoveryAttempts();
+  const dailyDiscoveryAttempts = createDailyDiscoveryAttempts({
+    observability: observability.observability,
+  });
   const tools = createTools({
     settings,
     workspaces,
@@ -428,6 +430,7 @@ function composeCapabilitiesWithDatabase(
     embeddedBrowser: options.embeddedBrowser ?? unavailableEmbeddedBrowser,
     zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
     twitterApiKey: () => discoveryCredential(settings, 'twitter'),
+    observability: observability.observability,
   });
 
   const clock = { now: () => new Date().toISOString() };
@@ -539,6 +542,7 @@ function composeCapabilitiesWithDatabase(
       repository: discoveryRepository,
       attempts: dailyDiscoveryAttempts,
       sourceRegistry: discoverySources,
+      observability: observability.observability,
       startExecution: (request) => executions.start(request),
       now: clock.now,
       settings: {

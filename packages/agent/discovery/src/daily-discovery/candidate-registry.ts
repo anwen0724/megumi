@@ -16,7 +16,7 @@ export type DiscoveryCandidate = SourceContent & {
 
 export interface CandidateRegistry {
   /** Validates, deduplicates, and merges normalized Source results. */
-  add(contents: readonly SourceContent[]): readonly DiscoveryCandidate[];
+  add(contents: readonly SourceContent[], admission?: CandidateAdmission): readonly DiscoveryCandidate[];
   /** Reads one candidate by its execution-local id. */
   get(candidateId: string): DiscoveryCandidate | undefined;
   /** Lists current candidates in insertion order. */
@@ -27,12 +27,29 @@ export interface CandidateRegistry {
   dispose(): void;
 }
 
+/** One attempt-local Candidate admission fact emitted after deterministic evaluation. */
+export interface CandidateDecision {
+  readonly candidateId: string;
+  readonly decision: 'accepted' | 'rejected' | 'deduplicated' | 'updated';
+  readonly reasonCode?: string;
+}
+
+/** Deterministic admission rules applied before identity merging. */
+export interface CandidateAdmission {
+  readonly reject?: (content: SourceContent) => string | undefined;
+  readonly limit?: number;
+  readonly limitReasonCode?: string;
+}
+
 /** Creates the execution-scoped registry that deduplicates and merges Source candidates. */
-export function createCandidateRegistry(): CandidateRegistry {
+export function createCandidateRegistry(options: {
+  readonly onDecision?: (decision: CandidateDecision) => void;
+} = {}): CandidateRegistry {
   const candidates = new Map<string, DiscoveryCandidate>();
   const candidateIdsByIdentity = new Map<string, string>();
   const candidateIdsBySourceIdentity = new Map<string, string>();
   let nextId = 1;
+  let nextRejectedId = 1;
   let disposed = false;
 
   const assertActive = () => {
@@ -40,11 +57,32 @@ export function createCandidateRegistry(): CandidateRegistry {
   };
 
   return {
-    add(contents) {
+    add(contents, admission = {}) {
       assertActive();
       const inserted: DiscoveryCandidate[] = [];
+      const admitted: SourceContent[] = [];
       for (const input of contents) {
         const content = SourceContentSchema.parse(input);
+        const rejection = admission.reject?.(content);
+        if (rejection) {
+          notifyDecision(options.onDecision, {
+            candidateId: `candidate:rejected:${nextRejectedId++}`,
+            decision: 'rejected',
+            reasonCode: rejection,
+          });
+          continue;
+        }
+        admitted.push(content);
+      }
+      const limit = Math.max(0, Math.floor(admission.limit ?? admitted.length));
+      for (const _content of admitted.slice(limit)) {
+        notifyDecision(options.onDecision, {
+          candidateId: `candidate:rejected:${nextRejectedId++}`,
+          decision: 'rejected',
+          reasonCode: admission.limitReasonCode ?? 'candidate_limit_exceeded',
+        });
+      }
+      for (const content of admitted.slice(0, limit)) {
         const identity = discoveryContentIdentity(content);
         const sourceIdentity = sourceContentIdentity(content);
         const existingId = candidateIdsByIdentity.get(identity)
@@ -56,6 +94,13 @@ export function createCandidateRegistry(): CandidateRegistry {
           candidates.set(existingId, merged);
           candidateIdsByIdentity.set(identity, existingId);
           candidateIdsBySourceIdentity.set(sourceIdentity, existingId);
+          notifyDecision(options.onDecision, {
+            candidateId: existingId,
+            decision: candidateChanged(existing, merged) ? 'updated' : 'deduplicated',
+            reasonCode: identity === discoveryContentIdentity(existing)
+              ? 'canonical_identity'
+              : 'source_identity',
+          });
           continue;
         }
         const candidateId = `candidate:${nextId++}`;
@@ -64,6 +109,7 @@ export function createCandidateRegistry(): CandidateRegistry {
         candidateIdsBySourceIdentity.set(sourceIdentity, candidateId);
         candidates.set(candidateId, candidate);
         inserted.push(candidate);
+        notifyDecision(options.onDecision, { candidateId, decision: 'accepted' });
       }
       return inserted;
     },
@@ -92,6 +138,7 @@ export function createCandidateRegistry(): CandidateRegistry {
       candidates.clear();
       candidateIdsByIdentity.clear();
       candidateIdsBySourceIdentity.clear();
+      nextRejectedId = 1;
       disposed = true;
     },
   };
@@ -100,6 +147,30 @@ export function createCandidateRegistry(): CandidateRegistry {
 /** Resolves the strongest available identity for one normalized Source result. */
 export function discoveryContentIdentity(content: SourceContent): string {
   return canonicalContentIdentity(content);
+}
+
+function notifyDecision(
+  observer: ((decision: CandidateDecision) => void) | undefined,
+  decision: CandidateDecision,
+): void {
+  try {
+    observer?.(decision);
+  } catch {
+    // Candidate admission remains authoritative when diagnostics are unavailable.
+  }
+}
+
+function candidateChanged(current: DiscoveryCandidate, next: DiscoveryCandidate): boolean {
+  return current.sourceId !== next.sourceId
+    || current.sourceName !== next.sourceName
+    || current.sourceContentId !== next.sourceContentId
+    || current.canonicalUrl !== next.canonicalUrl
+    || current.contentType !== next.contentType
+    || current.title !== next.title
+    || current.author !== next.author
+    || current.publishedAt !== next.publishedAt
+    || current.description !== next.description
+    || current.coverUrl !== next.coverUrl;
 }
 
 function mergeContent(current: DiscoveryCandidate, incoming: SourceContent): DiscoveryCandidate {

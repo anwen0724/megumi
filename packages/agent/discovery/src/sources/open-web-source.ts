@@ -7,6 +7,7 @@ import {
   type WebSearch,
 } from '@megumi/tools';
 import {
+  reportSourceProviderResponse,
   SourceContentDetailSchema,
   SourceContentSchema,
   type DiscoverySource,
@@ -50,6 +51,7 @@ export function createOpenWebSource(input: {
           count: request.limit,
           signal: request.signal,
         });
+        reportSourceProviderResponse(request.onProviderResponse, result);
         const items = result.results.flatMap((entry) => {
           try {
             const canonicalUrl = new URL(entry.url).toString();
@@ -77,6 +79,7 @@ export function createOpenWebSource(input: {
       if (!input.webFetch) return failed('not_configured', 'Open Web reading is not configured.', false);
       try {
         const result = await input.webFetch.fetch({ url: request.url, signal: request.signal });
+        reportSourceProviderResponse(request.onProviderResponse, result);
         return {
           status: 'success',
           detail: SourceContentDetailSchema.parse({

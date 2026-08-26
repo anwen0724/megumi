@@ -4,6 +4,17 @@ import { describe, expect, it } from 'vitest';
 import { captureContent } from '../../../packages/agent/observability/src/content/content-capture';
 
 describe('Content capture', () => {
+  it('redacts credential-like query parameters inside Source URLs', () => {
+    const captured = captureContent({
+      value: 'https://www.xiaohongshu.com/explore/item?xsec_token=provider-secret&mode=search',
+    });
+
+    expect(captured.content).toMatchObject({
+      mode: 'inline',
+      value: 'https://www.xiaohongshu.com/explore/item?xsec_token=[redacted]&mode=search',
+    });
+  });
+
   it('canonicalizes object keys and redacts secret fields before hashing', () => {
     const first = captureContent({
       value: {

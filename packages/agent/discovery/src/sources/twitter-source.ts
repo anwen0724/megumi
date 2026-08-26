@@ -1,7 +1,12 @@
 /*
  * Owns TwitterAPI.io Advanced Search, cursor paging, and Tweet normalization.
  */
-import { SourceContentSchema, type DiscoverySource, type SourceFailure } from './discovery-source';
+import {
+  reportSourceProviderResponse,
+  SourceContentSchema,
+  type DiscoverySource,
+  type SourceFailure,
+} from './discovery-source';
 
 const SEARCH_URL = 'https://api.twitterapi.io/twitter/tweet/advanced_search';
 const PROVIDER_PAGE_LIMIT = 20;
@@ -64,6 +69,7 @@ export function createTwitterSource(input: {
             return failed('invalid_response', `TwitterAPI.io returned HTTP ${response.status}.`, response.status >= 500);
           }
           const payload: unknown = await response.json();
+          reportSourceProviderResponse(request.onProviderResponse, payload);
           if (!isRecord(payload) || !Array.isArray(payload.tweets)) {
             return failed('invalid_response', 'TwitterAPI.io returned an invalid response.', false);
           }

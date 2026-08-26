@@ -2,6 +2,7 @@
  * Searches Bilibili public videos through WBI with bounded retry and risk-control cooldown.
  */
 import {
+  reportSourceProviderResponse,
   SourceContentSchema,
   type DiscoverySource,
   type SourceFailure,
@@ -69,11 +70,25 @@ export function createBilibiliSource(input: {
       try {
         let result: unknown;
         try {
-          result = await searchOnce(request.query, request.mode, request.limit, request.signal, false);
+          result = await searchOnce(
+            request.query,
+            request.mode,
+            request.limit,
+            request.signal,
+            false,
+            request.onProviderResponse,
+          );
         } catch (error) {
           if (!(error instanceof BilibiliFailure) || !error.invalidKey) throw error;
           keys = undefined;
-          result = await searchOnce(request.query, request.mode, request.limit, request.signal, true);
+          result = await searchOnce(
+            request.query,
+            request.mode,
+            request.limit,
+            request.signal,
+            true,
+            request.onProviderResponse,
+          );
         }
         checkedAt = new Date(now()).toISOString();
         return { status: 'success', items: normalizeSearchItems(result) };
@@ -95,6 +110,7 @@ export function createBilibiliSource(input: {
         const url = new URL(VIEW_URL);
         url.searchParams.set('bvid', bvid);
         const payload = await fetchJson(url, request.signal);
+        reportSourceProviderResponse(request.onProviderResponse, payload);
         if (recordNumber(payload, 'code') !== 0) {
           return { status: 'failed', failure: failure('invalid_response', 'Bilibili returned an unsuccessful detail response.', false) };
         }
@@ -136,6 +152,7 @@ export function createBilibiliSource(input: {
     limit: number,
     signal: AbortSignal,
     forceKeys: boolean,
+    onProviderResponse: ((response: unknown) => void) | undefined,
   ): Promise<unknown> {
     const currentKeys = await resolveKeys(signal, forceKeys);
     const signed = signBilibiliWbiParameters({
@@ -153,6 +170,7 @@ export function createBilibiliSource(input: {
     const url = new URL(SEARCH_URL);
     for (const [key, value] of Object.entries(signed)) url.searchParams.set(key, value);
     const payload = await fetchJson(url, signal);
+    reportSourceProviderResponse(onProviderResponse, payload);
     const code = recordNumber(payload, 'code');
     if (code === -403) {
       throw new BilibiliFailure(failure('invalid_response', 'Bilibili rejected the WBI signature.', true), true);

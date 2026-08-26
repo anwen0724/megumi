@@ -19,6 +19,9 @@ import {
 } from '@megumi/discovery';
 import { createAgentExecutions, launchAgentExecution } from '@megumi/execution';
 import { createEventBus } from '@megumi/events';
+import type { Observability } from '@megumi/observability';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
 
 const model = {
   id: 'daily-model', name: 'Daily', api: 'test-api', provider: 'test-provider',
@@ -96,6 +99,186 @@ describe('daily discovery scheduler and retry lifecycle', () => {
     expect(fixture.repository.getDailyBatch('2026-08-22')).toMatchObject({
       batchId: failed.batchId, attemptCount: 4, automaticRetryCount: 2,
     });
+
+    await fixture.agent.shutdown();
+    const traces = fixture.traceRecords.filter((record) => record.type === 'trace.started');
+    const attempts = fixture.traceRecords.filter((record) => (
+      record.type === 'span.started' && record.name === 'discovery.attempt'
+    ));
+    expect(traces).toHaveLength(2);
+    const automaticAttempts = attempts.filter((record) => record.traceId === traces[0]?.traceId);
+    expect(automaticAttempts).toHaveLength(3);
+    expect(new Set(automaticAttempts.map((record) => record.parentSpanId)).size).toBe(1);
+    expect(attempts.filter((record) => record.traceId === traces[1]?.traceId)).toHaveLength(1);
+    expect(fixture.traceRecords.filter((record) => (
+      record.type === 'span.event'
+      && record.traceId === traces[0]?.traceId
+      && record.event.type === 'discovery.retry.scheduled'
+    ))).toHaveLength(2);
+    expect(fixture.traceRecords).toContainEqual(expect.objectContaining({
+      type: 'trace.linked',
+      traceId: traces[1]?.traceId,
+      targetTraceId: traces[0]?.traceId,
+      linkKind: 'retries',
+    }));
+  });
+
+  it('keeps one Trace open through source normalization, selection and durable publication', async () => {
+    const fixture = createFixture(
+      database,
+      () => '2026-08-22T10:00:00.000+08:00',
+      successfulStreams(),
+    );
+    addInterest(fixture.repository);
+
+    const started = await fixture.agent.ensureDailyDiscovery({
+      trigger: 'manual',
+      now: '2026-08-22T10:00:00.000+08:00',
+    });
+
+    expect(started.status).toBe('started');
+    expect(fixture.traceRecords.some((record) => record.type === 'trace.ended')).toBe(false);
+    await waitForStatus(fixture.repository, 'published');
+    await fixture.agent.shutdown();
+
+    expect(fixture.traceRecords.filter((record) => record.type === 'trace.ended')).toHaveLength(1);
+    const spanNames = fixture.traceRecords.flatMap((record) => (
+      record.type === 'span.started' ? [record.name] : []
+    ));
+    expect(spanNames).toEqual(expect.arrayContaining([
+      'discovery.preflight',
+      'source.availability.check',
+      'model.resolve',
+      'discovery.attempt',
+      'discovery.batch.claim',
+      'agent.execution',
+      'source.search',
+      'discovery.selection',
+      'discovery.attempt.settle',
+      'recommendation.publish',
+    ]));
+    const contentKinds = fixture.traceRecords.flatMap((record) => (
+      record.type === 'content.recorded' ? [record.kind] : []
+    ));
+    expect(contentKinds).toEqual(expect.arrayContaining([
+      'discovery.material',
+      'source.request',
+      'source.provider_response',
+      'source.result',
+      'discovery.candidates',
+      'discovery.selection',
+      'discovery.recommendations',
+    ]));
+    expect(contentKinds).not.toContain('recommendation.published');
+  });
+
+  it('publishes exactly once when every Observability operation throws', async () => {
+    const fixture = createFixture(
+      database,
+      () => '2026-08-22T10:00:00.000+08:00',
+      successfulStreams(),
+      undefined,
+      {
+        onBackgroundError: () => undefined,
+        getDiscoverySettings: () => ({
+          dailyGenerationTime: '08:00',
+          dailyTargetCount: 20,
+          enabledSources: ['open_web'],
+        }),
+        observability: throwingObservability(),
+      },
+    );
+    addInterest(fixture.repository);
+
+    await expect(fixture.agent.ensureDailyDiscovery({
+      trigger: 'manual',
+      now: '2026-08-22T10:00:00.000+08:00',
+    })).resolves.toMatchObject({ status: 'started' });
+    await waitForStatus(fixture.repository, 'published');
+
+    expect(fixture.repository.getDailyBatch('2026-08-22')).toMatchObject({
+      status: 'published',
+      attemptCount: 1,
+      resultCount: 1,
+    });
+  });
+
+  it.each([
+    {
+      expected: 'no_active_interests',
+      addActiveInterest: false,
+      enabledSources: ['open_web'] as const,
+      resolveModel: async () => model,
+    },
+    {
+      expected: 'no_available_sources',
+      addActiveInterest: true,
+      enabledSources: [] as const,
+      resolveModel: async () => model,
+    },
+    {
+      expected: 'model_unavailable',
+      addActiveInterest: true,
+      enabledSources: ['open_web'] as const,
+      resolveModel: async () => undefined,
+    },
+  ])('ends $expected as an ok short Trace', async ({
+    expected,
+    addActiveInterest,
+    enabledSources,
+    resolveModel,
+  }) => {
+    const fixture = createFixture(
+      database,
+      () => '2026-08-22T10:00:00.000+08:00',
+      [],
+      undefined,
+      {
+        onBackgroundError: () => undefined,
+        getDiscoverySettings: () => ({
+          dailyGenerationTime: '08:00',
+          dailyTargetCount: 20,
+          enabledSources,
+        }),
+        resolveModel,
+      },
+    );
+    if (addActiveInterest) addInterest(fixture.repository);
+
+    await expect(fixture.agent.ensureDailyDiscovery({
+      trigger: 'manual',
+      now: '2026-08-22T10:00:00.000+08:00',
+    })).resolves.toMatchObject({ status: expected });
+    await fixture.agent.shutdown();
+
+    expect(fixture.traceRecords.find((record) => record.type === 'trace.ended'))
+      .toMatchObject({ outcome: { status: 'ok', code: expected } });
+  });
+
+  it('records in-progress and already-published calls as independent ok short Traces', async () => {
+    const fixture = createFixture(
+      database,
+      () => '2026-08-22T10:00:00.000+08:00',
+      successfulStreams(),
+    );
+    addInterest(fixture.repository);
+
+    await fixture.agent.ensureDailyDiscovery({ trigger: 'manual', now: '2026-08-22T10:00:00.000+08:00' });
+    await expect(fixture.agent.ensureDailyDiscovery({
+      trigger: 'manual', now: '2026-08-22T10:00:01.000+08:00',
+    })).resolves.toMatchObject({ status: 'in_progress' });
+    await waitForStatus(fixture.repository, 'published');
+    await expect(fixture.agent.ensureDailyDiscovery({
+      trigger: 'manual', now: '2026-08-22T10:00:02.000+08:00',
+    })).resolves.toMatchObject({ status: 'already_published' });
+    await fixture.agent.shutdown();
+
+    const outcomeCodes = fixture.traceRecords.flatMap((record) => (
+      record.type === 'trace.ended' && record.outcome.status === 'ok'
+        ? [record.outcome.code]
+        : []
+    ));
+    expect(outcomeCodes).toEqual(expect.arrayContaining(['published', 'in_progress', 'already_published']));
   });
 
   it('marks a legacy running attempt interrupted and resumes it with a fresh execution', async () => {
@@ -118,6 +301,11 @@ describe('daily discovery scheduler and retry lifecycle', () => {
       batchId: 'batch:legacy', attemptCount: 2, automaticRetryCount: 1,
     });
     expect(fixture.repository.getDailyBatch('2026-08-22')?.executionId).not.toBe('execution:legacy');
+    expect(fixture.traceRecords).toContainEqual(expect.objectContaining({
+      type: 'trace.linked',
+      linkKind: 'continues',
+      targetTraceId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    }));
   });
 
   it('cancels the timer during shutdown and does not start scheduled work afterward', async () => {
@@ -181,11 +369,15 @@ function createFixture(
     readonly getDiscoverySettings: () => {
       readonly dailyGenerationTime: string;
       readonly dailyTargetCount: number;
-      readonly enabledSources: readonly ['open_web'];
+      readonly enabledSources: readonly string[];
     };
+    readonly observability?: Observability;
+    readonly resolveModel?: () => Promise<Model<Api> | undefined>;
   },
 ) {
   const repository = createDiscoveryRepository({ database });
+  const traceRecords: TraceJournalRecord[] = [];
+  const observability = background?.observability ?? recorder(traceRecords);
   let executionNumber = 0;
   let recommendationNumber = 0;
   let batchNumber = 0;
@@ -196,7 +388,8 @@ function createFixture(
       supportedModes: ['relevance'], supportsRead: false,
     },
     getAvailability: () => ({ state: 'ready' }),
-    async search() {
+    async search(request) {
+      request.onProviderResponse?.({ items: [{ id: 'item:new', title: 'Useful item' }] });
       return { status: 'success', items: [{
         sourceId: 'open_web', sourceName: 'example.com', sourceContentId: 'item:new',
         canonicalUrl: 'https://example.com/item', contentType: 'article', title: 'Useful item',
@@ -210,14 +403,14 @@ function createFixture(
       return stream;
     }),
   } as unknown as Models;
-  const discoveryTools = createDailyDiscoveryTestTools();
+  const discoveryTools = createDailyDiscoveryTestTools(observability);
   const options = {
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
       createSessionMessageId: () => 'message:unused', createModelCallId: () => 'model-call:unused',
       createToolExecutionId: () => 'tool:unused', createApprovalId: () => 'approval:unused',
     },
-    clock: { now }, terminalRetentionMs: 60_000, events: createEventBus(), models,
+    clock: { now }, terminalRetentionMs: 60_000, events: createEventBus(), models, observability,
     context: {
       build: async (request) => ({
         status: 'ready' as const,
@@ -243,12 +436,15 @@ function createFixture(
       clock: { now },
     },
     dailyDiscovery: {
-      repository, attempts: discoveryTools.attempts, sourceRegistry: createSourceRegistry([source]),
+      repository,
+      attempts: discoveryTools.attempts,
+      sourceRegistry: createSourceRegistry([source], { observability }),
+      observability,
       settings: { getDiscoverySettings: background?.getDiscoverySettings ?? (() => ({
         dailyGenerationTime: '08:00', dailyTargetCount: 20, enabledSources: ['open_web'],
       })) },
       onBackgroundError: background?.onBackgroundError ?? (() => undefined),
-      timezone: () => 'Asia/Shanghai', resolveModel: async () => model,
+      timezone: () => 'Asia/Shanghai', resolveModel: background?.resolveModel ?? (async () => model),
       ids: {
         createBatchId: () => `batch:${++batchNumber}`,
         createRecommendationId: () => `recommendation:${++recommendationNumber}`,
@@ -279,7 +475,32 @@ function createFixture(
       now: options.clock.now,
     },
   });
-  return { agent, executions, repository };
+  return { agent, executions, repository, traceRecords };
+}
+
+function recorder(records: TraceJournalRecord[]): Observability {
+  let id = 0;
+  return createTraceRecorder({
+    enqueue: (record) => { records.push(record); },
+    createId: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
+    now: () => new Date('2026-08-22T02:00:00.000Z'),
+    links: {
+      resolve: (target) => target.state === 'latest_incomplete'
+        ? 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+        : records.find((record) => record.type === 'trace.started')?.traceId,
+    },
+  });
+}
+
+function throwingObservability(): Observability {
+  const failure = () => { throw new Error('observability unavailable'); };
+  return {
+    withTrace: failure,
+    withSpan: failure,
+    recordContent: failure,
+    recordEvent: failure,
+    linkTrace: failure,
+  } as Observability;
 }
 
 function successfulStreams() {

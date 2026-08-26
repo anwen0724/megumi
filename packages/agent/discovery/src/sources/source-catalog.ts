@@ -7,6 +7,7 @@ import {
   type WebFetch,
   type WebSearch,
 } from '@megumi/tools';
+import type { Observability } from '@megumi/observability';
 import type { EmbeddedBrowser } from './embedded-browser';
 import { createBilibiliSource } from './bilibili-source';
 import { createDouyinSource } from './douyin-source';
@@ -27,6 +28,7 @@ export function createDiscoverySourceRegistry(input: {
   readonly embeddedBrowser: EmbeddedBrowser;
   readonly zhihuAccessSecret?: () => string | undefined;
   readonly twitterApiKey?: () => string | undefined;
+  readonly observability?: Observability;
 }) {
   const configuredWebSearch = deferredWebSearch(input.webSearch);
   const bingWebSearch = createBingRssWebSearch();
@@ -41,7 +43,7 @@ export function createDiscoverySourceRegistry(input: {
     createDouyinSource({ browser: input.embeddedBrowser }),
     createZhihuSource({ accessSecret: input.zhihuAccessSecret ?? (() => undefined) }),
     createTwitterSource({ apiKey: input.twitterApiKey ?? (() => undefined) }),
-  ]);
+  ], { observability: input.observability });
 }
 
 /** Resolves mutable Host settings for every request without weakening the fallback chain. */

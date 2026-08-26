@@ -81,6 +81,39 @@ describe('CandidateRegistry', () => {
     expect(() => registry.list()).toThrow(/disposed/i);
     expect(() => registry.add([content({ canonicalUrl: 'https://example.com/two' })])).toThrow(/disposed/i);
   });
+
+  it('reports stable admission decisions without letting the observer alter candidates', () => {
+    const decisions: unknown[] = [];
+    const registry = createCandidateRegistry({
+      onDecision: (decision) => {
+        decisions.push(decision);
+        throw new Error('diagnostics unavailable');
+      },
+    });
+    const initial = content({ canonicalUrl: 'https://example.com/item', title: 'Initial' });
+
+    registry.add([initial]);
+    registry.add([initial]);
+    registry.add([{ ...initial, description: 'More detail' }]);
+    registry.add([content({ canonicalUrl: 'https://example.com/rejected' })], {
+      reject: () => 'already_recommended',
+    });
+
+    expect(registry.list()).toEqual([expect.objectContaining({
+      candidateId: 'candidate:1',
+      description: 'More detail',
+    })]);
+    expect(decisions).toEqual([
+      { candidateId: 'candidate:1', decision: 'accepted' },
+      expect.objectContaining({ candidateId: 'candidate:1', decision: 'deduplicated' }),
+      expect.objectContaining({ candidateId: 'candidate:1', decision: 'updated' }),
+      {
+        candidateId: 'candidate:rejected:1',
+        decision: 'rejected',
+        reasonCode: 'already_recommended',
+      },
+    ]);
+  });
 });
 
 function content(overrides: Partial<SourceContent>): SourceContent {

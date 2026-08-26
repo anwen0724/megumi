@@ -20,9 +20,14 @@ describe('configured provider discovery sources', () => {
       fetch: fetch as typeof globalThis.fetch,
       now: () => 1_777_000_000_000,
     });
+    const providerResponses: unknown[] = [];
 
     const result = await source.search({
       query: 'RAG', mode: 'relevance', limit: 20, signal: new AbortController().signal,
+      onProviderResponse: (response) => {
+        providerResponses.push(response);
+        throw new Error('diagnostics unavailable');
+      },
     });
 
     expect(source.descriptor).toMatchObject({
@@ -43,6 +48,7 @@ describe('configured provider discovery sources', () => {
       })],
     });
     expect(JSON.stringify(result)).not.toContain('zhihu-secret');
+    expect(providerResponses).toEqual([expect.stringContaining('RAG 评测方法综述')]);
   });
 
   it('reports Zhihu as not configured without invoking the provider', async () => {
@@ -76,9 +82,14 @@ describe('configured provider discovery sources', () => {
       next_cursor: '',
     }), { status: 200, headers: { 'content-type': 'application/json' } }));
     const source = createTwitterSource({ apiKey: () => 'twitter-secret', fetch: fetch as typeof globalThis.fetch });
+    const providerResponses: unknown[] = [];
 
     const result = await source.search({
       query: 'Agent harness', mode, limit: 5, signal: new AbortController().signal,
+      onProviderResponse: (response) => {
+        providerResponses.push(response);
+        throw new Error('diagnostics unavailable');
+      },
     });
 
     const [requestUrl, requestInit] = fetch.mock.calls[0]!;
@@ -95,6 +106,7 @@ describe('configured provider discovery sources', () => {
       })],
     });
     expect(JSON.stringify(result)).not.toContain('twitter-secret');
+    expect(providerResponses).toEqual([expect.objectContaining({ tweets: expect.any(Array) })]);
   });
 
   it('uses cursors only until the requested result limit is satisfied', async () => {

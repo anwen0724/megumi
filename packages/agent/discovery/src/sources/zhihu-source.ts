@@ -2,6 +2,7 @@
  * Owns Zhihu Open Platform search, authentication, and SourceContent normalization.
  */
 import {
+  reportSourceProviderResponse,
   SourceContentSchema,
   type DiscoveryContentType,
   type DiscoverySource,
@@ -68,7 +69,9 @@ export function createZhihuSource(input: {
         if (!response.ok) {
           return providerFailure('invalid_response', `Zhihu returned HTTP ${response.status}.`, response.status >= 500);
         }
-        const items = normalizeResponse(await response.text());
+        const responseText = await response.text();
+        reportSourceProviderResponse(request.onProviderResponse, responseText);
+        const items = normalizeResponse(responseText);
         availability = { state: 'ready', checkedAt: new Date(now()).toISOString() };
         return { status: 'success', items };
       } catch (error) {

@@ -16,9 +16,14 @@ describe('Open Web discovery source', () => {
       })),
     };
     const source = createOpenWebSource({ webSearch });
+    const providerResponses: unknown[] = [];
 
     const result = await source.search({
       query: ' agent harness ', mode: 'relevance', limit: 2, signal: new AbortController().signal,
+      onProviderResponse: (response) => {
+        providerResponses.push(response);
+        throw new Error('diagnostics unavailable');
+      },
     });
 
     expect(webSearch.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'agent harness', count: 2 }));
@@ -29,6 +34,7 @@ describe('Open Web discovery source', () => {
         expect.objectContaining({ sourceId: 'open_web', sourceName: 'github.com', title: 'Repository' }),
       ],
     });
+    expect(providerResponses).toEqual([expect.objectContaining({ query: 'agent harness' })]);
   });
 
   it('returns not_configured without trying a network call when Web Search is unavailable', async () => {

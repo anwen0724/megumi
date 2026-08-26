@@ -2,13 +2,24 @@
  * Owns execution-scoped candidate, search-budget, and selection facts used by Discovery tools.
  */
 import type { RawToolResult } from '@megumi/tools';
+import type {
+  Observability,
+  OperationCompletion,
+  TraceCorrelation,
+  TraceEvent,
+} from '@megumi/observability';
 import {
   createCandidateRegistry,
   discoveryContentIdentity,
   type DiscoveryCandidate,
 } from './candidate-registry';
 import type { RecommendationSelectionSignal } from '../persistence/discovery-repository';
-import type { SourceDescriptor, SourceFailure, SourceSearchMode } from '../sources/discovery-source';
+import type {
+  SourceContent,
+  SourceDescriptor,
+  SourceFailure,
+  SourceSearchMode,
+} from '../sources/discovery-source';
 import type { SourceRegistry } from '../sources/source-registry';
 
 const MAX_SEARCH_CALLS = 12;
@@ -73,7 +84,9 @@ export interface DailyDiscoveryAttempts {
 }
 
 /** Creates the execution-scoped Attempt store used by Discovery's built-in tools. */
-export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
+export function createDailyDiscoveryAttempts(options: {
+  readonly observability?: Observability;
+} = {}): DailyDiscoveryAttempts {
   const records = new Map<string, AttemptRecord>();
 
   const requireAttempt = (executionId: string): AttemptRecord | undefined => records.get(executionId);
@@ -88,7 +101,12 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
         descriptors: [...request.descriptors],
         sourceRegistry: request.sourceRegistry,
         historicalIdentities: new Set(request.signals.map((signal) => signal.contentIdentity)),
-        candidates: createCandidateRegistry(),
+        candidates: createCandidateRegistry({
+          onDecision: (decision) => safeRecordEvent(options.observability, {
+            type: 'discovery.candidate.decided',
+            ...decision,
+          }),
+        }),
         searchCount: 0,
         readCount: 0,
         successfulSearches: 0,
@@ -154,31 +172,57 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
         usage.searchCalls += 1;
         attempt.sourceUsage.set(parsed.sourceId, usage);
       }
-      const result = await source.search({ ...parsed, limit: effectiveLimit, signal: request.signal });
-      if (result.status === 'failed') {
-        attempt.failedSearches += 1;
-        attempt.sourceFailures.push({ sourceId: parsed.sourceId, failure: result.failure });
-        return toolError(result.failure.code, result.failure.message, { failure: result.failure });
-      }
-      attempt.successfulSearches += 1;
-      const resultItems = result.items.slice(0, effectiveLimit);
-      if (budget) usage.resultCount += resultItems.length;
-      attempt.rawCandidates += resultItems.length;
-      const available = Math.max(0, MAX_CANDIDATES - attempt.candidates.list().length);
-      const admitted = resultItems
-        .filter((content) => (
-          content.sourceId === source.descriptor.id
-          && !attempt.historicalIdentities.has(discoveryContentIdentity(content))
-          && (content.contentType !== 'news' || Boolean(content.publishedAt))
-        ))
-        .slice(0, available);
-      const inserted = attempt.candidates.add(admitted);
-      return toolSuccess({
-        status: 'success',
-        candidates: inserted.map(candidateSummary),
-        resultCount: resultItems.length,
-        admittedCount: inserted.length,
-        candidateCount: attempt.candidates.list().length,
+      const correlation = { executionId: request.executionId, sourceId: parsed.sourceId };
+      return observeOperation(options.observability, 'source.search', correlation, async () => {
+        safeRecordContent(options.observability, 'source.request', {
+          query: parsed.query,
+          mode: parsed.mode,
+          limit: effectiveLimit,
+        }, correlation);
+        const result = await source.search({
+          ...parsed,
+          limit: effectiveLimit,
+          signal: request.signal,
+          onProviderResponse: (response) => safeRecordContent(
+            options.observability,
+            'source.provider_response',
+            response,
+            correlation,
+          ),
+        });
+        safeRecordContent(options.observability, 'source.result', result, correlation);
+        if (result.status === 'failed') {
+          attempt.failedSearches += 1;
+          attempt.sourceFailures.push({ sourceId: parsed.sourceId, failure: result.failure });
+          return toolError(result.failure.code, result.failure.message, { failure: result.failure });
+        }
+        attempt.successfulSearches += 1;
+        const resultItems = result.items.slice(0, effectiveLimit);
+        if (budget) usage.resultCount += resultItems.length;
+        attempt.rawCandidates += resultItems.length;
+        const available = Math.max(0, MAX_CANDIDATES - attempt.candidates.list().length);
+        const inserted = attempt.candidates.add(resultItems, {
+          reject: (content) => candidateRejectionReason(
+            content,
+            source.descriptor.id,
+            attempt.historicalIdentities,
+          ),
+          limit: available,
+          limitReasonCode: 'candidate_budget_exhausted',
+        });
+        safeRecordContent(
+          options.observability,
+          'discovery.candidates',
+          attempt.candidates.list(),
+          correlation,
+        );
+        return toolSuccess({
+          status: 'success',
+          candidates: inserted.map(candidateSummary),
+          resultCount: resultItems.length,
+          admittedCount: inserted.length,
+          candidateCount: attempt.candidates.list().length,
+        });
       });
     },
 
@@ -193,20 +237,38 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
       const source = attempt.sourceRegistry.get(candidate.sourceId);
       if (!source?.read) return toolError('read_unavailable', 'This source does not support candidate reading.');
       attempt.readCount += 1;
-      const result = await source.read({
-        sourceContentId: candidate.sourceContentId,
-        url: candidate.canonicalUrl,
-        signal: request.signal,
+      const correlation = {
+        executionId: request.executionId,
+        sourceId: candidate.sourceId,
+        candidateId: candidate.candidateId,
+      };
+      return observeOperation(options.observability, 'source.read', correlation, async () => {
+        safeRecordContent(options.observability, 'source.request', {
+          sourceContentId: candidate.sourceContentId,
+          url: candidate.canonicalUrl,
+        }, correlation);
+        const result = await source.read!({
+          sourceContentId: candidate.sourceContentId,
+          url: candidate.canonicalUrl,
+          signal: request.signal,
+          onProviderResponse: (response) => safeRecordContent(
+            options.observability,
+            'source.provider_response',
+            response,
+            correlation,
+          ),
+        });
+        safeRecordContent(options.observability, 'source.result', result, correlation);
+        if (result.status === 'failed') {
+          return toolError(result.failure.code, result.failure.message, { failure: result.failure });
+        }
+        try {
+          const updated = attempt.candidates.attachDetail(candidate.candidateId, result.detail);
+          return toolSuccess({ status: 'success', candidate: candidateSummary(updated), detail: result.detail });
+        } catch (error) {
+          return toolError('invalid_candidate_detail', error instanceof Error ? error.message : 'Candidate detail was invalid.');
+        }
       });
-      if (result.status === 'failed') {
-        return toolError(result.failure.code, result.failure.message, { failure: result.failure });
-      }
-      try {
-        const updated = attempt.candidates.attachDetail(candidate.candidateId, result.detail);
-        return toolSuccess({ status: 'success', candidate: candidateSummary(updated), detail: result.detail });
-      } catch (error) {
-        return toolError('invalid_candidate_detail', error instanceof Error ? error.message : 'Candidate detail was invalid.');
-      }
     },
 
     async selectRecommendations(request) {
@@ -224,15 +286,88 @@ export function createDailyDiscoveryAttempts(): DailyDiscoveryAttempts {
           { sourceIds: missingSources },
         );
       }
-      const parsed = parseSelection(request.input, attempt.targetCount, attempt.candidates);
-      if (!parsed.ok) {
-        attempt.invalidSelection = true;
-        return toolError('selection_invalid', parsed.message);
-      }
-      attempt.selected = parsed.items;
-      return toolSuccess({ status: 'selected', count: parsed.items.length });
+      const correlation = { executionId: request.executionId };
+      return observeOperation(options.observability, 'discovery.selection', correlation, async () => {
+        safeRecordContent(
+          options.observability,
+          'discovery.candidates',
+          attempt.candidates.list(),
+          correlation,
+        );
+        safeRecordContent(options.observability, 'discovery.selection', request.input, correlation);
+        const parsed = parseSelection(request.input, attempt.targetCount, attempt.candidates);
+        if (!parsed.ok) {
+          attempt.invalidSelection = true;
+          return toolError('selection_invalid', parsed.message);
+        }
+        attempt.selected = parsed.items;
+        return toolSuccess({ status: 'selected', count: parsed.items.length });
+      });
     },
   };
+}
+
+function candidateRejectionReason(
+  content: SourceContent,
+  sourceId: string,
+  historicalIdentities: ReadonlySet<string>,
+): string | undefined {
+  if (content.sourceId !== sourceId) return 'source_identity_mismatch';
+  if (historicalIdentities.has(discoveryContentIdentity(content))) return 'already_recommended';
+  if (content.contentType === 'news' && !content.publishedAt) return 'news_timestamp_missing';
+  return undefined;
+}
+
+async function observeOperation(
+  observability: Observability | undefined,
+  name: 'source.search' | 'source.read' | 'discovery.selection',
+  correlation: TraceCorrelation,
+  operation: () => Promise<RawToolResult>,
+): Promise<RawToolResult> {
+  let operationPromise: Promise<RawToolResult> | undefined;
+  const runOnce = () => {
+    operationPromise ??= operation();
+    return operationPromise;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name,
+      correlation,
+      classifyResult: classifyToolResult,
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function classifyToolResult(result: RawToolResult): OperationCompletion {
+  if (!result.isError) return { outcome: { status: 'ok' } };
+  const code = recordString(result.content, 'code') ?? 'discovery_operation_failed';
+  const message = recordString(result.content, 'message') ?? 'Discovery operation failed.';
+  return { outcome: { status: 'error', code, message } };
+}
+
+function safeRecordContent(
+  observability: Observability | undefined,
+  kind: 'source.request' | 'source.provider_response' | 'source.result'
+    | 'discovery.candidates' | 'discovery.selection',
+  value: unknown,
+  correlation: TraceCorrelation,
+): void {
+  try {
+    observability?.recordContent({ kind, value, correlation });
+  } catch {
+    // Discovery execution remains authoritative when diagnostics are unavailable.
+  }
+}
+
+function safeRecordEvent(observability: Observability | undefined, event: TraceEvent): void {
+  try {
+    observability?.recordEvent(event);
+  } catch {
+    // Candidate admission remains authoritative when diagnostics are unavailable.
+  }
 }
 
 function parseSearchArguments(value: unknown):
