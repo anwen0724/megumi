@@ -379,6 +379,7 @@ export const discoveryCandidateSupplyState = sqliteTable('discovery_candidate_su
   consecutiveZeroYieldCount: integer('consecutive_zero_yield_count').notNull().default(0),
   retryAt: text('retry_at'),
   nextRecheckAt: text('next_recheck_at'),
+  lastSettlementJson: text('last_settlement_json'),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
   check('check_discovery_candidate_supply_state_singleton', sql`${table.stateId} = 'candidate_supply'`),

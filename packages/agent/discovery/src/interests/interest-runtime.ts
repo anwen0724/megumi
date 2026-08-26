@@ -52,6 +52,7 @@ export interface CreateInterestRuntimeOptions {
   };
   readonly clock: { now(): string };
   readonly onError?: (error: unknown, job?: InterestExtractionJob) => void;
+  readonly onInterestsChanged?: (interestIds: readonly string[]) => void;
 }
 
 export interface InterestRuntime {
@@ -101,7 +102,8 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
         updatedAt: now,
       });
       if (request.participation === 'excluded') {
-        options.repository.retractSessionEvidence(request.sessionId, now);
+        const affected = options.repository.retractSessionEvidence(request.sessionId, now);
+        if (affected.length > 0) options.onInterestsChanged?.(affected);
       }
       return policy;
     },
@@ -117,7 +119,8 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
     },
 
     async retractSessionEvidence(sessionId) {
-      options.repository.retractSessionEvidence(sessionId, options.clock.now());
+      const affected = options.repository.retractSessionEvidence(sessionId, options.clock.now());
+      if (affected.length > 0) options.onInterestsChanged?.(affected);
     },
 
     async shutdown() {
@@ -210,7 +213,7 @@ async function processJob(
     readonly confidence: 'high' | 'medium';
   } => evidence.confidence !== 'low');
   if (durable.length === 0) return;
-  options.repository.applyInterestExtraction({
+  const changed = options.repository.applyInterestExtraction({
     sessionId: job.sessionId,
     messageId: job.userMessageId,
     now: options.clock.now(),
@@ -226,4 +229,5 @@ async function processJob(
         : {}),
     })),
   });
+  if (changed.length > 0) options.onInterestsChanged?.(changed.map(({ interestId }) => interestId));
 }

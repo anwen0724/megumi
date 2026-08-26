@@ -6,6 +6,7 @@ import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import {
   CandidateAdmissionDecisionSchema,
   CandidateSchema,
+  CandidateSupplySettlementSchema,
   SourceContentDetailSchema,
   SourceContentSchema,
   type Candidate,
@@ -379,7 +380,7 @@ function validateAdmissionDecision(
   database: DatabaseConnection,
   decision: CandidateAdmissionDecision,
 ): void {
-  requireCandidate(database, decision.candidateId);
+  const candidate = requireCandidate(database, decision.candidateId);
   if (decision.decision === 'needs_detail') return;
   assertActiveInterests(database, decision.matchedInterestIds);
   if ((decision.relevance === 'direct' || decision.relevance === 'adjacent')
@@ -398,6 +399,46 @@ function validateAdmissionDecision(
       sql: 'SELECT recommendation_id FROM discovery_recommendations WHERE recommendation_id = ?',
     }).get([decision.duplicateOfRecommendationId]);
     if (!row) throw new Error('Referenced duplicate Recommendation does not exist.');
+  }
+  if (decision.decision === 'reject') {
+    validateRejectionDimensions(database, candidate, decision);
+  }
+}
+
+function validateRejectionDimensions(
+  database: DatabaseConnection,
+  candidate: Candidate,
+  decision: Extract<CandidateAdmissionDecision, { decision: 'reject' }>,
+): void {
+  const matchesReason = decision.reasonCode === 'unrelated'
+    ? decision.relevance === 'none'
+    : decision.reasonCode === 'low_value'
+      ? decision.contentValue === 'low_value'
+      : decision.reasonCode === 'semantic_duplicate'
+        ? decision.novelty === 'semantic_duplicate'
+        : decision.reasonCode === 'stale'
+          ? decision.temporalValidity === 'stale'
+          : decision.reasonCode === 'negative_constraint'
+            ? decision.negativeConstraint === 'conflict'
+            : true;
+  if (!matchesReason) {
+    throw new Error('Candidate rejection reason does not match its assessment dimensions.');
+  }
+  if (decision.reasonCode !== 'semantic_duplicate') {
+    if (decision.duplicateOfCandidateId || decision.duplicateOfRecommendationId) {
+      throw new Error('Only a semantic duplicate rejection may reference a duplicate object.');
+    }
+    return;
+  }
+  const references = [decision.duplicateOfCandidateId, decision.duplicateOfRecommendationId]
+    .filter((value): value is string => Boolean(value));
+  if (references.length !== 1 || references[0] === candidate.candidateId) {
+    throw new Error('A semantic duplicate rejection requires exactly one different duplicate object.');
+  }
+  const provided = new Set(listPotentialDuplicates(database, candidate.candidateId, 10)
+    .map(({ id }) => id));
+  if (!provided.has(references[0]!)) {
+    throw new Error('Semantic duplicate target is outside the provided potential duplicate set.');
   }
 }
 
@@ -507,7 +548,8 @@ function queryAvailableYield(database: DatabaseConnection, queryId: string): num
     SELECT COUNT(DISTINCT qr.candidate_id) AS count
     FROM discovery_candidate_query_results qr
     JOIN discovery_candidate_assessments a ON a.candidate_id = qr.candidate_id
-    WHERE qr.query_id = ? AND a.active = 1 AND a.decision = 'admit'
+    JOIN discovery_candidates c ON c.candidate_id = qr.candidate_id
+    WHERE qr.query_id = ? AND a.active = 1 AND a.decision = 'admit' AND c.status = 'available'
   ` }).get([queryId])?.count ?? 0;
 }
 
@@ -566,6 +608,9 @@ function readSupplyState(database: DatabaseConnection): CandidateSupplyState | u
     consecutiveZeroYieldCount: row.consecutive_zero_yield_count,
     ...(row.retry_at ? { retryAt: row.retry_at } : {}),
     ...(row.next_recheck_at ? { nextRecheckAt: row.next_recheck_at } : {}),
+    ...(row.last_settlement_json ? {
+      lastSettlement: CandidateSupplySettlementSchema.parse(JSON.parse(row.last_settlement_json)),
+    } : {}),
     updatedAt: row.updated_at,
   } : undefined;
 }
@@ -573,14 +618,17 @@ function readSupplyState(database: DatabaseConnection): CandidateSupplyState | u
 function writeSupplyState(database: DatabaseConnection, state: CandidateSupplyState): void {
   database.prepare({ sql: `
     INSERT INTO discovery_candidate_supply_state (
-      state_id, consecutive_zero_yield_count, retry_at, next_recheck_at, updated_at
-    ) VALUES ('candidate_supply', ?, ?, ?, ?)
+      state_id, consecutive_zero_yield_count, retry_at, next_recheck_at,
+      last_settlement_json, updated_at
+    ) VALUES ('candidate_supply', ?, ?, ?, ?, ?)
     ON CONFLICT(state_id) DO UPDATE SET
       consecutive_zero_yield_count = excluded.consecutive_zero_yield_count,
       retry_at = excluded.retry_at, next_recheck_at = excluded.next_recheck_at,
+      last_settlement_json = excluded.last_settlement_json,
       updated_at = excluded.updated_at
   ` }).run([
     state.consecutiveZeroYieldCount, state.retryAt ?? null, state.nextRecheckAt ?? null,
+    state.lastSettlement ? JSON.stringify(CandidateSupplySettlementSchema.parse(state.lastSettlement)) : null,
     parseTimestamp(state.updatedAt),
   ]);
 }
@@ -904,7 +952,7 @@ type PotentialRecommendationRow = DatabaseRow & {
 };
 type SupplyStateRow = DatabaseRow & {
   consecutive_zero_yield_count: number; retry_at: string | null;
-  next_recheck_at: string | null; updated_at: string;
+  next_recheck_at: string | null; last_settlement_json: string | null; updated_at: string;
 };
 type SourceStateRow = DatabaseRow & {
   source_id: string; consecutive_failure_count: number; retry_at: string | null;

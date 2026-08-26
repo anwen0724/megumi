@@ -51,7 +51,7 @@ export interface InterestRepository {
     readonly updatedAt: string;
   }): SessionParticipation;
   /** Retracts a Session's Evidence and removes unsupported inferred Interests atomically. */
-  retractSessionEvidence(sessionId: string, retractedAt: string): void;
+  retractSessionEvidence(sessionId: string, retractedAt: string): readonly string[];
 }
 
 /** Creates the Interest persistence implementation over one Database connection. */
@@ -250,7 +250,7 @@ function retractSessionEvidence(
   database: DatabaseConnection,
   sessionId: string,
   retractedAt: string,
-): void {
+): readonly string[] {
   const evidence = database.prepare<EvidenceRow>({ sql: `
     SELECT * FROM discovery_interest_evidence
     WHERE session_id = ? AND status <> 'retracted'
@@ -276,6 +276,7 @@ function retractSessionEvidence(
       ` }).run([retractedAt, retractedAt, interestId]);
     }
   }
+  return [...affected].sort();
 }
 
 function readInterestRequired(database: DatabaseConnection, interestId: string): Interest {

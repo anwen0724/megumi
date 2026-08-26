@@ -14,8 +14,11 @@ import type { DiscoveryConfigurationStore } from '../configuration/discovery-con
 import type { DiscoveryRepository } from '../persistence/discovery-repository';
 import type { SourceRegistry } from '../sources/source-registry';
 import { hasCandidatePoolGap } from './candidate-pool';
-import type { CandidatePoolSnapshot } from './candidate-supply';
-import type { CandidateSupplyAttempts } from './candidate-supply-attempts';
+import type { CandidatePoolSnapshot, CandidateSupplySettlement } from './candidate-supply';
+import type {
+  CandidateSupplyAttempts,
+  CandidateSupplyAttemptSummary,
+} from './candidate-supply-attempts';
 
 const BACKOFF_MS = [5 * 60_000, 15 * 60_000, 60 * 60_000, 6 * 60 * 60_000] as const;
 
@@ -48,6 +51,10 @@ export interface CreateCandidateSupplyRuntimeOptions {
   >;
   readonly now: () => string;
   readonly proactiveTargetCount?: () => number;
+  readonly consumerShortfalls?: () => {
+    readonly daily?: number;
+    readonly proactive?: number;
+  };
   readonly observability?: Observability;
   readonly timers?: {
     set(delayMs: number, callback: () => void): unknown;
@@ -94,16 +101,17 @@ export function createCandidateSupplyRuntime(
       return;
     }
     const settings = options.settings.read();
-    const enabledSources = options.sourceRegistry.listSources().filter(({ descriptor, availability }) => (
+    const configuredSources = options.sourceRegistry.listSources().filter(({ descriptor }) => (
       settings.enabledSources.includes(descriptor.id)
-      && availability.state === 'ready'
+    ));
+    const readySources = configuredSources.filter(({ descriptor, availability }) => (
+      availability.state === 'ready'
       && (!availability.retryAt || Date.parse(availability.retryAt) <= Date.parse(now))
       && (!options.repository.readSourceState(descriptor.id)?.retryAt
         || Date.parse(options.repository.readSourceState(descriptor.id)!.retryAt!) <= Date.parse(now))
     ));
-    if (enabledSources.length === 0) {
-      const nextSourceRetry = options.sourceRegistry.listSources()
-        .filter(({ descriptor }) => settings.enabledSources.includes(descriptor.id))
+    if (readySources.length === 0) {
+      const nextSourceRetry = configuredSources
         .flatMap(({ descriptor, availability }) => [
           availability.retryAt,
           options.repository.readSourceState(descriptor.id)?.retryAt,
@@ -116,27 +124,32 @@ export function createCandidateSupplyRuntime(
         nextSourceRetry,
         nextSourceRetry,
         now,
+        settlement(snapshot, 'no_available_source', now),
       );
       schedule(nextSourceRetry);
       return;
     }
     const model = await options.resolveModel();
     if (model.status === 'failed') {
-      applyBackoff(options, snapshot, state?.consecutiveZeroYieldCount ?? 0, now);
+      applyBackoff(
+        options,
+        snapshot,
+        state?.consecutiveZeroYieldCount ?? 0,
+        now,
+        settlement(snapshot, 'agent_failed', now),
+      );
       return;
     }
 
     const availableBefore = snapshot.counts.available;
-    const material = buildMaterial(options, snapshot, enabledSources, now);
+    const material = buildMaterial(options, snapshot, configuredSources, now);
     activeExecution = true;
     rerunRequested = false;
     let executionId: string | undefined;
-    let outcome: ExecutionOutcome = {
-      status: 'failed',
-      failure: { code: 'internal_error', message: 'Candidate Supply did not start.', retryable: true },
-    };
+    let attemptSummary: CandidateSupplyAttemptSummary | undefined;
+    let outcome: ExecutionOutcome;
     try {
-      await withTrace(options.observability, material, async () => {
+      outcome = await withTrace(options.observability, material, async () => {
         const started = await options.startExecution({
           kind: 'candidate_supply',
           requestId: `candidate-supply-request:${randomUUID()}`,
@@ -149,7 +162,7 @@ export function createCandidateSupplyRuntime(
                 executionId: acceptedExecutionId,
                 repository: options.repository,
                 sourceRegistry: options.sourceRegistry,
-                enabledSourceIds: enabledSources.map(({ descriptor }) => descriptor.id),
+                enabledSourceIds: configuredSources.map(({ descriptor }) => descriptor.id),
                 initialCandidateIds: snapshot.pendingCandidates.map((candidate) => candidate.candidateId),
                 getSnapshot: () => getSnapshot(options, options.now()),
                 now: options.now,
@@ -162,17 +175,35 @@ export function createCandidateSupplyRuntime(
           onSettled: () => undefined,
         });
         if (started.status === 'started' || started.status === 'already_started') {
-          outcome = await started.completion;
-        } else if (started.status === 'failed') {
-          outcome = { status: 'failed', failure: started.failure };
+          return started.completion;
         }
+        if (started.status === 'failed') return { status: 'failed', failure: started.failure };
+        return {
+          status: 'failed',
+          failure: {
+            code: 'internal_error',
+            message: messageOf(started.reason),
+            retryable: true,
+          },
+        };
       });
     } finally {
-      if (executionId) options.attempts.dispose(executionId);
+      if (executionId) {
+        attemptSummary = options.attempts.summarize(executionId);
+        options.attempts.dispose(executionId);
+      }
       activeExecution = false;
     }
     const after = getSnapshot(options, options.now());
-    settleAttempt(options, after, availableBefore, outcome, options.now());
+    settleAttempt(
+      options,
+      after,
+      availableBefore,
+      outcome,
+      options.now(),
+      executionId,
+      attemptSummary,
+    );
     if (rerunRequested) {
       rerunRequested = false;
       notify('candidate_state_changed');
@@ -259,11 +290,20 @@ function settleAttempt(
   availableBefore: number,
   outcome: ExecutionOutcome,
   now: string,
+  executionId: string | undefined,
+  summary: CandidateSupplyAttemptSummary | undefined,
 ): void {
   const produced = snapshot.counts.available > availableBefore;
   const current = options.repository.readSupplyState();
-  if (produced && !hasCandidatePoolGap(snapshot.gap)) {
-    persistWakeState(options, 0, undefined, snapshot.nextRecheckAt, now);
+  if (!hasCandidatePoolGap(snapshot.gap)) {
+    persistWakeState(
+      options,
+      0,
+      undefined,
+      snapshot.nextRecheckAt,
+      now,
+      settlement(snapshot, 'fulfilled', now, executionId),
+    );
     return;
   }
   const consecutive = produced ? 0 : (current?.consecutiveZeroYieldCount ?? 0) + 1;
@@ -277,8 +317,8 @@ function settleAttempt(
     hasCandidatePoolGap(snapshot.gap) ? retryAt : undefined,
     retryAt,
     now,
+    settlement(snapshot, settlementReason(snapshot, outcome, summary), now, executionId),
   );
-  void outcome;
 }
 
 function applyBackoff(
@@ -286,12 +326,13 @@ function applyBackoff(
   snapshot: CandidatePoolSnapshot,
   previous: number,
   now: string,
+  lastSettlement: CandidateSupplySettlement,
 ): void {
   const consecutive = previous + 1;
   const retryAt = new Date(
     Date.parse(now) + BACKOFF_MS[Math.min(consecutive, BACKOFF_MS.length) - 1]!,
   ).toISOString();
-  persistWakeState(options, consecutive, retryAt, retryAt, now);
+  persistWakeState(options, consecutive, retryAt, retryAt, now, lastSettlement);
 }
 
 function persistWakeState(
@@ -300,36 +341,85 @@ function persistWakeState(
   retryAt: string | undefined,
   nextRecheckAt: string | undefined,
   now: string,
+  lastSettlement?: CandidateSupplySettlement,
 ): void {
+  const current = options.repository.readSupplyState();
+  const retainedSettlement = lastSettlement ?? current?.lastSettlement;
   options.repository.writeSupplyState({
     consecutiveZeroYieldCount,
     ...(retryAt ? { retryAt } : {}),
     ...(nextRecheckAt ? { nextRecheckAt } : {}),
+    ...(retainedSettlement ? { lastSettlement: retainedSettlement } : {}),
     updatedAt: now,
   });
 }
 
+function settlementReason(
+  snapshot: CandidatePoolSnapshot,
+  outcome: ExecutionOutcome,
+  summary: CandidateSupplyAttemptSummary | undefined,
+): CandidateSupplySettlement['reason'] {
+  if (!hasCandidatePoolGap(snapshot.gap)) return 'fulfilled';
+  if (outcome.status === 'cancelled') return 'cancelled';
+  if (outcome.status === 'failed') return 'agent_failed';
+  if (summary && (
+    summary.searchesStarted >= 12
+    || summary.readsStarted >= 40
+    || summary.rawResultsReceived >= 200
+  )) return 'budget_exhausted';
+  if (summary && summary.searchesSucceeded === 0 && summary.sourceFailures > 0) {
+    return 'no_available_source';
+  }
+  if (summary && summary.searchesSucceeded >= 2 && summary.admittedCandidates === 0) {
+    return 'zero_yield';
+  }
+  return 'agent_failed';
+}
+
+function settlement(
+  snapshot: CandidatePoolSnapshot,
+  reason: CandidateSupplySettlement['reason'],
+  settledAt: string,
+  executionId?: string,
+): CandidateSupplySettlement {
+  return {
+    ...(executionId ? { executionId } : {}),
+    reason,
+    remainingGap: {
+      totalShortfall: snapshot.gap.totalShortfall,
+      uncoveredInterestIds: [...snapshot.gap.uncoveredInterestIds],
+      consumerShortfalls: snapshot.gap.consumerShortfalls.map((shortfall) => ({ ...shortfall })),
+    },
+    settledAt,
+  };
+}
+
 function getSnapshot(options: CreateCandidateSupplyRuntimeOptions, now: string): CandidatePoolSnapshot {
   const settings = options.settings.read();
+  const consumerShortfalls = options.consumerShortfalls?.();
   return options.repository.getPoolSnapshot({
     now,
     dailyTargetCount: settings.dailyTargetCount,
     proactiveTargetCount: options.proactiveTargetCount?.() ?? 0,
+    ...(consumerShortfalls?.daily !== undefined ? { dailyShortfall: consumerShortfalls.daily } : {}),
+    ...(consumerShortfalls?.proactive !== undefined
+      ? { proactiveShortfall: consumerShortfalls.proactive }
+      : {}),
   });
 }
 
 async function withTrace(
   observability: Observability | undefined,
   material: CandidateSupplyContextMaterial,
-  operation: () => Promise<void>,
-): Promise<void> {
-  let promise: Promise<void> | undefined;
+  operation: () => Promise<ExecutionOutcome>,
+): Promise<ExecutionOutcome> {
+  let promise: Promise<ExecutionOutcome> | undefined;
   const runOnce = () => (promise ??= operation());
   if (!observability) return runOnce();
   try {
     return await observability.withTrace({
       kind: 'candidate_supply',
-      classifyResult: (): OperationCompletion => ({ outcome: { status: 'ok' } }),
+      classifyResult: classifyExecutionOutcome,
       correlation: {},
     }, async () => {
       try {
@@ -342,6 +432,19 @@ async function withTrace(
   } catch {
     return runOnce();
   }
+}
+
+function classifyExecutionOutcome(outcome: ExecutionOutcome): OperationCompletion {
+  if (outcome.status === 'completed') return { outcome: { status: 'ok' } };
+  if (outcome.status === 'cancelled') return { outcome: { status: 'cancelled' } };
+  return {
+    outcome: {
+      status: 'error',
+      code: outcome.failure.code,
+      message: outcome.failure.message,
+      retryable: outcome.failure.retryable,
+    },
+  };
 }
 
 function nodeTimers() {

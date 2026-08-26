@@ -151,6 +151,7 @@ describe('Execute Agent', () => {
   it('persists a Recommendation reference and presents it to the first model call', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
     const launched = await launchAgentExecution({
+      kind: 'conversation',
       metadata: executionMetadata(),
       input: {
         displayContent: [{ type: 'text', text: '聊聊它的架构' }],
@@ -623,6 +624,7 @@ function launchWith(
   dependencies: ExecuteAgentDependencies,
 ) {
   return launchAgentExecution({
+    kind: 'conversation',
     metadata: executionMetadata(),
     input: {
       displayContent: [{ type: 'text', text: 'hello' }],

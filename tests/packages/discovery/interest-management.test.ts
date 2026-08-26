@@ -94,6 +94,21 @@ describe('Discovery Agent Interest runtime', () => {
     }).get()?.count).toBe(0);
   });
 
+  it('announces durable inferred Interest changes after their transaction commits', async () => {
+    const onInterestsChanged = vi.fn();
+    const { agent } = fixture(database, {
+      onInterestsChanged,
+      extractor: async () => ({
+        evidence: [{ description: 'Agent runtime', effect: 'support', confidence: 'high' }],
+      }),
+    });
+
+    agent.observeConversationTurn(turn('execution:1', 'user:1', 'assistant:1'));
+
+    await vi.waitFor(() => expect(onInterestsChanged).toHaveBeenCalledOnce());
+    expect(activeInterestDescriptions(database)).toEqual(['Agent runtime']);
+  });
+
   it('requires two independent medium signals, then retracts Session evidence on exclusion', async () => {
     const extractor = vi.fn(async (input: any) => {
       if (input.job.executionId === 'execution:1') {
@@ -197,6 +212,7 @@ describe('Discovery Agent Interest runtime', () => {
 function fixture(database: DatabaseConnection, override: {
   extractor?: (input: any) => Promise<any>;
   recognitionEnabled?: boolean;
+  onInterestsChanged?: (interestIds: readonly string[]) => void;
 } = {}) {
   const repository = createDiscoveryRepository({ database });
   let interestNumber = 0;
@@ -227,6 +243,7 @@ function fixture(database: DatabaseConnection, override: {
         createEvidenceId: () => `evidence:${++evidenceNumber}`,
       },
       clock: { now: () => now },
+      ...(override.onInterestsChanged ? { onInterestsChanged: override.onInterestsChanged } : {}),
     },
   };
   return { agent: createDiscovery(options), repository };

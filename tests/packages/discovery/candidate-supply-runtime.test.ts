@@ -84,6 +84,149 @@ describe('CandidateSupplyRuntime', () => {
     expect(startExecution).toHaveBeenCalledTimes(1);
     await runtime.shutdown();
   });
+
+  it('includes configured cooling Sources in Context while allowing only ready Sources to start the run', async () => {
+    const cooling = source('source:2');
+    cooling.getAvailability = () => ({
+      state: 'rate_limited',
+      retryAt: '2026-08-27T01:00:00.000Z',
+    });
+    const startExecution = vi.fn(async (request: import('@megumi/execution').CandidateSupplyExecutionInput) => ({
+      status: 'started' as const,
+      execution: { kind: 'candidate_supply' as const } as never,
+      completion: Promise.resolve({ status: 'completed' as const }),
+    }));
+    const runtime = createCandidateSupplyRuntime(runtimeOptions({
+      repository,
+      startExecution,
+      sourceRegistry: createSourceRegistry([source(), cooling]),
+      enabledSourceIds: ['source:1', 'source:2'],
+    }));
+
+    await runtime.start();
+    await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
+
+    expect(startExecution.mock.calls[0]![0].material.sources).toEqual([
+      expect.objectContaining({ id: 'source:1', availability: 'ready' }),
+      expect.objectContaining({
+        id: 'source:2',
+        availability: 'rate_limited',
+        retryAt: '2026-08-27T01:00:00.000Z',
+      }),
+    ]);
+    await runtime.shutdown();
+  });
+
+  it('starts when a consumer reports an explicit shortfall even above the inventory low watermark', async () => {
+    seedAvailableCandidate(repository);
+    const startExecution = vi.fn(async (request: import('@megumi/execution').CandidateSupplyExecutionInput) => ({
+      status: 'started' as const,
+      execution: { kind: 'candidate_supply' as const } as never,
+      completion: Promise.resolve({ status: 'completed' as const }),
+    }));
+    const runtime = createCandidateSupplyRuntime({
+      ...runtimeOptions({ repository, startExecution }),
+      consumerShortfalls: () => ({ daily: 1 }),
+    });
+
+    await runtime.start();
+    await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
+
+    expect(startExecution.mock.calls[0]![0].material.pool.consumerShortfalls).toEqual([
+      { consumer: 'daily', count: 1 },
+    ]);
+    await runtime.shutdown();
+  });
+
+  it('waits for the earliest retry when every enabled Source is unavailable', async () => {
+    const retryAt = '2026-08-27T00:05:00.000Z';
+    const startExecution = vi.fn();
+    const resolveModel = vi.fn(async () => ({ status: 'ok' as const, model }));
+    const timerSet = vi.fn(() => 'timer');
+    const unavailable = source();
+    unavailable.getAvailability = () => ({ state: 'rate_limited', retryAt });
+    const runtime = createCandidateSupplyRuntime({
+      ...runtimeOptions({ repository, startExecution, resolveModel }),
+      sourceRegistry: createSourceRegistry([unavailable]),
+      timers: { set: timerSet, clear: vi.fn() },
+    });
+
+    await runtime.start();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resolveModel).not.toHaveBeenCalled();
+    expect(startExecution).not.toHaveBeenCalled();
+    expect(timerSet).toHaveBeenCalledWith(5 * 60_000, expect.any(Function));
+    expect(repository.readSupplyState()).toMatchObject({
+      retryAt,
+      nextRecheckAt: retryAt,
+      lastSettlement: {
+        reason: 'no_available_source',
+        remainingGap: { totalShortfall: 2 },
+      },
+    });
+    await runtime.shutdown();
+  });
+
+  it('records a structured zero-yield settlement when two successful searches leave the gap open', async () => {
+    const attempts = {
+      ...attemptStub(),
+      summarize: vi.fn(() => ({
+        searchesStarted: 2, searchesSucceeded: 2, sourceFailures: 0,
+        readsStarted: 0, rawResultsReceived: 0, admissionCommits: 0,
+        admittedCandidates: 0, rejectedCandidates: 0, needsDetailCandidates: 0,
+      })),
+    } as CandidateSupplyAttempts;
+    const startExecution = vi.fn(async (request: import('@megumi/execution').CandidateSupplyExecutionInput) => {
+      await request.accept({ executionId: 'execution:zero' });
+      return {
+        status: 'started' as const,
+        execution: { kind: 'candidate_supply' as const } as never,
+        completion: Promise.resolve({ status: 'completed' as const }),
+      };
+    });
+    const runtime = createCandidateSupplyRuntime(runtimeOptions({ repository, startExecution, attempts }));
+
+    await runtime.start();
+    await vi.waitFor(() => expect(repository.readSupplyState()?.lastSettlement).toMatchObject({
+      executionId: 'execution:zero',
+      reason: 'zero_yield',
+      remainingGap: { totalShortfall: 2 },
+    }));
+
+    await runtime.shutdown();
+  });
+
+  it('settles as fulfilled and clears backoff when an external state change closes the gap', async () => {
+    seedAvailableCandidate(repository);
+    let dailyShortfall = 1;
+    let finishExecution: (() => void) | undefined;
+    const startExecution = vi.fn(async (request: import('@megumi/execution').CandidateSupplyExecutionInput) => {
+      await request.accept({ executionId: 'execution:externally-fulfilled' });
+      return {
+        status: 'started' as const,
+        execution: { kind: 'candidate_supply' as const } as never,
+        completion: new Promise<import('@megumi/execution').ExecutionOutcome>((resolve) => {
+          finishExecution = () => resolve({ status: 'completed' });
+        }),
+      };
+    });
+    const runtime = createCandidateSupplyRuntime({
+      ...runtimeOptions({ repository, startExecution }),
+      consumerShortfalls: () => ({ daily: dailyShortfall }),
+    });
+
+    await runtime.start();
+    await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
+    dailyShortfall = 0;
+    finishExecution?.();
+    await vi.waitFor(() => expect(repository.readSupplyState()).toMatchObject({
+      consecutiveZeroYieldCount: 0,
+      lastSettlement: { reason: 'fulfilled', remainingGap: { totalShortfall: 0 } },
+    }));
+
+    await runtime.shutdown();
+  });
 });
 
 function runtimeOptions(overrides: {
@@ -92,15 +235,17 @@ function runtimeOptions(overrides: {
   resolveModel?: import('@megumi/discovery').CreateCandidateSupplyRuntimeOptions['resolveModel'];
   attempts?: CandidateSupplyAttempts;
   timers?: import('@megumi/discovery').CreateCandidateSupplyRuntimeOptions['timers'];
+  sourceRegistry?: import('@megumi/discovery').SourceRegistry;
+  enabledSourceIds?: readonly string[];
 }): import('@megumi/discovery').CreateCandidateSupplyRuntimeOptions {
   return {
     repository: overrides.repository,
     attempts: overrides.attempts ?? attemptStub(),
-    sourceRegistry: createSourceRegistry([source()]),
+    sourceRegistry: overrides.sourceRegistry ?? createSourceRegistry([source()]),
     settings: {
       read: () => ({
         conversationRecognitionEnabled: false, dailyGenerationTime: '08:00',
-        dailyTargetCount: 1, enabledSources: ['source:1'],
+        dailyTargetCount: 1, enabledSources: overrides.enabledSourceIds ?? ['source:1'],
       }),
       write: () => undefined,
     },
@@ -118,14 +263,15 @@ function runtimeOptions(overrides: {
 function attemptStub(): CandidateSupplyAttempts {
   return {
     start: vi.fn(), ownsExecution: vi.fn(() => true), dispose: vi.fn(),
+    summarize: vi.fn(() => undefined),
     searchContent: vi.fn(), readCandidate: vi.fn(), commitCandidateAdmission: vi.fn(),
   };
 }
 
-function source(): DiscoverySource {
+function source(id = 'source:1'): DiscoverySource {
   return {
     descriptor: {
-      id: 'source:1', name: 'Source 1', access: 'public_http',
+      id, name: `Source ${id}`, access: 'public_http',
       supportedModes: ['relevance'], supportsRead: false,
     },
     getAvailability: () => ({ state: 'ready' }),

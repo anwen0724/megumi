@@ -27,8 +27,26 @@ interface AttemptRecord {
   readonly getSnapshot: () => CandidatePoolSnapshot;
   readonly now: () => string;
   searchCount: number;
+  searchSucceededCount: number;
+  sourceFailureCount: number;
   readCount: number;
   rawResultCount: number;
+  admissionCommitCount: number;
+  admittedCandidateCount: number;
+  rejectedCandidateCount: number;
+  needsDetailCandidateCount: number;
+}
+
+export interface CandidateSupplyAttemptSummary {
+  readonly searchesStarted: number;
+  readonly searchesSucceeded: number;
+  readonly sourceFailures: number;
+  readonly readsStarted: number;
+  readonly rawResultsReceived: number;
+  readonly admissionCommits: number;
+  readonly admittedCandidates: number;
+  readonly rejectedCandidates: number;
+  readonly needsDetailCandidates: number;
 }
 
 export interface CandidateSupplyAttempts {
@@ -42,6 +60,7 @@ export interface CandidateSupplyAttempts {
     readonly now: () => string;
   }): void;
   ownsExecution(executionId: string): boolean;
+  summarize(executionId: string): CandidateSupplyAttemptSummary | undefined;
   dispose(executionId: string): void;
   searchContent(request: {
     readonly executionId: string;
@@ -80,12 +99,22 @@ export function createCandidateSupplyAttempts(options: {
         getSnapshot: request.getSnapshot,
         now: request.now,
         searchCount: 0,
+        searchSucceededCount: 0,
+        sourceFailureCount: 0,
         readCount: 0,
         rawResultCount: 0,
+        admissionCommitCount: 0,
+        admittedCandidateCount: 0,
+        rejectedCandidateCount: 0,
+        needsDetailCandidateCount: 0,
       });
     },
 
     ownsExecution: (executionId) => records.has(executionId),
+    summarize(executionId) {
+      const attempt = records.get(executionId);
+      return attempt ? attemptSummary(attempt) : undefined;
+    },
     dispose: (executionId) => { records.delete(executionId); },
 
     async searchContent(request) {
@@ -150,6 +179,7 @@ export function createCandidateSupplyAttempts(options: {
         }));
         safeRecordContent(options.observability, 'source.result', result, correlation);
         if (result.status === 'failed') {
+          attempt.sourceFailureCount += 1;
           safeSettleSourceAttempt(attempt.repository, {
             sourceId: parsed.data.sourceId,
             result: result.failure.code === 'cancelled' ? 'cancelled' : 'failed',
@@ -178,6 +208,7 @@ export function createCandidateSupplyAttempts(options: {
           for (const candidate of committed.candidates) {
             attempt.allowedCandidateIds.add(candidate.candidateId);
           }
+          attempt.searchSucceededCount += 1;
           safeSettleSourceAttempt(attempt.repository, {
             sourceId: parsed.data.sourceId, result: 'success', now: attempt.now(),
           });
@@ -282,22 +313,46 @@ export function createCandidateSupplyAttempts(options: {
       if (parsed.data.decisions.some((decision) => !attempt.allowedCandidateIds.has(decision.candidateId))) {
         return toolError('candidate_not_in_context', 'Admission references a Candidate outside this execution context.');
       }
-      try {
-        const candidates = attempt.repository.commitAdmission({
-          executionId: request.executionId,
-          assessmentVersion: 'candidate-admission:v1',
-          assessedAt: attempt.now(),
-          decisions: parsed.data.decisions,
-        });
-        return toolSuccess({
-          status: 'committed',
-          candidates,
-          pool: attempt.getSnapshot(),
-          budget: remainingBudget(attempt),
-        });
-      } catch (error) {
-        return toolError('admission_commit_failed', messageOf(error));
+      const unreadable = parsed.data.decisions.find((decision) => {
+        if (decision.decision !== 'needs_detail') return false;
+        const candidate = attempt.repository.readCandidate(decision.candidateId);
+        return !candidate || !attempt.sourceRegistry.get(candidate.primarySourceId)?.read;
+      });
+      if (unreadable) {
+        return toolError(
+          'admission_commit_failed',
+          'needs_detail requires a Candidate Source that can read additional content.',
+        );
       }
+      return observeOperation(
+        options.observability,
+        'candidate.admission.commit',
+        { executionId: request.executionId },
+        async () => {
+          try {
+            const candidates = attempt.repository.commitAdmission({
+              executionId: request.executionId,
+              assessmentVersion: 'candidate-admission:v1',
+              assessedAt: attempt.now(),
+              decisions: parsed.data.decisions,
+            });
+            attempt.admissionCommitCount += 1;
+            for (const decision of parsed.data.decisions) {
+              if (decision.decision === 'admit') attempt.admittedCandidateCount += 1;
+              else if (decision.decision === 'reject') attempt.rejectedCandidateCount += 1;
+              else attempt.needsDetailCandidateCount += 1;
+            }
+            return toolSuccess({
+              status: 'committed',
+              candidates,
+              pool: attempt.getSnapshot(),
+              budget: remainingBudget(attempt),
+            });
+          } catch (error) {
+            return toolError('admission_commit_failed', messageOf(error));
+          }
+        },
+      );
     },
   };
 }
@@ -317,9 +372,23 @@ function remainingBudget(attempt: AttemptRecord) {
   };
 }
 
+function attemptSummary(attempt: AttemptRecord): CandidateSupplyAttemptSummary {
+  return {
+    searchesStarted: attempt.searchCount,
+    searchesSucceeded: attempt.searchSucceededCount,
+    sourceFailures: attempt.sourceFailureCount,
+    readsStarted: attempt.readCount,
+    rawResultsReceived: attempt.rawResultCount,
+    admissionCommits: attempt.admissionCommitCount,
+    admittedCandidates: attempt.admittedCandidateCount,
+    rejectedCandidates: attempt.rejectedCandidateCount,
+    needsDetailCandidates: attempt.needsDetailCandidateCount,
+  };
+}
+
 async function observeOperation(
   observability: Observability | undefined,
-  name: 'source.search' | 'source.read',
+  name: 'source.search' | 'source.read' | 'candidate.admission.commit',
   correlation: TraceCorrelation,
   operation: () => Promise<RawToolResult>,
 ): Promise<RawToolResult> {

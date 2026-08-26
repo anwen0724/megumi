@@ -127,6 +127,7 @@ CREATE TABLE `discovery_candidate_supply_state` (
 	`consecutive_zero_yield_count` integer DEFAULT 0 NOT NULL,
 	`retry_at` text,
 	`next_recheck_at` text,
+	`last_settlement_json` text,
 	`updated_at` text NOT NULL,
 	CONSTRAINT `check_discovery_candidate_supply_state_singleton` CHECK(`state_id` = 'candidate_supply')
 );

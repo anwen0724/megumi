@@ -278,6 +278,7 @@ export async function launchedExecution(
   } = {},
 ): Promise<LaunchedAgentExecution> {
   return launchAgentExecution({
+    kind: 'conversation',
     metadata: executionMetadata(overrides.metadata),
     input: executionInput,
     awaitApproval: overrides.awaitApproval ?? (async () => ({ status: 'cancelled' as const })),

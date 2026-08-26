@@ -150,8 +150,31 @@ export interface CandidateSupplyState {
   readonly consecutiveZeroYieldCount: number;
   readonly retryAt?: string;
   readonly nextRecheckAt?: string;
+  readonly lastSettlement?: CandidateSupplySettlement;
   readonly updatedAt: string;
 }
+
+export const CandidateSupplySettlementSchema = z.object({
+  executionId: z.string().min(1).optional(),
+  reason: z.enum([
+    'fulfilled',
+    'budget_exhausted',
+    'no_available_source',
+    'zero_yield',
+    'agent_failed',
+    'cancelled',
+  ]),
+  remainingGap: z.object({
+    totalShortfall: z.number().int().nonnegative(),
+    uncoveredInterestIds: z.array(z.string().min(1)),
+    consumerShortfalls: z.array(z.object({
+      consumer: z.enum(['daily', 'proactive']),
+      count: z.number().int().positive(),
+    }).strict()),
+  }).strict(),
+  settledAt: TimestampSchema,
+}).strict();
+export type CandidateSupplySettlement = z.infer<typeof CandidateSupplySettlementSchema>;
 
 export interface CandidateSourceState {
   readonly sourceId: string;

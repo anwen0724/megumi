@@ -79,6 +79,7 @@ export {
   CandidateAdmissionDecisionSchema,
   CandidateSchema,
   CandidateStatusSchema,
+  CandidateSupplySettlementSchema,
   CandidateSupplyCommitInputSchema,
   CandidateSupplySearchInputSchema,
 } from './candidate-supply/candidate-supply';
@@ -93,7 +94,10 @@ export {
   normalizeCandidateQuery,
 } from './candidate-supply/candidate-pool';
 export { createCandidateSupplyAttempts } from './candidate-supply/candidate-supply-attempts';
-export type { CandidateSupplyAttempts } from './candidate-supply/candidate-supply-attempts';
+export type {
+  CandidateSupplyAttempts,
+  CandidateSupplyAttemptSummary,
+} from './candidate-supply/candidate-supply-attempts';
 export { createCandidateSupplyRuntime } from './candidate-supply/candidate-supply-runtime';
 export type {
   CandidateSupplyRuntime,
@@ -112,6 +116,7 @@ export type {
   CandidateSupplyCommitInput,
   CandidateSupplyRepository,
   CandidateSupplySearchInput,
+  CandidateSupplySettlement,
   CandidateSupplyThresholds,
   CandidateSupplyState,
   CandidateSourceState,

@@ -93,14 +93,24 @@ export interface CreateDiscoveryOptions {
 
 /** Composes Megumi's Discovery business operations from its optional capabilities. */
 export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
+  const candidateSupplyRuntime = options.candidateSupply
+    ? createCandidateSupplyRuntime(options.candidateSupply)
+    : undefined;
   const interestRuntime = options.interests
-    ? createInterestRuntime(options.interests)
+    ? createInterestRuntime({
+        ...options.interests,
+        onInterestsChanged: (interestIds) => {
+          options.interests?.onInterestsChanged?.(interestIds);
+          options.candidateSupply?.repository.invalidateAdmissions({
+            interestIds,
+            now: options.candidateSupply.now(),
+          });
+          candidateSupplyRuntime?.notify('interest_changed');
+        },
+      })
     : createDisabledInterestRuntime();
   const dailyDiscoveryRuntime = options.dailyDiscovery
     ? createDailyDiscoveryRuntime(options.dailyDiscovery)
-    : undefined;
-  const candidateSupplyRuntime = options.candidateSupply
-    ? createCandidateSupplyRuntime(options.candidateSupply)
     : undefined;
   const discoveryConfiguration = options.configuration
     ? createDiscoveryConfiguration(options.configuration)
