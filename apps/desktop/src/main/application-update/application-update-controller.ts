@@ -82,15 +82,19 @@ export function createApplicationUpdateController(
   dependencies: ApplicationUpdateControllerDependencies,
 ): ApplicationUpdateController {
   let preferences = normalizePreferences(dependencies.preferences.read());
+  const unsupportedReason = resolveUnsupportedReason(dependencies);
+  const installation = unsupportedReason
+    ? { supported: false as const, reason: unsupportedReason }
+    : { supported: true as const };
   const common = () => ({
     currentVersion: dependencies.currentVersion,
     platform: dependencies.platform,
     arch: dependencies.arch,
     automaticChecksEnabled: preferences.automaticChecksEnabled,
     automaticDownloadsEnabled: preferences.automaticDownloadsEnabled,
+    installation,
   });
-  const unsupportedReason = resolveUnsupportedReason(dependencies);
-  let snapshot: ApplicationUpdateSnapshot = unsupportedReason
+  let snapshot: ApplicationUpdateSnapshot = unsupportedReason && unsupportedReason !== 'development'
     ? { ...common(), status: 'unsupported', reason: unsupportedReason }
     : { ...common(), status: 'idle' };
   let started = false;
@@ -135,7 +139,7 @@ export function createApplicationUpdateController(
 
   // One gate owns both check sources so entering About cannot create competing remote requests.
   async function check(source: 'automatic' | 'manual'): Promise<ApplicationUpdateSnapshot> {
-    if (snapshot.status === 'unsupported' || disposed) return snapshot;
+    if (disposed) return snapshot;
     if (activeCheck) return activeCheck;
     if (snapshot.status === 'downloading' || snapshot.status === 'ready' || snapshot.status === 'installing') {
       return snapshot;
@@ -162,7 +166,7 @@ export function createApplicationUpdateController(
           return publishWithCurrentPreferences({ ...common(), status: 'up_to_date', checkedAt: lastCheckedAt });
         }
         const available = publishAvailable(result.release, lastCheckedAt);
-        if (preferences.automaticDownloadsEnabled) return beginDownload();
+        if (preferences.automaticDownloadsEnabled && installation.supported) return beginDownload();
         return available;
       } catch (error) {
         return publishOperationError(error, 'check');
@@ -184,7 +188,7 @@ export function createApplicationUpdateController(
 
   // Electron's check command is intentionally invoked only after metadata discovery and user policy allow download.
   async function beginDownload(): Promise<ApplicationUpdateSnapshot> {
-    if (snapshot.status !== 'available') return snapshot;
+    if (!installation.supported || snapshot.status !== 'available') return snapshot;
     const release = releaseFromSnapshot(snapshot);
     publishWithCurrentPreferences({ ...common(), status: 'downloading', ...releaseSnapshotFields(release) });
     try {
@@ -260,7 +264,7 @@ export function createApplicationUpdateController(
 
   return {
     start() {
-      if (started || disposed || snapshot.status === 'unsupported') return;
+      if (started || disposed || !installation.supported) return;
       started = true;
       unsubscribeUpdater = dependencies.updater.subscribe(handleUpdaterEvent);
       if (preferences.automaticChecksEnabled) {
@@ -277,7 +281,7 @@ export function createApplicationUpdateController(
     getSnapshot: () => snapshot,
     checkNow: () => check('manual'),
     async setAutomaticChecksEnabled(enabled) {
-      if (snapshot.status === 'installing') return snapshot;
+      if (!installation.supported || snapshot.status === 'installing') return snapshot;
       const nextPreferences = enabled
         ? { ...preferences, automaticChecksEnabled: true }
         : { automaticChecksEnabled: false, automaticDownloadsEnabled: false };
@@ -286,7 +290,7 @@ export function createApplicationUpdateController(
       return publishWithCurrentPreferences(snapshot);
     },
     async setAutomaticDownloadsEnabled(enabled) {
-      if (snapshot.status === 'installing') return snapshot;
+      if (!installation.supported || snapshot.status === 'installing') return snapshot;
       const nextPreferences = {
         ...preferences,
         automaticDownloadsEnabled: preferences.automaticChecksEnabled && enabled,

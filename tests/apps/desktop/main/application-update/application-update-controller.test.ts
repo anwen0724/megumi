@@ -211,14 +211,24 @@ describe('ApplicationUpdateController', () => {
     expect(fixture.updater.quitAndInstall).not.toHaveBeenCalled();
   });
 
-  it('never registers or checks the production updater in unsupported environments', async () => {
+  it('allows metadata checks but never registers or downloads through the updater in development', async () => {
     const fixture = createFixture({ isPackaged: false });
     fixture.controller.start();
 
-    expect(fixture.controller.getSnapshot()).toMatchObject({ status: 'unsupported', reason: 'development' });
+    expect(fixture.controller.getSnapshot()).toMatchObject({
+      status: 'idle',
+      installation: { supported: false, reason: 'development' },
+    });
     expect(fixture.updater.subscribe).not.toHaveBeenCalled();
     expect(fixture.schedule).not.toHaveBeenCalled();
-    await expect(fixture.controller.checkNow()).resolves.toMatchObject({ status: 'unsupported' });
+    await expect(fixture.controller.checkNow()).resolves.toMatchObject({
+      status: 'available',
+      targetVersion: '0.2.0',
+      installation: { supported: false, reason: 'development' },
+    });
+    await fixture.controller.downloadUpdate();
+    expect(fixture.metadata.checkLatest).toHaveBeenCalledOnce();
+    expect(fixture.updater.checkForUpdates).not.toHaveBeenCalled();
   });
 });
 

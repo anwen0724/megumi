@@ -28,12 +28,21 @@ export const ApplicationUpdateErrorCodeSchema = z.enum([
 
 export type ApplicationUpdateErrorCode = z.infer<typeof ApplicationUpdateErrorCodeSchema>;
 
+const ApplicationUpdateInstallationSchema = z.discriminatedUnion('supported', [
+  z.object({ supported: z.literal(true) }).strict(),
+  z.object({
+    supported: z.literal(false),
+    reason: z.enum(['development', 'platform', 'not_installed']),
+  }).strict(),
+]);
+
 const SnapshotBaseSchema = z.object({
   currentVersion: z.string(),
   platform: z.string(),
   arch: z.string(),
   automaticChecksEnabled: z.boolean(),
   automaticDownloadsEnabled: z.boolean(),
+  installation: ApplicationUpdateInstallationSchema,
 });
 
 const ReleaseSnapshotFields = {
@@ -46,7 +55,7 @@ const ReleaseSnapshotFields = {
 export const ApplicationUpdateSnapshotSchema = z.discriminatedUnion('status', [
   SnapshotBaseSchema.extend({
     status: z.literal('unsupported'),
-    reason: z.enum(['development', 'platform', 'not_installed']),
+    reason: z.enum(['platform', 'not_installed']),
   }).strict(),
   SnapshotBaseSchema.extend({
     status: z.literal('idle'),

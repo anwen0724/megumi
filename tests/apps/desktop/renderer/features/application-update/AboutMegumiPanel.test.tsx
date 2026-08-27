@@ -15,9 +15,11 @@ describe('AboutMegumiPanel', () => {
   const downloadUpdate = vi.fn();
   const restartAndInstall = vi.fn();
   const setAutomaticChecksEnabled = vi.fn();
+  const openReleasePage = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    checkNow.mockResolvedValue(developmentSnapshot());
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
@@ -28,7 +30,7 @@ describe('AboutMegumiPanel', () => {
           setAutomaticChecksEnabled,
           setAutomaticDownloadsEnabled: vi.fn(),
           restartAndInstall,
-          openReleasePage: vi.fn(),
+          openReleasePage,
           onSnapshot: vi.fn(() => vi.fn()),
         },
       },
@@ -43,6 +45,33 @@ describe('AboutMegumiPanel', () => {
     expect(screen.getByText('Windows x64')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Check for updates on startup' })).toBeChecked();
     expect(screen.getByRole('switch', { name: 'Download available updates automatically' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeInTheDocument();
+    expect(screen.queryByText('Connect your preferred AI providers, work with project files, and keep control of local data and tool permissions.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Check and download are separate. Megumi never restarts to install without your action.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Check once, 15 seconds after each normal application startup.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download after a check finds a stable update. Restarting is always your choice.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Megumi is developed openly on GitHub.')).not.toBeInTheDocument();
+  });
+
+  it('uses the same update UI in development while disabling installation-only actions', async () => {
+    const user = userEvent.setup();
+    useApplicationUpdateStore.setState({ snapshot: developmentSnapshot() });
+    const view = render(<AboutMegumiPanel />);
+
+    expect(screen.getByText('Ready to check')).toBeInTheDocument();
+    expect(screen.queryByText('This environment supports version checks only')).not.toBeInTheDocument();
+    expect(screen.queryByText('Development mode cannot download or install updates in the app.')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(checkNow).toHaveBeenCalledOnce();
+    expect(screen.getByRole('switch', { name: 'Check for updates on startup' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Download available updates automatically' })).toBeDisabled();
+
+    useApplicationUpdateStore.setState({ snapshot: unavailableInstallationSnapshot() });
+    view.rerender(<AboutMegumiPanel />);
+    expect(screen.getByRole('button', { name: 'Download update' })).toBeDisabled();
+    expect(downloadUpdate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'View release' }));
+    expect(openReleasePage).toHaveBeenCalledOnce();
   });
 
   it('shows Download update for available and Restart and update only for ready', async () => {
@@ -88,7 +117,15 @@ function common() {
     arch: 'x64',
     automaticChecksEnabled: true,
     automaticDownloadsEnabled: false,
+    installation: { supported: true as const },
   } as const;
+}
+
+function developmentCommon() {
+  return {
+    ...common(),
+    installation: { supported: false as const, reason: 'development' as const },
+  };
 }
 
 function idleSnapshot(): ApplicationUpdateSnapshot {
@@ -109,4 +146,19 @@ function availableSnapshot(): ApplicationUpdateSnapshot {
 
 function readySnapshot(): ApplicationUpdateSnapshot {
   return { ...availableSnapshot(), status: 'ready' };
+}
+
+function developmentSnapshot(): ApplicationUpdateSnapshot {
+  return { ...developmentCommon(), status: 'idle' };
+}
+
+function unavailableInstallationSnapshot(): ApplicationUpdateSnapshot {
+  return {
+    ...developmentCommon(),
+    status: 'available',
+    checkedAt: '2026-08-28T00:00:00.000Z',
+    targetVersion: '0.2.0',
+    releaseTitle: 'Megumi 0.2.0',
+    releasePageUrl: 'https://github.com/anwen0724/megumi/releases/tag/v0.2.0',
+  };
 }

@@ -50,7 +50,7 @@ export function AboutMegumiPanel() {
     );
   }
 
-  const preferencesDisabled = snapshot.status === 'unsupported' || snapshot.status === 'installing';
+  const preferencesDisabled = !snapshot.installation.supported || snapshot.status === 'installing';
   return (
     <div className="space-y-6">
       <SettingsPageHeader
@@ -68,9 +68,6 @@ export function AboutMegumiPanel() {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold tracking-[-0.01em] text-[var(--color-text)]">Megumi</h2>
             <p className="mt-1 text-sm font-medium text-[var(--color-text)]">{t('about.tagline')}</p>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">
-              {t('about.description')}
-            </p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[var(--color-text-muted)]">
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1">
                 {t('about.version', { version: snapshot.currentVersion })}
@@ -85,13 +82,15 @@ export function AboutMegumiPanel() {
 
       <SettingsSection
         title={t('about.updateTitle')}
-        description={t('about.updateDescription')}
+        headerAction={(
+          <ManualCheckButton
+            snapshot={snapshot}
+            onCheck={() => { void checkNow(); }}
+          />
+        )}
       >
         <div className="divide-y divide-[var(--color-border)]">
-          <SettingsRow
-            title={t('about.automaticChecks')}
-            description={t('about.automaticChecksDescription')}
-          >
+          <SettingsRow title={t('about.automaticChecks')}>
             <div className="flex justify-end">
               <UpdateSwitch
                 checked={snapshot.automaticChecksEnabled}
@@ -101,12 +100,7 @@ export function AboutMegumiPanel() {
               />
             </div>
           </SettingsRow>
-          <SettingsRow
-            title={t('about.automaticDownloads')}
-            description={snapshot.automaticChecksEnabled
-              ? t('about.automaticDownloadsDescription')
-              : t('about.automaticDownloadsRequiresChecks')}
-          >
+          <SettingsRow title={t('about.automaticDownloads')}>
             <div className="flex justify-end">
               <UpdateSwitch
                 checked={snapshot.automaticDownloadsEnabled}
@@ -120,14 +114,13 @@ export function AboutMegumiPanel() {
 
         <UpdateStatusCard
           snapshot={snapshot}
-          onCheck={() => { void checkNow(); }}
           onDownload={() => { void downloadUpdate(); }}
           onRestart={() => { void restartAndInstall(); }}
           onOpenRelease={() => { void openReleasePage(); }}
         />
       </SettingsSection>
 
-      <SettingsSection title={t('about.projectTitle')} description={t('about.projectDescription')}>
+      <SettingsSection title={t('about.projectTitle')}>
         <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--color-text)]">{t('about.openSource')}</p>
@@ -146,13 +139,11 @@ export function AboutMegumiPanel() {
 /** Combines the current status explanation, Release details, and its single primary action. */
 function UpdateStatusCard({
   snapshot,
-  onCheck,
   onDownload,
   onRestart,
   onOpenRelease,
 }: {
   readonly snapshot: ApplicationUpdateSnapshot;
-  readonly onCheck: () => void;
   readonly onDownload: () => void;
   readonly onRestart: () => void;
   readonly onOpenRelease: () => void;
@@ -160,7 +151,8 @@ function UpdateStatusCard({
   const { t } = useTranslation('settings');
   const presentation = statusPresentation(snapshot, t);
   const StatusIcon = presentation.icon;
-  const releaseVisible = 'releasePageUrl' in snapshot && Boolean(snapshot.releasePageUrl);
+  const releaseVisible = snapshot.status === 'unsupported'
+    || ('releasePageUrl' in snapshot && Boolean(snapshot.releasePageUrl));
   const lastCheckedAt = checkedAt(snapshot);
   return (
     <div className="border-t border-[var(--color-border)] p-5">
@@ -211,10 +203,8 @@ function UpdateStatusCard({
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <PrimaryUpdateAction
             snapshot={snapshot}
-            onCheck={onCheck}
             onDownload={onDownload}
             onRestart={onRestart}
-            onOpenRelease={onOpenRelease}
           />
           {releaseVisible ? (
             <Button variant="ghost" onClick={onOpenRelease}>
@@ -231,64 +221,66 @@ function UpdateStatusCard({
 /** Selects exactly one primary command from the Main-owned discriminated state. */
 function PrimaryUpdateAction({
   snapshot,
-  onCheck,
   onDownload,
   onRestart,
-  onOpenRelease,
 }: {
   readonly snapshot: ApplicationUpdateSnapshot;
-  readonly onCheck: () => void;
   readonly onDownload: () => void;
   readonly onRestart: () => void;
-  readonly onOpenRelease: () => void;
 }) {
   const { t } = useTranslation('settings');
   switch (snapshot.status) {
     case 'unsupported':
-      return <Button variant="primary" onClick={onOpenRelease}>{t('about.openReleases')}</Button>;
     case 'idle':
     case 'up_to_date':
-      return (
-        <Button variant="primary" onClick={onCheck}>
-          <RefreshCw className="size-4" aria-hidden="true" />
-          {t('about.checkNow')}
-        </Button>
-      );
+    case 'checking':
+    case 'downloading':
+    case 'installing':
+    case 'error':
+      return null;
     case 'available':
       return (
-        <Button variant="primary" onClick={onDownload}>
+        <Button variant="primary" disabled={!snapshot.installation.supported} onClick={onDownload}>
           <Download className="size-4" aria-hidden="true" />
           {t('about.downloadUpdate')}
         </Button>
       );
     case 'ready':
       return (
-        <Button variant="primary" onClick={onRestart}>
+        <Button variant="primary" disabled={!snapshot.installation.supported} onClick={onRestart}>
           <PackageCheck className="size-4" aria-hidden="true" />
           {t('about.restartAndUpdate')}
         </Button>
       );
-    case 'error':
-      return snapshot.retryable ? (
-        <Button variant="primary" onClick={onCheck}>
-          <RefreshCw className="size-4" aria-hidden="true" />
-          {t('about.retryCheck')}
-        </Button>
-      ) : <Button variant="primary" onClick={onOpenRelease}>{t('about.openReleases')}</Button>;
-    case 'checking':
-      return <ProgressButton label={t('about.checking')} />;
-    case 'downloading':
-      return <ProgressButton label={t('about.downloading')} />;
-    case 'installing':
-      return <ProgressButton label={t('about.installing')} />;
   }
 }
 
-/** Presents truthful indeterminate work without exposing a second interactive update command. */
-function ProgressButton({ label }: { readonly label: string }) {
+/** Keeps manual metadata discovery visible independently from installation support. */
+function ManualCheckButton({
+  snapshot,
+  onCheck,
+}: {
+  readonly snapshot: ApplicationUpdateSnapshot;
+  readonly onCheck: () => void;
+}) {
+  const { t } = useTranslation('settings');
+  const busy = snapshot.status === 'checking'
+    || snapshot.status === 'downloading'
+    || snapshot.status === 'ready'
+    || snapshot.status === 'installing';
+  const checking = snapshot.status === 'checking';
+  const label = checking
+    ? t('about.checking')
+    : snapshot.status === 'error'
+      ? t('about.retryCheck')
+      : t('about.checkNow');
   return (
-    <Button variant="primary" disabled>
-      <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+    <Button variant="secondary" disabled={busy} onClick={onCheck}>
+      {checking ? (
+        <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      ) : (
+        <RefreshCw className="size-4" aria-hidden="true" />
+      )}
       {label}
     </Button>
   );

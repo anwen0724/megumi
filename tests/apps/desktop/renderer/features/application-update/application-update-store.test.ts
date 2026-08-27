@@ -85,6 +85,7 @@ function common() {
     arch: 'x64',
     automaticChecksEnabled: true,
     automaticDownloadsEnabled: false,
+    installation: { supported: true as const },
   } as const;
 }
 
