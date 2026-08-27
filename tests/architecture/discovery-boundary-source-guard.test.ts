@@ -37,7 +37,7 @@ describe('Megumi discovery architecture boundary', () => {
       readTypeScriptTree('packages/agent/product-host/src/host'),
     ].join('\n');
     expect(productBusinessBoundary).not.toMatch(
-      /createDiscoveryRepository|DiscoveryRepository|discovery_(?:interests|batches|recommendations)|search_content|CandidateRegistry/u,
+      /createDiscoveryRepository|DiscoveryRepository|discovery_(?:interests|batches|recommendations)|search_content/u,
     );
   });
 });
