@@ -1,0 +1,41 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify tag and package version
+        run: npm run release:verify:version -- --tag "$env:GITHUB_REF_NAME"
+
+      - name: Run release gates
+        run: npm run release:verify
+
+      - name: Build and upload Draft Release
+        run: npm run publish -- --arch=x64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify Squirrel.Windows assets
+        run: npm run release:verify:artifacts -- --directory out/make/squirrel.windows/x64

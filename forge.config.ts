@@ -76,6 +76,21 @@ const config: ForgeConfig = {
       config: {},
     },
   ],
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: {
+          owner: 'anwen0724',
+          name: 'megumi',
+        },
+        draft: true,
+        prerelease: false,
+        generateReleaseNotes: true,
+        tagPrefix: 'v',
+      },
+    },
+  ],
   plugins: [
     new VitePlugin({
       build: [

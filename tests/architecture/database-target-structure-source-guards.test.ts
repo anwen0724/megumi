@@ -10,6 +10,7 @@ describe('Database target structure', () => {
   it('provides the confirmed Package and source files', () => {
     expect(listFiles('packages/agent/database/src')).toEqual([
       'database-migrations.ts',
+      'database-release-upgrade.ts',
       'database-schema.ts',
       'database-tables.ts',
       'database.ts',
