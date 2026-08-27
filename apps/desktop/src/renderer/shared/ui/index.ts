@@ -13,4 +13,4 @@ export { cx } from './class-names';
 export { showToast, useToastStore } from './toast-store';
 export type { TabItem } from './Tabs';
 export type { SelectOption } from './Select';
-export type { ShowToastRequest, ToastMessage, ToastTone } from './toast-store';
+export type { ShowToastRequest, ToastAction, ToastMessage, ToastTone } from './toast-store';

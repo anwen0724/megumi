@@ -62,6 +62,18 @@ function ToastItem({
           {toast.message ? (
             <div className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">{toast.message}</div>
           ) : null}
+          {toast.action ? (
+            <button
+              type="button"
+              className="mt-2 min-h-8 cursor-pointer rounded px-2 text-xs font-semibold text-[var(--color-accent)] hover:bg-[var(--color-accent-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]"
+              onClick={() => {
+                toast.action?.onClick();
+                onDismiss();
+              }}
+            >
+              {toast.action.label}
+            </button>
+          ) : null}
         </div>
         <button
           type="button"

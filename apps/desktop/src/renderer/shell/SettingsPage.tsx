@@ -1,3 +1,6 @@
+/*
+ * Composes the Settings shell, category navigation, and independent feature panels.
+ */
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Activity, AudioLines, Bot, BrainCircuit, Boxes, CheckCircle2, Info, Palette, Rss, ShieldCheck } from 'lucide-react';
@@ -8,6 +11,7 @@ import { ContentSourcesSettingsPanel } from '../features/content-sources-setting
 import { PermissionRulesPanel } from '../features/permission-settings';
 import { SkillSettingsPanel } from '../features/skill-settings';
 import { VoiceSettingsPanel } from '../features/voice-settings';
+import { AboutMegumiPanel, useApplicationUpdateStore } from '../features/application-update';
 import { ThemeSelector } from '../shared/theme';
 import { LanguageSelector } from '../shared/i18n';
 import {
@@ -18,7 +22,7 @@ import {
   cx,
 } from '../shared/ui';
 
-type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'memory' | 'diagnostics' | 'security' | 'about';
+export type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'memory' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -68,6 +72,10 @@ function activeCategoryLabel(category: SettingsCategory): SettingsCategoryItem {
 export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWidth = 288, onStartSidebarResize }: SettingsPageProps) {
   const { t } = useTranslation('settings');
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
+  const updateSnapshot = useApplicationUpdateStore((state) => state.snapshot);
+  const updatePending = updateSnapshot?.status === 'available'
+    || updateSnapshot?.status === 'downloading'
+    || updateSnapshot?.status === 'ready';
   const activeCategory = activeCategoryLabel(category);
 
   useEffect(() => {
@@ -80,6 +88,10 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onDone]);
+
+  useEffect(() => {
+    setCategory(initialCategory);
+  }, [initialCategory]);
 
   return (
     <main
@@ -149,7 +161,16 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
                             aria-hidden="true"
                             className={selected ? 'text-[var(--color-accent)]' : undefined}
                           />
-                          <span className="truncate">{t(`categories.${item.id}.label`)}</span>
+                          <span className="min-w-0 flex-1 truncate">{t(`categories.${item.id}.label`)}</span>
+                          {item.id === 'about' && updatePending ? (
+                            <span
+                              aria-label={t('about.updateBadgeLabel')}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[0.65rem] font-semibold text-[var(--color-accent)]"
+                            >
+                              <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+                              {t('about.updateBadge')}
+                            </span>
+                          ) : null}
                         </button>
                       );
                     })}
@@ -223,30 +244,7 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
                 </div>
               ) : null}
 
-              {category === 'about' ? (
-                <div className="space-y-6">
-                  <SettingsPageHeader
-                    title={t('categories.about.label')}
-                    description={t('categories.about.description')}
-                  />
-                  <SettingsSection>
-                    <div className="flex items-start gap-4 p-5">
-                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-                        <CheckCircle2 size={20} aria-hidden="true" />
-                      </div>
-                      <div>
-                        <h2 className="text-base font-semibold text-[var(--color-text)]">Megumi</h2>
-                        <p className="mt-1 text-sm text-[var(--color-text)]">
-                          {t('about.tagline')}
-                        </p>
-                        <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">
-                          {t('about.description')}
-                        </p>
-                      </div>
-                    </div>
-                  </SettingsSection>
-                </div>
-              ) : null}
+              {category === 'about' ? <AboutMegumiPanel /> : null}
             </div>
           </section>
         </div>

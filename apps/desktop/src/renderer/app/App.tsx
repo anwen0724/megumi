@@ -1,3 +1,6 @@
+/*
+ * Composes process-wide Renderer providers, update state, setup, and the primary Desktop shell.
+ */
 import { useEffect, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ThemeProvider } from '../shared/theme';
@@ -6,6 +9,10 @@ import { WindowTitleBar } from '../shell/WindowTitleBar';
 import { SetupWizard, useSetupWizardStore } from '../features/setup-wizard';
 import { ToastViewport } from '../shared/ui';
 import { useSessionStore } from '../entities/session';
+import {
+  disposeApplicationUpdateStore,
+  initializeApplicationUpdateStore,
+} from '../features/application-update';
 
 export default function App() {
   const status = useSetupWizardStore((state) => state.status);
@@ -20,6 +27,11 @@ export default function App() {
     return useSessionStore.subscribe((state, previous) => {
       if (state.activeSessionId !== previous.activeSessionId) publishSelection(state.activeSessionId);
     });
+  }, []);
+
+  useEffect(() => {
+    void initializeApplicationUpdateStore();
+    return () => disposeApplicationUpdateStore();
   }, []);
 
   const setupPending = status === 'idle' || status === 'loading';

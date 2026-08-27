@@ -1,3 +1,6 @@
+/*
+ * Owns top-level shell navigation, including externally requested Settings destinations.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useProjectStore } from '../entities/project/store';
 import { useSessionStore } from '../entities/session/store';
@@ -5,13 +8,16 @@ import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
 import type { DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
+import { useApplicationUpdateStore } from '../features/application-update';
+import type { SettingsCategory } from './SettingsPage';
 
 export function useAppBodyController() {
   const [activePage, setActivePage] = useState<'discovery' | 'chat'>('discovery');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsCategory, setSettingsCategory] = useState<'appearance' | 'sources'>('appearance');
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('appearance');
+  const aboutRequestId = useApplicationUpdateStore((state) => state.aboutRequestId);
   const projects = useProjectStore((state) => state.projects);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const sessions = useSessionStore((state) => state.sessions);
@@ -108,11 +114,15 @@ export function useAppBodyController() {
     })();
   }, [setActiveSession]);
 
-  const showSettingsCategory = useCallback((category: 'appearance' | 'sources') => {
+  const showSettingsCategory = useCallback((category: SettingsCategory) => {
     setRightSidebarOpen(false);
     setSettingsCategory(category);
     setSettingsOpen(true);
   }, []);
+
+  useEffect(() => {
+    if (aboutRequestId > 0) showSettingsCategory('about');
+  }, [aboutRequestId, showSettingsCategory]);
 
   const openSettings = useCallback(() => {
     showSettingsCategory('appearance');

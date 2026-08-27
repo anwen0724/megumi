@@ -11,13 +11,22 @@ export type ToastMessage = {
   title: string;
   message?: string;
   durationMs: number;
+  action?: ToastAction;
+};
+
+export type ToastAction = {
+  label: string;
+  /** Runs the single user-visible action attached to this local notification. */
+  onClick(): void;
 };
 
 export type ShowToastRequest = {
+  id?: string;
   tone?: ToastTone;
   title: string;
   message?: string;
   durationMs?: number;
+  action?: ToastAction;
 };
 
 type ToastStore = {
@@ -30,15 +39,18 @@ type ToastStore = {
 export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   showToast(request) {
-    const id = `toast:${crypto.randomUUID()}`;
+    const id = request.id ?? `toast:${crypto.randomUUID()}`;
     const toast: ToastMessage = {
       id,
       tone: request.tone ?? 'info',
       title: request.title,
       ...(request.message ? { message: request.message } : {}),
       durationMs: request.durationMs ?? 4000,
+      ...(request.action ? { action: request.action } : {}),
     };
-    set((state) => ({ toasts: [...state.toasts, toast].slice(-4) }));
+    set((state) => ({
+      toasts: [...state.toasts.filter((item) => item.id !== id), toast].slice(-4),
+    }));
     return id;
   },
   dismissToast(id) {
