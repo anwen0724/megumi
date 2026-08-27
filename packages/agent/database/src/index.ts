@@ -7,6 +7,13 @@ export {
   DatabaseTransactionError,
   createDatabase,
 } from './database';
+export {
+  DatabaseReleaseUpgradeError,
+} from './database-release-upgrade';
+export type {
+  DatabaseReleaseUpgradeOptions,
+  PreparedDatabaseReleaseUpgrade,
+} from './database-release-upgrade';
 export type {
   CreateDatabaseRequest,
   DatabaseConnection,
@@ -19,6 +26,7 @@ export type {
   PrepareDatabaseStatementRequest,
 } from './database';
 export {
+  DatabaseDowngradeUnsupportedError,
   DatabaseMigrationError,
   migrateDatabase,
 } from './database-migrations';

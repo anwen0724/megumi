@@ -1,10 +1,13 @@
+/*
+ * Owns Desktop window residency and the single asynchronous application shutdown sequence.
+ */
 import { app } from 'electron';
 
 export interface RegisterAppLifecycleOptions {
   registerAllHandlers: () => void;
   createWindow: () => LifecycleWindow;
   start?: () => void;
-  dispose?: () => void;
+  dispose?: () => void | Promise<void>;
 }
 
 export interface LifecycleWindow {
@@ -19,9 +22,13 @@ export interface LifecycleWindow {
 
 export interface AppLifecycleController {
   showMainWindow(): void;
-  quit(): void;
+  /** Marks the application as quitting and waits for every composed resource to be released. */
+  prepareToQuit(): Promise<void>;
+  /** Completes the shared shutdown preparation before requesting a normal Electron quit. */
+  quit(): Promise<void>;
 }
 
+/** Registers resident-window lifecycle behavior and returns the shared shutdown Interface. */
 export function registerAppLifecycle({
   registerAllHandlers,
   createWindow,
@@ -30,13 +37,12 @@ export function registerAppLifecycle({
 }: RegisterAppLifecycleOptions): AppLifecycleController {
   let mainWindow: LifecycleWindow | undefined;
   let quitting = false;
-  let disposalStarted = false;
+  let disposalPromise: Promise<void> | undefined;
 
-  const beginQuit = () => {
+  const beginQuit = (): Promise<void> => {
     quitting = true;
-    if (disposalStarted) return;
-    disposalStarted = true;
-    dispose?.();
+    disposalPromise ??= Promise.resolve().then(() => dispose?.());
+    return disposalPromise;
   };
 
   const openMainWindow = () => {
@@ -72,13 +78,14 @@ export function registerAppLifecycle({
   });
 
   app.on('before-quit', () => {
-    beginQuit();
+    void beginQuit();
   });
 
   return {
     showMainWindow: openMainWindow,
-    quit() {
-      beginQuit();
+    prepareToQuit: beginQuit,
+    async quit() {
+      await beginQuit();
       app.quit();
     },
   };

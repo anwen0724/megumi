@@ -1,4 +1,7 @@
-import { app, BrowserWindow } from 'electron';
+/*
+ * Boots the Electron Desktop Host and stops before Product startup when composition is unsafe.
+ */
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
 import { loadEnvFile } from './config/env';
 import { registerAllHandlers } from './ipc/register-ipc-handlers';
@@ -13,6 +16,7 @@ import { shouldQuitForSquirrelStartup } from './app/squirrel-startup';
 import { composeDesktopMain } from './shell-composition/desktop-main-composition';
 import type { CharacterWindowController } from './app/character-window-controller';
 import { createFileCharacterWindowStateStore } from './adapters/file-character-window-state-store';
+import { showDesktopBootstrapFailure } from './app/bootstrap-failure';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -21,8 +25,15 @@ if (shouldQuitForSquirrelStartup()) {
   app.quit();
 } else {
   loadEnvFile();
+  try {
+    startDesktop(composeDesktopMain());
+  } catch (error) {
+    void stopAfterBootstrapFailure(error);
+  }
+}
+
+function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void {
   let character: CharacterWindowController | undefined;
-  const desktopMain = composeDesktopMain();
   let mainWindow: BrowserWindow | undefined;
   let tray: MegumiTray | undefined;
   let quitApplication = () => app.quit();
@@ -88,7 +99,7 @@ if (shouldQuitForSquirrelStartup()) {
         showMainWindow: () => {
           showMainWindow();
         },
-        quit: () => quitApplication(),
+        quit: () => { void quitApplication(); },
       });
       if (character.shouldRestoreVisible()) void character.show();
     },
@@ -108,5 +119,18 @@ if (shouldQuitForSquirrelStartup()) {
     },
   });
   showMainWindow = () => lifecycle.showMainWindow();
-  quitApplication = () => lifecycle.quit();
+  quitApplication = () => { void lifecycle.quit(); };
+}
+
+async function stopAfterBootstrapFailure(error: unknown): Promise<void> {
+  console.error('Megumi Desktop bootstrap failed.', error);
+  const recoveryShown = await showDesktopBootstrapFailure(error);
+  if (!recoveryShown) {
+    await app.whenReady();
+    dialog.showErrorBox(
+      'Megumi 启动失败',
+      '桌面应用未能完成启动。请退出后重试，并保留日志以便诊断。',
+    );
+  }
+  app.quit();
 }

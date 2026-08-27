@@ -134,12 +134,38 @@ describe('registerAppLifecycle', () => {
     const lifecycle = registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window, dispose });
     await whenReady.mock.results[0].value;
 
-    lifecycle.quit();
+    await lifecycle.quit();
     const closeEvent = { preventDefault: vi.fn() };
     listeners.get('close')?.(closeEvent);
 
     expect(dispose).toHaveBeenCalledOnce();
     expect(quit).toHaveBeenCalledOnce();
     expect(closeEvent.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('awaits one shared disposal before quitting or handing control to an updater', async () => {
+    let finishDisposal: (() => void) | undefined;
+    const disposal = new Promise<void>((resolve) => { finishDisposal = resolve; });
+    const dispose = vi.fn(() => disposal);
+    const window = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn(),
+    };
+    const { registerAppLifecycle } = await import('@megumi/desktop/main/app/lifecycle');
+    const lifecycle = registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window, dispose });
+    await whenReady.mock.results[0].value;
+
+    const prepared = lifecycle.prepareToQuit();
+    const quitRequested = lifecycle.quit();
+    await Promise.resolve();
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(quit).not.toHaveBeenCalled();
+
+    finishDisposal?.();
+    await Promise.all([prepared, quitRequested]);
+    expect(quit).toHaveBeenCalledOnce();
   });
 });

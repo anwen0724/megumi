@@ -191,6 +191,9 @@ export function composeProductCapabilities(options: ProductCapabilitiesOptions):
         database,
         ...(options.migrationsFolder ? { migrationsFolder: options.migrationsFolder } : {}),
         ...(options.migrationEnvironment ? { migrationEnvironment: options.migrationEnvironment } : {}),
+        ...(options.productEnvironment?.appVersion
+          ? { releaseUpgrade: { targetApplicationVersion: options.productEnvironment.appVersion } }
+          : {}),
       });
     } catch (error) {
       database.close();

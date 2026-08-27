@@ -12,29 +12,56 @@ import {
   resolveDatabaseMigrationsFolder,
   type ResolveDatabaseMigrationsFolderRequest,
 } from './migration-resources';
+import {
+  completeDatabaseReleaseUpgrade,
+  prepareDatabaseReleaseUpgrade,
+  type DatabaseReleaseUpgradeOptions,
+} from './database-release-upgrade';
 
 export interface MigrateDatabaseRequest {
   readonly database: DatabaseConnection;
   readonly migrationsFolder?: string;
   readonly migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
+  readonly releaseUpgrade?: DatabaseReleaseUpgradeOptions;
 }
 
 export interface MigrateDatabaseResult {
   readonly appliedMigrations: number;
   readonly currentMigration?: string;
   readonly migrationsFolder: string;
+  readonly backupFile?: string;
+}
+
+export class DatabaseDowngradeUnsupportedError extends Error {
+  readonly databaseFile: string;
+  readonly databaseMigrationCount: number;
+  readonly supportedMigrationCount: number;
+
+  constructor(request: {
+    readonly databaseFile: string;
+    readonly databaseMigrationCount: number;
+    readonly supportedMigrationCount: number;
+  }) {
+    super(`Database migration history is newer than this application for ${request.databaseFile}.`);
+    this.name = 'DatabaseDowngradeUnsupportedError';
+    this.databaseFile = request.databaseFile;
+    this.databaseMigrationCount = request.databaseMigrationCount;
+    this.supportedMigrationCount = request.supportedMigrationCount;
+  }
 }
 
 export class DatabaseMigrationError extends Error {
   readonly databaseFile: string;
   readonly migrationsFolder: string;
   readonly migration: string;
+  readonly backupFile?: string;
   readonly reason: 'legacy_history_migration_failed' | 'sql_migration_failed';
 
   constructor(request: {
     databaseFile: string;
     migrationsFolder: string;
     migration: string;
+    backupFile?: string;
     reason: 'legacy_history_migration_failed' | 'sql_migration_failed';
   }) {
     super(`Failed to apply Database migration ${request.migration} for ${request.databaseFile}.`);
@@ -42,6 +69,7 @@ export class DatabaseMigrationError extends Error {
     this.databaseFile = request.databaseFile;
     this.migrationsFolder = request.migrationsFolder;
     this.migration = request.migration;
+    this.backupFile = request.backupFile;
     this.reason = request.reason;
   }
 }
@@ -53,8 +81,22 @@ export function migrateDatabase(request: MigrateDatabaseRequest): MigrateDatabas
   });
   const journal = readDatabaseMigrationJournal(migrationsFolder);
   const beforeCount = migrationCount(request.database);
-  const pendingMigration = journal.entries[beforeCount]?.tag ?? 'unknown';
   const databaseFile = getDatabaseFilename(request.database);
+  if (beforeCount > journal.entries.length) {
+    throw new DatabaseDowngradeUnsupportedError({
+      databaseFile,
+      databaseMigrationCount: beforeCount,
+      supportedMigrationCount: journal.entries.length,
+    });
+  }
+  const pendingMigration = journal.entries[beforeCount]?.tag ?? 'unknown';
+  const preparedUpgrade = request.releaseUpgrade
+    ? prepareDatabaseReleaseUpgrade({
+        database: request.database,
+        hasPendingMigrations: beforeCount < journal.entries.length,
+        options: request.releaseUpgrade,
+      })
+    : undefined;
 
   try {
     prepareLegacySessionHistoryMigration(request.database);
@@ -63,6 +105,7 @@ export function migrateDatabase(request: MigrateDatabaseRequest): MigrateDatabas
       databaseFile,
       migrationsFolder,
       migration: 'legacy_session_history_migration',
+      ...(preparedUpgrade?.backupFile ? { backupFile: preparedUpgrade.backupFile } : {}),
       reason: 'legacy_history_migration_failed',
     });
   }
@@ -74,15 +117,23 @@ export function migrateDatabase(request: MigrateDatabaseRequest): MigrateDatabas
       databaseFile,
       migrationsFolder,
       migration: pendingMigration,
+      ...(preparedUpgrade?.backupFile ? { backupFile: preparedUpgrade.backupFile } : {}),
       reason: 'sql_migration_failed',
     });
   }
 
   const afterCount = migrationCount(request.database);
+  if (preparedUpgrade) {
+    completeDatabaseReleaseUpgrade({
+      prepared: preparedUpgrade,
+      backupRetention: request.releaseUpgrade?.backupRetention,
+    });
+  }
   return {
     appliedMigrations: afterCount - beforeCount,
     currentMigration: journal.entries[Math.min(afterCount, journal.entries.length) - 1]?.tag,
     migrationsFolder,
+    ...(preparedUpgrade?.backupFile ? { backupFile: preparedUpgrade.backupFile } : {}),
   };
 }
 
