@@ -206,6 +206,7 @@ export const settings = {
   memory: {
     title: 'Memory',
     description: 'Control whether Megumi may remember useful information across conversations.',
+    developing: 'In development...',
     preferences: 'Memory preferences',
     conversation: 'Conversation memory',
     conversationDescription: 'Remember useful project context and preferences so future conversations can continue with less repetition.',

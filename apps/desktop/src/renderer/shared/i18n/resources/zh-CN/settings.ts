@@ -209,6 +209,7 @@ export const settings = {
   memory: {
     title: '记忆',
     description: '控制 Megumi 是否可以跨会话记住有用信息。',
+    developing: '正在开发中...',
     preferences: '记忆偏好',
     conversation: '会话记忆',
     conversationDescription: '记住有用的项目上下文和偏好，让后续会话减少重复说明。',

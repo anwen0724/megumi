@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 /* Verifies the product-facing Memory setting and its immediate save behavior. */
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemorySettingsPanel } from '@megumi/desktop/renderer/features/memory-settings';
 
@@ -18,16 +17,13 @@ describe('MemorySettingsPanel', () => {
     });
   });
 
-  it('enables conversation memory without exposing runtime terminology', async () => {
-    const user = userEvent.setup();
+  it('keeps conversation memory unavailable while the feature is in development', async () => {
     render(<MemorySettingsPanel />);
 
     const toggle = await screen.findByRole('switch', { name: 'Conversation memory' });
-    await waitFor(() => expect(toggle).not.toBeDisabled());
-    await user.click(toggle);
-
-    await waitFor(() => expect(update).toHaveBeenCalled());
-    expect(update.mock.calls[0][0].payload).toEqual({ memory: { enabled: true } });
+    expect(toggle).toBeDisabled();
+    expect(screen.getByText('In development...')).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
     expect(screen.queryByText(/memory runtime/i)).not.toBeInTheDocument();
   });
 });

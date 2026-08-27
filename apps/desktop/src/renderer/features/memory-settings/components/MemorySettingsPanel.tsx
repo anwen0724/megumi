@@ -88,8 +88,6 @@ export function MemorySettingsPanel() {
     setStatus('ready');
   }
 
-  const busy = status === 'loading' || status === 'saving';
-
   return (
     <div className="space-y-6">
       <SettingsPageHeader
@@ -101,34 +99,42 @@ export function MemorySettingsPanel() {
           title={t('memory.conversation')}
           description={t('memory.conversationDescription')}
         >
-          <div className="flex items-center justify-end gap-3">
-            <span className="text-sm text-[var(--color-text-muted)]">
-              {status === 'loading' ? t('memory.loading') : enabled ? t('memory.on') : t('memory.off')}
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-label={t('memory.conversation')}
-              aria-checked={enabled}
-              disabled={busy}
-              onClick={() => void updateAutoCaptureEnabled(!enabled)}
-              className={cx(
-                'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-150',
-                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
-                enabled
-                  ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
-                  : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
-                busy ? 'cursor-wait opacity-60' : undefined,
-              )}
+          <div className="flex flex-col items-end gap-1.5">
+            <span
+              id="memory-development-status"
+              className="text-xs text-[var(--color-text-muted)]"
             >
-              <span
-                aria-hidden="true"
+              {t('memory.developing')}
+            </span>
+            <div className="flex items-center justify-end gap-3">
+              <span className="text-sm text-[var(--color-text-muted)]">
+                {status === 'loading' ? t('memory.loading') : enabled ? t('memory.on') : t('memory.off')}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-label={t('memory.conversation')}
+                aria-describedby="memory-development-status"
+                aria-checked={enabled}
+                disabled
+                onClick={() => void updateAutoCaptureEnabled(!enabled)}
                 className={cx(
-                  'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-150',
-                  enabled ? 'translate-x-6' : 'translate-x-1',
+                  'relative inline-flex h-7 w-12 shrink-0 cursor-not-allowed items-center rounded-full border opacity-60 transition-colors duration-150',
+                  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
+                  enabled
+                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                    : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
                 )}
-              />
-            </button>
+              >
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-150',
+                    enabled ? 'translate-x-6' : 'translate-x-1',
+                  )}
+                />
+              </button>
+            </div>
           </div>
         </SettingsRow>
         {error ? (
