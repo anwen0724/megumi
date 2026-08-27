@@ -168,4 +168,30 @@ describe('registerAppLifecycle', () => {
     await Promise.all([prepared, quitRequested]);
     expect(quit).toHaveBeenCalledOnce();
   });
+
+  it('restores resident-window behavior when exit preparation fails', async () => {
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const dispose = vi.fn()
+      .mockRejectedValueOnce(new Error('busy'))
+      .mockResolvedValueOnce(undefined);
+    const window = {
+      show: vi.fn(),
+      hide: vi.fn(),
+      focus: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      on: vi.fn((event: string, listener: (...args: unknown[]) => void) => listeners.set(event, listener)),
+    };
+    const { registerAppLifecycle } = await import('@megumi/desktop/main/app/lifecycle');
+    const lifecycle = registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window, dispose });
+    await whenReady.mock.results[0].value;
+
+    await expect(lifecycle.prepareToQuit()).rejects.toThrow('busy');
+    const closeEvent = { preventDefault: vi.fn() };
+    listeners.get('close')?.(closeEvent);
+    expect(closeEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(window.hide).toHaveBeenCalledOnce();
+
+    await expect(lifecycle.prepareToQuit()).resolves.toBeUndefined();
+    expect(dispose).toHaveBeenCalledTimes(2);
+  });
 });

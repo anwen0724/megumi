@@ -17,6 +17,7 @@ import { composeDesktopMain } from './shell-composition/desktop-main-composition
 import type { CharacterWindowController } from './app/character-window-controller';
 import { createFileCharacterWindowStateStore } from './adapters/file-character-window-state-store';
 import { showDesktopBootstrapFailure } from './app/bootstrap-failure';
+import { composeApplicationUpdate } from './application-update/application-update-composition';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -33,6 +34,19 @@ if (shouldQuitForSquirrelStartup()) {
 }
 
 function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void {
+  let prepareToQuit: () => Promise<void> = async () => {
+    throw new Error('Desktop lifecycle is not ready for update installation.');
+  };
+  const applicationUpdate = composeApplicationUpdate({
+    megumiHomePath: desktopMain.homePath,
+    logger: desktopMain.runtimeLogger,
+    prepareToQuit: () => prepareToQuit(),
+  });
+  const applicationUpdateSubscription = applicationUpdate.subscribe((snapshot) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(IPC_CHANNELS.applicationUpdate.snapshotChanged, snapshot);
+    }
+  });
   let character: CharacterWindowController | undefined;
   let mainWindow: BrowserWindow | undefined;
   let tray: MegumiTray | undefined;
@@ -67,6 +81,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
 
   const lifecycle = registerAppLifecycle({
     start: () => {
+      applicationUpdate.start();
       void desktopMain.start().catch((error: unknown) => {
         desktopMain.runtimeLogger.warn('product_background_start_failed', {
           errorMessage: error instanceof Error ? error.message : String(error),
@@ -76,6 +91,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
     registerAllHandlers: () => {
       registerAllHandlers({
         logger: desktopMain.runtimeLogger,
+        applicationUpdate,
         workspace: desktopMain.workspace,
         session: desktopMain.session,
         publishSessionMessageEvent: (event) => {
@@ -112,6 +128,8 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
       return mainWindow;
     },
     dispose: async () => {
+      applicationUpdateSubscription();
+      applicationUpdate.dispose();
       tray?.dispose();
       characterSubscription.unsubscribe();
       await character.dispose();
@@ -119,6 +137,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
     },
   });
   showMainWindow = () => lifecycle.showMainWindow();
+  prepareToQuit = () => lifecycle.prepareToQuit();
   quitApplication = () => { void lifecycle.quit(); };
 }
 

@@ -44,6 +44,15 @@ describe('Desktop preload transport contract', () => {
     expect(handlers).toMatch(/ipcMain\.on\(\s*IPC_CHANNELS\.voice\.inputPort/);
     expect(handlers).not.toMatch(/ipcMain\.handle\(\s*IPC_CHANNELS\.voice\.inputPort/);
   });
+
+  it('validates update snapshots and returns an unsubscribe function for the long-lived event', () => {
+    const preload = fs.readFileSync(path.resolve('apps/desktop/src/preload/api.ts'), 'utf8');
+    expect(preload).toMatch(/ApplicationUpdateSnapshotSchema\.parse/);
+    expect(preload).toMatch(/ApplicationUpdateSnapshotSchema\.safeParse/);
+    expect(preload).toMatch(/ipcRenderer\.on\(IPC_CHANNELS\.applicationUpdate\.snapshotChanged/);
+    expect(preload).toMatch(/removeListener\(IPC_CHANNELS\.applicationUpdate\.snapshotChanged/);
+    expect(preload).not.toMatch(/applicationUpdate[\s\S]{0,1200}(feed|assetPath|downloadUrl):/);
+  });
 });
 
 function tokens(source: string, pattern: RegExp): Set<string> {

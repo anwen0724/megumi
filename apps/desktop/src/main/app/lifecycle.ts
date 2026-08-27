@@ -41,7 +41,14 @@ export function registerAppLifecycle({
 
   const beginQuit = (): Promise<void> => {
     quitting = true;
-    disposalPromise ??= Promise.resolve().then(() => dispose?.());
+    disposalPromise ??= Promise.resolve()
+      .then(() => dispose?.())
+      .catch((error: unknown) => {
+        // A failed preparation must not leave the resident window behaving as if exit succeeded.
+        quitting = false;
+        disposalPromise = undefined;
+        throw error;
+      });
     return disposalPromise;
   };
 

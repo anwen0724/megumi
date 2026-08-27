@@ -17,6 +17,10 @@ import { registerVoiceInputHandler } from './handlers/voice-input.handler';
 import type { ElectronVoiceInputAdapter } from '../adapters/voice-input/electron-voice-input-adapter';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 import type { SessionMessagePresentationEvent } from './session-message-presentation';
+import {
+  registerApplicationUpdateHandlers,
+} from './handlers/application-update.handler';
+import type { ApplicationUpdateController } from '../application-update/application-update-controller';
 
 export interface RegisterAllHandlersOptions {
   logger?: ProductRuntimeLogger;
@@ -32,12 +36,17 @@ export interface RegisterAllHandlersOptions {
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
   voiceInput?: { adapter: ElectronVoiceInputAdapter };
+  applicationUpdate?: ApplicationUpdateController;
 }
 
 export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
   registerWindowHandlers({ ipcMain });
+
+  if (options.applicationUpdate) {
+    registerApplicationUpdateHandlers({ controller: options.applicationUpdate, ipcMain });
+  }
 
   if (options.workspace) {
     registerWorkspaceHandlers(options.workspace, { logger: options.logger, ipcMain });

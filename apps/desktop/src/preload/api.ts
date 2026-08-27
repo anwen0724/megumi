@@ -1,3 +1,6 @@
+/*
+ * Exposes validated, least-authority Desktop and Product operations to the Renderer.
+ */
 import { ipcRenderer } from 'electron';
 import type { AnyEvent } from '@megumi/product-host/host';
 import type {
@@ -126,6 +129,10 @@ import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/
 import { parseSpeechInputEvent } from '@megumi/voice/speech-input/speech-input-schema';
 import { parseSpeechOutputEvent } from '@megumi/voice/speech-output/speech-output-schema';
 import type { SpeechInputEvent, SpeechOutputEvent } from '@megumi/voice';
+import {
+  ApplicationUpdateSnapshotSchema,
+  type ApplicationUpdateSnapshot,
+} from '../application-update/application-update-contract';
 
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
 type EmptyPayload = Record<string, never>;
@@ -181,6 +188,37 @@ export const api = {
     minimize: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.window.minimize),
     toggleMaximize: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.window.toggleMaximize),
     close: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.window.close),
+  },
+  applicationUpdate: {
+    getSnapshot: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.snapshotGet),
+    ),
+    checkNow: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.check),
+    ),
+    setAutomaticChecksEnabled: async (enabled: boolean): Promise<ApplicationUpdateSnapshot> => (
+      ApplicationUpdateSnapshotSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.automaticChecksSet,
+        { enabled },
+      ))
+    ),
+    setAutomaticDownloadsEnabled: async (enabled: boolean): Promise<ApplicationUpdateSnapshot> => (
+      ApplicationUpdateSnapshotSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.automaticDownloadsSet,
+        { enabled },
+      ))
+    ),
+    downloadUpdate: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
+      await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.download),
+    ),
+    restartAndInstall: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.restartAndInstall),
+    openReleasePage: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.releasePageOpen),
+    onSnapshot: (callback: (snapshot: ApplicationUpdateSnapshot) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, rawSnapshot: unknown) => {
+        const parsed = ApplicationUpdateSnapshotSchema.safeParse(rawSnapshot);
+        if (parsed.success) callback(parsed.data);
+      };
+      ipcRenderer.on(IPC_CHANNELS.applicationUpdate.snapshotChanged, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.applicationUpdate.snapshotChanged, listener);
+    },
   },
   provider: {
     list: (

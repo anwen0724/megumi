@@ -257,6 +257,11 @@ describe('main runtime logger composition', () => {
     }));
     expect(mocks.registerAllHandlers).toHaveBeenCalledWith({
       logger: processLogger,
+      applicationUpdate: expect.objectContaining({
+        getSnapshot: expect.any(Function),
+        checkNow: expect.any(Function),
+        downloadUpdate: expect.any(Function),
+      }),
       workspace: { host: mocks.agentHost },
       session: { host: mocks.agentHost },
       publishSessionMessageEvent: expect.any(Function),
