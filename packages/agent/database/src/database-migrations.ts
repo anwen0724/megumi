@@ -32,6 +32,7 @@ export interface MigrateDatabaseResult {
   readonly backupFile?: string;
 }
 
+/** Blocks an older application from writing a database with newer migration history. */
 export class DatabaseDowngradeUnsupportedError extends Error {
   readonly databaseFile: string;
   readonly databaseMigrationCount: number;
@@ -50,6 +51,7 @@ export class DatabaseDowngradeUnsupportedError extends Error {
   }
 }
 
+/** Preserves the failed migration identity and any recovery backup for Desktop presentation. */
 export class DatabaseMigrationError extends Error {
   readonly databaseFile: string;
   readonly migrationsFolder: string;

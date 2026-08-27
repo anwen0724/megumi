@@ -27,6 +27,7 @@ export interface PreparedDatabaseReleaseUpgrade {
   readonly targetApplicationVersion: string;
 }
 
+/** Describes a release-upgrade safety failure without exposing driver-specific errors. */
 export class DatabaseReleaseUpgradeError extends Error {
   readonly databaseFile: string;
   readonly backupFile?: string;
@@ -103,6 +104,7 @@ function validateTargetVersion(version: string, databaseFile: string): string {
   throw new DatabaseReleaseUpgradeError({ databaseFile, reason: 'invalid_target_version' });
 }
 
+// A malformed marker is unsafe because it would make backup lineage and downgrade reasoning ambiguous.
 function readApplicationVersionMarker(databaseFile: string): string {
   const markerFile = applicationVersionMarkerFile(databaseFile);
   if (!fs.existsSync(markerFile)) return 'unknown';
@@ -136,6 +138,7 @@ function hasPersistentUserSchema(database: DatabaseConnection): boolean {
   return (row?.count ?? 0) > 0;
 }
 
+// SQLite owns the snapshot operation so WAL-backed writes are included before migration begins.
 function createConsistentBackup(request: {
   readonly database: DatabaseConnection;
   readonly databaseFile: string;
@@ -181,6 +184,7 @@ function backupIntegrityIsValid(backupFile: string): boolean {
   }
 }
 
+// Replace the marker atomically only after every migration has completed successfully.
 function writeApplicationVersionMarker(databaseFile: string, applicationVersion: string): void {
   const markerFile = applicationVersionMarkerFile(databaseFile);
   const temporaryFile = `${markerFile}.${process.pid}.tmp`;
@@ -197,18 +201,23 @@ function writeApplicationVersionMarker(databaseFile: string, applicationVersion:
   }
 }
 
+// Sort by the UTC suffix rather than SemVer text so 0.10-era backups do not precede newer 0.9 names.
 function retainRecentBackups(databaseFile: string, retention: number): void {
   const backupDirectory = path.join(path.dirname(databaseFile), 'backups');
   try {
     const backups = fs.readdirSync(backupDirectory)
       .filter((name) => name.startsWith(BACKUP_FILE_PREFIX) && name.endsWith('.sqlite'))
-      .sort((left, right) => right.localeCompare(left));
+      .sort((left, right) => backupTimestamp(right).localeCompare(backupTimestamp(left)));
     for (const backup of backups.slice(Math.max(1, retention))) {
       fs.rmSync(path.join(backupDirectory, backup));
     }
   } catch {
     throw new DatabaseReleaseUpgradeError({ databaseFile, reason: 'backup_retention_failed' });
   }
+}
+
+function backupTimestamp(filename: string): string {
+  return /-(\d{8}T\d{9}Z)\.sqlite$/.exec(filename)?.[1] ?? '';
 }
 
 function applicationVersionMarkerFile(databaseFile: string): string {

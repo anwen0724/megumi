@@ -32,6 +32,8 @@ describe('Application update IPC handler', () => {
     expect(controller.openReleasePage).toHaveBeenCalledOnce();
     expect(() => handlers.get(IPC_CHANNELS.applicationUpdate.automaticChecksSet)?.({}, { enabled: 'no' }))
       .toThrow();
+    expect(() => handlers.get(IPC_CHANNELS.applicationUpdate.check)?.({}, { unexpected: true }))
+      .toThrow();
     expect(handle).toHaveBeenCalledTimes(7);
   });
 });

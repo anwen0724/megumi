@@ -34,8 +34,10 @@ describe('Update preferences store', () => {
 
   it('returns safe defaults for malformed local data', () => {
     const store = createStore();
-    fs.mkdirSync(path.dirname(store.filePath), { recursive: true });
-    fs.writeFileSync(store.filePath, '{"automaticChecksEnabled":"yes"}', 'utf8');
+    if (!tempRoot) throw new Error('Update preferences fixture was not initialized.');
+    const filePath = path.join(tempRoot, 'desktop', 'application-update.json');
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, '{"automaticChecksEnabled":"yes"}', 'utf8');
     expect(store.read()).toEqual({
       automaticChecksEnabled: true,
       automaticDownloadsEnabled: false,

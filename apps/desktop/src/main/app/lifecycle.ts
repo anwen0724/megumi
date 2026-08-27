@@ -39,6 +39,7 @@ export function registerAppLifecycle({
   let quitting = false;
   let disposalPromise: Promise<void> | undefined;
 
+  // Every quit path shares one preparation Promise; a failed attempt remains explicitly retryable.
   const beginQuit = (): Promise<void> => {
     quitting = true;
     disposalPromise ??= Promise.resolve()
@@ -52,6 +53,7 @@ export function registerAppLifecycle({
     return disposalPromise;
   };
 
+  // Window creation and residency remain private so tray and activation paths cannot diverge.
   const openMainWindow = () => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized?.()) mainWindow.restore?.();
@@ -85,7 +87,9 @@ export function registerAppLifecycle({
   });
 
   app.on('before-quit', () => {
-    void beginQuit();
+    void beginQuit().catch((error: unknown) => {
+      console.error('Desktop shutdown preparation failed.', error);
+    });
   });
 
   return {

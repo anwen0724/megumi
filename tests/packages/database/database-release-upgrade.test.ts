@@ -102,18 +102,20 @@ describe('Database release upgrade safety', () => {
     const fixture = createFixture();
     const migrations = [{ tag: '0000_initial', sql: 'CREATE TABLE upgrade_probe (id TEXT PRIMARY KEY);' }];
     writeMigrationChain(fixture.migrationsFolder, migrations);
-    migrateWithVersion(fixture.databaseFile, fixture.migrationsFolder, '0.1.0', 0);
+    migrateWithVersion(fixture.databaseFile, fixture.migrationsFolder, '0.8.0', 0);
 
-    for (let index = 1; index <= 4; index += 1) {
+    const targetVersions = ['0.9.0', '0.10.0', '0.11.0', '0.12.0'];
+    for (const [offset, targetVersion] of targetVersions.entries()) {
+      const index = offset + 1;
       migrations.push({ tag: `000${index}_column`, sql: `ALTER TABLE upgrade_probe ADD COLUMN value_${index} TEXT;` });
       writeMigrationChain(fixture.migrationsFolder, migrations);
-      migrateWithVersion(fixture.databaseFile, fixture.migrationsFolder, `0.${index + 1}.0`, index);
+      migrateWithVersion(fixture.databaseFile, fixture.migrationsFolder, targetVersion, index);
     }
 
     const backups = fs.readdirSync(path.join(path.dirname(fixture.databaseFile), 'backups'));
     expect(backups).toHaveLength(3);
-    expect(backups.some((name) => name.includes('0.1.0-to-0.2.0'))).toBe(false);
-    expect(backups.some((name) => name.includes('0.4.0-to-0.5.0'))).toBe(true);
+    expect(backups.some((name) => name.includes('0.8.0-to-0.9.0'))).toBe(false);
+    expect(backups.some((name) => name.includes('0.11.0-to-0.12.0'))).toBe(true);
   });
 
   it('rejects a database whose migration history is newer than the bundled journal', () => {

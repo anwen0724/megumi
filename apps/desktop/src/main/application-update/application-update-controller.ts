@@ -102,6 +102,7 @@ export function createApplicationUpdateController(
   const squirrelFirstRunUnlockAt = dependencies.now().getTime() + STARTUP_CHECK_DELAY_MS;
   const listeners = new Set<(value: ApplicationUpdateSnapshot) => void>();
 
+  // Observer failures are isolated so a closed Renderer cannot corrupt the Main state machine.
   function publish(next: ApplicationUpdateSnapshot): ApplicationUpdateSnapshot {
     const previousStatus = snapshot.status;
     snapshot = Object.freeze(next);
@@ -111,7 +112,16 @@ export function createApplicationUpdateController(
       currentVersion: dependencies.currentVersion,
       ...('targetVersion' in snapshot ? { targetVersion: snapshot.targetVersion } : {}),
     });
-    for (const listener of listeners) listener(snapshot);
+    for (const listener of listeners) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        dependencies.logger.warn('application_update_listener_failed', {
+          status: snapshot.status,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     return snapshot;
   }
 
@@ -256,29 +266,38 @@ export function createApplicationUpdateController(
       if (preferences.automaticChecksEnabled) {
         cancelStartupCheck = dependencies.schedule(() => {
           cancelStartupCheck = undefined;
-          void check('automatic');
+          void check('automatic').catch((error: unknown) => {
+            dependencies.logger.warn('application_update_startup_check_failed', {
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+          });
         }, STARTUP_CHECK_DELAY_MS);
       }
     },
     getSnapshot: () => snapshot,
     checkNow: () => check('manual'),
     async setAutomaticChecksEnabled(enabled) {
-      preferences = enabled
+      if (snapshot.status === 'installing') return snapshot;
+      const nextPreferences = enabled
         ? { ...preferences, automaticChecksEnabled: true }
         : { automaticChecksEnabled: false, automaticDownloadsEnabled: false };
-      dependencies.preferences.write(preferences);
+      dependencies.preferences.write(nextPreferences);
+      preferences = nextPreferences;
       return publishWithCurrentPreferences(snapshot);
     },
     async setAutomaticDownloadsEnabled(enabled) {
-      preferences = {
+      if (snapshot.status === 'installing') return snapshot;
+      const nextPreferences = {
         ...preferences,
         automaticDownloadsEnabled: preferences.automaticChecksEnabled && enabled,
       };
-      dependencies.preferences.write(preferences);
+      dependencies.preferences.write(nextPreferences);
+      preferences = nextPreferences;
       return publishWithCurrentPreferences(snapshot);
     },
     downloadUpdate: beginDownload,
     async restartAndInstall() {
+      if (snapshot.status === 'installing') return;
       if (snapshot.status !== 'ready') {
         publishError('update_not_ready', false, 'install');
         return;

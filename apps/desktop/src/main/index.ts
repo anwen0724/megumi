@@ -29,10 +29,14 @@ if (shouldQuitForSquirrelStartup()) {
   try {
     startDesktop(composeDesktopMain());
   } catch (error) {
-    void stopAfterBootstrapFailure(error);
+    void stopAfterBootstrapFailure(error).catch((failure: unknown) => {
+      console.error('Megumi Desktop could not present its bootstrap failure.', failure);
+      app.quit();
+    });
   }
 }
 
+/** Composes the Desktop-owned surfaces and their single orderly shutdown boundary. */
 function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void {
   let prepareToQuit: () => Promise<void> = async () => {
     throw new Error('Desktop lifecycle is not ready for update installation.');
@@ -128,19 +132,27 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
       return mainWindow;
     },
     dispose: async () => {
-      applicationUpdateSubscription();
-      applicationUpdate.dispose();
       tray?.dispose();
       characterSubscription.unsubscribe();
       await character.dispose();
       await desktopMain.dispose();
+      // Keep the update observer alive until every fallible resource is released so preparation errors reach the UI.
+      applicationUpdateSubscription();
+      applicationUpdate.dispose();
     },
   });
   showMainWindow = () => lifecycle.showMainWindow();
   prepareToQuit = () => lifecycle.prepareToQuit();
-  quitApplication = () => { void lifecycle.quit(); };
+  quitApplication = () => {
+    void lifecycle.quit().catch((error: unknown) => {
+      desktopMain.runtimeLogger.warn('desktop_quit_failed', {
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
 }
 
+/** Presents a recoverable startup failure and guarantees the unsafe composition cannot remain resident. */
 async function stopAfterBootstrapFailure(error: unknown): Promise<void> {
   console.error('Megumi Desktop bootstrap failed.', error);
   const recoveryShown = await showDesktopBootstrapFailure(error);

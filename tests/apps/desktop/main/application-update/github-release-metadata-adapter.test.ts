@@ -74,6 +74,46 @@ describe('GitHub release metadata adapter', () => {
     });
   });
 
+  it('rejects Squirrel assets that belong to a different application version', async () => {
+    const adapter = createGithubReleaseMetadataAdapter({
+      fetch: fetchResponse({
+        tag_name: 'v0.2.0',
+        name: 'Mismatched assets',
+        body: '',
+        html_url: 'https://github.com/anwen0724/megumi/releases/tag/v0.2.0',
+        draft: false,
+        prerelease: false,
+        assets: [
+          { name: 'Megumi-0.1.0 Setup.exe' },
+          { name: 'Megumi-0.1.0-full.nupkg' },
+          { name: 'RELEASES' },
+        ],
+      }),
+    });
+
+    await expect(adapter.checkLatest('0.1.0')).rejects.toMatchObject<ApplicationUpdateOperationError>({
+      code: 'release_assets_incomplete',
+    });
+  });
+
+  it('classifies network and service failures at the GitHub boundary', async () => {
+    const networkFailure = createGithubReleaseMetadataAdapter({
+      fetch: vi.fn(async () => { throw new Error('offline'); }),
+    });
+    const serviceFailure = createGithubReleaseMetadataAdapter({
+      fetch: vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })),
+    });
+
+    await expect(networkFailure.checkLatest('0.1.0')).rejects.toMatchObject({
+      code: 'network_unavailable',
+      retryable: true,
+    });
+    await expect(serviceFailure.checkLatest('0.1.0')).rejects.toMatchObject({
+      code: 'update_service_unavailable',
+      retryable: true,
+    });
+  });
+
   it('rejects prerelease and off-repository release URLs at the boundary', async () => {
     const adapter = createGithubReleaseMetadataAdapter({
       fetch: fetchResponse({

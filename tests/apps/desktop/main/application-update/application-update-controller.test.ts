@@ -8,6 +8,7 @@ import {
   type ApplicationUpdateControllerDependencies,
   type ElectronAutoUpdaterEvent,
 } from '@megumi/desktop/main/application-update/application-update-controller';
+import { ApplicationUpdateOperationError } from '@megumi/desktop/main/application-update/github-release-metadata-adapter';
 import type { ApplicationUpdateRelease } from '@megumi/desktop/application-update/application-update-contract';
 
 const release: ApplicationUpdateRelease = {
@@ -44,15 +45,41 @@ describe('ApplicationUpdateController', () => {
     });
     const fixture = createFixture({ checkLatest: vi.fn(() => check) });
 
-    const first = fixture.controller.checkNow();
+    fixture.fireScheduledCheck();
     const second = fixture.controller.checkNow();
     expect(fixture.metadata.checkLatest).toHaveBeenCalledOnce();
-    expect(fixture.controller.getSnapshot()).toMatchObject({ status: 'checking', source: 'manual' });
+    expect(fixture.controller.getSnapshot()).toMatchObject({ status: 'checking', source: 'automatic' });
 
     resolveCheck?.({ status: 'available', release });
-    await Promise.all([first, second]);
+    await second;
     expect(fixture.controller.getSnapshot()).toMatchObject({ status: 'available', targetVersion: '0.2.0' });
     expect(fixture.updater.checkForUpdates).not.toHaveBeenCalled();
+  });
+
+  it('isolates subscriber failures from state progression and records them', async () => {
+    const fixture = createFixture();
+    fixture.controller.subscribe(() => { throw new Error('renderer closed'); });
+
+    await expect(fixture.controller.checkNow()).resolves.toMatchObject({ status: 'available' });
+    expect(fixture.dependencies.logger.warn).toHaveBeenCalledWith(
+      'application_update_listener_failed',
+      expect.objectContaining({ errorMessage: 'renderer closed' }),
+    );
+  });
+
+  it('projects typed discovery failures into retryable user state', async () => {
+    const fixture = createFixture({
+      checkLatest: vi.fn(async () => {
+        throw new ApplicationUpdateOperationError('network_unavailable', true, 'offline');
+      }),
+    });
+
+    await expect(fixture.controller.checkNow()).resolves.toMatchObject({
+      status: 'error',
+      errorCode: 'network_unavailable',
+      retryable: true,
+      operation: 'check',
+    });
   });
 
   it('projects an up-to-date result without touching the download Adapter', async () => {
@@ -137,6 +164,53 @@ describe('ApplicationUpdateController', () => {
     expect(fixture.updater.quitAndInstall).toHaveBeenCalledOnce();
   });
 
+  it('ignores duplicate Electron events after a download becomes ready', async () => {
+    const fixture = createFixture();
+    await fixture.controller.checkNow();
+    await fixture.controller.downloadUpdate();
+    fixture.emitUpdaterEvent({ type: 'update-downloaded' });
+    fixture.emitUpdaterEvent({ type: 'update-downloaded' });
+    fixture.emitUpdaterEvent({ type: 'error', error: new Error('late event') });
+
+    expect(fixture.controller.getSnapshot()).toMatchObject({ status: 'ready', targetVersion: '0.2.0' });
+  });
+
+  it('rejects install and preference commands while installation is in progress', async () => {
+    let finishPreparation: (() => void) | undefined;
+    const preparation = new Promise<void>((resolve) => { finishPreparation = resolve; });
+    const fixture = createFixture({ prepareToQuit: vi.fn(() => preparation) });
+    await fixture.controller.checkNow();
+    await fixture.controller.downloadUpdate();
+    fixture.emitUpdaterEvent({ type: 'update-downloaded' });
+
+    const installing = fixture.controller.restartAndInstall();
+    const writesBeforeCommands = fixture.preferences.write.mock.calls.length;
+    await fixture.controller.setAutomaticChecksEnabled(false);
+    await fixture.controller.setAutomaticDownloadsEnabled(true);
+    await fixture.controller.restartAndInstall();
+
+    expect(fixture.controller.getSnapshot().status).toBe('installing');
+    expect(fixture.preferences.write).toHaveBeenCalledTimes(writesBeforeCommands);
+    expect(fixture.updater.quitAndInstall).not.toHaveBeenCalled();
+    finishPreparation?.();
+    await installing;
+    expect(fixture.updater.quitAndInstall).toHaveBeenCalledOnce();
+  });
+
+  it('reports an install command issued before an update is ready', async () => {
+    const fixture = createFixture();
+    await fixture.controller.restartAndInstall();
+
+    expect(fixture.controller.getSnapshot()).toMatchObject({
+      status: 'error',
+      errorCode: 'update_not_ready',
+      retryable: false,
+      operation: 'install',
+    });
+    expect(fixture.dependencies.prepareToQuit).not.toHaveBeenCalled();
+    expect(fixture.updater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
   it('never registers or checks the production updater in unsupported environments', async () => {
     const fixture = createFixture({ isPackaged: false });
     fixture.controller.start();
@@ -199,7 +273,9 @@ function createFixture(overrides: Partial<ApplicationUpdateControllerDependencie
     updater,
     preferences,
     schedule,
+    dependencies,
     emitUpdaterEvent(event: ElectronAutoUpdaterEvent) { updaterListener?.(event); },
+    fireScheduledCheck() { scheduled?.(); },
     async runScheduledCheck() {
       scheduled?.();
       await vi.waitFor(() => expect(metadata.checkLatest).toHaveBeenCalled());

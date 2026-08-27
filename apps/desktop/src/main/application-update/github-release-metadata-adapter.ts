@@ -35,6 +35,7 @@ export interface GithubReleaseMetadataAdapter {
   checkLatest(currentVersion: string): Promise<ApplicationReleaseCheckResult>;
 }
 
+/** Carries a stable user-facing update failure classification across the Main Module. */
 export class ApplicationUpdateOperationError extends Error {
   readonly code: ApplicationUpdateErrorCode;
   readonly retryable: boolean;
@@ -102,7 +103,11 @@ export function createGithubReleaseMetadataAdapter(options: {
         throw invalidMetadata('GitHub release identity was invalid.');
       }
       if (compareVersion(version, current) <= 0) return { status: 'up_to_date' };
-      assertCompleteSquirrelAssets(parsed.data.assets.map((asset) => asset.name));
+      const normalizedVersion = formatVersion(version);
+      assertCompleteSquirrelAssets(
+        parsed.data.assets.map((asset) => asset.name),
+        normalizedVersion,
+      );
 
       const notesSummary = toPlainTextSummary(
         typeof parsed.data.body === 'string' ? parsed.data.body : '',
@@ -110,8 +115,8 @@ export function createGithubReleaseMetadataAdapter(options: {
       return {
         status: 'available',
         release: {
-          version: formatVersion(version),
-          title: normalizedTitle(parsed.data.name, formatVersion(version)),
+          version: normalizedVersion,
+          title: normalizedTitle(parsed.data.name, normalizedVersion),
           ...(notesSummary ? { notesSummary } : {}),
           releasePageUrl: parsed.data.html_url,
         },
@@ -155,10 +160,11 @@ function isAllowedReleaseUrl(url: string, tag: string): boolean {
   }
 }
 
-function assertCompleteSquirrelAssets(names: readonly string[]): void {
+// A Release is installable only when all three assets belong to its validated Tag version.
+function assertCompleteSquirrelAssets(names: readonly string[], version: string): void {
   const complete = names.includes('RELEASES')
-    && names.some((name) => name.endsWith('-full.nupkg'))
-    && names.some((name) => name.endsWith('.exe'));
+    && names.includes(`Megumi-${version}-full.nupkg`)
+    && names.includes(`Megumi-${version} Setup.exe`);
   if (!complete) {
     throw new ApplicationUpdateOperationError(
       'release_assets_incomplete',

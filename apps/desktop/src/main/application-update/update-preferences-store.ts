@@ -20,17 +20,12 @@ export interface UpdatePreferencesStore {
   write(preferences: ApplicationUpdatePreferences): void;
 }
 
-export interface FileUpdatePreferencesStore extends UpdatePreferencesStore {
-  readonly filePath: string;
-}
-
 /** Creates the atomic JSON store under Megumi Home's Desktop-owned directory. */
 export function createFileUpdatePreferencesStore(request: {
   readonly megumiHomePath: string;
-}): FileUpdatePreferencesStore {
+}): UpdatePreferencesStore {
   const filePath = path.join(request.megumiHomePath, 'desktop', 'application-update.json');
   return {
-    filePath,
     read() {
       if (!fs.existsSync(filePath)) return DEFAULT_PREFERENCES;
       try {

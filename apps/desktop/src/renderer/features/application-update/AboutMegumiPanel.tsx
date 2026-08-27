@@ -143,6 +143,7 @@ export function AboutMegumiPanel() {
   );
 }
 
+/** Combines the current status explanation, Release details, and its single primary action. */
 function UpdateStatusCard({
   snapshot,
   onCheck,
@@ -227,6 +228,7 @@ function UpdateStatusCard({
   );
 }
 
+/** Selects exactly one primary command from the Main-owned discriminated state. */
 function PrimaryUpdateAction({
   snapshot,
   onCheck,
@@ -282,6 +284,7 @@ function PrimaryUpdateAction({
   }
 }
 
+/** Presents truthful indeterminate work without exposing a second interactive update command. */
 function ProgressButton({ label }: { readonly label: string }) {
   return (
     <Button variant="primary" disabled>
