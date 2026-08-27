@@ -39,10 +39,8 @@ jobs:
       - name: Verify tag and package version
         run: npm run release:verify:version -- --tag "$env:GITHUB_REF_NAME"
 
-      - name: Run release type checks
-        run: |
-          npm run typecheck:packages
-          npm run typecheck:product
+      - name: Run release gates
+        run: npm run release:verify
 
       - name: Build and upload Draft Release
         run: npm run publish -- --arch=x64
