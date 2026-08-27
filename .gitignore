@@ -8,7 +8,7 @@ packages/agent/voice/sidecar/moss-tts-nano/.build/
 *.db
 *.db-shm
 *.db-wal
-data/
+/data/
 .env
 .env.*
 !.env.example

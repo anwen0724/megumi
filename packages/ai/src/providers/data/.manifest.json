@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 3,
+  "generatedAt": "2026-08-05T11:16:38.103Z",
+  "structureHash": "658e93bebf45fb9c3bb339c53a72bb54967ddfa6c5faae0ce5bf9d7c329b2894",
+  "files": {
+    "anthropic.json": "fea1226a62396c8d4a3d9c3b7f65d4dc527ac025d05719880418d3a2b0665a69",
+    "deepseek.json": "0dcc807a4e5827b488c6ceac87884ff6e735e01cf4f2ddfec9dd812e6fde041b",
+    "google.json": "bcf8a8d59ccbb75bc6fb4a261a37ac4b7c806f40ee7313b4411178964be5fa37",
+    "huggingface.json": "d1952ba962c983a9f52a50323cf2475081a69b26b79467b3a9a9a06f8ab68899",
+    "minimax-cn.json": "8ccd71ff838f4b78bb88809babb0dc32a4fcfaec2bc4f4083841000428df4f77",
+    "minimax.json": "253edd4c910a41c8bb252400ba099f3a4de0a8900ce154319288ab091b372987",
+    "moonshotai-cn.json": "1e6146ff3477883636448c0f44222f0a52b3c4562ef8f4eecf7e941cdd59d12e",
+    "moonshotai.json": "d8d5209873058ddccd37c1f026833e2ea3f9476c3dc9628b4a940d407acc0b2e",
+    "openai-codex.json": "c3313710bc6910e6bbcb06d5867247e97ec3fa6c2af9bc780f8a3eefb03e32e1",
+    "openai.json": "8e3852ef3567b23d2ab03b0f52f1caeb77e6e776f248e6111f851ccbe0fca8b6",
+    "openrouter.json": "f57911b114dbf272d311234696738288fdafc676383771179392b289834901c8",
+    "qwen-token-plan-cn.json": "9c5d76e655f9e74818c4bd137b4385252b92a0615f42da7ffabb4d61a4dc2f1a",
+    "qwen-token-plan.json": "4f89469fe53236f97c789b019d426e180f3a944b65c833c8b9a5415c2557ff24"
+  }
+}
