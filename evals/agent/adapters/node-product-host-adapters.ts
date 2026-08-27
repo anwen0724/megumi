@@ -1,5 +1,5 @@
 /* Implements Product Host Adapters for headless Node evaluation. */
-import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import fs from 'fs-extra';
 import path from 'node:path';
 import type { InitializeMegumiHomeSyncOptions } from '@megumi/home';
@@ -51,6 +51,16 @@ export const nodeObservabilityStorage: ProductObservabilityStorage = {
   appendText: (filePath, content) => appendFile(filePath, content, 'utf8'),
   readText: (filePath) => readFile(filePath, 'utf8'),
   readBytes: (filePath) => readFile(filePath),
+  async readBytesRange(filePath, offset, length) {
+    const handle = await open(filePath, 'r');
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, offset);
+      return new Uint8Array(buffer.subarray(0, bytesRead));
+    } finally {
+      await handle.close();
+    }
+  },
   writeBytes: (filePath, bytes) => writeFile(filePath, bytes),
   async listEntries(directoryPath) {
     let entries;

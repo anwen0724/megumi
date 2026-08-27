@@ -4,11 +4,78 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { encodeTraceJournalRecord, type TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import type { TraceIndex } from '../../../packages/agent/observability/src/persistence/trace-index';
+import type {
+  JournalCheckpoint,
+  TraceIndex,
+  TraceRecordLocator,
+} from '../../../packages/agent/observability/src/persistence/trace-index';
 import { createTraceReader } from '../../../packages/agent/observability/src/query/trace-reader';
+import { summarizeTrace, type TraceProjection } from '../../../packages/agent/observability/src/query/trace-projector';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Trace Reader', () => {
+  it('uses the Derived Index for repeated queries without rescanning Journal or reading Content bodies', async () => {
+    const storage = new CountingObservabilityStorage();
+    const firstTraceId = '00000000-0000-4000-8000-000000000001';
+    const secondTraceId = '00000000-0000-4000-8000-000000000002';
+    const firstContent = new TextEncoder().encode('first body');
+    const secondContent = new TextEncoder().encode('second body');
+    const firstContentId = sha256(firstContent);
+    const secondContentId = sha256(secondContent);
+    seedSegment(storage, '2026-08-26', 1, [
+      started(firstTraceId, 1),
+      storedContent(firstTraceId, 2, firstContentId, firstContent.byteLength),
+      ended(firstTraceId, 3),
+      started(secondTraceId, 1),
+      storedContent(secondTraceId, 2, secondContentId, secondContent.byteLength),
+      ended(secondTraceId, 3),
+    ]);
+    storage.seedBytes(blobPath(firstContentId), firstContent);
+    storage.seedBytes(blobPath(secondContentId), secondContent);
+    const reader = createTraceReader({
+      rootDirectory: 'observability',
+      storage,
+      index: new MemoryTraceIndex(),
+    });
+
+    await reader.listTraces();
+    storage.resetReads();
+
+    await expect(reader.getTrace(secondTraceId)).resolves.toMatchObject({ traceId: secondTraceId });
+
+    expect(storage.textReads).toEqual([]);
+    expect(storage.byteReads.filter((path) => path.includes('content'))).toEqual([]);
+  });
+
+  it('indexes only newly appended Journal bytes after the initial synchronization', async () => {
+    const storage = new CountingObservabilityStorage();
+    const firstTraceId = '00000000-0000-4000-8000-000000000011';
+    const secondTraceId = '00000000-0000-4000-8000-000000000012';
+    const path = segmentPath('2026-08-26', 1);
+    seedSegment(storage, '2026-08-26', 1, [started(firstTraceId, 1), ended(firstTraceId, 2)]);
+    const reader = createTraceReader({
+      rootDirectory: 'observability',
+      storage,
+      index: new MemoryTraceIndex(),
+    });
+    await reader.listTraces();
+    const previousSize = (await storage.stat(path))?.size ?? 0;
+    await storage.appendText(path, `${[
+      started(secondTraceId, 1),
+      ended(secondTraceId, 2),
+    ].map(encodeTraceJournalRecord).join('\n')}\n`);
+    storage.resetReads();
+
+    const traces = await reader.listTraces();
+
+    expect(traces.map((trace) => trace.traceId)).toEqual([firstTraceId, secondTraceId]);
+    expect(storage.rangeReads.length).toBeGreaterThan(0);
+    expect(storage.rangeReads.every((read) => read.offset >= previousSize)).toBe(true);
+    storage.resetReads();
+    await reader.listTraces();
+    expect(storage.rangeReads).toEqual([]);
+  });
+
   it('folds a cross-segment Trace by filename and sequence with spans, links, events, and Content', async () => {
     const storage = new ObservabilityMemoryStorage();
     const traceId = '00000000-0000-4000-8000-000000000001';
@@ -72,7 +139,7 @@ describe('Trace Reader', () => {
     });
   });
 
-  it('keeps the recorded business outcome while marking structural and Content evidence gaps incomplete', async () => {
+  it('keeps the recorded business outcome while marking structural evidence gaps incomplete', async () => {
     const storage = new ObservabilityMemoryStorage();
     const traceId = '00000000-0000-4000-8000-000000000101';
     const missingContentId = 'a'.repeat(64);
@@ -121,8 +188,8 @@ describe('Trace Reader', () => {
       'sequence_gap',
       'missing_span_end',
       'invalid_parent',
-      'missing_content',
     ]));
+    expect(detail?.issues).not.toContainEqual(expect.objectContaining({ code: 'missing_content' }));
   });
 
   it('turns duplicate lifecycle and unknown schema lines into explicit incomplete issues', async () => {
@@ -152,7 +219,7 @@ describe('Trace Reader', () => {
     ]));
   });
 
-  it('detects a stored Content hash mismatch', async () => {
+  it('defers stored Content integrity checks until that body is explicitly read', async () => {
     const storage = new ObservabilityMemoryStorage();
     const traceId = '00000000-0000-4000-8000-000000000202';
     const contentId = 'd'.repeat(64);
@@ -184,9 +251,10 @@ describe('Trace Reader', () => {
     const detail = await reader.getTrace(traceId);
 
     expect(detail?.status).toBe('ok');
-    expect(detail?.diagnostics).toBe('incomplete');
+    expect(detail?.diagnostics).toBe('complete');
     expect(detail?.recordedOutcome).toEqual({ status: 'ok' });
-    expect(detail?.issues).toContainEqual(expect.objectContaining({ code: 'content_hash_mismatch' }));
+    expect(detail?.issues).not.toContainEqual(expect.objectContaining({ code: 'content_hash_mismatch' }));
+    await expect(reader.readContent(contentId)).resolves.toEqual({ status: 'corrupt' });
   });
 
   it('reports unavailable nested fields as partial capture without declaring the Content unavailable', async () => {
@@ -251,7 +319,10 @@ describe('Trace Reader', () => {
     const failedIndex: TraceIndex = {
       initialize: () => { throw new Error('Index unavailable.'); },
       replace: () => { throw new Error('Index unavailable.'); },
-      queryTraceIds: () => { throw new Error('Index unavailable.'); },
+      apply: () => { throw new Error('Index unavailable.'); },
+      queryTraces: () => { throw new Error('Index unavailable.'); },
+      getRecordLocators: () => { throw new Error('Index unavailable.'); },
+      readCheckpoints: () => { throw new Error('Index unavailable.'); },
       matchesCheckpoints: () => { throw new Error('Index unavailable.'); },
       prune: async () => { throw new Error('Index unavailable.'); },
     };
@@ -375,6 +446,35 @@ function spanEnded(
   };
 }
 
+function storedContent(
+  traceId: string,
+  sequence: number,
+  contentId: string,
+  byteLength: number,
+): TraceJournalRecord {
+  return {
+    ...base(traceId, sequence),
+    type: 'content.recorded',
+    kind: 'model.response',
+    content: {
+      mode: 'stored',
+      contentId,
+      mediaType: 'text/plain;charset=utf-8',
+      byteLength,
+    },
+    correlation: {},
+  };
+}
+
+function ended(traceId: string, sequence: number): TraceJournalRecord {
+  return {
+    ...base(traceId, sequence),
+    type: 'trace.ended',
+    outcome: { status: 'ok' },
+    diagnostics: 'complete',
+  };
+}
+
 function base(traceId: string, sequence: number) {
   return {
     schemaVersion: 1 as const,
@@ -417,4 +517,85 @@ function blobPath(contentId: string): string {
 
 function sha256(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+class CountingObservabilityStorage extends ObservabilityMemoryStorage {
+  readonly textReads: string[] = [];
+  readonly byteReads: string[] = [];
+  readonly rangeReads: Array<{ readonly path: string; readonly offset: number; readonly length: number }> = [];
+
+  override async readText(filePath: string): Promise<string> {
+    this.textReads.push(filePath);
+    return super.readText(filePath);
+  }
+
+  override async readBytes(filePath: string): Promise<Uint8Array> {
+    this.byteReads.push(filePath);
+    return super.readBytes(filePath);
+  }
+
+  override async readBytesRange(
+    filePath: string,
+    offset: number,
+    length: number,
+  ): Promise<Uint8Array> {
+    this.rangeReads.push({ path: filePath, offset, length });
+    return super.readBytesRange(filePath, offset, length);
+  }
+
+  resetReads(): void {
+    this.textReads.length = 0;
+    this.byteReads.length = 0;
+    this.rangeReads.length = 0;
+  }
+}
+
+class MemoryTraceIndex implements TraceIndex {
+  private traces = new Map<string, TraceProjection>();
+  private records: TraceRecordLocator[] = [];
+  private checkpoints: readonly JournalCheckpoint[] = [];
+
+  initialize(): { readonly status: 'ready' } {
+    return { status: 'ready' };
+  }
+
+  replace(input: {
+    readonly traces: readonly TraceProjection[];
+    readonly records: readonly TraceRecordLocator[];
+    readonly checkpoints: readonly JournalCheckpoint[];
+  }): void {
+    this.traces = new Map(input.traces.map((trace) => [trace.traceId, trace]));
+    this.records = [...input.records];
+    this.checkpoints = input.checkpoints;
+  }
+
+  apply(input: {
+    readonly traces: readonly TraceProjection[];
+    readonly records: readonly TraceRecordLocator[];
+    readonly checkpoints: readonly JournalCheckpoint[];
+  }): void {
+    for (const trace of input.traces) this.traces.set(trace.traceId, trace);
+    this.records.push(...input.records);
+    this.checkpoints = input.checkpoints;
+  }
+
+  queryTraces() {
+    return [...this.traces.values()].map(summarizeTrace);
+  }
+
+  getRecordLocators(traceId: string): readonly TraceRecordLocator[] {
+    return this.records.filter((record) => record.traceId === traceId);
+  }
+
+  readCheckpoints(): readonly JournalCheckpoint[] {
+    return this.checkpoints;
+  }
+
+  matchesCheckpoints(checkpoints: readonly JournalCheckpoint[]): boolean {
+    return JSON.stringify(this.checkpoints) === JSON.stringify(checkpoints);
+  }
+
+  async prune(): Promise<void> {
+    return undefined;
+  }
 }

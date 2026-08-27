@@ -4,12 +4,15 @@
  */
 import {
   serializeCapturedContentValue,
+  createContentDigest,
+  summarizeTrace,
   type DiagnosticJsonValue,
   type ObservabilityQueries,
   type TraceContentProjection,
   type TraceCorrelation,
   type TraceEvent,
   type TraceProjection,
+  type TraceSummaryProjection,
 } from '@megumi/observability';
 import {
   ObservabilityContentPayloadSchema,
@@ -109,7 +112,7 @@ export function createObservabilityOperations(request: {
   };
 }
 
-function projectSummary(trace: TraceProjection): ObservabilityTraceSummaryUiDto {
+function projectSummary(trace: TraceSummaryProjection): ObservabilityTraceSummaryUiDto {
   const duration = durationMs(trace.startedAt, trace.endedAt);
   return {
     traceId: trace.traceId,
@@ -120,16 +123,16 @@ function projectSummary(trace: TraceProjection): ObservabilityTraceSummaryUiDto 
     ...(trace.startedAt ? { startedAt: trace.startedAt } : {}),
     ...(trace.endedAt ? { endedAt: trace.endedAt } : {}),
     ...(duration === undefined ? {} : { durationMs: duration }),
-    spanCount: trace.spans.length,
-    eventCount: trace.spans.reduce((count, span) => count + span.events.length, 0),
-    contentCount: trace.contents.length,
-    issueCount: trace.issues.length,
+    spanCount: trace.spanCount,
+    eventCount: trace.eventCount,
+    contentCount: trace.contentCount,
+    issueCount: trace.issueCount,
   };
 }
 
 function projectDetail(trace: TraceProjection): ObservabilityTraceDetailUiDto {
   return {
-    summary: projectSummary(trace),
+    summary: projectSummary(summarizeTrace(trace)),
     ...(trace.recordedOutcome ? { outcome: trace.recordedOutcome } : {}),
     spans: trace.spans.map((span) => {
       const duration = durationMs(span.startedAt, span.endedAt);
@@ -211,6 +214,9 @@ async function readCheckpointContent(
   if (content.mode === 'unavailable') return { status: 'unavailable', reason: content.reason };
   if (content.mode === 'inline') {
     const encoded = encodedInline(content.value, content.mediaType);
+    if (createContentDigest(content.value) !== content.contentId) {
+      return { status: 'unavailable', reason: 'content_hash_mismatch' };
+    }
     return {
       status: 'available',
       content: encoded.encoding === 'json'
@@ -227,6 +233,9 @@ async function readCheckpointContent(
 
   const read = await queries.readContent(content.contentId);
   if (read.status !== 'available') return { status: 'unavailable', reason: read.status };
+  if (read.bytes.byteLength !== content.byteLength) {
+    return { status: 'unavailable', reason: 'content_length_mismatch' };
+  }
   if (!isTextMediaType(content.mediaType)) {
     return {
       status: 'available',

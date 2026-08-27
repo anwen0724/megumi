@@ -19,9 +19,23 @@ export interface TraceListQuery {
   readonly limit?: number;
 }
 
+export interface TraceSummaryProjection {
+  readonly traceId: string;
+  readonly traceKind: TraceProjection['traceKind'];
+  readonly status: TraceProjection['status'];
+  readonly diagnostics: TraceProjection['diagnostics'];
+  readonly correlations: TraceProjection['correlations'];
+  readonly startedAt?: string;
+  readonly endedAt?: string;
+  readonly spanCount: number;
+  readonly eventCount: number;
+  readonly contentCount: number;
+  readonly issueCount: number;
+}
+
 export interface TraceReader {
-  /** Lists projected Traces under stable metadata filters. */
-  listTraces(query?: TraceListQuery): Promise<readonly TraceProjection[]>;
+  /** Lists bounded Trace summaries without loading captured Content bodies. */
+  listTraces(query?: TraceListQuery): Promise<readonly TraceSummaryProjection[]>;
   /** Reads one full projected Trace from Journal truth. */
   getTrace(traceId: string): Promise<TraceProjection | undefined>;
   /** Reads and verifies one referenced Content blob by identity. */

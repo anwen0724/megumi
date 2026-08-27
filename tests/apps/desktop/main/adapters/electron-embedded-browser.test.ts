@@ -46,6 +46,7 @@ describe('Electron embedded browser', () => {
     expect(windows[0]!.options.show).toBe(true);
     expect(windows[0]!.show).toHaveBeenCalledTimes(2);
     expect(windows[0]!.focus).toHaveBeenCalledTimes(1);
+    expect(windows[0]!.webContents.setAudioMuted).not.toHaveBeenCalled();
     windows[0]!.closedHandler?.();
     await Promise.all([first, second]);
     await browser.shutdown();
@@ -72,11 +73,14 @@ describe('Electron embedded browser', () => {
       }],
     } });
     expect(JSON.stringify(result)).not.toContain('must-not-pass');
+    expect(window.webContents.setAudioMuted).toHaveBeenCalledWith(true);
+    expect(window.webContents.setAudioMuted.mock.invocationCallOrder[0])
+      .toBeLessThan(window.loadURL.mock.invocationCallOrder[0]!);
     expect(window.webContents.executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('querySelectorAll'), true);
     expect(window.destroy).toHaveBeenCalled();
   });
 
-  it('blocks navigation outside the Source allowlist and honors cancellation', async () => {
+  it('blocks top-level and frame navigation outside the Source allowlist and honors cancellation', async () => {
     const window = new FakeWindow(embeddedBrowserWindowOptions('xiaohongshu', false));
     const browser = createElectronEmbeddedBrowser({ createWindow: () => window as never, settleDelayMs: 0 });
     const controller = new AbortController();
@@ -95,6 +99,14 @@ describe('Electron embedded browser', () => {
     const event = { preventDefault: vi.fn() };
     window.navigationHandler?.(event, 'https://evil.example/steal');
     expect(event.preventDefault).toHaveBeenCalled();
+
+    const customProtocolEvent = { preventDefault: vi.fn(), url: 'bytedance://launch' };
+    window.frameNavigationHandler?.(customProtocolEvent);
+    expect(customProtocolEvent.preventDefault).toHaveBeenCalled();
+
+    const allowedFrameEvent = { preventDefault: vi.fn(), url: 'https://www.xiaohongshu.com/explore' };
+    window.frameNavigationHandler?.(allowedFrameEvent);
+    expect(allowedFrameEvent.preventDefault).not.toHaveBeenCalled();
     expect(window.webContents.setWindowOpenHandler()).toEqual({ action: 'deny' });
   });
 });
@@ -110,17 +122,25 @@ class FakeWindow {
   });
   readonly webContents = {
     stop: vi.fn(),
+    setAudioMuted: vi.fn(),
     executeJavaScript: vi.fn(async () => ({
       finalUrl: 'https://www.xiaohongshu.com/', bodyText: '', links: [],
     })),
     setWindowOpenHandler: vi.fn((handler?: () => unknown) => handler ? handler() : { action: 'deny' }),
-    on: vi.fn((event: string, listener: (event: { preventDefault(): void }, url: string) => void) => {
+    on: vi.fn((event: string, listener: FakeNavigationHandler) => {
       if (event === 'will-navigate') this.navigationHandler = listener;
+      if (event === 'will-frame-navigate') this.frameNavigationHandler = listener;
     }),
   };
-  navigationHandler?: (event: { preventDefault(): void }, url: string) => void;
+  navigationHandler?: FakeNavigationHandler;
+  frameNavigationHandler?: FakeNavigationHandler;
   closedHandler?: () => void;
   private destroyed = false;
 
   constructor(readonly options: BrowserWindowConstructorOptions) {}
 }
+
+type FakeNavigationHandler = (
+  event: { preventDefault(): void; readonly url?: string },
+  url?: string,
+) => void;

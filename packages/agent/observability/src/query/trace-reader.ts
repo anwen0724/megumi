@@ -1,25 +1,31 @@
 /*
- * Reads strict Journal segments, projects Trace truth, validates Content, and optionally refreshes Index.
+ * Synchronizes the disposable Trace index and reconstructs only explicitly requested Journal evidence.
  */
 import { join } from 'node:path';
 import { z } from 'zod';
-import { captureContent } from '../content/content-capture';
 import { createContentStore, type ContentStore } from '../content/content-store';
 import type { ObservabilityStorage } from '../persistence/observability-storage';
-import type { JournalCheckpoint, TraceIndex } from '../persistence/trace-index';
+import type {
+  JournalCheckpoint,
+  TraceIndex,
+  TraceRecordLocator,
+} from '../persistence/trace-index';
 import {
   decodeTraceJournalLine,
   type TraceJournalRecord,
 } from '../persistence/trace-journal-record';
 import { TraceCorrelationSchema } from '../trace/trace-contract';
-import type { TraceListQuery, TraceReader } from './trace-query';
+import type { TraceListQuery, TraceReader, TraceSummaryProjection } from './trace-query';
 import {
-  addTraceReadIssues,
   projectTrace,
+  summarizeTrace,
   type InvalidJournalFact,
   type TraceProjection,
-  type TraceReadIssue,
 } from './trace-projector';
+
+const DETAIL_CACHE_LIMIT = 20;
+const NEWLINE_BYTE = 0x0a;
+const CARRIAGE_RETURN_BYTE = 0x0d;
 
 const InvalidRecordIdentitySchema = z.object({
   schemaVersion: z.number().optional(),
@@ -28,28 +34,30 @@ const InvalidRecordIdentitySchema = z.object({
 }).passthrough();
 
 const SCALAR_CORRELATION_KEYS = [
-  'requestId',
-  'executionId',
-  'sessionId',
-  'messageId',
-  'workspaceId',
-  'batchId',
-  'compactionId',
-  'modelCallId',
-  'toolCallId',
-  'sourceId',
-  'candidateId',
-  'recommendationId',
-  'contentId',
-  'contentDigest',
-  'providerAttempt',
-  'discoveryAttempt',
+  'requestId', 'executionId', 'sessionId', 'messageId', 'workspaceId', 'batchId',
+  'compactionId', 'modelCallId', 'toolCallId', 'sourceId', 'candidateId',
+  'recommendationId', 'contentId', 'contentDigest', 'providerAttempt', 'discoveryAttempt',
 ] as const;
 
 interface ScannedTraceFacts {
   readonly records: TraceJournalRecord[];
   readonly invalidFacts: InvalidJournalFact[];
   readonly sourceFiles: Set<string>;
+}
+
+interface JournalFile {
+  readonly path: string;
+  readonly name: string;
+  readonly date: string;
+  readonly segment: number;
+  readonly size: number;
+  readonly modifiedAtMs: number;
+}
+
+interface JournalScan {
+  readonly facts: Map<string, ScannedTraceFacts>;
+  readonly records: TraceRecordLocator[];
+  readonly checkpoints: JournalCheckpoint[];
 }
 
 export interface CreateTraceReaderOptions {
@@ -59,60 +67,68 @@ export interface CreateTraceReaderOptions {
   readonly index?: TraceIndex;
 }
 
-interface JournalScan {
-  readonly facts: Map<string, ScannedTraceFacts>;
-  readonly checkpoints: JournalCheckpoint[];
-}
-
-/** Creates a streaming Reader whose correctness never depends on directory enumeration order. */
+/** Creates a Reader whose query cost follows Journal growth and the selected Trace, not retained Content. */
 export function createTraceReader(options: CreateTraceReaderOptions): TraceReader {
   const contentStore = options.contentStore ?? createContentStore({
     rootDirectory: options.rootDirectory,
     storage: options.storage,
   });
+  const detailCache = new Map<string, TraceProjection>();
+  let synchronization: Promise<boolean> | undefined;
 
-  const readAll = async (): Promise<{
-    readonly traces: TraceProjection[];
-    readonly checkpoints: JournalCheckpoint[];
-  }> => {
-    const scan = await scanJournal(options);
-    const projections: TraceProjection[] = [];
-    for (const [traceId, value] of scan.facts) {
-      const projected = projectTrace({
-        traceId,
-        records: value.records,
-        invalidFacts: value.invalidFacts,
-        sourceFiles: [...value.sourceFiles],
-      });
-      projections.push(await validateProjectionContent(projected, contentStore));
-    }
-    const traces = projections.sort((left, right) => (
-      (right.startedAt ?? '').localeCompare(left.startedAt ?? '')
-      || left.traceId.localeCompare(right.traceId)
-    ));
-    refreshIndex(options.index, traces, scan.checkpoints);
-    return { traces, checkpoints: scan.checkpoints };
+  const synchronize = (): Promise<boolean> => {
+    synchronization ??= synchronizeIndex(options, detailCache)
+      .finally(() => { synchronization = undefined; });
+    return synchronization;
+  };
+
+  const readAll = async (): Promise<TraceProjection[]> => {
+    const scan = await scanJournal(options, await listJournalFiles(options), new Map());
+    return projectFacts(scan.facts);
   };
 
   return {
     async listTraces(query = {}) {
-      const { traces } = await readAll();
-      const indexedTraceIds = queryIndex(options.index, query);
-      const filtered = traces.filter((trace) => (
-        (!indexedTraceIds || indexedTraceIds.has(trace.traceId)) && matchesQuery(trace, query)
-      ));
-      return filtered.slice(0, query.limit ?? filtered.length);
+      if (options.index && await synchronize()) {
+        try {
+          return options.index.queryTraces(query);
+        } catch {
+          // Fall through to streaming Journal projection when the disposable Index fails.
+        }
+      }
+      const traces = await readAll();
+      return traces
+        .filter((trace) => matchesQuery(trace, query))
+        .map(summarizeTrace)
+        .slice(0, query.limit ?? 200);
     },
+
     async getTrace(traceId) {
-      return (await readAll()).traces.find((trace) => trace.traceId === traceId);
+      if (options.index && await synchronize()) {
+        const cached = takeCachedTrace(detailCache, traceId);
+        if (cached) return cached;
+        try {
+          const locators = options.index.getRecordLocators(traceId);
+          if (locators.length === 0) return undefined;
+          const trace = await readTraceFromLocators(options.storage, traceId, locators);
+          cacheTrace(detailCache, trace);
+          return trace;
+        } catch {
+          // Fall through to streaming Journal projection when indexed locations are unreadable.
+        }
+      }
+      const trace = (await readAll()).find((candidate) => candidate.traceId === traceId);
+      if (trace) cacheTrace(detailCache, trace);
+      return trace;
     },
+
     readContent: (contentId) => contentStore.read(contentId),
+
     async rebuildIndex() {
       if (!options.index) return false;
       try {
-        const { traces, checkpoints } = await readAll();
-        options.index.initialize();
-        options.index.replace({ traces, checkpoints });
+        await rebuildIndex(options, options.index);
+        detailCache.clear();
         return true;
       } catch {
         return false;
@@ -121,15 +137,101 @@ export function createTraceReader(options: CreateTraceReaderOptions): TraceReade
   };
 }
 
-/** Scans valid and invalid lines while assigning only safely identified failures to a Trace. */
-async function scanJournal(
+/** Synchronizes only appended Journal bytes and reprojects only the affected Traces. */
+async function synchronizeIndex(
   options: CreateTraceReaderOptions,
-): Promise<JournalScan> {
-  const facts = new Map<string, ScannedTraceFacts>();
-  const checkpoints: JournalCheckpoint[] = [];
+  detailCache: Map<string, TraceProjection>,
+): Promise<boolean> {
+  const index = options.index;
+  if (!index) return false;
+  try {
+    const state = index.initialize();
+    const files = await listJournalFiles(options);
+    const checkpoints = index.readCheckpoints();
+    if (state.status === 'rebuilt' || requiresRebuild(files, checkpoints)) {
+      await rebuildIndex(options, index, files);
+      detailCache.clear();
+      return true;
+    }
+
+    const checkpointByPath = new Map(checkpoints.map((checkpoint) => [
+      checkpoint.filePath,
+      checkpoint,
+    ]));
+    const changedFiles = files.filter((file) => {
+      const checkpoint = checkpointByPath.get(file.path);
+      return !checkpoint
+        || file.size !== checkpoint.size
+        || file.modifiedAtMs !== checkpoint.modifiedAtMs;
+    });
+    if (changedFiles.length === 0) return true;
+
+    const starts = new Map(changedFiles.map((file) => [
+      file.path,
+      checkpointByPath.get(file.path)?.consumedBytes ?? 0,
+    ]));
+    const tail = await scanJournal(options, changedFiles, starts);
+    const changedTraceIds = [...tail.facts.keys()];
+    const traces: TraceProjection[] = [];
+    for (const traceId of changedTraceIds) {
+      const currentLocators = index.getRecordLocators(traceId);
+      const appendedLocators = tail.records.filter(
+        (locator) => locator.traceId === traceId,
+      );
+      traces.push(currentLocators.length === 0
+        ? projectScannedTrace(traceId, tail.facts.get(traceId))
+        : await readTraceFromLocators(
+            options.storage,
+            traceId,
+            mergeLocators(currentLocators, appendedLocators),
+          ));
+      detailCache.delete(traceId);
+    }
+    const updatedCheckpoints = files.map((file) => (
+      tail.checkpoints.find((checkpoint) => checkpoint.filePath === file.path)
+      ?? checkpointByPath.get(file.path)
+      ?? { filePath: file.path, consumedBytes: 0, size: file.size, modifiedAtMs: file.modifiedAtMs }
+    ));
+    index.apply({ traces, records: tail.records, checkpoints: updatedCheckpoints });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Performs the explicit recovery path from retained Journal truth. */
+async function rebuildIndex(
+  options: CreateTraceReaderOptions,
+  index: TraceIndex,
+  knownFiles?: readonly JournalFile[],
+): Promise<void> {
+  index.initialize();
+  const scan = await scanJournal(options, knownFiles ?? await listJournalFiles(options), new Map());
+  index.replace({
+    traces: projectFacts(scan.facts),
+    records: scan.records,
+    checkpoints: scan.checkpoints,
+  });
+}
+
+function requiresRebuild(
+  files: readonly JournalFile[],
+  checkpoints: readonly JournalCheckpoint[],
+): boolean {
+  const fileByPath = new Map(files.map((file) => [file.path, file]));
+  for (const checkpoint of checkpoints) {
+    const file = fileByPath.get(checkpoint.filePath);
+    if (!file || file.size < checkpoint.size || file.size < checkpoint.consumedBytes) return true;
+    if (file.size === checkpoint.size && file.modifiedAtMs !== checkpoint.modifiedAtMs) return true;
+  }
+  return false;
+}
+
+/** Lists strict Trace Journal segments in semantic order rather than directory order. */
+async function listJournalFiles(options: CreateTraceReaderOptions): Promise<JournalFile[]> {
   const directoryPath = join(options.rootDirectory, 'traces');
   const entries = await options.storage.listEntries(directoryPath);
-  const files = entries.flatMap((entry) => {
+  return entries.flatMap((entry): JournalFile[] => {
     if (entry.kind !== 'file') return [];
     const match = /^trace-v(\d+)-(\d{4}-\d{2}-\d{2})-(\d{4})\.jsonl$/.exec(entry.name);
     return match?.[1] && match[2] && match[3]
@@ -147,65 +249,159 @@ async function scanJournal(
     || left.segment - right.segment
     || left.name.localeCompare(right.name)
   ));
+}
 
+/** Scans complete newline-delimited records from the supplied byte positions. */
+async function scanJournal(
+  options: CreateTraceReaderOptions,
+  files: readonly JournalFile[],
+  starts: ReadonlyMap<string, number>,
+): Promise<JournalScan> {
+  const facts = new Map<string, ScannedTraceFacts>();
+  const records: TraceRecordLocator[] = [];
+  const checkpoints: JournalCheckpoint[] = [];
   for (const file of files) {
-    let content: string;
+    const start = starts.get(file.path) ?? 0;
+    let bytes: Uint8Array;
     try {
-      content = await options.storage.readText(file.path);
+      bytes = await options.storage.readBytesRange(file.path, start, Math.max(0, file.size - start));
     } catch {
       continue;
     }
+    let lineStart = 0;
+    let consumedBytes = start;
+    for (let index = 0; index < bytes.byteLength; index += 1) {
+      if (bytes[index] !== NEWLINE_BYTE) continue;
+      const rawEnd = index > lineStart && bytes[index - 1] === CARRIAGE_RETURN_BYTE
+        ? index - 1
+        : index;
+      if (rawEnd > lineStart) {
+        const line = new TextDecoder().decode(bytes.subarray(lineStart, rawEnd));
+        collectLine({
+          line,
+          filePath: file.path,
+          byteOffset: start + lineStart,
+          byteLength: rawEnd - lineStart,
+          facts,
+          records,
+        });
+      }
+      lineStart = index + 1;
+      consumedBytes = start + lineStart;
+    }
     checkpoints.push({
       filePath: file.path,
+      consumedBytes,
       size: file.size,
       modifiedAtMs: file.modifiedAtMs,
     });
-    for (const line of content.split(/\r?\n/)) {
-      if (!line) continue;
-      try {
-        const record = decodeTraceJournalLine(line);
-        const value = getOrCreateFacts(facts, record.traceId);
-        value.records.push(record);
-        value.sourceFiles.add(file.path);
-      } catch {
-        const invalid = identifyInvalidFact(line, file.path);
-        if (!invalid) continue;
-        const value = getOrCreateFacts(facts, invalid.traceId);
-        value.invalidFacts.push(invalid);
-        value.sourceFiles.add(file.path);
-      }
-    }
   }
-  return { facts, checkpoints };
+  return { facts, records, checkpoints };
 }
 
-/** Rebuilds stale metadata opportunistically; all failures leave streaming results intact. */
-function refreshIndex(
-  index: TraceIndex | undefined,
-  traces: readonly TraceProjection[],
-  checkpoints: readonly JournalCheckpoint[],
-): void {
-  if (!index) return;
+interface CollectLineInput {
+  readonly line: string;
+  readonly filePath: string;
+  readonly byteOffset: number;
+  readonly byteLength: number;
+  readonly facts: Map<string, ScannedTraceFacts>;
+  readonly records: TraceRecordLocator[];
+}
+
+/** Assigns one valid or safely identifiable invalid line to its owning Trace. */
+function collectLine(input: CollectLineInput): void {
   try {
-    const state = index.initialize();
-    if (state.status === 'rebuilt' || !index.matchesCheckpoints(checkpoints)) {
-      index.replace({ traces, checkpoints });
-    }
+    const record = decodeTraceJournalLine(input.line);
+    const facts = getOrCreateFacts(input.facts, record.traceId);
+    facts.records.push(record);
+    facts.sourceFiles.add(input.filePath);
+    input.records.push({
+      traceId: record.traceId,
+      sequence: record.sequence,
+      filePath: input.filePath,
+      byteOffset: input.byteOffset,
+      byteLength: input.byteLength,
+    });
   } catch {
-    // The Journal projection above remains the read result.
+    const invalid = identifyInvalidFact(input.line, input.filePath);
+    if (!invalid) return;
+    const facts = getOrCreateFacts(input.facts, invalid.traceId);
+    facts.invalidFacts.push(invalid);
+    facts.sourceFiles.add(input.filePath);
+    input.records.push({
+      traceId: invalid.traceId,
+      ...(invalid.sequence ? { sequence: invalid.sequence } : {}),
+      filePath: input.filePath,
+      byteOffset: input.byteOffset,
+      byteLength: input.byteLength,
+    });
   }
 }
 
-function queryIndex(
-  index: TraceIndex | undefined,
-  query: TraceListQuery,
-): ReadonlySet<string> | undefined {
-  if (!index) return undefined;
-  try {
-    return new Set(index.queryTraceIds(query));
-  } catch {
-    return undefined;
+/** Reads the minimum file ranges enclosing one Trace's indexed records. */
+async function readTraceFromLocators(
+  storage: ObservabilityStorage,
+  traceId: string,
+  locators: readonly TraceRecordLocator[],
+): Promise<TraceProjection> {
+  const facts = new Map<string, ScannedTraceFacts>();
+  const byFile = new Map<string, TraceRecordLocator[]>();
+  for (const locator of locators) {
+    const existing = byFile.get(locator.filePath) ?? [];
+    existing.push(locator);
+    byFile.set(locator.filePath, existing);
   }
+  for (const [filePath, fileLocators] of byFile) {
+    fileLocators.sort((left, right) => left.byteOffset - right.byteOffset);
+    const first = fileLocators[0];
+    const last = fileLocators.at(-1);
+    if (!first || !last) continue;
+    const rangeEnd = last.byteOffset + last.byteLength;
+    const bytes = await storage.readBytesRange(filePath, first.byteOffset, rangeEnd - first.byteOffset);
+    for (const locator of fileLocators) {
+      const relativeOffset = locator.byteOffset - first.byteOffset;
+      const end = relativeOffset + locator.byteLength;
+      if (relativeOffset < 0 || end > bytes.byteLength) continue;
+      collectLine({
+        line: new TextDecoder().decode(bytes.subarray(relativeOffset, end)),
+        filePath,
+        byteOffset: locator.byteOffset,
+        byteLength: locator.byteLength,
+        facts,
+        records: [],
+      });
+    }
+  }
+  const value = facts.get(traceId) ?? {
+    records: [],
+    invalidFacts: [],
+    sourceFiles: new Set<string>(),
+  };
+  return projectTrace({
+    traceId,
+    records: value.records,
+    invalidFacts: value.invalidFacts,
+    sourceFiles: [...value.sourceFiles],
+  });
+}
+
+function projectFacts(facts: ReadonlyMap<string, ScannedTraceFacts>): TraceProjection[] {
+  return [...facts].map(([traceId, value]) => projectScannedTrace(traceId, value)).sort((left, right) => (
+    (right.startedAt ?? '').localeCompare(left.startedAt ?? '')
+    || left.traceId.localeCompare(right.traceId)
+  ));
+}
+
+function projectScannedTrace(
+  traceId: string,
+  facts: ScannedTraceFacts | undefined,
+): TraceProjection {
+  return projectTrace({
+    traceId,
+    records: facts?.records ?? [],
+    invalidFacts: facts?.invalidFacts ?? [],
+    sourceFiles: [...(facts?.sourceFiles ?? [])],
+  });
 }
 
 function identifyInvalidFact(line: string, sourceFile: string): InvalidJournalFact | undefined {
@@ -228,64 +424,36 @@ function identifyInvalidFact(line: string, sourceFile: string): InvalidJournalFa
   }
 }
 
-async function validateProjectionContent(
-  projection: TraceProjection,
-  contentStore: ContentStore,
-): Promise<TraceProjection> {
-  const issues: TraceReadIssue[] = [];
-  for (const checkpoint of projection.contents) {
-    if (checkpoint.content.mode === 'inline') {
-      const captured = captureContent({
-        value: checkpoint.content.value,
-        mediaType: checkpoint.content.mediaType,
-        inlineThresholdBytes: Number.MAX_SAFE_INTEGER,
-      });
-      if (
-        (captured.content.mode !== 'inline' && captured.content.mode !== 'stored')
-        || captured.content.contentId !== checkpoint.content.contentId
-      ) {
-        issues.push({
-          code: 'content_hash_mismatch',
-          sequence: checkpoint.sequence,
-          contentId: checkpoint.content.contentId,
-          contentKind: checkpoint.kind,
-        });
-      }
-      continue;
-    }
-    if (checkpoint.content.mode !== 'stored') continue;
-    const read = await contentStore.read(checkpoint.content.contentId);
-    if (read.status === 'missing') {
-      issues.push({
-        code: 'missing_content',
-        sequence: checkpoint.sequence,
-        contentId: checkpoint.content.contentId,
-        contentKind: checkpoint.kind,
-      });
-    } else if (read.status === 'corrupt') {
-      issues.push({
-        code: 'content_hash_mismatch',
-        sequence: checkpoint.sequence,
-        contentId: checkpoint.content.contentId,
-        contentKind: checkpoint.kind,
-      });
-    } else if (read.status === 'failed') {
-      issues.push({
-        code: 'content_read_failed',
-        sequence: checkpoint.sequence,
-        contentId: checkpoint.content.contentId,
-        contentKind: checkpoint.kind,
-      });
-    } else if (read.bytes.byteLength !== checkpoint.content.byteLength) {
-      issues.push({
-        code: 'content_length_mismatch',
-        sequence: checkpoint.sequence,
-        contentId: checkpoint.content.contentId,
-        contentKind: checkpoint.kind,
-      });
-    }
+function mergeLocators(
+  current: readonly TraceRecordLocator[],
+  appended: readonly TraceRecordLocator[],
+): TraceRecordLocator[] {
+  const merged = new Map<string, TraceRecordLocator>();
+  for (const locator of [...current, ...appended]) {
+    merged.set(`${locator.filePath}:${locator.byteOffset}`, locator);
   }
-  return addTraceReadIssues(projection, issues);
+  return [...merged.values()];
+}
+
+function cacheTrace(cache: Map<string, TraceProjection>, trace: TraceProjection): void {
+  cache.delete(trace.traceId);
+  cache.set(trace.traceId, trace);
+  while (cache.size > DETAIL_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (typeof oldest !== 'string') return;
+    cache.delete(oldest);
+  }
+}
+
+function takeCachedTrace(
+  cache: Map<string, TraceProjection>,
+  traceId: string,
+): TraceProjection | undefined {
+  const trace = cache.get(traceId);
+  if (!trace) return undefined;
+  cache.delete(traceId);
+  cache.set(traceId, trace);
+  return trace;
 }
 
 function matchesQuery(trace: TraceProjection, query: TraceListQuery): boolean {
@@ -310,10 +478,9 @@ function correlationSetContains(
 ): boolean {
   const parsed = TraceCorrelationSchema.parse(required);
   for (const key of SCALAR_CORRELATION_KEYS) {
-    if (
-      parsed[key] !== undefined
-      && !candidates.some((candidate) => candidate[key] === parsed[key])
-    ) return false;
+    if (parsed[key] !== undefined && !candidates.some((candidate) => candidate[key] === parsed[key])) {
+      return false;
+    }
   }
   return !parsed.recommendationIds || parsed.recommendationIds.every((recommendationId) => (
     candidates.some((candidate) => candidate.recommendationIds?.includes(recommendationId))

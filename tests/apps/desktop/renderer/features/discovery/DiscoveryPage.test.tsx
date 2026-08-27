@@ -129,6 +129,44 @@ describe('DiscoveryPage', () => {
     expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(6);
   });
 
+  it('switches modes without rendering stale cards and ignores out-of-order Home responses', async () => {
+    const user = userEvent.setup();
+    const recommendations = Array.from({ length: 20 }, (_, index) => recommendation({
+      recommendationId: `recommendation:${index + 1}`,
+      title: `推荐内容 ${index + 1}`,
+      position: index,
+    }));
+    const favoritesResponse = deferred<ReturnType<typeof ok>>();
+    getHome.mockReset()
+      .mockResolvedValueOnce(ok(homeView({ recommendations })))
+      .mockImplementationOnce(() => favoritesResponse.promise)
+      .mockResolvedValueOnce(ok(homeView({
+        mode: 'watch_later',
+        recommendations: [recommendation({ recommendationId: 'recommendation:later', title: '稍后看内容' })],
+      })));
+
+    render(<DiscoveryPage />);
+    expect(await screen.findAllByTestId(/^recommendation-recommendation:/)).toHaveLength(4);
+
+    await user.click(screen.getByRole('button', { name: '收藏' }));
+    expect(screen.getByRole('button', { name: '收藏' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryAllByTestId(/^recommendation-recommendation:/)).toHaveLength(0);
+    expect(screen.getByText('正在加载发现内容…')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '稍后看' }));
+    expect(await screen.findByText('稍后看内容')).toBeInTheDocument();
+
+    await act(async () => {
+      favoritesResponse.resolve(ok(homeView({
+        mode: 'favorites',
+        recommendations: [recommendation({ recommendationId: 'recommendation:favorite', title: '收藏内容' })],
+      })));
+      await favoritesResponse.promise;
+    });
+    expect(screen.getByText('稍后看内容')).toBeInTheDocument();
+    expect(screen.queryByText('收藏内容')).not.toBeInTheDocument();
+  });
+
   it('searches only published local recommendations and updates card state through the Host', async () => {
     const user = userEvent.setup();
     searchRecommendations.mockResolvedValue(ok({
@@ -298,9 +336,12 @@ describe('DiscoveryPage', () => {
   });
 });
 
-function homeView(options: { recommendations?: ReturnType<typeof recommendation>[] } = {}) {
+function homeView(options: {
+  mode?: 'timeline' | 'favorites' | 'watch_later';
+  recommendations?: ReturnType<typeof recommendation>[];
+} = {}) {
   return {
-    mode: 'timeline' as const,
+    mode: options.mode ?? 'timeline',
     today: {
       localDate: '2026-08-22', status: 'published' as const, batchId: 'batch:1', executionId: 'execution:1',
       targetCount: 20, resultCount: 1, publishedAt: '2026-08-22T08:00:00.000Z',
@@ -347,4 +388,16 @@ function discoveryConfiguration(overrides: Record<string, unknown> = {}) {
 
 function ok<T extends object>(data: T) {
   return { ok: true as const, data, meta: {} };
+}
+
+function deferred<T>() {
+  let settle: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((resolve) => { settle = resolve; });
+  return {
+    promise,
+    resolve(value: T) {
+      if (!settle) throw new Error('Deferred promise was not initialized.');
+      settle(value);
+    },
+  };
 }

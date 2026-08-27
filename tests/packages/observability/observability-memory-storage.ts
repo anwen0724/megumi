@@ -62,6 +62,13 @@ export class ObservabilityMemoryStorage implements ObservabilityStorage {
     return new Uint8Array(file.bytes);
   }
 
+  /** Reads a defensive copy of one bounded byte range. */
+  async readBytesRange(filePath: string, offset: number, length: number): Promise<Uint8Array> {
+    const file = this.files.get(filePath);
+    if (!file) throw new Error(`Missing file: ${filePath}`);
+    return file.bytes.slice(offset, offset + length);
+  }
+
   /** Replaces one in-memory file with a defensive byte copy. */
   async writeBytes(filePath: string, bytes: Uint8Array): Promise<void> {
     this.operations.push(`write:${filePath}`);

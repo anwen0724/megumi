@@ -35,6 +35,15 @@ interface TraceDetailProps {
 
 type DetailView = 'flow' | 'timing';
 
+interface TraceFlowIndex {
+  readonly roots: readonly ObservabilitySpanUiDto[];
+  readonly childrenByParentSpanId: ReadonlyMap<string, readonly ObservabilitySpanUiDto[]>;
+  readonly rootContents: readonly ObservabilityContentCheckpointUiDto[];
+  readonly contentsBySpanId: ReadonlyMap<string, readonly ObservabilityContentCheckpointUiDto[]>;
+  readonly modelCallCount: number;
+  readonly toolCallCount: number;
+}
+
 export function TraceDetail({
   trace,
   display,
@@ -46,12 +55,7 @@ export function TraceDetail({
   const { t } = useTranslation('settings');
   const [view, setView] = useState<DetailView>('flow');
   const [highlightedSequence, setHighlightedSequence] = useState<number>();
-  const roots = useMemo(() => trace.spans.filter((span) => (
-    !span.parentSpanId || !trace.spans.some((candidate) => candidate.spanId === span.parentSpanId)
-  )), [trace.spans]);
-  const rootContents = trace.contents.filter((content) => !content.spanId);
-  const modelCallCount = trace.spans.filter((span) => span.name === 'model.call').length;
-  const toolCallCount = trace.spans.filter((span) => span.name === 'tool.call').length;
+  const flow = useMemo(() => createTraceFlowIndex(trace), [trace]);
 
   function locateSequence(sequence: number | undefined) {
     if (sequence === undefined) return;
@@ -113,7 +117,10 @@ export function TraceDetail({
         </div>
 
         <div className="mt-3 text-xs font-medium text-[var(--color-text-muted)]">
-          {t('diagnostics.invocationCounts', { modelCount: modelCallCount, toolCount: toolCallCount })}
+          {t('diagnostics.invocationCounts', {
+            modelCount: flow.modelCallCount,
+            toolCount: flow.toolCallCount,
+          })}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 text-[0.68rem] text-[var(--color-text-muted)]">
@@ -169,7 +176,7 @@ export function TraceDetail({
           <section aria-label={t('diagnostics.executionFlow')}>
             <SectionTitle icon={<GitBranch size={15} />} title={t('diagnostics.executionFlow')} />
             <div className="mt-3 space-y-3">
-              {rootContents.map((content) => (
+              {flow.rootContents.map((content) => (
                 <ContentCheckpoint
                   key={content.sequence}
                   checkpoint={content}
@@ -178,17 +185,18 @@ export function TraceDetail({
                   onReadContent={onReadContent}
                 />
               ))}
-              {roots.map((span) => (
+              {flow.roots.map((span) => (
                 <SpanNode
                   key={span.spanId}
                   span={span}
-                  trace={trace}
+                  childrenByParentSpanId={flow.childrenByParentSpanId}
+                  contentsBySpanId={flow.contentsBySpanId}
                   contentBySequence={contentBySequence}
                   highlightedSequence={highlightedSequence}
                   onReadContent={onReadContent}
                 />
               ))}
-              {roots.length === 0 && rootContents.length === 0 ? (
+              {flow.roots.length === 0 && flow.rootContents.length === 0 ? (
                 <EmptyLine label={t('diagnostics.noExecutionFlow')} />
               ) : null}
             </div>
@@ -274,22 +282,64 @@ function DiagnosticIssues({
   );
 }
 
+/** Builds the execution tree once so recursive rendering never rescans the full Trace. */
+function createTraceFlowIndex(trace: ObservabilityTraceDetailUiDto): TraceFlowIndex {
+  const spanIds = new Set(trace.spans.map((span) => span.spanId));
+  const roots: ObservabilitySpanUiDto[] = [];
+  const childrenByParentSpanId = new Map<string, ObservabilitySpanUiDto[]>();
+  let modelCallCount = 0;
+  let toolCallCount = 0;
+  for (const span of trace.spans) {
+    if (span.name === 'model.call') modelCallCount += 1;
+    if (span.name === 'tool.call') toolCallCount += 1;
+    if (!span.parentSpanId || !spanIds.has(span.parentSpanId)) {
+      roots.push(span);
+      continue;
+    }
+    const children = childrenByParentSpanId.get(span.parentSpanId) ?? [];
+    children.push(span);
+    childrenByParentSpanId.set(span.parentSpanId, children);
+  }
+
+  const rootContents: ObservabilityContentCheckpointUiDto[] = [];
+  const contentsBySpanId = new Map<string, ObservabilityContentCheckpointUiDto[]>();
+  for (const content of trace.contents) {
+    if (!content.spanId) {
+      rootContents.push(content);
+      continue;
+    }
+    const contents = contentsBySpanId.get(content.spanId) ?? [];
+    contents.push(content);
+    contentsBySpanId.set(content.spanId, contents);
+  }
+  return {
+    roots,
+    childrenByParentSpanId,
+    rootContents,
+    contentsBySpanId,
+    modelCallCount,
+    toolCallCount,
+  };
+}
+
 function SpanNode({
   span,
-  trace,
+  childrenByParentSpanId,
+  contentsBySpanId,
   contentBySequence,
   highlightedSequence,
   onReadContent,
 }: {
   readonly span: ObservabilitySpanUiDto;
-  readonly trace: ObservabilityTraceDetailUiDto;
+  readonly childrenByParentSpanId: ReadonlyMap<string, readonly ObservabilitySpanUiDto[]>;
+  readonly contentsBySpanId: ReadonlyMap<string, readonly ObservabilityContentCheckpointUiDto[]>;
   readonly contentBySequence: Readonly<Record<number, ObservabilityGetContentResult | 'loading'>>;
   readonly highlightedSequence?: number;
   readonly onReadContent: (sequence: number) => void;
 }) {
   const { t } = useTranslation('settings');
-  const children = trace.spans.filter((candidate) => candidate.parentSpanId === span.spanId);
-  const contents = trace.contents.filter((content) => content.spanId === span.spanId);
+  const children = childrenByParentSpanId.get(span.spanId) ?? [];
+  const contents = contentsBySpanId.get(span.spanId) ?? [];
   const events = span.events.filter((event) => !(
     event.type === 'tool.permission.resolved'
     && children.some((child) => child.name === 'permission.await')
@@ -345,7 +395,8 @@ function SpanNode({
                 <SpanNode
                   key={child.spanId}
                   span={child}
-                  trace={trace}
+                  childrenByParentSpanId={childrenByParentSpanId}
+                  contentsBySpanId={contentsBySpanId}
                   contentBySequence={contentBySequence}
                   highlightedSequence={highlightedSequence}
                   onReadContent={onReadContent}

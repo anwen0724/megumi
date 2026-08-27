@@ -844,6 +844,7 @@ const noopObservabilityStorage: ObservabilityPersistenceStorage = {
   appendText: async () => undefined,
   readText: async () => '',
   readBytes: async () => new Uint8Array(),
+  readBytesRange: async () => new Uint8Array(),
   writeBytes: async () => undefined,
   listEntries: async () => [],
   stat: async () => undefined,

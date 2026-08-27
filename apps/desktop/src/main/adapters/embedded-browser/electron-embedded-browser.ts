@@ -85,6 +85,8 @@ export function createElectronEmbeddedBrowser(input: {
           return failed('invalid_response', 'Embedded browser URL is outside the allowed origins.');
         }
         const window = createWindow(embeddedBrowserWindowOptions(request.profileId, false));
+        // Background Source snapshots must never emit page audio; interactive login windows remain unaffected.
+        window.webContents.setAudioMuted(true);
         taskWindows.add(window);
         secureWindow(window, request.allowedOrigins);
         let timedOut = false;
@@ -160,9 +162,14 @@ export function embeddedBrowserWindowOptions(
 
 function secureWindow(window: BrowserWindow, allowedOrigins: readonly string[]): void {
   const allowed = new Set(allowedOrigins.map(normalizeOrigin));
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event, url) => {
+  const preventDisallowedNavigation = (event: { preventDefault(): void }, url: string) => {
     if (!isAllowedUrl(url, allowed)) event.preventDefault();
+  };
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', preventDisallowedNavigation);
+  // Source pages can request custom app protocols from nested frames without a top-level navigation.
+  window.webContents.on('will-frame-navigate', (event) => {
+    preventDisallowedNavigation(event, event.url);
   });
 }
 

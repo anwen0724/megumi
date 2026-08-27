@@ -184,6 +184,7 @@ export function ContentSourcesSettingsPanel() {
             source={source('zhihu')}
             sourceId="zhihu"
             label="知乎 Access Secret"
+            helpLink={{ href: 'https://developer.zhihu.com/', label: t('settings:contentSources.zhihuApiLink') }}
             configured={configured.zhihu}
             value={drafts.zhihu}
             expanded={expandedSource === 'zhihu'}
@@ -197,6 +198,7 @@ export function ContentSourcesSettingsPanel() {
             source={source('twitter')}
             sourceId="twitter"
             label="TwitterAPI.io API Key"
+            helpLink={{ href: 'https://twitterapi.io/', label: t('settings:contentSources.twitterApiLink') }}
             configured={configured.twitter}
             value={drafts.twitter}
             expanded={expandedSource === 'twitter'}
@@ -295,6 +297,7 @@ function CredentialSourceRow(props: {
   source?: SourceView;
   sourceId: ProviderSourceId;
   label: string;
+  helpLink: { readonly href: string; readonly label: string };
   configured: boolean;
   value: string;
   expanded: boolean;
@@ -349,11 +352,9 @@ function CredentialSourceRow(props: {
                 <Button type="button" variant="primary" disabled={props.busy || !props.value.trim() || !props.expanded} onClick={props.onSave} aria-label={t('contentSources.saveCredentialFor', { name: props.source?.name ?? props.sourceId })}>{t('contentSources.save')}</Button>
               </div>
             </div>
-            {props.sourceId === 'twitter' ? (
-              <a href="https://twitterapi.io/" target="_blank" rel="noreferrer" tabIndex={props.expanded ? 0 : -1} className="flex items-center gap-1 px-5 pb-4 text-xs text-[var(--color-accent)] hover:underline">
-                {t('contentSources.twitterApiLink')} <ExternalLink size={11} aria-hidden="true" />
-              </a>
-            ) : null}
+            <a href={props.helpLink.href} target="_blank" rel="noreferrer" tabIndex={props.expanded ? 0 : -1} className="flex items-center gap-1 px-5 pb-4 text-xs text-[var(--color-accent)] hover:underline">
+              {props.helpLink.label} <ExternalLink size={11} aria-hidden="true" />
+            </a>
           </div>
         </div>
       </div>

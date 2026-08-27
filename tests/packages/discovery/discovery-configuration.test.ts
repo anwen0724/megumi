@@ -2,6 +2,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createDiscovery,
   createDiscoveryConfiguration,
   createSourceRegistry,
   type DiscoverySource,
@@ -90,6 +91,37 @@ describe('Discovery configuration', () => {
     });
     expect(connect).toHaveBeenCalledOnce();
     await expect(configuration.connectSource({ sourceId: 'bilibili' })).rejects.toThrow(/login/i);
+  });
+
+  it('checks only enabled sources during background startup while manual refresh checks all sources', async () => {
+    const enabledCheck = vi.fn(async () => ({ state: 'ready' as const }));
+    const disabledCheck = vi.fn(async () => ({ state: 'ready' as const }));
+    const sourceRegistry = createSourceRegistry([
+      { ...source('enabled', 'public_http'), checkAvailability: enabledCheck },
+      { ...source('disabled', 'browser_session'), checkAvailability: disabledCheck },
+    ]);
+    const discovery = createDiscovery({
+      configuration: {
+        sourceRegistry,
+        settings: {
+          read: () => ({
+            conversationRecognitionEnabled: false,
+            dailyGenerationTime: '08:00',
+            dailyTargetCount: 20,
+            enabledSources: ['enabled'],
+          }),
+          write: vi.fn(),
+        },
+      },
+    });
+
+    await discovery.startBackground();
+    expect(enabledCheck).toHaveBeenCalledOnce();
+    expect(disabledCheck).not.toHaveBeenCalled();
+
+    await discovery.refreshDiscoverySources();
+    expect(enabledCheck).toHaveBeenCalledTimes(2);
+    expect(disabledCheck).toHaveBeenCalledOnce();
   });
 
   it.each([

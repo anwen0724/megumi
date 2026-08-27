@@ -167,7 +167,11 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     async startBackground() {
       const failures: unknown[] = [];
       await runBackgroundStartStep(options, failures, 'source_refresh', async () => {
-        await discoveryConfiguration?.refreshSources();
+        if (!discoveryConfiguration) return;
+        const configuration = await discoveryConfiguration.get();
+        await discoveryConfiguration.refreshSources(
+          configuration.sources.filter((source) => source.enabled).map((source) => source.sourceId),
+        );
       });
       await runBackgroundStartStep(options, failures, 'candidate_supply_start', async () => {
         await candidateSupplyRuntime?.start();

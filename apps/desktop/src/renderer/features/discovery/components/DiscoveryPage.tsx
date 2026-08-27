@@ -1,5 +1,5 @@
 /* Owns the renderer projection for today, discovery history, search, and feedback. */
-import { useCallback, useEffect, useId, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Bookmark, ChevronDown, ChevronUp, Heart, LoaderCircle, Search, Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DiscoveryHomeUiResult, DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
@@ -27,8 +27,10 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
+  const homeRequestSequence = useRef(0);
 
-  const loadHome = useCallback(async (selectedMode: HomeMode = mode) => {
+  const loadHome = useCallback(async (selectedMode: HomeMode) => {
+    const requestSequence = ++homeRequestSequence.current;
     setLoading(true);
     setError(null);
     try {
@@ -36,6 +38,7 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
         IPC_CHANNELS.discovery.homeGet,
         { mode: selectedMode, limit: 60 },
       ));
+      if (requestSequence !== homeRequestSequence.current) return;
       setLoading(false);
       if (!result.ok) {
         setError(t('loadFailed'));
@@ -43,10 +46,11 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
       }
       setHome(result.data);
     } catch {
+      if (requestSequence !== homeRequestSequence.current) return;
       setLoading(false);
       setError(t('loadFailed'));
     }
-  }, [mode, t]);
+  }, [t]);
 
   useEffect(() => { void loadHome('timeline'); }, []);
   useEffect(() => {
@@ -60,11 +64,12 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
     return () => window.clearInterval(timer);
   }, [home?.nextScheduledAt, home?.today.status, loadHome, mode]);
 
-  async function selectMode(next: HomeMode) {
+  function selectMode(next: HomeMode) {
+    if (next === mode && !activeQuery) return;
     setMode(next);
     setActiveQuery(null);
     setQuery('');
-    await loadHome(next);
+    void loadHome(next);
   }
 
   async function search(event: FormEvent) {
@@ -127,9 +132,10 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
 
   const recommendations = useMemo(() => activeQuery ? searchResults : [], [activeQuery, searchResults]);
   const hasActiveInterests = home?.interests.some((interest) => interest.status === 'active') ?? false;
+  const modeHome = home?.mode === mode ? home : null;
 
   return (
-    <div className="relative h-full w-full overflow-y-auto bg-[radial-gradient(circle_at_10%_0%,var(--color-accent-soft),transparent_26rem),var(--color-app-bg)]">
+    <div className="relative h-full w-full overflow-y-auto [scrollbar-gutter:stable] bg-[radial-gradient(circle_at_10%_0%,var(--color-accent-soft),transparent_26rem),var(--color-app-bg)]">
       <div className="mx-auto max-w-[94rem] px-5 pb-16 pt-6 sm:px-7 lg:px-10">
         <header className="mb-7 grid gap-5 xl:grid-cols-[minmax(18rem,1fr)_minmax(28rem,0.9fr)_auto] xl:items-end">
           <div>
@@ -163,7 +169,7 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           {home?.nextScheduledAt ? <p className="text-xs text-[var(--color-text-subtle)]">{t('nextRun', { time: formatSchedule(home.nextScheduledAt, i18n.language) })}</p> : null}
         </div>
 
-        {loading && !home ? <StatusPanel icon={<LoaderCircle className="animate-spin" size={22} />} title={t('loading')} /> : null}
+        {loading && !modeHome && (!home || hasActiveInterests) ? <StatusPanel icon={<LoaderCircle className="animate-spin" size={22} />} title={t('loading')} /> : null}
         {error ? <div role="alert" className="mb-6 rounded-2xl border border-[var(--color-danger)]/25 bg-[var(--color-danger-soft)] px-5 py-4 text-sm text-[var(--color-danger)]">{error}</div> : null}
 
         {home && !hasActiveInterests ? (
@@ -203,11 +209,11 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           </section>
         ) : null}
 
-        {!activeQuery && home?.days.map((day) => (
+        {!activeQuery && modeHome?.days.map((day) => (
           <section key={day.localDate} className="mb-12">
             <div className="mb-4 flex items-end justify-between border-b border-[var(--color-border)] pb-3">
               <h2 className="text-xl font-semibold tracking-[-0.025em] text-[var(--color-text)]">
-                {day.localDate === home.today.localDate
+                {day.localDate === modeHome.today.localDate
                   ? t('todayDate', { date: formatLocalDate(day.localDate, i18n.language) })
                   : formatHistoricalDate(day.localDate, i18n.language)}
               </h2>
@@ -222,7 +228,7 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           </section>
         ))}
 
-        {!activeQuery && home && home.days.length === 0 && hasActiveInterests && !['not_generated', 'waiting_for_candidates', 'running', 'failed'].includes(home.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
+        {!activeQuery && modeHome && modeHome.days.length === 0 && hasActiveInterests && !['not_generated', 'waiting_for_candidates', 'running', 'failed'].includes(modeHome.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
       </div>
 
       <InterestManager

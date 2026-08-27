@@ -20,15 +20,23 @@ describe('Trace Index', () => {
     const trace = indexedTrace();
     const checkpoint: JournalCheckpoint = {
       filePath: 'observability/traces/trace-v1-2026-08-26-0001.jsonl',
+      consumedBytes: 1234,
       size: 1234,
       modifiedAtMs: 10,
     };
-    index.replace({ traces: [trace], checkpoints: [checkpoint] });
+    const locator = {
+      traceId: trace.traceId,
+      sequence: 1,
+      filePath: checkpoint.filePath,
+      byteOffset: 0,
+      byteLength: 200,
+    };
+    index.replace({ traces: [trace], records: [locator], checkpoints: [checkpoint] });
 
-    expect(index.queryTraceIds({ traceKind: 'daily_recommendation' })).toEqual([trace.traceId]);
-    expect(index.queryTraceIds({ status: 'ok' })).toEqual([trace.traceId]);
-    expect(index.queryTraceIds({ spanName: 'source.search' })).toEqual([trace.traceId]);
-    expect(index.queryTraceIds({ contentKind: 'source.result' })).toEqual([trace.traceId]);
+    expect(traceIds(index.queryTraces({ traceKind: 'daily_recommendation' }))).toEqual([trace.traceId]);
+    expect(traceIds(index.queryTraces({ status: 'ok' }))).toEqual([trace.traceId]);
+    expect(traceIds(index.queryTraces({ spanName: 'source.search' }))).toEqual([trace.traceId]);
+    expect(traceIds(index.queryTraces({ contentKind: 'source.result' }))).toEqual([trace.traceId]);
     const correlationQueries = [
       { requestId: 'request-1' },
       { executionId: 'execution-1' },
@@ -48,17 +56,18 @@ describe('Trace Index', () => {
       { discoveryAttempt: 2 },
     ] as const;
     for (const correlation of correlationQueries) {
-      expect(index.queryTraceIds({ correlation })).toEqual([trace.traceId]);
+      expect(traceIds(index.queryTraces({ correlation }))).toEqual([trace.traceId]);
     }
-    expect(index.queryTraceIds({
+    expect(traceIds(index.queryTraces({
       correlation: { executionId: 'execution-1', modelCallId: 'model-call-2' },
-    })).toEqual([trace.traceId]);
-    expect(index.queryTraceIds({ correlation: { recommendationIds: ['recommendation-2'] } })).toEqual([
+    }))).toEqual([trace.traceId]);
+    expect(traceIds(index.queryTraces({ correlation: { recommendationIds: ['recommendation-2'] } }))).toEqual([
       trace.traceId,
     ]);
-    expect(index.queryTraceIds({ startedAtOrAfter: '2026-08-26T00:00:00.000Z' })).toEqual([
+    expect(traceIds(index.queryTraces({ startedAtOrAfter: '2026-08-26T00:00:00.000Z' }))).toEqual([
       trace.traceId,
     ]);
+    expect(index.getRecordLocators(trace.traceId)).toEqual([locator]);
     expect(index.matchesCheckpoints([checkpoint])).toBe(true);
     expect(index.matchesCheckpoints([{ ...checkpoint, size: 999 }])).toBe(false);
 
@@ -79,17 +88,18 @@ describe('Trace Index', () => {
     const trace = indexedTrace();
     const checkpoint: JournalCheckpoint = {
       filePath: 'observability/traces/trace-v1-2026-08-26-0001.jsonl',
+      consumedBytes: 1234,
       size: 1234,
       modifiedAtMs: 10,
     };
-    index.replace({ traces: [trace], checkpoints: [checkpoint] });
+    index.replace({ traces: [trace], records: [], checkpoints: [checkpoint] });
 
     await index.prune({ retainedJournalPaths: [] });
-    expect(index.queryTraceIds({})).toEqual([]);
+    expect(index.queryTraces({})).toEqual([]);
 
     database.prepare({ sql: 'UPDATE observability_index_meta SET schema_version = 999' }).run();
     expect(index.initialize()).toEqual({ status: 'rebuilt' });
-    expect(index.queryTraceIds({})).toEqual([]);
+    expect(index.queryTraces({})).toEqual([]);
   });
 });
 
@@ -101,6 +111,10 @@ function openMemoryDatabase() {
 
 interface CountRow extends DatabaseRow {
   readonly count: number;
+}
+
+function traceIds(traces: readonly { readonly traceId: string }[]): string[] {
+  return traces.map((trace) => trace.traceId);
 }
 
 function indexedTrace() {

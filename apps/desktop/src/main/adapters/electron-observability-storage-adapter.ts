@@ -2,6 +2,7 @@
 import {
   mkdir,
   appendFile,
+  open,
   readFile,
   readdir,
   stat,
@@ -21,6 +22,16 @@ export const electronObservabilityStorageAdapter: ObservabilityPersistenceStorag
   appendText: (path, content) => appendFile(path, content, "utf8"),
   readText: (path) => readFile(path, "utf8"),
   readBytes: (path) => readFile(path),
+  async readBytesRange(path, offset, length) {
+    const handle = await open(path, 'r');
+    try {
+      const buffer = Buffer.alloc(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, offset);
+      return new Uint8Array(buffer.subarray(0, bytesRead));
+    } finally {
+      await handle.close();
+    }
+  },
   writeBytes: (path, bytes) => writeFile(path, bytes),
   async listEntries(path) {
     try {

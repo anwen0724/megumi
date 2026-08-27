@@ -117,6 +117,10 @@ class MemoryObservabilityStorage implements ObservabilityStorage {
     return new Uint8Array(value);
   }
 
+  async readBytesRange(filePath: string, offset: number, length: number): Promise<Uint8Array> {
+    return (await this.readBytes(filePath)).slice(offset, offset + length);
+  }
+
   async writeBytes(filePath: string, bytes: Uint8Array): Promise<void> {
     this.operations.push(`write:${filePath}`);
     if (this.failurePoint === 'write') {

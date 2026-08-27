@@ -193,6 +193,7 @@ export const settings = {
     opening: '正在打开…',
     loginSource: '登录{{name}}',
     saveCredentialFor: '保存{{name}}凭据',
+    zhihuApiLink: '前往知乎开发者平台',
     twitterApiLink: '打开 TwitterAPI.io',
     checkedAt: '最近检查：{{time}}',
     retryAt: '可重试时间：{{time}}',

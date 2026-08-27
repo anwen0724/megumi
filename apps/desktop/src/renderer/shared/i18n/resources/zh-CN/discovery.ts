@@ -11,7 +11,7 @@ export const discovery = {
   search: '搜索',
   clearSearch: '返回今日发现',
   manageInterests: '管理关注',
-  timeline: '时间线',
+  timeline: '推荐',
   favorites: '收藏',
   watchLater: '稍后看',
   todayDate: '今天 · {{date}}',

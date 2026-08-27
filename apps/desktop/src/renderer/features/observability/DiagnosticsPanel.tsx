@@ -1,7 +1,7 @@
 /*
  * Owns the human-facing Trace diagnostics workbench and enriches Trace facts with optional Session labels.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type {
@@ -28,13 +28,18 @@ type TraceKindFilter = 'all' | 'conversation' | 'daily_recommendation' | 'candid
   | 'preference_learning';
 type TraceStatusFilter = 'all' | ObservabilityTraceSummaryUiDto['status'];
 type ActiveAction = 'refresh' | 'rebuild' | 'export';
+type SelectedTraceState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading'; readonly traceId: string }
+  | { readonly status: 'ready'; readonly traceId: string; readonly trace: ObservabilityTraceDetailUiDto }
+  | { readonly status: 'failed'; readonly traceId: string };
 
 export function DiagnosticsPanel() {
   const { t, i18n } = useTranslation('settings');
   const [traces, setTraces] = useState<readonly ObservabilityTraceSummaryUiDto[]>([]);
   const [sessions, setSessions] = useState<readonly SessionDto[]>([]);
   const [messages, setMessages] = useState<readonly UserMessageSummaryDto[]>([]);
-  const [selected, setSelected] = useState<ObservabilityTraceDetailUiDto>();
+  const [selectedState, setSelectedState] = useState<SelectedTraceState>({ status: 'idle' });
   const [contentBySequence, setContentBySequence] = useState<Readonly<Record<number, ObservabilityGetContentResult | 'loading'>>>({});
   const [health, setHealth] = useState<ObservabilityHealthUiDto>();
   const [query, setQuery] = useState('');
@@ -45,6 +50,11 @@ export function DiagnosticsPanel() {
   const [loading, setLoading] = useState(true);
   const [activeAction, setActiveAction] = useState<ActiveAction>();
   const [message, setMessage] = useState<'unavailable' | 'exported' | 'exportFailed' | 'rebuilt'>();
+  const detailRequestId = useRef(0);
+  const selectedTraceIdRef = useRef<string | undefined>(undefined);
+
+  const selectedTraceId = selectedState.status === 'idle' ? undefined : selectedState.traceId;
+  const selected = selectedState.status === 'ready' ? selectedState.trace : undefined;
 
   const displayItems = useMemo(() => createTraceDisplayItems({
     traces,
@@ -67,8 +77,8 @@ export function DiagnosticsPanel() {
     query, traceKind, sessionId, status, issuesOnly,
   }), [displayItems, issuesOnly, query, sessionId, status, traceKind]);
   const groups = useMemo(() => groupTraceDisplayItems(filteredItems), [filteredItems]);
-  const selectedDisplay = selected
-    ? displayItems.find((item) => item.summary.traceId === selected.summary.traceId)
+  const selectedDisplay = selectedTraceId
+    ? displayItems.find((item) => item.summary.traceId === selectedTraceId)
     : undefined;
   const sessionOptions = useMemo(() => {
     const options = new Map<string, string>();
@@ -121,8 +131,8 @@ export function DiagnosticsPanel() {
     } else {
       setMessages([]);
     }
-    if (selected && !nextTraces.some((trace) => trace.traceId === selected.summary.traceId)) {
-      setSelected(undefined);
+    if (selectedTraceId && !nextTraces.some((trace) => trace.traceId === selectedTraceId)) {
+      clearSelection();
       setContentBySequence({});
     }
     setLoading(false);
@@ -135,32 +145,44 @@ export function DiagnosticsPanel() {
   }, []);
 
   useEffect(() => {
-    if (!selected) return;
-    if (filteredItems.some((item) => item.summary.traceId === selected.summary.traceId)) return;
-    setSelected(undefined);
+    if (!selectedTraceId) return;
+    if (filteredItems.some((item) => item.summary.traceId === selectedTraceId)) return;
+    clearSelection();
     setContentBySequence({});
-  }, [filteredItems, selected]);
+  }, [filteredItems, selectedTraceId]);
 
   async function inspect(item: TraceDisplayItem) {
+    if (selectedTraceId === item.summary.traceId && selectedState.status !== 'failed') return;
+    const requestId = detailRequestId.current + 1;
+    detailRequestId.current = requestId;
+    selectedTraceIdRef.current = item.summary.traceId;
+    setSelectedState({ status: 'loading', traceId: item.summary.traceId });
     setContentBySequence({});
     const result = await window.megumi.observability.get(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.get, {
         traceId: item.summary.traceId,
       }),
     );
-    if (result.ok && result.data.status === 'found') setSelected(result.data.trace);
+    if (detailRequestId.current !== requestId) return;
+    setSelectedState(
+      result.ok && result.data.status === 'found'
+        ? { status: 'ready', traceId: item.summary.traceId, trace: result.data.trace }
+        : { status: 'failed', traceId: item.summary.traceId },
+    );
   }
 
   async function readContent(sequence: number) {
     if (!selected) return;
+    const traceId = selected.summary.traceId;
     if (contentBySequence[sequence] && contentBySequence[sequence] !== 'loading') return;
     setContentBySequence((current) => ({ ...current, [sequence]: 'loading' }));
     const result = await window.megumi.observability.getContent(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.observability.content, {
-        traceId: selected.summary.traceId,
+        traceId,
         sequence,
       }),
     );
+    if (selectedTraceIdRef.current !== traceId) return;
     setContentBySequence((current) => ({
       ...current,
       [sequence]: result.ok
@@ -214,6 +236,12 @@ export function DiagnosticsPanel() {
     } finally {
       setActiveAction(undefined);
     }
+  }
+
+  function clearSelection(): void {
+    detailRequestId.current += 1;
+    selectedTraceIdRef.current = undefined;
+    setSelectedState({ status: 'idle' });
   }
 
   const emptyLabel = loading
@@ -309,23 +337,28 @@ export function DiagnosticsPanel() {
           <div className="max-h-[48rem] overflow-auto">
             <TraceList
               groups={groups}
-              selectedTraceId={selected?.summary.traceId}
+              selectedTraceId={selectedTraceId}
               emptyLabel={emptyLabel}
               onSelect={(item) => void inspect(item)}
             />
           </div>
         </div>
         <div className="min-w-0 max-h-[48rem] overflow-auto">
-          {selected && selectedDisplay ? (
+          {selectedState.status === 'ready' && selectedDisplay ? (
             <TraceDetail
-              key={selected.summary.traceId}
-              trace={selected}
+              key={selectedState.traceId}
+              trace={selectedState.trace}
               display={selectedDisplay}
               contentBySequence={contentBySequence}
               exportLoading={activeAction === 'export'}
               onReadContent={(sequence) => void readContent(sequence)}
               onExport={() => void exportBundle()}
             />
+          ) : selectedState.status === 'loading' ? (
+            <div className="flex min-h-[38rem] flex-col items-center justify-center px-6 text-center">
+              <RefreshCw size={20} className="animate-spin text-[var(--color-accent)]" />
+              <h3 className="mt-3 text-sm font-semibold text-[var(--color-text)]">{t('diagnostics.loading')}</h3>
+            </div>
           ) : (
             <div className="flex min-h-[38rem] flex-col items-center justify-center px-6 text-center">
               <div className="rounded-full bg-[var(--color-surface-muted)] p-3 text-[var(--color-text-muted)]"><Activity size={20} /></div>

@@ -132,10 +132,41 @@ describe('DiagnosticsPanel', () => {
     await user.click(collapse);
     expect(screen.getByRole('button', { name: 'View full content' })).toBeInTheDocument();
   });
+
+  it('selects immediately and ignores an older Trace response after a faster later selection', async () => {
+    const conversationRequest = deferred<ReturnType<typeof success>>();
+    const dailyRequest = deferred<ReturnType<typeof success>>();
+    get.mockImplementation((request: { readonly payload: { readonly traceId: string } }) => (
+      request.payload.traceId === summary.traceId
+        ? conversationRequest.promise
+        : dailyRequest.promise
+    ));
+    const user = userEvent.setup();
+    render(<DiagnosticsPanel />);
+
+    const conversationButton = await screen.findByRole('button', { name: /I'm going to sleep/i });
+    const dailyButton = screen.getByRole('button', { name: /Scheduled discovery/i });
+    await user.click(conversationButton);
+    expect(conversationButton).toHaveAttribute('aria-pressed', 'true');
+    await user.click(dailyButton);
+    expect(dailyButton).toHaveAttribute('aria-pressed', 'true');
+    expect(conversationButton).toHaveAttribute('aria-pressed', 'false');
+
+    dailyRequest.resolve(success({ status: 'found', trace: { ...detail, summary: dailySummary } }));
+    await waitFor(() => expect(screen.getAllByText('Scheduled discovery')).toHaveLength(2));
+    conversationRequest.resolve(success({ status: 'found', trace: detail }));
+    await waitFor(() => expect(screen.getAllByText('Scheduled discovery')).toHaveLength(2));
+  });
 });
 
 function success<T extends object>(data: T) {
   return { ok: true as const, data, meta: {} };
+}
+
+function deferred<T>() {
+  let resolve = (_value: T): void => undefined;
+  const promise = new Promise<T>((complete) => { resolve = complete; });
+  return { promise, resolve };
 }
 
 const summary = {

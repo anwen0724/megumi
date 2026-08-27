@@ -8,7 +8,7 @@ export const discovery = {
   search: 'Search',
   clearSearch: 'Back to today',
   manageInterests: 'Manage interests',
-  timeline: 'Timeline',
+  timeline: 'Recommendations',
   favorites: 'Favorites',
   watchLater: 'Watch later',
   todayDate: 'Today · {{date}}',

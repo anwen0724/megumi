@@ -104,6 +104,7 @@ function TraceListItem({
     <button
       type="button"
       aria-label={`${item.title} · ${item.groupTitle} · ${t(`diagnostics.status.${item.summary.status}`)}`}
+      aria-pressed={selected}
       onClick={() => onSelect(item)}
       className={cx(
         'group relative w-full rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.995]',

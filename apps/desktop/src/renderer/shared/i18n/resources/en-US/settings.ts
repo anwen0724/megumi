@@ -190,6 +190,7 @@ export const settings = {
     opening: 'Opening…',
     loginSource: 'Log in to {{name}}',
     saveCredentialFor: 'Save {{name}} credential',
+    zhihuApiLink: 'Open the Zhihu developer platform',
     twitterApiLink: 'Open TwitterAPI.io',
     checkedAt: 'Last checked: {{time}}',
     retryAt: 'Retry at: {{time}}',

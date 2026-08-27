@@ -2,12 +2,14 @@
  * Verifies the renderer-safe Trace diagnostics contract and lazy Content boundary.
  */
 // @vitest-environment node
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import type { ObservabilityQueries, TraceProjection } from '@megumi/observability';
+import { summarizeTrace, type ObservabilityQueries, type TraceProjection } from '@megumi/observability';
 import { createObservabilityOperations } from '@megumi/product-host/operations';
 
 const TRACE_ID = '00000000-0000-4000-8000-000000000001';
-const CONTENT_ID = 'a'.repeat(64);
+const CONTENT_ID = sha256(new TextEncoder().encode('actual prompt'));
+const STORED_CONTENT_ID = sha256(new Uint8Array([0, 1, 2, 3]));
 
 describe('ObservabilityHost', () => {
   it('lists product Trace metadata with fixed filters and no Content body', async () => {
@@ -92,13 +94,13 @@ describe('ObservabilityHost', () => {
       status: 'available',
       content: {
         encoding: 'binary',
-        contentId: 'b'.repeat(64),
+        contentId: STORED_CONTENT_ID,
         mediaType: 'application/octet-stream',
         byteLength: 4,
       },
     });
     expect(queries.readContent).toHaveBeenCalledOnce();
-    expect(queries.readContent).toHaveBeenCalledWith('b'.repeat(64));
+    expect(queries.readContent).toHaveBeenCalledWith(STORED_CONTENT_ID);
   });
 
   it('serializes inline JSON with the same canonical bytes used by Content identity', async () => {
@@ -112,7 +114,7 @@ describe('ObservabilityHost', () => {
         kind: 'model.request',
         content: {
           mode: 'inline',
-          contentId: 'c'.repeat(64),
+          contentId: sha256(new TextEncoder().encode('{"a":1,"b":2}')),
           mediaType: 'application/json',
           value: { b: 2, a: 1 },
         },
@@ -124,8 +126,8 @@ describe('ObservabilityHost', () => {
     await expect(host.getContent({ traceId: TRACE_ID, sequence: 6 })).resolves.toEqual({
       status: 'available',
       content: {
-        encoding: 'json', contentId: 'c'.repeat(64), mediaType: 'application/json',
-        byteLength: 13, json: '{"a":1,"b":2}',
+        encoding: 'json', contentId: sha256(new TextEncoder().encode('{"a":1,"b":2}')),
+        mediaType: 'application/json', byteLength: 13, json: '{"a":1,"b":2}',
       },
     });
   });
@@ -145,7 +147,7 @@ describe('ObservabilityHost', () => {
 function queryFixture(): ObservabilityQueries {
   const trace = projection();
   return {
-    listTraces: vi.fn(async () => [trace]),
+    listTraces: vi.fn(async () => [summarizeTrace(trace)]),
     getTrace: vi.fn(async () => trace),
     readContent: vi.fn(async () => ({
       status: 'available' as const,
@@ -216,7 +218,7 @@ function projection(): TraceProjection {
       kind: 'model.provider_response',
       content: {
         mode: 'stored',
-        contentId: 'b'.repeat(64),
+        contentId: STORED_CONTENT_ID,
         mediaType: 'application/octet-stream',
         byteLength: 4,
       },
@@ -226,4 +228,8 @@ function projection(): TraceProjection {
     issues: [],
     sourceFiles: ['trace.jsonl'],
   };
+}
+
+function sha256(bytes: Uint8Array): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }

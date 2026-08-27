@@ -22,6 +22,8 @@ export interface ObservabilityStorage {
   readText(filePath: string): Promise<string>;
   /** Reads one exact file as copied bytes. */
   readBytes(filePath: string): Promise<Uint8Array>;
+  /** Reads one bounded byte range without loading the remainder of the file. */
+  readBytesRange(filePath: string, offset: number, length: number): Promise<Uint8Array>;
   /** Replaces one exact file with the supplied bytes. */
   writeBytes(filePath: string, bytes: Uint8Array): Promise<void>;
   /** Lists direct children without recursive traversal. */

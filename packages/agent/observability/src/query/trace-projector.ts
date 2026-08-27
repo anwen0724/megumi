@@ -11,6 +11,7 @@ import type {
   TraceEvent,
   TraceKind,
 } from '../trace/trace-contract';
+import type { TraceSummaryProjection } from './trace-query';
 
 export type TraceReadIssueCode =
   | 'missing_trace_start'
@@ -218,6 +219,23 @@ export function addTraceReadIssues(
     ...projection,
     diagnostics: 'incomplete',
     issues: [...projection.issues, ...additionalIssues],
+  };
+}
+
+/** Reduces one full projection to the metadata required by Trace list consumers. */
+export function summarizeTrace(trace: TraceProjection): TraceSummaryProjection {
+  return {
+    traceId: trace.traceId,
+    traceKind: trace.traceKind,
+    status: trace.status,
+    diagnostics: trace.diagnostics,
+    correlations: trace.correlations,
+    ...(trace.startedAt ? { startedAt: trace.startedAt } : {}),
+    ...(trace.endedAt ? { endedAt: trace.endedAt } : {}),
+    spanCount: trace.spans.length,
+    eventCount: trace.spans.reduce((count, span) => count + span.events.length, 0),
+    contentCount: trace.contents.length,
+    issueCount: trace.issues.length,
   };
 }
 
