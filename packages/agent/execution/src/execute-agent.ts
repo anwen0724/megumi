@@ -35,7 +35,7 @@ import type { Tools } from '@megumi/tools';
 import type {
   LaunchedAgentExecution,
   LaunchCandidateSupplyExecutionInput,
-  LaunchDailyDiscoveryExecutionInput,
+  LaunchDailyRecommendationExecutionInput,
   LaunchAgentExecutionInput,
 } from './agent-executions';
 import type {
@@ -301,7 +301,7 @@ export async function launchAgentExecution(
 }
 
 async function launchBackgroundExecution(
-  input: LaunchDailyDiscoveryExecutionInput | LaunchCandidateSupplyExecutionInput,
+  input: LaunchDailyRecommendationExecutionInput | LaunchCandidateSupplyExecutionInput,
   dependencies: ExecuteAgentDependencies,
 ): Promise<LaunchedAgentExecution> {
   const { metadata } = input;
@@ -345,8 +345,8 @@ async function launchBackgroundExecution(
       },
       messages: [{
         role: 'user',
-        content: input.kind === 'daily_discovery'
-          ? '开始本次每日发现执行。'
+        content: input.kind === 'daily_recommendation'
+          ? '开始本次 Daily Recommendation 执行。'
           : '开始本次 Candidate Supply 执行。',
         timestamp: timestampFrom(metadata.createdAt),
       }],
@@ -434,7 +434,7 @@ function executionCorrelation(metadata: ExecutionMetadata) {
     executionId: metadata.executionId,
     ...(metadata.kind === 'conversation'
       ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId }
-      : metadata.kind === 'daily_discovery'
+      : metadata.kind === 'daily_recommendation'
         ? { batchId: metadata.batchId }
         : {}),
   };

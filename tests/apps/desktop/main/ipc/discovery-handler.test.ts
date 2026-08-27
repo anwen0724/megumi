@@ -1,18 +1,19 @@
-/* Protects the strict Desktop IPC boundary for daily discovery operations. */
+/* Protects the strict Desktop IPC boundary for Daily Recommendation operations. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { registerDiscoveryHandlers } from '@megumi/desktop/main/ipc/handlers/discovery.handler';
 
 describe('registerDiscoveryHandlers', () => {
-  it('forwards a valid daily discovery request through the Product Host', async () => {
+  it('forwards a valid Daily Recommendation request through the Product Host', async () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const handle = vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler);
     });
     const ensureDaily = vi.fn(async () => ({
-      status: 'no_active_interests' as const,
+      status: 'waiting_for_candidates' as const,
       localDate: '2026-08-22',
+      requestedCount: 20,
     }));
 
     registerDiscoveryHandlers(
@@ -36,7 +37,7 @@ describe('registerDiscoveryHandlers', () => {
     });
     expect(response).toMatchObject({
       ok: true,
-      data: { status: 'no_active_interests', localDate: '2026-08-22' },
+      data: { status: 'waiting_for_candidates', localDate: '2026-08-22', requestedCount: 20 },
     });
   });
 

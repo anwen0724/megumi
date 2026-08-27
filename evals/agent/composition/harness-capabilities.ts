@@ -21,7 +21,7 @@ import {
 import {
   createDiscoverySourceRegistry,
   createDiscoveryRepository,
-  createDailyDiscoveryAttempts,
+  createDailyRecommendationAttempts,
   createDiscovery,
   createInterestExtractor,
   type Discovery,
@@ -398,7 +398,7 @@ function composeCapabilitiesWithDatabase(
     }
   };
 
-  const dailyDiscoveryAttempts = createDailyDiscoveryAttempts({
+  const dailyRecommendationAttempts = createDailyRecommendationAttempts({
     observability: observability.observability,
   });
   const tools = createTools({
@@ -411,7 +411,7 @@ function composeCapabilitiesWithDatabase(
       maxOutputBytes: 20_000,
       maxProcessCount: 16,
     },
-    dailyDiscoveryTools: dailyDiscoveryAttempts,
+    dailyRecommendationTools: dailyRecommendationAttempts,
     ...(options.builtInToolAvailability
       ? { builtInToolAvailability: options.builtInToolAvailability }
       : {}),
@@ -537,10 +537,9 @@ function composeCapabilitiesWithDatabase(
         });
       },
     },
-    dailyDiscovery: {
+    dailyRecommendation: {
       repository: discoveryRepository,
-      attempts: dailyDiscoveryAttempts,
-      sourceRegistry: discoverySources,
+      attempts: dailyRecommendationAttempts,
       observability: observability.observability,
       startExecution: (request) => executions.start(request),
       now: clock.now,
@@ -551,19 +550,10 @@ function composeCapabilitiesWithDatabase(
             ? {
                 dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
                 dailyTargetCount: resolved.settings.discovery.daily_target_count,
-                enabledSources: resolved.settings.discovery.enabled_sources,
-                sourceBudgets: {
-                  twitter: {
-                    maxSearchCalls: resolved.settings.discovery.twitter_budget.max_search_calls,
-                    maxResultsPerSearch: resolved.settings.discovery.twitter_budget.max_results_per_search,
-                    maxResultsPerAttempt: resolved.settings.discovery.twitter_budget.max_results_per_attempt,
-                  },
-                },
               }
             : {
                 dailyGenerationTime: '08:00',
                 dailyTargetCount: 20,
-                enabledSources: [],
               };
         },
       },
@@ -585,8 +575,8 @@ function composeCapabilitiesWithDatabase(
         observability.runtimeLogger.write({
           level: 'warn',
           module: 'discovery',
-          code: 'daily_discovery_background_failed',
-          message: 'Daily discovery background work failed.',
+          code: 'daily_recommendation_background_failed',
+          message: 'Daily Recommendation background work failed.',
           correlation: {
             ...(context.batchId ? { batchId: context.batchId } : {}),
             ...(context.executionId ? { executionId: context.executionId } : {}),

@@ -67,7 +67,7 @@ describe('DiagnosticsPanel', () => {
 
     expect(await screen.findByText('Sleep chat')).toBeInTheDocument();
     expect(screen.getByText("I'm going to sleep")).toBeInTheDocument();
-    expect(screen.getByText('Daily discovery · Aug 26')).toBeInTheDocument();
+    expect(screen.getByText('Daily recommendation · Aug 26')).toBeInTheDocument();
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ payload: { limit: 200 } }));
     expect(listSessions).toHaveBeenCalled();
     expect(listMessages).toHaveBeenCalledWith(expect.objectContaining({
@@ -103,10 +103,10 @@ describe('DiagnosticsPanel', () => {
     await user.click(screen.getByRole('combobox', { name: 'Session' }));
     await user.click(screen.getByRole('option', { name: 'Sleep chat' }));
     await user.click(screen.getByRole('combobox', { name: 'Trace type' }));
-    await user.click(screen.getByRole('option', { name: 'Daily discovery' }));
+    await user.click(screen.getByRole('option', { name: 'Daily recommendation' }));
 
     expect(screen.queryByText("I'm going to sleep")).not.toBeInTheDocument();
-    const dailyGroup = screen.getByText('Daily discovery · Aug 26').closest('section');
+    const dailyGroup = screen.getByText('Daily recommendation · Aug 26').closest('section');
     expect(dailyGroup).not.toBeNull();
     expect(within(dailyGroup!).getByText('Scheduled discovery')).toBeInTheDocument();
 
@@ -147,7 +147,7 @@ const summary = {
 };
 
 const dailySummary = {
-  traceId: 'trace:daily:1', traceKind: 'daily_discovery' as const,
+  traceId: 'trace:daily:1', traceKind: 'daily_recommendation' as const,
   status: 'error' as const, diagnostics: 'complete' as const,
   correlation: { executionId: 'execution:2', batchId: 'batch:1' },
   startedAt: '2026-08-26T07:30:00.000Z', endedAt: '2026-08-26T07:30:42.000Z',

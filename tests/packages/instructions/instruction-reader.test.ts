@@ -96,7 +96,7 @@ describe('InstructionReader', () => {
     });
 
     const conversation = await reader.getSystemInstructions('conversation');
-    const discovery = await reader.getSystemInstructions('daily_discovery');
+    const dailyRecommendation = await reader.getSystemInstructions('daily_recommendation');
 
     expect(conversation.map((document) => ({
       instructionId: document.instructionId,
@@ -111,20 +111,20 @@ describe('InstructionReader', () => {
         content: EXPECTED_CONVERSATION_DOCUMENT,
       },
     ]);
-    expect(discovery.map((document) => document.instructionId)).toEqual([
+    expect(dailyRecommendation.map((document) => document.instructionId)).toEqual([
       'megumi.common',
-      'megumi.daily-discovery',
+      'megumi.daily-recommendation',
     ]);
-    expect(discovery[1]?.content).toContain('select_recommendations');
-    expect(conversation).not.toBe(discovery);
-    expect(conversation[0]).not.toBe(discovery[0]);
+    expect(dailyRecommendation[1]?.content).toContain('publish_daily_recommendations');
+    expect(conversation).not.toBe(dailyRecommendation);
+    expect(conversation[0]).not.toBe(dailyRecommendation[0]);
   });
 
   it('normalizes BOM and Windows line endings in replaceable instruction files', async () => {
     const contentRoot = createInstructionContentRoot({
       common: '\uFEFFIdentity\r\nline two\r\n',
       conversation: 'Behavior guidelines:\r- one\r\n- two\r\n',
-      dailyDiscovery: 'Daily discovery.\r\n',
+      dailyRecommendation: 'Daily Recommendation.\r\n',
     });
     const reader = createInstructionReader({
       megumiHomePath: testPath('home', '.megumi'),
@@ -140,12 +140,12 @@ describe('InstructionReader', () => {
   it('rejects missing and empty profile instruction files', async () => {
     const missingRoot = createInstructionContentRoot({
       common: 'Identity',
-      dailyDiscovery: 'Daily discovery.',
+      dailyRecommendation: 'Daily Recommendation.',
     });
     const emptyRoot = createInstructionContentRoot({
       common: 'Identity',
       conversation: ' \r\n ',
-      dailyDiscovery: 'Daily discovery.',
+      dailyRecommendation: 'Daily Recommendation.',
     });
 
     await expect(createInstructionReader({
@@ -370,14 +370,14 @@ describe('InstructionReader', () => {
 function createInstructionContentRoot(input: {
   readonly common?: string;
   readonly conversation?: string;
-  readonly dailyDiscovery?: string;
+  readonly dailyRecommendation?: string;
 }): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-instruction-content-'));
   temporaryInstructionRoots.push(root);
   for (const [fileName, content] of [
     ['common.md', input.common],
     ['conversation.md', input.conversation],
-    ['daily-discovery.md', input.dailyDiscovery],
+    ['daily-recommendation.md', input.dailyRecommendation],
   ] as const) {
     if (content !== undefined) fs.writeFileSync(path.join(root, fileName), content, 'utf8');
   }

@@ -15,8 +15,6 @@ export type {
   ContextFailure,
   ContextFailureCode,
   ContextWorkspaceSource,
-  DailyDiscoveryContextMaterial,
-  DailyDiscoveryRunContext,
   DailyRecommendationContextMaterial,
   DailyRecommendationHistoryItem,
   DailyRecommendationRunContext,

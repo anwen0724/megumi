@@ -221,44 +221,6 @@ describe('Context.build', () => {
     ].join('\n\n'));
   });
 
-  it('builds daily discovery from fixed material and current Agent messages without Session or Workspace reads', async () => {
-    const options = fixture();
-    const currentMessages = [{ role: 'user' as const, content: [{ type: 'text' as const, text: 'start discovery' }], timestamp: 1 }];
-    const result = await createContext(options).build({
-      modelCallContext: {
-        modelCallId: 'model-call:daily',
-        run: {
-          kind: 'daily_discovery',
-          executionId: 'execution:daily',
-          batchId: 'batch:daily',
-          localDate: '2026-08-24',
-          model,
-          material: {
-            targetCount: 20,
-            interests: [{ interestId: 'interest:1', description: '秋招面试经验' }],
-            sources: [{
-              id: 'bilibili', name: '哔哩哔哩', access: 'public_http',
-              supportedModes: ['recent'], supportsRead: false,
-            }],
-            recommendationSignals: [],
-          },
-        },
-        tools: [],
-      },
-      currentMessages,
-    });
-
-    expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    expect(options.instructionReader.getSystemInstructions).toHaveBeenCalledWith('daily_discovery');
-    expect(options.sessionHistory.getActiveHistory).not.toHaveBeenCalled();
-    expect(options.workspaceSource.readWorkspace).not.toHaveBeenCalled();
-    expect(options.skills.createView).not.toHaveBeenCalled();
-    expect(result.prompt.messages).toEqual(currentMessages);
-    expect(result.prompt.systemPrompt).toContain('秋招面试经验');
-    expect(result.prompt.systemPrompt).toContain('<target_count>20</target_count>');
-  });
-
   it('reads Session History and returns one provider-neutral Prompt', async () => {
     const options = fixture();
     const context = createContext(options);

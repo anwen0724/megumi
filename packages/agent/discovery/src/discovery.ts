@@ -16,13 +16,13 @@ import {
   type UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
 import type {
-  EnsureDailyDiscoveryRequest,
-  EnsureDailyDiscoveryResult,
-} from './daily-discovery/daily-discovery';
+  EnsureDailyRecommendationRequest,
+  EnsureDailyRecommendationResult,
+} from './daily-recommendation/daily-recommendation';
 import {
-  createDailyDiscoveryRuntime,
-  type CreateDailyDiscoveryRuntimeOptions,
-} from './daily-discovery/daily-discovery-runtime';
+  createDailyRecommendationRuntime,
+  type CreateDailyRecommendationRuntimeOptions,
+} from './daily-recommendation/daily-recommendation-runtime';
 import type {
   DiscoveryHomeView,
   GetDiscoveryHomeRequest,
@@ -55,10 +55,10 @@ export interface Discovery {
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   /** Retracts the Evidence contributed by one Session. */
   retractSessionEvidence(sessionId: string): Promise<void>;
-  /** Starts owned background recovery and Daily Discovery scheduling. */
+  /** Starts owned background recovery and Daily Recommendation scheduling. */
   startBackground(): Promise<void>;
-  /** Ensures the requested Daily Discovery Batch according to its trigger semantics. */
-  ensureDailyDiscovery(request: EnsureDailyDiscoveryRequest): Promise<EnsureDailyDiscoveryResult>;
+  /** Ensures the requested Daily Recommendation Batch according to its trigger semantics. */
+  ensureDailyRecommendation(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
   /** Reads the persisted Discovery Home projection. */
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
   /** Searches persisted Recommendations rather than external Sources. */
@@ -81,9 +81,7 @@ export interface Discovery {
 
 export interface CreateDiscoveryOptions {
   readonly interests?: CreateInterestRuntimeOptions;
-  readonly dailyDiscovery?: CreateDailyDiscoveryRuntimeOptions & {
-    readonly now: () => string;
-  };
+  readonly dailyRecommendation?: Omit<CreateDailyRecommendationRuntimeOptions, 'notifyCandidateSupply'>;
   readonly candidateSupply?: CreateCandidateSupplyRuntimeOptions;
   readonly configuration?: {
     readonly sourceRegistry: SourceRegistry;
@@ -93,8 +91,21 @@ export interface CreateDiscoveryOptions {
 
 /** Composes Megumi's Discovery business operations from its optional capabilities. */
 export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
-  const candidateSupplyRuntime = options.candidateSupply
-    ? createCandidateSupplyRuntime(options.candidateSupply)
+  let candidateSupplyRuntime: ReturnType<typeof createCandidateSupplyRuntime> | undefined;
+  const dailyRecommendationRuntime = options.dailyRecommendation
+    ? createDailyRecommendationRuntime({
+        ...options.dailyRecommendation,
+        notifyCandidateSupply: () => candidateSupplyRuntime?.notify('consumer_shortfall'),
+      })
+    : undefined;
+  candidateSupplyRuntime = options.candidateSupply
+    ? createCandidateSupplyRuntime({
+        ...options.candidateSupply,
+        onPoolAvailable: () => {
+          options.candidateSupply?.onPoolAvailable?.();
+          dailyRecommendationRuntime?.notifyCandidatesAvailable();
+        },
+      })
     : undefined;
   const interestRuntime = options.interests
     ? createInterestRuntime({
@@ -109,9 +120,6 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         },
       })
     : createDisabledInterestRuntime();
-  const dailyDiscoveryRuntime = options.dailyDiscovery
-    ? createDailyDiscoveryRuntime(options.dailyDiscovery)
-    : undefined;
   const discoveryConfiguration = options.configuration
     ? createDiscoveryConfiguration(options.configuration)
     : undefined;
@@ -132,28 +140,28 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     async startBackground() {
       await discoveryConfiguration?.refreshSources();
       await candidateSupplyRuntime?.start();
-      await dailyDiscoveryRuntime?.start();
+      await dailyRecommendationRuntime?.start();
     },
-    ensureDailyDiscovery: (request) => dailyDiscoveryRuntime
-      ? dailyDiscoveryRuntime.ensure(request)
+    ensureDailyRecommendation: (request) => dailyRecommendationRuntime
+      ? dailyRecommendationRuntime.ensure(request)
       : Promise.resolve({
           status: 'failed',
           localDate: request.now.slice(0, 10),
           failure: {
-            code: 'daily_discovery_not_configured',
-            message: 'Daily discovery is not configured.',
+            code: 'daily_recommendation_not_configured',
+            message: 'Daily Recommendation is not configured.',
             retryable: false,
           },
         }),
-    getDiscoveryHome: (request) => dailyDiscoveryRuntime
-      ? Promise.resolve(dailyDiscoveryRuntime.getHome(request))
-      : Promise.reject(new Error('Daily discovery is not configured.')),
-    searchRecommendations: (request) => dailyDiscoveryRuntime
-      ? Promise.resolve(dailyDiscoveryRuntime.searchRecommendations(request))
-      : Promise.reject(new Error('Daily discovery is not configured.')),
-    updateRecommendationState: (request) => dailyDiscoveryRuntime
-      ? Promise.resolve(dailyDiscoveryRuntime.updateRecommendationState(request))
-      : Promise.reject(new Error('Daily discovery is not configured.')),
+    getDiscoveryHome: (request) => dailyRecommendationRuntime
+      ? Promise.resolve(dailyRecommendationRuntime.getHome(request))
+      : Promise.reject(new Error('Daily Recommendation is not configured.')),
+    searchRecommendations: (request) => dailyRecommendationRuntime
+      ? Promise.resolve(dailyRecommendationRuntime.searchRecommendations(request))
+      : Promise.reject(new Error('Daily Recommendation is not configured.')),
+    updateRecommendationState: (request) => dailyRecommendationRuntime
+      ? Promise.resolve(dailyRecommendationRuntime.updateRecommendationState(request))
+      : Promise.reject(new Error('Daily Recommendation is not configured.')),
     getDiscoveryConfiguration: () => discoveryConfiguration
       ? discoveryConfiguration.get()
       : Promise.reject(new Error('Discovery configuration is not configured.')),
@@ -184,7 +192,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     async shutdown() {
       await Promise.all([
         interestRuntime.shutdown(),
-        dailyDiscoveryRuntime?.shutdown() ?? Promise.resolve(),
+        dailyRecommendationRuntime?.shutdown() ?? Promise.resolve(),
         candidateSupplyRuntime?.shutdown() ?? Promise.resolve(),
       ]);
     },

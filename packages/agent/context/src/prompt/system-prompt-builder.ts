@@ -12,7 +12,6 @@ import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 import type {
   CandidateSupplyContextMaterial,
-  DailyDiscoveryContextMaterial,
   DailyRecommendationContextMaterial,
   ExecutionEnvironment,
 } from '../context';
@@ -24,10 +23,6 @@ export interface SystemPromptSources {
   readonly skills?: SkillView;
   readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
-  readonly dailyDiscoveryMaterial?: {
-    readonly localDate: string;
-    readonly material: DailyDiscoveryContextMaterial;
-  };
   readonly dailyRecommendationMaterial?: {
     readonly localDate: string;
     readonly material: DailyRecommendationContextMaterial;
@@ -47,12 +42,6 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
     sections.push(document === conversationDocument
       ? appendToolGuidelines(document.content, sources.tools)
       : document.content);
-  }
-  if (sources.dailyDiscoveryMaterial) {
-    sections.push(renderDailyDiscoveryMaterial(
-      sources.dailyDiscoveryMaterial.localDate,
-      sources.dailyDiscoveryMaterial.material,
-    ));
   }
   if (sources.dailyRecommendationMaterial) {
     sections.push(renderDailyRecommendationMaterial(
@@ -97,21 +86,6 @@ function renderCandidateSupplyMaterial(
     `  <pending_candidates>${escapePromptText(JSON.stringify(material.pendingCandidates))}</pending_candidates>`,
     `  <budget>${escapePromptText(JSON.stringify(material.budget))}</budget>`,
     '</candidate_supply_material>',
-  ].join('\n');
-}
-
-function renderDailyDiscoveryMaterial(
-  localDate: string,
-  material: DailyDiscoveryContextMaterial,
-): string {
-  return [
-    '<daily_discovery_material>',
-    `  <local_date>${escapePromptText(localDate)}</local_date>`,
-    `  <target_count>${material.targetCount}</target_count>`,
-    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
-    `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
-    `  <recommendation_signals>${escapePromptText(JSON.stringify(material.recommendationSignals))}</recommendation_signals>`,
-    '</daily_discovery_material>',
   ].join('\n');
 }
 

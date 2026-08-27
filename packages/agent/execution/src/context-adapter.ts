@@ -225,7 +225,7 @@ function safeReleaseModelCallTools(
               sessionId: dependencies.metadata.sessionId,
               workspaceId: dependencies.metadata.workspaceId,
             }
-            : dependencies.metadata.kind === 'daily_discovery'
+            : dependencies.metadata.kind === 'daily_recommendation'
               ? { batchId: dependencies.metadata.batchId }
               : {}),
       },

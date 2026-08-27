@@ -1,22 +1,17 @@
-/*
- * Owns Daily Discovery wall-clock scheduling, startup catch-up, and timer shutdown.
- */
-import type { EnsureDailyDiscoveryRequest } from './daily-discovery';
+/* Owns Daily Recommendation wall-clock scheduling, startup catch-up, and timer shutdown. */
+import type { EnsureDailyRecommendationRequest } from './daily-recommendation';
 
-export interface DailyDiscoveryScheduler {
-  /** Starts catch-up and future scheduling exactly once. */
+export interface DailyRecommendationScheduler {
   start(): Promise<void>;
-  /** Returns the next wall-clock generation timestamp when scheduled. */
   getNextScheduledAt(): string | undefined;
-  /** Stops future scheduling and waits for the active scheduled invocation. */
   shutdown(): Promise<void>;
 }
 
-export interface CreateDailyDiscoverySchedulerOptions {
+export interface CreateDailyRecommendationSchedulerOptions {
   readonly now: () => string;
   readonly timezone: () => string;
   readonly generationTime: () => string;
-  readonly ensure: (request: EnsureDailyDiscoveryRequest) => Promise<unknown>;
+  readonly ensure: (request: EnsureDailyRecommendationRequest) => Promise<unknown>;
   readonly onScheduledError: (error: unknown) => void;
   readonly timers?: {
     setTimeout(callback: () => void, delayMs: number): unknown;
@@ -24,10 +19,10 @@ export interface CreateDailyDiscoverySchedulerOptions {
   };
 }
 
-/** Creates the single timer owner for Daily Discovery generation. */
-export function createDailyDiscoveryScheduler(
-  options: CreateDailyDiscoverySchedulerOptions,
-): DailyDiscoveryScheduler {
+/** Creates the single wall-clock timer owner for Daily Recommendation. */
+export function createDailyRecommendationScheduler(
+  options: CreateDailyRecommendationSchedulerOptions,
+): DailyRecommendationScheduler {
   const timers = options.timers ?? defaultTimers();
   let accepting = true;
   let started = false;
@@ -39,23 +34,20 @@ export function createDailyDiscoveryScheduler(
     if (!accepting || !started) return;
     if (timerHandle !== undefined) timers.clearTimeout(timerHandle);
     nextScheduledAt = nextScheduledTimestamp(
-      options.now(),
-      options.timezone(),
-      options.generationTime(),
+      options.now(), options.timezone(), options.generationTime(),
     );
     const delay = Math.max(0, Date.parse(nextScheduledAt) - Date.parse(options.now()));
     timerHandle = timers.setTimeout(() => {
       timerHandle = undefined;
       if (!accepting) return;
-      activeInvocation = runScheduledEnsure(options)
-        .then(() => {
-          activeInvocation = undefined;
-          try {
-            scheduleNext();
-          } catch (error) {
-            reportScheduledError(options, error);
-          }
-        });
+      activeInvocation = runScheduledEnsure(options).finally(() => {
+        activeInvocation = undefined;
+        try {
+          scheduleNext();
+        } catch (error) {
+          reportScheduledError(options, error);
+        }
+      });
     }, delay);
     unrefTimer(timerHandle);
   };
@@ -86,20 +78,16 @@ export function createDailyDiscoveryScheduler(
   };
 }
 
-/** Resolves the local calendar date for a timestamp in the configured timezone. */
+/** Resolves a timestamp to its calendar date in the configured timezone. */
 export function localDateAt(timestamp: string, timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
   }).formatToParts(new Date(timestamp));
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-/** Executes the scheduled callback at the background error-observation boundary. */
-async function runScheduledEnsure(options: CreateDailyDiscoverySchedulerOptions): Promise<void> {
+async function runScheduledEnsure(options: CreateDailyRecommendationSchedulerOptions): Promise<void> {
   try {
     await options.ensure({ trigger: 'schedule', now: options.now() });
   } catch (error) {
@@ -108,13 +96,13 @@ async function runScheduledEnsure(options: CreateDailyDiscoverySchedulerOptions)
 }
 
 function reportScheduledError(
-  options: CreateDailyDiscoverySchedulerOptions,
+  options: CreateDailyRecommendationSchedulerOptions,
   error: unknown,
 ): void {
   try {
     options.onScheduledError(error);
   } catch {
-    // The observer is the terminal boundary and must not create another rejection.
+    // Scheduling diagnostics cannot alter the next business invocation.
   }
 }
 
@@ -127,18 +115,14 @@ function nextScheduledTimestamp(now: string, timezone: string, generationTime: s
   return scheduledTimestamp(date.toISOString().slice(0, 10), generationTime, timezone);
 }
 
-/** Resolves a local wall-clock generation time to a stable UTC timestamp across timezones. */
 function scheduledTimestamp(localDate: string, generationTime: string, timezone: string): string {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(generationTime)) {
     throw new Error('Discovery dailyGenerationTime must use HH:mm.');
   }
   const dateParts = localDate.split('-').map(Number);
   const timeParts = generationTime.split(':').map(Number);
-  const year = dateParts[0];
-  const month = dateParts[1];
-  const day = dateParts[2];
-  const hour = timeParts[0];
-  const minute = timeParts[1];
+  const [year, month, day] = dateParts;
+  const [hour, minute] = timeParts;
   if (dateParts.length !== 3 || timeParts.length !== 2
     || year === undefined || month === undefined || day === undefined
     || hour === undefined || minute === undefined
@@ -150,22 +134,13 @@ function scheduledTimestamp(localDate: string, generationTime: string, timezone:
   for (let index = 0; index < 3; index += 1) {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
     }).formatToParts(new Date(instant));
     const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
     const representedAsUtc = Date.UTC(
-      Number(value.year),
-      Number(value.month) - 1,
-      Number(value.day),
-      Number(value.hour),
-      Number(value.minute),
-      Number(value.second),
+      Number(value.year), Number(value.month) - 1, Number(value.day),
+      Number(value.hour), Number(value.minute), Number(value.second),
     );
     instant += desiredAsUtc - representedAsUtc;
   }

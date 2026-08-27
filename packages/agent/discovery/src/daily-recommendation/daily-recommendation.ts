@@ -9,6 +9,17 @@ const TimestampSchema = z.string().datetime({ offset: true });
 export const LocalDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
 export const DailyRecommendationBatchStatusSchema = z.enum(['running', 'published', 'failed']);
 
+export const DailyRecommendationFailureSchema = z.object({
+  code: z.string().min(1),
+  message: z.string(),
+  retryable: z.boolean(),
+}).strict();
+
+export const EnsureDailyRecommendationRequestSchema = z.object({
+  trigger: z.enum(['schedule', 'startup_catchup', 'manual', 'retry', 'candidate_available']),
+  now: TimestampSchema,
+}).strict();
+
 export const DailyRecommendationCandidateSchema = CandidateSchema.extend({
   admission: z.object({
     relevance: z.enum(['direct', 'adjacent', 'exploration']),
@@ -74,3 +85,31 @@ export interface DailyRecommendationSnapshot {
 
 export type DailyRecommendationCandidate = z.infer<typeof DailyRecommendationCandidateSchema>;
 export type DailyRecommendationBatch = z.infer<typeof DailyRecommendationBatchSchema>;
+export type DailyRecommendationFailure = z.infer<typeof DailyRecommendationFailureSchema>;
+export type EnsureDailyRecommendationRequest = z.infer<typeof EnsureDailyRecommendationRequestSchema>;
+
+export type EnsureDailyRecommendationResult =
+  | {
+      readonly status: 'started';
+      readonly localDate: string;
+      readonly batchId: string;
+      readonly executionId: string;
+      readonly requestedCount: number;
+      readonly actualTarget: number;
+    }
+  | {
+      readonly status: 'in_progress';
+      readonly localDate: string;
+      readonly batchId: string;
+      readonly executionId: string;
+    }
+  | {
+      readonly status: 'already_published';
+      readonly localDate: string;
+      readonly batchId: string;
+      readonly resultCount: number;
+      readonly publishedAt: string;
+    }
+  | { readonly status: 'waiting_for_candidates'; readonly localDate: string; readonly requestedCount: number }
+  | { readonly status: 'model_unavailable'; readonly localDate: string }
+  | { readonly status: 'failed'; readonly localDate: string; readonly failure: DailyRecommendationFailure };

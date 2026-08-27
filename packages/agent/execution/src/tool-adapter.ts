@@ -762,7 +762,7 @@ function toolCorrelation(
           sessionId: metadata.sessionId,
           workspaceId: metadata.workspaceId,
         }
-      : metadata.kind === 'daily_discovery'
+      : metadata.kind === 'daily_recommendation'
         ? { batchId: metadata.batchId }
         : {}),
   };

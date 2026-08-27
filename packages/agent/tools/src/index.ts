@@ -50,7 +50,6 @@ export {
   type AvailableTool,
   type BuiltInToolAvailability,
   type CreateToolsRequest,
-  type DailyDiscoveryToolOperations,
   type DailyRecommendationToolOperations,
   type CandidateSupplyToolOperations,
   type ExecuteToolInvocationRequest,

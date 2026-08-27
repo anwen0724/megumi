@@ -24,7 +24,7 @@ import {
   type TraceDisplayItem,
 } from './trace-display';
 
-type TraceKindFilter = 'all' | 'conversation' | 'daily_discovery' | 'candidate_supply';
+type TraceKindFilter = 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply';
 type TraceStatusFilter = 'all' | ObservabilityTraceSummaryUiDto['status'];
 type ActiveAction = 'refresh' | 'rebuild' | 'export';
 
@@ -54,7 +54,7 @@ export function DiagnosticsPanel() {
       conversationFallback: t('diagnostics.conversationFallback'),
       deletedSession: t('diagnostics.deletedSession'),
       unassignedSession: t('diagnostics.unassignedSession'),
-      dailyDiscovery: t('diagnostics.traceKinds.dailyDiscovery'),
+      dailyRecommendation: t('diagnostics.traceKinds.dailyRecommendation'),
       scheduledDiscovery: t('diagnostics.scheduledDiscovery'),
       candidateSupply: t('diagnostics.traceKinds.candidateSupply'),
       candidateSupplyRun: t('diagnostics.candidateSupplyRun'),
@@ -265,7 +265,7 @@ export function DiagnosticsPanel() {
             options={[
               { value: 'all', label: t('diagnostics.allKinds') },
               { value: 'conversation', label: t('diagnostics.traceKinds.conversation') },
-              { value: 'daily_discovery', label: t('diagnostics.traceKinds.dailyDiscovery') },
+              { value: 'daily_recommendation', label: t('diagnostics.traceKinds.dailyRecommendation') },
               { value: 'candidate_supply', label: t('diagnostics.traceKinds.candidateSupply') },
             ]}
             onValueChange={setTraceKind}

@@ -7,7 +7,7 @@ export function createDiscoveryOperations(
     Discovery,
     | 'changeInterest'
     | 'setSessionParticipation'
-    | 'ensureDailyDiscovery'
+    | 'ensureDailyRecommendation'
     | 'getDiscoveryHome'
     | 'searchRecommendations'
     | 'updateRecommendationState'
@@ -26,7 +26,7 @@ export function createDiscoveryOperations(
     refreshSources: () => agent.refreshDiscoverySources(),
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
-    ensureDaily: (request) => agent.ensureDailyDiscovery(request),
+    ensureDaily: (request) => agent.ensureDailyRecommendation(request),
     getHome: (request) => agent.getDiscoveryHome(request),
     searchRecommendations: (request) => agent.searchRecommendations(request),
     updateRecommendationState: (request) => agent.updateRecommendationState(request),

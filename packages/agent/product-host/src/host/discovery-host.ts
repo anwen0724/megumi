@@ -6,7 +6,7 @@ import {
   DiscoverySourceViewSchema,
   ConnectDiscoverySourceRequestSchema,
   RefreshDiscoverySourceRequestSchema,
-  EnsureDailyDiscoveryRequestSchema,
+  EnsureDailyRecommendationRequestSchema,
   GetDiscoveryHomeRequestSchema,
   InterestSchema,
   RecommendationViewSchema,
@@ -28,7 +28,7 @@ export const DiscoverySessionParticipationPayloadSchema = z.object({
   sessionId: z.string().min(1),
   participation: z.enum(['included', 'excluded']),
 }).strict();
-export const DiscoveryDailyEnsurePayloadSchema = EnsureDailyDiscoveryRequestSchema;
+export const DiscoveryDailyEnsurePayloadSchema = EnsureDailyRecommendationRequestSchema;
 export const DiscoveryHomePayloadSchema = GetDiscoveryHomeRequestSchema;
 export const DiscoveryRecommendationSearchPayloadSchema = SearchRecommendationsRequestSchema;
 export const DiscoveryRecommendationStatePayloadSchema = UpdateRecommendationStateRequestSchema;
@@ -43,11 +43,17 @@ export const DiscoverySourceUiDtoSchema = DiscoverySourceViewSchema;
 export const DiscoveryInterestUiDtoSchema = InterestSchema;
 export const DiscoverySessionParticipationUiDtoSchema = SessionParticipationSchema;
 export const DiscoveryDailyEnsureResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('started'), localDate: z.string(), batchId: z.string().min(1), executionId: z.string().min(1) }).strict(),
+  z.object({
+    status: z.literal('started'), localDate: z.string(), batchId: z.string().min(1),
+    executionId: z.string().min(1), requestedCount: z.number().int().positive(),
+    actualTarget: z.number().int().positive(),
+  }).strict(),
   z.object({ status: z.literal('in_progress'), localDate: z.string(), batchId: z.string().min(1), executionId: z.string().min(1) }).strict(),
   z.object({ status: z.literal('already_published'), localDate: z.string(), batchId: z.string().min(1), resultCount: z.number().int().nonnegative(), publishedAt: z.string().datetime({ offset: true }) }).strict(),
-  z.object({ status: z.literal('no_active_interests'), localDate: z.string() }).strict(),
-  z.object({ status: z.literal('no_available_sources'), localDate: z.string() }).strict(),
+  z.object({
+    status: z.literal('waiting_for_candidates'), localDate: z.string(),
+    requestedCount: z.number().int().positive(),
+  }).strict(),
   z.object({ status: z.literal('model_unavailable'), localDate: z.string() }).strict(),
   z.object({
     status: z.literal('failed'), localDate: z.string(),

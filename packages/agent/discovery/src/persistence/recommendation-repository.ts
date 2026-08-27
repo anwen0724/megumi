@@ -14,7 +14,7 @@ import {
   type RecommendationView,
   type SearchRecommendationsResult,
 } from '../discovery-view';
-import { LocalDateSchema } from '../daily-discovery/daily-discovery';
+import { LocalDateSchema } from '../daily-recommendation/daily-recommendation';
 import {
   type Recommendation,
   RecommendationReferenceContentSchema,

@@ -31,7 +31,9 @@ describe('Discovery Host', () => {
       updateDiscoveryConfiguration: vi.fn(async () => ({ sources: [] })),
       changeInterest: vi.fn(async (request) => ({ ...request, interestId: 'interest:1', status: 'active' })),
       setSessionParticipation: vi.fn(async (request) => ({ ...request, effectiveFrom: '2026-08-22T10:00:00.000Z', updatedAt: '2026-08-22T10:00:00.000Z' })),
-      ensureDailyDiscovery: vi.fn(async () => ({ status: 'no_active_interests', localDate: '2026-08-22' })),
+      ensureDailyRecommendation: vi.fn(async () => ({
+        status: 'waiting_for_candidates', localDate: '2026-08-22', requestedCount: 20,
+      })),
       getDiscoveryHome: vi.fn(async () => ({ mode: 'timeline' })),
       searchRecommendations: vi.fn(async () => ({ query: 'Agent', recommendations: [] })),
       updateRecommendationState: vi.fn(async () => ({ recommendationId: 'recommendation:1' })),
@@ -51,7 +53,7 @@ describe('Discovery Host', () => {
     expect(agent.getDiscoveryConfiguration).toHaveBeenCalledOnce();
     expect(agent.updateDiscoveryConfiguration).toHaveBeenCalledWith({ enabledSources: ['open_web'] });
     expect(agent.setSessionParticipation).toHaveBeenCalledWith({ sessionId: 'session:1', participation: 'excluded' });
-    expect(agent.ensureDailyDiscovery).toHaveBeenCalledOnce();
+    expect(agent.ensureDailyRecommendation).toHaveBeenCalledOnce();
     expect(agent.getDiscoveryHome).toHaveBeenCalledOnce();
     expect(agent.searchRecommendations).toHaveBeenCalledOnce();
     expect(agent.updateRecommendationState).toHaveBeenCalledOnce();

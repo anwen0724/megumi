@@ -284,7 +284,7 @@ export const settings = {
       automaticAllow: 'Automatically allowed', automaticDeny: 'Automatically denied', userAllow: 'User allowed',
       userDeny: 'User denied', cancelled: 'Cancelled',
     },
-    traceKinds: { conversation: 'Conversation', dailyDiscovery: 'Daily discovery', candidateSupply: 'Candidate supply' },
+    traceKinds: { conversation: 'Conversation', dailyRecommendation: 'Daily recommendation', candidateSupply: 'Candidate supply' },
     candidateSupplyRun: 'Replenish Candidate Pool',
     spanCount: '{{count}} spans', eventCount: '{{count}} events', contentCount: '{{count}} content checkpoints',
     status: { ok: 'Completed', error: 'Failed', cancelled: 'Cancelled', incomplete: 'Did not finish normally' },

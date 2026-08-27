@@ -115,6 +115,44 @@ describe('DailyRecommendationRepository', () => {
     expect(discovery.readCandidate(second)?.status).toBe('available');
     expect(repository.getBatch('2026-08-27')).toMatchObject({ status: 'running', resultCount: 0 });
   });
+
+  it('reuses the same failed Batch for at most three execution attempts', () => {
+    const repository = createDailyRecommendationRepository(database);
+    const claim = (executionId: string) => repository.claimBatch({
+      batchId: `ignored:${executionId}`,
+      localDate: '2026-08-27',
+      timezone: 'UTC',
+      executionId,
+      requestedCount: 5,
+      actualTarget: 1,
+      now,
+    });
+    const fail = (executionId: string) => repository.failBatch({
+      batchId: 'ignored:execution:1',
+      executionId,
+      failedAt: now,
+      failureCode: 'model_call_failed',
+      failureMessage: 'Temporary model failure.',
+    });
+
+    expect(claim('execution:1')).toMatchObject({
+      status: 'claimed', batch: { batchId: 'ignored:execution:1', attemptCount: 1 },
+    });
+    fail('execution:1');
+    expect(claim('execution:2')).toMatchObject({
+      status: 'claimed',
+      batch: { batchId: 'ignored:execution:1', executionId: 'execution:2', attemptCount: 2, automaticRetryCount: 1 },
+    });
+    fail('execution:2');
+    expect(claim('execution:3')).toMatchObject({
+      status: 'claimed',
+      batch: { batchId: 'ignored:execution:1', executionId: 'execution:3', attemptCount: 3, automaticRetryCount: 2 },
+    });
+    fail('execution:3');
+    expect(claim('execution:4')).toMatchObject({
+      status: 'failed', batch: { batchId: 'ignored:execution:1', attemptCount: 3 },
+    });
+  });
 });
 
 function admitCandidate(

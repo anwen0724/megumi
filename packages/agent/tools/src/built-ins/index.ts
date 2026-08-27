@@ -16,7 +16,6 @@ import { globToolDefinition, globToolHandler } from './glob';
 import { listDirectoryToolDefinition, listDirectoryToolHandler } from './list-directory';
 import { movePathToolDefinition, movePathToolHandler } from './move-path';
 import { readFileToolDefinition, readFileToolHandler } from './read-file';
-import { createReadCandidateToolHandler, readCandidateToolDefinition, type ReadCandidateOperation } from './read-candidate';
 import { createReadSourceCandidateToolHandler, readSourceCandidateToolDefinition, type ReadSourceCandidateOperation } from './read-source-candidate';
 import { createReadPoolCandidateToolHandler, readPoolCandidateToolDefinition, type ReadPoolCandidateOperation } from './read-pool-candidate';
 import { createPublishDailyRecommendationsToolHandler, publishDailyRecommendationsToolDefinition, type PublishDailyRecommendationsOperation } from './publish-daily-recommendations';
@@ -27,7 +26,6 @@ import {
 } from './run-command';
 import { searchTextToolDefinition, searchTextToolHandler } from './search-text';
 import { createSearchContentToolHandler, searchContentToolDefinition, type SearchContentOperation } from './search-content';
-import { createSelectRecommendationsToolHandler, selectRecommendationsToolDefinition, type SelectRecommendationsOperation } from './select-recommendations';
 import { updatePlanToolDefinition, updatePlanToolHandler } from './update-plan';
 import { webFetchToolDefinition, webFetchToolHandler } from './web-fetch';
 import { webSearchToolDefinition, webSearchToolHandler } from './web-search';
@@ -38,7 +36,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'read_file', 'list_directory', 'glob', 'search_text', 'edit_file', 'write_file',
   'create_directory', 'copy_path', 'move_path', 'delete_path', 'run_command',
   'web_search', 'web_fetch', 'update_plan',
-  'search_content', 'read_candidate', 'select_recommendations',
+  'search_content',
   'read_source_candidate', 'commit_candidate_admission',
   'read_pool_candidate', 'publish_daily_recommendations',
 ] as const;
@@ -57,9 +55,8 @@ const BUILT_IN_TOOL_SOURCE: ToolSource = {
 
 export function createBuiltInToolRegistry(request: {
   readonly process?: ToolProcessDescriptor;
-  readonly contentTools?: SearchContentOperation & ReadCandidateOperation;
-  readonly dailySelectionTools?: SelectRecommendationsOperation;
-  readonly candidateSupplyTools?: ReadSourceCandidateOperation & CommitCandidateAdmissionOperation;
+  readonly candidateSupplyTools?: SearchContentOperation & ReadSourceCandidateOperation
+    & CommitCandidateAdmissionOperation;
   readonly dailyRecommendationTools?: ReadPoolCandidateOperation & PublishDailyRecommendationsOperation;
 }): ToolRegistry<BuiltInToolContext> {
   const pairs: Array<{
@@ -85,14 +82,8 @@ export function createBuiltInToolRegistry(request: {
     { definition: webSearchToolDefinition, handler: webSearchToolHandler },
     { definition: webFetchToolDefinition, handler: webFetchToolHandler },
     { definition: updatePlanToolDefinition, handler: updatePlanToolHandler, executionMode: 'serial' },
-    ...(request.contentTools ? [
-      { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.contentTools) },
-      { definition: readCandidateToolDefinition, handler: createReadCandidateToolHandler(request.contentTools) },
-    ] : []),
-    ...(request.dailySelectionTools ? [
-      { definition: selectRecommendationsToolDefinition, handler: createSelectRecommendationsToolHandler(request.dailySelectionTools), executionMode: 'serial' as const },
-    ] : []),
     ...(request.candidateSupplyTools ? [
+      { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.candidateSupplyTools) },
       { definition: readSourceCandidateToolDefinition, handler: createReadSourceCandidateToolHandler(request.candidateSupplyTools) },
       {
       definition: commitCandidateAdmissionToolDefinition,

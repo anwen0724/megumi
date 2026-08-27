@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { DiagnosticErrorSchema, type DiagnosticError } from '../diagnostic-error';
 
-export const TraceKindSchema = z.enum(['conversation', 'daily_discovery', 'candidate_supply']);
+export const TraceKindSchema = z.enum(['conversation', 'daily_recommendation', 'candidate_supply']);
 export type TraceKind = z.infer<typeof TraceKindSchema>;
 
 export const TRACE_SPAN_NAMES = [
@@ -34,6 +34,9 @@ export const TRACE_SPAN_NAMES = [
   'discovery.attempt.settle',
   'candidate.supply.check',
   'candidate.admission.commit',
+  'candidate.pool.snapshot',
+  'daily.batch.claim',
+  'daily.attempt.settle',
   'recommendation.publish',
 ] as const;
 
@@ -164,6 +167,10 @@ export const TraceEventSchema = z.discriminatedUnion('type', [
     currentAttempt: z.number().int().positive(),
     nextAttempt: z.number().int().positive(),
     reasonCode: z.string(),
+  }).strict(),
+  z.object({
+    type: z.literal('recommendation.selection.conflict'),
+    conflictCount: z.number().int().positive(),
   }).strict(),
 ]);
 export type TraceEvent = z.infer<typeof TraceEventSchema>;

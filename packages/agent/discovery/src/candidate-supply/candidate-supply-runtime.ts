@@ -61,6 +61,8 @@ export interface CreateCandidateSupplyRuntimeOptions {
     clear(handle: unknown): void;
   };
   readonly onBackgroundError?: (error: unknown) => void;
+  /** Notifies an independent consumer after Supply increases the available Pool. */
+  readonly onPoolAvailable?: () => void;
 }
 
 export function createCandidateSupplyRuntime(
@@ -195,6 +197,13 @@ export function createCandidateSupplyRuntime(
       activeExecution = false;
     }
     const after = getSnapshot(options, options.now());
+    if (after.counts.available > availableBefore) {
+      try {
+        options.onPoolAvailable?.();
+      } catch {
+        // A consumer wake-up cannot alter Candidate Supply settlement.
+      }
+    }
     settleAttempt(
       options,
       after,

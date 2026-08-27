@@ -43,26 +43,6 @@ export interface ConversationRunContext extends BaseRunContext {
   readonly userInput: UserInput;
 }
 
-export interface DailyDiscoveryContextMaterial {
-  readonly targetCount: number;
-  readonly interests: readonly {
-    readonly interestId: string;
-    readonly description: string;
-  }[];
-  readonly sources: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly access: string;
-    readonly supportedModes: readonly string[];
-  }[];
-  readonly recommendationSignals: readonly {
-    readonly contentIdentity: string;
-    readonly sourceName: string;
-    readonly title: string;
-    readonly reaction?: string;
-  }[];
-}
-
 /** Bounded Pool facts exposed to one Daily Recommendation execution. */
 export interface DailyRecommendationContextMaterial {
   readonly requestedCount: number;
@@ -80,6 +60,8 @@ export interface DailyRecommendationContextMaterial {
     readonly canonicalUrl: string;
     readonly contentType: string;
     readonly title: string;
+    readonly author?: string;
+    readonly contentPublishedAt?: string;
     readonly description?: string;
     readonly relevance: 'direct' | 'adjacent' | 'exploration';
     readonly matchedInterestIds: readonly string[];
@@ -138,14 +120,6 @@ export interface CandidateSupplyContextMaterial {
   };
 }
 
-/** Discovery facts are fixed before one daily-discovery execution starts. */
-export interface DailyDiscoveryRunContext extends BaseRunContext {
-  readonly kind: 'daily_discovery';
-  readonly batchId: string;
-  readonly localDate: string;
-  readonly material: DailyDiscoveryContextMaterial;
-}
-
 /** Candidate Pool facts fixed before one Daily Recommendation execution starts. */
 export interface DailyRecommendationRunContext extends BaseRunContext {
   readonly kind: 'daily_recommendation';
@@ -161,8 +135,8 @@ export interface CandidateSupplyRunContext extends BaseRunContext {
   readonly material: CandidateSupplyContextMaterial;
 }
 
-export type RunContext = ConversationRunContext | DailyDiscoveryRunContext
-  | DailyRecommendationRunContext | CandidateSupplyRunContext;
+export type RunContext = ConversationRunContext | DailyRecommendationRunContext
+  | CandidateSupplyRunContext;
 
 /** Facts fixed before one model call; never persisted. */
 export interface ModelCallContext {

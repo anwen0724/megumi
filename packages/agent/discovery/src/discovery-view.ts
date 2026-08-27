@@ -2,7 +2,10 @@
  * Defines stable renderer-facing views for Discovery history and search.
  */
 import { z } from 'zod';
-import { DiscoveryFailureViewSchema, LocalDateSchema } from './daily-discovery/daily-discovery';
+import {
+  DailyRecommendationFailureSchema,
+  LocalDateSchema,
+} from './daily-recommendation/daily-recommendation';
 import { InterestCreatedFromSchema, InterestDescriptionSchema } from './interests/interest';
 import { DiscoveryContentTypeSchema, DiscoverySourceIdSchema } from './sources/discovery-source';
 
@@ -30,7 +33,7 @@ export const TodayDiscoveryViewSchema = z.object({
   executionId: z.string().min(1).optional(),
   targetCount: z.number().int().min(1).max(100).optional(),
   resultCount: z.number().int().nonnegative(),
-  failure: DiscoveryFailureViewSchema.optional(),
+  failure: DailyRecommendationFailureSchema.optional(),
   publishedAt: TimestampSchema.optional(),
 }).strict();
 

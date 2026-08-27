@@ -8,17 +8,12 @@ import type {
   ContextFailure,
   CandidateSupplyContextMaterial,
   ContextWorkspaceSource,
-  DailyDiscoveryContextMaterial,
   DailyRecommendationContextMaterial,
 } from './context';
 import {
   createConversationContextResolver,
   type ConversationResolvedContext,
 } from './resolvers/conversation-context-resolver';
-import {
-  createDailyDiscoveryContextResolver,
-  type DailyDiscoveryResolvedContext,
-} from './resolvers/daily-discovery-context-resolver';
 import {
   createDailyRecommendationContextResolver,
   type DailyRecommendationResolvedContext,
@@ -28,7 +23,7 @@ import {
   type CandidateSupplyResolvedContext,
 } from './resolvers/candidate-supply-context-resolver';
 
-export type ResolvedContext = ConversationResolvedContext | DailyDiscoveryResolvedContext
+export type ResolvedContext = ConversationResolvedContext
   | DailyRecommendationResolvedContext | CandidateSupplyResolvedContext;
 
 export type ResolveContextRequest =
@@ -37,14 +32,6 @@ export type ResolveContextRequest =
       readonly sessionId: string;
       readonly workspaceId: string;
       readonly model: Model<Api>;
-      readonly tools: readonly ToolDefinition[];
-      readonly signal?: AbortSignal;
-    }
-  | {
-      readonly kind: 'daily_discovery';
-      readonly localDate: string;
-      readonly material: DailyDiscoveryContextMaterial;
-      readonly currentMessages: readonly Message[];
       readonly tools: readonly ToolDefinition[];
       readonly signal?: AbortSignal;
     }
@@ -82,9 +69,6 @@ export interface ContextResolverDependencies {
 
 export function createContextResolver(dependencies: ContextResolverDependencies): ContextResolver {
   const conversation = createConversationContextResolver(dependencies);
-  const dailyDiscovery = createDailyDiscoveryContextResolver({
-    instructionReader: dependencies.instructionReader,
-  });
   const dailyRecommendation = createDailyRecommendationContextResolver({
     instructionReader: dependencies.instructionReader,
   });
@@ -94,7 +78,6 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
   return {
     resolve(request) {
       if (request.kind === 'conversation') return conversation.resolve(request);
-      if (request.kind === 'daily_discovery') return dailyDiscovery.resolve(request);
       return request.kind === 'daily_recommendation'
         ? dailyRecommendation.resolve(request)
         : candidateSupply.resolve(request);

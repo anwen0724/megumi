@@ -11,7 +11,7 @@ export interface TraceDisplayLabels {
   readonly conversationFallback: string;
   readonly deletedSession: string;
   readonly unassignedSession: string;
-  readonly dailyDiscovery: string;
+  readonly dailyRecommendation: string;
   readonly scheduledDiscovery: string;
   readonly candidateSupply: string;
   readonly candidateSupplyRun: string;
@@ -22,20 +22,20 @@ export interface TraceDisplayItem {
   readonly title: string;
   readonly groupId: string;
   readonly groupTitle: string;
-  readonly groupKind: 'conversation' | 'daily_discovery' | 'candidate_supply';
+  readonly groupKind: 'conversation' | 'daily_recommendation' | 'candidate_supply';
   readonly sessionId?: string;
 }
 
 export interface TraceDisplayGroup {
   readonly id: string;
   readonly title: string;
-  readonly kind: 'conversation' | 'daily_discovery' | 'candidate_supply';
+  readonly kind: 'conversation' | 'daily_recommendation' | 'candidate_supply';
   readonly items: readonly TraceDisplayItem[];
 }
 
 export interface TraceDisplayFilters {
   readonly query: string;
-  readonly traceKind: 'all' | 'conversation' | 'daily_discovery' | 'candidate_supply';
+  readonly traceKind: 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply';
   readonly sessionId: string;
   readonly status: 'all' | ObservabilityTraceSummaryUiDto['status'];
   readonly issuesOnly: boolean;
@@ -60,14 +60,14 @@ export function createTraceDisplayItems(input: {
   );
 
   return input.traces.map((summary) => {
-    if (summary.traceKind === 'daily_discovery') {
+    if (summary.traceKind === 'daily_recommendation') {
       const day = formatTraceDay(summary.startedAt, input.locale);
       return {
         summary,
         title: input.labels.scheduledDiscovery,
         groupId: `daily:${day}`,
-        groupTitle: `${input.labels.dailyDiscovery} · ${day}`,
-        groupKind: 'daily_discovery',
+        groupTitle: `${input.labels.dailyRecommendation} · ${day}`,
+        groupKind: 'daily_recommendation',
       };
     }
     if (summary.traceKind === 'candidate_supply') {

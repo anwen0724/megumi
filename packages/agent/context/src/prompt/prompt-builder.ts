@@ -10,7 +10,6 @@ import type { SessionAttachmentReader } from '@megumi/session';
 import type { ContextFailure, Prompt } from '../context';
 import type { ResolvedContext } from '../context-resolver';
 import type { ConversationResolvedContext } from '../resolvers/conversation-context-resolver';
-import type { DailyDiscoveryResolvedContext } from '../resolvers/daily-discovery-context-resolver';
 import type { DailyRecommendationResolvedContext } from '../resolvers/daily-recommendation-context-resolver';
 import type { CandidateSupplyResolvedContext } from '../resolvers/candidate-supply-context-resolver';
 import { buildContextMessages, type MaterializedHistory } from './context-message-builder';
@@ -26,11 +25,6 @@ export type BuildPromptResult =
       readonly kind: 'conversation';
       readonly prompt: Prompt;
       readonly materializedHistory: MaterializedHistory;
-    }
-  | {
-      readonly status: 'built';
-      readonly kind: 'daily_discovery';
-      readonly prompt: Prompt;
     }
   | {
       readonly status: 'built';
@@ -56,9 +50,6 @@ export function createPromptBuilder(dependencies: PromptBuilderDependencies): Pr
     async build(request) {
       if (request.context.kind === 'conversation') {
         return buildConversationPrompt(request.context, dependencies, request.signal);
-      }
-      if (request.context.kind === 'daily_discovery') {
-        return buildDailyDiscoveryPrompt(request.context);
       }
       return request.context.kind === 'daily_recommendation'
         ? buildDailyRecommendationPrompt(request.context)
@@ -115,27 +106,6 @@ async function buildConversationPrompt(
       tools: [...context.tools],
     },
     materializedHistory: converted.materialized,
-  };
-}
-
-function buildDailyDiscoveryPrompt(
-  context: DailyDiscoveryResolvedContext,
-): BuildPromptResult {
-  return {
-    status: 'built',
-    kind: 'daily_discovery',
-    prompt: {
-      systemPrompt: buildSystemPrompt({
-        systemInstructions: context.systemInstructions,
-        dailyDiscoveryMaterial: {
-          localDate: context.localDate,
-          material: context.material,
-        },
-        tools: context.tools,
-      }),
-      messages: [...context.currentMessages],
-      tools: [...context.tools],
-    },
   };
 }
 

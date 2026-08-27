@@ -42,22 +42,20 @@ describe('built-in Tool Registry', () => {
   });
 });
 
-const contentTools = {
+const candidateSupplyTools = {
   async searchContent() { return { outputKind: 'json' as const, content: {} }; },
-  async readCandidate() { return { outputKind: 'json' as const, content: {} }; },
-};
-const dailySelectionTools = {
-  async selectRecommendations() { return { outputKind: 'json' as const, content: {} }; },
-};
-const candidateAdmissionTools = {
+  async readSourceCandidate() { return { outputKind: 'json' as const, content: {} }; },
   async commitCandidateAdmission() { return { outputKind: 'json' as const, content: {} }; },
+};
+const dailyRecommendationTools = {
+  async readPoolCandidate() { return { outputKind: 'json' as const, content: {} }; },
+  async publishDailyRecommendations() { return { outputKind: 'json' as const, content: {} }; },
 };
 
 function completeRegistry() {
   return createBuiltInToolRegistry({
     process: createProcessAdapter(),
-    contentTools,
-    dailySelectionTools,
-    candidateAdmissionTools,
+    candidateSupplyTools,
+    dailyRecommendationTools,
   });
 }

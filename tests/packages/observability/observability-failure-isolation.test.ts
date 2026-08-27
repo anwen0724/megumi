@@ -41,7 +41,7 @@ describe('Observability failure isolation', () => {
       openIndexDatabase: () => { throw new Error('Index unavailable.'); },
     });
 
-    await composed.observability.withTrace({ kind: 'daily_discovery' }, async () => 'settled');
+    await composed.observability.withTrace({ kind: 'daily_recommendation' }, async () => 'settled');
     await composed.flush();
 
     await expect(composed.queries.listTraces()).resolves.toHaveLength(1);

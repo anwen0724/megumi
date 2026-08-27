@@ -287,7 +287,7 @@ export const settings = {
       automaticAllow: '自动允许', automaticDeny: '自动拒绝', userAllow: '用户允许',
       userDeny: '用户拒绝', cancelled: '已取消',
     },
-    traceKinds: { conversation: '会话', dailyDiscovery: '每日发现', candidateSupply: '候选供给' },
+    traceKinds: { conversation: '会话', dailyRecommendation: '每日推荐', candidateSupply: '候选供给' },
     candidateSupplyRun: '补充候选池',
     spanCount: '{{count}} 个 Span', eventCount: '{{count}} 个 Event', contentCount: '{{count}} 个 Content 检查点',
     status: { ok: '已完成', error: '失败', cancelled: '已取消', incomplete: '未正常结束' },

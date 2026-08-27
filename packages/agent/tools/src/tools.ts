@@ -25,11 +25,9 @@ import { createWebSearch, type WebSearch, type WebSearchProvider } from './built
 import type { ToolProcessDescriptor } from './built-ins/run-command';
 import type { BuiltInToolContext } from './built-ins/workspace-file-access';
 import type { SearchContentOperation } from './built-ins/search-content';
-import type { ReadCandidateOperation } from './built-ins/read-candidate';
 import type { ReadSourceCandidateOperation } from './built-ins/read-source-candidate';
 import type { ReadPoolCandidateOperation } from './built-ins/read-pool-candidate';
 import type { PublishDailyRecommendationsOperation } from './built-ins/publish-daily-recommendations';
-import type { SelectRecommendationsOperation } from './built-ins/select-recommendations';
 import type { CommitCandidateAdmissionOperation } from './built-ins/commit-candidate-admission';
 import { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 import {
@@ -156,14 +154,9 @@ export interface CreateToolsRequest {
   readonly sandbox: Sandbox;
   readonly executionPolicy: ToolExecutionPolicy;
   readonly builtInToolAvailability?: BuiltInToolAvailability;
-  readonly dailyDiscoveryTools?: DailyDiscoveryToolOperations;
   readonly dailyRecommendationTools?: DailyRecommendationToolOperations;
   readonly candidateSupplyTools?: CandidateSupplyToolOperations;
 }
-
-export type DailyDiscoveryToolOperations = SearchContentOperation
-  & ReadCandidateOperation
-  & SelectRecommendationsOperation;
 
 export type CandidateSupplyToolOperations = SearchContentOperation
   & ReadSourceCandidateOperation
@@ -183,11 +176,8 @@ interface ModelCallRegistration {
 
 export function createTools(request: CreateToolsRequest): Tools {
   const process = toolProcessDescriptor(request.sandbox);
-  const contentTools = createContentToolMultiplexer(request);
   const registry = createBuiltInToolRegistry({
     ...(process ? { process } : {}),
-    ...(contentTools ? { contentTools } : {}),
-    ...(request.dailyDiscoveryTools ? { dailySelectionTools: request.dailyDiscoveryTools } : {}),
     ...(request.candidateSupplyTools ? { candidateSupplyTools: request.candidateSupplyTools } : {}),
     ...(request.dailyRecommendationTools ? { dailyRecommendationTools: request.dailyRecommendationTools } : {}),
   });
@@ -202,9 +192,6 @@ export function createTools(request: CreateToolsRequest): Tools {
       }
       if (bindingRequest.toolGroupId === 'conversation' && bindingRequest.subject.kind !== 'session') {
         return failedBinding('workspace_unavailable', 'Conversation tools require a Session-backed Workspace.');
-      }
-      if (bindingRequest.toolGroupId === 'daily_discovery' && !request.dailyDiscoveryTools) {
-        return failedBinding('tool_group_unavailable', 'Daily discovery tools are not configured.');
       }
       if (bindingRequest.toolGroupId === 'daily_recommendation' && !request.dailyRecommendationTools) {
         return failedBinding('tool_group_unavailable', 'Daily Recommendation tools are not configured.');
@@ -422,29 +409,6 @@ export function createTools(request: CreateToolsRequest): Tools {
       );
     }
   }
-}
-
-function createContentToolMultiplexer(
-  request: Pick<CreateToolsRequest, 'dailyDiscoveryTools' | 'candidateSupplyTools'>,
-): (SearchContentOperation & ReadCandidateOperation) | undefined {
-  if (!request.dailyDiscoveryTools && !request.candidateSupplyTools) return undefined;
-  return {
-    searchContent(input) {
-      return request.candidateSupplyTools?.ownsExecution(input.executionId)
-        ? request.candidateSupplyTools.searchContent(input)
-        : requireDailyDiscoveryTools(request).searchContent(input);
-    },
-    readCandidate(input) {
-      return requireDailyDiscoveryTools(request).readCandidate(input);
-    },
-  };
-}
-
-function requireDailyDiscoveryTools(
-  request: Pick<CreateToolsRequest, 'dailyDiscoveryTools'>,
-): DailyDiscoveryToolOperations {
-  if (!request.dailyDiscoveryTools) throw new Error('Daily discovery Tool execution is not configured.');
-  return request.dailyDiscoveryTools;
 }
 
 async function executeHandler(

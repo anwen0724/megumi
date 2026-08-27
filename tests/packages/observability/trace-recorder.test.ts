@@ -77,7 +77,7 @@ describe('Trace recorder', () => {
     };
 
     await expect(observability.withTrace({
-      kind: 'daily_discovery',
+      kind: 'daily_recommendation',
       classifyResult: (result) => ({
         outcome: {
           status: 'error',
@@ -134,7 +134,7 @@ describe('Trace recorder', () => {
     const records: TraceJournalRecord[] = [];
     const observability = createRecorder(records);
 
-    await observability.withTrace({ kind: 'daily_discovery' }, async () => {
+    await observability.withTrace({ kind: 'daily_recommendation' }, async () => {
       observability.recordEvent({
         type: 'discovery.retry.scheduled',
         currentAttempt: 1,

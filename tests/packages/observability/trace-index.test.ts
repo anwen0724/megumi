@@ -25,7 +25,7 @@ describe('Trace Index', () => {
     };
     index.replace({ traces: [trace], checkpoints: [checkpoint] });
 
-    expect(index.queryTraceIds({ traceKind: 'daily_discovery' })).toEqual([trace.traceId]);
+    expect(index.queryTraceIds({ traceKind: 'daily_recommendation' })).toEqual([trace.traceId]);
     expect(index.queryTraceIds({ status: 'ok' })).toEqual([trace.traceId]);
     expect(index.queryTraceIds({ spanName: 'source.search' })).toEqual([trace.traceId]);
     expect(index.queryTraceIds({ contentKind: 'source.result' })).toEqual([trace.traceId]);
@@ -110,7 +110,7 @@ function indexedTrace() {
     {
       ...base(traceId, 1),
       type: 'trace.started',
-      traceKind: 'daily_discovery',
+      traceKind: 'daily_recommendation',
       correlation: {
         requestId: 'request-1',
         executionId: 'execution-1',

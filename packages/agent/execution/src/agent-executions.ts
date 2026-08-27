@@ -4,8 +4,8 @@ import type { Api, Model } from '@megumi/ai';
 import type {
   CandidateSupplyContextMaterial,
   CandidateSupplyRunContext,
-  DailyDiscoveryContextMaterial,
-  DailyDiscoveryRunContext,
+  DailyRecommendationContextMaterial,
+  DailyRecommendationRunContext,
 } from '@megumi/context';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
 import type { UserInput } from '@megumi/input';
@@ -25,7 +25,7 @@ import {
   ExecutionOutcome,
   type ConversationExecutionMetadata,
   type CandidateSupplyExecutionMetadata,
-  type DailyDiscoveryExecutionMetadata,
+  type DailyRecommendationExecutionMetadata,
   type ExecutionSnapshot,
 } from './execution-registry';
 
@@ -39,10 +39,10 @@ export interface LaunchConversationAgentExecutionInput {
   }) => Promise<ApprovalResolution>;
 }
 
-export interface LaunchDailyDiscoveryExecutionInput {
-  readonly kind: 'daily_discovery';
-  readonly metadata: DailyDiscoveryExecutionMetadata;
-  readonly runContext: DailyDiscoveryRunContext;
+export interface LaunchDailyRecommendationExecutionInput {
+  readonly kind: 'daily_recommendation';
+  readonly metadata: DailyRecommendationExecutionMetadata;
+  readonly runContext: DailyRecommendationRunContext;
 }
 
 export interface LaunchCandidateSupplyExecutionInput {
@@ -53,7 +53,7 @@ export interface LaunchCandidateSupplyExecutionInput {
 
 export type LaunchAgentExecutionInput =
   | LaunchConversationAgentExecutionInput
-  | LaunchDailyDiscoveryExecutionInput
+  | LaunchDailyRecommendationExecutionInput
   | LaunchCandidateSupplyExecutionInput;
 
 export interface LaunchedAgentExecution {
@@ -79,12 +79,12 @@ export interface ConversationExecutionInput {
   readonly permissionMode: PermissionMode;
 }
 
-export interface DailyDiscoveryExecutionInput<TRejected = unknown> {
-  readonly kind: 'daily_discovery';
+export interface DailyRecommendationExecutionInput<TRejected = unknown> {
+  readonly kind: 'daily_recommendation';
   readonly requestId: string;
   readonly batchId: string;
   readonly localDate: string;
-  readonly material: DailyDiscoveryContextMaterial;
+  readonly material: DailyRecommendationContextMaterial;
   readonly model: Model<Api>;
   accept(request: { readonly executionId: string }): Promise<
     | { readonly status: 'accepted' }
@@ -111,7 +111,7 @@ export interface CandidateSupplyExecutionInput<TRejected = unknown> {
   }): void | Promise<void>;
 }
 
-export type StartExecutionRequest = ConversationExecutionInput | DailyDiscoveryExecutionInput
+export type StartExecutionRequest = ConversationExecutionInput | DailyRecommendationExecutionInput
   | CandidateSupplyExecutionInput;
 
 export type StartExecutionResult =
@@ -120,14 +120,14 @@ export type StartExecutionResult =
   | { readonly status: 'session_busy'; readonly activeExecution: ConversationExecutionSnapshot }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
 
-export type StartDailyDiscoveryExecutionResult<TRejected = unknown> =
+export type StartDailyRecommendationExecutionResult<TRejected = unknown> =
   | { readonly status: 'started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
   | { readonly status: 'already_started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
   | { readonly status: 'rejected'; readonly reason: TRejected }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
 
 export type StartCandidateSupplyExecutionResult<TRejected = unknown> =
-  StartDailyDiscoveryExecutionResult<TRejected>;
+  StartDailyRecommendationExecutionResult<TRejected>;
 
 export interface ResolveApprovalRequest {
   readonly approvalId: string;
@@ -171,7 +171,7 @@ export type ConversationExecutionSnapshot = Extract<ExecutionSnapshot, { kind: '
 
 export interface AgentExecutions {
   start(request: ConversationExecutionInput): Promise<StartExecutionResult>;
-  start<TRejected>(request: DailyDiscoveryExecutionInput<TRejected>): Promise<StartDailyDiscoveryExecutionResult<TRejected>>;
+  start<TRejected>(request: DailyRecommendationExecutionInput<TRejected>): Promise<StartDailyRecommendationExecutionResult<TRejected>>;
   start<TRejected>(request: CandidateSupplyExecutionInput<TRejected>): Promise<StartCandidateSupplyExecutionResult<TRejected>>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
@@ -193,7 +193,7 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
   const store = new ExecutionRegistry({ clock: options.clock, terminalRetentionMs: options.terminalRetentionMs });
   const backgroundSettlementHandlers = new Map<
     string,
-    DailyDiscoveryExecutionInput['onSettled'] | CandidateSupplyExecutionInput['onSettled']
+    DailyRecommendationExecutionInput['onSettled'] | CandidateSupplyExecutionInput['onSettled']
   >();
   let accepting = true;
 
@@ -271,14 +271,14 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
   };
 
   const startExecution = async (
-    request: ConversationExecutionInput | DailyDiscoveryExecutionInput | CandidateSupplyExecutionInput,
-  ): Promise<StartExecutionResult | StartDailyDiscoveryExecutionResult | StartCandidateSupplyExecutionResult> => {
+    request: ConversationExecutionInput | DailyRecommendationExecutionInput | CandidateSupplyExecutionInput,
+  ): Promise<StartExecutionResult | StartDailyRecommendationExecutionResult | StartCandidateSupplyExecutionResult> => {
     if (!accepting) {
       return { status: 'failed', failure: executionFailure('Agent execution service is shutting down.', 'execution_shutting_down') };
     }
     if (request.kind === 'conversation') return startConversationExecution(request);
-    return request.kind === 'daily_discovery'
-      ? startDailyDiscoveryExecution(request)
+    return request.kind === 'daily_recommendation'
+      ? startDailyRecommendationExecution(request)
       : startCandidateSupplyExecution(request);
   };
 
@@ -372,13 +372,13 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
     return { status: 'started', execution, completion, userMessage: launched.userMessage, userEntry: launched.userEntry };
   }
 
-  async function startDailyDiscoveryExecution(
-    request: DailyDiscoveryExecutionInput,
-  ): Promise<StartDailyDiscoveryExecutionResult> {
+  async function startDailyRecommendationExecution(
+    request: DailyRecommendationExecutionInput,
+  ): Promise<StartDailyRecommendationExecutionResult> {
     const createdAt = options.clock.now();
     const executionId = options.ids.createExecutionId();
-    const metadata: DailyDiscoveryExecutionMetadata = {
-      kind: 'daily_discovery',
+    const metadata: DailyRecommendationExecutionMetadata = {
+      kind: 'daily_recommendation',
       executionId,
       requestId: request.requestId,
       batchId: request.batchId,
@@ -393,10 +393,10 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
     let launched: LaunchedAgentExecution;
     try {
       launched = await options.launch({
-        kind: 'daily_discovery',
+        kind: 'daily_recommendation',
         metadata,
         runContext: {
-          kind: 'daily_discovery', executionId, batchId: request.batchId,
+          kind: 'daily_recommendation', executionId, batchId: request.batchId,
           localDate: request.localDate, material: request.material, model: request.model,
         },
       });

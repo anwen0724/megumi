@@ -491,7 +491,7 @@ function captureReason(reason: string, t: TFunction<'settings'>): string {
 
 function traceKindName(kind: string, t: TFunction<'settings'>): string {
   if (kind === 'conversation') return t('diagnostics.traceKinds.conversation');
-  if (kind === 'daily_discovery') return t('diagnostics.traceKinds.dailyDiscovery');
+  if (kind === 'daily_recommendation') return t('diagnostics.traceKinds.dailyRecommendation');
   return t('diagnostics.unknownTraceKind');
 }
 

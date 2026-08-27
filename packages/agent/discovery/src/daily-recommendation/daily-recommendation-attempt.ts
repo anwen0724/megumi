@@ -3,6 +3,7 @@
  */
 import { z } from 'zod';
 import type { RawToolResult } from '@megumi/tools';
+import type { Observability, OperationCompletion } from '@megumi/observability';
 import type { DailyCandidateWindow } from './daily-recommendation';
 import type { DailyRecommendationRepository } from '../persistence/daily-recommendation-repository';
 
@@ -53,7 +54,9 @@ export interface DailyRecommendationAttempts {
 }
 
 /** Creates the process-local Tool operation state for Daily Recommendation executions. */
-export function createDailyRecommendationAttempts(): DailyRecommendationAttempts {
+export function createDailyRecommendationAttempts(options: {
+  readonly observability?: Observability;
+} = {}): DailyRecommendationAttempts {
   const attempts = new Map<string, AttemptRecord>();
   return {
     start(request) {
@@ -102,18 +105,22 @@ export function createDailyRecommendationAttempts(): DailyRecommendationAttempts
       if (!attempt) return toolError('attempt_not_found', 'Daily Recommendation attempt was not found.');
       const parsed = PublishInputSchema.safeParse(request.input);
       if (!parsed.success) return toolError('invalid_selection', 'Publication requires valid ordered Candidate IDs and reasons.');
-      const result = attempt.repository.publish({
+      const result = await observePublication(options.observability, {
         batchId: attempt.batchId,
         executionId: request.executionId,
-        publishedAt: attempt.now(),
-        allowedCandidateIds: [...attempt.allowedCandidateIds],
-        items: parsed.data.items.map((item) => ({
-          recommendationId: attempt.createRecommendationId(),
-          candidateId: item.candidateId,
-          recommendationReason: item.recommendationReason,
-        })),
-      });
+      }, () => attempt.repository.publish({
+          batchId: attempt.batchId,
+          executionId: request.executionId,
+          publishedAt: attempt.now(),
+          allowedCandidateIds: [...attempt.allowedCandidateIds],
+          items: parsed.data.items.map((item) => ({
+            recommendationId: attempt.createRecommendationId(),
+            candidateId: item.candidateId,
+            recommendationReason: item.recommendationReason,
+          })),
+        }));
       if (result.status === 'selection_conflict') {
+        safeRecordConflict(options.observability, result.unavailableCandidateIds.length);
         return toolError('selection_conflict', 'One or more Candidates changed before publication.', {
           unavailableCandidateIds: result.unavailableCandidateIds,
         });
@@ -129,6 +136,45 @@ export function createDailyRecommendationAttempts(): DailyRecommendationAttempts
       });
     },
   };
+}
+
+async function observePublication<T extends { readonly status: string }>(
+  observability: Observability | undefined,
+  correlation: { readonly batchId: string; readonly executionId: string },
+  operation: () => T,
+): Promise<T> {
+  let result: T | undefined;
+  const runOnce = async () => {
+    result ??= operation();
+    return result;
+  };
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'recommendation.publish',
+      correlation,
+      classifyResult: (value): OperationCompletion => value.status === 'published'
+        || value.status === 'already_published'
+        ? { outcome: { status: 'ok', code: value.status } }
+        : {
+            outcome: {
+              status: 'error', code: value.status,
+              message: 'Daily Recommendation publication was not committed.',
+              retryable: value.status === 'selection_conflict',
+            },
+          },
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function safeRecordConflict(observability: Observability | undefined, conflictCount: number): void {
+  try {
+    observability?.recordEvent({ type: 'recommendation.selection.conflict', conflictCount });
+  } catch {
+    // Conflict diagnostics cannot alter the typed Tool failure.
+  }
 }
 
 function toolSuccess(content: unknown): RawToolResult {

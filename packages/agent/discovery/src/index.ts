@@ -64,16 +64,6 @@ export { createZhihuSource } from './sources/zhihu-source';
 export { createTwitterSource } from './sources/twitter-source';
 export { createDiscoverySourceRegistry, DISCOVERY_SOURCE_IDS } from './sources/source-catalog';
 export { signBilibiliWbiParameters } from './sources/bilibili-wbi';
-export {
-  createCandidateRegistry,
-  discoveryContentIdentity,
-} from './daily-discovery/candidate-registry';
-export { createDailyDiscoveryAttempts } from './daily-discovery/daily-discovery-attempt';
-export type {
-  DailyDiscoveryAttempts,
-  DailyDiscoveryAttemptState,
-  SourceAttemptBudget,
-} from './daily-discovery/daily-discovery-attempt';
 export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './candidate-supply/content-identity';
 export { buildDailyCandidateWindow } from './daily-recommendation/candidate-window';
 export { createDailyRecommendationAttempts } from './daily-recommendation/daily-recommendation-attempt';
@@ -83,6 +73,9 @@ export {
   DailyRecommendationBatchSchema,
   DailyRecommendationBatchStatusSchema,
   DailyRecommendationCandidateSchema,
+  DailyRecommendationFailureSchema,
+  EnsureDailyRecommendationRequestSchema,
+  LocalDateSchema,
 } from './daily-recommendation/daily-recommendation';
 export type {
   DailyCandidateWindow,
@@ -90,12 +83,22 @@ export type {
   DailyRecommendationCandidate,
   DailyRecommendationInterest,
   DailyRecommendationSnapshot,
+  DailyRecommendationFailure,
+  EnsureDailyRecommendationRequest,
+  EnsureDailyRecommendationResult,
 } from './daily-recommendation/daily-recommendation';
+export { createDailyRecommendationRuntime } from './daily-recommendation/daily-recommendation-runtime';
+export type {
+  CreateDailyRecommendationRuntimeOptions,
+  DailyRecommendationBackgroundErrorContext,
+  DailyRecommendationRuntime,
+} from './daily-recommendation/daily-recommendation-runtime';
 export { createDailyRecommendationRepository } from './persistence/daily-recommendation-repository';
 export type {
   ClaimDailyRecommendationBatch,
   ClaimDailyRecommendationBatchResult,
   DailyRecommendationRepository,
+  FailDailyRecommendationBatch,
   PublishDailyRecommendations,
   PublishDailyRecommendationsResult,
 } from './persistence/daily-recommendation-repository';
@@ -146,12 +149,6 @@ export type {
   CandidateSourceState,
 } from './candidate-supply/candidate-supply';
 export type {
-  CandidateAdmission,
-  CandidateDecision,
-  CandidateRegistry,
-  DiscoveryCandidate,
-} from './daily-discovery/candidate-registry';
-export type {
   DiscoveryContentType,
   DiscoverySource,
   DiscoverySourceId,
@@ -186,24 +183,6 @@ export type {
   UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
 export {
-  DailyDiscoveryBatchSchema,
-  DailyDiscoveryBatchStatusSchema,
-  DiscoveryFailureViewSchema,
-  EnsureDailyDiscoveryRequestSchema,
-  LocalDateSchema,
-} from './daily-discovery/daily-discovery';
-export type {
-  CreateDailyDiscoveryRuntimeOptions,
-  DailyDiscoveryBackgroundErrorContext,
-  DailyDiscoveryRuntime,
-} from './daily-discovery/daily-discovery-runtime';
-export type {
-  DailyDiscoveryBatch,
-  DiscoveryFailureView,
-  EnsureDailyDiscoveryRequest,
-  EnsureDailyDiscoveryResult,
-} from './daily-discovery/daily-discovery';
-export {
   RecommendationReferenceContentSchema,
   RecommendationSchema,
   UpdateRecommendationStateRequestSchema,
@@ -226,13 +205,8 @@ export {
 } from './discovery-view';
 export { createDiscoveryRepository } from './persistence/discovery-repository';
 export type {
-  ClaimDailyBatch,
-  ClaimDailyBatchResult,
   DiscoveryRepository,
-  FailDailyAttemptResult,
   ApplyInterestExtraction,
-  PublishDailyBatch,
-  PublishDailyBatchResult,
   RecommendationSelectionSignal,
   ValidatedInterestCommand,
 } from './persistence/discovery-repository';

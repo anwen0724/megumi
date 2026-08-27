@@ -8,7 +8,6 @@ import type {
 
 const PROFILE_FILES: Record<InstructionProfile, string> = {
   conversation: 'conversation.md',
-  daily_discovery: 'daily-discovery.md',
   daily_recommendation: 'daily-recommendation.md',
   candidate_supply: 'candidate-supply.md',
 };

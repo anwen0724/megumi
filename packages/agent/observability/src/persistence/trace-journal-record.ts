@@ -2,7 +2,7 @@
  * Defines and validates the append-only Trace Journal schema major version 1.
  */
 import { z } from 'zod';
-import { CapturedContentSchema } from '../content/content-contract';
+import { CapturedContentSchema, ContentKindSchema } from '../content/content-contract';
 import {
   RecordedOutcomeSchema,
   SpanMetadataSchema,
@@ -49,15 +49,7 @@ export const TraceJournalRecordSchema = z.discriminatedUnion('type', [
   TraceJournalRecordBaseSchema.extend({
     type: z.literal('content.recorded'),
     spanId: z.string().uuid().optional(),
-    kind: z.enum([
-      'input.received', 'input.processed', 'session.message.committed',
-      'context.resolved', 'context.compaction.source', 'context.compaction.summary', 'prompt.final',
-      'model.request', 'model.provider_request', 'model.provider_response', 'model.response',
-      'tool.request', 'tool.arguments', 'tool.handler_result', 'tool.result',
-      'source.request', 'source.provider_response', 'source.result',
-      'discovery.material', 'discovery.candidates', 'discovery.selection',
-      'discovery.recommendations', 'recommendation.published',
-    ]),
+    kind: ContentKindSchema,
     content: CapturedContentSchema,
     correlation: TraceCorrelationSchema,
   }).strict(),

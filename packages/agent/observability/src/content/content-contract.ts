@@ -27,6 +27,7 @@ export const CONTENT_KINDS = [
   'discovery.candidates',
   'discovery.selection',
   'discovery.recommendations',
+  'candidate.pool.snapshot',
   'recommendation.published',
 ] as const;
 

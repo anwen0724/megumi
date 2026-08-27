@@ -2,7 +2,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  DailyDiscoveryBatchSchema,
+  DailyRecommendationBatchSchema,
   DiscoveryHomeViewSchema,
   InterestSchema,
   RecommendationSchema,
@@ -24,13 +24,14 @@ describe('Discovery owner contracts', () => {
       createdAt: now,
       updatedAt: now,
     })).toMatchObject({ interestId: 'interest:1', status: 'active' });
-    expect(DailyDiscoveryBatchSchema.parse({
+    expect(DailyRecommendationBatchSchema.parse({
       batchId: 'batch:1',
       localDate: '2026-08-22',
       timezone: 'Asia/Shanghai',
       status: 'running',
       executionId: 'execution:1',
-      targetCount: 20,
+      requestedCount: 20,
+      actualTarget: 12,
       attemptCount: 1,
       automaticRetryCount: 0,
       resultCount: 0,
@@ -54,13 +55,14 @@ describe('Discovery owner contracts', () => {
     }).success).toBe(false);
   });
 
-  it('accepts only fields that belong to each Daily Discovery Batch state', () => {
+  it('accepts only fields that belong to each Daily Recommendation Batch state', () => {
     const base = {
       batchId: 'batch:1',
       localDate: '2026-08-22',
       timezone: 'Asia/Shanghai',
       executionId: 'execution:1',
-      targetCount: 20,
+      requestedCount: 20,
+      actualTarget: 12,
       attemptCount: 1,
       automaticRetryCount: 0,
       resultCount: 0,
@@ -69,29 +71,29 @@ describe('Discovery owner contracts', () => {
       startedAt: now,
     };
 
-    expect(DailyDiscoveryBatchSchema.safeParse({
+    expect(DailyRecommendationBatchSchema.safeParse({
       ...base,
       status: 'running',
       failureCode: 'impossible',
       failureMessage: 'Running batches have not failed.',
     }).success).toBe(false);
-    expect(DailyDiscoveryBatchSchema.safeParse({
+    expect(DailyRecommendationBatchSchema.safeParse({
       ...base,
       status: 'published',
       resultCount: 2,
     }).success).toBe(false);
-    expect(DailyDiscoveryBatchSchema.safeParse({
+    expect(DailyRecommendationBatchSchema.safeParse({
       ...base,
       status: 'failed',
     }).success).toBe(false);
 
-    expect(DailyDiscoveryBatchSchema.parse({
+    expect(DailyRecommendationBatchSchema.parse({
       ...base,
       status: 'published',
       resultCount: 2,
       publishedAt: now,
     })).toMatchObject({ status: 'published', publishedAt: now });
-    expect(DailyDiscoveryBatchSchema.parse({
+    expect(DailyRecommendationBatchSchema.parse({
       ...base,
       status: 'failed',
       failureCode: 'source_search_failed',

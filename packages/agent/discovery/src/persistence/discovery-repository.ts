@@ -7,9 +7,9 @@ import {
 } from './candidate-supply-repository';
 import type { CandidateSupplyRepository } from '../candidate-supply/candidate-supply';
 import {
-  createDailyBatchRepository,
-  type DailyBatchRepository,
-} from './daily-batch-repository';
+  createDailyRecommendationRepository,
+  type DailyRecommendationRepository,
+} from './daily-recommendation-repository';
 import {
   createInterestRepository,
   type InterestRepository,
@@ -24,20 +24,13 @@ import {
 } from './recommendation-identity-migration';
 
 export type {
-  ClaimDailyBatch,
-  ClaimDailyBatchResult,
-  FailDailyAttemptResult,
-  PublishDailyBatch,
-  PublishDailyBatchResult,
-} from './daily-batch-repository';
-export type {
   ApplyInterestExtraction,
   ValidatedInterestCommand,
 } from './interest-repository';
 export type { RecommendationSelectionSignal } from './recommendation-repository';
 
 export interface DiscoveryRepository
-  extends InterestRepository, DailyBatchRepository, RecommendationRepositoryOperations,
+  extends InterestRepository, DailyRecommendationRepository, RecommendationRepositoryOperations,
     CandidateSupplyRepository {
   /** Migrates legacy Recommendation identities before normal Discovery work begins. */
   migrateRecommendationIdentities(): RecommendationIdentityMigrationResult;
@@ -50,11 +43,11 @@ export function createDiscoveryRepository(options: {
   const interests = createInterestRepository(options.database);
   const candidateSupply = createCandidateSupplyRepository(options.database);
   const recommendations = createRecommendationRepository(options.database);
-  const batches = createDailyBatchRepository(options.database, recommendations.publicationWriter);
+  const dailyRecommendation = createDailyRecommendationRepository(options.database);
 
   return {
     ...interests,
-    ...batches,
+    ...dailyRecommendation,
     ...recommendations.operations,
     ...candidateSupply,
     migrateRecommendationIdentities: () => migrateRecommendationIdentities(options.database),

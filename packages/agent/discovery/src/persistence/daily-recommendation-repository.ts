@@ -14,6 +14,7 @@ import {
 } from '../daily-recommendation/daily-recommendation';
 import { RecommendationSchema, type Recommendation } from '../recommendations/recommendation';
 import { createRecommendationRepository } from './recommendation-repository';
+import type { RecommendationRepositoryOperations } from './recommendation-repository';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const ClaimBatchSchema = z.object({
@@ -38,9 +39,17 @@ const PublishSchema = z.object({
     recommendationReason: z.string().trim().min(1).max(1000),
   }).strict()).min(1),
 }).strict();
+const FailBatchSchema = z.object({
+  batchId: z.string().min(1),
+  executionId: z.string().min(1),
+  failedAt: TimestampSchema,
+  failureCode: z.string().min(1),
+  failureMessage: z.string(),
+}).strict();
 
 export type ClaimDailyRecommendationBatch = z.infer<typeof ClaimBatchSchema>;
 export type PublishDailyRecommendations = z.infer<typeof PublishSchema>;
+export type FailDailyRecommendationBatch = z.infer<typeof FailBatchSchema>;
 type RunningBatch = Extract<DailyRecommendationBatch, { readonly status: 'running' }>;
 type PublishedBatch = Extract<DailyRecommendationBatch, { readonly status: 'published' }>;
 
@@ -56,7 +65,7 @@ export type PublishDailyRecommendationsResult =
   | { readonly status: 'selection_conflict'; readonly unavailableCandidateIds: readonly string[] }
   | { readonly status: 'rejected'; readonly reason: 'batch_not_running' | 'execution_mismatch' | 'invalid_selection' };
 
-export interface DailyRecommendationRepository {
+export interface DailyRecommendationRepository extends RecommendationRepositoryOperations {
   /** Reads the authoritative Batch for one local date. */
   getBatch(localDate: string): DailyRecommendationBatch | undefined;
   /** Reads one consistent and bounded Candidate, Interest, Recommendation, and feedback snapshot. */
@@ -67,12 +76,16 @@ export interface DailyRecommendationRepository {
   claimBatch(command: ClaimDailyRecommendationBatch): ClaimDailyRecommendationBatchResult;
   /** Atomically creates Recommendation snapshots, consumes Candidates, and publishes the Batch. */
   publish(command: PublishDailyRecommendations): PublishDailyRecommendationsResult;
+  /** Fixes one unsuccessful execution attempt so the same Batch may retry within its budget. */
+  failBatch(command: FailDailyRecommendationBatch): DailyRecommendationBatch;
 }
 
 /** Creates the deep persistence module used by Daily Recommendation Runtime and Tool publication. */
 export function createDailyRecommendationRepository(database: DatabaseConnection): DailyRecommendationRepository {
-  const recommendationWriter = createRecommendationRepository(database).publicationWriter;
+  const recommendations = createRecommendationRepository(database);
+  const recommendationWriter = recommendations.publicationWriter;
   return {
+    ...recommendations.operations,
     getBatch(localDate) {
       return readBatchByLocalDate(database, LocalDateSchema.parse(localDate));
     },
@@ -92,6 +105,33 @@ export function createDailyRecommendationRepository(database: DatabaseConnection
     claimBatch(command) {
       const parsed = ClaimBatchSchema.parse(command);
       const existing = readBatchByLocalDate(database, parsed.localDate);
+      if (existing?.status === 'failed' && existing.attemptCount < 3) {
+        return database.transaction({
+          operation: () => {
+            const updated = database.prepare({ sql: `
+              UPDATE discovery_batches
+              SET status = 'running', execution_id = ?, requested_count = ?, target_count = ?,
+                  attempt_count = attempt_count + 1,
+                  automatic_retry_count = automatic_retry_count + 1,
+                  result_count = 0, failure_code = NULL, failure_message = NULL,
+                  updated_at = ?, started_at = ?, published_at = NULL
+              WHERE batch_id = ? AND status = 'failed' AND attempt_count < 3
+            ` }).run([
+              parsed.executionId, parsed.requestedCount, parsed.actualTarget,
+              parsed.now, parsed.now, existing.batchId,
+            ]);
+            if (updated.changes !== 1) {
+              const authoritative = readBatchByLocalDate(database, parsed.localDate);
+              if (!authoritative) throw new Error('Daily Recommendation retry Batch disappeared.');
+              return existingClaim(authoritative);
+            }
+            return {
+              status: 'claimed' as const,
+              batch: requireRunning(readBatchByIdRequired(database, existing.batchId)),
+            };
+          },
+        });
+      }
       if (existing) return existingClaim(existing);
       try {
         return database.transaction({
@@ -144,6 +184,18 @@ export function createDailyRecommendationRepository(database: DatabaseConnection
         }
         throw error;
       }
+    },
+    failBatch(command) {
+      const parsed = FailBatchSchema.parse(command);
+      database.prepare({ sql: `
+        UPDATE discovery_batches
+        SET status = 'failed', failure_code = ?, failure_message = ?, updated_at = ?
+        WHERE batch_id = ? AND execution_id = ? AND status = 'running'
+      ` }).run([
+        parsed.failureCode, parsed.failureMessage, parsed.failedAt,
+        parsed.batchId, parsed.executionId,
+      ]);
+      return readBatchByIdRequired(database, parsed.batchId);
     },
   };
 }
