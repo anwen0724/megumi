@@ -22,9 +22,22 @@ export const EnsureDailyRecommendationRequestSchema = z.object({
 
 export const DailyRecommendationCandidateSchema = CandidateSchema.extend({
   admission: z.object({
+    assessmentId: z.string().min(1),
+    assessmentVersion: z.string().min(1),
     relevance: z.enum(['direct', 'adjacent', 'exploration']),
     matchedInterestIds: z.array(z.string().min(1)),
     reason: z.string().trim().min(1).max(1000),
+    interestRevisions: z.array(z.object({
+      interestId: z.string().min(1), revision: z.number().int().nonnegative(),
+    }).strict()),
+    preferenceRevisions: z.array(z.object({
+      scopeKey: z.string().min(1), revision: z.number().int().nonnegative(),
+    }).strict()),
+    preferenceAlignment: z.array(z.object({
+      directionId: z.string().min(1),
+      relation: z.enum(['aligned', 'conflicted', 'neutral']),
+      reason: z.string().min(1),
+    }).strict()),
   }).strict(),
 }).strict();
 
@@ -76,11 +89,25 @@ export interface DailyRecommendationInterest {
   readonly description: string;
 }
 
+export interface DailyRecommendationPendingFeedback {
+  readonly feedbackId: string;
+  readonly recommendationId: string;
+  readonly reaction: 'liked' | 'disliked';
+  readonly changedAt: string;
+  readonly learnedFeedbackRevision: number;
+  readonly title: string;
+  readonly sourceName: string;
+  readonly contentType: string;
+  readonly description?: string;
+  readonly matchedInterestIds: readonly string[];
+}
+
 export interface DailyRecommendationSnapshot {
   readonly window: DailyCandidateWindow;
   readonly activeInterests: readonly DailyRecommendationInterest[];
   readonly recentRecommendations: readonly Recommendation[];
-  readonly recentFeedback: readonly Recommendation[];
+  readonly pendingFeedback: readonly DailyRecommendationPendingFeedback[];
+  readonly omittedPendingFeedbackCount: number;
 }
 
 export type DailyRecommendationCandidate = z.infer<typeof DailyRecommendationCandidateSchema>;

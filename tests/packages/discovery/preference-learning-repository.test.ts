@@ -192,7 +192,7 @@ function seedRecommendation(database: DatabaseConnection, index: number): void {
       content_evidence_json
     ) VALUES (?, 'batch:1', ?, ?, 'open_web', 'example.com', ?, ?, 'article', ?, ?, ?,
       '["interest:agents"]', '{"interest:agents":1}', '{}',
-      '{"completeness":"partial","text":"Fixed content evidence"}')
+      '{"sourceId":"open_web","canonicalUrl":"https://example.com/evidence","title":"Fixed content evidence","description":"Durable Recommendation evidence.","completeness":"partial"}')
   ` }).run([
     `recommendation:${index}`,
     `identity:${index}`,

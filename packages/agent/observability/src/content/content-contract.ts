@@ -29,6 +29,8 @@ export const CONTENT_KINDS = [
   'discovery.recommendations',
   'candidate.pool.snapshot',
   'recommendation.published',
+  'preference.learning.result',
+  'preference.committed',
 ] as const;
 
 export const ContentKindSchema = z.enum(CONTENT_KINDS);

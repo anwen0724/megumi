@@ -6,7 +6,9 @@ import { z } from 'zod';
 
 const TraceStatusSchema = z.enum(['ok', 'error', 'cancelled', 'incomplete']);
 const TraceDiagnosticsSchema = z.enum(['complete', 'incomplete']);
-const TraceKindSchema = z.enum(['conversation', 'daily_recommendation', 'candidate_supply', 'unknown']);
+const TraceKindSchema = z.enum([
+  'conversation', 'daily_recommendation', 'candidate_supply', 'preference_learning', 'unknown',
+]);
 export interface ObservabilityDiagnosticErrorUiDto {
   readonly name: string;
   readonly message: string;
@@ -49,7 +51,9 @@ export type ObservabilityCorrelationUiDto = z.infer<typeof ObservabilityCorrelat
 export const ObservabilityListPayloadSchema = z.object({
   startedAtOrAfter: z.string().datetime({ offset: true }).optional(),
   startedBefore: z.string().datetime({ offset: true }).optional(),
-  traceKind: z.enum(['conversation', 'daily_recommendation', 'candidate_supply']).optional(),
+  traceKind: z.enum([
+    'conversation', 'daily_recommendation', 'candidate_supply', 'preference_learning',
+  ]).optional(),
   status: TraceStatusSchema.optional(),
   correlation: ObservabilityCorrelationSchema.optional(),
   limit: z.number().int().min(1).max(200).optional(),

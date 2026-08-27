@@ -29,7 +29,8 @@ describe('CandidateSupplyAttempts', () => {
   it('returns a persisted admission batch and commits the typed assessment', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start({
-      executionId: 'execution:1', repository, sourceRegistry: createSourceRegistry([source()]),
+      executionId: 'execution:1', startedAt: now, trigger: 'startup',
+      repository, sourceRegistry: createSourceRegistry([source()]),
       enabledSourceIds: ['source:1'], initialCandidateIds: [],
       getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
       now: () => now,
@@ -53,6 +54,9 @@ describe('CandidateSupplyAttempts', () => {
         candidateId, decision: 'admit', relevance: 'direct', matchedInterestIds: ['interest:1'],
         contentValue: 'substantive', novelty: 'novel', temporalValidity: 'valid',
         negativeConstraint: 'clear', reason: 'Useful implementation detail.',
+        interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
+        preferenceRevisions: [{ scopeKey: 'interest:interest:1', revision: 0 }],
+        preferenceAlignment: [],
       }] },
     });
     expect(committed.isError).not.toBe(true);
@@ -69,7 +73,8 @@ describe('CandidateSupplyAttempts', () => {
     } as import('@megumi/observability').Observability;
     const attempts = createCandidateSupplyAttempts({ observability: throwingObservability });
     attempts.start({
-      executionId: 'execution:1', repository, sourceRegistry: createSourceRegistry([source()]),
+      executionId: 'execution:1', startedAt: now, trigger: 'startup',
+      repository, sourceRegistry: createSourceRegistry([source()]),
       enabledSourceIds: ['source:1'], initialCandidateIds: [],
       getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
       now: () => now,
@@ -87,7 +92,8 @@ describe('CandidateSupplyAttempts', () => {
   it('does not accept needs_detail when the Candidate Source cannot read more content', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start({
-      executionId: 'execution:1', repository, sourceRegistry: createSourceRegistry([source(false)]),
+      executionId: 'execution:1', startedAt: now, trigger: 'startup',
+      repository, sourceRegistry: createSourceRegistry([source(false)]),
       enabledSourceIds: ['source:1'], initialCandidateIds: [],
       getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
       now: () => now,
@@ -115,7 +121,8 @@ describe('CandidateSupplyAttempts', () => {
   it('reads a preparing Candidate once and returns it to the admission batch', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start({
-      executionId: 'execution:1', repository, sourceRegistry: createSourceRegistry([source(true, false)]),
+      executionId: 'execution:1', startedAt: now, trigger: 'startup',
+      repository, sourceRegistry: createSourceRegistry([source(true, false)]),
       enabledSourceIds: ['source:1'], initialCandidateIds: [],
       getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
       now: () => now,
@@ -150,7 +157,8 @@ describe('CandidateSupplyAttempts', () => {
     const emptySource = source();
     emptySource.search = async () => ({ status: 'success', items: [] });
     attempts.start({
-      executionId: 'execution:1', repository, sourceRegistry: createSourceRegistry([emptySource]),
+      executionId: 'execution:1', startedAt: now, trigger: 'startup',
+      repository, sourceRegistry: createSourceRegistry([emptySource]),
       enabledSourceIds: ['source:1'], initialCandidateIds: [],
       getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
       now: () => now,

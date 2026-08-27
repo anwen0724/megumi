@@ -4,7 +4,6 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Api, Model } from '@megumi/ai';
-import type { DailyRecommendationContextMaterial } from '@megumi/context';
 import type {
   DailyRecommendationExecutionInput,
   ExecutionOutcome,
@@ -62,6 +61,7 @@ export interface CreateDailyRecommendationRuntimeOptions {
   };
   readonly now: () => string;
   readonly notifyCandidateSupply: (shortfall: number) => void;
+  readonly notifyPreferenceLearning?: () => void;
   readonly observability?: Observability;
   readonly timers?: {
     setTimeout(callback: () => void, delayMs: number): unknown;
@@ -177,7 +177,7 @@ export function createDailyRecommendationRuntime(
     searchRecommendations: (request) => options.repository.searchRecommendations(request),
     updateRecommendationState(request) {
       const now = options.now();
-      return request.action === 'set_reaction'
+      const updated = request.action === 'set_reaction'
         ? options.repository.updateRecommendationState({
             ...request,
             now,
@@ -186,6 +186,14 @@ export function createDailyRecommendationRuntime(
               ?? `feedback-change:${randomUUID()}`,
           })
         : options.repository.updateRecommendationState({ ...request, now });
+      if (request.action === 'set_reaction') {
+        try {
+          options.notifyPreferenceLearning?.();
+        } catch {
+          // Durable Feedback success never depends on a background wake-up.
+        }
+      }
+      return updated;
     },
     getNextScheduledAt: () => scheduler.getNextScheduledAt(),
     async shutdown() {
@@ -260,15 +268,13 @@ async function runLifecycle(
   }
 
   const batchId = current?.batchId ?? options.ids.createBatchId();
-  const material = contextMaterial(snapshot);
-  safeRecordContent(options.observability, 'discovery.candidates', material.candidates, { batchId });
+  safeRecordContent(options.observability, 'discovery.candidates', snapshot.window.candidates, { batchId });
   let executionId: string | undefined;
   const started = await options.startExecution<ClaimRejection>({
     kind: 'daily_recommendation',
     requestId: `daily-recommendation-request:${randomUUID()}`,
     batchId,
     localDate,
-    material,
     model,
     async accept({ executionId: acceptedExecutionId }) {
       executionId = acceptedExecutionId;
@@ -281,8 +287,8 @@ async function runLifecycle(
           localDate,
           timezone: options.timezone(),
           executionId: acceptedExecutionId,
-          requestedCount: material.requestedCount,
-          actualTarget: material.actualTarget,
+          requestedCount: snapshot.window.requestedCount,
+          actualTarget: snapshot.window.actualTarget,
           now,
         }),
       );
@@ -291,7 +297,7 @@ async function runLifecycle(
         options.attempts.start({
           executionId: acceptedExecutionId,
           batchId: claimed.batch.batchId,
-          window: snapshot.window,
+          snapshot,
           repository: options.repository,
           createRecommendationId: options.ids.createRecommendationId,
           now: options.now,
@@ -343,8 +349,8 @@ async function runLifecycle(
     localDate,
     batchId: started.execution.batchId,
     executionId: acceptedExecutionId,
-    requestedCount: material.requestedCount,
-    actualTarget: material.actualTarget,
+    requestedCount: snapshot.window.requestedCount,
+    actualTarget: snapshot.window.actualTarget,
   };
   acceptance.resolve(acceptedResult);
   return observeSpan(
@@ -371,47 +377,6 @@ async function runLifecycle(
       };
     },
   );
-}
-
-function contextMaterial(snapshot: DailyRecommendationSnapshot): DailyRecommendationContextMaterial {
-  return {
-    requestedCount: snapshot.window.requestedCount,
-    actualTarget: snapshot.window.actualTarget,
-    availableCount: snapshot.window.availableCount,
-    readBudget: Math.min(snapshot.window.candidates.length, 20),
-    interests: snapshot.activeInterests.map((interest) => ({ ...interest })),
-    candidates: snapshot.window.candidates.map((candidate) => ({
-      candidateId: candidate.candidateId,
-      contentIdentity: candidate.contentIdentity,
-      sourceName: candidate.primarySourceName,
-      canonicalUrl: candidate.canonicalUrl,
-      contentType: candidate.contentType,
-      title: candidate.title,
-      ...(candidate.author ? { author: candidate.author } : {}),
-      ...(candidate.publishedAt ? { contentPublishedAt: candidate.publishedAt } : {}),
-      ...(candidate.description ? { description: candidate.description } : {}),
-      relevance: candidate.admission.relevance,
-      matchedInterestIds: [...candidate.admission.matchedInterestIds],
-      admissionReason: candidate.admission.reason,
-    })),
-    recentRecommendations: snapshot.recentRecommendations.map(historyItem),
-    recentFeedback: snapshot.recentFeedback.map(historyItem),
-  };
-}
-
-function historyItem(recommendation: DailyRecommendationSnapshot['recentRecommendations'][number]) {
-  return {
-    contentIdentity: recommendation.contentIdentity,
-    sourceName: recommendation.sourceName,
-    title: recommendation.title,
-    recommendationReason: recommendation.recommendationReason,
-    publishedAt: recommendation.publishedAt,
-    ...(recommendation.reaction ? { reaction: recommendation.reaction } : {}),
-    ...(recommendation.hiddenAt ? { hiddenAt: recommendation.hiddenAt } : {}),
-    ...(recommendation.favoriteAt ? { favoriteAt: recommendation.favoriteAt } : {}),
-    ...(recommendation.watchLaterAt ? { watchLaterAt: recommendation.watchLaterAt } : {}),
-    ...(recommendation.firstOpenedAt ? { firstOpenedAt: recommendation.firstOpenedAt } : {}),
-  };
 }
 
 function settleFailure(

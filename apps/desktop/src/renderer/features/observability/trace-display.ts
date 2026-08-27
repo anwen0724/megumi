@@ -15,27 +15,31 @@ export interface TraceDisplayLabels {
   readonly scheduledDiscovery: string;
   readonly candidateSupply: string;
   readonly candidateSupplyRun: string;
+  readonly preferenceLearning: string;
+  readonly preferenceLearningRun: string;
 }
+
+type TraceDisplayKind = 'conversation' | 'daily_recommendation' | 'candidate_supply' | 'preference_learning';
 
 export interface TraceDisplayItem {
   readonly summary: ObservabilityTraceSummaryUiDto;
   readonly title: string;
   readonly groupId: string;
   readonly groupTitle: string;
-  readonly groupKind: 'conversation' | 'daily_recommendation' | 'candidate_supply';
+  readonly groupKind: TraceDisplayKind;
   readonly sessionId?: string;
 }
 
 export interface TraceDisplayGroup {
   readonly id: string;
   readonly title: string;
-  readonly kind: 'conversation' | 'daily_recommendation' | 'candidate_supply';
+  readonly kind: TraceDisplayKind;
   readonly items: readonly TraceDisplayItem[];
 }
 
 export interface TraceDisplayFilters {
   readonly query: string;
-  readonly traceKind: 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply';
+  readonly traceKind: 'all' | TraceDisplayKind;
   readonly sessionId: string;
   readonly status: 'all' | ObservabilityTraceSummaryUiDto['status'];
   readonly issuesOnly: boolean;
@@ -78,6 +82,16 @@ export function createTraceDisplayItems(input: {
         groupId: `candidate-supply:${day}`,
         groupTitle: `${input.labels.candidateSupply} · ${day}`,
         groupKind: 'candidate_supply',
+      };
+    }
+    if (summary.traceKind === 'preference_learning') {
+      const day = formatTraceDay(summary.startedAt, input.locale);
+      return {
+        summary,
+        title: input.labels.preferenceLearningRun,
+        groupId: `preference-learning:${day}`,
+        groupTitle: `${input.labels.preferenceLearning} · ${day}`,
+        groupKind: 'preference_learning',
       };
     }
 

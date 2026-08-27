@@ -105,9 +105,7 @@ describe('DailyRecommendationRuntime', () => {
     expect(result).toMatchObject({
       status: 'started', localDate: '2026-08-27', requestedCount: 5, actualTarget: 2,
     });
-    expect(startExecution.mock.calls[0]?.[0].material).toMatchObject({
-      requestedCount: 5, actualTarget: 2, availableCount: 2, readBudget: 2,
-    });
+    expect(startExecution.mock.calls[0]?.[0]).not.toHaveProperty('material');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(repository.getBatch('2026-08-27')).toMatchObject({
       status: 'published', requestedCount: 5, actualTarget: 2, resultCount: 2,
@@ -215,6 +213,9 @@ function admitCandidate(repository: DiscoveryRepository, title: string): string 
       candidateId: candidate.candidateId, decision: 'admit', relevance: 'direct',
       matchedInterestIds: ['interest:1'], contentValue: 'substantive', novelty: 'novel',
       temporalValidity: 'valid', negativeConstraint: 'clear', reason: `${title} is useful.`,
+      interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
+      preferenceRevisions: [{ scopeKey: 'interest:interest:1', revision: 0 }],
+      preferenceAlignment: [],
     }],
   });
   return candidate.candidateId;

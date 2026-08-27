@@ -17,6 +17,20 @@ const commonDecisionFields = {
   reason: Type.String(),
 };
 
+const decisionRevisionFields = {
+  interestRevisions: Type.Array(Type.Object({
+    interestId: Type.String(), revision: Type.Number(),
+  })),
+  preferenceRevisions: Type.Array(Type.Object({
+    scopeKey: Type.String(), revision: Type.Number(),
+  })),
+  preferenceAlignment: Type.Array(Type.Object({
+    directionId: Type.String(),
+    relation: Type.Union([Type.Literal('aligned'), Type.Literal('conflicted'), Type.Literal('neutral')]),
+    reason: Type.String(),
+  })),
+};
+
 export const commitCandidateAdmissionToolDefinition = {
   name: 'commit_candidate_admission',
   description: 'Commit a complete bounded batch of Candidate admission decisions.',
@@ -32,6 +46,7 @@ export const commitCandidateAdmissionToolDefinition = {
         novelty: Type.Literal('novel'),
         temporalValidity: Type.Literal('valid'),
         negativeConstraint: Type.Literal('clear'),
+        ...decisionRevisionFields,
       }),
       Type.Object({
         ...commonDecisionFields,
@@ -49,6 +64,7 @@ export const commitCandidateAdmissionToolDefinition = {
         novelty: Type.Union([Type.Literal('novel'), Type.Literal('semantic_duplicate')]),
         temporalValidity: Type.Union([Type.Literal('valid'), Type.Literal('stale'), Type.Literal('uncertain')]),
         negativeConstraint: Type.Union([Type.Literal('clear'), Type.Literal('conflict')]),
+        ...decisionRevisionFields,
         duplicateOfCandidateId: Type.Optional(Type.String()),
         duplicateOfRecommendationId: Type.Optional(Type.String()),
         reasonCode: Type.Union([

@@ -17,6 +17,15 @@ export const PreferenceDimensionSchema = z.enum([
   'expression_quality',
 ]);
 
+export const RecommendationContentEvidenceSchema = z.object({
+  sourceId: z.string().min(1),
+  canonicalUrl: z.string().url(),
+  title: z.string().trim().min(1),
+  description: z.string().trim().min(1).optional(),
+  contentText: z.string().trim().min(1).optional(),
+  completeness: z.enum(['full', 'partial', 'metadata_only']),
+}).strict();
+
 export const PreferenceDirectionSchema = z.object({
   directionId: z.string().min(1),
   polarity: PreferencePolaritySchema,
@@ -108,7 +117,7 @@ export interface PreferenceLearningFeedbackChange {
     readonly publishedAt: string;
     readonly recommendationReason: string;
     readonly matchedInterestIds: readonly string[];
-    readonly contentEvidence: Readonly<Record<string, unknown>>;
+    readonly contentEvidence: RecommendationContentEvidence;
   };
   readonly previouslySupportedDirectionIds: readonly string[];
 }
@@ -151,3 +160,4 @@ export type PreferenceSnapshot = z.infer<typeof PreferenceSnapshotSchema>;
 export type PreferenceDirection = z.infer<typeof PreferenceDirectionSchema>;
 export type PreferenceLearningBatch = z.infer<typeof PreferenceLearningBatchSchema>;
 export type LearnedScopeInput = z.infer<typeof LearnedScopeInputSchema>;
+export type RecommendationContentEvidence = z.infer<typeof RecommendationContentEvidenceSchema>;

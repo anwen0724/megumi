@@ -24,7 +24,8 @@ import {
   type TraceDisplayItem,
 } from './trace-display';
 
-type TraceKindFilter = 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply';
+type TraceKindFilter = 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply'
+  | 'preference_learning';
 type TraceStatusFilter = 'all' | ObservabilityTraceSummaryUiDto['status'];
 type ActiveAction = 'refresh' | 'rebuild' | 'export';
 
@@ -58,6 +59,8 @@ export function DiagnosticsPanel() {
       scheduledDiscovery: t('diagnostics.scheduledDiscovery'),
       candidateSupply: t('diagnostics.traceKinds.candidateSupply'),
       candidateSupplyRun: t('diagnostics.candidateSupplyRun'),
+      preferenceLearning: t('diagnostics.traceKinds.preferenceLearning'),
+      preferenceLearningRun: t('diagnostics.preferenceLearningRun'),
     },
   }), [i18n.language, i18n.resolvedLanguage, messages, sessions, t, traces]);
   const filteredItems = useMemo(() => filterTraceDisplayItems(displayItems, {
@@ -267,6 +270,7 @@ export function DiagnosticsPanel() {
               { value: 'conversation', label: t('diagnostics.traceKinds.conversation') },
               { value: 'daily_recommendation', label: t('diagnostics.traceKinds.dailyRecommendation') },
               { value: 'candidate_supply', label: t('diagnostics.traceKinds.candidateSupply') },
+              { value: 'preference_learning', label: t('diagnostics.traceKinds.preferenceLearning') },
             ]}
             onValueChange={setTraceKind}
           />

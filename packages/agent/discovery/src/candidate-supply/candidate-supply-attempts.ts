@@ -18,6 +18,8 @@ const MAX_READ_CALLS = 40;
 const MAX_RAW_RESULTS = 200;
 
 interface AttemptRecord {
+  readonly startedAt: string;
+  readonly trigger: string;
   readonly repository: CandidateSupplyRepository;
   readonly sourceRegistry: SourceRegistry;
   readonly enabledSourceIds: ReadonlySet<string>;
@@ -49,9 +51,23 @@ export interface CandidateSupplyAttemptSummary {
   readonly needsDetailCandidates: number;
 }
 
+export interface CandidateSupplyAttemptContextState {
+  readonly startedAt: string;
+  readonly trigger: string;
+  readonly asOf: string;
+  readonly snapshot: CandidatePoolSnapshot;
+  readonly budget: {
+    readonly searchesRemaining: number;
+    readonly readsRemaining: number;
+    readonly rawResultsRemaining: number;
+  };
+}
+
 export interface CandidateSupplyAttempts {
   start(request: {
     readonly executionId: string;
+    readonly startedAt: string;
+    readonly trigger: string;
     readonly repository: CandidateSupplyRepository;
     readonly sourceRegistry: SourceRegistry;
     readonly enabledSourceIds: readonly string[];
@@ -60,6 +76,7 @@ export interface CandidateSupplyAttempts {
     readonly now: () => string;
   }): void;
   ownsExecution(executionId: string): boolean;
+  readContextState(executionId: string): CandidateSupplyAttemptContextState | undefined;
   summarize(executionId: string): CandidateSupplyAttemptSummary | undefined;
   dispose(executionId: string): void;
   searchContent(request: {
@@ -90,6 +107,8 @@ export function createCandidateSupplyAttempts(options: {
         throw new Error(`Candidate Supply attempt already exists: ${request.executionId}.`);
       }
       records.set(request.executionId, {
+        startedAt: request.startedAt,
+        trigger: request.trigger,
         repository: request.repository,
         sourceRegistry: request.sourceRegistry,
         enabledSourceIds: new Set(request.enabledSourceIds),
@@ -111,6 +130,16 @@ export function createCandidateSupplyAttempts(options: {
     },
 
     ownsExecution: (executionId) => records.has(executionId),
+    readContextState(executionId) {
+      const attempt = records.get(executionId);
+      return attempt ? {
+        startedAt: attempt.startedAt,
+        trigger: attempt.trigger,
+        asOf: attempt.now(),
+        snapshot: attempt.getSnapshot(),
+        budget: remainingBudget(attempt),
+      } : undefined;
+    },
     summarize(executionId) {
       const attempt = records.get(executionId);
       return attempt ? attemptSummary(attempt) : undefined;

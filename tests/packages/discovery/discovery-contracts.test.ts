@@ -17,6 +17,7 @@ describe('Discovery owner contracts', () => {
   it('parses durable Interest, Batch, and Recommendation facts strictly', () => {
     expect(InterestSchema.parse({
       interestId: 'interest:1',
+      revision: 1,
       description: '关注 Agent 工程实践',
       status: 'active',
       createdFrom: 'manual',
@@ -46,6 +47,7 @@ describe('Discovery owner contracts', () => {
 
     expect(InterestSchema.safeParse({
       interestId: 'interest:1',
+      revision: 1,
       description: 'valid',
       status: 'active',
       createdFrom: 'manual',

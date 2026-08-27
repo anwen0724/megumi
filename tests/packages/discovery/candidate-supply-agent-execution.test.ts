@@ -90,12 +90,16 @@ describe('Candidate Supply Agent execution', () => {
                 candidateId: candidateIds[0], decision: 'admit', relevance: 'direct',
                 matchedInterestIds: ['interest:agent'], contentValue: 'substantive', novelty: 'novel',
                 temporalValidity: 'valid', negativeConstraint: 'clear', reason: 'Useful and current.',
+                interestRevisions: [{ interestId: 'interest:agent', revision: 1 }],
+                preferenceRevisions: [], preferenceAlignment: [],
               },
               {
                 candidateId: candidateIds[1], decision: 'reject', relevance: 'direct',
                 matchedInterestIds: ['interest:agent'], contentValue: 'substantive', novelty: 'novel',
                 temporalValidity: 'stale', negativeConstraint: 'clear', reasonCode: 'stale',
                 reason: 'The described implementation is obsolete.',
+                interestRevisions: [{ interestId: 'interest:agent', revision: 1 }],
+                preferenceRevisions: [], preferenceAlignment: [],
               },
             ] },
           }]);

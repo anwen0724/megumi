@@ -71,11 +71,8 @@ describe('CandidateSupplyRuntime', () => {
     await runtime.start();
     await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
     const request = startExecution.mock.calls[0]![0];
-    expect(request.material).toMatchObject({
-      pool: { lowWatermark: 1, target: 2, hardLimit: 4, totalShortfall: 2 },
-      interests: [{ interestId: 'interest:1', description: 'Agent architecture' }],
-      budget: { searchesRemaining: 12, readsRemaining: 40, rawResultsRemaining: 200 },
-    });
+    expect(request).toMatchObject({ kind: 'candidate_supply', trigger: 'startup' });
+    expect(request).not.toHaveProperty('material');
     runtime.notify('interest_changed');
     runtime.notify('configuration_changed');
     expect(startExecution).toHaveBeenCalledTimes(1);
@@ -106,14 +103,7 @@ describe('CandidateSupplyRuntime', () => {
     await runtime.start();
     await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
 
-    expect(startExecution.mock.calls[0]![0].material.sources).toEqual([
-      expect.objectContaining({ id: 'source:1', availability: 'ready' }),
-      expect.objectContaining({
-        id: 'source:2',
-        availability: 'rate_limited',
-        retryAt: '2026-08-27T01:00:00.000Z',
-      }),
-    ]);
+    expect(startExecution.mock.calls[0]![0]).not.toHaveProperty('material');
     await runtime.shutdown();
   });
 
@@ -132,9 +122,7 @@ describe('CandidateSupplyRuntime', () => {
     await runtime.start();
     await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
 
-    expect(startExecution.mock.calls[0]![0].material.pool.consumerShortfalls).toEqual([
-      { consumer: 'daily', count: 1 },
-    ]);
+    expect(startExecution.mock.calls[0]![0]).toMatchObject({ trigger: 'startup' });
     await runtime.shutdown();
   });
 
@@ -298,6 +286,7 @@ function seedAvailableCandidate(repository: DiscoveryRepository): void {
       candidateId: candidate.candidateId, decision: 'admit', relevance: 'exploration', matchedInterestIds: [],
       contentValue: 'substantive', novelty: 'novel', temporalValidity: 'valid',
       negativeConstraint: 'clear', reason: 'Useful exploration.',
+      interestRevisions: [], preferenceRevisions: [], preferenceAlignment: [],
     }],
   });
 }

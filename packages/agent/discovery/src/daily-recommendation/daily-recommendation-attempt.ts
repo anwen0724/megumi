@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import type { RawToolResult } from '@megumi/tools';
 import type { Observability, OperationCompletion } from '@megumi/observability';
-import type { DailyCandidateWindow } from './daily-recommendation';
+import type { DailyRecommendationSnapshot } from './daily-recommendation';
 import type { DailyRecommendationRepository } from '../persistence/daily-recommendation-repository';
 
 const ReadInputSchema = z.object({ candidateId: z.string().min(1) }).strict();
@@ -17,6 +17,7 @@ const PublishInputSchema = z.object({
 
 interface AttemptRecord {
   readonly batchId: string;
+  readonly snapshot: DailyRecommendationSnapshot;
   readonly allowedCandidateIds: readonly string[];
   readonly allowedCandidateIdSet: ReadonlySet<string>;
   readonly readCandidateIds: Set<string>;
@@ -32,11 +33,15 @@ export interface DailyRecommendationAttempts {
   start(request: {
     readonly executionId: string;
     readonly batchId: string;
-    readonly window: DailyCandidateWindow;
+    readonly snapshot: DailyRecommendationSnapshot;
     readonly repository: DailyRecommendationRepository;
     readonly createRecommendationId: () => string;
     readonly now: () => string;
   }): void;
+  readContextSnapshot(executionId: string): {
+    readonly batchId: string;
+    readonly snapshot: DailyRecommendationSnapshot;
+  } | undefined;
   /** Releases execution-scoped IDs and budget facts. */
   dispose(executionId: string): void;
   /** Reads one persisted local Candidate from the fixed execution window. */
@@ -63,9 +68,10 @@ export function createDailyRecommendationAttempts(options: {
       if (attempts.has(request.executionId)) {
         throw new Error(`Daily Recommendation attempt already exists: ${request.executionId}.`);
       }
-      const allowedCandidateIds = request.window.candidates.map(({ candidateId }) => candidateId);
+      const allowedCandidateIds = request.snapshot.window.candidates.map(({ candidateId }) => candidateId);
       attempts.set(request.executionId, {
         batchId: request.batchId,
+        snapshot: request.snapshot,
         allowedCandidateIds,
         allowedCandidateIdSet: new Set(allowedCandidateIds),
         readCandidateIds: new Set(),
@@ -75,6 +81,10 @@ export function createDailyRecommendationAttempts(options: {
         now: request.now,
         published: false,
       });
+    },
+    readContextSnapshot(executionId) {
+      const attempt = attempts.get(executionId);
+      return attempt ? { batchId: attempt.batchId, snapshot: attempt.snapshot } : undefined;
     },
     dispose(executionId) {
       attempts.delete(executionId);

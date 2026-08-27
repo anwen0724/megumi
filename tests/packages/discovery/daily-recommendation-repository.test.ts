@@ -41,7 +41,7 @@ describe('DailyRecommendationRepository', () => {
       expect.objectContaining({ interestId: 'interest:1', description: 'Agent architecture' }),
     ]);
     expect(snapshot.recentRecommendations).toEqual([]);
-    expect(snapshot.recentFeedback).toEqual([]);
+    expect(snapshot.pendingFeedback).toEqual([]);
   });
 
   it('atomically creates immutable Recommendations, consumes Candidates, and publishes the Batch', () => {
@@ -82,6 +82,41 @@ describe('DailyRecommendationRepository', () => {
       batch: published.batch,
       recommendations: published.recommendations,
     });
+
+    const publishedBasis = database.prepare<PublishedBasisRow>({ sql: `
+      SELECT assessment_id, assessment_version, matched_interest_ids_json,
+        interest_revisions_json, preference_revisions_json, content_evidence_json
+      FROM discovery_recommendations WHERE recommendation_id = ?
+    ` }).get(['recommendation:2']);
+    expect(publishedBasis).toMatchObject({
+      assessment_id: expect.any(String),
+      assessment_version: 'candidate-admission:v1',
+      matched_interest_ids_json: '["interest:1"]',
+      interest_revisions_json: '[{"interestId":"interest:1","revision":1}]',
+      preference_revisions_json: '[{"scopeKey":"interest:interest:1","revision":0}]',
+    });
+    expect(JSON.parse(publishedBasis?.content_evidence_json ?? '')).toEqual({
+      sourceId: 'open_web',
+      canonicalUrl: 'https://example.com/first-guide',
+      title: 'First guide',
+      description: 'First guide with concrete implementation detail.',
+      completeness: 'partial',
+    });
+
+    const feedbackAt = '2026-08-27T08:01:00.000Z';
+    discovery.updateRecommendationState({
+      recommendationId: 'recommendation:2', action: 'set_reaction', reaction: 'liked',
+      feedbackId: 'feedback:2', feedbackChangeId: 'feedback-change:2', now: feedbackAt,
+    });
+    discovery.updateRecommendationState({
+      recommendationId: 'recommendation:2', action: 'set_favorite', favorite: true,
+      now: '2026-08-27T08:02:00.000Z',
+    });
+    expect(repository.readSnapshot({ now, requestedCount: 5 }).pendingFeedback).toEqual([
+      expect.objectContaining({
+        feedbackId: 'feedback:2', reaction: 'liked', changedAt: feedbackAt,
+      }),
+    ]);
   });
 
   it('rolls back the whole selection when one Candidate becomes unavailable before publication', () => {
@@ -187,7 +222,21 @@ function admitCandidate(
       temporalValidity: 'valid',
       negativeConstraint: 'clear',
       reason: `${title} is useful.`,
+      interestRevisions: matchedInterestIds.map((interestId) => ({ interestId, revision: 1 })),
+      preferenceRevisions: matchedInterestIds.map((interestId) => ({
+        scopeKey: `interest:${interestId}`, revision: 0,
+      })),
+      preferenceAlignment: [],
     }],
   });
   return candidate.candidateId;
+}
+
+interface PublishedBasisRow {
+  readonly assessment_id: string | null;
+  readonly assessment_version: string | null;
+  readonly matched_interest_ids_json: string;
+  readonly interest_revisions_json: string;
+  readonly preference_revisions_json: string;
+  readonly content_evidence_json: string;
 }

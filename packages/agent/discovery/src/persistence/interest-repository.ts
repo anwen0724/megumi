@@ -111,8 +111,8 @@ function changeInterest(database: DatabaseConnection, command: ValidatedInterest
     database.prepare({ sql: `
       INSERT INTO discovery_interests (
         interest_id, description, status, created_from, user_managed_at,
-        created_at, updated_at
-      ) VALUES (?, ?, 'active', 'manual', ?, ?, ?)
+        created_at, updated_at, revision
+      ) VALUES (?, ?, 'active', 'manual', ?, ?, ?, 1)
     ` }).run([command.interestId, description, command.now, command.now, command.now]);
     return readInterestRequired(database, command.interestId);
   }
@@ -123,27 +123,28 @@ function changeInterest(database: DatabaseConnection, command: ValidatedInterest
     const description = InterestDescriptionSchema.parse(command.description);
     database.prepare({ sql: `
       UPDATE discovery_interests
-      SET description = ?, user_managed_at = ?, updated_at = ?
+      SET description = ?, user_managed_at = ?, updated_at = ?, revision = revision + 1
       WHERE interest_id = ?
     ` }).run([description, command.now, command.now, command.interestId]);
   } else if (command.action === 'pause') {
     database.prepare({ sql: `
       UPDATE discovery_interests
       SET status = 'paused', paused_at = COALESCE(paused_at, ?),
-          user_managed_at = ?, updated_at = ?
+          user_managed_at = ?, updated_at = ?, revision = revision + 1
       WHERE interest_id = ?
     ` }).run([command.now, command.now, command.now, command.interestId]);
   } else if (command.action === 'resume') {
     database.prepare({ sql: `
       UPDATE discovery_interests
-      SET status = 'active', paused_at = NULL, user_managed_at = ?, updated_at = ?
+      SET status = 'active', paused_at = NULL, user_managed_at = ?, updated_at = ?,
+          revision = revision + 1
       WHERE interest_id = ?
     ` }).run([command.now, command.now, command.interestId]);
   } else {
     database.prepare({ sql: `
       UPDATE discovery_interests
       SET status = 'deleted', deleted_at = COALESCE(deleted_at, ?),
-          user_managed_at = ?, updated_at = ?
+          user_managed_at = ?, updated_at = ?, revision = revision + 1
       WHERE interest_id = ?
     ` }).run([command.now, command.now, command.now, command.interestId]);
   }
@@ -205,7 +206,8 @@ function applyInterestExtraction(
       if (!interest.userManagedAt) {
         database.prepare({ sql: `
           UPDATE discovery_interests
-          SET status = 'paused', paused_at = COALESCE(paused_at, ?), updated_at = ?
+          SET status = 'paused', paused_at = COALESCE(paused_at, ?), updated_at = ?,
+              revision = revision + 1
           WHERE interest_id = ? AND status <> 'deleted'
         ` }).run([command.now, command.now, interest.interestId]);
       }
@@ -240,8 +242,8 @@ function insertConversationInterest(
 ): void {
   database.prepare({ sql: `
     INSERT INTO discovery_interests (
-      interest_id, description, status, created_from, created_at, updated_at
-    ) VALUES (?, ?, 'active', 'conversation', ?, ?)
+      interest_id, description, status, created_from, created_at, updated_at, revision
+    ) VALUES (?, ?, 'active', 'conversation', ?, ?, 1)
   ` }).run([interestId, description, now, now]);
 }
 
@@ -271,7 +273,7 @@ function retractSessionEvidence(
     if (support === 0) {
       database.prepare({ sql: `
         UPDATE discovery_interests
-        SET status = 'deleted', deleted_at = ?, updated_at = ?
+        SET status = 'deleted', deleted_at = ?, updated_at = ?, revision = revision + 1
         WHERE interest_id = ? AND status <> 'deleted'
       ` }).run([retractedAt, retractedAt, interestId]);
     }
@@ -305,6 +307,7 @@ function interestFromRow(row: InterestRow): Interest {
     description: row.description,
     status: row.status,
     createdFrom: row.created_from,
+    revision: row.revision,
     ...(row.user_managed_at ? { userManagedAt: row.user_managed_at } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -343,6 +346,7 @@ type InterestRow = DatabaseRow & {
   description: string;
   status: string;
   created_from: string;
+  revision: number;
   user_managed_at: string | null;
   created_at: string;
   updated_at: string;

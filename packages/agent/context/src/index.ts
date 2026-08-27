@@ -16,13 +16,28 @@ export type {
   ContextFailureCode,
   ContextWorkspaceSource,
   DailyRecommendationContextMaterial,
-  DailyRecommendationHistoryItem,
   DailyRecommendationRunContext,
+  PreferenceLearningContextMaterial,
+  PreferenceLearningRunContext,
   ExecutionEnvironment,
   ModelCallContext,
   Prompt,
   RunContext,
 } from './context';
+export type {
+  CandidateSupplyFacts,
+  CandidateSupplyContextMaterial as DiscoveryCandidateSupplyContextMaterial,
+  ContextDiscoverySourceFact,
+  ContextDiscoverySourceRegistry,
+  ContextPreferenceDirection,
+  ContextPreferenceSnapshot,
+  DailyRecommendationFacts,
+  DailyRecommendationContextMaterial as DiscoveryDailyRecommendationContextMaterial,
+  DiscoveryFactsReader,
+  PreferenceLearningFacts,
+  PreferenceLearningContextMaterial as DiscoveryPreferenceLearningContextMaterial,
+  ReadDiscoveryFactsResult,
+} from './discovery-context';
 export { createContext, type ContextCapabilities, type CreateContextOptions } from './context-builder';
 export {
   DEFAULT_COMPACTION_POLICY,

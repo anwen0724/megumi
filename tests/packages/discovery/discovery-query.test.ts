@@ -87,6 +87,7 @@ describe('DiscoveryRepository Home and Recommendation queries', () => {
 
     expect(repository.updateRecommendationState({
       recommendationId: 'recommendation:today:1', action: 'set_reaction', reaction: 'liked', now,
+      feedbackId: 'feedback:today:1', feedbackChangeId: 'feedback-change:today:1:1',
     }).reaction).toBe('liked');
     expect(repository.updateRecommendationState({
       recommendationId: 'recommendation:today:1', action: 'set_favorite', favorite: true, now,

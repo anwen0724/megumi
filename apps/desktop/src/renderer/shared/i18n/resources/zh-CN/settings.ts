@@ -287,8 +287,12 @@ export const settings = {
       automaticAllow: '自动允许', automaticDeny: '自动拒绝', userAllow: '用户允许',
       userDeny: '用户拒绝', cancelled: '已取消',
     },
-    traceKinds: { conversation: '会话', dailyRecommendation: '每日推荐', candidateSupply: '候选供给' },
+    traceKinds: {
+      conversation: '会话', dailyRecommendation: '每日推荐', candidateSupply: '候选供给',
+      preferenceLearning: '偏好学习',
+    },
     candidateSupplyRun: '补充候选池',
+    preferenceLearningRun: '归纳推荐反馈',
     spanCount: '{{count}} 个 Span', eventCount: '{{count}} 个 Event', contentCount: '{{count}} 个 Content 检查点',
     status: { ok: '已完成', error: '失败', cancelled: '已取消', incomplete: '未正常结束' },
     executionStatus: { ok: '执行成功', error: '执行失败', cancelled: '执行已取消', incomplete: '执行未正常结束' },
@@ -301,6 +305,8 @@ export const settings = {
       sourceAvailabilityCheck: '检查来源可用性', discoveryBatchClaim: '领取发现批次', discoveryAttempt: '执行发现尝试',
       sourceSearch: '搜索内容来源', sourceRead: '读取内容来源', discoverySelection: '筛选发现内容',
       discoveryAttemptSettle: '结算发现尝试', recommendationPublish: '发布推荐',
+      preferenceBatchClaim: '领取偏好学习批次', preferenceCommit: '提交偏好更新',
+      preferenceBatchSettle: '结算偏好学习批次',
     },
     contentNames: {
       inputReceived: '用户原始输入', inputProcessed: '处理后的模型输入', sessionMessageCommitted: '已保存消息',
@@ -311,6 +317,7 @@ export const settings = {
       sourceRequest: '来源请求', sourceProviderResponse: '来源供应商原始响应', sourceResult: '规范化来源结果',
       discoveryMaterial: '发现材料', discoveryCandidates: '发现候选集', discoverySelection: '筛选结果',
       discoveryRecommendations: '组装后的推荐', recommendationPublished: '已发布推荐',
+      preferenceLearningResult: '偏好学习结构化结果', preferenceCommitted: '已提交偏好更新',
     },
     issueCodes: {
       missingTraceStart: '缺少 Trace 开始记录', missingTraceEnd: '缺少 Trace 结束记录', missingSpanStart: '缺少 Span 开始记录',

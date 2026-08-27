@@ -204,6 +204,10 @@ export {
   TodayDiscoveryViewSchema,
 } from './discovery-view';
 export { createDiscoveryRepository } from './persistence/discovery-repository';
+export {
+  createContextDiscoverySourceRegistry,
+  createDiscoveryFactsReader,
+} from './context/discovery-facts-reader';
 export type {
   DiscoveryRepository,
   ApplyInterestExtraction,
@@ -224,6 +228,7 @@ export {
   PreferencePolaritySchema,
   PreferenceScopeSchema,
   PreferenceSnapshotSchema,
+  RecommendationContentEvidenceSchema,
 } from './preferences/preference';
 export type {
   CommitPreferenceLearningBatchResult,
@@ -236,10 +241,16 @@ export type {
   PreferenceLearningFeedbackChange,
   PreferenceLearningTrigger,
   PreferenceSnapshot,
+  RecommendationContentEvidence,
 } from './preferences/preference';
 export {
   createPreferenceLearningRepository,
 } from './persistence/preference-learning-repository';
+export {
+  createPreferenceLearningRuntime,
+  type CreatePreferenceLearningRuntimeOptions,
+  type PreferenceLearningRuntime,
+} from './preferences/preference-learning-runtime';
 export type {
   PreferenceLearningRepository,
   RecordRecommendationFeedbackInput,

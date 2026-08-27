@@ -211,7 +211,9 @@ function readSnapshot(
     WHERE status = 'active' ORDER BY created_at, interest_id
   ` }).all().map((row) => ({ interestId: row.interest_id, description: row.description }));
   const candidates = database.prepare<CandidateAssessmentRow>({ sql: `
-    SELECT c.*, a.relevance, a.matched_interest_ids_json, a.reason AS admission_reason
+    SELECT c.*, a.assessment_id, a.assessment_version, a.relevance,
+      a.matched_interest_ids_json, a.reason AS admission_reason,
+      a.interest_revisions_json, a.preference_revisions_json, a.preference_alignment_json
     FROM discovery_candidates c
     JOIN discovery_candidate_assessments a ON a.candidate_id = c.candidate_id
       AND a.active = 1 AND a.decision = 'admit'
@@ -230,8 +232,8 @@ function readSnapshot(
       candidates,
     }),
     activeInterests,
-    recentRecommendations: listRecentRecommendations(database, now, 30, false),
-    recentFeedback: listRecentRecommendations(database, now, 90, true),
+    recentRecommendations: listRecentRecommendations(database, now, 30),
+    ...readPendingFeedback(database),
   };
 }
 
@@ -289,6 +291,7 @@ function publishSelection(
     ` }).run([command.publishedAt, candidateId, command.publishedAt]);
     if (updated.changes !== 1) throw new SelectionConflict([candidateId]);
     recommendationWriter.insertForPublication(recommendation);
+    persistRecommendationBasis(database, recommendation.recommendationId, candidateId);
   }
 
   const updatedBatch = database.prepare({ sql: `
@@ -306,6 +309,48 @@ function publishSelection(
     batch: requirePublished(readBatchByIdRequired(database, command.batchId)),
     recommendations,
   };
+}
+
+function persistRecommendationBasis(
+  database: DatabaseConnection,
+  recommendationId: string,
+  candidateId: string,
+): void {
+  const assessment = database.prepare<CandidateAssessmentRow>({ sql: `
+    SELECT c.*, a.assessment_id, a.assessment_version, a.relevance,
+      a.matched_interest_ids_json, a.reason AS admission_reason,
+      a.interest_revisions_json, a.preference_revisions_json, a.preference_alignment_json
+    FROM discovery_candidates c
+    JOIN discovery_candidate_assessments a ON a.candidate_id = c.candidate_id
+      AND a.active = 1 AND a.decision = 'admit'
+    WHERE c.candidate_id = ?
+  ` }).get([candidateId]);
+  if (!assessment) throw new Error('Published Candidate has no active admission Assessment.');
+  const contentEvidence = {
+    sourceId: assessment.primary_source_id,
+    canonicalUrl: assessment.canonical_url,
+    title: assessment.title,
+    ...(assessment.description ? { description: assessment.description } : {}),
+    ...(assessment.content_text ? { contentText: assessment.content_text } : {}),
+    completeness: assessment.content_text ? 'full'
+      : assessment.description ? 'partial'
+        : 'metadata_only',
+  };
+  database.prepare({ sql: `
+    UPDATE discovery_recommendations SET
+      assessment_id = ?, assessment_version = ?,
+      matched_interest_ids_json = ?, interest_revisions_json = ?,
+      preference_revisions_json = ?, content_evidence_json = ?
+    WHERE recommendation_id = ?
+  ` }).run([
+    assessment.assessment_id,
+    assessment.assessment_version,
+    assessment.matched_interest_ids_json,
+    assessment.interest_revisions_json,
+    assessment.preference_revisions_json,
+    JSON.stringify(contentEvidence),
+    recommendationId,
+  ]);
 }
 
 function validSelection(
@@ -346,18 +391,43 @@ function listRecentRecommendations(
   database: DatabaseConnection,
   now: string,
   days: number,
-  feedbackOnly: boolean,
 ): readonly Recommendation[] {
   const cutoff = new Date(Date.parse(now) - days * 24 * 60 * 60 * 1000).toISOString();
-  const feedbackFilter = feedbackOnly ? `AND (
-    reaction IS NOT NULL OR hidden_at IS NOT NULL OR favorite_at IS NOT NULL
-    OR watch_later_at IS NOT NULL OR first_opened_at IS NOT NULL
-  )` : '';
   return database.prepare<RecommendationRow>({ sql: `
     SELECT * FROM discovery_recommendations
-    WHERE published_at >= ? ${feedbackFilter}
+    WHERE published_at >= ?
     ORDER BY published_at DESC, position, recommendation_id LIMIT 50
   ` }).all([cutoff]).map(recommendationFromRow);
+}
+
+function readPendingFeedback(database: DatabaseConnection): Pick<
+  DailyRecommendationSnapshot,
+  'pendingFeedback' | 'omittedPendingFeedbackCount'
+> {
+  const rows = database.prepare<PendingFeedbackRow>({ sql: `
+    SELECT r.*, c.changed_at AS feedback_changed_at
+    FROM discovery_recommendations r
+    JOIN discovery_feedback_changes c
+      ON c.feedback_id = r.feedback_id AND c.feedback_revision = r.feedback_revision
+    WHERE r.reaction IN ('liked', 'disliked') AND r.feedback_id IS NOT NULL
+      AND r.feedback_revision > r.learned_feedback_revision
+    ORDER BY c.changed_at DESC, r.recommendation_id LIMIT 21
+  ` }).all();
+  return {
+    pendingFeedback: rows.slice(0, 20).map((row) => ({
+      feedbackId: requireString(row.feedback_id, 'Feedback identity is missing.'),
+      recommendationId: row.recommendation_id,
+      reaction: row.reaction === 'liked' ? 'liked' : 'disliked',
+      changedAt: row.feedback_changed_at,
+      learnedFeedbackRevision: row.learned_feedback_revision,
+      title: row.title,
+      sourceName: row.source_name,
+      contentType: row.content_type,
+      ...(row.description ? { description: row.description } : {}),
+      matchedInterestIds: parseStringArray(row.matched_interest_ids_json),
+    })),
+    omittedPendingFeedbackCount: Math.max(0, rows.length - 20),
+  };
 }
 
 function listRecommendationsByBatch(database: DatabaseConnection, batchId: string): readonly Recommendation[] {
@@ -400,9 +470,14 @@ function candidateFromAssessmentRow(row: CandidateAssessmentRow): DailyRecommend
   return {
     ...candidate,
     admission: {
+      assessmentId: row.assessment_id,
+      assessmentVersion: row.assessment_version,
       relevance: z.enum(['direct', 'adjacent', 'exploration']).parse(row.relevance),
       matchedInterestIds: parseStringArray(row.matched_interest_ids_json),
       reason: row.admission_reason,
+      interestRevisions: parseInterestRevisions(row.interest_revisions_json),
+      preferenceRevisions: parsePreferenceRevisions(row.preference_revisions_json),
+      preferenceAlignment: parsePreferenceAlignment(row.preference_alignment_json),
     },
   };
 }
@@ -488,6 +563,31 @@ function parseStringArray(value: string): string[] {
   return z.array(z.string().min(1)).parse(parsed);
 }
 
+function parseInterestRevisions(value: string) {
+  return z.array(z.object({
+    interestId: z.string().min(1), revision: z.number().int().nonnegative(),
+  }).strict()).parse(JSON.parse(value));
+}
+
+function parsePreferenceRevisions(value: string) {
+  return z.array(z.object({
+    scopeKey: z.string().min(1), revision: z.number().int().nonnegative(),
+  }).strict()).parse(JSON.parse(value));
+}
+
+function parsePreferenceAlignment(value: string) {
+  return z.array(z.object({
+    directionId: z.string().min(1),
+    relation: z.enum(['aligned', 'conflicted', 'neutral']),
+    reason: z.string().min(1),
+  }).strict()).parse(JSON.parse(value));
+}
+
+function requireString(value: string | null, message: string): string {
+  if (!value) throw new Error(message);
+  return value;
+}
+
 function requireRequestedCount(value: number): number {
   if (!Number.isInteger(value) || value < 1 || value > 100) {
     throw new Error('Daily Recommendation requestedCount must be between 1 and 100.');
@@ -516,7 +616,10 @@ type CandidateRow = DatabaseRow & {
   expires_at: string; status_updated_at: string;
 };
 type CandidateAssessmentRow = CandidateRow & {
-  relevance: string | null; matched_interest_ids_json: string; admission_reason: string;
+  assessment_id: string; assessment_version: string; relevance: string | null;
+  matched_interest_ids_json: string; admission_reason: string;
+  interest_revisions_json: string; preference_revisions_json: string;
+  preference_alignment_json: string;
 };
 type InterestRow = DatabaseRow & { interest_id: string; description: string };
 type BatchRow = DatabaseRow & {
@@ -533,4 +636,7 @@ type RecommendationRow = DatabaseRow & {
   recommendation_reason: string; reaction: string | null; hidden_at: string | null;
   favorite_at: string | null; watch_later_at: string | null; first_opened_at: string | null;
   last_opened_at: string | null; published_at: string; state_updated_at: string | null;
+  feedback_id: string | null; feedback_revision: number; learned_feedback_revision: number;
+  matched_interest_ids_json: string;
 };
+type PendingFeedbackRow = RecommendationRow & { feedback_changed_at: string };

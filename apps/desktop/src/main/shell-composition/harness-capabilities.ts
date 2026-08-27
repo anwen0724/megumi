@@ -11,7 +11,13 @@ import {
   type CommandTerminalResult,
   type Commands,
 } from '@megumi/commands';
-import { createContext, deriveContextUsage, type ContextWorkspaceSource } from '@megumi/context';
+import {
+  createContext,
+  deriveContextUsage,
+  type ContextDiscoverySourceRegistry,
+  type ContextWorkspaceSource,
+  type DiscoveryFactsReader,
+} from '@megumi/context';
 import {
   createDatabase,
   migrateDatabase,
@@ -24,6 +30,8 @@ import {
   createCandidateSupplyAttempts,
   createDailyRecommendationAttempts,
   createDiscovery,
+  createContextDiscoverySourceRegistry,
+  createDiscoveryFactsReader,
   createInterestExtractor,
   type Discovery,
   type EmbeddedBrowser,
@@ -300,6 +308,22 @@ function composeCapabilitiesWithDatabase(
           };
     },
   };
+  let discoveryFactsReaderDelegate: DiscoveryFactsReader | undefined;
+  let discoverySourceRegistryDelegate: ContextDiscoverySourceRegistry | undefined;
+  const discoveryFactsReader: DiscoveryFactsReader = {
+    readCandidateSupplyFacts: (request) => discoveryFactsReaderDelegate
+      ? discoveryFactsReaderDelegate.readCandidateSupplyFacts(request)
+      : Promise.resolve(discoveryFactsUnavailable()),
+    readDailyRecommendationFacts: (request) => discoveryFactsReaderDelegate
+      ? discoveryFactsReaderDelegate.readDailyRecommendationFacts(request)
+      : Promise.resolve(discoveryFactsUnavailable()),
+    readPreferenceLearningFacts: (request) => discoveryFactsReaderDelegate
+      ? discoveryFactsReaderDelegate.readPreferenceLearningFacts(request)
+      : Promise.resolve(discoveryFactsUnavailable()),
+  };
+  const discoveryContextSources: ContextDiscoverySourceRegistry = {
+    listContextSources: (request) => discoverySourceRegistryDelegate?.listContextSources(request) ?? [],
+  };
   const context = createContext({
     sessionHistory: history,
     attachmentReader: attachments,
@@ -309,6 +333,8 @@ function composeCapabilitiesWithDatabase(
     models: modelComposition.models,
     observability: observability.observability,
     events,
+    discoveryFactsReader,
+    discoverySourceRegistry: discoveryContextSources,
   });
   const permissions = createPermissions({
     ruleReader: {
@@ -503,6 +529,15 @@ function composeCapabilitiesWithDatabase(
     },
     startExecution: (request) => executions.start(request),
   });
+  discoveryFactsReaderDelegate = createDiscoveryFactsReader({
+    repository: discoveryRepository,
+    candidateSupplyAttempts,
+    dailyRecommendationAttempts,
+  });
+  discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
+    sourceRegistry: discoverySources,
+    repository: discoveryRepository,
+  });
   const discoveryConfigurationSettings = {
     read() {
       const resolved = settings.resolve();
@@ -626,6 +661,8 @@ function composeCapabilitiesWithDatabase(
       ids: {
         createBatchId: () => `discovery-batch:${crypto.randomUUID()}`,
         createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
+        createFeedbackId: () => `feedback:${crypto.randomUUID()}`,
+        createFeedbackChangeId: () => `feedback-change:${crypto.randomUUID()}`,
       },
       onBackgroundError(error, context) {
         observability.runtimeLogger.write({
@@ -641,6 +678,32 @@ function composeCapabilitiesWithDatabase(
             operation: context.operation,
             errorMessage: error instanceof Error ? error.message : String(error),
           },
+        });
+      },
+    },
+    preferenceLearning: {
+      repository: discoveryRepository,
+      context,
+      models: modelComposition.models,
+      now: clock.now,
+      observability: observability.observability,
+      async resolveModel() {
+        const resolved = settings.resolve();
+        const selection = resolved.status === 'ok' ? resolved.settings.model_selection : undefined;
+        if (!selection) return undefined;
+        const result = await resolveModel(selection);
+        return result.status === 'ok' ? result.model : undefined;
+      },
+      ids: {
+        createBatchId: () => `preference-batch:${crypto.randomUUID()}`,
+        createModelCallId: ids.createModelCallId,
+        createDirectionId: () => `preference-direction:${crypto.randomUUID()}`,
+      },
+      onBackgroundError(error) {
+        observability.runtimeLogger.write({
+          level: 'warn', module: 'discovery', code: 'preference_learning_background_failed',
+          message: 'Preference Learning background work failed.',
+          data: { errorMessage: error instanceof Error ? error.message : String(error) },
         });
       },
     },
@@ -718,6 +781,16 @@ function discoveryCredential(
 ): string | undefined {
   const result = settings.readDiscoverySourceCredential({ source_id: sourceId });
   return result.status === 'found' ? result.credential : undefined;
+}
+
+function discoveryFactsUnavailable() {
+  return {
+    status: 'failed' as const,
+    failure: {
+      code: 'discovery_context_not_composed',
+      message: 'Discovery Context sources have not finished composition.',
+    },
+  };
 }
 
 const unavailableEmbeddedBrowser: EmbeddedBrowser = {

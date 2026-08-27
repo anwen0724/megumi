@@ -15,6 +15,7 @@ import type {
   DailyRecommendationContextMaterial,
   ExecutionEnvironment,
 } from '../context';
+import type { PreferenceLearningContextMaterial } from '../discovery-context';
 import { escapeXmlAttribute } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
@@ -30,6 +31,10 @@ export interface SystemPromptSources {
   readonly candidateSupplyMaterial?: {
     readonly startedAt: string;
     readonly material: CandidateSupplyContextMaterial;
+  };
+  readonly preferenceLearningMaterial?: {
+    readonly startedAt: string;
+    readonly material: PreferenceLearningContextMaterial;
   };
 }
 
@@ -55,6 +60,12 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
       sources.candidateSupplyMaterial.material,
     ));
   }
+  if (sources.preferenceLearningMaterial) {
+    sections.push(renderPreferenceLearningMaterial(
+      sources.preferenceLearningMaterial.startedAt,
+      sources.preferenceLearningMaterial.material,
+    ));
+  }
   const guidance = conversationDocument ? '' : renderToolGuidelines(sources.tools);
   if (guidance) sections.push(guidance);
   const effective = sources.effectiveInstructions
@@ -78,13 +89,15 @@ function renderCandidateSupplyMaterial(
   return [
     '<candidate_supply_material>',
     `  <started_at>${escapePromptText(startedAt)}</started_at>`,
+    `  <execution>${escapePromptText(JSON.stringify(material.execution))}</execution>`,
     `  <pool>${escapePromptText(JSON.stringify(material.pool))}</pool>`,
     `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <exploration_preference>${escapePromptText(JSON.stringify(material.explorationPreference))}</exploration_preference>`,
     `  <negative_constraints>${escapePromptText(JSON.stringify(material.negativeConstraints))}</negative_constraints>`,
     `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
     `  <recent_query_outcomes>${escapePromptText(JSON.stringify(material.recentQueryOutcomes))}</recent_query_outcomes>`,
-    `  <pending_candidates>${escapePromptText(JSON.stringify(material.pendingCandidates))}</pending_candidates>`,
-    `  <budget>${escapePromptText(JSON.stringify(material.budget))}</budget>`,
+    `  <pending_admission_batch>${escapePromptText(JSON.stringify(material.pendingAdmissionBatch))}</pending_admission_batch>`,
+    `  <remaining_budget>${escapePromptText(JSON.stringify(material.remainingBudget))}</remaining_budget>`,
     '</candidate_supply_material>',
   ].join('\n');
 }
@@ -96,15 +109,29 @@ function renderDailyRecommendationMaterial(
   return [
     '<daily_recommendation_material>',
     `  <local_date>${escapePromptText(localDate)}</local_date>`,
-    `  <requested_count>${material.requestedCount}</requested_count>`,
-    `  <actual_target>${material.actualTarget}</actual_target>`,
-    `  <available_count>${material.availableCount}</available_count>`,
-    `  <read_budget>${material.readBudget}</read_budget>`,
+    `  <batch>${escapePromptText(JSON.stringify(material.batch))}</batch>`,
     `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <exploration_preference>${escapePromptText(JSON.stringify(material.explorationPreference))}</exploration_preference>`,
     `  <candidates>${escapePromptText(JSON.stringify(material.candidates))}</candidates>`,
     `  <recent_recommendations>${escapePromptText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
-    `  <recent_feedback>${escapePromptText(JSON.stringify(material.recentFeedback))}</recent_feedback>`,
+    `  <pending_feedback>${escapePromptText(JSON.stringify(material.pendingFeedback))}</pending_feedback>`,
+    `  <omitted_pending_feedback_count>${material.omittedPendingFeedbackCount}</omitted_pending_feedback_count>`,
     '</daily_recommendation_material>',
+  ].join('\n');
+}
+
+function renderPreferenceLearningMaterial(
+  startedAt: string,
+  material: PreferenceLearningContextMaterial,
+): string {
+  return [
+    '<preference_learning_material>',
+    `  <started_at>${escapePromptText(startedAt)}</started_at>`,
+    `  <batch>${escapePromptText(JSON.stringify(material.batch))}</batch>`,
+    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <current_preferences>${escapePromptText(JSON.stringify(material.currentPreferences))}</current_preferences>`,
+    `  <feedback_changes>${escapePromptText(JSON.stringify(material.feedbackChanges))}</feedback_changes>`,
+    '</preference_learning_material>',
   ].join('\n');
 }
 

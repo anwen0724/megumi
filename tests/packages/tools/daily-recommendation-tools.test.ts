@@ -45,6 +45,8 @@ describe('Daily Recommendation Tools', () => {
         candidateId: candidate.candidateId, decision: 'admit', relevance: 'direct',
         matchedInterestIds: ['interest:1'], contentValue: 'substantive', novelty: 'novel',
         temporalValidity: 'valid', negativeConstraint: 'clear', reason: 'Directly useful.',
+        interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
+        preferenceRevisions: [], preferenceAlignment: [],
       }],
     });
 
@@ -56,7 +58,7 @@ describe('Daily Recommendation Tools', () => {
     });
     const attempts = createDailyRecommendationAttempts();
     attempts.start({
-      executionId: 'execution:daily', batchId: 'batch:1', window: snapshot.window,
+      executionId: 'execution:daily', batchId: 'batch:1', snapshot,
       repository, createRecommendationId: () => 'recommendation:1', now: () => now,
     });
     const tools = createTools({

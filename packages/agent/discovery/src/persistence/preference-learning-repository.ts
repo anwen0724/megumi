@@ -8,6 +8,7 @@ import {
   LearnedScopeInputSchema,
   PreferenceLearningBatchSchema,
   PreferenceSnapshotSchema,
+  RecommendationContentEvidenceSchema,
   type CommitPreferenceLearningBatchResult,
   type FeedbackReaction,
   type LearnedScopeInput,
@@ -15,6 +16,7 @@ import {
   type PreferenceLearningFacts,
   type PreferenceLearningTrigger,
   type PreferenceSnapshot,
+  type RecommendationContentEvidence,
 } from '../preferences/preference';
 
 type CommitRejectionReason = Extract<
@@ -24,7 +26,6 @@ type CommitRejectionReason = Extract<
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const StringArraySchema = z.array(z.string().min(1));
-const JsonObjectSchema = z.record(z.string(), z.unknown());
 const ClaimBatchSchema = z.object({
   batchId: z.string().min(1),
   reason: z.enum(['threshold', 'deadline', 'correction', 'retry']),
@@ -561,8 +562,8 @@ function parseStringArray(value: string): readonly string[] {
   return StringArraySchema.parse(JSON.parse(value));
 }
 
-function parseJsonObject(value: string): Readonly<Record<string, unknown>> {
-  return JsonObjectSchema.parse(JSON.parse(value));
+function parseJsonObject(value: string): RecommendationContentEvidence {
+  return RecommendationContentEvidenceSchema.parse(JSON.parse(value));
 }
 
 function sameStrings(left: readonly string[], right: readonly string[]): boolean {

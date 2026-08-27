@@ -49,6 +49,22 @@ export const CandidateSchema = z.object({
 }).strict();
 export type Candidate = z.infer<typeof CandidateSchema>;
 
+const DecisionRevisionFields = {
+  interestRevisions: z.array(z.object({
+    interestId: z.string().min(1),
+    revision: z.number().int().nonnegative(),
+  }).strict()),
+  preferenceRevisions: z.array(z.object({
+    scopeKey: z.string().min(1),
+    revision: z.number().int().nonnegative(),
+  }).strict()),
+  preferenceAlignment: z.array(z.object({
+    directionId: z.string().min(1),
+    relation: z.enum(['aligned', 'conflicted', 'neutral']),
+    reason: z.string().trim().min(1).max(1000),
+  }).strict()),
+};
+
 export const CandidateAdmissionDecisionSchema = z.discriminatedUnion('decision', [
   z.object({
     candidateId: z.string().min(1),
@@ -59,6 +75,7 @@ export const CandidateAdmissionDecisionSchema = z.discriminatedUnion('decision',
     novelty: z.literal('novel'),
     temporalValidity: z.literal('valid'),
     negativeConstraint: z.literal('clear'),
+    ...DecisionRevisionFields,
     reason: z.string().trim().min(1).max(1000),
   }).strict(),
   z.object({
@@ -75,6 +92,7 @@ export const CandidateAdmissionDecisionSchema = z.discriminatedUnion('decision',
     novelty: z.enum(['novel', 'semantic_duplicate']),
     temporalValidity: z.enum(['valid', 'stale', 'uncertain']),
     negativeConstraint: z.enum(['clear', 'conflict']),
+    ...DecisionRevisionFields,
     duplicateOfCandidateId: z.string().min(1).optional(),
     duplicateOfRecommendationId: z.string().min(1).optional(),
     reasonCode: z.enum([

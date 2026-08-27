@@ -492,6 +492,8 @@ function captureReason(reason: string, t: TFunction<'settings'>): string {
 function traceKindName(kind: string, t: TFunction<'settings'>): string {
   if (kind === 'conversation') return t('diagnostics.traceKinds.conversation');
   if (kind === 'daily_recommendation') return t('diagnostics.traceKinds.dailyRecommendation');
+  if (kind === 'candidate_supply') return t('diagnostics.traceKinds.candidateSupply');
+  if (kind === 'preference_learning') return t('diagnostics.traceKinds.preferenceLearning');
   return t('diagnostics.unknownTraceKind');
 }
 
@@ -522,6 +524,9 @@ function spanName(name: string, t: TFunction<'settings'>): string {
     case 'discovery.selection': return t('diagnostics.spanNames.discoverySelection');
     case 'discovery.attempt.settle': return t('diagnostics.spanNames.discoveryAttemptSettle');
     case 'recommendation.publish': return t('diagnostics.spanNames.recommendationPublish');
+    case 'preference.batch.claim': return t('diagnostics.spanNames.preferenceBatchClaim');
+    case 'preference.commit': return t('diagnostics.spanNames.preferenceCommit');
+    case 'preference.batch.settle': return t('diagnostics.spanNames.preferenceBatchSettle');
     default: return name;
   }
 }
@@ -604,6 +609,8 @@ function contentName(kind: string, t: TFunction<'settings'>): string {
     case 'discovery.selection': return t('diagnostics.contentNames.discoverySelection');
     case 'discovery.recommendations': return t('diagnostics.contentNames.discoveryRecommendations');
     case 'recommendation.published': return t('diagnostics.contentNames.recommendationPublished');
+    case 'preference.learning.result': return t('diagnostics.contentNames.preferenceLearningResult');
+    case 'preference.committed': return t('diagnostics.contentNames.preferenceCommitted');
     default: return kind;
   }
 }

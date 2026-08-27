@@ -13,6 +13,7 @@ export const InterestSchema = z.object({
   description: InterestDescriptionSchema,
   status: InterestStatusSchema,
   createdFrom: InterestCreatedFromSchema,
+  revision: z.number().int().nonnegative(),
   userManagedAt: TimestampSchema.optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,

@@ -3,7 +3,6 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Api, Model } from '@megumi/ai';
-import type { CandidateSupplyContextMaterial } from '@megumi/context';
 import type {
   CandidateSupplyExecutionInput,
   ExecutionOutcome,
@@ -144,24 +143,25 @@ export function createCandidateSupplyRuntime(
     }
 
     const availableBefore = snapshot.counts.available;
-    const material = buildMaterial(options, snapshot, configuredSources, now);
     activeExecution = true;
     rerunRequested = false;
     let executionId: string | undefined;
     let attemptSummary: CandidateSupplyAttemptSummary | undefined;
     let outcome: ExecutionOutcome;
     try {
-      outcome = await withTrace(options.observability, material, async () => {
+      outcome = await withTrace(options.observability, async () => {
         const started = await options.startExecution({
           kind: 'candidate_supply',
           requestId: `candidate-supply-request:${randomUUID()}`,
+          trigger,
           model: model.model,
-          material,
           accept: async ({ executionId: acceptedExecutionId }) => {
             executionId = acceptedExecutionId;
             try {
               options.attempts.start({
                 executionId: acceptedExecutionId,
+                startedAt: now,
+                trigger,
                 repository: options.repository,
                 sourceRegistry: options.sourceRegistry,
                 enabledSourceIds: configuredSources.map(({ descriptor }) => descriptor.id),
@@ -245,51 +245,6 @@ export function createCandidateSupplyRuntime(
       timer = undefined;
       await running;
     },
-  };
-}
-
-function buildMaterial(
-  options: CreateCandidateSupplyRuntimeOptions,
-  snapshot: CandidatePoolSnapshot,
-  sources: ReturnType<SourceRegistry['listSources']>,
-  now: string,
-): CandidateSupplyContextMaterial {
-  const activeInterests = options.repository.listInterests().filter((interest) => interest.status === 'active');
-  return {
-    pool: {
-      counts: snapshot.counts,
-      lowWatermark: snapshot.thresholds.lowWatermark,
-      target: snapshot.thresholds.target,
-      hardLimit: snapshot.thresholds.hardLimit,
-      totalShortfall: snapshot.gap.totalShortfall,
-      uncoveredInterestIds: snapshot.gap.uncoveredInterestIds,
-      consumerShortfalls: snapshot.gap.consumerShortfalls,
-    },
-    interests: activeInterests.map(({ interestId, description }) => ({ interestId, description })),
-    negativeConstraints: options.repository.listNegativeConstraints(),
-    sources: sources.map(({ descriptor, availability }) => ({
-      id: descriptor.id,
-      name: descriptor.name,
-      access: descriptor.access,
-      supportedModes: descriptor.supportedModes,
-      supportsRead: descriptor.supportsRead,
-      availability: availability.state,
-      ...((latestTimestamp(
-        availability.retryAt,
-        options.repository.readSourceState(descriptor.id)?.retryAt,
-      )) ? {
-          retryAt: latestTimestamp(
-            availability.retryAt,
-            options.repository.readSourceState(descriptor.id)?.retryAt,
-          ),
-        } : {}),
-    })),
-    recentQueryOutcomes: options.repository.listRecentQueryOutcomes({ now, withinDays: 30, limit: 50 }),
-    pendingCandidates: snapshot.pendingCandidates.map((candidate) => ({
-      candidate,
-      potentialDuplicates: options.repository.listPotentialDuplicates(candidate.candidateId, 10),
-    })),
-    budget: { searchesRemaining: 12, readsRemaining: 40, rawResultsRemaining: 200 },
   };
 }
 
@@ -419,7 +374,6 @@ function getSnapshot(options: CreateCandidateSupplyRuntimeOptions, now: string):
 
 async function withTrace(
   observability: Observability | undefined,
-  material: CandidateSupplyContextMaterial,
   operation: () => Promise<ExecutionOutcome>,
 ): Promise<ExecutionOutcome> {
   let promise: Promise<ExecutionOutcome> | undefined;
@@ -430,14 +384,7 @@ async function withTrace(
       kind: 'candidate_supply',
       classifyResult: classifyExecutionOutcome,
       correlation: {},
-    }, async () => {
-      try {
-        observability.recordContent({ kind: 'context.resolved', value: material });
-      } catch {
-        // Trace capture is isolated from Supply execution.
-      }
-      return runOnce();
-    });
+    }, runOnce);
   } catch {
     return runOnce();
   }
@@ -465,8 +412,4 @@ function nodeTimers() {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : 'Candidate Supply operation failed.';
-}
-
-function latestTimestamp(...values: readonly (string | undefined)[]): string | undefined {
-  return values.filter((value): value is string => Boolean(value)).sort().at(-1);
 }

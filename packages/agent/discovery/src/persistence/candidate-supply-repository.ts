@@ -335,9 +335,10 @@ function commitAdmission(
       INSERT INTO discovery_candidate_assessments (
         assessment_id, candidate_id, execution_id, assessment_version, decision,
         relevance, matched_interest_ids_json, content_value, novelty, temporal_validity,
-        negative_constraint, duplicate_of_candidate_id, duplicate_of_recommendation_id,
+        negative_constraint, interest_revisions_json, preference_revisions_json,
+        preference_alignment_json, duplicate_of_candidate_id, duplicate_of_recommendation_id,
         reason_code, reason, active, assessed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
     ` }).run([
       assessmentId, candidate.candidateId, input.executionId, input.assessmentVersion,
       decision.decision,
@@ -347,6 +348,9 @@ function commitAdmission(
       decision.decision === 'needs_detail' ? null : decision.novelty,
       decision.decision === 'needs_detail' ? null : decision.temporalValidity,
       decision.decision === 'needs_detail' ? null : decision.negativeConstraint,
+      JSON.stringify(decision.decision === 'needs_detail' ? [] : decision.interestRevisions),
+      JSON.stringify(decision.decision === 'needs_detail' ? [] : decision.preferenceRevisions),
+      JSON.stringify(decision.decision === 'needs_detail' ? [] : decision.preferenceAlignment),
       decision.decision === 'reject' ? decision.duplicateOfCandidateId ?? null : null,
       decision.decision === 'reject' ? decision.duplicateOfRecommendationId ?? null : null,
       decision.decision === 'reject' ? decision.reasonCode : null,
@@ -383,6 +387,7 @@ function validateAdmissionDecision(
   const candidate = requireCandidate(database, decision.candidateId);
   if (decision.decision === 'needs_detail') return;
   assertActiveInterests(database, decision.matchedInterestIds);
+  validateDecisionRevisions(database, decision);
   if ((decision.relevance === 'direct' || decision.relevance === 'adjacent')
     && decision.matchedInterestIds.length === 0) {
     throw new Error(`${decision.relevance} admission requires a matching active Interest.`);
@@ -402,6 +407,42 @@ function validateAdmissionDecision(
   }
   if (decision.decision === 'reject') {
     validateRejectionDimensions(database, candidate, decision);
+  }
+}
+
+function validateDecisionRevisions(
+  database: DatabaseConnection,
+  decision: Exclude<CandidateAdmissionDecision, { decision: 'needs_detail' }>,
+): void {
+  const interestIds = decision.interestRevisions.map(({ interestId }) => interestId);
+  if (new Set(interestIds).size !== interestIds.length
+    || [...interestIds].sort().join('\n') !== [...decision.matchedInterestIds].sort().join('\n')) {
+    throw new Error('Admission Interest revisions must exactly match the claimed Interest relations.');
+  }
+  for (const item of decision.interestRevisions) {
+    const row = database.prepare<RevisionRow>({
+      sql: 'SELECT revision FROM discovery_interests WHERE interest_id = ? AND status = \'active\'',
+    }).get([item.interestId]);
+    if (!row || row.revision !== item.revision) throw new Error('Admission Interest revision is stale.');
+  }
+  const scopeKeys = decision.preferenceRevisions.map(({ scopeKey }) => scopeKey);
+  if (new Set(scopeKeys).size !== scopeKeys.length) {
+    throw new Error('Admission Preference scopes must be unique.');
+  }
+  for (const item of decision.preferenceRevisions) {
+    const row = database.prepare<RevisionRow>({
+      sql: 'SELECT revision FROM discovery_preference_scopes WHERE scope_key = ?',
+    }).get([item.scopeKey]);
+    if ((row?.revision ?? 0) !== item.revision) throw new Error('Admission Preference revision is stale.');
+  }
+  for (const alignment of decision.preferenceAlignment) {
+    const direction = database.prepare<DirectionScopeRow>({ sql: `
+      SELECT d.scope_key FROM discovery_preference_directions d
+      WHERE d.direction_id = ? AND d.active = 1
+    ` }).get([alignment.directionId]);
+    if (!direction || !scopeKeys.includes(direction.scope_key)) {
+      throw new Error('Admission Preference alignment references an unavailable Direction.');
+    }
   }
 }
 
@@ -946,6 +987,8 @@ type CandidateRow = DatabaseRow & {
 };
 type StatusCountRow = DatabaseRow & { status: string; count: number };
 type InterestIdRow = DatabaseRow & { interest_id: string };
+type RevisionRow = DatabaseRow & { revision: number };
+type DirectionScopeRow = DatabaseRow & { scope_key: string };
 type ExpiryRow = DatabaseRow & { candidate_id: string; expires_at: string };
 type PotentialRecommendationRow = DatabaseRow & {
   recommendation_id: string; title: string; description: string | null;

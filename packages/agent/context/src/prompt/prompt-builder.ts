@@ -12,6 +12,7 @@ import type { ResolvedContext } from '../context-resolver';
 import type { ConversationResolvedContext } from '../resolvers/conversation-context-resolver';
 import type { DailyRecommendationResolvedContext } from '../resolvers/daily-recommendation-context-resolver';
 import type { CandidateSupplyResolvedContext } from '../resolvers/candidate-supply-context-resolver';
+import type { PreferenceLearningResolvedContext } from '../resolvers/preference-learning-context-resolver';
 import { buildContextMessages, type MaterializedHistory } from './context-message-builder';
 import { buildSystemPrompt } from './system-prompt-builder';
 
@@ -36,6 +37,11 @@ export type BuildPromptResult =
       readonly kind: 'candidate_supply';
       readonly prompt: Prompt;
     }
+  | {
+      readonly status: 'built';
+      readonly kind: 'preference_learning';
+      readonly prompt: Prompt;
+    }
   | { readonly status: 'failed'; readonly failure: ContextFailure };
 
 export interface PromptBuilder {
@@ -51,9 +57,33 @@ export function createPromptBuilder(dependencies: PromptBuilderDependencies): Pr
       if (request.context.kind === 'conversation') {
         return buildConversationPrompt(request.context, dependencies, request.signal);
       }
-      return request.context.kind === 'daily_recommendation'
-        ? buildDailyRecommendationPrompt(request.context)
-        : buildCandidateSupplyPrompt(request.context);
+      if (request.context.kind === 'daily_recommendation') {
+        return buildDailyRecommendationPrompt(request.context);
+      }
+      return request.context.kind === 'candidate_supply'
+        ? buildCandidateSupplyPrompt(request.context)
+        : buildPreferenceLearningPrompt(request.context);
+    },
+  };
+}
+
+function buildPreferenceLearningPrompt(
+  context: PreferenceLearningResolvedContext,
+): BuildPromptResult {
+  return {
+    status: 'built',
+    kind: 'preference_learning',
+    prompt: {
+      systemPrompt: buildSystemPrompt({
+        systemInstructions: context.systemInstructions,
+        preferenceLearningMaterial: {
+          startedAt: context.startedAt,
+          material: context.material,
+        },
+        tools: [],
+      }),
+      messages: [...context.currentMessages],
+      tools: [],
     },
   };
 }

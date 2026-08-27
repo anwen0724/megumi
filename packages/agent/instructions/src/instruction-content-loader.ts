@@ -10,6 +10,7 @@ const PROFILE_FILES: Record<InstructionProfile, string> = {
   conversation: 'conversation.md',
   daily_recommendation: 'daily-recommendation.md',
   candidate_supply: 'candidate-supply.md',
+  preference_learning: 'preference-learning.md',
 };
 
 export interface LoadSystemInstructionDocumentsRequest {

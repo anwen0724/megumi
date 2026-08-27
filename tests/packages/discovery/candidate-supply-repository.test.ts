@@ -95,6 +95,7 @@ describe('CandidateSupplyRepository', () => {
         novelty: 'novel',
         temporalValidity: 'valid',
         negativeConstraint: 'clear',
+        interestRevisions: [], preferenceRevisions: [], preferenceAlignment: [],
         reason: 'Useful.',
       }],
     })).toThrow('requires a matching active Interest');
@@ -113,6 +114,7 @@ describe('CandidateSupplyRepository', () => {
         candidateId: candidate.candidateId, decision: 'reject', relevance: 'none', matchedInterestIds: [],
         contentValue: 'substantive', novelty: 'semantic_duplicate', temporalValidity: 'valid',
         negativeConstraint: 'clear', reasonCode: 'semantic_duplicate',
+        interestRevisions: [], preferenceRevisions: [], preferenceAlignment: [],
         duplicateOfCandidateId: hidden.candidateId, reason: 'Duplicate.',
       }],
     })).toThrow('provided potential duplicate set');
@@ -129,6 +131,8 @@ describe('CandidateSupplyRepository', () => {
         matchedInterestIds: [repository.listInterests()[0]!.interestId],
         contentValue: 'substantive', novelty: 'novel', temporalValidity: 'valid',
         negativeConstraint: 'clear', reasonCode: 'stale', reason: 'Contradictory.',
+        interestRevisions: [{ interestId: repository.listInterests()[0]!.interestId, revision: 1 }],
+        preferenceRevisions: [], preferenceAlignment: [],
       }],
     })).toThrow('does not match its assessment dimensions');
     expect(repository.readCandidate(candidateId)?.status).toBe('pending_admission');
@@ -175,6 +179,7 @@ describe('CandidateSupplyRepository', () => {
           candidateId: candidate.candidateId, decision: 'admit', relevance: 'exploration',
           matchedInterestIds: [], contentValue: 'substantive', novelty: 'novel',
           temporalValidity: 'valid', negativeConstraint: 'clear', reason: 'Useful exploration.',
+          interestRevisions: [], preferenceRevisions: [], preferenceAlignment: [],
         }],
       });
     }
@@ -271,6 +276,9 @@ function admit(candidateId: string, interestId: string): CandidateAdmissionDecis
     novelty: 'novel',
     temporalValidity: 'valid',
     negativeConstraint: 'clear',
+    interestRevisions: [{ interestId, revision: 1 }],
+    preferenceRevisions: [{ scopeKey: `interest:${interestId}`, revision: 0 }],
+    preferenceAlignment: [],
     reason: 'Directly useful to the active Interest.',
   };
 }

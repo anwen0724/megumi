@@ -32,8 +32,14 @@ import type {
   ConversationRunContext,
   CandidateSupplyRunContext,
   DailyRecommendationRunContext,
+  PreferenceLearningRunContext,
   Prompt,
 } from './context';
+import type {
+  ContextDiscoverySourceRegistry,
+  DiscoveryFactsReader,
+  ReadDiscoveryFactsResult,
+} from './discovery-context';
 import {
   buildCancelledContextFailure,
   buildFailedContextResult,
@@ -78,6 +84,9 @@ export interface CreateContextOptions {
   readonly ids?: { compactionId(): string };
   /** Optional bus: compaction lifecycle facts are published here. */
   readonly events?: EventBus;
+  /** Discovery read seam: Context, not Runtime, owns the model-visible projection. */
+  readonly discoveryFactsReader?: DiscoveryFactsReader;
+  readonly discoverySourceRegistry?: ContextDiscoverySourceRegistry;
 }
 
 export type ContextCapabilities = ContextBuilder & ContextCompactor;
@@ -103,6 +112,8 @@ class DefaultContext implements ContextCapabilities {
       workspaceSource: options.workspaceSource,
       instructionReader: options.instructionReader,
       skills: options.skills,
+      factsReader: options.discoveryFactsReader ?? unavailableDiscoveryFactsReader(),
+      sourceRegistry: options.discoverySourceRegistry ?? { listContextSources: () => [] },
     });
     this.promptBuilder = createPromptBuilder({ attachmentReader: options.attachmentReader });
   }
@@ -110,9 +121,12 @@ class DefaultContext implements ContextCapabilities {
   async build(request: BuildContextRequest): Promise<BuildContextResult> {
     const run = request.modelCallContext.run;
     const correlation: TraceCorrelation = {
-      executionId: run.executionId,
+      ...('executionId' in run ? { executionId: run.executionId } : {}),
       modelCallId: request.modelCallContext.modelCallId,
       ...(run.kind === 'conversation' ? { sessionId: run.sessionId } : {}),
+      ...(run.kind === 'daily_recommendation' || run.kind === 'preference_learning'
+        ? { batchId: run.batchId }
+        : {}),
     };
     const operation = async (): Promise<BuildContextResult> => {
       let result: BuildContextResult;
@@ -124,7 +138,9 @@ class DefaultContext implements ContextCapabilities {
             )
           : run.kind === 'daily_recommendation'
             ? await this.buildDailyRecommendation(request, run)
-            : await this.buildCandidateSupply(request, run);
+            : run.kind === 'candidate_supply'
+              ? await this.buildCandidateSupply(request, run)
+              : await this.buildPreferenceLearning(request, run);
       } catch (error) {
         result = buildFailedContextResult(buildUnexpectedContextFailure({
           code: 'context_build_failed',
@@ -257,8 +273,9 @@ class DefaultContext implements ContextCapabilities {
       name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
     }, () => this.resolver.resolve({
       kind: 'daily_recommendation',
+      executionId: run.executionId,
+      batchId: run.batchId,
       localDate: run.localDate,
-      material: run.material,
       currentMessages: request.currentMessages,
       tools: request.modelCallContext.tools,
       signal: request.signal,
@@ -290,8 +307,9 @@ class DefaultContext implements ContextCapabilities {
       name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
     }, () => this.resolver.resolve({
       kind: 'candidate_supply',
+      executionId: run.executionId,
       startedAt: run.startedAt,
-      material: run.material,
+      trigger: run.trigger,
       currentMessages: request.currentMessages,
       tools: request.modelCallContext.tools,
       signal: request.signal,
@@ -306,6 +324,41 @@ class DefaultContext implements ContextCapabilities {
     if (built.status === 'failed') return built;
     const capacity = contextCapacityFromModel(run.model);
     return this.finalizePrompt(built.prompt, capacity, this.countUsage(built.prompt));
+  }
+
+  private async buildPreferenceLearning(
+    request: BuildContextRequest,
+    run: PreferenceLearningRunContext,
+  ): Promise<BuildContextResult> {
+    if (request.signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+    }
+    const correlation = {
+      batchId: run.batchId,
+      modelCallId: request.modelCallContext.modelCallId,
+    };
+    const resolved = await observeSpan(this.options.observability, {
+      name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
+    }, () => this.resolver.resolve({
+      kind: 'preference_learning',
+      batchId: run.batchId,
+      startedAt: run.startedAt,
+      currentMessages: request.currentMessages,
+      signal: request.signal,
+    }));
+    if (resolved.status === 'failed') return resolved;
+    recordContent(this.options.observability, {
+      kind: 'context.resolved', value: resolved.context, correlation,
+    });
+    const built = await observeSpan(this.options.observability, {
+      name: 'prompt.build', correlation, classifyResult: classifyFallibleResult,
+    }, () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }));
+    if (built.status === 'failed') return built;
+    return this.finalizePrompt(
+      built.prompt,
+      contextCapacityFromModel(run.model),
+      this.countUsage(built.prompt),
+    );
   }
 
   /**
@@ -539,4 +592,19 @@ function recordContent(
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function unavailableDiscoveryFactsReader(): DiscoveryFactsReader {
+  const unavailable = <T>(): Promise<ReadDiscoveryFactsResult<T>> => Promise.resolve({
+    status: 'failed',
+    failure: {
+      code: 'discovery_context_not_configured',
+      message: 'Discovery Context sources are not configured.',
+    },
+  });
+  return {
+    readCandidateSupplyFacts: unavailable,
+    readDailyRecommendationFacts: unavailable,
+    readPreferenceLearningFacts: unavailable,
+  };
 }

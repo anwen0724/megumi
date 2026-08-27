@@ -21,7 +21,7 @@ export function buildSourceContextFailure(input: {
   readonly code: ContextFailureCode;
   readonly message: string;
   readonly retryable: boolean;
-  readonly owner: 'session' | 'workspace' | 'instructions' | 'skills' | 'tools' | 'ai';
+  readonly owner: 'session' | 'workspace' | 'instructions' | 'skills' | 'tools' | 'ai' | 'discovery';
   readonly sourceCode?: string;
 }): ContextFailure {
   return {

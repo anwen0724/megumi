@@ -45,6 +45,10 @@ import {
 } from './interests/interest-runtime';
 import type { UpdateRecommendationStateRequest } from './recommendations/recommendation';
 import type { SourceRegistry } from './sources/source-registry';
+import {
+  createPreferenceLearningRuntime,
+  type CreatePreferenceLearningRuntimeOptions,
+} from './preferences/preference-learning-runtime';
 
 export interface Discovery {
   /** Applies one explicit user Interest change. */
@@ -83,23 +87,42 @@ export interface CreateDiscoveryOptions {
   readonly interests?: CreateInterestRuntimeOptions;
   readonly dailyRecommendation?: Omit<CreateDailyRecommendationRuntimeOptions, 'notifyCandidateSupply'>;
   readonly candidateSupply?: CreateCandidateSupplyRuntimeOptions;
+  readonly preferenceLearning?: CreatePreferenceLearningRuntimeOptions;
   readonly configuration?: {
     readonly sourceRegistry: SourceRegistry;
     readonly settings: DiscoveryConfigurationStore;
   };
   readonly onBackgroundError?: (
     error: unknown,
-    context: { readonly operation: 'source_refresh' | 'candidate_supply_start' | 'daily_recommendation_start' },
+    context: {
+      readonly operation: 'source_refresh' | 'candidate_supply_start'
+        | 'preference_learning_start' | 'daily_recommendation_start';
+    },
   ) => void;
 }
 
 /** Composes Megumi's Discovery business operations from its optional capabilities. */
 export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
   let candidateSupplyRuntime: ReturnType<typeof createCandidateSupplyRuntime> | undefined;
+  const preferenceLearningRuntime = options.preferenceLearning
+    ? createPreferenceLearningRuntime({
+        ...options.preferenceLearning,
+        onPreferencesCommitted: (interestIds) => {
+          options.preferenceLearning?.onPreferencesCommitted?.(interestIds);
+          if (!options.candidateSupply || interestIds.length === 0) return;
+          options.candidateSupply.repository.invalidateAdmissions({
+            interestIds,
+            now: options.candidateSupply.now(),
+          });
+          candidateSupplyRuntime?.notify('candidate_state_changed');
+        },
+      })
+    : undefined;
   const dailyRecommendationRuntime = options.dailyRecommendation
     ? createDailyRecommendationRuntime({
         ...options.dailyRecommendation,
         notifyCandidateSupply: () => candidateSupplyRuntime?.notify('consumer_shortfall'),
+        notifyPreferenceLearning: () => preferenceLearningRuntime?.notifyFeedbackChanged(),
       })
     : undefined;
   candidateSupplyRuntime = options.candidateSupply
@@ -148,6 +171,9 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       });
       await runBackgroundStartStep(options, failures, 'candidate_supply_start', async () => {
         await candidateSupplyRuntime?.start();
+      });
+      await runBackgroundStartStep(options, failures, 'preference_learning_start', async () => {
+        await preferenceLearningRuntime?.start();
       });
       await runBackgroundStartStep(options, failures, 'daily_recommendation_start', async () => {
         await dailyRecommendationRuntime?.start();
@@ -208,6 +234,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         interestRuntime.shutdown(),
         dailyRecommendationRuntime?.shutdown() ?? Promise.resolve(),
         candidateSupplyRuntime?.shutdown() ?? Promise.resolve(),
+        preferenceLearningRuntime?.shutdown() ?? Promise.resolve(),
       ]);
     },
   };
@@ -217,7 +244,8 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
 async function runBackgroundStartStep(
   options: CreateDiscoveryOptions,
   failures: unknown[],
-  operation: 'source_refresh' | 'candidate_supply_start' | 'daily_recommendation_start',
+  operation: 'source_refresh' | 'candidate_supply_start'
+    | 'preference_learning_start' | 'daily_recommendation_start',
   start: () => Promise<void>,
 ): Promise<void> {
   try {

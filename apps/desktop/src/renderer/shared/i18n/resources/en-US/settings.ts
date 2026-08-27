@@ -284,8 +284,12 @@ export const settings = {
       automaticAllow: 'Automatically allowed', automaticDeny: 'Automatically denied', userAllow: 'User allowed',
       userDeny: 'User denied', cancelled: 'Cancelled',
     },
-    traceKinds: { conversation: 'Conversation', dailyRecommendation: 'Daily recommendation', candidateSupply: 'Candidate supply' },
+    traceKinds: {
+      conversation: 'Conversation', dailyRecommendation: 'Daily recommendation', candidateSupply: 'Candidate supply',
+      preferenceLearning: 'Preference learning',
+    },
     candidateSupplyRun: 'Replenish Candidate Pool',
+    preferenceLearningRun: 'Learn from recommendation feedback',
     spanCount: '{{count}} spans', eventCount: '{{count}} events', contentCount: '{{count}} content checkpoints',
     status: { ok: 'Completed', error: 'Failed', cancelled: 'Cancelled', incomplete: 'Did not finish normally' },
     executionStatus: { ok: 'Execution completed', error: 'Execution failed', cancelled: 'Execution cancelled', incomplete: 'Execution did not finish normally' },
@@ -298,6 +302,8 @@ export const settings = {
       sourceAvailabilityCheck: 'Check source availability', discoveryBatchClaim: 'Claim discovery batch', discoveryAttempt: 'Run discovery attempt',
       sourceSearch: 'Search source', sourceRead: 'Read source', discoverySelection: 'Select discoveries',
       discoveryAttemptSettle: 'Settle discovery attempt', recommendationPublish: 'Publish recommendations',
+      preferenceBatchClaim: 'Claim preference learning batch', preferenceCommit: 'Commit Preference update',
+      preferenceBatchSettle: 'Settle preference learning batch',
     },
     contentNames: {
       inputReceived: 'Original user input', inputProcessed: 'Processed model input', sessionMessageCommitted: 'Committed message',
@@ -308,6 +314,7 @@ export const settings = {
       sourceRequest: 'Source request', sourceProviderResponse: 'Raw source response', sourceResult: 'Normalized source result',
       discoveryMaterial: 'Discovery material', discoveryCandidates: 'Discovery candidates', discoverySelection: 'Selection result',
       discoveryRecommendations: 'Built recommendations', recommendationPublished: 'Published recommendation',
+      preferenceLearningResult: 'Structured Preference result', preferenceCommitted: 'Committed Preference update',
     },
     issueCodes: {
       missingTraceStart: 'Trace start is missing', missingTraceEnd: 'Trace end is missing', missingSpanStart: 'Span start is missing',

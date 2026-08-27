@@ -2,9 +2,7 @@
 import type { Agent } from '@megumi/agent-core';
 import type { Api, Model } from '@megumi/ai';
 import type {
-  CandidateSupplyContextMaterial,
   CandidateSupplyRunContext,
-  DailyRecommendationContextMaterial,
   DailyRecommendationRunContext,
 } from '@megumi/context';
 import type { EventBus, EventPayloadByType, EventType } from '@megumi/events';
@@ -84,7 +82,6 @@ export interface DailyRecommendationExecutionInput<TRejected = unknown> {
   readonly requestId: string;
   readonly batchId: string;
   readonly localDate: string;
-  readonly material: DailyRecommendationContextMaterial;
   readonly model: Model<Api>;
   accept(request: { readonly executionId: string }): Promise<
     | { readonly status: 'accepted' }
@@ -99,7 +96,7 @@ export interface DailyRecommendationExecutionInput<TRejected = unknown> {
 export interface CandidateSupplyExecutionInput<TRejected = unknown> {
   readonly kind: 'candidate_supply';
   readonly requestId: string;
-  readonly material: CandidateSupplyContextMaterial;
+  readonly trigger: string;
   readonly model: Model<Api>;
   accept(request: { readonly executionId: string }): Promise<
     | { readonly status: 'accepted' }
@@ -397,7 +394,7 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
         metadata,
         runContext: {
           kind: 'daily_recommendation', executionId, batchId: request.batchId,
-          localDate: request.localDate, material: request.material, model: request.model,
+          localDate: request.localDate, model: request.model,
         },
       });
     } catch (error) {
@@ -428,8 +425,8 @@ export function createAgentExecutions(options: CreateAgentExecutionsOptions): Ag
       launched = await options.launch({
         kind: 'candidate_supply', metadata,
         runContext: {
-          kind: 'candidate_supply', executionId, startedAt: createdAt,
-          material: request.material, model: request.model,
+          kind: 'candidate_supply', executionId, requestId: request.requestId,
+          startedAt: createdAt, trigger: request.trigger, model: request.model,
         },
       });
     } catch (error) {
