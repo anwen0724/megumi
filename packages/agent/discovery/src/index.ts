@@ -214,6 +214,36 @@ export type {
   ReadHomeQuery,
   RecommendationStateCommand,
 } from './persistence/recommendation-repository';
+export {
+  FeedbackReactionSchema,
+  LearnedDirectionInputSchema,
+  LearnedScopeInputSchema,
+  PreferenceDimensionSchema,
+  PreferenceDirectionSchema,
+  PreferenceLearningBatchSchema,
+  PreferencePolaritySchema,
+  PreferenceScopeSchema,
+  PreferenceSnapshotSchema,
+} from './preferences/preference';
+export type {
+  CommitPreferenceLearningBatchResult,
+  FeedbackReaction,
+  LearnedScopeInput,
+  PreferenceDirection,
+  PreferenceLearningAffectedScope,
+  PreferenceLearningBatch,
+  PreferenceLearningFacts,
+  PreferenceLearningFeedbackChange,
+  PreferenceLearningTrigger,
+  PreferenceSnapshot,
+} from './preferences/preference';
+export {
+  createPreferenceLearningRepository,
+} from './persistence/preference-learning-repository';
+export type {
+  PreferenceLearningRepository,
+  RecordRecommendationFeedbackInput,
+} from './persistence/preference-learning-repository';
 export type {
   DiscoveryDayView,
   DiscoveryHomeMode,

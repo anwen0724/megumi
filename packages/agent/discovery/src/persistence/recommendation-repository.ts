@@ -22,6 +22,7 @@ import {
   type RecommendationReferenceContent,
   type UpdateRecommendationStateRequest,
 } from '../recommendations/recommendation';
+import { recordRecommendationFeedbackChange } from './preference-learning-repository';
 
 export interface RecommendationSelectionSignal {
   readonly contentIdentity: string;
@@ -65,7 +66,15 @@ export interface ReadHomeQuery {
   readonly nextScheduledAt?: string;
 }
 
-export type RecommendationStateCommand = UpdateRecommendationStateRequest & { readonly now: string };
+type ReactionRequest = Extract<UpdateRecommendationStateRequest, { readonly action: 'set_reaction' }>;
+type OrganizationRequest = Exclude<UpdateRecommendationStateRequest, ReactionRequest>;
+export type RecommendationStateCommand =
+  | (OrganizationRequest & { readonly now: string })
+  | (ReactionRequest & {
+      readonly now: string;
+      readonly feedbackId: string;
+      readonly feedbackChangeId: string;
+    });
 
 /** Creates the Recommendation persistence operations and transaction-scoped writer. */
 export function createRecommendationRepository(database: DatabaseConnection): RecommendationRepository {
@@ -214,8 +223,7 @@ function updateRecommendationState(
   database: DatabaseConnection,
   input: RecommendationStateCommand,
 ): RecommendationView {
-  const { now: _now, ...requestValue } = input;
-  const request = UpdateRecommendationStateRequestSchema.parse(requestValue);
+  const request = UpdateRecommendationStateRequestSchema.parse(publicRecommendationRequest(input));
   const now = parseTimestamp(input.now);
   switch (request.action) {
     case 'opened':
@@ -226,9 +234,16 @@ function updateRecommendationState(
       ` }).run([now, now, now, request.recommendationId]);
       break;
     case 'set_reaction':
-      database.prepare({ sql: `
-        UPDATE discovery_recommendations SET reaction = ?, state_updated_at = ? WHERE recommendation_id = ?
-      ` }).run([request.reaction, now, request.recommendationId]);
+      if (input.action !== 'set_reaction') {
+        throw new Error('Recommendation reaction command did not match its validated request.');
+      }
+      recordRecommendationFeedbackChange(database, {
+        recommendationId: request.recommendationId,
+        reaction: request.reaction,
+        feedbackId: input.feedbackId,
+        feedbackChangeId: input.feedbackChangeId,
+        now,
+      });
       break;
     case 'set_hidden':
       database.prepare({ sql: `
@@ -251,6 +266,35 @@ function updateRecommendationState(
   const row = readRecommendation(database, request.recommendationId);
   if (!row) throw new Error(`Recommendation not found: ${request.recommendationId}.`);
   return recommendationViewFromRow(row);
+}
+
+function publicRecommendationRequest(
+  input: RecommendationStateCommand,
+): UpdateRecommendationStateRequest {
+  switch (input.action) {
+    case 'opened': return { recommendationId: input.recommendationId, action: input.action };
+    case 'set_reaction': return {
+      recommendationId: input.recommendationId,
+      action: input.action,
+      reaction: input.reaction,
+    };
+    case 'set_hidden': return {
+      recommendationId: input.recommendationId,
+      action: input.action,
+      hidden: input.hidden,
+    };
+    case 'set_favorite': return {
+      recommendationId: input.recommendationId,
+      action: input.action,
+      favorite: input.favorite,
+    };
+    case 'set_watch_later': return {
+      recommendationId: input.recommendationId,
+      action: input.action,
+      watchLater: input.watchLater,
+    };
+    default: return assertNever(input);
+  }
 }
 
 function assertNever(value: never): never {

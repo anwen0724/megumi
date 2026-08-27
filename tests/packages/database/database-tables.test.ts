@@ -56,6 +56,11 @@ describe('Database table ownership', () => {
         'discovery_candidate_interests',
         'discovery_candidate_supply_state',
         'discovery_candidate_source_state',
+        'discovery_feedback_changes',
+        'discovery_preference_learning_batches',
+        'discovery_preference_scopes',
+        'discovery_preference_directions',
+        'discovery_preference_direction_feedback',
       ],
     });
   });

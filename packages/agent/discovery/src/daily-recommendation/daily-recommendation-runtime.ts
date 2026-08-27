@@ -57,6 +57,8 @@ export interface CreateDailyRecommendationRuntimeOptions {
   readonly ids: {
     createBatchId(): string;
     createRecommendationId(): string;
+    createFeedbackId?(): string;
+    createFeedbackChangeId?(): string;
   };
   readonly now: () => string;
   readonly notifyCandidateSupply: (shortfall: number) => void;
@@ -173,10 +175,18 @@ export function createDailyRecommendationRuntime(
       };
     },
     searchRecommendations: (request) => options.repository.searchRecommendations(request),
-    updateRecommendationState: (request) => options.repository.updateRecommendationState({
-      ...request,
-      now: options.now(),
-    }),
+    updateRecommendationState(request) {
+      const now = options.now();
+      return request.action === 'set_reaction'
+        ? options.repository.updateRecommendationState({
+            ...request,
+            now,
+            feedbackId: options.ids.createFeedbackId?.() ?? `feedback:${randomUUID()}`,
+            feedbackChangeId: options.ids.createFeedbackChangeId?.()
+              ?? `feedback-change:${randomUUID()}`,
+          })
+        : options.repository.updateRecommendationState({ ...request, now });
+    },
     getNextScheduledAt: () => scheduler.getNextScheduledAt(),
     async shutdown() {
       accepting = false;
