@@ -1,0 +1,76 @@
+/*
+ * Defines Daily Recommendation's durable Batch, Candidate-window, and publication contracts.
+ */
+import { z } from 'zod';
+import { CandidateSchema } from '../candidate-supply/candidate-supply';
+import type { Recommendation } from '../recommendations/recommendation';
+
+const TimestampSchema = z.string().datetime({ offset: true });
+export const LocalDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u);
+export const DailyRecommendationBatchStatusSchema = z.enum(['running', 'published', 'failed']);
+
+export const DailyRecommendationCandidateSchema = CandidateSchema.extend({
+  admission: z.object({
+    relevance: z.enum(['direct', 'adjacent', 'exploration']),
+    matchedInterestIds: z.array(z.string().min(1)),
+    reason: z.string().trim().min(1).max(1000),
+  }).strict(),
+}).strict();
+
+const DailyRecommendationBatchBaseShape = {
+  batchId: z.string().min(1),
+  localDate: LocalDateSchema,
+  timezone: z.string().trim().min(1),
+  executionId: z.string().min(1),
+  requestedCount: z.number().int().min(1).max(100),
+  actualTarget: z.number().int().min(1).max(100),
+  attemptCount: z.number().int().min(1),
+  automaticRetryCount: z.number().int().min(0).max(2),
+  createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
+  startedAt: TimestampSchema,
+};
+
+export const DailyRecommendationBatchSchema = z.discriminatedUnion('status', [
+  z.object({
+    ...DailyRecommendationBatchBaseShape,
+    status: z.literal('running'),
+    resultCount: z.literal(0),
+  }).strict(),
+  z.object({
+    ...DailyRecommendationBatchBaseShape,
+    status: z.literal('published'),
+    resultCount: z.number().int().positive(),
+    publishedAt: TimestampSchema,
+  }).strict(),
+  z.object({
+    ...DailyRecommendationBatchBaseShape,
+    status: z.literal('failed'),
+    resultCount: z.literal(0),
+    failureCode: z.string().min(1),
+    failureMessage: z.string(),
+  }).strict(),
+]);
+
+export interface DailyCandidateWindow {
+  readonly requestedCount: number;
+  readonly actualTarget: number;
+  readonly availableCount: number;
+  readonly windowLimit: number;
+  readonly candidates: readonly DailyRecommendationCandidate[];
+}
+
+export interface DailyRecommendationInterest {
+  readonly interestId: string;
+  readonly description: string;
+}
+
+export interface DailyRecommendationSnapshot {
+  readonly window: DailyCandidateWindow;
+  readonly activeInterests: readonly DailyRecommendationInterest[];
+  readonly recentRecommendations: readonly Recommendation[];
+  readonly recentFeedback: readonly Recommendation[];
+}
+
+export type DailyRecommendationCandidate = z.infer<typeof DailyRecommendationCandidateSchema>;
+export type DailyRecommendationBatch = z.infer<typeof DailyRecommendationBatchSchema>;

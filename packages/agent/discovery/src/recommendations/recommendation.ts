@@ -20,6 +20,7 @@ const HttpUrlSchema = z.string().url().refine((value) => {
 export const RecommendationSchema = z.object({
   recommendationId: z.string().min(1),
   batchId: z.string().min(1),
+  candidateId: z.string().min(1).optional(),
   contentIdentity: z.string().min(1),
   position: z.number().int().nonnegative(),
   sourceId: DiscoverySourceIdSchema,

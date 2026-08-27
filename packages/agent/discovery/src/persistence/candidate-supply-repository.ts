@@ -32,7 +32,7 @@ import {
 import {
   canonicalContentIdentity,
   sourceContentIdentity,
-} from '../daily-discovery/content-identity';
+} from '../candidate-supply/content-identity';
 import type { SourceContent } from '../sources/discovery-source';
 
 const ACTIVE_STATUSES: readonly CandidateStatus[] = [

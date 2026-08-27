@@ -198,6 +198,7 @@ export const discoveryBatches = sqliteTable('discovery_batches', {
   timezone: text('timezone').notNull(),
   status: text('status').notNull(),
   executionId: text('execution_id').notNull(),
+  requestedCount: integer('requested_count').notNull(),
   targetCount: integer('target_count').notNull(),
   attemptCount: integer('attempt_count').notNull().default(1),
   automaticRetryCount: integer('automatic_retry_count').notNull().default(0),
@@ -211,6 +212,7 @@ export const discoveryBatches = sqliteTable('discovery_batches', {
 }, (table) => [
   uniqueIndex('idx_discovery_batches_local_date').on(table.localDate),
   check('check_discovery_batches_status', sql`${table.status} IN ('running', 'published', 'failed')`),
+  check('check_discovery_batches_requested_count', sql`${table.requestedCount} BETWEEN 1 AND 100`),
   check('check_discovery_batches_target_count', sql`${table.targetCount} BETWEEN 1 AND 100`),
   check('check_discovery_batches_attempt_count', sql`${table.attemptCount} >= 1`),
   check('check_discovery_batches_automatic_retry_count', sql`${table.automaticRetryCount} BETWEEN 0 AND 2`),
@@ -222,6 +224,7 @@ export const discoveryBatches = sqliteTable('discovery_batches', {
 export const discoveryRecommendations = sqliteTable('discovery_recommendations', {
   recommendationId: text('recommendation_id').primaryKey(),
   batchId: text('batch_id').notNull().references(() => discoveryBatches.batchId, { onDelete: 'cascade' }),
+  candidateId: text('candidate_id').references(() => discoveryCandidates.candidateId),
   contentIdentity: text('content_identity').notNull(),
   position: integer('position').notNull(),
   sourceId: text('source_id').notNull(),
@@ -245,6 +248,7 @@ export const discoveryRecommendations = sqliteTable('discovery_recommendations',
   stateUpdatedAt: text('state_updated_at'),
 }, (table) => [
   uniqueIndex('idx_discovery_recommendations_content_identity').on(table.contentIdentity),
+  uniqueIndex('idx_discovery_recommendations_candidate').on(table.candidateId).where(sql`${table.candidateId} IS NOT NULL`),
   uniqueIndex('idx_discovery_recommendations_batch_position').on(table.batchId, table.position),
   check('check_discovery_recommendations_position', sql`${table.position} >= 0`),
   check('check_discovery_recommendations_source_id', sql`length(trim(${table.sourceId})) > 0`),

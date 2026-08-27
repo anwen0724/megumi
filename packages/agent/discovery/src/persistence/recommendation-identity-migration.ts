@@ -2,7 +2,7 @@
  * Owns the one-way migration from legacy Recommendation identities to canonical identities.
  */
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
-import { canonicalContentIdentity } from '../daily-discovery/content-identity';
+import { canonicalContentIdentity } from '../candidate-supply/content-identity';
 
 export interface RecommendationIdentityMigrationResult {
   readonly migrated: number;

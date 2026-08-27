@@ -7,7 +7,7 @@ import {
   type SourceContent,
   type SourceContentDetail,
 } from '../sources/discovery-source';
-import { canonicalContentIdentity, sourceContentIdentity } from './content-identity';
+import { canonicalContentIdentity, sourceContentIdentity } from '../candidate-supply/content-identity';
 
 export type DiscoveryCandidate = SourceContent & {
   readonly candidateId: string;

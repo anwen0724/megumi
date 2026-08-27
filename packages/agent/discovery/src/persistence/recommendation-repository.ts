@@ -315,15 +315,16 @@ function readRecommendationReference(
 function insertRecommendation(database: DatabaseConnection, item: Recommendation): void {
   database.prepare({ sql: `
     INSERT INTO discovery_recommendations (
-      recommendation_id, batch_id, content_identity, position,
+      recommendation_id, batch_id, candidate_id, content_identity, position,
       source_id, source_name, canonical_url, title, content_type,
       source_content_id, author, content_published_at, description, cover_url,
       recommendation_reason, reaction, hidden_at, favorite_at, watch_later_at,
       first_opened_at, last_opened_at, published_at, state_updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ` }).run([
     item.recommendationId,
     item.batchId,
+    item.candidateId ?? null,
     item.contentIdentity,
     item.position,
     item.sourceId,
@@ -434,7 +435,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 type RecommendationRow = DatabaseRow & {
-  recommendation_id: string; batch_id: string; local_date: string; content_identity: string;
+  recommendation_id: string; batch_id: string; candidate_id: string | null; local_date: string; content_identity: string;
   position: number; source_id: string; source_name: string; canonical_url: string;
   content_type: string; source_content_id: string | null; title: string; author: string | null;
   content_published_at: string | null; description: string | null; cover_url: string | null;

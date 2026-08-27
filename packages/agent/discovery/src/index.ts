@@ -74,7 +74,29 @@ export type {
   DailyDiscoveryAttemptState,
   SourceAttemptBudget,
 } from './daily-discovery/daily-discovery-attempt';
-export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './daily-discovery/content-identity';
+export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './candidate-supply/content-identity';
+export { buildDailyCandidateWindow } from './daily-recommendation/candidate-window';
+export type { BuildDailyCandidateWindowInput } from './daily-recommendation/candidate-window';
+export {
+  DailyRecommendationBatchSchema,
+  DailyRecommendationBatchStatusSchema,
+  DailyRecommendationCandidateSchema,
+} from './daily-recommendation/daily-recommendation';
+export type {
+  DailyCandidateWindow,
+  DailyRecommendationBatch,
+  DailyRecommendationCandidate,
+  DailyRecommendationInterest,
+  DailyRecommendationSnapshot,
+} from './daily-recommendation/daily-recommendation';
+export { createDailyRecommendationRepository } from './persistence/daily-recommendation-repository';
+export type {
+  ClaimDailyRecommendationBatch,
+  ClaimDailyRecommendationBatchResult,
+  DailyRecommendationRepository,
+  PublishDailyRecommendations,
+  PublishDailyRecommendationsResult,
+} from './persistence/daily-recommendation-repository';
 export {
   CandidateAdmissionDecisionSchema,
   CandidateSchema,
