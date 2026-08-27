@@ -32,9 +32,9 @@ describe('Daily Recommendation Evaluation', () => {
     expect(new Set(DAILY_RECOMMENDATION_FIXED_CASES.flatMap(({ windowCandidates }) => (
       windowCandidates.map(({ relevance }) => relevance)
     )))).toEqual(new Set(['direct', 'adjacent', 'exploration']));
-    expect(new Set(DAILY_RECOMMENDATION_FIXED_CASES.flatMap(({ feedback }) => (
-      feedback.map(({ signal }) => signal)
-    )))).toEqual(new Set(['liked', 'disliked', 'hidden', 'favorite', 'watch_later']));
+    expect(new Set(DAILY_RECOMMENDATION_FIXED_CASES.flatMap(({ pendingFeedback }) => (
+      pendingFeedback.map(({ reaction }) => reaction)
+    )))).toEqual(new Set(['liked', 'disliked']));
   });
 
   it('reports selection, coverage, relevance, Tool use, and publication conflicts from replayable facts', () => {
@@ -126,7 +126,8 @@ describe('Daily Recommendation Evaluation', () => {
           summarySufficient: true,
         })),
         recentTopicKeys: [],
-        feedback: [],
+        stablePreferences: [],
+        pendingFeedback: [],
         observation: {
           batch: {
             requestedCount: publication.batch.requestedCount,
@@ -212,6 +213,9 @@ function admitCandidate(
       novelty: 'novel',
       temporalValidity: 'valid',
       negativeConstraint: 'clear',
+      interestRevisions: matchedInterestIds.map((interestId) => ({ interestId, revision: 1 })),
+      preferenceRevisions: [],
+      preferenceAlignment: [],
       reason: `${title} is useful.`,
     }],
   });

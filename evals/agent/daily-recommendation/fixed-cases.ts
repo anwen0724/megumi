@@ -24,12 +24,16 @@ export const DAILY_RECOMMENDATION_FIXED_CASES = [
       candidate('candidate:hidden-boilerplate', 'adjacent', ['interest:typescript'], 'hidden-boilerplate'),
     ],
     recentTopicKeys: ['recent-runtime'],
-    feedback: [
-      { topicKey: 'typed-contracts', signal: 'liked' },
-      { topicKey: 'agent-runtime', signal: 'favorite' },
-      { topicKey: 'local-first', signal: 'watch_later' },
-      { topicKey: 'disliked-framework', signal: 'disliked' },
-      { topicKey: 'hidden-boilerplate', signal: 'hidden' },
+    stablePreferences: [{
+      scopeKey: 'interest:interest:typescript', revision: 1,
+      directions: [{
+        directionId: 'direction:typed-contracts', polarity: 'positive',
+        statement: 'Prefer concrete examples of typed contracts.',
+      }],
+    }],
+    pendingFeedback: [
+      { topicKey: 'typed-contracts', reaction: 'liked' },
+      { topicKey: 'disliked-framework', reaction: 'disliked' },
     ],
     observation: {
       batch: { requestedCount: 3, actualTarget: 3 },
@@ -75,7 +79,8 @@ export const DAILY_RECOMMENDATION_FIXED_CASES = [
       candidate('candidate:shallow-listicle', 'direct', ['interest:agents'], 'shallow-listicle'),
     ],
     recentTopicKeys: [],
-    feedback: [],
+    stablePreferences: [],
+    pendingFeedback: [],
     observation: {
       batch: { requestedCount: 2, actualTarget: 2 },
       modelCallCount: 1,
@@ -110,7 +115,8 @@ export const DAILY_RECOMMENDATION_FIXED_CASES = [
       candidate('candidate:replacement', 'adjacent', ['interest:typescript'], 'replacement'),
     ],
     recentTopicKeys: [],
-    feedback: [],
+    stablePreferences: [],
+    pendingFeedback: [],
     observation: {
       batch: { requestedCount: 2, actualTarget: 2 },
       modelCallCount: 2,
@@ -148,7 +154,8 @@ export const DAILY_RECOMMENDATION_FIXED_CASES = [
       candidate('candidate:only-exploration', 'exploration', [], 'only-exploration'),
     ],
     recentTopicKeys: [],
-    feedback: [],
+    stablePreferences: [],
+    pendingFeedback: [],
     observation: {
       batch: { requestedCount: 5, actualTarget: 2 },
       modelCallCount: 1,

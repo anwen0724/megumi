@@ -17,7 +17,17 @@ export interface DailyRecommendationEvaluationCandidate {
 
 export interface DailyRecommendationEvaluationFeedback {
   readonly topicKey: string;
-  readonly signal: 'liked' | 'disliked' | 'hidden' | 'favorite' | 'watch_later';
+  readonly reaction: 'liked' | 'disliked';
+}
+
+export interface DailyRecommendationEvaluationPreference {
+  readonly scopeKey: string;
+  readonly revision: number;
+  readonly directions: readonly {
+    readonly directionId: string;
+    readonly polarity: 'positive' | 'negative';
+    readonly statement: string;
+  }[];
 }
 
 export type DailyRecommendationEvaluationToolCall =
@@ -53,7 +63,8 @@ export interface DailyRecommendationEvaluationCase {
   readonly activeInterestIds: readonly string[];
   readonly windowCandidates: readonly DailyRecommendationEvaluationCandidate[];
   readonly recentTopicKeys: readonly string[];
-  readonly feedback: readonly DailyRecommendationEvaluationFeedback[];
+  readonly stablePreferences: readonly DailyRecommendationEvaluationPreference[];
+  readonly pendingFeedback: readonly DailyRecommendationEvaluationFeedback[];
   readonly observation: DailyRecommendationEvaluationObservation;
   readonly expected: {
     readonly selectedCandidateIds: readonly string[];

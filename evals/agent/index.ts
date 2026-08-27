@@ -21,3 +21,4 @@ export * from './adapters/source-state';
 export * from './runner/evaluation-suite-runner';
 export * from './candidate-supply';
 export * from './daily-recommendation';
+export * from './preference-learning';
