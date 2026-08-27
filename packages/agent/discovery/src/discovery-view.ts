@@ -28,7 +28,7 @@ export const InterestViewSchema = z.object({
 
 export const TodayDiscoveryViewSchema = z.object({
   localDate: LocalDateSchema,
-  status: z.enum(['not_generated', 'running', 'published', 'failed']),
+  status: z.enum(['not_generated', 'waiting_for_candidates', 'running', 'published', 'failed']),
   batchId: z.string().min(1).optional(),
   executionId: z.string().min(1).optional(),
   targetCount: z.number().int().min(1).max(100).optional(),

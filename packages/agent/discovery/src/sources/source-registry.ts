@@ -30,7 +30,10 @@ export interface SourceRegistry {
 /** Creates the validated registry used to resolve all configured Discovery Sources. */
 export function createSourceRegistry(
   sources: readonly DiscoverySource[],
-  options: { readonly observability?: Observability } = {},
+  options: {
+    readonly observability?: Observability;
+    readonly onCheckError?: (error: unknown, sourceId: string) => void;
+  } = {},
 ): SourceRegistry {
   const entries = new Map<DiscoverySourceId, { source: DiscoverySource; descriptor: SourceDescriptor }>();
   for (const source of sources) {
@@ -53,10 +56,14 @@ export function createSourceRegistry(
       const selected = new Set(sourceIds.map((sourceId) => sourceId.trim()));
       const targets = [...entries.values()].filter((entry) => selected.has(entry.descriptor.id));
       await Promise.all(targets.map(async (entry) => {
-        await observeAvailability(observability ?? options.observability, entry.descriptor.id, async () => {
-          await entry.source.checkAvailability?.();
-          return entry.source.getAvailability();
-        });
+        try {
+          await observeAvailability(observability ?? options.observability, entry.descriptor.id, async () => {
+            await entry.source.checkAvailability?.();
+            return entry.source.getAvailability();
+          });
+        } catch (error) {
+          reportCheckError(options.onCheckError, error, entry.descriptor.id);
+        }
       }));
       return targets.map((entry) => ({
         descriptor: entry.descriptor,
@@ -72,6 +79,19 @@ export function createSourceRegistry(
       return entry.source;
     },
   };
+}
+
+/** Reports one Adapter failure without allowing it to cancel independent Source checks. */
+function reportCheckError(
+  reporter: ((error: unknown, sourceId: string) => void) | undefined,
+  error: unknown,
+  sourceId: string,
+): void {
+  try {
+    reporter?.(error, sourceId);
+  } catch {
+    // A diagnostic callback cannot change Source availability or refresh completion.
+  }
 }
 
 async function observeAvailability(

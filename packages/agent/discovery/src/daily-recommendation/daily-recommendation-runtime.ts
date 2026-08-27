@@ -100,6 +100,7 @@ export function createDailyRecommendationRuntime(
   let accepting = true;
   const activeLifecycles = new Set<Promise<void>>();
   const activeDates = new Map<string, Promise<EnsureDailyRecommendationResult>>();
+  let waitingForCandidatesDate: string | undefined;
   let scheduler: DailyRecommendationScheduler;
 
   function ensure(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult> {
@@ -115,7 +116,10 @@ export function createDailyRecommendationRuntime(
     activeDates.set(localDate, acceptance.promise);
     let retry = false;
     const lifecycle = observeTrace(options.observability, async () => {
-      const result = await runLifecycle(options, parsed, localDate, acceptance);
+      const result = await runLifecycle(options, parsed, localDate, acceptance, (waiting) => {
+        if (waiting) waitingForCandidatesDate = localDate;
+        else if (waitingForCandidatesDate === localDate) waitingForCandidatesDate = undefined;
+      });
       retry = result.retry;
       return result.result;
     }).catch((error) => {
@@ -150,11 +154,23 @@ export function createDailyRecommendationRuntime(
     },
     getHome(request) {
       const nextScheduledAt = scheduler.getNextScheduledAt();
-      return options.repository.readHome({
+      const home = options.repository.readHome({
         ...request,
         localDate: localDateAt(options.now(), options.timezone()),
         ...(nextScheduledAt ? { nextScheduledAt } : {}),
       });
+      if (
+        home.today.status !== 'not_generated'
+        || home.today.localDate !== waitingForCandidatesDate
+      ) return home;
+      return {
+        ...home,
+        today: {
+          localDate: home.today.localDate,
+          status: 'waiting_for_candidates',
+          resultCount: 0,
+        },
+      };
     },
     searchRecommendations: (request) => options.repository.searchRecommendations(request),
     updateRecommendationState: (request) => options.repository.updateRecommendationState({
@@ -184,7 +200,9 @@ async function runLifecycle(
   request: EnsureDailyRecommendationRequest,
   localDate: string,
   acceptance: Acceptance<EnsureDailyRecommendationResult>,
+  setWaitingForCandidates: (waiting: boolean) => void,
 ): Promise<{ readonly result: EnsureDailyRecommendationResult; readonly retry: boolean }> {
+  setWaitingForCandidates(false);
   const current = options.repository.getBatch(localDate);
   if (current?.status === 'published') {
     const result = publishedResult(current);
@@ -216,6 +234,7 @@ async function runLifecycle(
   const shortfall = Math.max(0, requestedCount - snapshot.window.availableCount);
   if (shortfall > 0) safeNotifyCandidateSupply(options, shortfall);
   if (snapshot.window.availableCount === 0) {
+    setWaitingForCandidates(true);
     const result: EnsureDailyRecommendationResult = {
       status: 'waiting_for_candidates', localDate, requestedCount,
     };

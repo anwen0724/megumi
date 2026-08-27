@@ -29,6 +29,7 @@ export function createDiscoverySourceRegistry(input: {
   readonly zhihuAccessSecret?: () => string | undefined;
   readonly twitterApiKey?: () => string | undefined;
   readonly observability?: Observability;
+  readonly onCheckError?: (error: unknown, sourceId: string) => void;
 }) {
   const configuredWebSearch = deferredWebSearch(input.webSearch);
   const bingWebSearch = createBingRssWebSearch();
@@ -43,7 +44,10 @@ export function createDiscoverySourceRegistry(input: {
     createDouyinSource({ browser: input.embeddedBrowser }),
     createZhihuSource({ accessSecret: input.zhihuAccessSecret ?? (() => undefined) }),
     createTwitterSource({ apiKey: input.twitterApiKey ?? (() => undefined) }),
-  ], { observability: input.observability });
+  ], {
+    observability: input.observability,
+    ...(input.onCheckError ? { onCheckError: input.onCheckError } : {}),
+  });
 }
 
 /** Resolves mutable Host settings for every request without weakening the fallback chain. */

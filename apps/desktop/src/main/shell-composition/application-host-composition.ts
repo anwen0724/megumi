@@ -304,17 +304,10 @@ function composeProductRuntime(
     voice: createVoiceOperations({ voice, speechOutput }),
   });
 
-  // Composition starts the business background lifecycle without implementing
-  // its scheduling or recovery rules.
-  void discovery.startBackground().catch((error) => {
-    logger.warn('discovery_background_start_failed', {
-      errorMessage: error instanceof Error ? error.message : String(error),
-    });
-  });
-
   return createApplicationRuntime({
     host,
     logger,
+    start: () => discovery.startBackground(),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
     dispose: () => resources.dispose({

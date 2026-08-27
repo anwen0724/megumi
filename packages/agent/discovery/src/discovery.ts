@@ -87,6 +87,10 @@ export interface CreateDiscoveryOptions {
     readonly sourceRegistry: SourceRegistry;
     readonly settings: DiscoveryConfigurationStore;
   };
+  readonly onBackgroundError?: (
+    error: unknown,
+    context: { readonly operation: 'source_refresh' | 'candidate_supply_start' | 'daily_recommendation_start' },
+  ) => void;
 }
 
 /** Composes Megumi's Discovery business operations from its optional capabilities. */
@@ -138,9 +142,19 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
     async startBackground() {
-      await discoveryConfiguration?.refreshSources();
-      await candidateSupplyRuntime?.start();
-      await dailyRecommendationRuntime?.start();
+      const failures: unknown[] = [];
+      await runBackgroundStartStep(options, failures, 'source_refresh', async () => {
+        await discoveryConfiguration?.refreshSources();
+      });
+      await runBackgroundStartStep(options, failures, 'candidate_supply_start', async () => {
+        await candidateSupplyRuntime?.start();
+      });
+      await runBackgroundStartStep(options, failures, 'daily_recommendation_start', async () => {
+        await dailyRecommendationRuntime?.start();
+      });
+      if (failures.length > 0) {
+        throw new AggregateError(failures, 'One or more Discovery background startup steps failed.');
+      }
     },
     ensureDailyRecommendation: (request) => dailyRecommendationRuntime
       ? dailyRecommendationRuntime.ensure(request)
@@ -197,4 +211,23 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       ]);
     },
   };
+}
+
+/** Keeps independent Discovery background owners startable after one startup step fails. */
+async function runBackgroundStartStep(
+  options: CreateDiscoveryOptions,
+  failures: unknown[],
+  operation: 'source_refresh' | 'candidate_supply_start' | 'daily_recommendation_start',
+  start: () => Promise<void>,
+): Promise<void> {
+  try {
+    await start();
+  } catch (error) {
+    failures.push(error);
+    try {
+      options.onBackgroundError?.(error, { operation });
+    } catch {
+      // The observer is the terminal boundary for a best-effort startup diagnostic.
+    }
+  }
 }

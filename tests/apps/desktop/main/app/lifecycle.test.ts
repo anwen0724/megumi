@@ -33,6 +33,23 @@ describe('registerAppLifecycle', () => {
     expect(createWindow).toHaveBeenCalledOnce();
   });
 
+  it('does not start Product background work until Electron is ready', async () => {
+    let releaseReady: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => { releaseReady = resolve; });
+    whenReady.mockReturnValueOnce(ready);
+    const start = vi.fn();
+    const window = { show: vi.fn(), hide: vi.fn(), focus: vi.fn(), isDestroyed: vi.fn(() => false), on: vi.fn() };
+    const { registerAppLifecycle } = await import('@megumi/desktop/main/app/lifecycle');
+
+    registerAppLifecycle({ registerAllHandlers: vi.fn(), createWindow: () => window, start });
+    expect(start).not.toHaveBeenCalled();
+
+    releaseReady?.();
+    await ready;
+    await Promise.resolve();
+    expect(start).toHaveBeenCalledOnce();
+  });
+
   it('hides the main window on close and restores it on activate', async () => {
     const listeners = new Map<string, (...args: unknown[]) => void>();
     const window = {

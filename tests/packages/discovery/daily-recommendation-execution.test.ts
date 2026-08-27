@@ -48,6 +48,9 @@ describe('DailyRecommendationRuntime', () => {
     expect(repository.getBatch('2026-08-27')).toBeUndefined();
     expect(startExecution).not.toHaveBeenCalled();
     expect(notifyCandidateSupply).toHaveBeenCalledWith(5);
+    expect(runtime.getHome({ mode: 'timeline', limit: 20 }).today).toEqual({
+      localDate: '2026-08-27', status: 'waiting_for_candidates', resultCount: 0,
+    });
     await runtime.shutdown();
   });
 

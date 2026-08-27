@@ -3,6 +3,7 @@ import { app } from 'electron';
 export interface RegisterAppLifecycleOptions {
   registerAllHandlers: () => void;
   createWindow: () => LifecycleWindow;
+  start?: () => void;
   dispose?: () => void;
 }
 
@@ -24,6 +25,7 @@ export interface AppLifecycleController {
 export function registerAppLifecycle({
   registerAllHandlers,
   createWindow,
+  start,
   dispose,
 }: RegisterAppLifecycleOptions): AppLifecycleController {
   let mainWindow: LifecycleWindow | undefined;
@@ -59,6 +61,7 @@ export function registerAppLifecycle({
   app.whenReady().then(() => {
     registerAllHandlers();
     openMainWindow();
+    start?.();
   });
 
   // Closing every visible surface keeps the private Agent resident for tray reopening.

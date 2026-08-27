@@ -55,6 +55,13 @@ if (shouldQuitForSquirrelStartup()) {
   registerRuntimeProcessErrorHandlers({ logger: desktopMain.runtimeLogger });
 
   const lifecycle = registerAppLifecycle({
+    start: () => {
+      void desktopMain.start().catch((error: unknown) => {
+        desktopMain.runtimeLogger.warn('product_background_start_failed', {
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+      });
+    },
     registerAllHandlers: () => {
       registerAllHandlers({
         logger: desktopMain.runtimeLogger,

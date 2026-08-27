@@ -437,6 +437,14 @@ function composeCapabilitiesWithDatabase(
     zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
     twitterApiKey: () => discoveryCredential(settings, 'twitter'),
     observability: observability.observability,
+    onCheckError(error, sourceId) {
+      observability.runtimeLogger.write({
+        level: 'warn', module: 'discovery', code: 'discovery_source_check_failed',
+        message: 'A Discovery Source availability check failed.',
+        correlation: { sourceId },
+        data: { errorMessage: error instanceof Error ? error.message : String(error) },
+      });
+    },
   });
 
   const clock = { now: () => new Date().toISOString() };
@@ -527,6 +535,16 @@ function composeCapabilitiesWithDatabase(
     },
   };
   discovery = createDiscovery({
+    onBackgroundError(error, context) {
+      observability.runtimeLogger.write({
+        level: 'warn', module: 'discovery', code: 'discovery_background_step_failed',
+        message: 'A Discovery background startup step failed.',
+        data: {
+          operation: context.operation,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        },
+      });
+    },
     interests: {
       repository: discoveryRepository,
       settings: {

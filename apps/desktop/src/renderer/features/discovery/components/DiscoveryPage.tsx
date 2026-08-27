@@ -50,10 +50,15 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
 
   useEffect(() => { void loadHome('timeline'); }, []);
   useEffect(() => {
-    if (home?.today.status !== 'running') return;
+    const status = home?.today.status;
+    if (
+      status !== 'running'
+      && status !== 'waiting_for_candidates'
+      && !(status === 'not_generated' && !home?.nextScheduledAt)
+    ) return;
     const timer = window.setInterval(() => { void loadHome(mode); }, 3_000);
     return () => window.clearInterval(timer);
-  }, [home?.today.status, loadHome, mode]);
+  }, [home?.nextScheduledAt, home?.today.status, loadHome, mode]);
 
   async function selectMode(next: HomeMode) {
     setMode(next);
@@ -174,6 +179,14 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           <StatusPanel title={t('notGenerated')} action={<Button variant="primary" onClick={() => void ensureToday()}>{t('generateNow')}</Button>} />
         ) : null}
         {home?.today.status === 'running' && mode === 'timeline' && !activeQuery ? <StatusPanel icon={<LoaderCircle className="animate-spin" size={22} />} title={t('running')} /> : null}
+        {home?.today.status === 'waiting_for_candidates' && mode === 'timeline' && !activeQuery ? (
+          <StatusPanel
+            icon={<LoaderCircle className="animate-spin" size={22} />}
+            title={t('waitingForCandidates')}
+            description={t('waitingForCandidatesDescription')}
+            action={onOpenContentSources ? <Button variant="secondary" onClick={onOpenContentSources}>{t('manageSources')}</Button> : undefined}
+          />
+        ) : null}
         {home?.today.status === 'failed' && mode === 'timeline' && !activeQuery ? (
           <StatusPanel title={t('failed')} description={home.today.failure?.message} action={<Button variant="primary" onClick={() => void ensureToday()}>{t('retry')}</Button>} />
         ) : null}
@@ -209,7 +222,7 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           </section>
         ))}
 
-        {!activeQuery && home && home.days.length === 0 && hasActiveInterests && !['not_generated', 'running', 'failed'].includes(home.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
+        {!activeQuery && home && home.days.length === 0 && hasActiveInterests && !['not_generated', 'waiting_for_candidates', 'running', 'failed'].includes(home.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
       </div>
 
       <InterestManager

@@ -17,6 +17,8 @@ export interface ProductRuntimeLogger {
 export interface ProductRuntime {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
+  /** Starts Host-ready background product behavior exactly once. */
+  start(): Promise<void>;
   subscribeRuntimeEvents(filter: EventFilter, handler: EventHandler): EventSubscription;
   subscribeSpeechOutputEvents(handler: SpeechOutputEventListener): SpeechOutputSubscription;
   dispose(): Promise<void>;
@@ -26,14 +28,20 @@ export interface ProductRuntime {
 export function createApplicationRuntime(input: {
   readonly host: ProductHostInterface;
   readonly logger: ProductRuntimeLogger;
+  readonly start: () => Promise<void>;
   readonly subscribeRuntimeEvents: ProductRuntime['subscribeRuntimeEvents'];
   readonly subscribeSpeechOutputEvents: ProductRuntime['subscribeSpeechOutputEvents'];
   readonly dispose: () => Promise<void>;
 }): ProductRuntime {
+  let startPromise: Promise<void> | undefined;
   let disposePromise: Promise<void> | undefined;
   return {
     host: input.host,
     logger: input.logger,
+    start() {
+      startPromise ??= input.start();
+      return startPromise;
+    },
     subscribeRuntimeEvents: input.subscribeRuntimeEvents,
     subscribeSpeechOutputEvents: input.subscribeSpeechOutputEvents,
     dispose() {

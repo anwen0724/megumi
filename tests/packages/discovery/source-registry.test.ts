@@ -44,6 +44,32 @@ describe('SourceRegistry', () => {
     expect(checkAvailability).toHaveBeenCalledOnce();
   });
 
+  it('isolates one Source availability failure from the remaining checks', async () => {
+    const failingCheck = vi.fn(async () => { throw new Error('Source check failed.'); });
+    const successfulCheck = vi.fn(async () => ({ state: 'ready' as const }));
+    const registry = createSourceRegistry([
+      {
+        ...source('browser'),
+        getAvailability: () => ({ state: 'unknown' }),
+        checkAvailability: failingCheck,
+      },
+      {
+        ...source('open_web'),
+        checkAvailability: successfulCheck,
+      },
+    ]);
+
+    await expect(registry.checkSources(['browser', 'open_web'])).resolves.toEqual([
+      expect.objectContaining({
+        descriptor: expect.objectContaining({ id: 'browser' }),
+        availability: { state: 'unknown' },
+      }),
+      expect.objectContaining({ descriptor: expect.objectContaining({ id: 'open_web' }) }),
+    ]);
+    expect(failingCheck).toHaveBeenCalledOnce();
+    expect(successfulCheck).toHaveBeenCalledOnce();
+  });
+
   it('accepts a third adapter without changing any shared contract', () => {
     const registry = createSourceRegistry([
       source('open_web'),

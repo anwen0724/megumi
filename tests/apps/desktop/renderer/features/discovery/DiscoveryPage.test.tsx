@@ -271,6 +271,31 @@ describe('DiscoveryPage', () => {
     await user.click(screen.getByRole('button', { name: '重试' }));
     expect(ensureDaily).toHaveBeenCalledOnce();
   });
+
+  it('shows Candidate replenishment and refreshes until Daily Recommendation advances', async () => {
+    getHome.mockResolvedValue(ok({
+      ...homeView(),
+      today: {
+        localDate: '2026-08-22', status: 'waiting_for_candidates', resultCount: 0,
+      },
+      days: [],
+    }));
+    vi.useFakeTimers();
+    try {
+      render(<DiscoveryPage onOpenContentSources={vi.fn()} />);
+      await act(async () => { await Promise.resolve(); });
+
+      expect(screen.getByText('正在补充候选内容。')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '管理内容来源' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '立即生成' })).not.toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(3_000));
+      await act(async () => { await Promise.resolve(); });
+      expect(getHome).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function homeView(options: { recommendations?: ReturnType<typeof recommendation>[] } = {}) {

@@ -103,6 +103,7 @@ export function composeDesktopMain() {
   return {
     homePath,
     runtimeLogger,
+    start: () => product.start(),
     workspace: { host: productHost },
     session: { host: productHost },
     skill: { host: productHost },
