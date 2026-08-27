@@ -88,6 +88,55 @@ function fixture(tokens = 50): CreateContextOptions {
 }
 
 describe('Context.build', () => {
+  it('builds Daily Recommendation from a fixed Pool window without Source or Search facts', async () => {
+    const options = fixture();
+    const currentMessages = [{
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'Choose today recommendations.' }],
+      timestamp: 1,
+    }];
+    const result = await createContext(options).build({
+      modelCallContext: {
+        modelCallId: 'model-call:daily-recommendation',
+        run: {
+          kind: 'daily_recommendation',
+          executionId: 'execution:daily',
+          batchId: 'batch:daily',
+          localDate: '2026-08-27',
+          model,
+          material: {
+            requestedCount: 20,
+            actualTarget: 2,
+            availableCount: 2,
+            readBudget: 2,
+            interests: [{ interestId: 'interest:1', description: 'Agent architecture' }],
+            candidates: [{
+              candidateId: 'candidate:1', contentIdentity: 'identity:1', sourceName: 'example.com',
+              canonicalUrl: 'https://example.com/guide', contentType: 'article', title: 'Agent guide',
+              description: 'Compact candidate summary.', relevance: 'direct',
+              matchedInterestIds: ['interest:1'], admissionReason: 'Directly useful.',
+            }],
+            recentRecommendations: [],
+            recentFeedback: [],
+          },
+        },
+        tools: [],
+      },
+      currentMessages,
+    });
+
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') return;
+    expect(options.instructionReader.getSystemInstructions).toHaveBeenCalledWith('daily_recommendation');
+    expect(options.sessionHistory.getActiveHistory).not.toHaveBeenCalled();
+    expect(options.workspaceSource.readWorkspace).not.toHaveBeenCalled();
+    expect(result.prompt.messages).toEqual(currentMessages);
+    expect(result.prompt.systemPrompt).toContain('<daily_recommendation_material>');
+    expect(result.prompt.systemPrompt).toContain('Agent guide');
+    expect(result.prompt.systemPrompt).not.toContain('<sources>');
+    expect(result.prompt.systemPrompt).not.toContain('<recent_query_outcomes>');
+  });
+
   it('builds Candidate Supply from one fixed snapshot and accumulated Tool messages', async () => {
     const options = fixture();
     const currentMessages = [{

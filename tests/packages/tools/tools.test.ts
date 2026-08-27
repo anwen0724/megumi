@@ -21,7 +21,7 @@ describe('Tools ModelCall routing', () => {
       candidateSupplyTools: {
         ownsExecution: (executionId) => executionId === 'execution:supply',
         async searchContent() { calls.push('search'); return { outputKind: 'json', content: { status: 'ok' } }; },
-        async readCandidate() { calls.push('read'); return { outputKind: 'json', content: { status: 'ok' } }; },
+        async readSourceCandidate() { calls.push('read'); return { outputKind: 'json', content: { status: 'ok' } }; },
         async commitCandidateAdmission() { calls.push('commit'); return { outputKind: 'json', content: { status: 'ok' } }; },
       },
     });
@@ -34,11 +34,11 @@ describe('Tools ModelCall routing', () => {
     expect(modelCall.status).toBe('prepared');
     if (modelCall.status !== 'prepared') return;
     expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual([
-      'search_content', 'read_candidate', 'commit_candidate_admission',
+      'search_content', 'read_source_candidate', 'commit_candidate_admission',
     ]);
     const invocations = [
       { toolName: 'search_content', input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 10, targetInterestIds: [] } },
-      { toolName: 'read_candidate', input: { candidateId: 'candidate:1' } },
+      { toolName: 'read_source_candidate', input: { candidateId: 'candidate:1' } },
       { toolName: 'commit_candidate_admission', input: { decisions: [{ candidateId: 'candidate:1', decision: 'needs_detail', reason: 'Need detail.' }] } },
     ];
     for (const { toolName, input } of invocations) {

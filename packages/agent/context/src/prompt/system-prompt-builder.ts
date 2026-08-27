@@ -13,6 +13,7 @@ import type { ToolDefinition } from '@megumi/tools';
 import type {
   CandidateSupplyContextMaterial,
   DailyDiscoveryContextMaterial,
+  DailyRecommendationContextMaterial,
   ExecutionEnvironment,
 } from '../context';
 import { escapeXmlAttribute } from './prompt-markup-formatter';
@@ -26,6 +27,10 @@ export interface SystemPromptSources {
   readonly dailyDiscoveryMaterial?: {
     readonly localDate: string;
     readonly material: DailyDiscoveryContextMaterial;
+  };
+  readonly dailyRecommendationMaterial?: {
+    readonly localDate: string;
+    readonly material: DailyRecommendationContextMaterial;
   };
   readonly candidateSupplyMaterial?: {
     readonly startedAt: string;
@@ -47,6 +52,12 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
     sections.push(renderDailyDiscoveryMaterial(
       sources.dailyDiscoveryMaterial.localDate,
       sources.dailyDiscoveryMaterial.material,
+    ));
+  }
+  if (sources.dailyRecommendationMaterial) {
+    sections.push(renderDailyRecommendationMaterial(
+      sources.dailyRecommendationMaterial.localDate,
+      sources.dailyRecommendationMaterial.material,
     ));
   }
   if (sources.candidateSupplyMaterial) {
@@ -101,6 +112,25 @@ function renderDailyDiscoveryMaterial(
     `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
     `  <recommendation_signals>${escapePromptText(JSON.stringify(material.recommendationSignals))}</recommendation_signals>`,
     '</daily_discovery_material>',
+  ].join('\n');
+}
+
+function renderDailyRecommendationMaterial(
+  localDate: string,
+  material: DailyRecommendationContextMaterial,
+): string {
+  return [
+    '<daily_recommendation_material>',
+    `  <local_date>${escapePromptText(localDate)}</local_date>`,
+    `  <requested_count>${material.requestedCount}</requested_count>`,
+    `  <actual_target>${material.actualTarget}</actual_target>`,
+    `  <available_count>${material.availableCount}</available_count>`,
+    `  <read_budget>${material.readBudget}</read_budget>`,
+    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
+    `  <candidates>${escapePromptText(JSON.stringify(material.candidates))}</candidates>`,
+    `  <recent_recommendations>${escapePromptText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
+    `  <recent_feedback>${escapePromptText(JSON.stringify(material.recentFeedback))}</recent_feedback>`,
+    '</daily_recommendation_material>',
   ].join('\n');
 }
 

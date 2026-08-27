@@ -61,6 +61,8 @@ export interface DailyRecommendationRepository {
   getBatch(localDate: string): DailyRecommendationBatch | undefined;
   /** Reads one consistent and bounded Candidate, Interest, Recommendation, and feedback snapshot. */
   readSnapshot(input: { readonly now: string; readonly requestedCount: number }): DailyRecommendationSnapshot;
+  /** Reads one persisted Candidate for an execution-scoped local-read Tool. */
+  readCandidate(candidateId: string): Candidate | undefined;
   /** Claims the unique Batch for one local date. */
   claimBatch(command: ClaimDailyRecommendationBatch): ClaimDailyRecommendationBatchResult;
   /** Atomically creates Recommendation snapshots, consumes Candidates, and publishes the Batch. */
@@ -80,6 +82,12 @@ export function createDailyRecommendationRepository(database: DatabaseConnection
       return database.transaction({
         operation: () => readSnapshot(database, now, requestedCount),
       });
+    },
+    readCandidate(candidateId) {
+      const row = database.prepare<CandidateRow>({
+        sql: 'SELECT * FROM discovery_candidates WHERE candidate_id = ?',
+      }).get([z.string().min(1).parse(candidateId)]);
+      return row ? candidateFromRow(row) : undefined;
     },
     claimBatch(command) {
       const parsed = ClaimBatchSchema.parse(command);

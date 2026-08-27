@@ -76,6 +76,8 @@ export type {
 } from './daily-discovery/daily-discovery-attempt';
 export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './candidate-supply/content-identity';
 export { buildDailyCandidateWindow } from './daily-recommendation/candidate-window';
+export { createDailyRecommendationAttempts } from './daily-recommendation/daily-recommendation-attempt';
+export type { DailyRecommendationAttempts } from './daily-recommendation/daily-recommendation-attempt';
 export type { BuildDailyCandidateWindowInput } from './daily-recommendation/candidate-window';
 export {
   DailyRecommendationBatchSchema,

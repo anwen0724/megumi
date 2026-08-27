@@ -11,6 +11,7 @@ import type { ContextFailure, Prompt } from '../context';
 import type { ResolvedContext } from '../context-resolver';
 import type { ConversationResolvedContext } from '../resolvers/conversation-context-resolver';
 import type { DailyDiscoveryResolvedContext } from '../resolvers/daily-discovery-context-resolver';
+import type { DailyRecommendationResolvedContext } from '../resolvers/daily-recommendation-context-resolver';
 import type { CandidateSupplyResolvedContext } from '../resolvers/candidate-supply-context-resolver';
 import { buildContextMessages, type MaterializedHistory } from './context-message-builder';
 import { buildSystemPrompt } from './system-prompt-builder';
@@ -33,6 +34,11 @@ export type BuildPromptResult =
     }
   | {
       readonly status: 'built';
+      readonly kind: 'daily_recommendation';
+      readonly prompt: Prompt;
+    }
+  | {
+      readonly status: 'built';
       readonly kind: 'candidate_supply';
       readonly prompt: Prompt;
     }
@@ -51,8 +57,11 @@ export function createPromptBuilder(dependencies: PromptBuilderDependencies): Pr
       if (request.context.kind === 'conversation') {
         return buildConversationPrompt(request.context, dependencies, request.signal);
       }
-      return request.context.kind === 'daily_discovery'
-        ? buildDailyDiscoveryPrompt(request.context)
+      if (request.context.kind === 'daily_discovery') {
+        return buildDailyDiscoveryPrompt(request.context);
+      }
+      return request.context.kind === 'daily_recommendation'
+        ? buildDailyRecommendationPrompt(request.context)
         : buildCandidateSupplyPrompt(request.context);
     },
   };
@@ -119,6 +128,27 @@ function buildDailyDiscoveryPrompt(
       systemPrompt: buildSystemPrompt({
         systemInstructions: context.systemInstructions,
         dailyDiscoveryMaterial: {
+          localDate: context.localDate,
+          material: context.material,
+        },
+        tools: context.tools,
+      }),
+      messages: [...context.currentMessages],
+      tools: [...context.tools],
+    },
+  };
+}
+
+function buildDailyRecommendationPrompt(
+  context: DailyRecommendationResolvedContext,
+): BuildPromptResult {
+  return {
+    status: 'built',
+    kind: 'daily_recommendation',
+    prompt: {
+      systemPrompt: buildSystemPrompt({
+        systemInstructions: context.systemInstructions,
+        dailyRecommendationMaterial: {
           localDate: context.localDate,
           material: context.material,
         },

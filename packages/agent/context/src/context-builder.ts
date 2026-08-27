@@ -32,6 +32,7 @@ import type {
   ConversationRunContext,
   CandidateSupplyRunContext,
   DailyDiscoveryRunContext,
+  DailyRecommendationRunContext,
   Prompt,
 } from './context';
 import {
@@ -124,7 +125,9 @@ class DefaultContext implements ContextCapabilities {
             )
           : run.kind === 'daily_discovery'
             ? await this.buildDailyDiscovery(request, run)
-            : await this.buildCandidateSupply(request, run);
+            : run.kind === 'daily_recommendation'
+              ? await this.buildDailyRecommendation(request, run)
+              : await this.buildCandidateSupply(request, run);
       } catch (error) {
         result = buildFailedContextResult(buildUnexpectedContextFailure({
           code: 'context_build_failed',
@@ -275,6 +278,40 @@ class DefaultContext implements ContextCapabilities {
       name: 'prompt.build',
       correlation,
       classifyResult: classifyFallibleResult,
+    }, () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }));
+    if (built.status === 'failed') return built;
+    const capacity = contextCapacityFromModel(run.model);
+    return this.finalizePrompt(built.prompt, capacity, this.countUsage(built.prompt));
+  }
+
+  private async buildDailyRecommendation(
+    request: BuildContextRequest,
+    run: DailyRecommendationRunContext,
+  ): Promise<BuildContextResult> {
+    if (request.signal?.aborted) {
+      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+    }
+    const correlation = {
+      executionId: run.executionId,
+      batchId: run.batchId,
+      modelCallId: request.modelCallContext.modelCallId,
+    };
+    const resolved = await observeSpan(this.options.observability, {
+      name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
+    }, () => this.resolver.resolve({
+      kind: 'daily_recommendation',
+      localDate: run.localDate,
+      material: run.material,
+      currentMessages: request.currentMessages,
+      tools: request.modelCallContext.tools,
+      signal: request.signal,
+    }));
+    if (resolved.status === 'failed') return resolved;
+    recordContent(this.options.observability, {
+      kind: 'context.resolved', value: resolved.context, correlation,
+    });
+    const built = await observeSpan(this.options.observability, {
+      name: 'prompt.build', correlation, classifyResult: classifyFallibleResult,
     }, () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }));
     if (built.status === 'failed') return built;
     const capacity = contextCapacityFromModel(run.model);

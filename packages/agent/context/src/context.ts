@@ -63,6 +63,45 @@ export interface DailyDiscoveryContextMaterial {
   }[];
 }
 
+/** Bounded Pool facts exposed to one Daily Recommendation execution. */
+export interface DailyRecommendationContextMaterial {
+  readonly requestedCount: number;
+  readonly actualTarget: number;
+  readonly availableCount: number;
+  readonly readBudget: number;
+  readonly interests: readonly {
+    readonly interestId: string;
+    readonly description: string;
+  }[];
+  readonly candidates: readonly {
+    readonly candidateId: string;
+    readonly contentIdentity: string;
+    readonly sourceName: string;
+    readonly canonicalUrl: string;
+    readonly contentType: string;
+    readonly title: string;
+    readonly description?: string;
+    readonly relevance: 'direct' | 'adjacent' | 'exploration';
+    readonly matchedInterestIds: readonly string[];
+    readonly admissionReason: string;
+  }[];
+  readonly recentRecommendations: readonly DailyRecommendationHistoryItem[];
+  readonly recentFeedback: readonly DailyRecommendationHistoryItem[];
+}
+
+export interface DailyRecommendationHistoryItem {
+  readonly contentIdentity: string;
+  readonly sourceName: string;
+  readonly title: string;
+  readonly recommendationReason: string;
+  readonly publishedAt: string;
+  readonly reaction?: 'liked' | 'disliked';
+  readonly hiddenAt?: string;
+  readonly favoriteAt?: string;
+  readonly watchLaterAt?: string;
+  readonly firstOpenedAt?: string;
+}
+
 export interface CandidateSupplyContextMaterial {
   readonly pool: {
     readonly counts: Readonly<Record<string, number>>;
@@ -107,6 +146,14 @@ export interface DailyDiscoveryRunContext extends BaseRunContext {
   readonly material: DailyDiscoveryContextMaterial;
 }
 
+/** Candidate Pool facts fixed before one Daily Recommendation execution starts. */
+export interface DailyRecommendationRunContext extends BaseRunContext {
+  readonly kind: 'daily_recommendation';
+  readonly batchId: string;
+  readonly localDate: string;
+  readonly material: DailyRecommendationContextMaterial;
+}
+
 /** Candidate Supply facts are snapshotted before one Supply execution starts. */
 export interface CandidateSupplyRunContext extends BaseRunContext {
   readonly kind: 'candidate_supply';
@@ -114,7 +161,8 @@ export interface CandidateSupplyRunContext extends BaseRunContext {
   readonly material: CandidateSupplyContextMaterial;
 }
 
-export type RunContext = ConversationRunContext | DailyDiscoveryRunContext | CandidateSupplyRunContext;
+export type RunContext = ConversationRunContext | DailyDiscoveryRunContext
+  | DailyRecommendationRunContext | CandidateSupplyRunContext;
 
 /** Facts fixed before one model call; never persisted. */
 export interface ModelCallContext {

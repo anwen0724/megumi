@@ -264,7 +264,7 @@ function attemptStub(): CandidateSupplyAttempts {
   return {
     start: vi.fn(), ownsExecution: vi.fn(() => true), dispose: vi.fn(),
     summarize: vi.fn(() => undefined),
-    searchContent: vi.fn(), readCandidate: vi.fn(), commitCandidateAdmission: vi.fn(),
+    searchContent: vi.fn(), readSourceCandidate: vi.fn(), commitCandidateAdmission: vi.fn(),
   };
 }
 

@@ -26,6 +26,9 @@ import type { ToolProcessDescriptor } from './built-ins/run-command';
 import type { BuiltInToolContext } from './built-ins/workspace-file-access';
 import type { SearchContentOperation } from './built-ins/search-content';
 import type { ReadCandidateOperation } from './built-ins/read-candidate';
+import type { ReadSourceCandidateOperation } from './built-ins/read-source-candidate';
+import type { ReadPoolCandidateOperation } from './built-ins/read-pool-candidate';
+import type { PublishDailyRecommendationsOperation } from './built-ins/publish-daily-recommendations';
 import type { SelectRecommendationsOperation } from './built-ins/select-recommendations';
 import type { CommitCandidateAdmissionOperation } from './built-ins/commit-candidate-admission';
 import { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
@@ -154,6 +157,7 @@ export interface CreateToolsRequest {
   readonly executionPolicy: ToolExecutionPolicy;
   readonly builtInToolAvailability?: BuiltInToolAvailability;
   readonly dailyDiscoveryTools?: DailyDiscoveryToolOperations;
+  readonly dailyRecommendationTools?: DailyRecommendationToolOperations;
   readonly candidateSupplyTools?: CandidateSupplyToolOperations;
 }
 
@@ -162,9 +166,12 @@ export type DailyDiscoveryToolOperations = SearchContentOperation
   & SelectRecommendationsOperation;
 
 export type CandidateSupplyToolOperations = SearchContentOperation
-  & ReadCandidateOperation
+  & ReadSourceCandidateOperation
   & CommitCandidateAdmissionOperation
   & { ownsExecution(executionId: string): boolean };
+
+export type DailyRecommendationToolOperations = ReadPoolCandidateOperation
+  & PublishDailyRecommendationsOperation;
 
 interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
@@ -181,7 +188,8 @@ export function createTools(request: CreateToolsRequest): Tools {
     ...(process ? { process } : {}),
     ...(contentTools ? { contentTools } : {}),
     ...(request.dailyDiscoveryTools ? { dailySelectionTools: request.dailyDiscoveryTools } : {}),
-    ...(request.candidateSupplyTools ? { candidateAdmissionTools: request.candidateSupplyTools } : {}),
+    ...(request.candidateSupplyTools ? { candidateSupplyTools: request.candidateSupplyTools } : {}),
+    ...(request.dailyRecommendationTools ? { dailyRecommendationTools: request.dailyRecommendationTools } : {}),
   });
   const routers = new Map<string, ModelCallRegistration>();
   const executions = new Map<string, ToolExecutionBinding>();
@@ -197,6 +205,9 @@ export function createTools(request: CreateToolsRequest): Tools {
       }
       if (bindingRequest.toolGroupId === 'daily_discovery' && !request.dailyDiscoveryTools) {
         return failedBinding('tool_group_unavailable', 'Daily discovery tools are not configured.');
+      }
+      if (bindingRequest.toolGroupId === 'daily_recommendation' && !request.dailyRecommendationTools) {
+        return failedBinding('tool_group_unavailable', 'Daily Recommendation tools are not configured.');
       }
       if (bindingRequest.toolGroupId === 'candidate_supply' && !request.candidateSupplyTools) {
         return failedBinding('tool_group_unavailable', 'Candidate supply tools are not configured.');
@@ -424,9 +435,7 @@ function createContentToolMultiplexer(
         : requireDailyDiscoveryTools(request).searchContent(input);
     },
     readCandidate(input) {
-      return request.candidateSupplyTools?.ownsExecution(input.executionId)
-        ? request.candidateSupplyTools.readCandidate(input)
-        : requireDailyDiscoveryTools(request).readCandidate(input);
+      return requireDailyDiscoveryTools(request).readCandidate(input);
     },
   };
 }

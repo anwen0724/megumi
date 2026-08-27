@@ -17,6 +17,9 @@ import { listDirectoryToolDefinition, listDirectoryToolHandler } from './list-di
 import { movePathToolDefinition, movePathToolHandler } from './move-path';
 import { readFileToolDefinition, readFileToolHandler } from './read-file';
 import { createReadCandidateToolHandler, readCandidateToolDefinition, type ReadCandidateOperation } from './read-candidate';
+import { createReadSourceCandidateToolHandler, readSourceCandidateToolDefinition, type ReadSourceCandidateOperation } from './read-source-candidate';
+import { createReadPoolCandidateToolHandler, readPoolCandidateToolDefinition, type ReadPoolCandidateOperation } from './read-pool-candidate';
+import { createPublishDailyRecommendationsToolHandler, publishDailyRecommendationsToolDefinition, type PublishDailyRecommendationsOperation } from './publish-daily-recommendations';
 import {
   createRunCommandToolDefinition,
   createRunCommandToolHandler,
@@ -36,7 +39,8 @@ export const BUILT_IN_TOOL_NAMES = [
   'create_directory', 'copy_path', 'move_path', 'delete_path', 'run_command',
   'web_search', 'web_fetch', 'update_plan',
   'search_content', 'read_candidate', 'select_recommendations',
-  'commit_candidate_admission',
+  'read_source_candidate', 'commit_candidate_admission',
+  'read_pool_candidate', 'publish_daily_recommendations',
 ] as const;
 
 export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
@@ -55,7 +59,8 @@ export function createBuiltInToolRegistry(request: {
   readonly process?: ToolProcessDescriptor;
   readonly contentTools?: SearchContentOperation & ReadCandidateOperation;
   readonly dailySelectionTools?: SelectRecommendationsOperation;
-  readonly candidateAdmissionTools?: CommitCandidateAdmissionOperation;
+  readonly candidateSupplyTools?: ReadSourceCandidateOperation & CommitCandidateAdmissionOperation;
+  readonly dailyRecommendationTools?: ReadPoolCandidateOperation & PublishDailyRecommendationsOperation;
 }): ToolRegistry<BuiltInToolContext> {
   const pairs: Array<{
     readonly definition: ToolDefinition;
@@ -87,11 +92,22 @@ export function createBuiltInToolRegistry(request: {
     ...(request.dailySelectionTools ? [
       { definition: selectRecommendationsToolDefinition, handler: createSelectRecommendationsToolHandler(request.dailySelectionTools), executionMode: 'serial' as const },
     ] : []),
-    ...(request.candidateAdmissionTools ? [{
+    ...(request.candidateSupplyTools ? [
+      { definition: readSourceCandidateToolDefinition, handler: createReadSourceCandidateToolHandler(request.candidateSupplyTools) },
+      {
       definition: commitCandidateAdmissionToolDefinition,
-      handler: createCommitCandidateAdmissionToolHandler(request.candidateAdmissionTools),
+      handler: createCommitCandidateAdmissionToolHandler(request.candidateSupplyTools),
       executionMode: 'serial' as const,
-    }] : []),
+      },
+    ] : []),
+    ...(request.dailyRecommendationTools ? [
+      { definition: readPoolCandidateToolDefinition, handler: createReadPoolCandidateToolHandler(request.dailyRecommendationTools) },
+      {
+        definition: publishDailyRecommendationsToolDefinition,
+        handler: createPublishDailyRecommendationsToolHandler(request.dailyRecommendationTools),
+        executionMode: 'serial' as const,
+      },
+    ] : []),
   ];
   return createToolRegistry({
     registrations: pairs.map((pair): ToolRegistration<BuiltInToolContext> => ({

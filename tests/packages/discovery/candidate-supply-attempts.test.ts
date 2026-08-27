@@ -132,7 +132,7 @@ describe('CandidateSupplyAttempts', () => {
     }).admissionBatch[0]!.candidate.candidateId;
     expect(repository.readCandidate(candidateId)?.status).toBe('preparing');
 
-    const read = await attempts.readCandidate({
+    const read = await attempts.readSourceCandidate({
       executionId: 'execution:1', signal: new AbortController().signal, input: { candidateId },
     });
 
@@ -140,7 +140,7 @@ describe('CandidateSupplyAttempts', () => {
     expect(repository.readCandidate(candidateId)).toMatchObject({
       status: 'pending_admission', contentText: 'Full implementation detail.',
     });
-    await expect(attempts.readCandidate({
+    await expect(attempts.readSourceCandidate({
       executionId: 'execution:1', signal: new AbortController().signal, input: { candidateId },
     })).resolves.toMatchObject({ isError: true, content: { code: 'candidate_already_read' } });
   });

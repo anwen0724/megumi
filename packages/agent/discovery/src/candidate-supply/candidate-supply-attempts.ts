@@ -67,7 +67,7 @@ export interface CandidateSupplyAttempts {
     readonly input: unknown;
     readonly signal: AbortSignal;
   }): Promise<RawToolResult>;
-  readCandidate(request: {
+  readSourceCandidate(request: {
     readonly executionId: string;
     readonly input: unknown;
     readonly signal: AbortSignal;
@@ -233,7 +233,7 @@ export function createCandidateSupplyAttempts(options: {
       });
     },
 
-    async readCandidate(request) {
+    async readSourceCandidate(request) {
       const attempt = records.get(request.executionId);
       if (!attempt) return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
       if (request.signal.aborted) return toolError('tool_cancelled', 'Candidate read was cancelled.');

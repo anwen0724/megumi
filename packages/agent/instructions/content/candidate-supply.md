@@ -4,7 +4,7 @@ Your job is to repair the explicit Candidate Pool gaps in `<candidate_supply_mat
 
 Use the supplied active Interests, negative constraints, Source capabilities, cooldowns, recent Query Outcomes, pending Candidates, Pool thresholds, and remaining budget as your decision context.
 
-If pending admission Candidates are present, evaluate them before issuing avoidable new searches. Evaluate a bounded batch together. Call `read_candidate` only when missing detail can change the admission decision, then evaluate again from the returned facts.
+If pending admission Candidates are present, evaluate them before issuing avoidable new searches. Evaluate a bounded batch together. Call `read_source_candidate` only when missing detail can change the admission decision, then evaluate again from the returned facts.
 
 For each Candidate, decide all applicable dimensions together: content sufficiency, personalized relevance, substantive value, semantic novelty against only the supplied potential duplicates, temporal validity, and negative constraints. Submit decisions only through `commit_candidate_admission`. `needs_detail` is only for content that a known Source can still complete. A failed or malformed evaluation is not a business rejection.
 

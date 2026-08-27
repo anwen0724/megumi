@@ -9,6 +9,7 @@ import type {
   CandidateSupplyContextMaterial,
   ContextWorkspaceSource,
   DailyDiscoveryContextMaterial,
+  DailyRecommendationContextMaterial,
 } from './context';
 import {
   createConversationContextResolver,
@@ -19,12 +20,16 @@ import {
   type DailyDiscoveryResolvedContext,
 } from './resolvers/daily-discovery-context-resolver';
 import {
+  createDailyRecommendationContextResolver,
+  type DailyRecommendationResolvedContext,
+} from './resolvers/daily-recommendation-context-resolver';
+import {
   createCandidateSupplyContextResolver,
   type CandidateSupplyResolvedContext,
 } from './resolvers/candidate-supply-context-resolver';
 
 export type ResolvedContext = ConversationResolvedContext | DailyDiscoveryResolvedContext
-  | CandidateSupplyResolvedContext;
+  | DailyRecommendationResolvedContext | CandidateSupplyResolvedContext;
 
 export type ResolveContextRequest =
   | {
@@ -39,6 +44,14 @@ export type ResolveContextRequest =
       readonly kind: 'daily_discovery';
       readonly localDate: string;
       readonly material: DailyDiscoveryContextMaterial;
+      readonly currentMessages: readonly Message[];
+      readonly tools: readonly ToolDefinition[];
+      readonly signal?: AbortSignal;
+    }
+  | {
+      readonly kind: 'daily_recommendation';
+      readonly localDate: string;
+      readonly material: DailyRecommendationContextMaterial;
       readonly currentMessages: readonly Message[];
       readonly tools: readonly ToolDefinition[];
       readonly signal?: AbortSignal;
@@ -72,14 +85,18 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
   const dailyDiscovery = createDailyDiscoveryContextResolver({
     instructionReader: dependencies.instructionReader,
   });
+  const dailyRecommendation = createDailyRecommendationContextResolver({
+    instructionReader: dependencies.instructionReader,
+  });
   const candidateSupply = createCandidateSupplyContextResolver({
     instructionReader: dependencies.instructionReader,
   });
   return {
     resolve(request) {
       if (request.kind === 'conversation') return conversation.resolve(request);
-      return request.kind === 'daily_discovery'
-        ? dailyDiscovery.resolve(request)
+      if (request.kind === 'daily_discovery') return dailyDiscovery.resolve(request);
+      return request.kind === 'daily_recommendation'
+        ? dailyRecommendation.resolve(request)
         : candidateSupply.resolve(request);
     },
   };
