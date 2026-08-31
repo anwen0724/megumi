@@ -1,3 +1,0 @@
-RECOVERY_FALLBACK_READY
-
-This controlled fixture proves that Megumi continued after the preferred source failed.

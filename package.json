@@ -23,8 +23,6 @@
     "release:verify:artifacts": "node scripts/release/verify-squirrel-artifacts.mjs",
     "release:verify": "npm run release:verify:version && npm run typecheck:packages && npm run typecheck:product && npm test",
     "test": "npm run rebuild:native:node && vitest run",
-    "eval:agent": "npm run rebuild:native:node && tsx --tsconfig evals/agent/tsconfig.json evals/agent/cli.ts",
-    "typecheck:evals": "tsc --project evals/agent/tsconfig.json --noEmit",
     "typecheck:packages": "tsc --build tsconfig.packages.json",
     "typecheck:product": "tsc --project tsconfig.product.json --noEmit",
     "rebuild:native:electron": "electron-rebuild -f -w better-sqlite3",
