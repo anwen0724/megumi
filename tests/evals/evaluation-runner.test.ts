@@ -1,6 +1,6 @@
 /* Verifies the Runner executes one Task through real Product composition and Metric evaluation. */
 // @vitest-environment node
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -29,21 +29,22 @@ describe('Agent Evaluation Runner', () => {
     };
     const config = EvaluationRunConfigSchema.parse({
       profile: 'controlled', taskIds: [task.taskId], suiteIds: [],
-      candidateModel: modelConfig('CANDIDATE_KEY'), graderModel: modelConfig('GRADER_KEY'),
+      candidateModel: { source: 'current' }, graderModel: { source: 'current' },
       repetitions: 1, concurrency: 1,
       budget: { maxTasks: 1, maxInputTokens: 1_000, maxOutputTokens: 1_000 },
       runRoot: temporaryRoot,
     });
+    const candidateModel = resolvedModel();
     const scripted = createScriptedStreams(['The requested task is complete.']);
-    const { result } = await runEvaluation({
+    const { result, storage } = await runEvaluation({
       repositoryRoot: process.cwd(), catalog, config,
+      models: { candidate: candidateModel, grader: candidateModel },
       dependencies: {
         createRunId: () => 'run:test',
         now: monotonicClock(),
         modelMetricEvaluator: noModelMetrics,
         composeTask: (input) => composeEvaluationTask({
           ...input,
-          environment: { CANDIDATE_KEY: 'test-key' },
           modelStreams: { 'openai-completions': scripted.streams },
         }),
       },
@@ -57,6 +58,9 @@ describe('Agent Evaluation Runner', () => {
         expect.objectContaining({ metricId: 'trace', judgement: 'pass' }),
       ],
     });
+    const manifest = readFileSync(path.join(storage.runDirectory, 'manifest.json'), 'utf8');
+    expect(manifest).toContain('"source": "custom"');
+    expect(manifest).not.toContain('test-key');
   });
 });
 
@@ -87,10 +91,21 @@ function evaluationTask() {
   });
 }
 
-function modelConfig(apiKeyEnv: string) {
+function resolvedModel() {
+  const credential = { type: 'api_key' as const, key: 'test-key' };
   return {
-    providerId: 'test', modelId: 'model', api: 'openai-completions' as const, apiKeyEnv,
-    baseUrl: 'https://example.test/v1', contextWindowTokens: 64_000, maxOutputTokens: 2_048,
+    source: 'custom' as const,
+    config: {
+      providerId: 'test', modelId: 'model', api: 'openai-completions' as const,
+      baseUrl: 'https://example.test/v1', displayName: 'Test model',
+      contextWindowTokens: 64_000, maxOutputTokens: 2_048,
+    },
+    credentials: {
+      async read(providerId: string) { return providerId === 'test' ? credential : undefined; },
+      async list() { return [{ providerId: 'test', type: 'api_key' as const }]; },
+      async modify() { throw new Error('read-only'); },
+      async delete() { throw new Error('read-only'); },
+    },
   };
 }
 

@@ -29,12 +29,14 @@ describe('Evaluation Task environment', () => {
     });
     const config = EvaluationRunConfigSchema.parse({
       profile: 'controlled', taskIds: [task.taskId], suiteIds: [],
-      candidateModel: modelConfig('CANDIDATE_KEY'), graderModel: modelConfig('GRADER_KEY'),
+      candidateModel: { source: 'current' }, graderModel: { source: 'current' },
       budget: { maxTasks: 1 }, runRoot: taskRoot,
     });
+    const candidateModel = resolvedModel();
     const composed = await composeEvaluationTask({
       repositoryRoot: process.cwd(), runConfig: config, task, taskRoot,
-      environment: { CANDIDATE_KEY: 'test-key' },
+      candidateModel,
+      graderModel: candidateModel,
     });
     try {
       expect(await readFile(path.join(composed.paths.workspace, 'materials', 'source.md'), 'utf8')).toBe('# Source');
@@ -46,9 +48,20 @@ describe('Evaluation Task environment', () => {
   });
 });
 
-function modelConfig(apiKeyEnv: string) {
+function resolvedModel() {
+  const credential = { type: 'api_key' as const, key: 'test-key' };
   return {
-    providerId: 'test', modelId: 'model', api: 'openai-completions' as const, apiKeyEnv,
-    baseUrl: 'https://example.test/v1', contextWindowTokens: 64_000, maxOutputTokens: 2_048,
+    source: 'custom' as const,
+    config: {
+      providerId: 'test', modelId: 'model', api: 'openai-completions' as const,
+      baseUrl: 'https://example.test/v1', displayName: 'Test model',
+      contextWindowTokens: 64_000, maxOutputTokens: 2_048,
+    },
+    credentials: {
+      async read(providerId: string) { return providerId === 'test' ? credential : undefined; },
+      async list() { return [{ providerId: 'test', type: 'api_key' as const }]; },
+      async modify() { throw new Error('read-only'); },
+      async delete() { throw new Error('read-only'); },
+    },
   };
 }

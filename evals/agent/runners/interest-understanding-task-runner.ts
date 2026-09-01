@@ -19,8 +19,8 @@ export const interestUnderstandingTaskRunner: TaskRunner<InterestUnderstandingTa
         projectId: context.scenarioIds.workspaceId,
         text: context.task.input.text,
         modelSelection: {
-          provider_id: context.runConfig.candidateModel.providerId,
-          model_id: context.runConfig.candidateModel.modelId,
+          provider_id: context.candidateModel.providerId,
+          model_id: context.candidateModel.modelId,
         },
         permissionMode: 'auto',
         createdAt: context.now(),

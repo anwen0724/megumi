@@ -5,7 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ProductRuntime } from '@megumi/composition';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EvaluationRunConfigSchema } from '../../evals/agent/contracts/evaluation-run-config';
 import { EvaluationTaskSchema } from '../../evals/agent/contracts/evaluation-task';
 import { conversationTaskRunner } from '../../evals/agent/runners/conversation-task-runner';
 
@@ -56,11 +55,7 @@ describe('Conversation Task Runner', () => {
     });
     const executionEvidence = await conversationTaskRunner.execute({
       task,
-      runConfig: EvaluationRunConfigSchema.parse({
-        profile: 'controlled', taskIds: [task.taskId], suiteIds: [],
-        candidateModel: modelConfig('CANDIDATE_KEY'), graderModel: modelConfig('GRADER_KEY'),
-        budget: { maxTasks: 1 }, runRoot: workspace,
-      }),
+      candidateModel: { providerId: 'test', modelId: 'model' },
       runtime,
       scenarioIds: {
         workspaceId: 'workspace:1', sessions: {}, interests: {}, candidates: {}, recommendations: {},
@@ -75,10 +70,3 @@ describe('Conversation Task Runner', () => {
     expect(executionEvidence.afterFacts.workspaceFiles).toEqual({ 'result.md': '# Final result' });
   });
 });
-
-function modelConfig(apiKeyEnv: string) {
-  return {
-    providerId: 'test', modelId: 'model', api: 'openai-completions' as const, apiKeyEnv,
-    baseUrl: 'https://example.test/v1', contextWindowTokens: 64_000, maxOutputTokens: 2_048,
-  };
-}

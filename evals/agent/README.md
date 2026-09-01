@@ -60,3 +60,22 @@ npm run eval:agent -- baseline approve <result.json> --id <baseline-id>
 ```
 
 Run Config 可通过 `taskIds` 直接选 Task，也可通过 `suiteIds` 选择集合。`controlled` 固定外部来源、权限、时钟和 ID，但仍调用真实候选模型；`live` 使用真实外部依赖。两种 Profile 都会产生真实模型费用。`runRoot` 通常指向本机 `.megumi/evaluation`。
+
+Candidate 和 Grader 分别声明模型来源：
+
+```json
+{
+  "candidateModel": { "source": "current" },
+  "graderModel": {
+    "source": "configured",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash"
+  }
+}
+```
+
+- `current`：使用当前 Megumi Settings 中选中的模型和凭据；
+- `configured`：使用 Settings 中指定的 Provider 与 Model；
+- `custom`：在 Run Config 中声明模型公共配置，并通过 `settings` Provider 或环境变量引用凭据。
+
+Run Config 不接受明文 API Key。三种来源在执行前统一解析为模型公共配置和 AI `CredentialStore`，Candidate 与 Grader 后续都通过 `@megumi/ai` 调用。正式 Megumi Home 只用于读取模型配置与凭据；Task 数据、数据库、Workspace、日志和报告仍写入隔离目录。

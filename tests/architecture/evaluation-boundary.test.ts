@@ -10,10 +10,13 @@ describe('Evaluation architecture boundary', () => {
     expect(composition).not.toContain('evals/');
   });
 
-  it('keeps candidate and Grader credentials out of the Run manifest', async () => {
-    const source = await readFile('evals/agent/runtime/evaluation-runner.ts', 'utf8');
-    expect(source).not.toContain('apiKey: model');
-    expect(source).toContain('apiKeyEnv');
+  it('keeps credential resolution at the model-source boundary instead of the Run manifest', async () => {
+    const runner = await readFile('evals/agent/runtime/evaluation-runner.ts', 'utf8');
+    const modelSource = await readFile('evals/agent/adapters/evaluation-model-source.ts', 'utf8');
+    const grader = await readFile('evals/agent/metrics/model-metric-evaluator.ts', 'utf8');
+    expect(runner).not.toContain('apiKeyEnv');
+    expect(runner).not.toContain('apiKey:');
+    expect(modelSource).toContain('createSettingsCredentialStore');
+    expect(grader).not.toContain('readonly apiKey: string');
   });
 });
-

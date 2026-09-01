@@ -68,8 +68,8 @@ describe('Evaluation Task authoring', () => {
       profile: 'controlled',
       taskIds: ['conversation.create-study-note'],
       suiteIds: ['core'],
-      candidateModel: model('candidate-key'),
-      graderModel: model('grader-key'),
+      candidateModel: { source: 'current' },
+      graderModel: { source: 'configured', providerId: 'grader', modelId: 'grader-model' },
       repetitions: 1,
       concurrency: 1,
       budget: { maxTasks: 10 },
@@ -86,8 +86,8 @@ describe('Evaluation Task authoring', () => {
   it('requires at least one task or suite in a Run Config', () => {
     expect(() => EvaluationRunConfigSchema.parse({
       profile: 'controlled',
-      candidateModel: model('candidate-key'),
-      graderModel: model('grader-key'),
+      candidateModel: { source: 'current' },
+      graderModel: { source: 'current' },
       budget: { maxTasks: 1 },
       runRoot: '.megumi/evaluation',
     })).toThrow();
@@ -158,18 +158,6 @@ function scenario() {
     preferences: [],
     controlledSearch: [],
     permissionDecision: 'allow' as const,
-  };
-}
-
-function model(apiKeyEnv: string) {
-  return {
-    providerId: 'test-provider',
-    modelId: 'test-model',
-    api: 'openai-completions' as const,
-    apiKeyEnv,
-    baseUrl: 'https://example.test/v1',
-    contextWindowTokens: 8_192,
-    maxOutputTokens: 1_024,
   };
 }
 

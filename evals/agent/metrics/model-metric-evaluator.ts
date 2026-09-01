@@ -14,7 +14,10 @@ import { openAICompletionsApi } from '@megumi/ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@megumi/ai/api/openai-responses.lazy';
 import { builtinProviders } from '@megumi/ai/providers/all';
 import { z } from 'zod';
-import type { EvaluationModelConfig } from '../contracts/evaluation-run-config';
+import type {
+  ResolvedEvaluationModel,
+  ResolvedEvaluationModelConfig,
+} from '../adapters/evaluation-model-source';
 import type { ModelMetric } from '../contracts/evaluation-metric';
 import {
   TaskMetricResultSchema,
@@ -54,30 +57,31 @@ export interface ModelMetricEvaluationOutcome {
 }
 
 export function createModelMetricEvaluator(input: {
-  readonly config: EvaluationModelConfig;
-  readonly apiKey: string;
+  readonly model: ResolvedEvaluationModel;
 }): ModelMetricEvaluator {
-  const models = createModels();
+  const config = input.model.config;
+  const models = createModels({ credentials: input.model.credentials });
   const builtins = builtinProviders();
-  const builtinProvider = builtins.find((provider) => provider.id === input.config.providerId);
-  const baseUrl = input.config.baseUrl ?? builtinProvider?.baseUrl;
-  if (!baseUrl) throw new Error(`Evaluation Grader provider requires a base URL: ${input.config.providerId}.`);
+  const builtinProvider = builtins.find((provider) => provider.id === config.providerId);
+  const baseUrl = config.baseUrl;
   const builtinModel = builtinProvider?.getModels().find((model) => (
-    model.id === input.config.modelId && model.api === input.config.api && model.baseUrl === baseUrl
+    model.id === config.modelId && model.api === config.api && model.baseUrl === baseUrl
   ));
-  const model = modelFromConfig(input.config, baseUrl, builtinModel);
+  const model = modelFromConfig(config, builtinModel);
   models.setProvider(createProvider({
-    id: input.config.providerId,
-    name: input.config.providerId,
+    id: config.providerId,
+    name: config.providerId,
     baseUrl,
     auth: {
       apiKey: {
-        name: `${input.config.providerId} Evaluation key`,
-        resolve: async () => ({ auth: { apiKey: input.apiKey }, source: 'Evaluation environment' }),
+        name: `${config.providerId} Evaluation key`,
+        resolve: async ({ credential }) => credential?.type === 'api_key' && credential.key
+          ? { auth: { apiKey: credential.key }, source: 'Evaluation CredentialStore' }
+          : undefined,
       },
     },
     models: [model],
-    api: apiImplementation(input.config.api),
+    api: apiImplementation(config.api),
   }));
   return {
     async evaluate(request) {
@@ -141,7 +145,7 @@ export function createModelMetricEvaluator(input: {
           ...(!notGradable ? { score } : {}),
           rationale: result?.rationale ?? '评估模型没有返回该 Metric 的结果。',
           evidenceRefs: result?.evidenceRefs ?? [],
-          graderModel: `${input.config.providerId}/${input.config.modelId}`,
+          graderModel: `${config.providerId}/${config.modelId}`,
           promptVersion: PROMPT_VERSION,
           evaluatedAt: request.now,
         });
@@ -166,14 +170,14 @@ function emptyOutcome(): ModelMetricEvaluationOutcome {
   };
 }
 
-function modelFromConfig(config: EvaluationModelConfig, baseUrl: string, builtin?: Model<Api>): Model<Api> {
+function modelFromConfig(config: ResolvedEvaluationModelConfig, builtin?: Model<Api>): Model<Api> {
   return {
     ...(builtin ?? {}),
     id: config.modelId,
     name: config.modelId,
     api: config.api,
     provider: config.providerId,
-    baseUrl,
+    baseUrl: config.baseUrl,
     reasoning: builtin?.reasoning ?? false,
     input: builtin?.input ?? ['text'],
     cost: builtin?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

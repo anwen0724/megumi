@@ -3,29 +3,59 @@ import { z } from 'zod';
 import { StableEvaluationIdSchema } from './evaluation-metric';
 import { EvaluationProfileSchema } from './evaluation-task';
 
-export const EvaluationModelConfigSchema = z.object({
-  providerId: z.string().min(1),
-  modelId: z.string().min(1),
-  api: z.enum([
+const EvaluationProviderApiSchema = z.enum([
     'openai-completions',
     'openai-responses',
     'openai-codex-responses',
     'anthropic-messages',
     'google-generative-ai',
-  ]),
-  apiKeyEnv: z.string().min(1),
-  baseUrl: z.string().url().optional(),
-  contextWindowTokens: z.number().int().positive().default(128_000),
-  maxOutputTokens: z.number().int().positive().default(8_192),
+]);
+
+const CurrentEvaluationModelSourceSchema = z.object({
+  source: z.literal('current'),
 }).strict();
-export type EvaluationModelConfig = z.infer<typeof EvaluationModelConfigSchema>;
+
+const ConfiguredEvaluationModelSourceSchema = z.object({
+  source: z.literal('configured'),
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
+}).strict();
+
+const EvaluationCredentialSourceSchema = z.discriminatedUnion('source', [
+  z.object({
+    source: z.literal('settings'),
+    providerId: z.string().min(1),
+  }).strict(),
+  z.object({
+    source: z.literal('environment'),
+    environmentVariable: z.string().min(1),
+  }).strict(),
+]);
+
+const CustomEvaluationModelSourceSchema = z.object({
+  source: z.literal('custom'),
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
+  api: EvaluationProviderApiSchema,
+  baseUrl: z.string().url(),
+  contextWindowTokens: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive(),
+  credential: EvaluationCredentialSourceSchema,
+}).strict();
+
+export const EvaluationModelSourceSchema = z.discriminatedUnion('source', [
+  CurrentEvaluationModelSourceSchema,
+  ConfiguredEvaluationModelSourceSchema,
+  CustomEvaluationModelSourceSchema,
+]);
+export type EvaluationModelSource = z.infer<typeof EvaluationModelSourceSchema>;
 
 export const EvaluationRunConfigSchema = z.object({
   profile: EvaluationProfileSchema,
   taskIds: z.array(StableEvaluationIdSchema).default([]),
   suiteIds: z.array(StableEvaluationIdSchema).default([]),
-  candidateModel: EvaluationModelConfigSchema,
-  graderModel: EvaluationModelConfigSchema,
+  candidateModel: EvaluationModelSourceSchema,
+  graderModel: EvaluationModelSourceSchema,
   repetitions: z.number().int().min(1).max(20).default(1),
   concurrency: z.number().int().min(1).max(8).default(1),
   budget: z.object({

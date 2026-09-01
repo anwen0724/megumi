@@ -4,7 +4,6 @@ import path from 'node:path';
 import type { ProductRuntime } from '@megumi/composition';
 import type { AnyEvent } from '@megumi/events';
 import { z } from 'zod';
-import type { EvaluationRunConfig } from '../contracts/evaluation-run-config';
 import {
   EvaluationProfileSchema,
   EvaluationRunnerSchema,
@@ -60,7 +59,10 @@ export type EvaluationMeasurements = z.infer<typeof EvaluationMeasurementsSchema
 
 export interface TaskRunnerContext<TTask extends EvaluationTask = EvaluationTask> {
   readonly task: TTask;
-  readonly runConfig: EvaluationRunConfig;
+  readonly candidateModel: {
+    readonly providerId: string;
+    readonly modelId: string;
+  };
   readonly runtime: ProductRuntime;
   readonly scenarioIds: InstalledScenarioIds;
   readonly workspacePath: string;

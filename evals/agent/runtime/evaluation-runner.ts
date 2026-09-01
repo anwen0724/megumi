@@ -1,6 +1,10 @@
 /* Orchestrates Task isolation, real Product execution, Evidence, Metrics, and partial failure. */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import type {
+  ResolvedEvaluationModel,
+  ResolvedEvaluationModels,
+} from '../adapters/evaluation-model-source';
 import type { EvaluationRunConfig } from '../contracts/evaluation-run-config';
 import {
   EvaluationRunResultSchema,
@@ -30,6 +34,7 @@ export async function runEvaluation(input: {
   readonly repositoryRoot: string;
   readonly catalog: EvaluationTaskCatalog;
   readonly config: EvaluationRunConfig;
+  readonly models: ResolvedEvaluationModels;
   readonly dependencies: EvaluationRunnerDependencies;
 }): Promise<{ readonly result: EvaluationRunResult; readonly storage: EvaluationRunStorage }> {
   const now = input.dependencies.now ?? (() => new Date());
@@ -44,8 +49,8 @@ export async function runEvaluation(input: {
     profile: input.config.profile,
     taskIds: input.config.taskIds,
     suiteIds: input.config.suiteIds,
-    candidateModel: publicModel(input.config.candidateModel),
-    graderModel: publicModel(input.config.graderModel),
+    candidateModel: publicModel(input.models.candidate),
+    graderModel: publicModel(input.models.grader),
     repetitions: input.config.repetitions,
     concurrency: input.config.concurrency,
     budget: input.config.budget,
@@ -72,8 +77,8 @@ export async function runEvaluation(input: {
     profile: input.config.profile,
     startedAt,
     endedAt: now().toISOString(),
-    candidateModel: `${input.config.candidateModel.providerId}/${input.config.candidateModel.modelId}`,
-    graderModelAndMetricVersion: `${input.config.graderModel.providerId}/${input.config.graderModel.modelId}@evaluation-model-metrics-v1`,
+    candidateModel: modelLabel(input.models.candidate),
+    graderModelAndMetricVersion: `${modelLabel(input.models.grader)}@evaluation-model-metrics-v1`,
     environment: {
       productVersion,
       nodeVersion: process.version,
@@ -93,6 +98,7 @@ export async function runEvaluation(input: {
 async function runTask(input: {
   readonly repositoryRoot: string;
   readonly config: EvaluationRunConfig;
+  readonly models: ResolvedEvaluationModels;
   readonly dependencies: EvaluationRunnerDependencies;
   readonly storage: EvaluationRunStorage;
   readonly scheduledTask: ScheduledTask;
@@ -108,10 +114,15 @@ async function runTask(input: {
       runConfig: input.config,
       task,
       taskRoot: input.storage.taskDirectory(taskRunId),
+      candidateModel: input.models.candidate,
+      graderModel: input.models.grader,
     });
     const execution = await resolveTaskRunner(task).execute({
       task,
-      runConfig: input.config,
+      candidateModel: {
+        providerId: input.models.candidate.config.providerId,
+        modelId: input.models.candidate.config.modelId,
+      },
       runtime: composed.runtime,
       scenarioIds: composed.scenarioIds,
       workspacePath: composed.paths.workspace,
@@ -248,14 +259,20 @@ function totals(results: readonly TaskEvaluationResult[]) {
   };
 }
 
-function publicModel(model: EvaluationRunConfig['candidateModel']): Record<string, unknown> {
+function publicModel(model: ResolvedEvaluationModel): Record<string, unknown> {
   return {
-    providerId: model.providerId,
-    modelId: model.modelId,
-    api: model.api,
-    apiKeyEnv: model.apiKeyEnv,
-    ...(model.baseUrl ? { baseUrl: model.baseUrl } : {}),
+    source: model.source,
+    providerId: model.config.providerId,
+    modelId: model.config.modelId,
+    api: model.config.api,
+    baseUrl: model.config.baseUrl,
+    contextWindowTokens: model.config.contextWindowTokens,
+    maxOutputTokens: model.config.maxOutputTokens,
   };
+}
+
+function modelLabel(model: ResolvedEvaluationModel): string {
+  return `${model.config.providerId}/${model.config.modelId}`;
 }
 
 async function readProductVersion(repositoryRoot: string): Promise<string> {

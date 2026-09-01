@@ -28,8 +28,8 @@ export const conversationTaskRunner: TaskRunner<ConversationTask> = {
           projectId: context.scenarioIds.workspaceId,
           text: step.userInput,
           modelSelection: {
-            provider_id: context.runConfig.candidateModel.providerId,
-            model_id: context.runConfig.candidateModel.modelId,
+            provider_id: context.candidateModel.providerId,
+            model_id: context.candidateModel.modelId,
           },
           permissionMode: step.permissionMode,
           createdAt: context.now(),

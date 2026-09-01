@@ -4,4 +4,4 @@ Adapters 只替换真实产品的外部环境边界，不替换 Product Runtime�
 
 - `controlled/` 固定外部搜索结果、权限决定、时钟和 ID，使重复运行可比较；
 - `live/` 使用实时外部依赖，结果主要用于趋势观察；
-- Credential 和 Home Adapter 保证密钥不进入产物、运行不接触用户正式 Home。
+- Model Source Adapter 只读当前 Megumi Settings 和 CredentialStore，并为 Run 建立只读凭据快照；密钥不进入 Run Config 或产物，隔离任务也不会写入用户正式 Home。

@@ -15,6 +15,7 @@ import { createEvaluationHomeOptions } from '../adapters/evaluation-home';
 import { createLiveProfile } from '../adapters/live/profile';
 import type { EvaluationRunConfig } from '../contracts/evaluation-run-config';
 import type { EvaluationTask } from '../contracts/evaluation-task';
+import type { ResolvedEvaluationModel } from '../adapters/evaluation-model-source';
 import {
   createDatabaseScenarioOwner,
   installScenario,
@@ -41,7 +42,8 @@ export async function composeEvaluationTask(input: {
   readonly runConfig: EvaluationRunConfig;
   readonly task: EvaluationTask;
   readonly taskRoot: string;
-  readonly environment?: Readonly<Record<string, string | undefined>>;
+  readonly candidateModel: ResolvedEvaluationModel;
+  readonly graderModel: ResolvedEvaluationModel;
   readonly modelStreams?: Partial<Record<Api, ProviderStreams>>;
 }): Promise<ComposedEvaluationTask> {
   const productPackage = z.object({ version: z.string().min(1) }).passthrough().parse(
@@ -71,19 +73,17 @@ export async function composeEvaluationTask(input: {
     scenarioOwner.close();
   }
 
-  const environment = input.environment ?? process.env;
   const controlledProfile = input.runConfig.profile === 'controlled'
     ? createControlledProfile({ taskId: input.task.taskId, scenario: input.task.scenario })
     : undefined;
   const profile = controlledProfile ?? createLiveProfile({ now: () => new Date() });
-  const settingsStore = createEvaluationSettingsStore(input.runConfig, input.task);
+  const settingsStore = await createEvaluationSettingsStore(input.candidateModel, input.task);
   const runtime = composeApplication({
     home: createEvaluationHomeOptions({ homePath: home, now: () => new Date(profile.now()) }),
     migrationsFolder,
     observabilityStorage: nodeObservabilityStorage,
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
     settingsStorage: settingsStore,
-    settingsEnvironment: { readVariable: (name) => environment[name] },
     productEnvironment: {
       appVersion: productPackage.version,
       platform: process.platform,
@@ -124,8 +124,10 @@ export async function composeEvaluationTask(input: {
       profile: input.runConfig.profile,
       taskId: input.task.taskId,
       taskRevision: input.task.revision,
-      candidateModel: `${input.runConfig.candidateModel.providerId}/${input.runConfig.candidateModel.modelId}`,
-      graderModel: `${input.runConfig.graderModel.providerId}/${input.runConfig.graderModel.modelId}`,
+      candidateModel: modelLabel(input.candidateModel),
+      candidateModelSource: input.candidateModel.source,
+      graderModel: modelLabel(input.graderModel),
+      graderModelSource: input.graderModel.source,
       timezone: 'UTC',
       permissions: input.task.scenario.permissionDecision,
       sources: profile.sourceDescription,
@@ -153,11 +155,15 @@ async function installWorkspaceFiles(
   }
 }
 
-function createEvaluationSettingsStore(
-  config: EvaluationRunConfig,
+async function createEvaluationSettingsStore(
+  model: ResolvedEvaluationModel,
   task: EvaluationTask,
-): SettingsStore {
-  const model = config.candidateModel;
+): Promise<SettingsStore> {
+  const credential = await model.credentials.read(model.config.providerId);
+  if (credential?.type !== 'api_key' || !credential.key) {
+    throw new Error(`Evaluation Candidate credential is unavailable: ${model.config.providerId}.`);
+  }
+  const config = model.config;
   let document: Readonly<Record<string, unknown>> = {
     setup: { completed: true, completed_at: task.scenario.clock },
     discovery: {
@@ -165,19 +171,19 @@ function createEvaluationSettingsStore(
       daily_target_count: task.scenario.dailyTargetCount,
       enabled_sources: ['open_web'],
     },
-    model_selection: { provider_id: model.providerId, model_id: model.modelId },
+    model_selection: { provider_id: config.providerId, model_id: config.modelId },
     permissions: controlledPermissionSettings(task.scenario),
     providers: {
-      [model.providerId]: {
+      [config.providerId]: {
         enabled: true,
-        api: model.api,
-        display_name: model.providerId,
-        ...(model.baseUrl ? { base_url: model.baseUrl } : {}),
-        api_key_env: model.apiKeyEnv,
+        api: config.api,
+        display_name: config.displayName,
+        base_url: config.baseUrl,
+        api_key: credential.key,
         models: {
-          [model.modelId]: {
-            context_window_tokens: model.contextWindowTokens,
-            max_output_tokens: model.maxOutputTokens,
+          [config.modelId]: {
+            context_window_tokens: config.contextWindowTokens,
+            max_output_tokens: config.maxOutputTokens,
           },
         },
       },
@@ -187,4 +193,8 @@ function createEvaluationSettingsStore(
     read: () => structuredClone(document),
     write: (next) => { document = structuredClone(next); },
   };
+}
+
+function modelLabel(model: ResolvedEvaluationModel): string {
+  return `${model.config.providerId}/${model.config.modelId}`;
 }

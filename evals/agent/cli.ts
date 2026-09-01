@@ -1,8 +1,10 @@
 /* Implements local Task validation, Evaluation Run, review, and Baseline commands. */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createEvaluationCredentials } from './adapters/evaluation-credential-store';
+import { resolveMegumiHomePath } from '@megumi/home';
+import { resolveEvaluationModels } from './adapters/evaluation-model-source';
 import { EvaluationRunConfigSchema } from './contracts/evaluation-run-config';
 import { EvaluationRunResultSchema } from './contracts/evaluation-result';
 import { createModelMetricEvaluator } from './metrics/model-metric-evaluator';
@@ -31,16 +33,22 @@ async function main(arguments_: readonly string[]): Promise<void> {
     const config = EvaluationRunConfigSchema.parse(await readJson(path.resolve(action)));
     const catalog = await loadEvaluationTaskCatalog(evaluationRoot);
     catalog.resolveTasks(config);
-    const credentials = createEvaluationCredentials(process.env);
-    credentials.require(config.candidateModel.apiKeyEnv);
+    const models = await resolveEvaluationModels({
+      config,
+      megumiHomePath: resolveMegumiHomePath({
+        env: { MEGUMI_HOME: process.env.MEGUMI_HOME },
+        homeDirectory: os.homedir(),
+      }),
+      environment: process.env,
+    });
     const modelMetricEvaluator = createModelMetricEvaluator({
-      config: config.graderModel,
-      apiKey: credentials.require(config.graderModel.apiKeyEnv),
+      model: models.grader,
     });
     const { result, storage } = await runEvaluation({
       repositoryRoot,
       catalog,
       config,
+      models,
       dependencies: { modelMetricEvaluator },
     });
     const comparison = config.baseline
