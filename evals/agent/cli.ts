@@ -7,17 +7,17 @@ import { resolveMegumiHomePath } from '@megumi/home';
 import { resolveEvaluationModels } from './adapters/evaluation-model-source';
 import { EvaluationRunConfigSchema } from './contracts/evaluation-run-config';
 import { EvaluationRunResultSchema } from './contracts/evaluation-result';
-import { createModelMetricEvaluator } from './metrics/model-metric-evaluator';
+import { createModelMetricEvaluator } from './grading/model-grader';
 import {
   approveBaseline,
   compareWithBaseline,
   EvaluationBaselineSchema,
-} from './reporting/baseline-comparator';
-import { importHumanReview } from './reporting/human-review';
-import { renderEvaluationReport } from './reporting/report-writer';
-import { cleanEvaluationRuns } from './reporting/retention-cleaner';
-import { runEvaluation } from './runtime/evaluation-runner';
-import { loadEvaluationTaskCatalog } from './runtime/task-loader';
+} from './results/baseline-comparator';
+import { importHumanReview } from './results/human-review';
+import { renderEvaluationDiagnostics, renderEvaluationReport } from './results/report-writer';
+import { cleanEvaluationRuns } from './results/retention-cleaner';
+import { runEvaluation } from './execution/run-evaluation';
+import { loadEvaluationTaskCatalog } from './execution/task-loader';
 
 const evaluationRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(evaluationRoot, '..', '..');
@@ -51,7 +51,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
       models,
       dependencies: { modelMetricEvaluator },
     });
-    const comparison = config.baseline
+    const comparison = config.baseline && result.infrastructureStatus === 'valid'
       ? compareWithBaseline({
           result,
           baseline: EvaluationBaselineSchema.parse(await readJson(path.join(
@@ -62,9 +62,13 @@ async function main(arguments_: readonly string[]): Promise<void> {
         })
       : undefined;
     if (comparison) await storage.writeBaselineComparison(comparison);
-    await storage.writeReport(renderEvaluationReport(result, comparison));
+    if (result.infrastructureStatus === 'valid') {
+      await storage.writeReport(renderEvaluationReport(result, comparison));
+    } else {
+      await storage.writeDiagnostics(renderEvaluationDiagnostics(result));
+    }
     await cleanEvaluationRuns({ evaluationRoot: config.runRoot });
-    process.stdout.write(`Evaluation complete: ${storage.runDirectory}\n`);
+    process.stdout.write(`Evaluation ${result.infrastructureStatus}: ${storage.runDirectory}\n`);
     return;
   }
   if (command === 'human' && action === 'review' && rest[0] === 'import' && rest[1] && rest[2]) {

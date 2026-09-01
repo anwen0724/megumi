@@ -11,11 +11,11 @@ describe('Evaluation architecture boundary', () => {
   });
 
   it('keeps credential resolution at the model-source boundary instead of the Run manifest', async () => {
-    const runner = await readFile('evals/agent/runtime/evaluation-runner.ts', 'utf8');
+    const execution = await readFile('evals/agent/execution/run-evaluation.ts', 'utf8');
     const modelSource = await readFile('evals/agent/adapters/evaluation-model-source.ts', 'utf8');
-    const grader = await readFile('evals/agent/metrics/model-metric-evaluator.ts', 'utf8');
-    expect(runner).not.toContain('apiKeyEnv');
-    expect(runner).not.toContain('apiKey:');
+    const grader = await readFile('evals/agent/grading/model-grader.ts', 'utf8');
+    expect(execution).not.toContain('apiKeyEnv');
+    expect(execution).not.toContain('apiKey:');
     expect(modelSource).toContain('createSettingsCredentialStore');
     expect(grader).not.toContain('readonly apiKey: string');
   });

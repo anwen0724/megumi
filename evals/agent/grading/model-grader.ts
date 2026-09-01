@@ -13,7 +13,6 @@ import { openAICodexResponsesApi } from '@megumi/ai/api/openai-codex-responses.l
 import { openAICompletionsApi } from '@megumi/ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@megumi/ai/api/openai-responses.lazy';
 import { builtinProviders } from '@megumi/ai/providers/all';
-import { z } from 'zod';
 import type {
   ResolvedEvaluationModel,
   ResolvedEvaluationModelConfig,
@@ -24,24 +23,15 @@ import {
   type TaskMetricResult,
 } from '../contracts/evaluation-result';
 import type { EvaluationTask } from '../contracts/evaluation-task';
-import type { EvidenceBundle } from '../runtime/evidence-collector';
+import type { TaskObservation } from '../execution/observe-task';
 
-const PROMPT_VERSION = 'evaluation-model-metrics-v1';
-const ResponseSchema = z.object({
-  results: z.array(z.object({
-    metricId: z.string().min(1),
-    judgement: z.enum(['graded', 'not_gradable']),
-    score: z.number().int().min(0).max(4).optional(),
-    rationale: z.string().min(1),
-    evidenceRefs: z.array(z.string().min(1)),
-  }).strict()),
-}).strict();
+const PROMPT_VERSION = 'evaluation-model-metrics-v2';
 
 export interface ModelMetricEvaluator {
   evaluate(input: {
     readonly task: EvaluationTask;
     readonly metrics: readonly ModelMetric[];
-    readonly evidence: EvidenceBundle;
+    readonly observation: TaskObservation;
     readonly now: string;
   }): Promise<ModelMetricEvaluationOutcome>;
 }
@@ -88,7 +78,7 @@ export function createModelMetricEvaluator(input: {
       if (request.metrics.length === 0) return emptyOutcome();
       const response = await models.completeSimple(model, {
         systemPrompt: [
-          'You evaluate Megumi Agent tasks from the supplied complete development evidence.',
+          'You evaluate one real Megumi product execution from its compact observation.',
           'Score every requested metric independently from 0 to 4 according to its rubric.',
           'Use not_gradable only when the evidence cannot support a judgement.',
           'Do not invent actions or outputs that are absent from the evidence.',
@@ -112,7 +102,7 @@ export function createModelMetricEvaluator(input: {
                 rubric: metric.rubric,
                 scoreScale: '0-4',
               })),
-              evidence: request.evidence,
+              observation: request.observation,
               output: {
                 results: [{
                   metricId: 'string',
@@ -130,8 +120,8 @@ export function createModelMetricEvaluator(input: {
       if (response.stopReason === 'error' || response.stopReason === 'aborted') {
         throw new Error(response.errorMessage ?? 'Model Metric Evaluator failed.');
       }
-      const parsed = ResponseSchema.parse(JSON.parse(extractJson(contentText(response.content))));
-      const byMetricId = new Map(parsed.results.map((result) => [result.metricId, result]));
+      const parsed = parseModelResults(contentText(response.content));
+      const byMetricId = new Map(parsed.map((result) => [result.metricId, result]));
       const results = request.metrics.map((metric) => {
         const result = byMetricId.get(metric.metricId);
         const score = result?.score;
@@ -203,4 +193,64 @@ function extractJson(text: string): string {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   return start >= 0 && end > start ? text.slice(start, end + 1) : text;
+}
+
+interface ParsedModelMetric {
+  readonly metricId: string;
+  readonly judgement: 'graded' | 'not_gradable';
+  readonly score?: number;
+  readonly rationale: string;
+  readonly evidenceRefs: readonly string[];
+}
+
+/** Normalizes harmless provider formatting differences without inventing missing grades. */
+function parseModelResults(text: string): ParsedModelMetric[] {
+  let root: unknown;
+  try {
+    root = JSON.parse(extractJson(text));
+  } catch {
+    return [];
+  }
+  if (isRecord(root) && 'output' in root) {
+    root = typeof root.output === 'string'
+      ? parseNestedJson(root.output)
+      : root.output;
+  }
+  if (!isRecord(root) || !Array.isArray(root.results)) return [];
+  return root.results.flatMap((value): ParsedModelMetric[] => {
+    if (!isRecord(value) || typeof value.metricId !== 'string') return [];
+    const score = normalizeScore(value.score);
+    return [{
+      metricId: value.metricId,
+      judgement: value.judgement === 'not_gradable' || score === undefined ? 'not_gradable' : 'graded',
+      ...(score !== undefined ? { score } : {}),
+      rationale: typeof value.rationale === 'string' && value.rationale.trim()
+        ? value.rationale
+        : '评估模型未提供可用理由。',
+      evidenceRefs: Array.isArray(value.evidenceRefs)
+        ? value.evidenceRefs.filter((reference): reference is string => typeof reference === 'string')
+        : [],
+    }];
+  });
+}
+
+function parseNestedJson(value: string): unknown {
+  try {
+    return JSON.parse(extractJson(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeScore(value: unknown): number | undefined {
+  const number = typeof value === 'string' && /^\d+$/u.test(value.trim())
+    ? Number(value)
+    : value;
+  return typeof number === 'number' && Number.isInteger(number) && number >= 0 && number <= 4
+    ? number
+    : undefined;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

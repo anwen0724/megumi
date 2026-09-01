@@ -10,34 +10,31 @@
   "tags": [
     "boundary"
   ],
-  "runner": "daily_recommendation",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": []
-    },
+    "workspaceFiles": [],
     "sessions": [],
     "interests": [
       {
-        "scenarioInterestId": "typescript",
+        "referenceId": "typescript",
         "description": "TypeScript 工程实践",
         "status": "active"
       }
     ],
     "candidates": [
       {
-        "scenarioCandidateId": "only",
+        "referenceId": "only",
         "sourceId": "open_web",
         "sourceName": "Open Web",
         "canonicalUrl": "https://example.test/only",
         "title": "TypeScript 工程案例",
         "description": "唯一可用候选。",
         "contentText": "完整的工程案例内容。",
-        "matchedInterestScenarioIds": [
+        "relevance": "direct",
+        "matchedInterestReferenceIds": [
           "typescript"
-        ],
-        "relevance": "direct"
+        ]
       }
     ],
     "recommendations": [],
@@ -46,12 +43,9 @@
     "permissionDecision": "allow"
   },
   "input": {
-    "kind": "ensure_daily"
+    "type": "daily_recommendation"
   },
-  "completion": {
-    "kind": "daily_batch_terminal",
-    "timeoutMs": 180000
-  },
+  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",

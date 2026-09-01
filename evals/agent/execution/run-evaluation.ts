@@ -1,4 +1,6 @@
-/* Orchestrates Task isolation, real Product execution, Evidence, Metrics, and partial failure. */
+/*
+ * Drives Evaluation Tasks through the real ProductRuntime and keeps infrastructure failure separate.
+ */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type {
@@ -14,22 +16,23 @@ import {
   type TaskMetricResult,
 } from '../contracts/evaluation-result';
 import type { EvaluationTask } from '../contracts/evaluation-task';
-import { evaluateTaskMetrics } from '../metrics/metric-evaluator';
-import type { ModelMetricEvaluator } from '../metrics/model-metric-evaluator';
-import { resolveTaskRunner } from '../runners/task-runner';
-import { collectEvidence } from './evidence-collector';
+import { gradeTask } from '../grading/grade-task';
+import type { ModelMetricEvaluator } from '../grading/model-grader';
+import { createRunStorage, type EvaluationRunStorage } from '../results/run-storage';
+import { createEvaluationHost, type EvaluationHost } from './evaluation-host';
+import { executeTask } from './execute-task';
+import { observeTask } from './observe-task';
 import { createRunBudget } from './run-budget';
-import { createRunStorage, type EvaluationRunStorage } from './run-storage';
-import { composeEvaluationTask, type ComposedEvaluationTask } from './task-environment';
 import type { EvaluationTaskCatalog } from './task-loader';
 
 export interface EvaluationRunnerDependencies {
   readonly modelMetricEvaluator: ModelMetricEvaluator;
-  readonly composeTask?: typeof composeEvaluationTask;
+  readonly createHost?: typeof createEvaluationHost;
   readonly now?: () => Date;
   readonly createRunId?: () => string;
 }
 
+/** Executes the selected Tasks and persists one valid quality result or invalid diagnostic result. */
 export async function runEvaluation(input: {
   readonly repositoryRoot: string;
   readonly catalog: EvaluationTaskCatalog;
@@ -56,6 +59,7 @@ export async function runEvaluation(input: {
     budget: input.config.budget,
     productVersion,
   });
+
   const budget = createRunBudget(input.config.budget);
   const results: TaskEvaluationResult[] = new Array(scheduled.length);
   let cursor = 0;
@@ -72,13 +76,17 @@ export async function runEvaluation(input: {
     }
   });
   await Promise.all(workers);
+
   const result = EvaluationRunResultSchema.parse({
     runId,
     profile: input.config.profile,
+    infrastructureStatus: results.some((result) => result.infrastructureStatus === 'invalid')
+      ? 'invalid'
+      : 'valid',
     startedAt,
     endedAt: now().toISOString(),
     candidateModel: modelLabel(input.models.candidate),
-    graderModelAndMetricVersion: `${modelLabel(input.models.grader)}@evaluation-model-metrics-v1`,
+    graderModelAndMetricVersion: `${modelLabel(input.models.grader)}@evaluation-model-metrics-v2`,
     environment: {
       productVersion,
       nodeVersion: process.version,
@@ -107,9 +115,9 @@ async function runTask(input: {
   const { task, taskRunId } = input.scheduledTask;
   const startedAt = input.now().toISOString();
   const startedAtMs = Date.now();
-  let composed: ComposedEvaluationTask | undefined;
+  let host: EvaluationHost | undefined;
   try {
-    composed = await (input.dependencies.composeTask ?? composeEvaluationTask)({
+    host = await (input.dependencies.createHost ?? createEvaluationHost)({
       repositoryRoot: input.repositoryRoot,
       runConfig: input.config,
       task,
@@ -117,76 +125,70 @@ async function runTask(input: {
       candidateModel: input.models.candidate,
       graderModel: input.models.grader,
     });
-    const execution = await resolveTaskRunner(task).execute({
+    const execution = await executeTask({
       task,
+      runtime: host.runtime,
+      initialStateIds: host.initialStateIds,
       candidateModel: {
         providerId: input.models.candidate.config.providerId,
         modelId: input.models.candidate.config.modelId,
       },
-      runtime: composed.runtime,
-      scenarioIds: composed.scenarioIds,
-      workspacePath: composed.paths.workspace,
-      environment: composed.environment,
-      now: () => task.scenario.clock,
+      now: () => task.initialState.clock,
     });
-    const evidence = await collectEvidence({
-      evidenceId: `evidence:${taskRunId}`,
+    const observation = await observeTask({
+      observationId: `observation:${taskRunId}`,
       task,
-      runtime: composed.runtime,
+      runtime: host.runtime,
       execution,
-      environment: composed.environment,
+      environment: host.environment,
+      workspacePath: host.paths.workspace,
       startedAtMs,
       collectedAt: input.now().toISOString(),
     });
-    const evidencePath = await input.storage.writeEvidence(taskRunId, evidence);
-    const evaluated = await evaluateTaskMetrics({
+    const observationPath = await input.storage.writeObservation(taskRunId, observation);
+    const graded = await gradeTask({
       task,
-      evidence,
+      observation,
       modelEvaluator: input.dependencies.modelMetricEvaluator,
       now: input.now().toISOString(),
     });
     const measurements = {
-      ...evidence.measurements,
-      graderModelCalls: evaluated.modelUsage.modelCalls,
-      graderInputTokens: evaluated.modelUsage.inputTokens,
-      graderOutputTokens: evaluated.modelUsage.outputTokens,
-      graderEstimatedCostUsd: evaluated.modelUsage.estimatedCostUsd,
+      ...observation.measurements,
+      graderModelCalls: graded.modelUsage.modelCalls,
+      graderInputTokens: graded.modelUsage.inputTokens,
+      graderOutputTokens: graded.modelUsage.outputTokens,
+      graderEstimatedCostUsd: graded.modelUsage.estimatedCostUsd,
     };
     return TaskEvaluationResultSchema.parse({
       taskRunId,
       taskId: task.taskId,
       revision: task.revision,
-      runner: task.runner,
+      operation: task.input.type,
       difficulty: task.difficulty,
       profile: input.config.profile,
-      status: deriveStatus(evaluated.results),
+      executionOutcome: execution.outcome,
+      judgement: graded.infrastructureError ? 'not_evaluated' : deriveJudgement(graded.results),
+      infrastructureStatus: graded.infrastructureError ? 'invalid' : 'valid',
       startedAt,
       endedAt: input.now().toISOString(),
-      evidencePath,
-      metricResults: evaluated.results,
+      observationPath,
+      metricResults: graded.results,
       measurements,
-      evidenceIssues: evidence.issues,
+      observationIssues: observation.issues,
+      ...(graded.infrastructureError ? { infrastructureError: graded.infrastructureError } : {}),
     });
   } catch (error) {
-    return TaskEvaluationResultSchema.parse({
+    return infrastructureFailureResult({
       taskRunId,
-      taskId: task.taskId,
-      revision: task.revision,
-      runner: task.runner,
-      difficulty: task.difficulty,
+      task,
       profile: input.config.profile,
-      status: 'evaluation_error',
       startedAt,
       endedAt: input.now().toISOString(),
-      metricResults: [],
-      measurements: emptyMeasurements(Math.max(0, Date.now() - startedAtMs)),
-      error: {
-        code: 'evaluation_execution_failed',
-        message: error instanceof Error ? error.message : String(error),
-      },
+      durationMs: Math.max(0, Date.now() - startedAtMs),
+      error,
     });
   } finally {
-    await composed?.dispose().catch(() => undefined);
+    await host?.dispose().catch(() => undefined);
   }
 }
 
@@ -202,7 +204,7 @@ function scheduleTasks(tasks: readonly EvaluationTask[], repetitions: number): S
   }))).flat();
 }
 
-function deriveStatus(results: readonly TaskMetricResult[]): TaskEvaluationResult['status'] {
+function deriveJudgement(results: readonly TaskMetricResult[]): TaskEvaluationResult['judgement'] {
   const required = results.filter((result) => result.required);
   if (required.some((result) => result.judgement === 'not_gradable')) return 'not_gradable';
   if (required.some((result) => result.judgement === 'fail')) return 'failed';
@@ -218,14 +220,48 @@ function budgetBlockedResult(
     taskRunId: entry.taskRunId,
     taskId: entry.task.taskId,
     revision: entry.task.revision,
-    runner: entry.task.runner,
+    operation: entry.task.input.type,
     difficulty: entry.task.difficulty,
     profile,
-    status: 'budget_blocked',
+    executionOutcome: { status: 'not_started', reason: 'budget_blocked' },
+    judgement: 'not_evaluated',
+    infrastructureStatus: 'valid',
     startedAt: at,
     endedAt: at,
     metricResults: [],
     measurements: emptyMeasurements(0),
+    observationIssues: [],
+  });
+}
+
+function infrastructureFailureResult(input: {
+  readonly taskRunId: string;
+  readonly task: EvaluationTask;
+  readonly profile: EvaluationRunConfig['profile'];
+  readonly startedAt: string;
+  readonly endedAt: string;
+  readonly durationMs: number;
+  readonly error: unknown;
+}): TaskEvaluationResult {
+  return TaskEvaluationResultSchema.parse({
+    taskRunId: input.taskRunId,
+    taskId: input.task.taskId,
+    revision: input.task.revision,
+    operation: input.task.input.type,
+    difficulty: input.task.difficulty,
+    profile: input.profile,
+    executionOutcome: { status: 'not_started', reason: 'infrastructure_error' },
+    judgement: 'not_evaluated',
+    infrastructureStatus: 'invalid',
+    startedAt: input.startedAt,
+    endedAt: input.endedAt,
+    metricResults: [],
+    measurements: emptyMeasurements(input.durationMs),
+    observationIssues: [],
+    infrastructureError: {
+      code: 'evaluation_infrastructure_failed',
+      message: input.error instanceof Error ? input.error.message : String(input.error),
+    },
   });
 }
 
@@ -251,11 +287,12 @@ function emptyMeasurements(durationMs: number) {
 
 function totals(results: readonly TaskEvaluationResult[]) {
   return {
-    passed: results.filter((result) => result.status === 'passed').length,
-    failed: results.filter((result) => result.status === 'failed').length,
-    notGradable: results.filter((result) => result.status === 'not_gradable').length,
-    evaluationErrors: results.filter((result) => result.status === 'evaluation_error').length,
-    budgetBlocked: results.filter((result) => result.status === 'budget_blocked').length,
+    passed: results.filter((result) => result.judgement === 'passed').length,
+    failed: results.filter((result) => result.judgement === 'failed').length,
+    notGradable: results.filter((result) => result.judgement === 'not_gradable').length,
+    invalid: results.filter((result) => result.infrastructureStatus === 'invalid').length,
+    budgetBlocked: results.filter((result) => result.executionOutcome.status === 'not_started'
+      && result.executionOutcome.reason === 'budget_blocked').length,
   };
 }
 

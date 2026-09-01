@@ -10,16 +10,13 @@
   "tags": [
     "boundary"
   ],
-  "runner": "interest_understanding",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": []
-    },
+    "workspaceFiles": [],
     "sessions": [
       {
-        "scenarioSessionId": "main",
+        "referenceId": "main",
         "title": "普通会话",
         "turns": []
       }
@@ -32,13 +29,10 @@
     "permissionDecision": "allow"
   },
   "input": {
-    "kind": "completed_conversation_turn",
+    "type": "interest_understanding",
     "text": "谢谢，今天先聊到这里。"
   },
-  "completion": {
-    "kind": "interest_understanding_terminal",
-    "timeoutMs": 120000
-  },
+  "timeoutMs": 120000,
   "metrics": [
     {
       "metricId": "business_completion_present",

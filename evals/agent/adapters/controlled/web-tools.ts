@@ -1,12 +1,12 @@
-/* Returns deterministic external Web Search and Fetch facts from one validated Scenario. */
+/* Returns deterministic external Web Search and Fetch facts from one validated initial state. */
 import type { WebFetch, WebSearch } from '@megumi/tools';
-import type { EvaluationScenario } from '../../contracts/evaluation-task';
+import type { EvaluationInitialState } from '../../contracts/evaluation-task';
 
-export function createControlledWebTools(scenario: EvaluationScenario): {
+export function createControlledWebTools(initialState: EvaluationInitialState): {
   readonly webSearch: WebSearch;
   readonly webFetch: WebFetch;
 } {
-  const results = scenario.controlledSearch;
+  const results = initialState.controlledSearch;
   return {
     webSearch: {
       async search(request) {
@@ -26,7 +26,7 @@ export function createControlledWebTools(scenario: EvaluationScenario): {
       async fetch(request) {
         request.signal?.throwIfAborted();
         const result = results.flatMap((entry) => entry.results).find((entry) => entry.url === request.url);
-        if (!result) throw new Error(`Controlled Web Fetch has no Scenario result for ${request.url}.`);
+        if (!result) throw new Error(`Controlled Web Fetch has no initial-state result for ${request.url}.`);
         return {
           requestedUrl: request.url,
           finalUrl: result.url,

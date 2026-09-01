@@ -17,15 +17,15 @@ import type { EvaluationRunConfig } from '../contracts/evaluation-run-config';
 import type { EvaluationTask } from '../contracts/evaluation-task';
 import type { ResolvedEvaluationModel } from '../adapters/evaluation-model-source';
 import {
-  createDatabaseScenarioOwner,
-  installScenario,
-  type InstalledScenarioIds,
-} from './scenario-installer';
+  createDatabaseInitialStateOwner,
+  installInitialState,
+  type InstalledInitialStateIds,
+} from './initial-state';
 
-export interface ComposedEvaluationTask {
+export interface EvaluationHost {
   readonly runtime: ProductRuntime;
   readonly task: EvaluationTask;
-  readonly scenarioIds: InstalledScenarioIds;
+  readonly initialStateIds: InstalledInitialStateIds;
   readonly paths: {
     readonly taskRoot: string;
     readonly home: string;
@@ -37,7 +37,7 @@ export interface ComposedEvaluationTask {
 }
 
 /** Creates an isolated Home, Workspace and database, then starts the shared application composition. */
-export async function composeEvaluationTask(input: {
+export async function createEvaluationHost(input: {
   readonly repositoryRoot: string;
   readonly runConfig: EvaluationRunConfig;
   readonly task: EvaluationTask;
@@ -45,7 +45,7 @@ export async function composeEvaluationTask(input: {
   readonly candidateModel: ResolvedEvaluationModel;
   readonly graderModel: ResolvedEvaluationModel;
   readonly modelStreams?: Partial<Record<Api, ProviderStreams>>;
-}): Promise<ComposedEvaluationTask> {
+}): Promise<EvaluationHost> {
   const productPackage = z.object({ version: z.string().min(1) }).passthrough().parse(
     JSON.parse(await readFile(path.join(input.repositoryRoot, 'package.json'), 'utf8')),
   );
@@ -54,27 +54,27 @@ export async function composeEvaluationTask(input: {
   const workspace = path.join(taskRoot, 'workspace');
   await mkdir(path.join(home, 'sqlite'), { recursive: true });
   await mkdir(workspace, { recursive: true });
-  await installWorkspaceFiles(workspace, input.task.scenario.workspace.files);
+  await installWorkspaceFiles(workspace, input.task.initialState.workspaceFiles);
 
   const migrationsFolder = path.join(input.repositoryRoot, 'packages', 'agent', 'database', 'migrations');
-  const scenarioOwner = createDatabaseScenarioOwner({
+  const initialStateOwner = createDatabaseInitialStateOwner({
     homePath: home,
     migrationsFolder,
-    now: input.task.scenario.clock,
+    now: input.task.initialState.clock,
   });
-  let scenarioIds: InstalledScenarioIds;
+  let initialStateIds: InstalledInitialStateIds;
   try {
-    scenarioIds = await installScenario({
-      scenario: input.task.scenario,
+    initialStateIds = await installInitialState({
+      initialState: input.task.initialState,
       workspaceRoot: workspace,
-      owner: scenarioOwner.owner,
+      owner: initialStateOwner.owner,
     });
   } finally {
-    scenarioOwner.close();
+    initialStateOwner.close();
   }
 
   const controlledProfile = input.runConfig.profile === 'controlled'
-    ? createControlledProfile({ taskId: input.task.taskId, scenario: input.task.scenario })
+    ? createControlledProfile({ taskId: input.task.taskId, initialState: input.task.initialState })
     : undefined;
   const profile = controlledProfile ?? createLiveProfile({ now: () => new Date() });
   const settingsStore = await createEvaluationSettingsStore(input.candidateModel, input.task);
@@ -102,7 +102,7 @@ export async function composeEvaluationTask(input: {
         }
       : {}),
   });
-  const approvalSubscription = controlledProfile?.driveApprovals(runtime, input.task.scenario);
+  const approvalSubscription = controlledProfile?.driveApprovals(runtime, input.task.initialState);
   try {
     await runtime.start();
   } catch (error) {
@@ -113,7 +113,7 @@ export async function composeEvaluationTask(input: {
   return {
     runtime,
     task: input.task,
-    scenarioIds,
+    initialStateIds,
     paths: {
       taskRoot,
       home,
@@ -129,7 +129,7 @@ export async function composeEvaluationTask(input: {
       graderModel: modelLabel(input.graderModel),
       graderModelSource: input.graderModel.source,
       timezone: 'UTC',
-      permissions: input.task.scenario.permissionDecision,
+      permissions: input.task.initialState.permissionDecision,
       sources: profile.sourceDescription,
     },
     async dispose() {
@@ -141,7 +141,7 @@ export async function composeEvaluationTask(input: {
 
 async function installWorkspaceFiles(
   workspaceRoot: string,
-  files: EvaluationTask['scenario']['workspace']['files'],
+  files: EvaluationTask['initialState']['workspaceFiles'],
 ): Promise<void> {
   const resolvedRoot = path.resolve(workspaceRoot);
   for (const file of files) {
@@ -165,14 +165,14 @@ async function createEvaluationSettingsStore(
   }
   const config = model.config;
   let document: Readonly<Record<string, unknown>> = {
-    setup: { completed: true, completed_at: task.scenario.clock },
+    setup: { completed: true, completed_at: task.initialState.clock },
     discovery: {
       conversation_recognition_enabled: true,
-      daily_target_count: task.scenario.dailyTargetCount,
+      daily_target_count: task.initialState.dailyTargetCount,
       enabled_sources: ['open_web'],
     },
     model_selection: { provider_id: config.providerId, model_id: config.modelId },
-    permissions: controlledPermissionSettings(task.scenario),
+    permissions: controlledPermissionSettings(task.initialState),
     providers: {
       [config.providerId]: {
         enabled: true,

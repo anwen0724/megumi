@@ -1,6 +1,6 @@
 /* Tracks Run limits and stops new Tasks without converting budget exhaustion to quality failure. */
 import type { EvaluationRunConfig } from '../contracts/evaluation-run-config';
-import type { EvaluationMeasurements } from './evidence-collector';
+import type { EvaluationMeasurements } from './observe-task';
 
 export interface EvaluationRunBudget {
   canStartTask(): boolean;

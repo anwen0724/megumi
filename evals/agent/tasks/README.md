@@ -1,38 +1,37 @@
 # Evaluation Tasks
 
-每个 JSON 是一项完整、独立、可版本化的评估任务。场景、任务输入和评估指标不再拆成多份文件。
+一个 Task 就是一项可直接执行的评测任务，不是测试框架内部写死的案例。开发者可以持续新增 JSON，并自由组合本任务需要查看的 Metrics。
 
-## Task 由什么组成
+## Task 字段
 
-| 字段 | 含义 |
+| 字段 | 用途 |
 | --- | --- |
-| `taskId`、`revision` | 稳定身份和语义版本；任务或评分要求变化时提升 revision |
-| `title`、`objective` | 人工可读说明和评估目标；不会发给候选 Agent |
-| `difficulty` | `simple`、`medium` 或 `complex` |
-| `profiles` | 允许使用 `controlled`、`live` 或两者 |
-| `runner` | 选择真实业务执行方式 |
-| `scenario` | 隔离 Workspace 文件、会话、Interest、Candidate、Recommendation、Preference 和受控搜索结果 |
-| `steps` / `input` | 候选 Agent 或业务 Runtime 真正收到的任务输入 |
-| `completion` | Runner 等待的业务终态和超时 |
-| `metrics` | 本任务最终展示和判定的评估指标 |
+| `taskId` / `revision` | 稳定身份和版本 |
+| `title` / `objective` | 说明评估目标；只供评估和报告使用 |
+| `difficulty` / `tags` | 任务分级与检索 |
+| `profiles` | 允许使用 `controlled` 或 `live` |
+| `initialState` | 执行前安装到隔离产品环境的状态 |
+| `input` | 交给真实产品入口的业务输入 |
+| `timeoutMs` | 等待本次业务终态的上限 |
+| `metrics` | 本 Task 要评估的指标 |
 
-会话 Task 使用 `steps`。多步 Task 的所有步骤在同一 Session 中顺序执行，所以后续步骤可以复审和修改前一步产物。其他业务使用与 Runner 对应的 `input`。
+`initialState` 可以包含 Workspace 文件、已有会话、Interest、Candidate、Recommendation、Preference、受控搜索结果、权限决定、时间和每日推荐数量。Task 内部使用 `referenceId` 建立引用，安装时才转换为真实数据库 ID。
+
+`input.type` 支持：
+
+- `conversation`：执行一个或多个用户任务步骤；
+- `interest_understanding`：通过真实会话产生一次关注理解；
+- `candidate_supply`：请求真实候选供给；
+- `daily_recommendation`：请求真实每日推荐；
+- `preference_learning`：对指定 Recommendation 写入反馈并等待偏好学习。
 
 ## Metrics
 
-- `rule`：检查完成事实、Trace、目标文件和固定安全边界；
-- `model`：按该 Metric 自己的 `rubric` 对完整 Evidence 评分 0–4；
-- `measurement`：比较耗时、Token、模型调用、工具调用、候选数或推荐数等数值。
+- `rule`：用确定性规则检查完成事实、Trace 或 Workspace 产物；
+- `model`：把本 Metric 的 `rubric` 与任务 Observation 交给 Grader，返回 0–4 分；
+- `measurement`：对耗时、Token、调用次数和业务产出数量执行阈值判断；
+- `human`：保留给人工复核导入。
 
-`required: true` 的 Metric 失败会使 Task 失败；必要证据无法支持判断时为 `not_gradable`。非必需 Metric 仍出现在报告中，但不阻断 Task 通过。
+Task 的 `input` 是题目或业务动作；`metric.rubric` 是阅卷标准。候选 Agent 不会看到 `objective` 或 `rubric`。
 
-## 新增任务步骤
-
-1. 选择已有 Runner，并在对应目录新增 JSON。
-2. 把初始材料和业务事实写入 `scenario`。
-3. 写出候选 Agent 真正要执行的 `steps` 或业务 `input`。
-4. 只声明本任务真正关心的 Metrics，并给每个 Model Metric 写清楚 Rubric。
-5. 运行 `npm run eval:agent -- tasks validate`。
-6. 需要批量运行时，再把 `taskId` 加入一个 Suite。
-
-可直接参考 `conversation/create-architecture-note.json`、`conversation/compare-technical-options.json` 和 `conversation/plan-and-review-delivery.json`。
+新增 Task 后执行 `npm run eval:agent -- tasks validate`。若要纳入固定批次，再把 `taskId` 添加到对应 Suite。

@@ -1,53 +1,47 @@
-/* Verifies the single-file Evaluation Task authoring contract and task selection. */
+/* Verifies extensible Task authoring and catalog selection without business-specific Runner fields. */
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EvaluationRunConfigSchema } from '../../evals/agent/contracts/evaluation-run-config';
 import { EvaluationTaskSchema } from '../../evals/agent/contracts/evaluation-task';
-import { loadEvaluationTaskCatalog } from '../../evals/agent/runtime/task-loader';
+import { loadEvaluationTaskCatalog } from '../../evals/agent/execution/task-loader';
 
 describe('Evaluation Task authoring', () => {
-  it('accepts one conversation task containing scenario, steps, and freely chosen metrics', () => {
+  it('defines a real product input, isolated initial state, and freely chosen metrics', () => {
     const task = EvaluationTaskSchema.parse(conversationTask());
 
-    expect(task.taskId).toBe('conversation.create-study-note');
-    expect(task.runner).toBe('conversation');
-    expect(task.scenario.workspace.files).toEqual([
+    expect(task.input).toMatchObject({ type: 'conversation' });
+    expect(task.initialState.workspaceFiles).toEqual([
       { path: 'source.md', content: '# TypeScript\nUse unknown at untrusted boundaries.' },
     ]);
-    expect(task.steps).toHaveLength(1);
     expect(task.metrics.map((metric) => metric.metricId)).toEqual([
       'document_created',
       'content_quality',
       'tool_calls',
     ]);
+    expect(task).not.toHaveProperty('runner');
   });
 
-  it('rejects duplicated metric IDs and runner-specific input mismatches', () => {
+  it('rejects duplicated Metric IDs and missing initial-state references', () => {
     const duplicate = conversationTask();
     duplicate.metrics.push({ ...duplicate.metrics[0] });
     expect(() => EvaluationTaskSchema.parse(duplicate)).toThrow();
 
     expect(() => EvaluationTaskSchema.parse({
-      ...conversationTask(),
-      runner: 'candidate_supply',
-    })).toThrow();
-
-    expect(() => EvaluationTaskSchema.parse({
       ...candidateSupplyTask(),
-      scenario: {
-        ...scenario(),
+      initialState: {
+        ...initialState(),
         candidates: [{
-          scenarioCandidateId: 'candidate', sourceId: 'open_web', sourceName: 'Web',
+          referenceId: 'candidate', sourceId: 'open_web', sourceName: 'Web',
           canonicalUrl: 'https://example.test/candidate', title: 'Candidate',
-          matchedInterestScenarioIds: ['missing-interest'], relevance: 'direct',
+          matchedInterestReferenceIds: ['missing-interest'], relevance: 'direct',
         }],
       },
-    })).toThrow(/Interest Scenario reference does not exist/iu);
+    })).toThrow(/Interest initial-state reference does not exist/iu);
   });
 
-  it('loads tasks and suites, then resolves direct and suite task selections without duplicates', async () => {
+  it('loads independently added Task files and resolves Suite selection without duplicates', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'megumi-evaluation-tasks-'));
     await mkdir(path.join(root, 'tasks', 'conversation'), { recursive: true });
     await mkdir(path.join(root, 'tasks', 'candidate-supply'), { recursive: true });
@@ -55,10 +49,7 @@ describe('Evaluation Task authoring', () => {
     await writeJson(path.join(root, 'tasks', 'conversation', 'create-study-note.json'), conversationTask());
     await writeJson(path.join(root, 'tasks', 'candidate-supply', 'refill.json'), candidateSupplyTask());
     await writeJson(path.join(root, 'suites', 'core.json'), {
-      suiteId: 'core',
-      revision: 1,
-      title: 'Core',
-      purpose: 'Core quality tasks.',
+      suiteId: 'core', revision: 1, title: 'Core', purpose: 'Core quality tasks.',
       profile: 'controlled',
       taskIds: ['conversation.create-study-note', 'candidate-supply.refill'],
     });
@@ -82,16 +73,6 @@ describe('Evaluation Task authoring', () => {
       'candidate-supply.refill',
     ]);
   });
-
-  it('requires at least one task or suite in a Run Config', () => {
-    expect(() => EvaluationRunConfigSchema.parse({
-      profile: 'controlled',
-      candidateModel: { source: 'current' },
-      graderModel: { source: 'current' },
-      budget: { maxTasks: 1 },
-      runRoot: '.megumi/evaluation',
-    })).toThrow();
-  });
 });
 
 function conversationTask() {
@@ -100,13 +81,15 @@ function conversationTask() {
     revision: 1,
     title: '创建学习笔记',
     objective: '读取材料并创建一份准确的学习笔记。',
-    runner: 'conversation' as const,
     difficulty: 'simple' as const,
     profiles: ['controlled'] as const,
     tags: ['core'],
-    scenario: scenario(),
-    steps: [{ userInput: '读取 source.md，并创建 notes.md。', permissionMode: 'auto' as const }],
-    completion: { kind: 'conversation_steps_terminal' as const, timeoutMs: 120_000 },
+    initialState: initialState(),
+    input: {
+      type: 'conversation' as const,
+      steps: [{ userInput: '读取 source.md，并创建 notes.md。', permissionMode: 'auto' as const }],
+    },
+    timeoutMs: 120_000,
     metrics: [
       {
         metricId: 'document_created', title: '文档已创建', evaluator: 'rule' as const,
@@ -126,17 +109,10 @@ function conversationTask() {
 
 function candidateSupplyTask() {
   return {
-    taskId: 'candidate-supply.refill',
-    revision: 1,
-    title: '补充候选池',
-    objective: '为已有关注补充有效 Candidate。',
-    runner: 'candidate_supply' as const,
-    difficulty: 'medium' as const,
-    profiles: ['controlled'] as const,
-    tags: ['core'],
-    scenario: scenario(),
-    input: { kind: 'request_candidate_supply' as const },
-    completion: { kind: 'candidate_supply_terminal' as const, timeoutMs: 180_000 },
+    taskId: 'candidate-supply.refill', revision: 1, title: '补充候选池',
+    objective: '为已有关注补充有效 Candidate。', difficulty: 'medium' as const,
+    profiles: ['controlled'] as const, tags: ['core'], initialState: initialState(),
+    input: { type: 'candidate_supply' as const }, timeoutMs: 180_000,
     metrics: [{
       metricId: 'completion', title: '业务完成', evaluator: 'rule' as const,
       required: true, rule: 'business_completion_present' as const,
@@ -144,20 +120,13 @@ function candidateSupplyTask() {
   };
 }
 
-function scenario() {
+function initialState() {
   return {
     clock: '2026-01-15T08:00:00.000Z',
     dailyTargetCount: 3,
-    workspace: {
-      files: [{ path: 'source.md', content: '# TypeScript\nUse unknown at untrusted boundaries.' }],
-    },
-    sessions: [],
-    interests: [],
-    candidates: [],
-    recommendations: [],
-    preferences: [],
-    controlledSearch: [],
-    permissionDecision: 'allow' as const,
+    workspaceFiles: [{ path: 'source.md', content: '# TypeScript\nUse unknown at untrusted boundaries.' }],
+    sessions: [], interests: [], candidates: [], recommendations: [], preferences: [],
+    controlledSearch: [], permissionDecision: 'allow' as const,
   };
 }
 

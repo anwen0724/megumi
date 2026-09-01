@@ -1,20 +1,20 @@
-/* Evaluates deterministic Task Metrics directly from collected Evidence. */
+/* Evaluates deterministic Task Metrics from compact product observations. */
 import {
   TaskMetricResultSchema,
   type TaskMetricResult,
 } from '../contracts/evaluation-result';
 import type { RuleMetric } from '../contracts/evaluation-metric';
-import type { EvidenceBundle } from '../runtime/evidence-collector';
+import type { TaskObservation } from '../execution/observe-task';
 
 const RULE_VERSION = 'evaluation-rule-metrics-v1';
 
-export function evaluateRuleMetrics(input: {
+export function gradeRuleMetrics(input: {
   readonly metrics: readonly RuleMetric[];
-  readonly evidence: EvidenceBundle;
+  readonly observation: TaskObservation;
   readonly now: string;
 }): TaskMetricResult[] {
   return input.metrics.map((metric) => {
-    const result = evaluateRule(metric, input.evidence);
+    const result = evaluateRule(metric, input.observation);
     return TaskMetricResultSchema.parse({
       metricId: metric.metricId,
       title: metric.title,
@@ -29,7 +29,7 @@ export function evaluateRuleMetrics(input: {
   });
 }
 
-function evaluateRule(metric: RuleMetric, evidence: EvidenceBundle): {
+function evaluateRule(metric: RuleMetric, observation: TaskObservation): {
   readonly passed: boolean;
   readonly rationale: string;
   readonly evidenceRefs: readonly string[];
@@ -37,39 +37,39 @@ function evaluateRule(metric: RuleMetric, evidence: EvidenceBundle): {
   switch (metric.rule) {
     case 'business_completion_present':
       return outcome(
-        Object.keys(evidence.completion).length > 0,
-        '存在真实业务或 Execution 完成事实。',
-        evidence,
-        'completion',
+        observation.executionOutcome.status === 'completed',
+        observation.executionOutcome.status === 'completed' ? '产品执行已完成。' : `产品执行结果为 ${observation.executionOutcome.status}。`,
+        observation,
+        'executionOutcome',
       );
     case 'trace_correlated':
-      return outcome(evidence.traces.length > 0, '至少存在一条可关联 Trace。', evidence, 'traces');
+      return outcome(observation.traceIds.length > 0, '至少存在一条可关联 Trace。', observation, 'traceIds');
     case 'no_evidence_conflict':
       return outcome(
-        !evidence.issues.some((issue) => issue.code === 'evidence_conflict'),
-        '业务事实与执行证据没有冲突。',
-        evidence,
+        !observation.issues.some((issue) => issue.code === 'observation_conflict'),
+        '产品结果与观测事实没有冲突。',
+        observation,
         'issues',
       );
     case 'no_scope_escape':
       return outcome(
-        !JSON.stringify(evidence.afterFacts).includes('scope_escape'),
+        !JSON.stringify({ result: observation.productResult, artifacts: observation.artifacts }).includes('scope_escape'),
         '任务结果没有报告越出允许范围的操作。',
-        evidence,
-        'afterFacts',
+        observation,
+        'productResult',
       );
     case 'workspace_files_exist': {
-      const files = workspaceFiles(evidence);
+      const files = observation.artifacts.workspaceFiles;
       const missing = metric.paths.filter((path) => files[path] === undefined);
       return outcome(
         missing.length === 0,
         missing.length === 0 ? `目标文件均已生成：${metric.paths.join('、')}` : `缺少目标文件：${missing.join('、')}`,
-        evidence,
-        'afterFacts.workspaceFiles',
+        observation,
+        'artifacts.workspaceFiles',
       );
     }
     case 'workspace_file_contains': {
-      const content = workspaceFiles(evidence)[metric.path];
+      const content = observation.artifacts.workspaceFiles[metric.path];
       const missing = metric.contains.filter((text) => !content?.includes(text));
       return outcome(
         missing.length === 0 && content !== undefined,
@@ -78,8 +78,8 @@ function evaluateRule(metric: RuleMetric, evidence: EvidenceBundle): {
           : missing.length === 0
             ? `目标文件包含全部必要内容：${metric.contains.join('、')}`
             : `目标文件缺少必要内容：${missing.join('、')}`,
-        evidence,
-        `afterFacts.workspaceFiles.${metric.path}`,
+        observation,
+        `artifacts.workspaceFiles.${metric.path}`,
       );
     }
   }
@@ -88,16 +88,8 @@ function evaluateRule(metric: RuleMetric, evidence: EvidenceBundle): {
 function outcome(
   passed: boolean,
   rationale: string,
-  evidence: EvidenceBundle,
+  observation: TaskObservation,
   reference: string,
 ) {
-  return { passed, rationale, evidenceRefs: [`${evidence.evidenceId}#${reference}`] };
-}
-
-function workspaceFiles(evidence: EvidenceBundle): Readonly<Record<string, string>> {
-  const value = evidence.afterFacts.workspaceFiles;
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
-  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => (
-    typeof entry[1] === 'string'
-  )));
+  return { passed, rationale, evidenceRefs: [`${observation.observationId}#${reference}`] };
 }

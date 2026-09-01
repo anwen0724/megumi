@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { cleanEvaluationRuns } from '../../evals/agent/reporting/retention-cleaner';
+import { cleanEvaluationRuns } from '../../evals/agent/results/retention-cleaner';
 
 describe('Evaluation retention cleaner', () => {
   let root: string | undefined;
@@ -29,4 +29,3 @@ async function createRun(root: string, directoryName: string, bytes: number): Pr
   await writeFile(path.join(directory, 'manifest.json'), JSON.stringify({ runId: `run:${directoryName}` }));
   await writeFile(path.join(directory, 'result.json'), 'x'.repeat(bytes));
 }
-

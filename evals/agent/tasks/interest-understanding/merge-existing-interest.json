@@ -10,23 +10,20 @@
   "tags": [
     "core"
   ],
-  "runner": "interest_understanding",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": []
-    },
+    "workspaceFiles": [],
     "sessions": [
       {
-        "scenarioSessionId": "main",
+        "referenceId": "main",
         "title": "关注理解",
         "turns": []
       }
     ],
     "interests": [
       {
-        "scenarioInterestId": "typescript",
+        "referenceId": "typescript",
         "description": "持续关注 TypeScript 语言、类型系统和编译器演进",
         "status": "active"
       }
@@ -38,13 +35,10 @@
     "permissionDecision": "allow"
   },
   "input": {
-    "kind": "completed_conversation_turn",
+    "type": "interest_understanding",
     "text": "我也想持续跟进 TypeScript 6.x 的类型系统变化。"
   },
-  "completion": {
-    "kind": "interest_understanding_terminal",
-    "timeoutMs": 120000
-  },
+  "timeoutMs": 120000,
   "metrics": [
     {
       "metricId": "business_completion_present",

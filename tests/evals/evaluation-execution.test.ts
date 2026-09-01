@@ -1,15 +1,15 @@
-/* Verifies the Runner executes one Task through real Product composition and Metric evaluation. */
+/* Verifies one Task uses the real shared ProductRuntime and persists a compact Observation. */
 // @vitest-environment node
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EvaluationRunConfigSchema } from '../../evals/agent/contracts/evaluation-run-config';
 import { EvaluationTaskSchema } from '../../evals/agent/contracts/evaluation-task';
-import type { ModelMetricEvaluator } from '../../evals/agent/metrics/model-metric-evaluator';
-import { runEvaluation } from '../../evals/agent/runtime/evaluation-runner';
-import { composeEvaluationTask } from '../../evals/agent/runtime/task-environment';
-import type { EvaluationTaskCatalog } from '../../evals/agent/runtime/task-loader';
+import { createEvaluationHost } from '../../evals/agent/execution/evaluation-host';
+import { runEvaluation } from '../../evals/agent/execution/run-evaluation';
+import type { EvaluationTaskCatalog } from '../../evals/agent/execution/task-loader';
+import type { ModelMetricEvaluator } from '../../evals/agent/grading/model-grader';
 import { createScriptedStreams } from '../packages/composition/compose-test-application';
 
 let temporaryRoot: string | undefined;
@@ -18,9 +18,9 @@ afterEach(() => {
   temporaryRoot = undefined;
 });
 
-describe('Agent Evaluation Runner', () => {
-  it('runs one Task and persists a metric-centric result', async () => {
-    temporaryRoot = mkdtempSync(path.join(tmpdir(), 'megumi-evaluation-runner-'));
+describe('Evaluation execution', () => {
+  it('calls the same ProductRuntime host and stores Observation references instead of copied Trace records', async () => {
+    temporaryRoot = mkdtempSync(path.join(tmpdir(), 'megumi-evaluation-execution-'));
     const task = evaluationTask();
     const catalog: EvaluationTaskCatalog = {
       tasks: new Map([[task.taskId, task]]),
@@ -30,37 +30,42 @@ describe('Agent Evaluation Runner', () => {
     const config = EvaluationRunConfigSchema.parse({
       profile: 'controlled', taskIds: [task.taskId], suiteIds: [],
       candidateModel: { source: 'current' }, graderModel: { source: 'current' },
-      repetitions: 1, concurrency: 1,
-      budget: { maxTasks: 1, maxInputTokens: 1_000, maxOutputTokens: 1_000 },
-      runRoot: temporaryRoot,
+      repetitions: 1, concurrency: 1, budget: { maxTasks: 1 }, runRoot: temporaryRoot,
     });
-    const candidateModel = resolvedModel();
+    const model = resolvedModel();
     const scripted = createScriptedStreams(['The requested task is complete.']);
+
     const { result, storage } = await runEvaluation({
       repositoryRoot: process.cwd(), catalog, config,
-      models: { candidate: candidateModel, grader: candidateModel },
+      models: { candidate: model, grader: model },
       dependencies: {
         createRunId: () => 'run:test',
         now: monotonicClock(),
         modelMetricEvaluator: noModelMetrics,
-        composeTask: (input) => composeEvaluationTask({
+        createHost: (input) => createEvaluationHost({
           ...input,
           modelStreams: { 'openai-completions': scripted.streams },
         }),
       },
     });
-    expect(result.totals).toMatchObject({ passed: 1, evaluationErrors: 0, budgetBlocked: 0 });
-    expect(result.taskResults[0]).toMatchObject({
-      taskId: task.taskId,
-      status: 'passed',
-      metricResults: [
-        expect.objectContaining({ metricId: 'completion', judgement: 'pass' }),
-        expect.objectContaining({ metricId: 'trace', judgement: 'pass' }),
-      ],
+
+    expect(result).toMatchObject({
+      infrastructureStatus: 'valid',
+      totals: { passed: 1, failed: 0, invalid: 0 },
+      taskResults: [{
+        operation: 'conversation',
+        executionOutcome: { status: 'completed' },
+        judgement: 'passed',
+        infrastructureStatus: 'valid',
+      }],
     });
-    const manifest = readFileSync(path.join(storage.runDirectory, 'manifest.json'), 'utf8');
-    expect(manifest).toContain('"source": "custom"');
-    expect(manifest).not.toContain('test-key');
+    const observationPath = result.taskResults[0]?.observationPath;
+    expect(observationPath).toBeTruthy();
+    const observation = readFileSync(observationPath!, 'utf8');
+    expect(observation).toContain('"traceIds"');
+    expect(observation).not.toContain('"records"');
+    expect(existsSync(path.join(storage.runDirectory, 'evidence'))).toBe(false);
+    expect(readFileSync(path.join(storage.runDirectory, 'manifest.json'), 'utf8')).not.toContain('test-key');
   });
 });
 
@@ -75,15 +80,17 @@ const noModelMetrics: ModelMetricEvaluator = {
 
 function evaluationTask() {
   return EvaluationTaskSchema.parse({
-    taskId: 'conversation.runner-contract', revision: 1, title: 'Runner contract',
+    taskId: 'conversation.execution-contract', revision: 1, title: 'Execution contract',
     objective: 'Complete a real Conversation Execution.', difficulty: 'simple', profiles: ['controlled'], tags: [],
-    runner: 'conversation',
-    scenario: {
-      clock: '2026-01-01T00:00:00.000Z', workspace: { files: [] }, sessions: [], interests: [],
+    initialState: {
+      clock: '2026-01-01T00:00:00.000Z', workspaceFiles: [], sessions: [], interests: [],
       candidates: [], recommendations: [], preferences: [], controlledSearch: [], permissionDecision: 'allow',
     },
-    steps: [{ userInput: 'Complete the requested task.', permissionMode: 'full_access' }],
-    completion: { kind: 'conversation_steps_terminal', timeoutMs: 2_000 },
+    input: {
+      type: 'conversation',
+      steps: [{ userInput: 'Complete the requested task.', permissionMode: 'full_access' }],
+    },
+    timeoutMs: 2_000,
     metrics: [
       { metricId: 'completion', title: 'Completion', evaluator: 'rule', rule: 'business_completion_present', required: true },
       { metricId: 'trace', title: 'Trace', evaluator: 'rule', rule: 'trace_correlated', required: true },

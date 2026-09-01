@@ -12,26 +12,23 @@
     "analysis",
     "file-work"
   ],
-  "runner": "conversation",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": [
-        {
-          "path": "materials/requirements.md",
-          "content": "# 需求\n\n离线优先；单机数据规模低于 2 GiB；TypeScript 团队维护；启动时间优先；必须支持事务和全文检索。\n"
-        },
-        {
-          "path": "materials/sqlite.md",
-          "content": "# SQLite 方案\n\n嵌入式、事务成熟、支持 FTS5、无需独立服务；需要迁移管理和原生模块构建。\n"
-        },
-        {
-          "path": "materials/document-store.md",
-          "content": "# 文档存储方案\n\nJSON 模型灵活、开发直观；复杂事务、关联查询和全文检索需要额外实现，数据一致性依赖应用层。\n"
-        }
-      ]
-    },
+    "workspaceFiles": [
+      {
+        "path": "materials/requirements.md",
+        "content": "# 需求\n\n离线优先；单机数据规模低于 2 GiB；TypeScript 团队维护；启动时间优先；必须支持事务和全文检索。\n"
+      },
+      {
+        "path": "materials/sqlite.md",
+        "content": "# SQLite 方案\n\n嵌入式、事务成熟、支持 FTS5、无需独立服务；需要迁移管理和原生模块构建。\n"
+      },
+      {
+        "path": "materials/document-store.md",
+        "content": "# 文档存储方案\n\nJSON 模型灵活、开发直观；复杂事务、关联查询和全文检索需要额外实现，数据一致性依赖应用层。\n"
+      }
+    ],
     "sessions": [],
     "interests": [],
     "candidates": [],
@@ -40,16 +37,16 @@
     "controlledSearch": [],
     "permissionDecision": "allow"
   },
-  "steps": [
-    {
-      "userInput": "读取 materials 下的三份文档，创建 reports/storage-decision.md。报告必须包含“## 约束与评价标准”“## 方案对比”“## 推荐结论”“## 风险与缓解”，明确推荐一个方案，并让每项关键判断能对应到材料事实。不要修改 materials。",
-      "permissionMode": "full_access"
-    }
-  ],
-  "completion": {
-    "kind": "conversation_steps_terminal",
-    "timeoutMs": 180000
+  "input": {
+    "type": "conversation",
+    "steps": [
+      {
+        "userInput": "读取 materials 下的三份文档，创建 reports/storage-decision.md。报告必须包含“## 约束与评价标准”“## 方案对比”“## 推荐结论”“## 风险与缓解”，明确推荐一个方案，并让每项关键判断能对应到材料事实。不要修改 materials。",
+        "permissionMode": "full_access"
+      }
+    ]
   },
+  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",

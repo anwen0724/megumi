@@ -1,81 +1,56 @@
 # Megumi Agent Evaluation
 
-该目录是 Megumi 唯一的 Agent 质量评估入口。一次评估从可扩展的 `Evaluation Task` 开始，在隔离 Home、数据库与 Workspace 中运行真实 Product Runtime 和真实候选模型，再按 Task 声明的 Metrics 生成结果与报告。
+这里是开发期的 Agent 质量评估模块。它不会实现第二套业务流程：每个 Task 都会建立隔离的 Megumi 环境，然后通过 `ProductRuntime.host` 的公开入口执行与正常产品相同的会话、关注理解、候选供给、每日推荐或偏好学习流程。
 
-## 如何增加一个评估任务
-
-在 `tasks/<runner>/` 新增一个 JSON 即可。一个 Task 文件同时说明：
-
-- `scenario`：开始前放入隔离环境的 Workspace 文件和业务事实；
-- `steps` 或 `input`：真正交给被测产品执行的任务；
-- `runner`：如何调用并等待这项业务；
-- `metrics`：本任务要查看的规则、语义质量和量化指标。
-
-新增普通 Task 不需要修改 TypeScript。只有引入全新的业务执行方式时才新增 Runner，引入新的评分机制时才新增 Metric Evaluator。完成后运行：
+一次评估的流程是：
 
 ```text
+Task JSON
+  → 安装 initialState
+  → input 调用真实 ProductRuntime
+  → 等待真实业务终态
+  → 收集结果、Workspace 产物和 Trace 引用
+  → 按 Task 声明的 Metrics 评分
+  → 有效运行生成 report.md；基础设施失败生成 diagnostics.md
+```
+
+候选 Agent 只接收 `input` 通过产品正常链路构造出的输入和 `initialState` 安装出的产品状态。`objective`、`metrics` 与 Model Grader 的 `rubric` 只用于执行后的评估，不会注入候选 Agent 的上下文。
+
+## 如何新增评估任务
+
+在 `tasks/<业务>/` 新增一个 JSON，无需修改 TypeScript。Task 至少声明：
+
+- `initialState`：执行前需要安装的产品状态；
+- `input`：要交给真实产品入口的任务输入；
+- `timeoutMs`：等待真实业务完成的上限；
+- `metrics`：本任务需要查看的评估指标。
+
+`input.type` 决定调用哪个现有产品入口。只有产品新增了新的顶层业务入口，才需要扩展 `execution/execute-task.ts`；新增普通任务或新增同类任务，不需要增加 Runner。
+
+任务字段和示例见 [tasks/README.md](tasks/README.md)。完成后运行：
+
+```powershell
 npm run eval:agent -- tasks validate
 ```
 
-会话任务不是简单问答，而是 Agent 需要完成的具体工作。当前示例分为：
+## 运行
 
-- `simple`：读取材料并创建一份架构笔记；
-- `medium`：综合多份材料并输出技术决策报告；
-- `complex`：同一 Session 内先产出实施计划和风险清单，再根据复审材料修订。
+候选模型和 Grader 模型都支持读取当前 Megumi 配置，或在 Run Config 中单独指定。运行命令：
 
-具体字段和示例见 `tasks/README.md`。
-
-## 执行与评估
-
-```text
-Run Config 选择 Task 或 Suite
-  → 为每个 Task 建立隔离 Scenario
-  → Runner 调用真实 Product Runtime
-  → 收集业务事实、Trace、Runtime Event、Workspace 结果和 Measurements
-  → 按 Task Metrics 分派 Rule、Model 或 Measurement Evaluator
-  → 生成 Task Result、Run Report 和可选 Baseline 对比
+```powershell
+npm run eval:agent -- run <config.json>
 ```
 
-Task 的 `steps` 或 `input` 是候选 Agent 真正执行的任务。`objective`、Metrics 和评分 Rubric 只供评估阶段使用，不注入候选 Agent 的产品提示词。Model Evaluator 在执行结束后接收本次完整开发 Evidence，并逐项评价 Task 声明的 Model Metrics。
+`controlled` 使用确定性的来源、权限和时间 Adapter，但模型调用仍通过 `@megumi/ai` 的真实接口；`live` 使用真实来源。两者执行的业务代码相同。
 
 ## 目录职责
 
-- `tasks/`：所有可独立运行的 Evaluation Task；这是新增评测任务的主要入口。
-- `suites/`：按运行目的组合 Task，不改变 Task 内容。
-- `contracts/`：Task、Metric、Suite、Run Config 和 Result 的运行时 Contract。
-- `runtime/`：加载 Task、建立隔离环境、执行 Run、收集 Evidence、管理预算和产物。
-- `runners/`：把不同顶层业务映射为可调用、可等待、可取证的执行方式。
-- `metrics/`：Rule、Model 和 Measurement 三种 Metric Evaluator。
-- `adapters/`：Controlled 与 Live Profile 的外部依赖适配。
-- `reporting/`：报告、人工复核、Baseline 对比和本地保留清理。
-- `baselines/`：已批准评估基准的存放约定。
+- `contracts/`：Task、Metric、Suite、Run Config 与结果 Contract。
+- `tasks/`：可独立扩展的评估任务。
+- `suites/`：按运行目的组合 Task。
+- `adapters/`：Controlled/Live 环境差异以及评估模型解析。
+- `execution/`：隔离环境、初始状态安装、真实产品调用、观察与 Run 编排。
+- `grading/`：Rule、Model、Measurement 三类评分器。
+- `results/`：结果持久化、报告、诊断、Baseline 与人工复核。
 
-## 常用命令
-
-```text
-npm run eval:agent -- tasks validate
-npm run eval:agent -- run <run-config.json>
-npm run eval:agent -- human review import <result.json> <review.json>
-npm run eval:agent -- baseline approve <result.json> --id <baseline-id>
-```
-
-Run Config 可通过 `taskIds` 直接选 Task，也可通过 `suiteIds` 选择集合。`controlled` 固定外部来源、权限、时钟和 ID，但仍调用真实候选模型；`live` 使用真实外部依赖。两种 Profile 都会产生真实模型费用。`runRoot` 通常指向本机 `.megumi/evaluation`。
-
-Candidate 和 Grader 分别声明模型来源：
-
-```json
-{
-  "candidateModel": { "source": "current" },
-  "graderModel": {
-    "source": "configured",
-    "providerId": "deepseek",
-    "modelId": "deepseek-v4-flash"
-  }
-}
-```
-
-- `current`：使用当前 Megumi Settings 中选中的模型和凭据；
-- `configured`：使用 Settings 中指定的 Provider 与 Model；
-- `custom`：在 Run Config 中声明模型公共配置，并通过 `settings` Provider 或环境变量引用凭据。
-
-Run Config 不接受明文 API Key。三种来源在执行前统一解析为模型公共配置和 AI `CredentialStore`，Candidate 与 Grader 后续都通过 `@megumi/ai` 调用。正式 Megumi Home 只用于读取模型配置与凭据；Task 数据、数据库、Workspace、日志和报告仍写入隔离目录。
+完整 Trace 仍保存在该隔离任务的 Observability Journal 中。Evaluation Observation 只保存 Trace ID、紧凑摘要、业务结果、Workspace 产物和 Measurement，避免复制一套 Trace 数据。

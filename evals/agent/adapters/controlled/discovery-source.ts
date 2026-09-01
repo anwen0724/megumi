@@ -1,14 +1,14 @@
 /* Builds the fixed Discovery Source boundary used by Controlled Evaluation. */
 import { createOpenWebSource, createSourceRegistry, type SourceRegistry } from '@megumi/discovery';
 import type { WebFetch, WebSearch } from '@megumi/tools';
-import type { EvaluationScenario } from '../../contracts/evaluation-task';
+import type { EvaluationInitialState } from '../../contracts/evaluation-task';
 
 export function createControlledDiscoverySourceRegistry(input: {
-  readonly scenario: EvaluationScenario;
+  readonly initialState: EvaluationInitialState;
   readonly webSearch: WebSearch;
   readonly webFetch: WebFetch;
 }): SourceRegistry {
-  const requestedSourceIds = new Set(input.scenario.controlledSearch.map((entry) => entry.sourceId));
+  const requestedSourceIds = new Set(input.initialState.controlledSearch.map((entry) => entry.sourceId));
   if ([...requestedSourceIds].some((sourceId) => sourceId !== 'open_web')) {
     throw new Error('Controlled Evaluation currently supports only the open_web Discovery Source.');
   }
@@ -17,14 +17,14 @@ export function createControlledDiscoverySourceRegistry(input: {
   ]);
 }
 
-export function describeControlledDiscoverySources(scenario: EvaluationScenario): readonly {
+export function describeControlledDiscoverySources(initialState: EvaluationInitialState): readonly {
   readonly sourceId: string;
   readonly resultSetCount: number;
 }[] {
-  return [...new Set(scenario.controlledSearch.map((entry) => entry.sourceId))]
+  return [...new Set(initialState.controlledSearch.map((entry) => entry.sourceId))]
     .sort()
     .map((sourceId) => ({
       sourceId,
-      resultSetCount: scenario.controlledSearch.filter((entry) => entry.sourceId === sourceId).length,
+      resultSetCount: initialState.controlledSearch.filter((entry) => entry.sourceId === sourceId).length,
     }));
 }

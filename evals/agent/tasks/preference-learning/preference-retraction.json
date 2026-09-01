@@ -10,40 +10,75 @@
   "tags": [
     "boundary"
   ],
-  "runner": "preference_learning",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": []
-    },
+    "workspaceFiles": [],
     "sessions": [],
     "interests": [
       {
-        "scenarioInterestId": "typescript",
+        "referenceId": "typescript",
         "description": "TypeScript 工程实践",
         "status": "active"
       }
     ],
     "candidates": [
       {
-        "scenarioCandidateId": "target-candidate",
+        "referenceId": "target-candidate",
         "sourceId": "open_web",
         "sourceName": "Open Web",
         "canonicalUrl": "https://example.test/retraction",
         "title": "TypeScript 长篇教程",
         "description": "长篇教程。",
         "contentText": "详细教程内容。",
-        "matchedInterestScenarioIds": [
+        "relevance": "direct",
+        "matchedInterestReferenceIds": [
           "typescript"
-        ],
-        "relevance": "direct"
+        ]
+      },
+      {
+        "referenceId": "seed-candidate-1",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/retraction-seed-1",
+        "title": "TypeScript 深度教程一",
+        "description": "长篇教程。",
+        "contentText": "详细教程内容一。",
+        "relevance": "direct",
+        "matchedInterestReferenceIds": [
+          "typescript"
+        ]
+      },
+      {
+        "referenceId": "seed-candidate-2",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/retraction-seed-2",
+        "title": "TypeScript 深度教程二",
+        "description": "长篇教程。",
+        "contentText": "详细教程内容二。",
+        "relevance": "direct",
+        "matchedInterestReferenceIds": [
+          "typescript"
+        ]
       }
     ],
     "recommendations": [
       {
-        "scenarioRecommendationId": "target",
-        "candidateScenarioId": "target-candidate",
+        "referenceId": "target",
+        "candidateReferenceId": "target-candidate",
+        "reason": "详细教程",
+        "reaction": "liked"
+      },
+      {
+        "referenceId": "seed-1",
+        "candidateReferenceId": "seed-candidate-1",
+        "reason": "详细教程",
+        "reaction": "liked"
+      },
+      {
+        "referenceId": "seed-2",
+        "candidateReferenceId": "seed-candidate-2",
         "reason": "详细教程",
         "reaction": "liked"
       }
@@ -55,8 +90,10 @@
         "polarity": "positive",
         "dimension": "expression_quality",
         "statement": "偏好有细节的长篇教程",
-        "supportingRecommendationScenarioIds": [
-          "target"
+        "supportingRecommendationReferenceIds": [
+          "target",
+          "seed-1",
+          "seed-2"
         ]
       }
     ],
@@ -64,14 +101,11 @@
     "permissionDecision": "allow"
   },
   "input": {
-    "kind": "update_recommendation_feedback",
-    "recommendationId": "target",
+    "type": "preference_learning",
+    "recommendationReferenceId": "target",
     "reaction": "none"
   },
-  "completion": {
-    "kind": "preference_learning_settled",
-    "timeoutMs": 180000
-  },
+  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",

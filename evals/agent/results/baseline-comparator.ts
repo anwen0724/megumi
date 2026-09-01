@@ -35,6 +35,7 @@ export function compareWithBaseline(input: {
   readonly result: EvaluationRunResult;
   readonly baseline: EvaluationBaseline;
 }): BaselineComparison {
+  assertValidRun(input.result);
   const regressions: string[] = [];
   const trends: string[] = [];
   let comparable = 0;
@@ -74,6 +75,7 @@ export function approveBaseline(input: {
   readonly approvedBy: string;
   readonly passRateTolerance?: number;
 }): EvaluationBaseline {
+  assertValidRun(input.result);
   return EvaluationBaselineSchema.parse({
     baselineId: input.baselineId,
     approvedAt: input.approvedAt,
@@ -121,7 +123,13 @@ function groupResults(results: readonly TaskEvaluationResult[]): TaskEvaluationR
 }
 
 function passRate(group: readonly TaskEvaluationResult[]): number {
-  return group.filter((entry) => entry.status === 'passed').length / group.length;
+  return group.filter((entry) => entry.judgement === 'passed').length / group.length;
+}
+
+function assertValidRun(result: EvaluationRunResult): void {
+  if (result.infrastructureStatus !== 'valid') {
+    throw new Error('Invalid Evaluation Runs cannot be compared with or approved as a Baseline.');
+  }
 }
 
 function metricPassRate(group: readonly TaskEvaluationResult[], metricId: string): number {

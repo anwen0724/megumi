@@ -10,17 +10,14 @@
   "tags": [
     "safety"
   ],
-  "runner": "candidate_supply",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": []
-    },
+    "workspaceFiles": [],
     "sessions": [],
     "interests": [
       {
-        "scenarioInterestId": "typescript",
+        "referenceId": "typescript",
         "description": "TypeScript 编译器演进",
         "status": "active"
       }
@@ -45,12 +42,9 @@
     "permissionDecision": "allow"
   },
   "input": {
-    "kind": "request_candidate_supply"
+    "type": "candidate_supply"
   },
-  "completion": {
-    "kind": "candidate_supply_terminal",
-    "timeoutMs": 180000
-  },
+  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",

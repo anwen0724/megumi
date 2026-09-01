@@ -1,4 +1,4 @@
-/* Installs a Task Scenario through narrow Owner-specific commands in an isolated database. */
+/* Installs validated pre-run state through narrow Owner-specific commands in an isolated database. */
 import path from 'node:path';
 import { createDatabase, migrateDatabase } from '@megumi/database';
 import { createDiscoveryRepository, type DiscoveryRepository } from '@megumi/discovery';
@@ -7,28 +7,28 @@ import { createSessionStore } from '@megumi/session/store';
 import { createWorkspaceCatalog } from '@megumi/workspace';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import { createWorkspaceStore } from '@megumi/workspace/store';
-import type { EvaluationScenario } from '../contracts/evaluation-task';
+import type { EvaluationInitialState } from '../contracts/evaluation-task';
 
-export interface EvaluationScenarioOwner {
+export interface EvaluationInitialStateOwner {
   installWorkspace(input: { readonly rootPath: string }): Promise<{ readonly workspaceId: string }>;
-  installSession(input: EvaluationScenario['sessions'][number] & { readonly workspaceId: string }): Promise<{ readonly sessionId: string }>;
-  installInterest(input: EvaluationScenario['interests'][number]): Promise<{ readonly interestId: string }>;
-  installCandidate(input: EvaluationScenario['candidates'][number] & {
+  installSession(input: EvaluationInitialState['sessions'][number] & { readonly workspaceId: string }): Promise<{ readonly sessionId: string }>;
+  installInterest(input: EvaluationInitialState['interests'][number]): Promise<{ readonly interestId: string }>;
+  installCandidate(input: EvaluationInitialState['candidates'][number] & {
     readonly interestIds: readonly string[];
   }): Promise<{ readonly candidateId: string }>;
-  installRecommendation(input: EvaluationScenario['recommendations'][number] & {
+  installRecommendation(input: EvaluationInitialState['recommendations'][number] & {
     readonly candidateId: string;
   }): Promise<{ readonly recommendationId: string }>;
-  installPreference(input: EvaluationScenario['preferences'][number] & {
+  installPreference(input: EvaluationInitialState['preferences'][number] & {
     readonly recommendationIds: readonly string[];
   }): Promise<{ readonly revisionId: string }>;
   verifyInstalled(input: {
-    readonly scenario: EvaluationScenario;
-    readonly ids: InstalledScenarioIds;
+    readonly initialState: EvaluationInitialState;
+    readonly ids: InstalledInitialStateIds;
   }): Promise<void>;
 }
 
-export interface InstalledScenarioIds {
+export interface InstalledInitialStateIds {
   readonly workspaceId: string;
   readonly sessions: Readonly<Record<string, string>>;
   readonly interests: Readonly<Record<string, string>>;
@@ -37,38 +37,38 @@ export interface InstalledScenarioIds {
   readonly preferenceRevisions: readonly string[];
 }
 
-/** Installs one validated Scenario and returns stable references used by Task Runners. */
-export async function installScenario(input: {
-  readonly scenario: EvaluationScenario;
+/** Installs one validated initial state and returns references used by the real product invocation. */
+export async function installInitialState(input: {
+  readonly initialState: EvaluationInitialState;
   readonly workspaceRoot: string;
-  readonly owner: EvaluationScenarioOwner;
-}): Promise<InstalledScenarioIds> {
+  readonly owner: EvaluationInitialStateOwner;
+}): Promise<InstalledInitialStateIds> {
   const workspace = await input.owner.installWorkspace({ rootPath: input.workspaceRoot });
   const sessions: Record<string, string> = {};
-  for (const entry of input.scenario.sessions) {
-    sessions[entry.scenarioSessionId] = (await input.owner.installSession({ ...entry, workspaceId: workspace.workspaceId })).sessionId;
+  for (const entry of input.initialState.sessions) {
+    sessions[entry.referenceId] = (await input.owner.installSession({ ...entry, workspaceId: workspace.workspaceId })).sessionId;
   }
   const interests: Record<string, string> = {};
-  for (const entry of input.scenario.interests) {
-    interests[entry.scenarioInterestId] = (await input.owner.installInterest(entry)).interestId;
+  for (const entry of input.initialState.interests) {
+    interests[entry.referenceId] = (await input.owner.installInterest(entry)).interestId;
   }
   const candidates: Record<string, string> = {};
-  for (const entry of input.scenario.candidates) {
-    const interestIds = entry.matchedInterestScenarioIds.map((id) => requireMapped(interests, id, 'Interest'));
-    candidates[entry.scenarioCandidateId] = (await input.owner.installCandidate({ ...entry, interestIds })).candidateId;
+  for (const entry of input.initialState.candidates) {
+    const interestIds = entry.matchedInterestReferenceIds.map((id) => requireMapped(interests, id, 'Interest'));
+    candidates[entry.referenceId] = (await input.owner.installCandidate({ ...entry, interestIds })).candidateId;
   }
   const recommendations: Record<string, string> = {};
-  for (const entry of input.scenario.recommendations) {
-    const candidateId = requireMapped(candidates, entry.candidateScenarioId, 'Candidate');
-    recommendations[entry.scenarioRecommendationId] = (await input.owner.installRecommendation({ ...entry, candidateId })).recommendationId;
+  for (const entry of input.initialState.recommendations) {
+    const candidateId = requireMapped(candidates, entry.candidateReferenceId, 'Candidate');
+    recommendations[entry.referenceId] = (await input.owner.installRecommendation({ ...entry, candidateId })).recommendationId;
   }
   const preferenceRevisions = [];
-  for (const entry of input.scenario.preferences) {
-    const recommendationIds = entry.supportingRecommendationScenarioIds
+  for (const entry of input.initialState.preferences) {
+    const recommendationIds = entry.supportingRecommendationReferenceIds
       .map((id) => requireMapped(recommendations, id, 'Recommendation'));
     preferenceRevisions.push((await input.owner.installPreference({ ...entry, recommendationIds })).revisionId);
   }
-  const installed: InstalledScenarioIds = {
+  const installed: InstalledInitialStateIds = {
     workspaceId: workspace.workspaceId,
     sessions,
     interests,
@@ -76,27 +76,27 @@ export async function installScenario(input: {
     recommendations,
     preferenceRevisions,
   };
-  await input.owner.verifyInstalled({ scenario: input.scenario, ids: installed });
+  await input.owner.verifyInstalled({ initialState: input.initialState, ids: installed });
   return installed;
 }
 
-function requireMapped(values: Readonly<Record<string, string>>, scenarioId: string, kind: string): string {
-  const value = values[scenarioId];
-  if (!value) throw new Error(`${kind} Scenario reference was not installed: ${scenarioId}.`);
+function requireMapped(values: Readonly<Record<string, string>>, referenceId: string, kind: string): string {
+  const value = values[referenceId];
+  if (!value) throw new Error(`${kind} initial-state reference was not installed: ${referenceId}.`);
   return value;
 }
 
-export interface DatabaseScenarioOwner {
-  readonly owner: EvaluationScenarioOwner;
+export interface DatabaseInitialStateOwner {
+  readonly owner: EvaluationInitialStateOwner;
   close(): void;
 }
 
-/** Creates the narrow Scenario owner over real repositories in an isolated database. */
-export function createDatabaseScenarioOwner(input: {
+/** Creates the narrow initial-state owner over real repositories in an isolated database. */
+export function createDatabaseInitialStateOwner(input: {
   readonly homePath: string;
   readonly migrationsFolder: string;
   readonly now: string;
-}): DatabaseScenarioOwner {
+}): DatabaseInitialStateOwner {
   const database = createDatabase({ filename: path.join(input.homePath, 'sqlite', 'megumi.sqlite') });
   migrateDatabase({ database, migrationsFolder: input.migrationsFolder });
   const discovery = createDiscoveryRepository({ database });
@@ -112,20 +112,20 @@ export function createDatabaseScenarioOwner(input: {
   let recommendationIndex = 0;
   let preferenceIndex = 0;
 
-  const owner: EvaluationScenarioOwner = {
+  const owner: EvaluationInitialStateOwner = {
     async installWorkspace(workspace) {
       const result = await workspaces.openWorkspace({ root_path: workspace.rootPath });
-      if (result.status !== 'opened') throw new Error(`Scenario Workspace failed: ${result.failure.message}`);
+      if (result.status !== 'opened') throw new Error(`Initial-state Workspace failed: ${result.failure.message}`);
       return { workspaceId: result.workspace.workspace_id };
     },
     async installSession(entry) {
       const created = sessions.createSession({ workspace_id: entry.workspaceId, title: entry.title });
-      if (created.status !== 'created') throw new Error(`Scenario Session failed: ${created.failure.message}`);
+      if (created.status !== 'created') throw new Error(`Initial-state Session failed: ${created.failure.message}`);
       let parentEntryId: string | undefined;
       for (const [turnIndex, turn] of entry.turns.entries()) {
-        const executionId = `evaluation:execution:${entry.scenarioSessionId}:${turnIndex + 1}`;
+        const executionId = `evaluation:execution:${entry.referenceId}:${turnIndex + 1}`;
         const user = await history.saveUserMessage({
-          message_id: `evaluation:user:${entry.scenarioSessionId}:${turnIndex + 1}`,
+          message_id: `evaluation:user:${entry.referenceId}:${turnIndex + 1}`,
           session_id: created.session.session_id,
           execution_id: executionId,
           display_content: [{ type: 'text', text: turn.user }],
@@ -133,9 +133,9 @@ export function createDatabaseScenarioOwner(input: {
           ...(parentEntryId ? { parent_entry_id: parentEntryId } : {}),
           created_at: input.now,
         });
-        if (user.status !== 'saved') throw new Error(`Scenario user turn failed: ${user.failure.message}`);
+        if (user.status !== 'saved') throw new Error(`Initial-state user turn failed: ${user.failure.message}`);
         const assistant = history.saveAssistantReply({
-          message_id: `evaluation:assistant:${entry.scenarioSessionId}:${turnIndex + 1}`,
+          message_id: `evaluation:assistant:${entry.referenceId}:${turnIndex + 1}`,
           session_id: created.session.session_id,
           execution_id: executionId,
           parent_entry_id: user.entry.entry_id,
@@ -144,7 +144,7 @@ export function createDatabaseScenarioOwner(input: {
           completed_at: input.now,
         });
         if (assistant.status !== 'saved') {
-          throw new Error(`Scenario assistant turn failed: ${assistant.failure.message}`);
+          throw new Error(`Initial-state assistant turn failed: ${assistant.failure.message}`);
         }
         parentEntryId = assistant.entry.entry_id;
       }
@@ -153,7 +153,7 @@ export function createDatabaseScenarioOwner(input: {
     async installInterest(entry) {
       const interest = discovery.changeInterest({
         action: 'create',
-        interestId: `evaluation:interest:${entry.scenarioInterestId}`,
+        interestId: `evaluation:interest:${entry.referenceId}`,
         description: entry.description,
         now: input.now,
       });
@@ -185,15 +185,14 @@ export function createDatabaseScenarioOwner(input: {
           canonicalUrl: entry.canonicalUrl,
           contentType: 'article',
           title: entry.title,
-          ...(entry.description ? { description: entry.description } : {}),
+          ...(!entry.contentText && entry.description ? { description: entry.description } : {}),
         }],
       });
       const candidate = material.candidates[0];
-      if (!candidate) throw new Error(`Scenario Candidate was not materialized: ${entry.scenarioCandidateId}.`);
+      if (!candidate) throw new Error(`Initial Candidate was not materialized: ${entry.referenceId}.`);
       if (entry.contentText) {
         discovery.commitCandidateDetail({
           candidateId: candidate.candidateId,
-          now: input.now,
           detail: {
             sourceId: entry.sourceId,
             sourceName: entry.sourceName,
@@ -203,6 +202,7 @@ export function createDatabaseScenarioOwner(input: {
             ...(entry.description ? { description: entry.description } : {}),
             contentText: entry.contentText,
           },
+          now: input.now,
         });
       }
       const interestRevisions = discovery.listInterests()
@@ -210,7 +210,7 @@ export function createDatabaseScenarioOwner(input: {
         .map((interest) => ({ interestId: interest.interestId, revision: interest.revision }));
       const [admitted] = discovery.commitAdmission({
         executionId,
-        assessmentVersion: 'evaluation-scenario-v1',
+        assessmentVersion: 'evaluation-initial-state-v1',
         assessedAt: input.now,
         decisions: [{
           candidateId: candidate.candidateId,
@@ -224,10 +224,10 @@ export function createDatabaseScenarioOwner(input: {
           interestRevisions,
           preferenceRevisions: [],
           preferenceAlignment: [],
-          reason: 'Installed by the isolated Evaluation Scenario owner.',
+          reason: 'Installed by the isolated Evaluation initial-state owner.',
         }],
       });
-      if (!admitted) throw new Error(`Scenario Candidate admission failed: ${entry.scenarioCandidateId}.`);
+      if (!admitted) throw new Error(`Initial Candidate admission failed: ${entry.referenceId}.`);
       return { candidateId: admitted.candidateId };
     },
     async installRecommendation(entry) {
@@ -245,7 +245,7 @@ export function createDatabaseScenarioOwner(input: {
         now: input.now,
       });
       if (claimed.status !== 'claimed') {
-        throw new Error(`Scenario Recommendation Batch was not claimed: ${batchId}.`);
+        throw new Error(`Initial-state Recommendation Batch was not claimed: ${batchId}.`);
       }
       const result = discovery.publish({
         batchId,
@@ -253,16 +253,16 @@ export function createDatabaseScenarioOwner(input: {
         publishedAt: input.now,
         allowedCandidateIds: [entry.candidateId],
         items: [{
-          recommendationId: `evaluation:recommendation:${entry.scenarioRecommendationId}`,
+          recommendationId: `evaluation:recommendation:${entry.referenceId}`,
           candidateId: entry.candidateId,
           recommendationReason: entry.reason,
         }],
       });
       if (result.status !== 'published') {
-        throw new Error(`Scenario Recommendation publication failed: ${entry.scenarioRecommendationId}.`);
+        throw new Error(`Initial Recommendation publication failed: ${entry.referenceId}.`);
       }
       const recommendation = result.recommendations[0];
-      if (!recommendation) throw new Error('Scenario Recommendation publication returned no result.');
+      if (!recommendation) throw new Error('Initial-state Recommendation publication returned no result.');
       if (entry.reaction !== 'none') {
         discovery.updateRecommendationState({
           recommendationId: recommendation.recommendationId,
@@ -294,9 +294,9 @@ export function createDatabaseScenarioOwner(input: {
         now: input.now,
         limit: 20,
       });
-      if (!batch) throw new Error(`Scenario Preference Batch had no pending Feedback: ${batchId}.`);
+      if (!batch) throw new Error(`Initial-state Preference Batch had no pending Feedback: ${batchId}.`);
       const facts = discovery.readPreferenceLearningFacts(batchId);
-      if (!facts) throw new Error(`Scenario Preference facts were unavailable: ${batchId}.`);
+      if (!facts) throw new Error(`Initial-state Preference facts were unavailable: ${batchId}.`);
       const result = discovery.commitPreferenceLearningBatch({
         batchId,
         committedAt: input.now,
@@ -313,21 +313,21 @@ export function createDatabaseScenarioOwner(input: {
         }],
       });
       if (result.status !== 'committed') {
-        throw new Error(`Scenario Preference commit was rejected: ${result.reason}.`);
+        throw new Error(`Initial-state Preference commit was rejected: ${result.reason}.`);
       }
       return { revisionId: `${entry.scopeKey}:${result.revisions[0]?.revision ?? 0}` };
     },
     async verifyInstalled(entry) {
-      verifyScenario(discovery, sessionStore, entry.ids);
+      verifyInitialState(discovery, sessionStore, entry.ids);
     },
   };
   return { owner, close: () => database.close() };
 }
 
-function verifyScenario(
+function verifyInitialState(
   discovery: DiscoveryRepository,
   sessionStore: ReturnType<typeof createSessionStore>,
-  ids: InstalledScenarioIds,
+  ids: InstalledInitialStateIds,
 ): void {
   for (const sessionId of Object.values(ids.sessions)) {
     if (!sessionStore.findSessionById(sessionId)) {

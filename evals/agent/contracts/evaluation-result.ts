@@ -1,7 +1,9 @@
-/* Defines metric-centric Task and Run results without embedding mutable product state. */
+/*
+ * Separates real product outcomes, quality judgements, and Evaluation infrastructure validity.
+ */
 import { z } from 'zod';
-import { EvidenceIssueSchema, EvaluationMeasurementsSchema } from '../runtime/evidence-collector';
-import { EvaluationProfileSchema, EvaluationRunnerSchema } from './evaluation-task';
+import { EvaluationMeasurementsSchema, ObservationIssueSchema } from '../execution/observe-task';
+import { EvaluationOperationSchema, EvaluationProfileSchema } from './evaluation-task';
 
 export const MetricJudgementSchema = z.enum(['pass', 'fail', 'not_gradable']);
 
@@ -24,27 +26,37 @@ export const TaskMetricResultSchema = z.object({
 }).strict();
 export type TaskMetricResult = z.infer<typeof TaskMetricResultSchema>;
 
+const ExecutionOutcomeSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('completed') }).strict(),
+  z.object({ status: z.literal('failed'), message: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('timed_out'), message: z.string().min(1) }).strict(),
+  z.object({ status: z.literal('not_started'), reason: z.enum(['budget_blocked', 'infrastructure_error']) }).strict(),
+]);
+
 export const TaskEvaluationResultSchema = z.object({
   taskRunId: z.string().min(1),
   taskId: z.string().min(1),
   revision: z.number().int().positive(),
-  runner: EvaluationRunnerSchema,
+  operation: EvaluationOperationSchema,
   difficulty: z.enum(['simple', 'medium', 'complex']),
   profile: EvaluationProfileSchema,
-  status: z.enum(['passed', 'failed', 'not_gradable', 'evaluation_error', 'budget_blocked']),
+  executionOutcome: ExecutionOutcomeSchema,
+  judgement: z.enum(['passed', 'failed', 'not_gradable', 'not_evaluated']),
+  infrastructureStatus: z.enum(['valid', 'invalid']),
   startedAt: z.string().datetime({ offset: true }),
   endedAt: z.string().datetime({ offset: true }),
-  evidencePath: z.string().min(1).optional(),
+  observationPath: z.string().min(1).optional(),
   metricResults: z.array(TaskMetricResultSchema),
   measurements: EvaluationMeasurementsSchema,
-  evidenceIssues: z.array(EvidenceIssueSchema).default([]),
-  error: z.object({ code: z.string().min(1), message: z.string() }).strict().optional(),
+  observationIssues: z.array(ObservationIssueSchema).default([]),
+  infrastructureError: z.object({ code: z.string().min(1), message: z.string() }).strict().optional(),
 }).strict();
 export type TaskEvaluationResult = z.infer<typeof TaskEvaluationResultSchema>;
 
 export const EvaluationRunResultSchema = z.object({
   runId: z.string().min(1),
   profile: EvaluationProfileSchema,
+  infrastructureStatus: z.enum(['valid', 'invalid']),
   startedAt: z.string().datetime({ offset: true }),
   endedAt: z.string().datetime({ offset: true }),
   candidateModel: z.string().min(1),
@@ -63,7 +75,7 @@ export const EvaluationRunResultSchema = z.object({
     passed: z.number().int().nonnegative(),
     failed: z.number().int().nonnegative(),
     notGradable: z.number().int().nonnegative(),
-    evaluationErrors: z.number().int().nonnegative(),
+    invalid: z.number().int().nonnegative(),
     budgetBlocked: z.number().int().nonnegative(),
   }).strict(),
 }).strict();

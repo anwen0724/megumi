@@ -1,22 +1,22 @@
 /* Drives the real approval Host from a deterministic Controlled decision. */
 import type { ProductRuntime } from '@megumi/composition';
 import type { EventSubscription } from '@megumi/events';
-import type { EvaluationScenario } from '../../contracts/evaluation-task';
+import type { EvaluationInitialState } from '../../contracts/evaluation-task';
 
-export function controlledPermissionSettings(scenario: EvaluationScenario): {
+export function controlledPermissionSettings(initialState: EvaluationInitialState): {
   readonly mode: 'ask' | 'auto' | 'full_access';
 } {
-  if (scenario.permissionDecision === 'ask') return { mode: 'ask' };
-  return scenario.permissionDecision === 'allow' ? { mode: 'full_access' } : { mode: 'ask' };
+  if (initialState.permissionDecision === 'ask') return { mode: 'ask' };
+  return initialState.permissionDecision === 'allow' ? { mode: 'full_access' } : { mode: 'ask' };
 }
 
 export function driveControlledApprovals(
   runtime: ProductRuntime,
-  scenario: EvaluationScenario,
+  initialState: EvaluationInitialState,
 ): EventSubscription {
   return runtime.subscribeRuntimeEvents({ eventTypes: ['approval.requested'] }, (event) => {
     if (event.type !== 'approval.requested') return;
-    const request = scenario.permissionDecision === 'deny'
+    const request = initialState.permissionDecision === 'deny'
       ? {
           approvalRequestId: event.payload.approvalRequestId,
           decision: 'denied' as const,

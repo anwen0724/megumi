@@ -12,18 +12,15 @@
     "core",
     "file-work"
   ],
-  "runner": "conversation",
-  "scenario": {
+  "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
     "dailyTargetCount": 3,
-    "workspace": {
-      "files": [
-        {
-          "path": "materials/module-boundaries.md",
-          "content": "# 背景材料\n\n模块对外暴露稳定 Contract；内部实现细节不跨边界泄漏；依赖方向从应用层指向稳定能力层。\n"
-        }
-      ]
-    },
+    "workspaceFiles": [
+      {
+        "path": "materials/module-boundaries.md",
+        "content": "# 背景材料\n\n模块对外暴露稳定 Contract；内部实现细节不跨边界泄漏；依赖方向从应用层指向稳定能力层。\n"
+      }
+    ],
     "sessions": [],
     "interests": [],
     "candidates": [],
@@ -32,16 +29,16 @@
     "controlledSearch": [],
     "permissionDecision": "allow"
   },
-  "steps": [
-    {
-      "userInput": "请读取 materials/module-boundaries.md，创建 notes/typescript-boundaries.md。文档必须包含标题“# TypeScript 模块边界笔记”，以及“## 核心原则”和“## 检查清单”两个小节，并结合材料给出至少三条可执行检查项。完成后简要告诉我创建了什么。",
-      "permissionMode": "full_access"
-    }
-  ],
-  "completion": {
-    "kind": "conversation_steps_terminal",
-    "timeoutMs": 120000
+  "input": {
+    "type": "conversation",
+    "steps": [
+      {
+        "userInput": "请读取 materials/module-boundaries.md，创建 notes/typescript-boundaries.md。文档必须包含标题“# TypeScript 模块边界笔记”，以及“## 核心原则”和“## 检查清单”两个小节，并结合材料给出至少三条可执行检查项。完成后简要告诉我创建了什么。",
+        "permissionMode": "full_access"
+      }
+    ]
   },
+  "timeoutMs": 120000,
   "metrics": [
     {
       "metricId": "business_completion_present",

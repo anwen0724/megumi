@@ -5,7 +5,7 @@ import {
   createControlledDiscoverySourceRegistry,
   describeControlledDiscoverySources,
 } from './discovery-source';
-import type { EvaluationScenario } from '../../contracts/evaluation-task';
+import type { EvaluationInitialState } from '../../contracts/evaluation-task';
 
 export interface ControlledTimerDriver {
   readonly timers: {
@@ -17,20 +17,20 @@ export interface ControlledTimerDriver {
 
 export function createControlledProfile(input: {
   readonly taskId: string;
-  readonly scenario: EvaluationScenario;
+  readonly initialState: EvaluationInitialState;
 }) {
   const timerDriver = createControlledTimers();
-  const webTools = createControlledWebTools(input.scenario);
+  const webTools = createControlledWebTools(input.initialState);
   return {
     profile: 'controlled' as const,
-    now: () => input.scenario.clock,
+    now: () => input.initialState.clock,
     createId: createDeterministicIdFactory(input.taskId),
     ...webTools,
-    discoverySourceRegistry: createControlledDiscoverySourceRegistry({ scenario: input.scenario, ...webTools }),
+    discoverySourceRegistry: createControlledDiscoverySourceRegistry({ initialState: input.initialState, ...webTools }),
     timerDriver,
-    permissionSettings: controlledPermissionSettings(input.scenario),
+    permissionSettings: controlledPermissionSettings(input.initialState),
     driveApprovals: driveControlledApprovals,
-    sourceDescription: describeControlledDiscoverySources(input.scenario),
+    sourceDescription: describeControlledDiscoverySources(input.initialState),
   };
 }
 
