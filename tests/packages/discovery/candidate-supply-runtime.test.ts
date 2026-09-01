@@ -14,6 +14,36 @@ let database: DatabaseConnection | undefined;
 afterEach(() => database?.close());
 
 describe('Candidate Supply Runtime', () => {
+  it('recovers durable state without creating a startup check in manual mode', async () => {
+    database = createDatabase({ filename: ':memory:' });
+    migrateDatabase({ database });
+    const repository = createDiscoveryRepository({ database });
+    const createSupplyCheck = vi.spyOn(repository, 'createSupplyCheck');
+    const runtime = createCandidateSupplyRuntime({
+      repository,
+      attempts: createCandidateSupplyAttempts(),
+      sourceRegistry: createSourceRegistry([]),
+      settings: {
+        read: () => ({
+          conversationRecognitionEnabled: true,
+          dailyGenerationTime: '08:00',
+          dailyTargetCount: 1,
+          enabledSources: [],
+        }),
+        write: () => undefined,
+      },
+      startExecution: async () => { throw new Error('Manual startup must not execute.'); },
+      resolveModel: async () => { throw new Error('Manual startup must not resolve a model.'); },
+      now: () => '2026-01-01T00:00:00.000Z',
+      ids: { createCheckId: () => 'candidate-supply:manual' },
+    });
+
+    await runtime.start({ automaticTriggers: false });
+
+    expect(createSupplyCheck).not.toHaveBeenCalled();
+    await runtime.shutdown();
+  });
+
   it('persists one queued rerun for repeated triggers while a check is settling', async () => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });

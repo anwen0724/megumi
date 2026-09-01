@@ -72,8 +72,8 @@ export interface Discovery {
   findInterestUnderstandingByExecution(executionId: string): InterestUnderstanding | undefined;
   /** Retracts the Evidence contributed by one Session. */
   retractSessionEvidence(sessionId: string): Promise<void>;
-  /** Starts owned background recovery and Daily Recommendation scheduling. */
-  startBackground(): Promise<void>;
+  /** Starts owned recovery and optionally enables automatic background triggers. */
+  startBackground(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   /** Ensures the requested Daily Recommendation Batch according to its trigger semantics. */
   ensureDailyRecommendation(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
   getDailyRecommendationBatch(localDate: string): DailyRecommendationBatch | undefined;
@@ -184,7 +184,8 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     getInterestUnderstanding: (id) => interestRuntime.getInterestUnderstanding(id),
     findInterestUnderstandingByExecution: (id) => interestRuntime.findInterestUnderstandingByExecution(id),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
-    async startBackground() {
+    async startBackground(startOptions = {}) {
+      const automaticTriggers = startOptions.automaticTriggers ?? true;
       const failures: unknown[] = [];
       await runBackgroundStartStep(options, failures, 'source_refresh', async () => {
         if (!discoveryConfiguration) return;
@@ -194,13 +195,13 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         );
       });
       await runBackgroundStartStep(options, failures, 'candidate_supply_start', async () => {
-        await candidateSupplyRuntime?.start();
+        await candidateSupplyRuntime?.start({ automaticTriggers });
       });
       await runBackgroundStartStep(options, failures, 'preference_learning_start', async () => {
-        await preferenceLearningRuntime?.start();
+        await preferenceLearningRuntime?.start({ automaticTriggers });
       });
       await runBackgroundStartStep(options, failures, 'daily_recommendation_start', async () => {
-        await dailyRecommendationRuntime?.start();
+        await dailyRecommendationRuntime?.start({ automaticTriggers });
       });
       if (failures.length > 0) {
         throw new AggregateError(failures, 'One or more Discovery background startup steps failed.');

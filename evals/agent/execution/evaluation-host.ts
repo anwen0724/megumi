@@ -104,7 +104,9 @@ export async function createEvaluationHost(input: {
   });
   const approvalSubscription = controlledProfile?.driveApprovals(runtime, input.task.initialState);
   try {
-    await runtime.start();
+    await runtime.start({
+      backgroundTriggers: controlledProfile ? 'manual' : 'automatic',
+    });
   } catch (error) {
     approvalSubscription?.unsubscribe();
     await runtime.dispose().catch(() => undefined);

@@ -13,7 +13,8 @@ export {
   type ProductSettingsEnvironment,
 } from './compose-application';
 export {
+  type ProductBackgroundTriggerMode,
   type ProductRuntime,
   type ProductRuntimeLogger,
+  type ProductRuntimeStartOptions,
 } from './application-runtime';
-

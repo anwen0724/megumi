@@ -31,6 +31,22 @@ describe('DailyRecommendationRuntime', () => {
 
   afterEach(() => database.close());
 
+  it('does not schedule or catch up during manual startup', async () => {
+    const repository = createDailyRecommendationRepository(database);
+    const setTimeout = vi.fn(() => 'timer:manual');
+    const startExecution = vi.fn();
+    const runtime = createDailyRecommendationRuntime(runtimeOptions(repository, {
+      startExecution,
+      timers: { setTimeout, clearTimeout: vi.fn() },
+    }));
+
+    await runtime.start({ automaticTriggers: false });
+
+    expect(setTimeout).not.toHaveBeenCalled();
+    expect(startExecution).not.toHaveBeenCalled();
+    await runtime.shutdown();
+  });
+
   it('does not create a Batch or start a model execution when no Candidate is available', async () => {
     const repository = createDailyRecommendationRepository(database);
     const startExecution = vi.fn();

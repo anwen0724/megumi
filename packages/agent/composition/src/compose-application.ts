@@ -307,7 +307,9 @@ function composeApplicationRuntime(
   return createApplicationRuntime({
     host,
     logger,
-    start: () => discovery.startBackground(),
+    start: ({ backgroundTriggers }) => discovery.startBackground({
+      automaticTriggers: backgroundTriggers === 'automatic',
+    }),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
     dispose: () => resources.dispose({

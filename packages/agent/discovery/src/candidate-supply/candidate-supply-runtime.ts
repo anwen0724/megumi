@@ -37,7 +37,7 @@ export type CandidateSupplyTrigger =
   | 'evaluation';
 
 export interface CandidateSupplyRuntime {
-  start(): Promise<void>;
+  start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   notify(trigger: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined;
   getCheck(candidateSupplyId: string): CandidateSupplyCheck | undefined;
   shutdown(): Promise<void>;
@@ -269,11 +269,11 @@ export function createCandidateSupplyRuntime(
   }
 
   return {
-    async start() {
+    async start(startOptions = {}) {
       stopped = false;
       options.repository.interruptRunningQueries(options.now());
       options.repository.interruptRunningSupplyChecks({ interruptedAt: options.now() });
-      notify('startup');
+      if (startOptions.automaticTriggers ?? true) notify('startup');
     },
     notify,
     getCheck: (id) => options.repository.getSupplyCheck(id),

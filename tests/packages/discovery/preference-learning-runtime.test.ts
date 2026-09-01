@@ -60,7 +60,9 @@ describe('Preference Learning Runtime', () => {
       observability,
     });
 
-    await runtime.start();
+    await runtime.start({ automaticTriggers: false });
+    expect(repository.readPreferenceLearningTrigger).not.toHaveBeenCalled();
+    runtime.notifyFeedbackChanged();
     await vi.waitFor(() => {
       expect(repository.commitPreferenceLearningBatch).toHaveBeenCalledTimes(1);
     });

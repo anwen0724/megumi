@@ -74,7 +74,7 @@ export interface CreateDailyRecommendationRuntimeOptions {
 }
 
 export interface DailyRecommendationRuntime {
-  start(): Promise<void>;
+  start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   ensure(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
   getBatch(localDate: string): DailyRecommendationBatch | undefined;
   notifyCandidatesAvailable(): void;
@@ -145,8 +145,8 @@ export function createDailyRecommendationRuntime(
   }
 
   const runtime: DailyRecommendationRuntime = {
-    async start() {
-      await scheduler.start();
+    async start(startOptions = {}) {
+      if (startOptions.automaticTriggers ?? true) await scheduler.start();
     },
     ensure,
     getBatch: (localDate) => options.repository.getBatch(localDate),

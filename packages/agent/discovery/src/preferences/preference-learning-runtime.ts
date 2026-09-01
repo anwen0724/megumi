@@ -27,7 +27,7 @@ const ModelResultSchema = z.object({
 }).strict();
 
 export interface PreferenceLearningRuntime {
-  start(): Promise<void>;
+  start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   notifyFeedbackChanged(): void;
   shutdown(): Promise<void>;
 }
@@ -130,10 +130,10 @@ export function createPreferenceLearningRuntime(
   }
 
   return {
-    async start() {
+    async start(startOptions = {}) {
       accepting = true;
       options.repository.interruptPreferenceLearningBatches({ now: options.now() });
-      wake();
+      if (startOptions.automaticTriggers ?? true) wake();
     },
     notifyFeedbackChanged: wake,
     async shutdown() {
