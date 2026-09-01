@@ -1,6 +1,6 @@
 {
   "taskId": "conversation.compare-technical-options",
-  "revision": 1,
+  "revision": 2,
   "title": "比较技术方案并形成决策报告",
   "objective": "Agent 综合多份 Workspace 材料，形成有证据、有取舍、有风险说明的技术选型报告。",
   "difficulty": "medium",
@@ -53,13 +53,6 @@
       "title": "业务执行已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {

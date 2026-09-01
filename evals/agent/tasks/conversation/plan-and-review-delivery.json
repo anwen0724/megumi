@@ -1,6 +1,6 @@
 {
   "taskId": "conversation.plan-and-review-delivery",
-  "revision": 1,
+  "revision": 2,
   "title": "规划并复审一次功能交付",
   "objective": "Agent 在同一 Session 中完成多材料分析、两个交付物创建以及后续自检修订。",
   "difficulty": "complex",
@@ -61,13 +61,6 @@
       "title": "两轮业务执行均已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "多轮 Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {

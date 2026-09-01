@@ -330,6 +330,28 @@ describe('Evaluation execution regressions', () => {
     ]));
     expect(evidence.measurements.unavailable).toContain('inputTokens');
   });
+
+  it('keeps a missing required Trace as an Observation diagnostic', async () => {
+    const runtime = {
+      host: { observability: {
+        async flush() {},
+        async listTraces() { return { status: 'ok', traces: [] }; },
+      } },
+    } as unknown as ProductRuntime;
+
+    const evidence = await collectTraceEvidence({
+      runtime,
+      targets: [{
+        traceKind: 'conversation', correlation: { executionId: 'execution:1' }, expectation: 'required',
+      }],
+      settlementTimeoutMs: 0,
+    });
+
+    expect(evidence.traceIds).toEqual([]);
+    expect(evidence.issues).toEqual([expect.objectContaining({
+      code: 'correlated_trace_missing', impact: 'diagnostic_only',
+    })]);
+  });
 });
 
 function operationTask(type: 'candidate_supply' | 'daily_recommendation') {

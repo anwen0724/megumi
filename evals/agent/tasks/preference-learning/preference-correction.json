@@ -1,6 +1,6 @@
 {
   "taskId": "preference-learning.preference-correction",
-  "revision": 1,
+  "revision": 2,
   "title": "反馈修正偏好",
   "objective": "相反的新反馈应正确修订已有 Preference，而不是叠加矛盾结论。",
   "difficulty": "medium",
@@ -112,13 +112,6 @@
       "title": "业务执行已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {

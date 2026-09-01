@@ -42,8 +42,6 @@ function evaluateRule(metric: RuleMetric, observation: TaskObservation): {
         observation,
         'executionOutcome',
       );
-    case 'trace_correlated':
-      return outcome(observation.traceIds.length > 0, '至少存在一条可关联 Trace。', observation, 'traceIds');
     case 'no_evidence_conflict':
       return outcome(
         !observation.issues.some((issue) => issue.code === 'observation_conflict'),

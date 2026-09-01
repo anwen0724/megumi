@@ -1,6 +1,6 @@
 {
   "taskId": "interest-understanding.merge-existing-interest",
-  "revision": 1,
+  "revision": 2,
   "title": "归并已有关注",
   "objective": "新证据应归并到语义一致的已有 Interest，而不是无意义重复。",
   "difficulty": "medium",
@@ -45,13 +45,6 @@
       "title": "业务执行已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {

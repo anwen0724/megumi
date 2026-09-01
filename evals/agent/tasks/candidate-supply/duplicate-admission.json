@@ -1,6 +1,6 @@
 {
   "taskId": "candidate-supply.duplicate-admission",
-  "revision": 1,
+  "revision": 2,
   "title": "重复内容入池判断",
   "objective": "语义重复内容不得作为新的有效 Candidate 入池。",
   "difficulty": "medium",
@@ -66,13 +66,6 @@
       "title": "业务执行已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {

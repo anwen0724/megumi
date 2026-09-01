@@ -16,7 +16,6 @@ const ParameterlessRuleMetricSchema = z.object({
   evaluator: z.literal('rule'),
   rule: z.enum([
     'business_completion_present',
-    'trace_correlated',
     'no_evidence_conflict',
     'no_scope_escape',
   ]),

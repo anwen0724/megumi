@@ -41,6 +41,16 @@ describe('Evaluation Task authoring', () => {
     })).toThrow(/Interest initial-state reference does not exist/iu);
   });
 
+  it('rejects Trace association as a product-quality Metric', () => {
+    expect(() => EvaluationTaskSchema.parse({
+      ...conversationTask(),
+      metrics: [{
+        metricId: 'trace_correlated', title: 'Trace 可关联', evaluator: 'rule',
+        required: true, rule: 'trace_correlated',
+      }],
+    })).toThrow();
+  });
+
   it('loads independently added Task files and resolves Suite selection without duplicates', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'megumi-evaluation-tasks-'));
     await mkdir(path.join(root, 'tasks', 'conversation'), { recursive: true });

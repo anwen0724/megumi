@@ -94,7 +94,6 @@ function evaluationTask() {
     timeoutMs: 2_000,
     metrics: [
       { metricId: 'completion', title: 'Completion', evaluator: 'rule', rule: 'business_completion_present', required: true },
-      { metricId: 'trace', title: 'Trace', evaluator: 'rule', rule: 'trace_correlated', required: true },
     ],
   });
 }

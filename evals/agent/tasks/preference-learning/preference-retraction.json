@@ -1,6 +1,6 @@
 {
   "taskId": "preference-learning.preference-retraction",
-  "revision": 1,
+  "revision": 2,
   "title": "撤销反馈与偏好",
   "objective": "撤销支撑反馈后应撤销或削弱不再有依据的 Preference。",
   "difficulty": "medium",
@@ -112,13 +112,6 @@
       "title": "业务执行已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {

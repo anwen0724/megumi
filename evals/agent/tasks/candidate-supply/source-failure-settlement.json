@@ -1,6 +1,6 @@
 {
   "taskId": "candidate-supply.source-failure-settlement",
-  "revision": 1,
+  "revision": 2,
   "title": "来源无结果结算",
   "objective": "来源未产出时检查仍应形成明确、可恢复的结算。",
   "difficulty": "complex",
@@ -38,13 +38,6 @@
       "title": "业务执行已完成",
       "evaluator": "rule",
       "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "trace_correlated",
-      "title": "Trace 可关联",
-      "evaluator": "rule",
-      "rule": "trace_correlated",
       "required": true
     },
     {
