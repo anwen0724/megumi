@@ -18,6 +18,7 @@ export * from './query/diagnostic-bundle';
 export * from './query/trace-projector';
 export * from './query/trace-query';
 export * from './query/trace-reader';
+export * from './query/trace-measurements';
 export type {
   ObservabilityEntryKind,
   ObservabilityStorage as ObservabilityPersistenceStorage,

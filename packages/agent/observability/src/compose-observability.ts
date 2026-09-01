@@ -213,6 +213,7 @@ function createNoopComposition(): ComposedObservability {
   const queries: ObservabilityQueries = {
     listTraces: async () => [],
     getTrace: async () => undefined,
+    getTraceMeasurements: async () => undefined,
     readContent: async () => ({ status: 'missing' }),
     rebuildIndex: async () => false,
     getHealth: () => health.snapshot(),

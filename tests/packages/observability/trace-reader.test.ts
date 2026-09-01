@@ -304,6 +304,98 @@ describe('Trace Reader', () => {
     expect(detail?.issues).not.toContainEqual(expect.objectContaining({ code: 'unavailable_content' }));
   });
 
+  it('derives model usage from stored model.response Content without changing Journal truth', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const traceId = '00000000-0000-4000-8000-000000000205';
+    const spanId = '00000000-0000-4000-8000-000000000215';
+    const responseBytes = new TextEncoder().encode(JSON.stringify({
+      usage: {
+        input: 120,
+        output: 30,
+        cacheRead: 20,
+        cacheWrite: 5,
+        reasoning: 8,
+        totalTokens: 175,
+        cost: { input: 0.1, output: 0.2, cacheRead: 0.01, cacheWrite: 0.02, total: 0.33 },
+      },
+    }));
+    const contentId = sha256(responseBytes);
+    const records: TraceJournalRecord[] = [
+      started(traceId, 1),
+      spanStarted(traceId, 2, spanId, undefined, 'model.call'),
+      {
+        ...base(traceId, 3),
+        type: 'span.event',
+        spanId,
+        event: {
+          type: 'model.retry.scheduled',
+          currentAttempt: 1,
+          nextAttempt: 2,
+          reasonCode: 'http_429',
+        },
+      },
+      {
+        ...base(traceId, 4),
+        type: 'content.recorded',
+        spanId,
+        kind: 'model.response',
+        content: {
+          mode: 'stored',
+          contentId,
+          mediaType: 'application/json',
+          byteLength: responseBytes.byteLength,
+        },
+        correlation: { modelCallId: 'model-call:1' },
+      },
+      spanEnded(traceId, 5, spanId),
+      ended(traceId, 6),
+    ];
+    seedSegment(storage, '2026-08-26', 1, records);
+    storage.seedBytes(blobPath(contentId), responseBytes);
+    const reader = createTraceReader({ rootDirectory: 'observability', storage });
+
+    await expect(reader.getTraceMeasurements(traceId)).resolves.toEqual({
+      traceId,
+      diagnostics: 'complete',
+      durationMs: 5_000,
+      modelCalls: 1,
+      toolCalls: 0,
+      sourceCalls: 0,
+      retries: 1,
+      usage: {
+        inputTokens: 120,
+        outputTokens: 30,
+        cacheReadTokens: 20,
+        cacheWriteTokens: 5,
+        reasoningTokens: 8,
+        totalTokens: 175,
+        estimatedCostUsd: 0.33,
+      },
+      issues: [],
+    });
+  });
+
+  it('marks measurements incomplete when a model call has no recorded usage', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const traceId = '00000000-0000-4000-8000-000000000206';
+    const spanId = '00000000-0000-4000-8000-000000000216';
+    seedSegment(storage, '2026-08-26', 1, [
+      started(traceId, 1),
+      spanStarted(traceId, 2, spanId, undefined, 'model.call'),
+      spanEnded(traceId, 3, spanId),
+      ended(traceId, 4),
+    ]);
+    const reader = createTraceReader({ rootDirectory: 'observability', storage });
+
+    await expect(reader.getTraceMeasurements(traceId)).resolves.toMatchObject({
+      traceId,
+      diagnostics: 'incomplete',
+      modelCalls: 1,
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      issues: [{ code: 'model_usage_missing' }],
+    });
+  });
+
   it('keeps streaming Journal reads available when every Derived Index operation fails', async () => {
     const storage = new ObservabilityMemoryStorage();
     const traceId = '00000000-0000-4000-8000-000000000203';

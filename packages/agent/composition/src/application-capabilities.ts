@@ -697,7 +697,9 @@ function composeCapabilitiesWithDatabase(
           code: 'daily_recommendation_background_failed',
           message: 'Daily Recommendation background work failed.',
           correlation: {
-            ...(context.batchId ? { batchId: context.batchId } : {}),
+            ...(context.batchId
+              ? { dailyRecommendationBatchId: context.batchId }
+              : {}),
             ...(context.executionId ? { executionId: context.executionId } : {}),
           },
           data: {

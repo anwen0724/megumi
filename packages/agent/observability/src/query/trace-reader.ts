@@ -26,6 +26,7 @@ import {
   type InvalidJournalFact,
   type TraceProjection,
 } from './trace-projector';
+import { deriveTraceMeasurements } from './trace-measurements';
 
 const DETAIL_CACHE_LIMIT = 20;
 const NEWLINE_BYTE = 0x0a;
@@ -85,6 +86,25 @@ export function createTraceReader(options: CreateTraceReaderOptions): TraceReade
     return projectFacts(scan.facts);
   };
 
+  const getTrace = async (traceId: string): Promise<TraceProjection | undefined> => {
+    if (options.index && await synchronize()) {
+      const cached = takeCachedTrace(detailCache, traceId);
+      if (cached) return cached;
+      try {
+        const locators = options.index.getRecordLocators(traceId);
+        if (locators.length === 0) return undefined;
+        const trace = await readTraceFromLocators(options.storage, traceId, locators);
+        cacheTrace(detailCache, trace);
+        return trace;
+      } catch {
+        // Fall through to streaming Journal projection when indexed locations are unreadable.
+      }
+    }
+    const trace = (await readAll()).find((candidate) => candidate.traceId === traceId);
+    if (trace) cacheTrace(detailCache, trace);
+    return trace;
+  };
+
   return {
     async listTraces(query = {}) {
       if (options.index && await synchronize()) {
@@ -101,23 +121,13 @@ export function createTraceReader(options: CreateTraceReaderOptions): TraceReade
         .slice(0, query.limit ?? 200);
     },
 
-    async getTrace(traceId) {
-      if (options.index && await synchronize()) {
-        const cached = takeCachedTrace(detailCache, traceId);
-        if (cached) return cached;
-        try {
-          const locators = options.index.getRecordLocators(traceId);
-          if (locators.length === 0) return undefined;
-          const trace = await readTraceFromLocators(options.storage, traceId, locators);
-          cacheTrace(detailCache, trace);
-          return trace;
-        } catch {
-          // Fall through to streaming Journal projection when indexed locations are unreadable.
-        }
-      }
-      const trace = (await readAll()).find((candidate) => candidate.traceId === traceId);
-      if (trace) cacheTrace(detailCache, trace);
-      return trace;
+    getTrace,
+
+    async getTraceMeasurements(traceId) {
+      const trace = await getTrace(traceId);
+      return trace
+        ? deriveTraceMeasurements({ trace, readContent: (contentId) => contentStore.read(contentId) })
+        : undefined;
     },
 
     readContent: (contentId) => contentStore.read(contentId),

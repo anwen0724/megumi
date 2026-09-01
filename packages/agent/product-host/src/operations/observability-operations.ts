@@ -20,6 +20,7 @@ import {
   ObservabilityEmptyPayloadSchema,
   ObservabilityListPayloadSchema,
   ObservabilityTracePayloadSchema,
+  ObservabilityTraceMeasurementsSchema,
   type ObservabilityContentCheckpointUiDto,
   type ObservabilityCorrelationUiDto,
   type ObservabilityEventUiDto,
@@ -52,6 +53,20 @@ export function createObservabilityOperations(request: {
         const trace = await request.queries.getTrace(payload.traceId);
         return trace
           ? { status: 'found', trace: projectDetail(trace) }
+          : { status: 'not_found' };
+      } catch (error) {
+        return failedResult(error);
+      }
+    },
+    async getTraceMeasurements(input) {
+      try {
+        const payload = ObservabilityTracePayloadSchema.parse(input);
+        const measurements = await request.queries.getTraceMeasurements(payload.traceId);
+        return measurements
+          ? {
+              status: 'found',
+              measurements: ObservabilityTraceMeasurementsSchema.parse(measurements),
+            }
           : { status: 'not_found' };
       } catch (error) {
         return failedResult(error);

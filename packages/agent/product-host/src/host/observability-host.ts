@@ -127,6 +127,39 @@ export const ObservabilityGetTraceResultSchema = z.discriminatedUnion('status', 
 ]);
 export type ObservabilityGetTraceResult = z.infer<typeof ObservabilityGetTraceResultSchema>;
 
+export const ObservabilityTraceMeasurementsSchema = z.object({
+  traceId: z.string().min(1),
+  diagnostics: TraceDiagnosticsSchema,
+  durationMs: z.number().nonnegative().optional(),
+  modelCalls: z.number().int().nonnegative(),
+  toolCalls: z.number().int().nonnegative(),
+  sourceCalls: z.number().int().nonnegative(),
+  retries: z.number().int().nonnegative(),
+  usage: z.object({
+    inputTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+    cacheReadTokens: z.number().int().nonnegative(),
+    cacheWriteTokens: z.number().int().nonnegative(),
+    reasoningTokens: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative(),
+    estimatedCostUsd: z.number().nonnegative(),
+  }).strict(),
+  issues: z.array(z.object({
+    code: z.enum(['trace_incomplete', 'model_usage_missing', 'model_usage_unavailable']),
+    sequence: z.number().int().positive().optional(),
+  }).strict()),
+}).strict();
+export type ObservabilityTraceMeasurementsUiDto = z.infer<typeof ObservabilityTraceMeasurementsSchema>;
+
+export const ObservabilityGetTraceMeasurementsResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('found'), measurements: ObservabilityTraceMeasurementsSchema }).strict(),
+  z.object({ status: z.literal('not_found') }).strict(),
+  z.object({ status: z.literal('failed'), message: z.string() }).strict(),
+]);
+export type ObservabilityGetTraceMeasurementsResult = z.infer<
+  typeof ObservabilityGetTraceMeasurementsResultSchema
+>;
+
 const AvailableContentSchema = z.discriminatedUnion('encoding', [
   z.object({
     encoding: z.literal('text'), contentId: z.string(), mediaType: z.string(),
@@ -195,6 +228,9 @@ export type ObservabilityExportResult = z.infer<typeof ObservabilityExportResult
 export interface ObservabilityHost {
   listTraces(payload: z.infer<typeof ObservabilityListPayloadSchema>): Promise<ObservabilityListResult>;
   getTrace(payload: z.infer<typeof ObservabilityTracePayloadSchema>): Promise<ObservabilityGetTraceResult>;
+  getTraceMeasurements(
+    payload: z.infer<typeof ObservabilityTracePayloadSchema>,
+  ): Promise<ObservabilityGetTraceMeasurementsResult>;
   getContent(payload: z.infer<typeof ObservabilityContentPayloadSchema>): Promise<ObservabilityGetContentResult>;
   getHealth(payload: z.infer<typeof ObservabilityEmptyPayloadSchema>): Promise<ObservabilityHealthResult>;
   rebuildIndex(payload: z.infer<typeof ObservabilityEmptyPayloadSchema>): Promise<ObservabilityRebuildResult>;

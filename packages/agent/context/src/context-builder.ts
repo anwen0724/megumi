@@ -124,9 +124,11 @@ class DefaultContext implements ContextCapabilities {
       ...('executionId' in run ? { executionId: run.executionId } : {}),
       modelCallId: request.modelCallContext.modelCallId,
       ...(run.kind === 'conversation' ? { sessionId: run.sessionId } : {}),
-      ...(run.kind === 'daily_recommendation' || run.kind === 'preference_learning'
-        ? { batchId: run.batchId }
-        : {}),
+      ...(run.kind === 'daily_recommendation'
+        ? { dailyRecommendationBatchId: run.batchId }
+        : run.kind === 'preference_learning'
+          ? { preferenceLearningBatchId: run.batchId }
+          : {}),
     };
     const operation = async (): Promise<BuildContextResult> => {
       let result: BuildContextResult;

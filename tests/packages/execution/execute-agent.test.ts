@@ -113,6 +113,9 @@ describe('Execute Agent', () => {
     expect(modelContent.filter((record) => record.kind === 'model.provider_request').map((record) => (
       record.correlation.providerAttempt
     ))).toEqual([1, 2]);
+    expect(modelContent.filter((record) => record.kind === 'model.provider_request').every((record) => (
+      record.content.mode !== 'inline' || record.content.issues === undefined
+    ))).toBe(true);
     expect(records.filter((record) => record.type === 'span.event').map((record) => record.event)).toEqual([
       {
         type: 'model.retry.scheduled',

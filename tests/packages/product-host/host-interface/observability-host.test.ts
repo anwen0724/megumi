@@ -103,6 +103,22 @@ describe('ObservabilityHost', () => {
     expect(queries.readContent).toHaveBeenCalledWith(STORED_CONTENT_ID);
   });
 
+  it('exposes Reader-derived Trace measurements without embedding Content', async () => {
+    const queries = queryFixture();
+    const host = createObservabilityOperations({ queries, flush: async () => undefined });
+
+    await expect(host.getTraceMeasurements({ traceId: TRACE_ID })).resolves.toEqual({
+      status: 'found',
+      measurements: expect.objectContaining({
+        traceId: TRACE_ID,
+        diagnostics: 'complete',
+        modelCalls: 1,
+        usage: expect.objectContaining({ totalTokens: 15 }),
+      }),
+    });
+    expect(queries.getTraceMeasurements).toHaveBeenCalledWith(TRACE_ID);
+  });
+
   it('serializes inline JSON with the same canonical bytes used by Content identity', async () => {
     const queries = queryFixture();
     const trace = projection();
@@ -149,6 +165,25 @@ function queryFixture(): ObservabilityQueries {
   return {
     listTraces: vi.fn(async () => [summarizeTrace(trace)]),
     getTrace: vi.fn(async () => trace),
+    getTraceMeasurements: vi.fn(async () => ({
+      traceId: TRACE_ID,
+      diagnostics: 'complete' as const,
+      durationMs: 1_000,
+      modelCalls: 1,
+      toolCalls: 0,
+      sourceCalls: 0,
+      retries: 0,
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        reasoningTokens: 0,
+        totalTokens: 15,
+        estimatedCostUsd: 0.002,
+      },
+      issues: [],
+    })),
     readContent: vi.fn(async () => ({
       status: 'available' as const,
       bytes: new Uint8Array([0, 1, 2, 3]),

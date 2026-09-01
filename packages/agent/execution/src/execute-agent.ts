@@ -435,7 +435,7 @@ function executionCorrelation(metadata: ExecutionMetadata) {
     ...(metadata.kind === 'conversation'
       ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId }
       : metadata.kind === 'daily_recommendation'
-        ? { batchId: metadata.batchId }
+        ? { dailyRecommendationBatchId: metadata.batchId }
         : {}),
   };
 }
@@ -774,7 +774,7 @@ function recordProviderExchange(
   if (exchange.type === 'request') {
     safeRecordContent(observability, {
       kind: 'model.provider_request',
-      value: exchange.payload,
+      value: omitUndefinedFields(exchange.payload),
       correlation,
     });
     return;
@@ -815,6 +815,24 @@ function recordProviderExchange(
     providerAttempt: exchange.attempt,
     reasonCode: exchange.reasonCode,
   });
+}
+
+/** Removes provider adapter omissions before the diagnostic serializer sees them as unsupported values. */
+function omitUndefinedFields(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value
+      .map(omitUndefinedFields)
+      .filter((item) => item !== undefined);
+  }
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.entries(value).flatMap(([key, child]) => {
+    const normalized = omitUndefinedFields(child);
+    return normalized === undefined ? [] : [[key, normalized]];
+  }));
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function modelCallCorrelation(metadata: ExecutionMetadata, modelCallId: string | undefined) {

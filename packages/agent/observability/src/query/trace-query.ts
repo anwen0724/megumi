@@ -7,6 +7,7 @@ import type { ObservabilityHealthSnapshot } from '../runtime/observability-healt
 import type { TraceDiagnosticBundle } from './diagnostic-bundle';
 import type { SpanName, TraceCorrelation, TraceKind } from '../trace/trace-contract';
 import type { TraceProjection } from './trace-projector';
+import type { TraceMeasurements } from './trace-measurements';
 
 export interface TraceListQuery {
   readonly startedAtOrAfter?: string;
@@ -38,6 +39,8 @@ export interface TraceReader {
   listTraces(query?: TraceListQuery): Promise<readonly TraceSummaryProjection[]>;
   /** Reads one full projected Trace from Journal truth. */
   getTrace(traceId: string): Promise<TraceProjection | undefined>;
+  /** Derives cost and efficiency measurements from one projected Trace and its model responses. */
+  getTraceMeasurements(traceId: string): Promise<TraceMeasurements | undefined>;
   /** Reads and verifies one referenced Content blob by identity. */
   readContent(contentId: string): Promise<ContentStoreReadResult>;
   /** Rebuilds the optional Derived Index from retained Journal segments. */
