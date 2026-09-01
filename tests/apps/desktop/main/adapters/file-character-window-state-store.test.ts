@@ -14,7 +14,12 @@ describe('FileCharacterWindowStateStore', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-character-state-'));
     roots.push(root);
     const store = createFileCharacterWindowStateStore({ filePath: path.join(root, 'state.json') });
-    const state = { alwaysOnTop: false, visible: true, bounds: { x: 30, y: 40, width: 420, height: 720 } };
+    const state = {
+      alwaysOnTop: false,
+      visible: true,
+      scale: 0.8,
+      bounds: { x: 30, y: 40, width: 420, height: 720 },
+    };
 
     store.save(state);
 
@@ -26,7 +31,11 @@ describe('FileCharacterWindowStateStore', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-character-state-'));
     roots.push(root);
     const filePath = path.join(root, 'state.json');
-    fs.writeFileSync(filePath, JSON.stringify({ alwaysOnTop: true, bounds: { x: 0, y: 0, width: -1, height: 0 } }));
+    fs.writeFileSync(filePath, JSON.stringify({
+      alwaysOnTop: true,
+      scale: 'large',
+      bounds: { x: 0, y: 0, width: -1, height: 0 },
+    }));
 
     expect(createFileCharacterWindowStateStore({ filePath }).load()).toEqual({ alwaysOnTop: true, visible: false });
   });

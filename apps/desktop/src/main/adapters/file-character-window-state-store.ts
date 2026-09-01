@@ -37,10 +37,12 @@ function parseState(value: unknown): CharacterWindowPersistedState | undefined {
   const record = value as Record<string, unknown>;
   if (typeof record.alwaysOnTop !== 'boolean') return undefined;
   const bounds = parseBounds(record.bounds);
+  const scale = isFiniteNumber(record.scale) ? record.scale : undefined;
   return {
     alwaysOnTop: record.alwaysOnTop,
     visible: typeof record.visible === 'boolean' ? record.visible : false,
     ...(bounds ? { bounds } : {}),
+    ...(scale !== undefined ? { scale } : {}),
   };
 }
 
