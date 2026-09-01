@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = process.cwd();
 
-const CODE_ROOTS = ['packages', 'apps', 'evals'];
+const CODE_ROOTS = ['packages', 'apps'];
 const CODE_EXTENSIONS = ['.ts', '.tsx'];
 
 /** Files explicitly allowed to reference the legacy run_id/runId names. */

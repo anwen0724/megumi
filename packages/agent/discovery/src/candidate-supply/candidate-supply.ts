@@ -194,6 +194,64 @@ export const CandidateSupplySettlementSchema = z.object({
 }).strict();
 export type CandidateSupplySettlement = z.infer<typeof CandidateSupplySettlementSchema>;
 
+const CandidateSupplyCheckBaseSchema = z.object({
+  candidateSupplyCheckId: z.string().min(1),
+  trigger: z.enum([
+    'startup',
+    'resume',
+    'interest_changed',
+    'configuration_changed',
+    'candidate_state_changed',
+    'consumer_shortfall',
+    'scheduled_recheck',
+    'evaluation',
+  ]),
+  requestedAt: TimestampSchema,
+}).strict();
+
+export const CandidateSupplyCheckSchema = z.discriminatedUnion('status', [
+  CandidateSupplyCheckBaseSchema.extend({ status: z.literal('queued') }).strict(),
+  CandidateSupplyCheckBaseSchema.extend({ status: z.literal('running'), startedAt: TimestampSchema }).strict(),
+  CandidateSupplyCheckBaseSchema.extend({
+    status: z.literal('completed'),
+    reason: z.enum([
+      'no_gap',
+      'cooldown',
+      'fulfilled',
+      'budget_exhausted',
+      'no_available_source',
+      'model_unavailable',
+      'zero_yield',
+      'agent_failed',
+      'cancelled',
+    ]),
+    executionId: z.string().min(1).optional(),
+    availableBefore: z.number().int().nonnegative().optional(),
+    availableAfter: z.number().int().nonnegative().optional(),
+    remainingGap: CandidateSupplySettlementSchema.shape.remainingGap.optional(),
+    startedAt: TimestampSchema.optional(),
+    completedAt: TimestampSchema,
+  }).strict(),
+  CandidateSupplyCheckBaseSchema.extend({
+    status: z.enum(['failed', 'interrupted']),
+    failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
+    startedAt: TimestampSchema.optional(),
+    completedAt: TimestampSchema,
+  }).strict(),
+]);
+
+export type CandidateSupplyCheck = z.infer<typeof CandidateSupplyCheckSchema>;
+export interface CandidateSupplyCheckReceipt {
+  readonly candidateSupplyCheckId: string;
+  readonly trigger: CandidateSupplyCheck['trigger'];
+  readonly status: 'queued';
+  readonly requestedAt: string;
+}
+
+export function isCandidateSupplyCheckTerminal(value: CandidateSupplyCheck): boolean {
+  return value.status === 'completed' || value.status === 'failed' || value.status === 'interrupted';
+}
+
 export interface CandidateSourceState {
   readonly sourceId: string;
   readonly consecutiveFailureCount: number;
@@ -262,6 +320,10 @@ export interface CandidateSupplyRepository {
   }): boolean;
   readSupplyState(): CandidateSupplyState | undefined;
   writeSupplyState(state: CandidateSupplyState): void;
+  createSupplyCheck(check: CandidateSupplyCheck): CandidateSupplyCheck;
+  updateSupplyCheck(check: CandidateSupplyCheck): CandidateSupplyCheck;
+  getSupplyCheck(candidateSupplyCheckId: string): CandidateSupplyCheck | undefined;
+  interruptRunningSupplyChecks(input: { readonly interruptedAt: string }): number;
   readSourceState(sourceId: string): CandidateSourceState | undefined;
   settleSourceAttempt(input: {
     readonly sourceId: string;

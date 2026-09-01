@@ -17,9 +17,12 @@ export interface TraceDisplayLabels {
   readonly candidateSupplyRun: string;
   readonly preferenceLearning: string;
   readonly preferenceLearningRun: string;
+  readonly interestUnderstanding: string;
+  readonly interestUnderstandingRun: string;
 }
 
-type TraceDisplayKind = 'conversation' | 'daily_recommendation' | 'candidate_supply' | 'preference_learning';
+type TraceDisplayKind = 'conversation' | 'interest_understanding' | 'daily_recommendation'
+  | 'candidate_supply' | 'preference_learning';
 
 export interface TraceDisplayItem {
   readonly summary: ObservabilityTraceSummaryUiDto;
@@ -92,6 +95,24 @@ export function createTraceDisplayItems(input: {
         groupId: `preference-learning:${day}`,
         groupTitle: `${input.labels.preferenceLearning} · ${day}`,
         groupKind: 'preference_learning',
+      };
+    }
+
+    if (summary.traceKind === 'interest_understanding') {
+      const sessionId = summary.correlation.sessionId;
+      const session = sessionId ? sessionsById.get(sessionId) : undefined;
+      const message = summary.correlation.executionId
+        ? messagesByExecutionId.get(summary.correlation.executionId)
+        : undefined;
+      const sessionTitle = session?.title.trim()
+        || (sessionId ? input.labels.deletedSession : input.labels.unassignedSession);
+      return {
+        summary,
+        title: preview(message?.text) ?? input.labels.interestUnderstandingRun,
+        groupId: `interest-session:${sessionId ?? 'unassigned'}`,
+        groupTitle: `${input.labels.interestUnderstanding} · ${sessionTitle}`,
+        groupKind: 'interest_understanding',
+        ...(sessionId ? { sessionId } : {}),
       };
     }
 

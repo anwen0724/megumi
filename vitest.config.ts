@@ -10,6 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@megumi/desktop': path.resolve(__dirname, 'apps/desktop/src'),
+      '@megumi/composition': path.resolve(__dirname, 'packages/agent/composition/src'),
       '@megumi/product-host': path.resolve(__dirname, 'packages/agent/product-host/src'),
       '@megumi/input': path.resolve(__dirname, 'packages/agent/input/src'),
       '@megumi/commands': path.resolve(__dirname, 'packages/agent/commands/src'),

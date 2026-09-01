@@ -31,7 +31,7 @@ export type {
   ApplyInterestExtraction,
   ValidatedInterestCommand,
 } from './interest-repository';
-export type { RecommendationSelectionSignal } from './recommendation-repository';
+export type { RecommendationSelectionSignal, RecommendationStateResult } from './recommendation-repository';
 
 export interface DiscoveryRepository
   extends InterestRepository, DailyRecommendationRepository, RecommendationRepositoryOperations,

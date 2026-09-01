@@ -70,6 +70,10 @@ export const PreferenceLearningBatchSchema = z.discriminatedUnion('status', [
     createdAt: TimestampSchema,
     startedAt: TimestampSchema,
     completedAt: TimestampSchema,
+    resultRevisions: z.array(z.object({
+      scopeKey: z.string().min(1),
+      revision: z.number().int().nonnegative(),
+    }).strict()),
   }).strict(),
   z.object({
     batchId: z.string().min(1),
@@ -155,9 +159,38 @@ export type CommitPreferenceLearningBatchResult =
         | 'invalid_feedback_reference';
     };
 
+export const RecommendationFeedbackChangeReceiptSchema = z.discriminatedUnion('changed', [
+  z.object({
+    changed: z.literal(false),
+    recommendationId: z.string().min(1),
+  }).strict(),
+  z.object({
+    changed: z.literal(true),
+    recommendationId: z.string().min(1),
+    feedbackChangeId: z.string().min(1),
+    status: z.enum(['pending', 'ignored']),
+    changedAt: TimestampSchema,
+  }).strict(),
+]);
+
+export const PreferenceLearningCompletionSchema = z.object({
+  feedbackChangeId: z.string().min(1),
+  status: z.enum(['pending', 'batched', 'superseded', 'ignored', 'learned', 'failed']),
+  batchId: z.string().min(1).optional(),
+  resultRevisions: z.array(z.object({
+    scopeKey: z.string().min(1),
+    revision: z.number().int().nonnegative(),
+  }).strict()),
+  failure: z.object({ code: z.string().min(1), message: z.string() }).strict().optional(),
+  changedAt: TimestampSchema,
+  completedAt: TimestampSchema.optional(),
+}).strict();
+
 export type FeedbackReaction = z.infer<typeof FeedbackReactionSchema>;
 export type PreferenceSnapshot = z.infer<typeof PreferenceSnapshotSchema>;
 export type PreferenceDirection = z.infer<typeof PreferenceDirectionSchema>;
 export type PreferenceLearningBatch = z.infer<typeof PreferenceLearningBatchSchema>;
 export type LearnedScopeInput = z.infer<typeof LearnedScopeInputSchema>;
 export type RecommendationContentEvidence = z.infer<typeof RecommendationContentEvidenceSchema>;
+export type RecommendationFeedbackChangeReceipt = z.infer<typeof RecommendationFeedbackChangeReceiptSchema>;
+export type PreferenceLearningCompletion = z.infer<typeof PreferenceLearningCompletionSchema>;

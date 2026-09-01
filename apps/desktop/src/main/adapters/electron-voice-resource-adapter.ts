@@ -14,7 +14,7 @@ import {
   resolveMegumiHomePath,
   type InitializeMegumiHomeSyncOptions,
 } from '@megumi/home';
-import type { ComposeProductVoiceOptions } from '../shell-composition/application-host-composition';
+import type { ComposeApplicationVoiceOptions } from '@megumi/composition';
 import {
   createFileVoiceModels,
   createMinimaxSynthesizer,
@@ -25,7 +25,7 @@ import { createElectronVoiceModelDownloader } from './electron-voice-model-downl
 import { createGithubVoiceReleaseDiscovery } from './github-voice-release-discovery';
 
 export interface ElectronVoiceResources {
-  readonly voiceOptions: ComposeProductVoiceOptions;
+  readonly voiceOptions: ComposeApplicationVoiceOptions;
   /** SenseVoice/Silero paths for the single Voice Input Adapter. */
   readonly speechInputPaths: () => {
     readonly vadModelPath: string;

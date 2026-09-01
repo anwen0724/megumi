@@ -22,3 +22,4 @@ export type {
   ObservabilityEntryKind,
   ObservabilityStorage as ObservabilityPersistenceStorage,
 } from './persistence/observability-storage';
+export { nodeObservabilityStorage } from './persistence/node-observability-storage';

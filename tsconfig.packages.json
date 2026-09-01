@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/agent-core" },
     { "path": "./packages/ai" },
+    { "path": "./packages/agent/composition" },
     { "path": "./packages/agent/commands" },
     { "path": "./packages/agent/context" },
     { "path": "./packages/agent/database" },

@@ -1,0 +1,32 @@
+{
+  "extends": "../../../tsconfig.package.json",
+  "compilerOptions": {
+    "baseUrl": "../../..",
+    "rootDir": "./src",
+    "outDir": "./dist/types",
+    "tsBuildInfoFile": "./dist/types/.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../ai" },
+    { "path": "../commands" },
+    { "path": "../context" },
+    { "path": "../database" },
+    { "path": "../discovery" },
+    { "path": "../events" },
+    { "path": "../execution" },
+    { "path": "../home" },
+    { "path": "../input" },
+    { "path": "../instructions" },
+    { "path": "../observability" },
+    { "path": "../permissions" },
+    { "path": "../product-host" },
+    { "path": "../sandbox" },
+    { "path": "../session" },
+    { "path": "../settings" },
+    { "path": "../skills" },
+    { "path": "../tools" },
+    { "path": "../voice" },
+    { "path": "../workspace" }
+  ]
+}

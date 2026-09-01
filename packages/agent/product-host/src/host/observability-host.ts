@@ -7,7 +7,7 @@ import { z } from 'zod';
 const TraceStatusSchema = z.enum(['ok', 'error', 'cancelled', 'incomplete']);
 const TraceDiagnosticsSchema = z.enum(['complete', 'incomplete']);
 const TraceKindSchema = z.enum([
-  'conversation', 'daily_recommendation', 'candidate_supply', 'preference_learning', 'unknown',
+  'conversation', 'interest_understanding', 'daily_recommendation', 'candidate_supply', 'preference_learning', 'unknown',
 ]);
 export interface ObservabilityDiagnosticErrorUiDto {
   readonly name: string;
@@ -45,6 +45,8 @@ export const ObservabilityCorrelationSchema = z.object({
   recommendationIds: z.array(z.string()).optional(), contentId: z.string().optional(),
   contentDigest: z.string().optional(), providerAttempt: z.number().int().positive().optional(),
   discoveryAttempt: z.number().int().positive().optional(),
+  interestUnderstandingId: z.string().optional(), userMessageId: z.string().optional(),
+  assistantMessageId: z.string().optional(),
 }).strict();
 export type ObservabilityCorrelationUiDto = z.infer<typeof ObservabilityCorrelationSchema>;
 
@@ -52,7 +54,7 @@ export const ObservabilityListPayloadSchema = z.object({
   startedAtOrAfter: z.string().datetime({ offset: true }).optional(),
   startedBefore: z.string().datetime({ offset: true }).optional(),
   traceKind: z.enum([
-    'conversation', 'daily_recommendation', 'candidate_supply', 'preference_learning',
+    'conversation', 'interest_understanding', 'daily_recommendation', 'candidate_supply', 'preference_learning',
   ]).optional(),
   status: TraceStatusSchema.optional(),
   correlation: ObservabilityCorrelationSchema.optional(),

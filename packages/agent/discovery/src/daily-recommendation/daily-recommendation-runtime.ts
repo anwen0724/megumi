@@ -13,7 +13,6 @@ import type { Observability, OperationCompletion, TraceCorrelation } from '@megu
 import type {
   DiscoveryHomeView,
   GetDiscoveryHomeRequest,
-  RecommendationView,
   SearchRecommendationsRequest,
   SearchRecommendationsResult,
 } from '../discovery-view';
@@ -32,6 +31,7 @@ import {
   type DailyRecommendationScheduler,
 } from './daily-recommendation-scheduler';
 import type { DailyRecommendationRepository } from '../persistence/daily-recommendation-repository';
+import type { RecommendationStateResult } from '../persistence/recommendation-repository';
 
 export interface DailyRecommendationBackgroundErrorContext {
   readonly operation: 'scheduled_ensure' | 'execution_settlement' | 'automatic_retry';
@@ -76,10 +76,11 @@ export interface CreateDailyRecommendationRuntimeOptions {
 export interface DailyRecommendationRuntime {
   start(): Promise<void>;
   ensure(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
+  getBatch(localDate: string): DailyRecommendationBatch | undefined;
   notifyCandidatesAvailable(): void;
   getHome(request: GetDiscoveryHomeRequest): DiscoveryHomeView;
   searchRecommendations(request: SearchRecommendationsRequest): SearchRecommendationsResult;
-  updateRecommendationState(request: UpdateRecommendationStateRequest): RecommendationView;
+  updateRecommendationState(request: UpdateRecommendationStateRequest): RecommendationStateResult;
   getNextScheduledAt(): string | undefined;
   shutdown(): Promise<void>;
 }
@@ -148,6 +149,7 @@ export function createDailyRecommendationRuntime(
       await scheduler.start();
     },
     ensure,
+    getBatch: (localDate) => options.repository.getBatch(localDate),
     notifyCandidatesAvailable() {
       if (!accepting) return;
       void ensure({ trigger: 'candidate_available', now: options.now() }).catch((error) => {

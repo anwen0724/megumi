@@ -120,6 +120,13 @@
       "when": 1787808000000,
       "tag": "0016_feedback_learning",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1787894400000,
+      "tag": "0017_discovery_background_operations",
+      "breakpoints": true
     }
   ]
 }

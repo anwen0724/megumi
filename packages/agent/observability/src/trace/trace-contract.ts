@@ -6,6 +6,7 @@ import { DiagnosticErrorSchema, type DiagnosticError } from '../diagnostic-error
 
 export const TraceKindSchema = z.enum([
   'conversation',
+  'interest_understanding',
   'daily_recommendation',
   'candidate_supply',
   'preference_learning',
@@ -46,6 +47,9 @@ export const TRACE_SPAN_NAMES = [
   'preference.batch.claim',
   'preference.commit',
   'preference.batch.settle',
+  'interest.turn.resolve',
+  'interest.result.validate',
+  'interest.commit',
 ] as const;
 
 export const SpanNameSchema = z.enum(TRACE_SPAN_NAMES);
@@ -80,6 +84,9 @@ export interface TraceCorrelation {
   readonly contentDigest?: string;
   readonly providerAttempt?: number;
   readonly discoveryAttempt?: number;
+  readonly interestUnderstandingId?: string;
+  readonly userMessageId?: string;
+  readonly assistantMessageId?: string;
 }
 
 export const TraceCorrelationSchema: z.ZodType<TraceCorrelation> = z.object({
@@ -100,6 +107,9 @@ export const TraceCorrelationSchema: z.ZodType<TraceCorrelation> = z.object({
   contentDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   providerAttempt: z.number().int().positive().optional(),
   discoveryAttempt: z.number().int().positive().optional(),
+  interestUnderstandingId: z.string().optional(),
+  userMessageId: z.string().optional(),
+  assistantMessageId: z.string().optional(),
 }).strict();
 
 export type RecordedOutcome =

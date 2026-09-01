@@ -156,6 +156,10 @@ export interface CreateToolsRequest {
   readonly builtInToolAvailability?: BuiltInToolAvailability;
   readonly dailyRecommendationTools?: DailyRecommendationToolOperations;
   readonly candidateSupplyTools?: CandidateSupplyToolOperations;
+  /** Replaces only the external search adapter; the Tool pipeline stays real. */
+  readonly webSearch?: WebSearch;
+  /** Replaces only the external fetch adapter; the Tool pipeline stays real. */
+  readonly webFetch?: WebFetch;
 }
 
 export type CandidateSupplyToolOperations = SearchContentOperation
@@ -183,7 +187,7 @@ export function createTools(request: CreateToolsRequest): Tools {
   });
   const routers = new Map<string, ModelCallRegistration>();
   const executions = new Map<string, ToolExecutionBinding>();
-  const webFetch = createWebFetch();
+  const webFetch = request.webFetch ?? createWebFetch();
 
   const runtime: InternalTools = {
     bindExecution(bindingRequest) {
@@ -265,7 +269,7 @@ export function createTools(request: CreateToolsRequest): Tools {
           .filter((tool) => input.includeDisabled || isSelected(tool.registeredToolName, {
             availability: request.builtInToolAvailability,
             processAvailable: process !== undefined,
-            webSearchAvailable: resolveConfiguredWebSearch(request.settings) !== undefined,
+            webSearchAvailable: resolveWebSearch(request) !== undefined,
           }))
           .map((tool) => ({
             identity: tool.identity,
@@ -364,7 +368,7 @@ export function createTools(request: CreateToolsRequest): Tools {
       if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
       if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
       workspaceRoot = workspace.workspace.root_path;
-      webSearch = resolveConfiguredWebSearch(request.settings);
+      webSearch = resolveWebSearch(request);
       selected = registry.list().filter((tool) => toolBelongsToGroup(tool.registeredToolName, toolGroupId) && isSelected(tool.registeredToolName, {
         availability: request.builtInToolAvailability,
         processAvailable: process !== undefined,
@@ -450,6 +454,10 @@ function toolProcessDescriptor(sandbox: Sandbox): ToolProcessDescriptor | undefi
   return capabilities.shellKind && capabilities.shellName
     ? { shellKind: capabilities.shellKind, shellName: capabilities.shellName, executionMethod: 'shell' }
     : undefined;
+}
+
+function resolveWebSearch(request: CreateToolsRequest): WebSearch | undefined {
+  return request.webSearch ?? resolveConfiguredWebSearch(request.settings);
 }
 
 export function resolveConfiguredWebSearch(settings: ToolSettings): WebSearch | undefined {

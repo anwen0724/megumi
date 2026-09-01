@@ -25,6 +25,8 @@
     "test": "npm run rebuild:native:node && vitest run",
     "typecheck:packages": "tsc --build tsconfig.packages.json",
     "typecheck:product": "tsc --project tsconfig.product.json --noEmit",
+    "typecheck:evals": "tsc --project evals/agent/tsconfig.json --noEmit",
+    "eval:agent": "tsx evals/agent/cli.ts",
     "rebuild:native:electron": "electron-rebuild -f -w better-sqlite3",
     "rebuild:native:node": "npm rebuild better-sqlite3"
   },

@@ -1,12 +1,12 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
 import { app, BrowserWindow } from 'electron';
 import { resolveMegumiHomePath } from '@megumi/home';
-import { composeProduct, composeProductCapabilities } from './application-host-composition';
+import { composeApplication } from '@megumi/composition';
+import { nodeObservabilityStorage } from '@megumi/observability';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { forwardRuntimeEvent } from '../ipc/event-forwarders';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
 import { electronFileOpenAdapter } from '../adapters/electron-file-open-adapter';
-import { electronObservabilityStorageAdapter } from '../adapters/electron-observability-storage-adapter';
 import { getElectronProductEnvironment } from '../adapters/electron-product-environment-adapter';
 import { getElectronMigrationEnvironment } from '../adapters/electron-migration-environment-adapter';
 import { createDesktopSettingsEnvironment } from '../adapters/desktop-settings-environment-adapter';
@@ -43,11 +43,11 @@ export function composeDesktopMain() {
       mainBuildDirectory: __dirname,
     }),
   });
-  // The capability instances and stable operation owners are composed once in this Host root.
-  const capabilities = composeProductCapabilities({
+  // Desktop selects environment adapters; shared Composition owns the object graph.
+  const product = composeApplication({
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
-    observabilityStorage: electronObservabilityStorageAdapter,
+    observabilityStorage: nodeObservabilityStorage,
     productEnvironment: getElectronProductEnvironment(),
     workspaceFileSystem: createDesktopWorkspaceFileSystem(),
     settingsEnvironment: createDesktopSettingsEnvironment(),
@@ -59,9 +59,6 @@ export function composeDesktopMain() {
       resourcesPath: process.resourcesPath,
       cwd: process.cwd(),
     }),
-  });
-  const product = composeProduct({
-    capabilities,
     diagnosticBundleSave: { save: saveDiagnosticBundle },
     directoryPicker: electronDirectoryPickerAdapter,
     fileOpen: electronFileOpenAdapter,

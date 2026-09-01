@@ -1,8 +1,8 @@
 /* Supplies Electron product identity and platform facts to Product composition. */
 
-import type { ProductCapabilitiesOptions } from '../shell-composition/harness-capabilities';
+import type { ComposeApplicationOptions } from '@megumi/composition';
 
-type ProductEnvironment = NonNullable<ProductCapabilitiesOptions['productEnvironment']>;
+type ProductEnvironment = NonNullable<ComposeApplicationOptions['productEnvironment']>;
 import { app } from 'electron';
 
 export function getElectronProductEnvironment(): ProductEnvironment {

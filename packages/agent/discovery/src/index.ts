@@ -25,6 +25,14 @@ export type {
   ObserveConversationTurnRequest,
   ObserveConversationTurnResult,
 } from './interests/interest-runtime';
+export {
+  InterestUnderstandingSchema,
+  isInterestUnderstandingTerminal,
+} from './interests/interest-understanding';
+export type {
+  InterestUnderstanding,
+  InterestUnderstandingReceipt,
+} from './interests/interest-understanding';
 export type {
   ChangeInterestRequest,
   Interest,
@@ -107,6 +115,8 @@ export {
   CandidateSchema,
   CandidateStatusSchema,
   CandidateSupplySettlementSchema,
+  CandidateSupplyCheckSchema,
+  isCandidateSupplyCheckTerminal,
   CandidateSupplyCommitInputSchema,
   CandidateSupplySearchInputSchema,
 } from './candidate-supply/candidate-supply';
@@ -144,6 +154,8 @@ export type {
   CandidateSupplyRepository,
   CandidateSupplySearchInput,
   CandidateSupplySettlement,
+  CandidateSupplyCheck,
+  CandidateSupplyCheckReceipt,
   CandidateSupplyThresholds,
   CandidateSupplyState,
   CandidateSourceState,
@@ -212,6 +224,7 @@ export type {
   DiscoveryRepository,
   ApplyInterestExtraction,
   RecommendationSelectionSignal,
+  RecommendationStateResult,
   ValidatedInterestCommand,
 } from './persistence/discovery-repository';
 export type {
@@ -225,10 +238,12 @@ export {
   PreferenceDimensionSchema,
   PreferenceDirectionSchema,
   PreferenceLearningBatchSchema,
+  PreferenceLearningCompletionSchema,
   PreferencePolaritySchema,
   PreferenceScopeSchema,
   PreferenceSnapshotSchema,
   RecommendationContentEvidenceSchema,
+  RecommendationFeedbackChangeReceiptSchema,
 } from './preferences/preference';
 export type {
   CommitPreferenceLearningBatchResult,
@@ -238,10 +253,12 @@ export type {
   PreferenceLearningAffectedScope,
   PreferenceLearningBatch,
   PreferenceLearningFacts,
+  PreferenceLearningCompletion,
   PreferenceLearningFeedbackChange,
   PreferenceLearningTrigger,
   PreferenceSnapshot,
   RecommendationContentEvidence,
+  RecommendationFeedbackChangeReceipt,
 } from './preferences/preference';
 export {
   createPreferenceLearningRepository,

@@ -25,7 +25,7 @@ import {
 } from './trace-display';
 
 type TraceKindFilter = 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply'
-  | 'preference_learning';
+  | 'preference_learning' | 'interest_understanding';
 type TraceStatusFilter = 'all' | ObservabilityTraceSummaryUiDto['status'];
 type ActiveAction = 'refresh' | 'rebuild' | 'export';
 type SelectedTraceState =
@@ -71,6 +71,8 @@ export function DiagnosticsPanel() {
       candidateSupplyRun: t('diagnostics.candidateSupplyRun'),
       preferenceLearning: t('diagnostics.traceKinds.preferenceLearning'),
       preferenceLearningRun: t('diagnostics.preferenceLearningRun'),
+      interestUnderstanding: t('diagnostics.traceKinds.interestUnderstanding'),
+      interestUnderstandingRun: t('diagnostics.interestUnderstandingRun'),
     },
   }), [i18n.language, i18n.resolvedLanguage, messages, sessions, t, traces]);
   const filteredItems = useMemo(() => filterTraceDisplayItems(displayItems, {
@@ -296,13 +298,14 @@ export function DiagnosticsPanel() {
             options={[
               { value: 'all', label: t('diagnostics.allKinds') },
               { value: 'conversation', label: t('diagnostics.traceKinds.conversation') },
+              { value: 'interest_understanding', label: t('diagnostics.traceKinds.interestUnderstanding') },
               { value: 'daily_recommendation', label: t('diagnostics.traceKinds.dailyRecommendation') },
               { value: 'candidate_supply', label: t('diagnostics.traceKinds.candidateSupply') },
               { value: 'preference_learning', label: t('diagnostics.traceKinds.preferenceLearning') },
             ]}
             onValueChange={setTraceKind}
           />
-          {traceKind === 'all' || traceKind === 'conversation' ? (
+          {traceKind === 'all' || traceKind === 'conversation' || traceKind === 'interest_understanding' ? (
             <Select label={t('diagnostics.session')} value={sessionId} options={sessionOptions} onValueChange={setSessionId} />
           ) : <div />}
           <Select

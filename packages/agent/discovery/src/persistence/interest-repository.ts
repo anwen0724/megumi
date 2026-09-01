@@ -11,6 +11,10 @@ import {
   type InterestEvidence,
   type SessionParticipation,
 } from '../interests/interest';
+import {
+  InterestUnderstandingSchema,
+  type InterestUnderstanding,
+} from '../interests/interest-understanding';
 
 export type ValidatedInterestCommand =
   | { readonly action: 'create'; readonly interestId: string; readonly description: string; readonly now: string }
@@ -33,6 +37,13 @@ export interface ApplyInterestExtraction {
 }
 
 export interface InterestRepository {
+  /** Creates the durable receipt before work enters the in-memory queue. */
+  createInterestUnderstanding(operation: InterestUnderstanding): InterestUnderstanding;
+  /** Persists one status transition for an existing Interest Understanding. */
+  updateInterestUnderstanding(operation: InterestUnderstanding): InterestUnderstanding;
+  getInterestUnderstanding(interestUnderstandingId: string): InterestUnderstanding | undefined;
+  findInterestUnderstandingByExecution(executionId: string): InterestUnderstanding | undefined;
+  interruptRunningInterestUnderstandings(input: { readonly interruptedAt: string }): number;
   /** Applies one user-owned Interest command atomically. */
   changeInterest(command: ValidatedInterestCommand): Interest;
   /** Lists durable non-deleted Interests in stable order. */
@@ -57,6 +68,16 @@ export interface InterestRepository {
 /** Creates the Interest persistence implementation over one Database connection. */
 export function createInterestRepository(database: DatabaseConnection): InterestRepository {
   return {
+    createInterestUnderstanding: (operation) => createInterestUnderstanding(database, operation),
+    updateInterestUnderstanding: (operation) => updateInterestUnderstanding(database, operation),
+    getInterestUnderstanding: (id) => readInterestUnderstanding(database, 'interest_understanding_id', id),
+    findInterestUnderstandingByExecution: (id) => readInterestUnderstanding(database, 'execution_id', id),
+    interruptRunningInterestUnderstandings: ({ interruptedAt }) => database.prepare({ sql: `
+      UPDATE discovery_interest_understandings
+      SET status = 'interrupted', completed_at = ?, failure_code = 'process_interrupted',
+          failure_message = 'Interest Understanding was interrupted before completion.'
+      WHERE status IN ('queued', 'running')
+    ` }).run([interruptedAt]).changes,
     changeInterest: (command) => database.transaction({
       operation: () => changeInterest(database, command),
     }),
@@ -102,6 +123,113 @@ export function createInterestRepository(database: DatabaseConnection): Interest
       operation: () => retractSessionEvidence(database, sessionId, retractedAt),
     }),
   };
+}
+
+function createInterestUnderstanding(
+  database: DatabaseConnection,
+  rawOperation: InterestUnderstanding,
+): InterestUnderstanding {
+  const operation = InterestUnderstandingSchema.parse(rawOperation);
+  database.prepare({ sql: `
+    INSERT INTO discovery_interest_understandings (
+      interest_understanding_id, execution_id, session_id, user_message_id,
+      assistant_message_id, status, queued_at
+    ) VALUES (?, ?, ?, ?, ?, 'queued', ?)
+  ` }).run([
+    operation.interestUnderstandingId,
+    operation.executionId,
+    operation.sessionId,
+    operation.userMessageId,
+    operation.assistantMessageId,
+    operation.queuedAt,
+  ]);
+  return readInterestUnderstandingRequired(database, operation.interestUnderstandingId);
+}
+
+function updateInterestUnderstanding(
+  database: DatabaseConnection,
+  rawOperation: InterestUnderstanding,
+): InterestUnderstanding {
+  const operation = InterestUnderstandingSchema.parse(rawOperation);
+  const changedInterestIds = operation.status === 'completed' ? operation.changedInterestIds : [];
+  const evidenceIds = operation.status === 'completed' ? operation.evidenceIds : [];
+  const outcome = operation.status === 'completed' ? operation.outcome : null;
+  const failure = operation.status === 'failed' || operation.status === 'interrupted'
+    ? operation.failure
+    : undefined;
+  const completedAt = operation.status === 'completed'
+    || operation.status === 'failed'
+    || operation.status === 'interrupted'
+    ? operation.completedAt
+    : null;
+  const result = database.prepare({ sql: `
+    UPDATE discovery_interest_understandings
+    SET status = ?, outcome = ?, changed_interest_ids_json = ?, evidence_ids_json = ?,
+        started_at = ?, completed_at = ?, failure_code = ?, failure_message = ?
+    WHERE interest_understanding_id = ?
+  ` }).run([
+    operation.status,
+    outcome,
+    JSON.stringify(changedInterestIds),
+    JSON.stringify(evidenceIds),
+    operation.status === 'queued' ? null : operation.startedAt ?? null,
+    completedAt,
+    failure?.code ?? null,
+    failure?.message ?? null,
+    operation.interestUnderstandingId,
+  ]);
+  if (result.changes !== 1) throw new Error('Interest Understanding was not found.');
+  return readInterestUnderstandingRequired(database, operation.interestUnderstandingId);
+}
+
+function readInterestUnderstandingRequired(
+  database: DatabaseConnection,
+  interestUnderstandingId: string,
+): InterestUnderstanding {
+  const value = readInterestUnderstanding(database, 'interest_understanding_id', interestUnderstandingId);
+  if (!value) throw new Error('Interest Understanding was not found.');
+  return value;
+}
+
+function readInterestUnderstanding(
+  database: DatabaseConnection,
+  column: 'interest_understanding_id' | 'execution_id',
+  value: string,
+): InterestUnderstanding | undefined {
+  const row = database.prepare<InterestUnderstandingRow>({
+    sql: `SELECT * FROM discovery_interest_understandings WHERE ${column} = ?`,
+  }).get([value]);
+  if (!row) return undefined;
+  const base = {
+    interestUnderstandingId: row.interest_understanding_id,
+    executionId: row.execution_id,
+    sessionId: row.session_id,
+    userMessageId: row.user_message_id,
+    assistantMessageId: row.assistant_message_id,
+    queuedAt: row.queued_at,
+  } as const;
+  if (row.status === 'queued') return InterestUnderstandingSchema.parse({ ...base, status: 'queued' });
+  if (row.status === 'running') {
+    return InterestUnderstandingSchema.parse({ ...base, status: 'running', startedAt: row.started_at });
+  }
+  if (row.status === 'completed') {
+    return InterestUnderstandingSchema.parse({
+      ...base,
+      status: 'completed',
+      outcome: row.outcome,
+      changedInterestIds: JSON.parse(row.changed_interest_ids_json),
+      evidenceIds: JSON.parse(row.evidence_ids_json),
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+    });
+  }
+  return InterestUnderstandingSchema.parse({
+    ...base,
+    status: row.status,
+    ...(row.started_at ? { startedAt: row.started_at } : {}),
+    completedAt: row.completed_at,
+    failure: { code: row.failure_code, message: row.failure_message },
+  });
 }
 
 /** Applies one already-validated Interest state transition inside the caller transaction. */
@@ -373,4 +501,21 @@ type SessionParticipationRow = DatabaseRow & {
   participation: string;
   effective_from: string;
   updated_at: string;
+};
+
+type InterestUnderstandingRow = DatabaseRow & {
+  interest_understanding_id: string;
+  execution_id: string;
+  session_id: string;
+  user_message_id: string;
+  assistant_message_id: string;
+  status: string;
+  outcome: string | null;
+  changed_interest_ids_json: string;
+  evidence_ids_json: string;
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  failure_code: string | null;
+  failure_message: string | null;
 };

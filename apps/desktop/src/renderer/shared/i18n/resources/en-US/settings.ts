@@ -348,11 +348,12 @@ export const settings = {
       userDeny: 'User denied', cancelled: 'Cancelled',
     },
     traceKinds: {
-      conversation: 'Conversation', dailyRecommendation: 'Daily recommendation', candidateSupply: 'Candidate supply',
+      conversation: 'Conversation', interestUnderstanding: 'Interest understanding', dailyRecommendation: 'Daily recommendation', candidateSupply: 'Candidate supply',
       preferenceLearning: 'Preference learning',
     },
     candidateSupplyRun: 'Replenish Candidate Pool',
     preferenceLearningRun: 'Learn from recommendation feedback',
+    interestUnderstandingRun: 'Understand conversation interests',
     spanCount: '{{count}} spans', eventCount: '{{count}} events', contentCount: '{{count}} content checkpoints',
     status: { ok: 'Completed', error: 'Failed', cancelled: 'Cancelled', incomplete: 'Did not finish normally' },
     executionStatus: { ok: 'Execution completed', error: 'Execution failed', cancelled: 'Execution cancelled', incomplete: 'Execution did not finish normally' },

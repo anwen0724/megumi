@@ -2,11 +2,13 @@
  * Owns the single-process FIFO and one-worker lifecycle for Interest extraction.
  */
 export interface InterestExtractionJob {
+  readonly interestUnderstandingId: string;
   readonly sessionId: string;
   readonly executionId: string;
   readonly userMessageId: string;
   readonly assistantMessageId: string;
   readonly completedAt: string;
+  readonly queuedAt: string;
   readonly sequence: number;
 }
 

@@ -140,7 +140,9 @@ export function registerDiscoveryHandlers(
     responseSchema: DiscoveryRecommendationUiDtoSchema,
     responseValidation: 'dev-only',
     logger: options.logger,
-    handle: (request) => service.host.discovery.updateRecommendationState(request.payload),
+    handle: async (request) => (
+      await service.host.discovery.updateRecommendationState(request.payload)
+    ).recommendation,
     mapError: mapDiscoveryIpcError,
   }));
 }

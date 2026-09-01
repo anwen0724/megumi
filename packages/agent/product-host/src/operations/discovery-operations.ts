@@ -1,6 +1,22 @@
 /* Adapts renderer-safe Discovery Host DTOs to the Discovery business owner. */
 import type { Discovery } from '@megumi/discovery';
+import type { DiscoveryFactsReader } from '@megumi/context';
 import type { DiscoveryHost } from '../host/discovery-host';
+import {
+  DiscoveryBackgroundWaitOptionsSchema,
+  DiscoveryCandidateSupplyQuerySchema,
+  DiscoveryCandidateSupplyRequestSchema,
+  DiscoveryCandidateSupplyFactsQuerySchema,
+  DiscoveryDailyRecommendationFactsQuerySchema,
+  DiscoveryPreferenceLearningFactsQuerySchema,
+  DiscoveryFactsResultSchema,
+  DiscoveryInterestUnderstandingQuerySchema,
+  DiscoveryPreferenceLearningQuerySchema,
+} from '../host/discovery-host';
+import {
+  isCandidateSupplyCheckTerminal,
+  isInterestUnderstandingTerminal,
+} from '@megumi/discovery';
 
 export function createDiscoveryOperations(
   agent: Pick<
@@ -8,6 +24,7 @@ export function createDiscoveryOperations(
     | 'changeInterest'
     | 'setSessionParticipation'
     | 'ensureDailyRecommendation'
+    | 'getDailyRecommendationBatch'
     | 'getDiscoveryHome'
     | 'searchRecommendations'
     | 'updateRecommendationState'
@@ -16,7 +33,14 @@ export function createDiscoveryOperations(
     | 'connectDiscoverySource'
     | 'refreshDiscoverySource'
     | 'refreshDiscoverySources'
+    | 'getInterestUnderstanding'
+    | 'findInterestUnderstandingByExecution'
+    | 'requestCandidateSupply'
+    | 'getCandidateSupplyCheck'
+    | 'getPreferenceLearningBatch'
+    | 'getPreferenceLearningCompletion'
   >,
+  facts: DiscoveryFactsReader,
 ): DiscoveryHost {
   return {
     getConfiguration: () => agent.getDiscoveryConfiguration(),
@@ -27,8 +51,104 @@ export function createDiscoveryOperations(
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
     ensureDaily: (request) => agent.ensureDailyRecommendation(request),
+    getDailyBatch: (request) => Promise.resolve(
+      agent.getDailyRecommendationBatch(request.localDate) ?? null,
+    ),
+    waitDailyBatch: (request) => waitForBusinessFact({
+      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
+      read: () => agent.getDailyRecommendationBatch(request.localDate),
+      terminal: (value) => value.status === 'published' || value.status === 'failed',
+    }),
     getHome: (request) => agent.getDiscoveryHome(request),
     searchRecommendations: (request) => agent.searchRecommendations(request),
     updateRecommendationState: (request) => agent.updateRecommendationState(request),
+    getInterestUnderstanding(request) {
+      const parsed = DiscoveryInterestUnderstandingQuerySchema.parse(request);
+      return Promise.resolve('interestUnderstandingId' in parsed
+        ? agent.getInterestUnderstanding(parsed.interestUnderstandingId) ?? null
+        : agent.findInterestUnderstandingByExecution(parsed.executionId) ?? null);
+    },
+    waitInterestUnderstanding: (request) => waitForBusinessFact({
+      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
+      read: () => {
+        const parsed = DiscoveryInterestUnderstandingQuerySchema.parse(
+          'interestUnderstandingId' in request
+            ? { interestUnderstandingId: request.interestUnderstandingId }
+            : { executionId: request.executionId },
+        );
+        return 'interestUnderstandingId' in parsed
+          ? agent.getInterestUnderstanding(parsed.interestUnderstandingId)
+          : agent.findInterestUnderstandingByExecution(parsed.executionId);
+      },
+      terminal: isInterestUnderstandingTerminal,
+    }),
+    requestCandidateSupply(request = { trigger: 'evaluation' }) {
+      const parsed = DiscoveryCandidateSupplyRequestSchema.parse(request);
+      return Promise.resolve(agent.requestCandidateSupply(parsed.trigger) ?? null);
+    },
+    getCandidateSupplyCheck(request) {
+      const parsed = DiscoveryCandidateSupplyQuerySchema.parse(request);
+      return Promise.resolve(agent.getCandidateSupplyCheck(parsed.candidateSupplyCheckId) ?? null);
+    },
+    waitCandidateSupplyCheck: (request) => waitForBusinessFact({
+      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
+      read: () => agent.getCandidateSupplyCheck(
+        DiscoveryCandidateSupplyQuerySchema.parse({
+          candidateSupplyCheckId: request.candidateSupplyCheckId,
+        }).candidateSupplyCheckId,
+      ),
+      terminal: isCandidateSupplyCheckTerminal,
+    }),
+    async getCandidateSupplyFacts(request) {
+      const result = await facts.readCandidateSupplyFacts(
+        DiscoveryCandidateSupplyFactsQuerySchema.parse(request),
+      );
+      DiscoveryFactsResultSchema.parse(result);
+      return result;
+    },
+    async getDailyRecommendationFacts(request) {
+      const result = await facts.readDailyRecommendationFacts(
+        DiscoveryDailyRecommendationFactsQuerySchema.parse(request),
+      );
+      DiscoveryFactsResultSchema.parse(result);
+      return result;
+    },
+    getPreferenceLearningBatch: (batchId) => Promise.resolve(
+      agent.getPreferenceLearningBatch(batchId) ?? null,
+    ),
+    getPreferenceLearning(request) {
+      const parsed = DiscoveryPreferenceLearningQuerySchema.parse(request);
+      return Promise.resolve(agent.getPreferenceLearningCompletion(parsed.feedbackChangeId) ?? null);
+    },
+    async getPreferenceLearningFacts(request) {
+      const result = await facts.readPreferenceLearningFacts(
+        DiscoveryPreferenceLearningFactsQuerySchema.parse(request),
+      );
+      DiscoveryFactsResultSchema.parse(result);
+      return result;
+    },
+    waitPreferenceLearning: (request) => waitForBusinessFact({
+      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
+      read: () => agent.getPreferenceLearningCompletion(
+        DiscoveryPreferenceLearningQuerySchema.parse({
+          feedbackChangeId: request.feedbackChangeId,
+        }).feedbackChangeId,
+      ),
+      terminal: (value) => ['learned', 'superseded', 'ignored', 'failed'].includes(value.status),
+    }),
   };
+}
+
+async function waitForBusinessFact<T>(input: {
+  readonly timeoutMs: number;
+  readonly read: () => T | undefined;
+  readonly terminal: (value: T) => boolean;
+}): Promise<{ readonly status: 'completed'; readonly value: T } | { readonly status: 'timed_out' }> {
+  const deadline = Date.now() + input.timeoutMs;
+  while (Date.now() <= deadline) {
+    const value = input.read();
+    if (value && input.terminal(value)) return { status: 'completed', value };
+    await new Promise<void>((resolve) => setTimeout(resolve, Math.min(25, input.timeoutMs)));
+  }
+  return { status: 'timed_out' };
 }

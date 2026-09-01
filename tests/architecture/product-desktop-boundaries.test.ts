@@ -26,10 +26,10 @@ describe('Product and Desktop final boundaries', () => {
       'packages/agent/settings/src/migrations/legacy-provider-api-settings.ts',
       'packages/agent/voice/src/speech-output/speech-output-wiring.ts',
       'apps/desktop/src/main/packaging/product-resources.ts',
-      'apps/desktop/src/main/shell-composition/application-host-composition.ts',
-      'apps/desktop/src/main/shell-composition/application-runtime.ts',
-      'apps/desktop/src/main/shell-composition/application-resource-manager.ts',
-      'apps/desktop/src/main/shell-composition/application-policy.ts',
+      'packages/agent/composition/src/compose-application.ts',
+      'packages/agent/composition/src/application-runtime.ts',
+      'packages/agent/composition/src/application-resource-manager.ts',
+      'packages/agent/composition/src/application-policy.ts',
       'packages/agent/product-host/src/create-product-host.ts',
       'packages/agent/product-host/src/operations/session/session-operations.ts',
       'packages/agent/product-host/src/operations/session/session-reader.ts',
@@ -93,7 +93,7 @@ describe('Product and Desktop final boundaries', () => {
   });
 
   it('delegates normal conversation submission and execution operations to their stable owners', () => {
-    const composer = read('apps/desktop/src/main/shell-composition/application-host-composition.ts');
+    const composer = read('packages/agent/composition/src/compose-application.ts');
     const sessionOperations = read('packages/agent/product-host/src/operations/session/session-operations.ts');
 
     expect(fs.existsSync(path.join(

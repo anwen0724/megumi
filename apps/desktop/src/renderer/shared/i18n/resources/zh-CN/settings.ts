@@ -351,11 +351,12 @@ export const settings = {
       userDeny: '用户拒绝', cancelled: '已取消',
     },
     traceKinds: {
-      conversation: '会话', dailyRecommendation: '每日推荐', candidateSupply: '候选供给',
+      conversation: '会话', interestUnderstanding: '关注理解', dailyRecommendation: '每日推荐', candidateSupply: '候选供给',
       preferenceLearning: '偏好学习',
     },
     candidateSupplyRun: '补充候选池',
     preferenceLearningRun: '归纳推荐反馈',
+    interestUnderstandingRun: '理解会话关注',
     spanCount: '{{count}} 个 Span', eventCount: '{{count}} 个 Event', contentCount: '{{count}} 个 Content 检查点',
     status: { ok: '已完成', error: '失败', cancelled: '已取消', incomplete: '未正常结束' },
     executionStatus: { ok: '执行成功', error: '执行失败', cancelled: '执行已取消', incomplete: '执行未正常结束' },

@@ -19,6 +19,12 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
+      "@megumi/composition": [
+        "packages/agent/composition/src/index.ts"
+      ],
+      "@megumi/composition/*": [
+        "packages/agent/composition/src/*"
+      ],
       "@megumi/desktop/*": [
         "apps/desktop/src/*"
       ],

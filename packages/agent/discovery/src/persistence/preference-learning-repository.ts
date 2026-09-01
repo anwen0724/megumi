@@ -7,6 +7,8 @@ import { z } from 'zod';
 import {
   LearnedScopeInputSchema,
   PreferenceLearningBatchSchema,
+  PreferenceLearningCompletionSchema,
+  RecommendationFeedbackChangeReceiptSchema,
   PreferenceSnapshotSchema,
   RecommendationContentEvidenceSchema,
   type CommitPreferenceLearningBatchResult,
@@ -14,9 +16,11 @@ import {
   type LearnedScopeInput,
   type PreferenceLearningBatch,
   type PreferenceLearningFacts,
+  type PreferenceLearningCompletion,
   type PreferenceLearningTrigger,
   type PreferenceSnapshot,
   type RecommendationContentEvidence,
+  type RecommendationFeedbackChangeReceipt,
 } from '../preferences/preference';
 
 type CommitRejectionReason = Extract<
@@ -39,6 +43,8 @@ const CommitBatchSchema = z.object({
 }).strict();
 
 export interface PreferenceLearningRepository {
+  getPreferenceLearningBatch(batchId: string): PreferenceLearningBatch | undefined;
+  getPreferenceLearningCompletion(feedbackChangeId: string): PreferenceLearningCompletion | undefined;
   /** Reports the next deterministic learning action without starting work. */
   readPreferenceLearningTrigger(input: { readonly now: string }): PreferenceLearningTrigger;
   /** Claims either a new fixed Change batch or the oldest due failed batch. */
@@ -82,7 +88,7 @@ export interface RecordRecommendationFeedbackInput {
 export function recordRecommendationFeedbackChange(
   database: DatabaseConnection,
   input: RecordRecommendationFeedbackInput,
-): void {
+): RecommendationFeedbackChangeReceipt {
   const now = TimestampSchema.parse(input.now);
   const current = database.prepare<RecommendationFeedbackRow>({ sql: `
     SELECT recommendation_id, reaction, feedback_id, feedback_revision, learned_feedback_revision
@@ -90,7 +96,12 @@ export function recordRecommendationFeedbackChange(
   ` }).get([z.string().min(1).parse(input.recommendationId)]);
   if (!current) throw new Error(`Recommendation not found: ${input.recommendationId}.`);
   const reaction = input.reaction === null ? null : z.enum(['liked', 'disliked']).parse(input.reaction);
-  if (current.reaction === reaction) return;
+  if (current.reaction === reaction) {
+    return RecommendationFeedbackChangeReceiptSchema.parse({
+      changed: false,
+      recommendationId: input.recommendationId,
+    });
+  }
 
   const feedbackId = current.feedback_id ?? z.string().min(1).parse(input.feedbackId);
   const nextRevision = current.feedback_revision + 1;
@@ -130,6 +141,13 @@ export function recordRecommendationFeedbackChange(
     requiresCorrection ? 1 : 0,
     now,
   ]);
+  return RecommendationFeedbackChangeReceiptSchema.parse({
+    changed: true,
+    recommendationId: input.recommendationId,
+    feedbackChangeId: input.feedbackChangeId,
+    status,
+    changedAt: now,
+  });
 }
 
 /** Creates the deep persistence boundary used by Feedback and Preference Learning. */
@@ -137,6 +155,8 @@ export function createPreferenceLearningRepository(
   database: DatabaseConnection,
 ): PreferenceLearningRepository {
   return {
+    getPreferenceLearningBatch: (batchId) => readBatch(database, batchId),
+    getPreferenceLearningCompletion: (feedbackChangeId) => readCompletion(database, feedbackChangeId),
     readPreferenceLearningTrigger: ({ now }) => readTrigger(database, now),
     claimPreferenceLearningBatch: (input) => claimBatch(database, input),
     readPreferenceLearningFacts: (batchId) => readFacts(database, batchId),
@@ -405,9 +425,9 @@ function commitBatch(
     database.prepare({ sql: `
       UPDATE discovery_preference_learning_batches
       SET status = 'succeeded', completed_at = ?, retry_at = NULL,
-          failure_code = NULL, failure_message = NULL
+          failure_code = NULL, failure_message = NULL, result_revisions_json = ?
       WHERE batch_id = ? AND status = 'running'
-    ` }).run([parsed.committedAt, parsed.batchId]);
+    ` }).run([parsed.committedAt, JSON.stringify(revisions), parsed.batchId]);
     return {
       status: 'committed',
       revisions,
@@ -549,8 +569,45 @@ function readBatch(database: DatabaseConnection, batchId: string): PreferenceLea
     startedAt: row.started_at,
     ...(row.retry_at ? { retryAt: row.retry_at } : {}),
     ...(row.completed_at ? { completedAt: row.completed_at } : {}),
+    ...(row.status === 'succeeded' ? { resultRevisions: JSON.parse(row.result_revisions_json) } : {}),
     ...(row.failure_code ? { failureCode: row.failure_code } : {}),
     ...(row.failure_message !== null ? { failureMessage: row.failure_message } : {}),
+  });
+}
+
+function readCompletion(
+  database: DatabaseConnection,
+  feedbackChangeId: string,
+): PreferenceLearningCompletion | undefined {
+  const row = database.prepare<CompletionRow>({ sql: `
+    SELECT c.feedback_change_id, c.status AS change_status, c.batch_id, c.changed_at,
+      c.processed_at, b.status AS batch_status, b.completed_at AS batch_completed_at,
+      b.failure_code, b.failure_message, b.result_revisions_json
+    FROM discovery_feedback_changes c
+    LEFT JOIN discovery_preference_learning_batches b ON b.batch_id = c.batch_id
+    WHERE c.feedback_change_id = ?
+  ` }).get([feedbackChangeId]);
+  if (!row) return undefined;
+  const status = row.change_status === 'processed'
+    ? 'learned'
+    : row.change_status === 'batched' && row.batch_status === 'failed'
+      ? 'failed'
+      : row.change_status;
+  return PreferenceLearningCompletionSchema.parse({
+    feedbackChangeId: row.feedback_change_id,
+    status,
+    ...(row.batch_id ? { batchId: row.batch_id } : {}),
+    resultRevisions: row.result_revisions_json ? JSON.parse(row.result_revisions_json) : [],
+    ...(status === 'failed' ? {
+      failure: {
+        code: row.failure_code ?? 'preference_learning_failed',
+        message: row.failure_message ?? 'Preference Learning failed.',
+      },
+    } : {}),
+    changedAt: row.changed_at,
+    ...(row.processed_at || row.batch_completed_at
+      ? { completedAt: row.processed_at ?? row.batch_completed_at }
+      : {}),
   });
 }
 
@@ -622,6 +679,19 @@ interface BatchRow extends DatabaseRow {
   readonly completed_at: string | null;
   readonly failure_code: string | null;
   readonly failure_message: string | null;
+  readonly result_revisions_json: string;
+}
+interface CompletionRow extends DatabaseRow {
+  readonly feedback_change_id: string;
+  readonly change_status: string;
+  readonly batch_id: string | null;
+  readonly changed_at: string;
+  readonly processed_at: string | null;
+  readonly batch_status: string | null;
+  readonly batch_completed_at: string | null;
+  readonly failure_code: string | null;
+  readonly failure_message: string | null;
+  readonly result_revisions_json: string | null;
 }
 interface ScopeRow extends DatabaseRow {
   readonly scope_key: string;

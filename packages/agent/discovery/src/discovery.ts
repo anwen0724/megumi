@@ -4,8 +4,13 @@
  */
 import {
   createCandidateSupplyRuntime,
+  type CandidateSupplyTrigger,
   type CreateCandidateSupplyRuntimeOptions,
 } from './candidate-supply/candidate-supply-runtime';
+import type {
+  CandidateSupplyCheck,
+  CandidateSupplyCheckReceipt,
+} from './candidate-supply/candidate-supply';
 import {
   createDiscoveryConfiguration,
   type ConnectDiscoverySourceRequest,
@@ -16,6 +21,7 @@ import {
   type UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
 import type {
+  DailyRecommendationBatch,
   EnsureDailyRecommendationRequest,
   EnsureDailyRecommendationResult,
 } from './daily-recommendation/daily-recommendation';
@@ -26,7 +32,6 @@ import {
 import type {
   DiscoveryHomeView,
   GetDiscoveryHomeRequest,
-  RecommendationView,
   SearchRecommendationsRequest,
   SearchRecommendationsResult,
 } from './discovery-view';
@@ -44,11 +49,17 @@ import {
   type ObserveConversationTurnResult,
 } from './interests/interest-runtime';
 import type { UpdateRecommendationStateRequest } from './recommendations/recommendation';
+import type { RecommendationStateResult } from './persistence/recommendation-repository';
 import type { SourceRegistry } from './sources/source-registry';
 import {
   createPreferenceLearningRuntime,
   type CreatePreferenceLearningRuntimeOptions,
 } from './preferences/preference-learning-runtime';
+import type {
+  PreferenceLearningBatch,
+  PreferenceLearningCompletion,
+} from './preferences/preference';
+import type { InterestUnderstanding } from './interests/interest-understanding';
 
 export interface Discovery {
   /** Applies one explicit user Interest change. */
@@ -57,18 +68,25 @@ export interface Discovery {
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
   /** Enqueues one completed conversation turn for Interest extraction when eligible. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
+  getInterestUnderstanding(interestUnderstandingId: string): InterestUnderstanding | undefined;
+  findInterestUnderstandingByExecution(executionId: string): InterestUnderstanding | undefined;
   /** Retracts the Evidence contributed by one Session. */
   retractSessionEvidence(sessionId: string): Promise<void>;
   /** Starts owned background recovery and Daily Recommendation scheduling. */
   startBackground(): Promise<void>;
   /** Ensures the requested Daily Recommendation Batch according to its trigger semantics. */
   ensureDailyRecommendation(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
+  getDailyRecommendationBatch(localDate: string): DailyRecommendationBatch | undefined;
+  requestCandidateSupply(trigger?: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined;
+  getCandidateSupplyCheck(candidateSupplyCheckId: string): CandidateSupplyCheck | undefined;
+  getPreferenceLearningBatch(batchId: string): PreferenceLearningBatch | undefined;
+  getPreferenceLearningCompletion(feedbackChangeId: string): PreferenceLearningCompletion | undefined;
   /** Reads the persisted Discovery Home projection. */
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
   /** Searches persisted Recommendations rather than external Sources. */
   searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
   /** Applies one user-controlled Recommendation state change. */
-  updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationView>;
+  updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationStateResult>;
   /** Reads the current user-facing Discovery configuration. */
   getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
   /** Validates and persists user-facing Discovery configuration changes. */
@@ -163,6 +181,8 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     },
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
+    getInterestUnderstanding: (id) => interestRuntime.getInterestUnderstanding(id),
+    findInterestUnderstandingByExecution: (id) => interestRuntime.findInterestUnderstandingByExecution(id),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
     async startBackground() {
       const failures: unknown[] = [];
@@ -197,6 +217,13 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
             retryable: false,
           },
         }),
+    getDailyRecommendationBatch: (localDate) => dailyRecommendationRuntime?.getBatch(localDate),
+    requestCandidateSupply: (trigger = 'evaluation') => candidateSupplyRuntime?.notify(trigger),
+    getCandidateSupplyCheck: (id) => candidateSupplyRuntime?.getCheck(id),
+    getPreferenceLearningBatch: (id) => options.preferenceLearning?.repository.getPreferenceLearningBatch(id),
+    getPreferenceLearningCompletion: (id) => (
+      options.preferenceLearning?.repository.getPreferenceLearningCompletion(id)
+    ),
     getDiscoveryHome: (request) => dailyRecommendationRuntime
       ? Promise.resolve(dailyRecommendationRuntime.getHome(request))
       : Promise.reject(new Error('Daily Recommendation is not configured.')),

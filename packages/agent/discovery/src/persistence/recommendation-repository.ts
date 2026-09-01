@@ -23,6 +23,12 @@ import {
   type UpdateRecommendationStateRequest,
 } from '../recommendations/recommendation';
 import { recordRecommendationFeedbackChange } from './preference-learning-repository';
+import type { RecommendationFeedbackChangeReceipt } from '../preferences/preference';
+
+export interface RecommendationStateResult {
+  readonly recommendation: RecommendationView;
+  readonly feedbackChange?: RecommendationFeedbackChangeReceipt;
+}
 
 export interface RecommendationSelectionSignal {
   readonly contentIdentity: string;
@@ -48,7 +54,7 @@ export interface RecommendationRepositoryOperations {
     readonly limit?: number;
   }): SearchRecommendationsResult;
   /** Applies one user-controlled Recommendation state change atomically. */
-  updateRecommendationState(command: RecommendationStateCommand): RecommendationView;
+  updateRecommendationState(command: RecommendationStateCommand): RecommendationStateResult;
   /** Reads the reference content used to start a Recommendation conversation. */
   readRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
 }
@@ -222,9 +228,10 @@ function searchRecommendations(
 function updateRecommendationState(
   database: DatabaseConnection,
   input: RecommendationStateCommand,
-): RecommendationView {
+): RecommendationStateResult {
   const request = UpdateRecommendationStateRequestSchema.parse(publicRecommendationRequest(input));
   const now = parseTimestamp(input.now);
+  let feedbackChange: RecommendationFeedbackChangeReceipt | undefined;
   switch (request.action) {
     case 'opened':
       database.prepare({ sql: `
@@ -237,7 +244,7 @@ function updateRecommendationState(
       if (input.action !== 'set_reaction') {
         throw new Error('Recommendation reaction command did not match its validated request.');
       }
-      recordRecommendationFeedbackChange(database, {
+      feedbackChange = recordRecommendationFeedbackChange(database, {
         recommendationId: request.recommendationId,
         reaction: request.reaction,
         feedbackId: input.feedbackId,
@@ -265,7 +272,10 @@ function updateRecommendationState(
   }
   const row = readRecommendation(database, request.recommendationId);
   if (!row) throw new Error(`Recommendation not found: ${request.recommendationId}.`);
-  return recommendationViewFromRow(row);
+  return {
+    recommendation: recommendationViewFromRow(row),
+    ...(feedbackChange ? { feedbackChange } : {}),
+  };
 }
 
 function publicRecommendationRequest(

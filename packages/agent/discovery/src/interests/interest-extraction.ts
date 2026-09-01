@@ -1,7 +1,8 @@
 /*
  * Builds and executes the provider-neutral Interest extraction request for one conversation turn.
  */
-import type { Api, Model, Models } from '@megumi/ai';
+import type { Api, Context, Model, Models } from '@megumi/ai';
+import type { Observability, OperationCompletion, TraceCorrelation } from '@megumi/observability';
 import {
   InterestExtractionResultSchema,
   type Interest,
@@ -28,10 +29,11 @@ export interface InterestExtractor {
 /** Creates the provider-neutral extractor for one completed conversation turn. */
 export function createInterestExtractor(options: {
   readonly models: Pick<Models, 'completeSimple'>;
+  readonly observability?: Observability;
 }): InterestExtractor {
   return {
     async extract(input) {
-      const response = await options.models.completeSimple(input.model, {
+      const context: Context = {
         systemPrompt: systemPrompt,
         messages: [{
           role: 'user',
@@ -43,10 +45,25 @@ export function createInterestExtractor(options: {
           }),
           timestamp: Date.parse(input.job.completedAt),
         }],
-      }, {
-        sessionId: `interest-extraction:${input.job.sessionId}`,
-        signal: input.signal,
-      });
+      };
+      const correlation = interestCorrelation(input.job);
+      safeRecord(options.observability, 'interest.understanding.input', {
+        userMessage: input.userText,
+        assistantReplyForReferenceOnly: input.assistantText,
+        existingInterests: input.interests,
+        pendingMediumEvidence: input.pendingEvidence,
+      }, correlation);
+      safeRecord(options.observability, 'model.request', {
+        model: { providerId: input.model.provider, modelId: input.model.id },
+        context,
+      }, correlation);
+      const response = await observeModelCall(options.observability, correlation, () => (
+        options.models.completeSimple(input.model, context, {
+          sessionId: `interest-extraction:${input.job.sessionId}`,
+          signal: input.signal,
+        })
+      ));
+      safeRecord(options.observability, 'model.response', response, correlation);
       if (response.stopReason === 'error' || response.stopReason === 'aborted') {
         throw new Error(response.errorMessage ?? 'Interest extraction failed.');
       }
@@ -57,6 +74,49 @@ export function createInterestExtractor(options: {
         .trim();
       return InterestExtractionResultSchema.parse(JSON.parse(stripCodeFence(text)));
     },
+  };
+}
+
+async function observeModelCall<T>(
+  observability: Observability | undefined,
+  correlation: TraceCorrelation,
+  operation: () => Promise<T>,
+): Promise<T> {
+  let promise: Promise<T> | undefined;
+  const runOnce = () => (promise ??= operation());
+  if (!observability) return runOnce();
+  try {
+    return await observability.withSpan({
+      name: 'model.call',
+      correlation,
+      classifyResult: (): OperationCompletion => ({ outcome: { status: 'ok' } }),
+    }, runOnce);
+  } catch {
+    return runOnce();
+  }
+}
+
+function safeRecord(
+  observability: Observability | undefined,
+  kind: 'interest.understanding.input' | 'model.request' | 'model.response',
+  value: unknown,
+  correlation: TraceCorrelation,
+): void {
+  try {
+    observability?.recordContent({ kind, value, correlation });
+  } catch {
+    // Content capture cannot alter model execution or validation.
+  }
+}
+
+function interestCorrelation(job: InterestExtractionJob): TraceCorrelation {
+  return {
+    interestUnderstandingId: job.interestUnderstandingId,
+    executionId: job.executionId,
+    sessionId: job.sessionId,
+    messageId: job.userMessageId,
+    userMessageId: job.userMessageId,
+    assistantMessageId: job.assistantMessageId,
   };
 }
 

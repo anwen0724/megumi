@@ -6,6 +6,7 @@ import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import {
   CandidateAdmissionDecisionSchema,
   CandidateSchema,
+  CandidateSupplyCheckSchema,
   CandidateSupplySettlementSchema,
   SourceContentDetailSchema,
   SourceContentSchema,
@@ -16,6 +17,7 @@ import {
   type CandidatePotentialDuplicate,
   type CandidateQueryOutcome,
   type CandidateStatus,
+  type CandidateSupplyCheck,
   type CandidateSupplyRepository,
   type CandidateSupplyState,
   type CandidateSourceState,
@@ -77,6 +79,15 @@ export function createCandidateSupplyRepository(
     isQueryCoolingDown: (input) => isQueryCoolingDown(database, input),
     readSupplyState: () => readSupplyState(database),
     writeSupplyState: (state) => writeSupplyState(database, state),
+    createSupplyCheck: (check) => createSupplyCheck(database, check),
+    updateSupplyCheck: (check) => updateSupplyCheck(database, check),
+    getSupplyCheck: (id) => readSupplyCheck(database, id),
+    interruptRunningSupplyChecks: ({ interruptedAt }) => database.prepare({ sql: `
+      UPDATE discovery_candidate_supply_checks
+      SET status = 'interrupted', completed_at = ?, failure_code = 'process_interrupted',
+          failure_message = 'Candidate Supply Check was interrupted before completion.'
+      WHERE status IN ('queued', 'running')
+    ` }).run([parseTimestamp(interruptedAt)]).changes,
     readSourceState: (sourceId) => readSourceState(database, sourceId),
     settleSourceAttempt: (input) => database.transaction({
       operation: () => settleSourceAttempt(database, input),
@@ -674,6 +685,105 @@ function writeSupplyState(database: DatabaseConnection, state: CandidateSupplySt
   ]);
 }
 
+function createSupplyCheck(
+  database: DatabaseConnection,
+  rawCheck: CandidateSupplyCheck,
+): CandidateSupplyCheck {
+  const check = CandidateSupplyCheckSchema.parse(rawCheck);
+  if (check.status !== 'queued') throw new Error('A Candidate Supply Check must be created as queued.');
+  database.prepare({ sql: `
+    INSERT INTO discovery_candidate_supply_checks (
+      candidate_supply_check_id, trigger, status, requested_at
+    ) VALUES (?, ?, 'queued', ?)
+  ` }).run([check.candidateSupplyCheckId, check.trigger, check.requestedAt]);
+  return readSupplyCheckRequired(database, check.candidateSupplyCheckId);
+}
+
+function updateSupplyCheck(
+  database: DatabaseConnection,
+  rawCheck: CandidateSupplyCheck,
+): CandidateSupplyCheck {
+  const check = CandidateSupplyCheckSchema.parse(rawCheck);
+  const completed = check.status === 'completed' ? check : undefined;
+  const failure = check.status === 'failed' || check.status === 'interrupted'
+    ? check.failure
+    : undefined;
+  const completedAt = check.status === 'completed'
+    || check.status === 'failed'
+    || check.status === 'interrupted'
+    ? check.completedAt
+    : null;
+  const result = database.prepare({ sql: `
+    UPDATE discovery_candidate_supply_checks
+    SET status = ?, execution_id = ?, settlement_reason = ?, available_before = ?,
+        available_after = ?, remaining_gap_json = ?, started_at = ?, completed_at = ?,
+        failure_code = ?, failure_message = ?
+    WHERE candidate_supply_check_id = ?
+  ` }).run([
+    check.status,
+    completed?.executionId ?? null,
+    completed?.reason ?? null,
+    completed?.availableBefore ?? null,
+    completed?.availableAfter ?? null,
+    completed?.remainingGap ? JSON.stringify(completed.remainingGap) : null,
+    check.status === 'queued' ? null : check.startedAt ?? null,
+    completedAt,
+    failure?.code ?? null,
+    failure?.message ?? null,
+    check.candidateSupplyCheckId,
+  ]);
+  if (result.changes !== 1) throw new Error('Candidate Supply Check was not found.');
+  return readSupplyCheckRequired(database, check.candidateSupplyCheckId);
+}
+
+function readSupplyCheckRequired(
+  database: DatabaseConnection,
+  candidateSupplyCheckId: string,
+): CandidateSupplyCheck {
+  const check = readSupplyCheck(database, candidateSupplyCheckId);
+  if (!check) throw new Error('Candidate Supply Check was not found.');
+  return check;
+}
+
+function readSupplyCheck(
+  database: DatabaseConnection,
+  candidateSupplyCheckId: string,
+): CandidateSupplyCheck | undefined {
+  const row = database.prepare<SupplyCheckRow>({
+    sql: 'SELECT * FROM discovery_candidate_supply_checks WHERE candidate_supply_check_id = ?',
+  }).get([candidateSupplyCheckId]);
+  if (!row) return undefined;
+  const base = {
+    candidateSupplyCheckId: row.candidate_supply_check_id,
+    trigger: row.trigger,
+    requestedAt: row.requested_at,
+  } as const;
+  if (row.status === 'queued') return CandidateSupplyCheckSchema.parse({ ...base, status: 'queued' });
+  if (row.status === 'running') {
+    return CandidateSupplyCheckSchema.parse({ ...base, status: 'running', startedAt: row.started_at });
+  }
+  if (row.status === 'completed') {
+    return CandidateSupplyCheckSchema.parse({
+      ...base,
+      status: 'completed',
+      reason: row.settlement_reason,
+      ...(row.execution_id ? { executionId: row.execution_id } : {}),
+      ...(row.available_before === null ? {} : { availableBefore: row.available_before }),
+      ...(row.available_after === null ? {} : { availableAfter: row.available_after }),
+      ...(row.remaining_gap_json ? { remainingGap: JSON.parse(row.remaining_gap_json) } : {}),
+      ...(row.started_at ? { startedAt: row.started_at } : {}),
+      completedAt: row.completed_at,
+    });
+  }
+  return CandidateSupplyCheckSchema.parse({
+    ...base,
+    status: row.status,
+    ...(row.started_at ? { startedAt: row.started_at } : {}),
+    completedAt: row.completed_at,
+    failure: { code: row.failure_code, message: row.failure_message },
+  });
+}
+
 function readSourceState(
   database: DatabaseConnection,
   sourceId: string,
@@ -1000,4 +1110,11 @@ type SupplyStateRow = DatabaseRow & {
 type SourceStateRow = DatabaseRow & {
   source_id: string; consecutive_failure_count: number; retry_at: string | null;
   last_failure_code: string | null; updated_at: string;
+};
+type SupplyCheckRow = DatabaseRow & {
+  candidate_supply_check_id: string; trigger: string; status: string;
+  execution_id: string | null; settlement_reason: string | null;
+  available_before: number | null; available_after: number | null;
+  remaining_gap_json: string | null; requested_at: string; started_at: string | null;
+  completed_at: string | null; failure_code: string | null; failure_message: string | null;
 };

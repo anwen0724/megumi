@@ -13,7 +13,12 @@ import type { DiscoveryConfigurationStore } from '../configuration/discovery-con
 import type { DiscoveryRepository } from '../persistence/discovery-repository';
 import type { SourceRegistry } from '../sources/source-registry';
 import { hasCandidatePoolGap } from './candidate-pool';
-import type { CandidatePoolSnapshot, CandidateSupplySettlement } from './candidate-supply';
+import type {
+  CandidatePoolSnapshot,
+  CandidateSupplyCheck,
+  CandidateSupplyCheckReceipt,
+  CandidateSupplySettlement,
+} from './candidate-supply';
 import type {
   CandidateSupplyAttempts,
   CandidateSupplyAttemptSummary,
@@ -28,11 +33,13 @@ export type CandidateSupplyTrigger =
   | 'configuration_changed'
   | 'candidate_state_changed'
   | 'consumer_shortfall'
-  | 'scheduled_recheck';
+  | 'scheduled_recheck'
+  | 'evaluation';
 
 export interface CandidateSupplyRuntime {
   start(): Promise<void>;
-  notify(trigger: CandidateSupplyTrigger): void;
+  notify(trigger: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined;
+  getCheck(candidateSupplyCheckId: string): CandidateSupplyCheck | undefined;
   shutdown(): Promise<void>;
 }
 
@@ -49,6 +56,7 @@ export interface CreateCandidateSupplyRuntimeOptions {
     | { readonly status: 'failed'; readonly code: string; readonly message: string }
   >;
   readonly now: () => string;
+  readonly ids: { createCheckId(): string };
   readonly proactiveTargetCount?: () => number;
   readonly consumerShortfalls?: () => {
     readonly daily?: number;
@@ -70,35 +78,54 @@ export function createCandidateSupplyRuntime(
   const timers = options.timers ?? nodeTimers();
   let stopped = false;
   let activeExecution = false;
-  let rerunRequested = false;
   let timer: unknown;
   let running: Promise<void> | undefined;
+  let queuedRerun: CandidateSupplyCheckReceipt | undefined;
 
-  function notify(trigger: CandidateSupplyTrigger): void {
-    if (stopped) return;
+  function notify(trigger: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined {
+    if (stopped) return undefined;
     if (timer !== undefined) {
       timers.clear(timer);
       timer = undefined;
     }
-    if (activeExecution) {
-      rerunRequested = true;
-      return;
+    if (running) {
+      queuedRerun ??= createCheck(options, trigger);
+      return queuedRerun;
     }
-    running = recheck(trigger).catch((error) => options.onBackgroundError?.(error));
+    const receipt = createCheck(options, trigger);
+    startCheck(receipt);
+    return receipt;
   }
 
-  async function recheck(trigger: CandidateSupplyTrigger): Promise<void> {
+  function startCheck(receipt: CandidateSupplyCheckReceipt): void {
+    running = recheck(receipt).catch((error) => {
+      failCheck(options, receipt, error);
+      options.onBackgroundError?.(error);
+    }).finally(() => {
+      running = undefined;
+      if (queuedRerun && !stopped) {
+        const next = queuedRerun;
+        queuedRerun = undefined;
+        startCheck(next);
+      }
+    });
+  }
+
+  async function recheck(receipt: CandidateSupplyCheckReceipt): Promise<void> {
     if (stopped || activeExecution) return;
     const now = options.now();
+    options.repository.updateSupplyCheck({ ...receipt, status: 'running', startedAt: now });
     const snapshot = getSnapshot(options, now);
     if (!hasCandidatePoolGap(snapshot.gap)) {
       persistWakeState(options, 0, undefined, snapshot.nextRecheckAt, now);
       schedule(snapshot.nextRecheckAt);
+      completeCheck(options, receipt, now, snapshot, 'no_gap');
       return;
     }
     const state = options.repository.readSupplyState();
     if (state?.retryAt && Date.parse(state.retryAt) > Date.parse(now)) {
       schedule(state.retryAt);
+      completeCheck(options, receipt, now, snapshot, 'cooldown');
       return;
     }
     const settings = options.settings.read();
@@ -128,6 +155,7 @@ export function createCandidateSupplyRuntime(
         settlement(snapshot, 'no_available_source', now),
       );
       schedule(nextSourceRetry);
+      completeCheck(options, receipt, now, snapshot, 'no_available_source');
       return;
     }
     const model = await options.resolveModel();
@@ -139,12 +167,12 @@ export function createCandidateSupplyRuntime(
         now,
         settlement(snapshot, 'agent_failed', now),
       );
+      completeCheck(options, receipt, now, snapshot, 'model_unavailable');
       return;
     }
 
     const availableBefore = snapshot.counts.available;
     activeExecution = true;
-    rerunRequested = false;
     let executionId: string | undefined;
     let attemptSummary: CandidateSupplyAttemptSummary | undefined;
     let outcome: ExecutionOutcome;
@@ -153,7 +181,7 @@ export function createCandidateSupplyRuntime(
         const started = await options.startExecution({
           kind: 'candidate_supply',
           requestId: `candidate-supply-request:${randomUUID()}`,
-          trigger,
+          trigger: receipt.trigger,
           model: model.model,
           accept: async ({ executionId: acceptedExecutionId }) => {
             executionId = acceptedExecutionId;
@@ -161,7 +189,7 @@ export function createCandidateSupplyRuntime(
               options.attempts.start({
                 executionId: acceptedExecutionId,
                 startedAt: now,
-                trigger,
+                trigger: receipt.trigger,
                 repository: options.repository,
                 sourceRegistry: options.sourceRegistry,
                 enabledSourceIds: configuredSources.map(({ descriptor }) => descriptor.id),
@@ -213,11 +241,19 @@ export function createCandidateSupplyRuntime(
       executionId,
       attemptSummary,
     );
-    if (rerunRequested) {
-      rerunRequested = false;
-      notify('candidate_state_changed');
-      return;
-    }
+    const finalSettlement = options.repository.readSupplyState()?.lastSettlement;
+    completeCheck(
+      options,
+      receipt,
+      now,
+      after,
+      finalSettlement?.reason ?? 'agent_failed',
+      {
+        availableBefore,
+        availableAfter: after.counts.available,
+        ...(executionId ? { executionId } : {}),
+      },
+    );
     const settledState = options.repository.readSupplyState();
     schedule(hasCandidatePoolGap(after.gap) ? settledState?.retryAt : after.nextRecheckAt);
   }
@@ -236,16 +272,82 @@ export function createCandidateSupplyRuntime(
     async start() {
       stopped = false;
       options.repository.interruptRunningQueries(options.now());
+      options.repository.interruptRunningSupplyChecks({ interruptedAt: options.now() });
       notify('startup');
     },
     notify,
+    getCheck: (id) => options.repository.getSupplyCheck(id),
     async shutdown() {
       stopped = true;
       if (timer !== undefined) timers.clear(timer);
       timer = undefined;
       await running;
+      options.repository.interruptRunningSupplyChecks({ interruptedAt: options.now() });
     },
   };
+}
+
+function createCheck(
+  options: CreateCandidateSupplyRuntimeOptions,
+  trigger: CandidateSupplyTrigger,
+): CandidateSupplyCheckReceipt {
+  const check = options.repository.createSupplyCheck({
+    candidateSupplyCheckId: options.ids.createCheckId(),
+    trigger,
+    status: 'queued',
+    requestedAt: options.now(),
+  });
+  return {
+    candidateSupplyCheckId: check.candidateSupplyCheckId,
+    trigger: check.trigger,
+    status: 'queued',
+    requestedAt: check.requestedAt,
+  };
+}
+
+function completeCheck(
+  options: CreateCandidateSupplyRuntimeOptions,
+  receipt: CandidateSupplyCheckReceipt,
+  startedAt: string,
+  snapshot: CandidatePoolSnapshot,
+  reason: Extract<CandidateSupplyCheck, { readonly status: 'completed' }>['reason'],
+  counts: {
+    readonly availableBefore?: number;
+    readonly availableAfter?: number;
+    readonly executionId?: string;
+  } = {},
+): void {
+  options.repository.updateSupplyCheck({
+    ...receipt,
+    status: 'completed',
+    reason,
+    startedAt,
+    completedAt: options.now(),
+    ...counts,
+    remainingGap: {
+      totalShortfall: snapshot.gap.totalShortfall,
+      uncoveredInterestIds: [...snapshot.gap.uncoveredInterestIds],
+      consumerShortfalls: snapshot.gap.consumerShortfalls.map((value) => ({ ...value })),
+    },
+  });
+}
+
+function failCheck(
+  options: CreateCandidateSupplyRuntimeOptions,
+  receipt: CandidateSupplyCheckReceipt,
+  error: unknown,
+): void {
+  const current = options.repository.getSupplyCheck(receipt.candidateSupplyCheckId);
+  if (!current || current.status === 'completed' || current.status === 'failed' || current.status === 'interrupted') {
+    return;
+  }
+  options.repository.updateSupplyCheck({
+    ...receipt,
+    status: 'failed',
+    ...(current.status === 'running' ? { startedAt: current.startedAt } : {}),
+    completedAt: options.now(),
+    failure: { code: 'candidate_supply_check_failed', message: messageOf(error) },
+  });
 }
 
 function settleAttempt(
