@@ -1,1 +1,58 @@
-{"caseId":"candidate-supply.relevant-pool-refill","revision":1,"fixtureVersion":1,"title":"相关候选补池","objective":"Pool 缺口应触发合理搜索并形成相关可用 Candidate。","profiles":["controlled","live"],"tags":["core"],"capability":"candidate_supply","setup":{"fixtureId":"relevant-pool-refill"},"trigger":{"kind":"request_candidate_supply"},"completion":{"kind":"candidate_supply_terminal","timeoutMs":180000},"requiredEvidence":["input","before_facts","completion","after_facts","trace","measurements"],"grading":{"hardGates":["business_completion_present","trace_correlated","no_evidence_conflict"],"dimensions":["trigger_correctness","search_strategy","candidate_quality","admission_quality","supply_efficiency","reliability_recovery"],"requiredDimensions":["trigger_correctness","candidate_quality"],"modelGradedDimensions":["search_strategy","candidate_quality","admission_quality"],"measurementLimits":{}}}
+{
+  "caseId": "candidate-supply.relevant-pool-refill",
+  "revision": 1,
+  "fixtureVersion": 1,
+  "title": "相关候选补池",
+  "objective": "Pool 缺口应触发合理搜索并形成相关可用 Candidate。",
+  "profiles": [
+    "controlled",
+    "live"
+  ],
+  "tags": [
+    "core"
+  ],
+  "capability": "candidate_supply",
+  "setup": {
+    "fixtureId": "relevant-pool-refill"
+  },
+  "trigger": {
+    "kind": "request_candidate_supply"
+  },
+  "completion": {
+    "kind": "candidate_supply_terminal",
+    "timeoutMs": 180000
+  },
+  "requiredEvidence": [
+    "input",
+    "before_facts",
+    "completion",
+    "after_facts",
+    "trace",
+    "measurements"
+  ],
+  "grading": {
+    "hardGates": [
+      "business_completion_present",
+      "trace_correlated",
+      "no_evidence_conflict"
+    ],
+    "dimensions": [
+      "trigger_correctness",
+      "search_strategy",
+      "candidate_quality",
+      "admission_quality",
+      "supply_efficiency",
+      "reliability_recovery"
+    ],
+    "requiredDimensions": [
+      "trigger_correctness",
+      "candidate_quality"
+    ],
+    "modelGradedDimensions": [
+      "search_strategy",
+      "candidate_quality",
+      "admission_quality"
+    ],
+    "measurementLimits": {}
+  }
+}

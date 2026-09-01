@@ -1,1 +1,29 @@
-{"fixtureId":"merge-existing-interest","version":1,"capability":"interest_understanding","clock":"2026-01-15T08:00:00.000Z","dailyTargetCount":3,"workspace":{"rootPath":"replaced-by-evaluation-root"},"sessions":[{"fixtureSessionId":"main","title":"关注理解","turns":[]}],"interests":[{"fixtureInterestId":"typescript","description":"持续关注 TypeScript 语言、类型系统和编译器演进","status":"active"}],"candidates":[],"recommendations":[],"preferences":[],"controlledSearch":[],"permissionDecision":"allow"}
+{
+  "fixtureId": "merge-existing-interest",
+  "version": 1,
+  "capability": "interest_understanding",
+  "clock": "2026-01-15T08:00:00.000Z",
+  "dailyTargetCount": 3,
+  "workspace": {
+    "rootPath": "replaced-by-evaluation-root"
+  },
+  "sessions": [
+    {
+      "fixtureSessionId": "main",
+      "title": "关注理解",
+      "turns": []
+    }
+  ],
+  "interests": [
+    {
+      "fixtureInterestId": "typescript",
+      "description": "持续关注 TypeScript 语言、类型系统和编译器演进",
+      "status": "active"
+    }
+  ],
+  "candidates": [],
+  "recommendations": [],
+  "preferences": [],
+  "controlledSearch": [],
+  "permissionDecision": "allow"
+}

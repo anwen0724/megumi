@@ -1,1 +1,56 @@
-{"caseId":"interest-understanding.explicit-interest","revision":1,"fixtureVersion":1,"title":"识别明确长期关注","objective":"从新会话轮次识别并保存明确的持续关注。","profiles":["controlled"],"tags":["core"],"capability":"interest_understanding","setup":{"fixtureId":"explicit-interest"},"trigger":{"kind":"completed_conversation_turn","text":"以后请持续帮我关注 TypeScript 语言和编译器的新进展。"},"completion":{"kind":"interest_understanding_terminal","timeoutMs":120000},"requiredEvidence":["input","before_facts","completion","after_facts","trace","measurements"],"grading":{"hardGates":["business_completion_present","trace_correlated","no_evidence_conflict"],"dimensions":["recognition_accuracy","omission","evidence_sufficiency","user_control","reliability_recovery"],"requiredDimensions":["recognition_accuracy"],"modelGradedDimensions":["recognition_accuracy","omission","evidence_sufficiency"],"measurementLimits":{}}}
+{
+  "caseId": "interest-understanding.explicit-interest",
+  "revision": 1,
+  "fixtureVersion": 1,
+  "title": "识别明确长期关注",
+  "objective": "从新会话轮次识别并保存明确的持续关注。",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core"
+  ],
+  "capability": "interest_understanding",
+  "setup": {
+    "fixtureId": "explicit-interest"
+  },
+  "trigger": {
+    "kind": "completed_conversation_turn",
+    "text": "以后请持续帮我关注 TypeScript 语言和编译器的新进展。"
+  },
+  "completion": {
+    "kind": "interest_understanding_terminal",
+    "timeoutMs": 120000
+  },
+  "requiredEvidence": [
+    "input",
+    "before_facts",
+    "completion",
+    "after_facts",
+    "trace",
+    "measurements"
+  ],
+  "grading": {
+    "hardGates": [
+      "business_completion_present",
+      "trace_correlated",
+      "no_evidence_conflict"
+    ],
+    "dimensions": [
+      "recognition_accuracy",
+      "omission",
+      "evidence_sufficiency",
+      "user_control",
+      "reliability_recovery"
+    ],
+    "requiredDimensions": [
+      "recognition_accuracy"
+    ],
+    "modelGradedDimensions": [
+      "recognition_accuracy",
+      "omission",
+      "evidence_sufficiency"
+    ],
+    "measurementLimits": {}
+  }
+}

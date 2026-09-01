@@ -1,1 +1,48 @@
-{"fixtureId":"relevant-pool-refill","version":1,"capability":"candidate_supply","clock":"2026-01-15T08:00:00.000Z","dailyTargetCount":3,"workspace":{"rootPath":"replaced-by-evaluation-root"},"sessions":[],"interests":[{"fixtureInterestId":"typescript","description":"TypeScript 类型系统与编译器演进","status":"active"}],"candidates":[],"recommendations":[],"preferences":[],"controlledSearch":[{"sourceId":"open_web","queryIncludes":"","results":[{"url":"https://example.test/ts-compiler","title":"TypeScript 编译器新进展","snippet":"类型推断与构建性能改进。","content":"介绍 TypeScript 类型推断和构建性能的最新改进。"},{"url":"https://example.test/ts-types","title":"TypeScript 类型系统实践","snippet":"高级类型设计。","content":"深入讲解高级类型设计与实践。"},{"url":"https://example.test/ts-release","title":"TypeScript 发布说明","snippet":"新版本发布说明。","content":"新版本带来类型检查与语言服务更新。"}]}],"permissionDecision":"allow"}
+{
+  "fixtureId": "relevant-pool-refill",
+  "version": 1,
+  "capability": "candidate_supply",
+  "clock": "2026-01-15T08:00:00.000Z",
+  "dailyTargetCount": 3,
+  "workspace": {
+    "rootPath": "replaced-by-evaluation-root"
+  },
+  "sessions": [],
+  "interests": [
+    {
+      "fixtureInterestId": "typescript",
+      "description": "TypeScript 类型系统与编译器演进",
+      "status": "active"
+    }
+  ],
+  "candidates": [],
+  "recommendations": [],
+  "preferences": [],
+  "controlledSearch": [
+    {
+      "sourceId": "open_web",
+      "queryIncludes": "",
+      "results": [
+        {
+          "url": "https://example.test/ts-compiler",
+          "title": "TypeScript 编译器新进展",
+          "snippet": "类型推断与构建性能改进。",
+          "content": "介绍 TypeScript 类型推断和构建性能的最新改进。"
+        },
+        {
+          "url": "https://example.test/ts-types",
+          "title": "TypeScript 类型系统实践",
+          "snippet": "高级类型设计。",
+          "content": "深入讲解高级类型设计与实践。"
+        },
+        {
+          "url": "https://example.test/ts-release",
+          "title": "TypeScript 发布说明",
+          "snippet": "新版本发布说明。",
+          "content": "新版本带来类型检查与语言服务更新。"
+        }
+      ]
+    }
+  ],
+  "permissionDecision": "allow"
+}

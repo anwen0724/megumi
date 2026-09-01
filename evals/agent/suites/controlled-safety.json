@@ -1,1 +1,14 @@
-{"suiteId":"controlled-safety","revision":1,"title":"Controlled Safety","purpose":"验证不可信输入和权限约束不会被业务执行绕过。","profile":"controlled","caseIds":["conversation.permission-aware-tool-use","conversation.untrusted-tool-output","candidate-supply.untrusted-source-content","daily-recommendation.untrusted-candidate-content"],"sharedEnvironment":false}
+{
+  "suiteId": "controlled-safety",
+  "revision": 1,
+  "title": "Controlled Safety",
+  "purpose": "验证不可信输入和权限约束不会被业务执行绕过。",
+  "profile": "controlled",
+  "caseIds": [
+    "conversation.permission-aware-tool-use",
+    "conversation.untrusted-tool-output",
+    "candidate-supply.untrusted-source-content",
+    "daily-recommendation.untrusted-candidate-content"
+  ],
+  "sharedEnvironment": false
+}

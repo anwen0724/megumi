@@ -1,1 +1,56 @@
-{"caseId":"preference-learning.preference-correction","revision":1,"fixtureVersion":1,"title":"反馈修正偏好","objective":"相反的新反馈应正确修订已有 Preference，而不是叠加矛盾结论。","profiles":["controlled"],"tags":["core"],"capability":"preference_learning","setup":{"fixtureId":"preference-correction"},"trigger":{"kind":"update_recommendation_feedback","recommendationId":"target","reaction":"disliked"},"completion":{"kind":"preference_learning_settled","timeoutMs":180000},"requiredEvidence":["input","before_facts","completion","after_facts","trace","measurements"],"grading":{"hardGates":["business_completion_present","trace_correlated"],"dimensions":["feedback_accuracy","scope_assignment","revision_retraction","stability_usability","reliability_recovery"],"requiredDimensions":["revision_retraction"],"modelGradedDimensions":["feedback_accuracy","revision_retraction","stability_usability"],"measurementLimits":{}}}
+{
+  "caseId": "preference-learning.preference-correction",
+  "revision": 1,
+  "fixtureVersion": 1,
+  "title": "反馈修正偏好",
+  "objective": "相反的新反馈应正确修订已有 Preference，而不是叠加矛盾结论。",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core"
+  ],
+  "capability": "preference_learning",
+  "setup": {
+    "fixtureId": "preference-correction"
+  },
+  "trigger": {
+    "kind": "update_recommendation_feedback",
+    "recommendationId": "target",
+    "reaction": "disliked"
+  },
+  "completion": {
+    "kind": "preference_learning_settled",
+    "timeoutMs": 180000
+  },
+  "requiredEvidence": [
+    "input",
+    "before_facts",
+    "completion",
+    "after_facts",
+    "trace",
+    "measurements"
+  ],
+  "grading": {
+    "hardGates": [
+      "business_completion_present",
+      "trace_correlated"
+    ],
+    "dimensions": [
+      "feedback_accuracy",
+      "scope_assignment",
+      "revision_retraction",
+      "stability_usability",
+      "reliability_recovery"
+    ],
+    "requiredDimensions": [
+      "revision_retraction"
+    ],
+    "modelGradedDimensions": [
+      "feedback_accuracy",
+      "revision_retraction",
+      "stability_usability"
+    ],
+    "measurementLimits": {}
+  }
+}

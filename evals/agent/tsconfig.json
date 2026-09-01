@@ -1,8 +1,14 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "resolveJsonModule": true
   },
-  "include": ["./**/*.ts", "./**/*.json", "../../packages/agent/voice/src/sherpa-onnx-node.d.ts"]
+  "include": [
+    "./**/*.ts",
+    "./**/*.json",
+    "../../packages/agent/voice/src/sherpa-onnx-node.d.ts"
+  ]
 }

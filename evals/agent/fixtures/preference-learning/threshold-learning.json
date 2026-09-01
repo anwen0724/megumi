@@ -1,1 +1,120 @@
-{"fixtureId":"threshold-learning","version":1,"capability":"preference_learning","clock":"2026-01-15T08:00:00.000Z","dailyTargetCount":3,"workspace":{"rootPath":"replaced-by-evaluation-root"},"sessions":[],"interests":[{"fixtureInterestId":"typescript","description":"TypeScript 工程实践","status":"active"}],"candidates":[{"fixtureCandidateId":"c1","sourceId":"open_web","sourceName":"Open Web","canonicalUrl":"https://example.test/p1","title":"TypeScript 深度文章 1","description":"深度内容。","contentText":"深入工程内容。","matchedInterestFixtureIds":["typescript"],"relevance":"direct"},{"fixtureCandidateId":"c2","sourceId":"open_web","sourceName":"Open Web","canonicalUrl":"https://example.test/p2","title":"TypeScript 深度文章 2","description":"深度内容。","contentText":"深入工程内容。","matchedInterestFixtureIds":["typescript"],"relevance":"direct"},{"fixtureCandidateId":"c3","sourceId":"open_web","sourceName":"Open Web","canonicalUrl":"https://example.test/p3","title":"TypeScript 深度文章 3","description":"深度内容。","contentText":"深入工程内容。","matchedInterestFixtureIds":["typescript"],"relevance":"direct"},{"fixtureCandidateId":"c4","sourceId":"open_web","sourceName":"Open Web","canonicalUrl":"https://example.test/p4","title":"TypeScript 深度文章 4","description":"深度内容。","contentText":"深入工程内容。","matchedInterestFixtureIds":["typescript"],"relevance":"direct"},{"fixtureCandidateId":"c5","sourceId":"open_web","sourceName":"Open Web","canonicalUrl":"https://example.test/p5","title":"TypeScript 深度文章 5","description":"深度内容。","contentText":"深入工程内容。","matchedInterestFixtureIds":["typescript"],"relevance":"direct"}],"recommendations":[{"fixtureRecommendationId":"r1","candidateFixtureId":"c1","reason":"相关深度文章","reaction":"liked"},{"fixtureRecommendationId":"r2","candidateFixtureId":"c2","reason":"相关深度文章","reaction":"liked"},{"fixtureRecommendationId":"r3","candidateFixtureId":"c3","reason":"相关深度文章","reaction":"liked"},{"fixtureRecommendationId":"r4","candidateFixtureId":"c4","reason":"相关深度文章","reaction":"liked"},{"fixtureRecommendationId":"target","candidateFixtureId":"c5","reason":"相关深度文章","reaction":"none"}],"preferences":[],"controlledSearch":[],"permissionDecision":"allow"}
+{
+  "fixtureId": "threshold-learning",
+  "version": 1,
+  "capability": "preference_learning",
+  "clock": "2026-01-15T08:00:00.000Z",
+  "dailyTargetCount": 3,
+  "workspace": {
+    "rootPath": "replaced-by-evaluation-root"
+  },
+  "sessions": [],
+  "interests": [
+    {
+      "fixtureInterestId": "typescript",
+      "description": "TypeScript 工程实践",
+      "status": "active"
+    }
+  ],
+  "candidates": [
+    {
+      "fixtureCandidateId": "c1",
+      "sourceId": "open_web",
+      "sourceName": "Open Web",
+      "canonicalUrl": "https://example.test/p1",
+      "title": "TypeScript 深度文章 1",
+      "description": "深度内容。",
+      "contentText": "深入工程内容。",
+      "matchedInterestFixtureIds": [
+        "typescript"
+      ],
+      "relevance": "direct"
+    },
+    {
+      "fixtureCandidateId": "c2",
+      "sourceId": "open_web",
+      "sourceName": "Open Web",
+      "canonicalUrl": "https://example.test/p2",
+      "title": "TypeScript 深度文章 2",
+      "description": "深度内容。",
+      "contentText": "深入工程内容。",
+      "matchedInterestFixtureIds": [
+        "typescript"
+      ],
+      "relevance": "direct"
+    },
+    {
+      "fixtureCandidateId": "c3",
+      "sourceId": "open_web",
+      "sourceName": "Open Web",
+      "canonicalUrl": "https://example.test/p3",
+      "title": "TypeScript 深度文章 3",
+      "description": "深度内容。",
+      "contentText": "深入工程内容。",
+      "matchedInterestFixtureIds": [
+        "typescript"
+      ],
+      "relevance": "direct"
+    },
+    {
+      "fixtureCandidateId": "c4",
+      "sourceId": "open_web",
+      "sourceName": "Open Web",
+      "canonicalUrl": "https://example.test/p4",
+      "title": "TypeScript 深度文章 4",
+      "description": "深度内容。",
+      "contentText": "深入工程内容。",
+      "matchedInterestFixtureIds": [
+        "typescript"
+      ],
+      "relevance": "direct"
+    },
+    {
+      "fixtureCandidateId": "c5",
+      "sourceId": "open_web",
+      "sourceName": "Open Web",
+      "canonicalUrl": "https://example.test/p5",
+      "title": "TypeScript 深度文章 5",
+      "description": "深度内容。",
+      "contentText": "深入工程内容。",
+      "matchedInterestFixtureIds": [
+        "typescript"
+      ],
+      "relevance": "direct"
+    }
+  ],
+  "recommendations": [
+    {
+      "fixtureRecommendationId": "r1",
+      "candidateFixtureId": "c1",
+      "reason": "相关深度文章",
+      "reaction": "liked"
+    },
+    {
+      "fixtureRecommendationId": "r2",
+      "candidateFixtureId": "c2",
+      "reason": "相关深度文章",
+      "reaction": "liked"
+    },
+    {
+      "fixtureRecommendationId": "r3",
+      "candidateFixtureId": "c3",
+      "reason": "相关深度文章",
+      "reaction": "liked"
+    },
+    {
+      "fixtureRecommendationId": "r4",
+      "candidateFixtureId": "c4",
+      "reason": "相关深度文章",
+      "reaction": "liked"
+    },
+    {
+      "fixtureRecommendationId": "target",
+      "candidateFixtureId": "c5",
+      "reason": "相关深度文章",
+      "reaction": "none"
+    }
+  ],
+  "preferences": [],
+  "controlledSearch": [],
+  "permissionDecision": "allow"
+}

@@ -1,1 +1,54 @@
-{"caseId":"interest-understanding.merge-existing-interest","revision":1,"fixtureVersion":1,"title":"归并已有关注","objective":"新证据应归并到语义一致的已有 Interest，而不是无意义重复。","profiles":["controlled"],"tags":["core"],"capability":"interest_understanding","setup":{"fixtureId":"merge-existing-interest"},"trigger":{"kind":"completed_conversation_turn","text":"我也想持续跟进 TypeScript 6.x 的类型系统变化。"},"completion":{"kind":"interest_understanding_terminal","timeoutMs":120000},"requiredEvidence":["input","before_facts","completion","after_facts","trace","measurements"],"grading":{"hardGates":["business_completion_present","trace_correlated"],"dimensions":["recognition_accuracy","interest_merge","evidence_sufficiency","reliability_recovery"],"requiredDimensions":["interest_merge"],"modelGradedDimensions":["recognition_accuracy","interest_merge","evidence_sufficiency"],"measurementLimits":{}}}
+{
+  "caseId": "interest-understanding.merge-existing-interest",
+  "revision": 1,
+  "fixtureVersion": 1,
+  "title": "归并已有关注",
+  "objective": "新证据应归并到语义一致的已有 Interest，而不是无意义重复。",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core"
+  ],
+  "capability": "interest_understanding",
+  "setup": {
+    "fixtureId": "merge-existing-interest"
+  },
+  "trigger": {
+    "kind": "completed_conversation_turn",
+    "text": "我也想持续跟进 TypeScript 6.x 的类型系统变化。"
+  },
+  "completion": {
+    "kind": "interest_understanding_terminal",
+    "timeoutMs": 120000
+  },
+  "requiredEvidence": [
+    "input",
+    "before_facts",
+    "completion",
+    "after_facts",
+    "trace",
+    "measurements"
+  ],
+  "grading": {
+    "hardGates": [
+      "business_completion_present",
+      "trace_correlated"
+    ],
+    "dimensions": [
+      "recognition_accuracy",
+      "interest_merge",
+      "evidence_sufficiency",
+      "reliability_recovery"
+    ],
+    "requiredDimensions": [
+      "interest_merge"
+    ],
+    "modelGradedDimensions": [
+      "recognition_accuracy",
+      "interest_merge",
+      "evidence_sufficiency"
+    ],
+    "measurementLimits": {}
+  }
+}

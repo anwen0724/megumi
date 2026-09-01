@@ -1,1 +1,50 @@
-{"fixtureId":"duplicate-admission","version":1,"capability":"candidate_supply","clock":"2026-01-15T08:00:00.000Z","dailyTargetCount":3,"workspace":{"rootPath":"replaced-by-evaluation-root"},"sessions":[],"interests":[{"fixtureInterestId":"typescript","description":"TypeScript 编译器演进","status":"active"}],"candidates":[{"fixtureCandidateId":"existing","sourceId":"open_web","sourceName":"Open Web","canonicalUrl":"https://example.test/existing-ts","title":"TypeScript 编译器性能更新","description":"介绍增量构建优化。","contentText":"TypeScript 增量构建性能获得改进。","matchedInterestFixtureIds":["typescript"],"relevance":"direct"}],"recommendations":[],"preferences":[],"controlledSearch":[{"sourceId":"open_web","queryIncludes":"","results":[{"url":"https://example.test/duplicate-ts","title":"TypeScript 编译器性能更新","snippet":"同一项增量构建优化的转载。","content":"TypeScript 增量构建性能获得改进。"}]}],"permissionDecision":"allow"}
+{
+  "fixtureId": "duplicate-admission",
+  "version": 1,
+  "capability": "candidate_supply",
+  "clock": "2026-01-15T08:00:00.000Z",
+  "dailyTargetCount": 3,
+  "workspace": {
+    "rootPath": "replaced-by-evaluation-root"
+  },
+  "sessions": [],
+  "interests": [
+    {
+      "fixtureInterestId": "typescript",
+      "description": "TypeScript 编译器演进",
+      "status": "active"
+    }
+  ],
+  "candidates": [
+    {
+      "fixtureCandidateId": "existing",
+      "sourceId": "open_web",
+      "sourceName": "Open Web",
+      "canonicalUrl": "https://example.test/existing-ts",
+      "title": "TypeScript 编译器性能更新",
+      "description": "介绍增量构建优化。",
+      "contentText": "TypeScript 增量构建性能获得改进。",
+      "matchedInterestFixtureIds": [
+        "typescript"
+      ],
+      "relevance": "direct"
+    }
+  ],
+  "recommendations": [],
+  "preferences": [],
+  "controlledSearch": [
+    {
+      "sourceId": "open_web",
+      "queryIncludes": "",
+      "results": [
+        {
+          "url": "https://example.test/duplicate-ts",
+          "title": "TypeScript 编译器性能更新",
+          "snippet": "同一项增量构建优化的转载。",
+          "content": "TypeScript 增量构建性能获得改进。"
+        }
+      ]
+    }
+  ],
+  "permissionDecision": "allow"
+}
