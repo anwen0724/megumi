@@ -48,7 +48,7 @@ async function readPinnedRuns(directory: string): Promise<Set<string>> {
       );
       if (value.pinnedRunId) ids.add(value.pinnedRunId);
     } catch {
-      // An invalid Baseline is reported by catalog/CLI validation; cleanup remains fail-safe.
+      // Invalid Baselines are reported by Evaluation CLI validation; cleanup remains fail-safe.
     }
   }
   return ids;

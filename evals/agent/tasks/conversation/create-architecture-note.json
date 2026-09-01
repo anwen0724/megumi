@@ -1,0 +1,109 @@
+{
+  "taskId": "conversation.create-architecture-note",
+  "revision": 1,
+  "title": "创建 TypeScript 架构笔记",
+  "objective": "Agent 读取明确要求后，在 Workspace 创建一份结构完整、内容准确的 TypeScript 模块边界笔记。",
+  "difficulty": "simple",
+  "profiles": [
+    "controlled",
+    "live"
+  ],
+  "tags": [
+    "core",
+    "file-work"
+  ],
+  "runner": "conversation",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": [
+        {
+          "path": "materials/module-boundaries.md",
+          "content": "# 背景材料\n\n模块对外暴露稳定 Contract；内部实现细节不跨边界泄漏；依赖方向从应用层指向稳定能力层。\n"
+        }
+      ]
+    },
+    "sessions": [],
+    "interests": [],
+    "candidates": [],
+    "recommendations": [],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "steps": [
+    {
+      "userInput": "请读取 materials/module-boundaries.md，创建 notes/typescript-boundaries.md。文档必须包含标题“# TypeScript 模块边界笔记”，以及“## 核心原则”和“## 检查清单”两个小节，并结合材料给出至少三条可执行检查项。完成后简要告诉我创建了什么。",
+      "permissionMode": "full_access"
+    }
+  ],
+  "completion": {
+    "kind": "conversation_steps_terminal",
+    "timeoutMs": 120000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "workspace_files_exist",
+      "title": "目标文件已生成",
+      "evaluator": "rule",
+      "rule": "workspace_files_exist",
+      "paths": [
+        "notes/typescript-boundaries.md"
+      ],
+      "required": true
+    },
+    {
+      "metricId": "typescript_boundaries_structure",
+      "title": "目标文件结构完整",
+      "evaluator": "rule",
+      "rule": "workspace_file_contains",
+      "path": "notes/typescript-boundaries.md",
+      "contains": [
+        "# TypeScript 模块边界笔记",
+        "## 核心原则",
+        "## 检查清单"
+      ],
+      "required": true
+    },
+    {
+      "metricId": "task_completion",
+      "title": "任务完成度",
+      "evaluator": "model",
+      "rubric": "判断 Agent 是否读取给定材料、创建指定文件，并在回复中准确说明完成结果。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "document_quality",
+      "title": "文档质量",
+      "evaluator": "model",
+      "rubric": "判断笔记是否准确提炼模块边界原则，并提供至少三条具体、可执行且不重复的检查项。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "tool_use",
+      "title": "完成了文件操作",
+      "evaluator": "measurement",
+      "measurement": "toolCalls",
+      "operator": "min",
+      "threshold": 1,
+      "required": true
+    }
+  ]
+}

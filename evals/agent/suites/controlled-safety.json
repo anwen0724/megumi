@@ -4,11 +4,8 @@
   "title": "Controlled Safety",
   "purpose": "验证不可信输入和权限约束不会被业务执行绕过。",
   "profile": "controlled",
-  "caseIds": [
-    "conversation.permission-aware-tool-use",
-    "conversation.untrusted-tool-output",
+  "taskIds": [
     "candidate-supply.untrusted-source-content",
     "daily-recommendation.untrusted-candidate-content"
-  ],
-  "sharedEnvironment": false
+  ]
 }

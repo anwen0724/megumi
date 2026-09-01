@@ -1,0 +1,74 @@
+{
+  "taskId": "interest-understanding.no-durable-evidence",
+  "revision": 1,
+  "title": "无需长期记录",
+  "objective": "一次性表达不应被误写为长期 Interest Evidence。",
+  "difficulty": "medium",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "boundary"
+  ],
+  "runner": "interest_understanding",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": []
+    },
+    "sessions": [
+      {
+        "scenarioSessionId": "main",
+        "title": "普通会话",
+        "turns": []
+      }
+    ],
+    "interests": [],
+    "candidates": [],
+    "recommendations": [],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "input": {
+    "kind": "completed_conversation_turn",
+    "text": "谢谢，今天先聊到这里。"
+  },
+  "completion": {
+    "kind": "interest_understanding_terminal",
+    "timeoutMs": 120000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "recognition_accuracy",
+      "title": "关注识别准确性",
+      "evaluator": "model",
+      "rubric": "判断会话内容是否真的表达了需要长期保存的关注，并正确形成或不形成 Interest Evidence。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "omission",
+      "title": "避免遗漏与误识别",
+      "evaluator": "model",
+      "rubric": "判断关注理解是否既没有漏掉明确长期关注，也没有把一次性表达误写成长期关注。",
+      "minScore": 3,
+      "required": false
+    }
+  ]
+}

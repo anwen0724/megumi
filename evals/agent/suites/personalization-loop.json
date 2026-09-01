@@ -4,11 +4,10 @@
   "title": "Personalization Loop",
   "purpose": "按真实独立业务顺序比较关注、供给、推荐和反馈学习能力。",
   "profile": "controlled",
-  "caseIds": [
+  "taskIds": [
     "interest-understanding.explicit-interest",
     "candidate-supply.relevant-pool-refill",
     "daily-recommendation.preference-aware-selection",
     "preference-learning.threshold-learning"
-  ],
-  "sharedEnvironment": false
+  ]
 }

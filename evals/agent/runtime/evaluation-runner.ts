@@ -1,45 +1,34 @@
-/* Orchestrates Case isolation, Product lifecycle, Evidence, grading, and partial failure. */
+/* Orchestrates Task isolation, real Product execution, Evidence, Metrics, and partial failure. */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { evaluationCapabilityDirectory, type EvaluationCase } from '../catalog/evaluation-case';
-import type { EvaluationCatalog } from '../catalog/evaluation-catalog';
-import type { EvaluationRunConfig } from '../catalog/evaluation-run-config';
-import { candidateSupplyEvaluation } from '../capabilities/candidate-supply/candidate-supply-evaluation';
-import { conversationEvaluation } from '../capabilities/conversation/conversation-evaluation';
-import { dailyRecommendationEvaluation } from '../capabilities/daily-recommendation/daily-recommendation-evaluation';
-import { interestUnderstandingEvaluation } from '../capabilities/interest-understanding/interest-understanding-evaluation';
-import { preferenceLearningEvaluation } from '../capabilities/preference-learning/preference-learning-evaluation';
-import { composeEvaluationCase, type ComposedEvaluationCase } from './evaluation-composition';
-import { collectEvidence, type CapabilityEvaluation } from './evidence';
-import { gradeHardGates } from './grading';
-import type { ModelGrader } from './model-grader';
+import type { EvaluationRunConfig } from '../contracts/evaluation-run-config';
+import {
+  EvaluationRunResultSchema,
+  TaskEvaluationResultSchema,
+  type EvaluationRunResult,
+  type TaskEvaluationResult,
+  type TaskMetricResult,
+} from '../contracts/evaluation-result';
+import type { EvaluationTask } from '../contracts/evaluation-task';
+import { evaluateTaskMetrics } from '../metrics/metric-evaluator';
+import type { ModelMetricEvaluator } from '../metrics/model-metric-evaluator';
+import { resolveTaskRunner } from '../runners/task-runner';
+import { collectEvidence } from './evidence-collector';
 import { createRunBudget } from './run-budget';
 import { createRunStorage, type EvaluationRunStorage } from './run-storage';
-import {
-  CaseEvaluationResultSchema,
-  EvaluationRunResultSchema,
-  type CaseEvaluationResult,
-  type EvaluationRunResult,
-} from './evaluation-result';
-
-const capabilityEvaluations: Readonly<Record<EvaluationCase['capability'], CapabilityEvaluation>> = {
-  conversation: conversationEvaluation as CapabilityEvaluation,
-  interest_understanding: interestUnderstandingEvaluation as CapabilityEvaluation,
-  candidate_supply: candidateSupplyEvaluation as CapabilityEvaluation,
-  daily_recommendation: dailyRecommendationEvaluation as CapabilityEvaluation,
-  preference_learning: preferenceLearningEvaluation as CapabilityEvaluation,
-};
+import { composeEvaluationTask, type ComposedEvaluationTask } from './task-environment';
+import type { EvaluationTaskCatalog } from './task-loader';
 
 export interface EvaluationRunnerDependencies {
-  readonly modelGrader: ModelGrader;
-  readonly composeCase?: typeof composeEvaluationCase;
+  readonly modelMetricEvaluator: ModelMetricEvaluator;
+  readonly composeTask?: typeof composeEvaluationTask;
   readonly now?: () => Date;
   readonly createRunId?: () => string;
 }
 
 export async function runEvaluation(input: {
   readonly repositoryRoot: string;
-  readonly catalog: EvaluationCatalog;
+  readonly catalog: EvaluationTaskCatalog;
   readonly config: EvaluationRunConfig;
   readonly dependencies: EvaluationRunnerDependencies;
 }): Promise<{ readonly result: EvaluationRunResult; readonly storage: EvaluationRunStorage }> {
@@ -48,11 +37,12 @@ export async function runEvaluation(input: {
   const startedAt = now().toISOString();
   const productVersion = await readProductVersion(input.repositoryRoot);
   const storage = await createRunStorage(input.config.runRoot, runId);
-  const scheduled = resolveCases(input.catalog, input.config);
+  const scheduled = scheduleTasks(input.catalog.resolveTasks(input.config), input.config.repetitions);
   await storage.writeManifest({
     runId,
     startedAt,
     profile: input.config.profile,
+    taskIds: input.config.taskIds,
     suiteIds: input.config.suiteIds,
     candidateModel: publicModel(input.config.candidateModel),
     graderModel: publicModel(input.config.graderModel),
@@ -62,17 +52,17 @@ export async function runEvaluation(input: {
     productVersion,
   });
   const budget = createRunBudget(input.config.budget);
-  const results: CaseEvaluationResult[] = new Array(scheduled.length);
+  const results: TaskEvaluationResult[] = new Array(scheduled.length);
   let cursor = 0;
   const workers = Array.from({ length: Math.min(input.config.concurrency, scheduled.length) }, async () => {
     while (cursor < scheduled.length) {
       const index = cursor++;
-      const scheduledCase = scheduled[index];
-      if (!budget.canStartCase()) {
-        results[index] = budgetBlockedResult(scheduledCase, input.config.profile, now().toISOString());
+      const scheduledTask = scheduled[index];
+      if (!budget.canStartTask()) {
+        results[index] = budgetBlockedResult(scheduledTask, input.config.profile, now().toISOString());
         continue;
       }
-      results[index] = await runCase({ ...input, storage, runId, scheduledCase, now });
+      results[index] = await runTask({ ...input, storage, scheduledTask, now });
       budget.record(results[index].measurements);
     }
   });
@@ -83,7 +73,7 @@ export async function runEvaluation(input: {
     startedAt,
     endedAt: now().toISOString(),
     candidateModel: `${input.config.candidateModel.providerId}/${input.config.candidateModel.modelId}`,
-    graderModelAndRuleVersion: `${input.config.graderModel.providerId}/${input.config.graderModel.modelId}@semantic-dimension-0-4-v1`,
+    graderModelAndMetricVersion: `${input.config.graderModel.providerId}/${input.config.graderModel.modelId}@evaluation-model-metrics-v1`,
     environment: {
       productVersion,
       nodeVersion: process.version,
@@ -93,157 +83,152 @@ export async function runEvaluation(input: {
       repetitions: input.config.repetitions,
       concurrency: input.config.concurrency,
     },
-    caseResults: results,
+    taskResults: results,
     totals: totals(results),
   });
   await storage.writeResult(result);
   return { result, storage };
 }
 
-async function runCase(input: {
+async function runTask(input: {
   readonly repositoryRoot: string;
   readonly config: EvaluationRunConfig;
   readonly dependencies: EvaluationRunnerDependencies;
   readonly storage: EvaluationRunStorage;
-  readonly runId: string;
-  readonly scheduledCase: ScheduledCase;
+  readonly scheduledTask: ScheduledTask;
   readonly now: () => Date;
-}): Promise<CaseEvaluationResult> {
-  const { evaluationCase, caseRunId } = input.scheduledCase;
+}): Promise<TaskEvaluationResult> {
+  const { task, taskRunId } = input.scheduledTask;
   const startedAt = input.now().toISOString();
   const startedAtMs = Date.now();
-  let composed: ComposedEvaluationCase | undefined;
+  let composed: ComposedEvaluationTask | undefined;
   try {
-    composed = await (input.dependencies.composeCase ?? composeEvaluationCase)({
+    composed = await (input.dependencies.composeTask ?? composeEvaluationTask)({
       repositoryRoot: input.repositoryRoot,
       runConfig: input.config,
-      fixturePath: path.join(
-        input.repositoryRoot,
-        'evals', 'agent', 'fixtures', evaluationCapabilityDirectory(evaluationCase.capability),
-        `${evaluationCase.setup.fixtureId}.json`,
-      ),
-      caseRoot: input.storage.caseDirectory(caseRunId),
+      task,
+      taskRoot: input.storage.taskDirectory(taskRunId),
     });
-    const execution = await capabilityEvaluations[evaluationCase.capability].execute({
-      evaluationCase,
+    const execution = await resolveTaskRunner(task).execute({
+      task,
       runConfig: input.config,
       runtime: composed.runtime,
-      fixtureIds: composed.fixtureIds,
+      scenarioIds: composed.scenarioIds,
+      workspacePath: composed.paths.workspace,
       environment: composed.environment,
-      now: () => composed?.fixture.clock ?? input.now().toISOString(),
+      now: () => task.scenario.clock,
     });
     const evidence = await collectEvidence({
-      evidenceId: `evidence:${caseRunId}`,
-      evaluationCase,
+      evidenceId: `evidence:${taskRunId}`,
+      task,
       runtime: composed.runtime,
       execution,
       environment: composed.environment,
       startedAtMs,
       collectedAt: input.now().toISOString(),
     });
-    const evidencePath = await input.storage.writeEvidence(caseRunId, evidence);
-    const deterministic = gradeHardGates({ evaluationCase, evidence, now: input.now().toISOString() });
-    const semantic = await input.dependencies.modelGrader.grade({
-      evaluationCase,
+    const evidencePath = await input.storage.writeEvidence(taskRunId, evidence);
+    const evaluated = await evaluateTaskMetrics({
+      task,
       evidence,
+      modelEvaluator: input.dependencies.modelMetricEvaluator,
       now: input.now().toISOString(),
     });
-    const grades = [...deterministic, ...semantic.grades];
     const measurements = {
       ...evidence.measurements,
-      graderModelCalls: semantic.usage.modelCalls,
-      graderInputTokens: semantic.usage.inputTokens,
-      graderOutputTokens: semantic.usage.outputTokens,
-      graderEstimatedCostUsd: semantic.usage.estimatedCostUsd,
+      graderModelCalls: evaluated.modelUsage.modelCalls,
+      graderInputTokens: evaluated.modelUsage.inputTokens,
+      graderOutputTokens: evaluated.modelUsage.outputTokens,
+      graderEstimatedCostUsd: evaluated.modelUsage.estimatedCostUsd,
     };
-    return CaseEvaluationResultSchema.parse({
-      caseRunId,
-      caseId: evaluationCase.caseId,
-      revision: evaluationCase.revision,
-      capability: evaluationCase.capability,
+    return TaskEvaluationResultSchema.parse({
+      taskRunId,
+      taskId: task.taskId,
+      revision: task.revision,
+      runner: task.runner,
+      difficulty: task.difficulty,
       profile: input.config.profile,
-      status: deriveStatus(evaluationCase, grades, evidence.issues),
+      status: deriveStatus(evaluated.results),
       startedAt,
       endedAt: input.now().toISOString(),
       evidencePath,
-      grades,
-      requiredDimensions: evaluationCase.grading.requiredDimensions,
-      measurementLimits: evaluationCase.grading.measurementLimits,
+      metricResults: evaluated.results,
       measurements,
       evidenceIssues: evidence.issues,
     });
   } catch (error) {
-    return CaseEvaluationResultSchema.parse({
-      caseRunId,
-      caseId: evaluationCase.caseId,
-      revision: evaluationCase.revision,
-      capability: evaluationCase.capability,
+    return TaskEvaluationResultSchema.parse({
+      taskRunId,
+      taskId: task.taskId,
+      revision: task.revision,
+      runner: task.runner,
+      difficulty: task.difficulty,
       profile: input.config.profile,
       status: 'evaluation_error',
       startedAt,
       endedAt: input.now().toISOString(),
-      grades: [],
+      metricResults: [],
       measurements: emptyMeasurements(Math.max(0, Date.now() - startedAtMs)),
-      error: { code: 'evaluation_execution_failed', message: error instanceof Error ? error.message : String(error) },
+      error: {
+        code: 'evaluation_execution_failed',
+        message: error instanceof Error ? error.message : String(error),
+      },
     });
   } finally {
     await composed?.dispose().catch(() => undefined);
   }
 }
 
-interface ScheduledCase { readonly evaluationCase: EvaluationCase; readonly caseRunId: string }
-function resolveCases(catalog: EvaluationCatalog, config: EvaluationRunConfig): ScheduledCase[] {
-  const uniqueCases = new Map<string, EvaluationCase>();
-  for (const suiteId of config.suiteIds) {
-    for (const evaluationCase of catalog.resolveSuite(suiteId).cases) {
-      uniqueCases.set(evaluationCase.caseId, evaluationCase);
-    }
-  }
-  const cases = [...uniqueCases.values()];
-  return Array.from({ length: config.repetitions }, (_, repetition) => cases.map((evaluationCase) => ({
-    evaluationCase,
-    caseRunId: `${evaluationCase.caseId}:r${repetition + 1}`,
+interface ScheduledTask {
+  readonly task: EvaluationTask;
+  readonly taskRunId: string;
+}
+
+function scheduleTasks(tasks: readonly EvaluationTask[], repetitions: number): ScheduledTask[] {
+  return Array.from({ length: repetitions }, (_, repetition) => tasks.map((task) => ({
+    task,
+    taskRunId: `${task.taskId}:r${repetition + 1}`,
   }))).flat();
 }
 
-function deriveStatus(
-  evaluationCase: EvaluationCase,
-  grades: readonly import('./grading').GraderResult[],
-  issues: readonly { readonly impact: string }[],
-): CaseEvaluationResult['status'] {
-  if (grades.some((grade) => grade.grader === 'deterministic' && grade.judgement === 'fail')) return 'failed';
-  for (const dimension of evaluationCase.grading.requiredDimensions) {
-    const grade = grades.find((entry) => entry.dimension === dimension && entry.grader === 'model');
-    if (!grade || grade.judgement === 'not_gradable') return 'not_gradable';
-    if ((grade.score ?? 0) < 3) return 'failed';
-  }
-  if (issues.some((issue) => issue.impact === 'not_gradable')) return 'not_gradable';
+function deriveStatus(results: readonly TaskMetricResult[]): TaskEvaluationResult['status'] {
+  const required = results.filter((result) => result.required);
+  if (required.some((result) => result.judgement === 'not_gradable')) return 'not_gradable';
+  if (required.some((result) => result.judgement === 'fail')) return 'failed';
   return 'passed';
 }
 
 function budgetBlockedResult(
-  entry: ScheduledCase,
+  entry: ScheduledTask,
   profile: EvaluationRunConfig['profile'],
   at: string,
-): CaseEvaluationResult {
-  return CaseEvaluationResultSchema.parse({
-    caseRunId: entry.caseRunId,
-    caseId: entry.evaluationCase.caseId,
-    revision: entry.evaluationCase.revision,
-    capability: entry.evaluationCase.capability,
+): TaskEvaluationResult {
+  return TaskEvaluationResultSchema.parse({
+    taskRunId: entry.taskRunId,
+    taskId: entry.task.taskId,
+    revision: entry.task.revision,
+    runner: entry.task.runner,
+    difficulty: entry.task.difficulty,
     profile,
     status: 'budget_blocked',
     startedAt: at,
     endedAt: at,
-    grades: [],
+    metricResults: [],
     measurements: emptyMeasurements(0),
   });
 }
 
 function emptyMeasurements(durationMs: number) {
   return {
-    durationMs, inputTokens: 0, outputTokens: 0, modelCalls: 0, toolCalls: 0,
-    sourceCalls: 0, retries: 0, candidatesProduced: 0, recommendationsPublished: 0,
+    durationMs,
+    inputTokens: 0,
+    outputTokens: 0,
+    modelCalls: 0,
+    toolCalls: 0,
+    sourceCalls: 0,
+    retries: 0,
+    candidatesProduced: 0,
+    recommendationsPublished: 0,
     preferenceRevisions: 0,
     estimatedCostUsd: 0,
     graderModelCalls: 0,
@@ -253,7 +238,7 @@ function emptyMeasurements(durationMs: number) {
   };
 }
 
-function totals(results: readonly CaseEvaluationResult[]) {
+function totals(results: readonly TaskEvaluationResult[]) {
   return {
     passed: results.filter((result) => result.status === 'passed').length,
     failed: results.filter((result) => result.status === 'failed').length,

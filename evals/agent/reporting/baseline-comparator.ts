@@ -1,21 +1,18 @@
-/* Defines explicit Baseline approval and comparable-group regression checks. */
+/* Defines explicit Baseline approval and comparable Task regression checks. */
 import { z } from 'zod';
-import type { CaseEvaluationResult, EvaluationRunResult } from '../runtime/evaluation-result';
+import type { EvaluationRunResult, TaskEvaluationResult } from '../contracts/evaluation-result';
 
-const BaselineCaseSchema = z.object({
-  caseId: z.string().min(1),
+const BaselineTaskSchema = z.object({
+  taskId: z.string().min(1),
   revision: z.number().int().positive(),
   profile: z.enum(['controlled', 'live']),
-  fixtureVersion: z.number().int().positive(),
   candidateModel: z.string().min(1),
-  graderModelAndRuleVersion: z.string().min(1),
+  graderModelAndMetricVersion: z.string().min(1),
   sampleCount: z.number().int().positive(),
   passRate: z.number().min(0).max(1),
-  hardGateFailureCount: z.number().int().nonnegative(),
-  requiredDimensionScores: z.record(z.string(), z.array(z.number().min(0).max(4))),
-  requiredDimensionPassRates: z.record(z.string(), z.number().min(0).max(1)),
+  requiredMetricPassRates: z.record(z.string(), z.number().min(0).max(1)),
+  modelMetricScoreAverages: z.record(z.string(), z.number().min(0).max(4)),
   measurementAverages: z.record(z.string(), z.number().nonnegative()),
-  measurementLimits: z.record(z.string(), z.number().nonnegative()),
 }).strict();
 
 export const EvaluationBaselineSchema = z.object({
@@ -23,7 +20,7 @@ export const EvaluationBaselineSchema = z.object({
   approvedAt: z.string().datetime({ offset: true }),
   approvedBy: z.string().min(1),
   pinnedRunId: z.string().min(1),
-  cases: z.array(BaselineCaseSchema),
+  tasks: z.array(BaselineTaskSchema),
   passRateTolerance: z.number().min(0).max(1).default(0),
 }).strict();
 export type EvaluationBaseline = z.infer<typeof EvaluationBaselineSchema>;
@@ -37,39 +34,31 @@ export interface BaselineComparison {
 export function compareWithBaseline(input: {
   readonly result: EvaluationRunResult;
   readonly baseline: EvaluationBaseline;
-  readonly fixtureVersions: Readonly<Record<string, number>>;
 }): BaselineComparison {
   const regressions: string[] = [];
   const trends: string[] = [];
   let comparable = 0;
-  for (const group of groupResults(input.result.caseResults)) {
+  for (const group of groupResults(input.result.taskResults)) {
     const sample = group[0];
     if (!sample) continue;
-    const baseline = input.baseline.cases.find((entry) => comparableKeyMatches({
-      baseline: entry,
-      current: sample,
-      fixtureVersion: input.fixtureVersions[sample.caseId],
-      result: input.result,
-    }));
+    const baseline = input.baseline.tasks.find((entry) => (
+      entry.taskId === sample.taskId
+      && entry.revision === sample.revision
+      && entry.profile === sample.profile
+      && entry.candidateModel === input.result.candidateModel
+      && entry.graderModelAndMetricVersion === input.result.graderModelAndMetricVersion
+    ));
     if (!baseline) continue;
     comparable += 1;
-    const currentPassRate = passRate(group);
     const observations: string[] = [];
-    if (group.filter(hasHardGateFailure).length > baseline.hardGateFailureCount) {
-      observations.push(`${sample.caseId}: new hard-gate failure.`);
-    }
+    const currentPassRate = passRate(group);
     if (currentPassRate < baseline.passRate - input.baseline.passRateTolerance) {
-      observations.push(`${sample.caseId}: pass rate ${currentPassRate.toFixed(3)} < ${baseline.passRate.toFixed(3)}.`);
+      observations.push(`${sample.taskId}: pass rate ${currentPassRate.toFixed(3)} < ${baseline.passRate.toFixed(3)}.`);
     }
-    for (const [dimension, baselineRate] of Object.entries(baseline.requiredDimensionPassRates)) {
-      const currentRate = dimensionPassRate(group, dimension);
+    for (const [metricId, baselineRate] of Object.entries(baseline.requiredMetricPassRates)) {
+      const currentRate = metricPassRate(group, metricId);
       if (currentRate < baselineRate - input.baseline.passRateTolerance) {
-        observations.push(`${sample.caseId}/${dimension}: pass rate ${currentRate.toFixed(3)} < ${baselineRate.toFixed(3)}.`);
-      }
-    }
-    for (const [measurement, limit] of Object.entries(baseline.measurementLimits)) {
-      if (group.some((entry) => measurementValue(entry, measurement) > limit)) {
-        observations.push(`${sample.caseId}/${measurement}: configured limit ${limit} exceeded.`);
+        observations.push(`${sample.taskId}/${metricId}: pass rate ${currentRate.toFixed(3)} < ${baselineRate.toFixed(3)}.`);
       }
     }
     if (sample.profile === 'live') trends.push(...observations);
@@ -83,52 +72,47 @@ export function approveBaseline(input: {
   readonly result: EvaluationRunResult;
   readonly approvedAt: string;
   readonly approvedBy: string;
-  readonly fixtureVersions: Readonly<Record<string, number>>;
   readonly passRateTolerance?: number;
 }): EvaluationBaseline {
-  const cases = groupResults(input.result.caseResults).map((group) => {
-    const first = group[0];
-    if (!first) throw new Error('Cannot approve an empty Baseline group.');
-    const fixtureVersion = input.fixtureVersions[first.caseId];
-    if (fixtureVersion === undefined) {
-      throw new Error(`Cannot approve Baseline without Fixture version: ${first.caseId}.`);
-    }
-    return {
-      caseId: first.caseId,
-      revision: first.revision,
-      profile: first.profile,
-      fixtureVersion,
-      candidateModel: input.result.candidateModel,
-      graderModelAndRuleVersion: input.result.graderModelAndRuleVersion,
-      sampleCount: group.length,
-      passRate: passRate(group),
-      hardGateFailureCount: group.filter(hasHardGateFailure).length,
-      requiredDimensionScores: Object.fromEntries(first.requiredDimensions.map((dimension) => [
-        dimension,
-        dimensionScores(group, dimension),
-      ])),
-      requiredDimensionPassRates: Object.fromEntries(first.requiredDimensions.map((dimension) => [
-        dimension,
-        dimensionPassRate(group, dimension),
-      ])),
-      measurementAverages: averageMeasurements(group),
-      measurementLimits: first.measurementLimits,
-    };
-  });
   return EvaluationBaselineSchema.parse({
     baselineId: input.baselineId,
     approvedAt: input.approvedAt,
     approvedBy: input.approvedBy,
     pinnedRunId: input.result.runId,
-    cases,
+    tasks: groupResults(input.result.taskResults).map((group) => {
+      const first = group[0];
+      if (!first) throw new Error('Cannot approve an empty Baseline group.');
+      const requiredMetricIds = first.metricResults
+        .filter((metric) => metric.required && metric.evaluator !== 'human')
+        .map((metric) => metric.metricId);
+      const modelMetricIds = first.metricResults.filter((metric) => metric.evaluator === 'model').map((metric) => metric.metricId);
+      return {
+        taskId: first.taskId,
+        revision: first.revision,
+        profile: first.profile,
+        candidateModel: input.result.candidateModel,
+        graderModelAndMetricVersion: input.result.graderModelAndMetricVersion,
+        sampleCount: group.length,
+        passRate: passRate(group),
+        requiredMetricPassRates: Object.fromEntries(requiredMetricIds.map((metricId) => [
+          metricId,
+          metricPassRate(group, metricId),
+        ])),
+        modelMetricScoreAverages: Object.fromEntries(modelMetricIds.map((metricId) => [
+          metricId,
+          averageMetricScore(group, metricId),
+        ])),
+        measurementAverages: averageMeasurements(group),
+      };
+    }),
     passRateTolerance: input.passRateTolerance ?? 0,
   });
 }
 
-function groupResults(results: readonly CaseEvaluationResult[]): CaseEvaluationResult[][] {
-  const groups = new Map<string, CaseEvaluationResult[]>();
+function groupResults(results: readonly TaskEvaluationResult[]): TaskEvaluationResult[][] {
+  const groups = new Map<string, TaskEvaluationResult[]>();
   for (const result of results) {
-    const key = `${result.caseId}\u0000${result.revision}\u0000${result.profile}`;
+    const key = `${result.taskId}\u0000${result.revision}\u0000${result.profile}`;
     const group = groups.get(key) ?? [];
     group.push(result);
     groups.set(key, group);
@@ -136,43 +120,25 @@ function groupResults(results: readonly CaseEvaluationResult[]): CaseEvaluationR
   return [...groups.values()];
 }
 
-function comparableKeyMatches(input: {
-  readonly baseline: z.infer<typeof BaselineCaseSchema>;
-  readonly current: CaseEvaluationResult;
-  readonly fixtureVersion: number | undefined;
-  readonly result: EvaluationRunResult;
-}): boolean {
-  return input.baseline.caseId === input.current.caseId
-    && input.baseline.revision === input.current.revision
-    && input.baseline.profile === input.current.profile
-    && input.baseline.fixtureVersion === input.fixtureVersion
-    && input.baseline.candidateModel === input.result.candidateModel
-    && input.baseline.graderModelAndRuleVersion === input.result.graderModelAndRuleVersion;
-}
-
-function passRate(group: readonly CaseEvaluationResult[]): number {
+function passRate(group: readonly TaskEvaluationResult[]): number {
   return group.filter((entry) => entry.status === 'passed').length / group.length;
 }
 
-function hasHardGateFailure(result: CaseEvaluationResult): boolean {
-  return result.grades.some((grade) => grade.grader === 'deterministic' && grade.judgement === 'fail');
+function metricPassRate(group: readonly TaskEvaluationResult[], metricId: string): number {
+  const results = group.flatMap((entry) => entry.metricResults.filter((metric) => (
+    metric.metricId === metricId && metric.evaluator !== 'human'
+  )));
+  return results.length === 0 ? 0 : results.filter((metric) => metric.judgement === 'pass').length / results.length;
 }
 
-function dimensionScores(group: readonly CaseEvaluationResult[], dimension: string): number[] {
-  return group.flatMap((entry) => entry.grades
-    .flatMap((grade) => (
-      grade.grader === 'model' && grade.dimension === dimension && grade.score !== undefined
-        ? [grade.score]
-        : []
-    )));
+function averageMetricScore(group: readonly TaskEvaluationResult[], metricId: string): number {
+  const scores = group.flatMap((entry) => entry.metricResults.flatMap((metric) => (
+    metric.metricId === metricId && metric.score !== undefined ? [metric.score] : []
+  )));
+  return scores.length === 0 ? 0 : scores.reduce((total, score) => total + score, 0) / scores.length;
 }
 
-function dimensionPassRate(group: readonly CaseEvaluationResult[], dimension: string): number {
-  const scores = dimensionScores(group, dimension);
-  return scores.length === 0 ? 0 : scores.filter((score) => score >= 3).length / scores.length;
-}
-
-function averageMeasurements(group: readonly CaseEvaluationResult[]): Record<string, number> {
+function averageMeasurements(group: readonly TaskEvaluationResult[]): Record<string, number> {
   const keys = Object.keys(group[0]?.measurements ?? {});
   return Object.fromEntries(keys.map((key) => [
     key,
@@ -180,7 +146,7 @@ function averageMeasurements(group: readonly CaseEvaluationResult[]): Record<str
   ]));
 }
 
-function measurementValue(result: CaseEvaluationResult, key: string): number {
+function measurementValue(result: TaskEvaluationResult, key: string): number {
   const value = Object.entries(result.measurements).find(([name]) => name === key)?.[1];
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

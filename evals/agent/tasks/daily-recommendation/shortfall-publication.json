@@ -1,0 +1,87 @@
+{
+  "taskId": "daily-recommendation.shortfall-publication",
+  "revision": 1,
+  "title": "候选不足时发布",
+  "objective": "Candidate 不足时应发布可用结果并如实记录 Shortfall。",
+  "difficulty": "medium",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "boundary"
+  ],
+  "runner": "daily_recommendation",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": []
+    },
+    "sessions": [],
+    "interests": [
+      {
+        "scenarioInterestId": "typescript",
+        "description": "TypeScript 工程实践",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "scenarioCandidateId": "only",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/only",
+        "title": "TypeScript 工程案例",
+        "description": "唯一可用候选。",
+        "contentText": "完整的工程案例内容。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "recommendations": [],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "input": {
+    "kind": "ensure_daily"
+  },
+  "completion": {
+    "kind": "daily_batch_terminal",
+    "timeoutMs": 180000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "relevance",
+      "title": "推荐相关性",
+      "evaluator": "model",
+      "rubric": "判断最终推荐是否与当前 Interest 和场景事实直接相关。",
+      "minScore": 3,
+      "required": false
+    },
+    {
+      "metricId": "publication_integrity",
+      "title": "发布完整性",
+      "evaluator": "model",
+      "rubric": "判断实际发布数量、Shortfall 和持久化结果是否与可用 Candidate 及目标数量一致。",
+      "minScore": 3,
+      "required": true
+    }
+  ]
+}

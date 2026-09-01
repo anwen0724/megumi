@@ -1,10 +1,10 @@
 /* Public entrypoint for local Agent Evaluation tooling. */
-export { loadEvaluationCatalog } from './catalog/evaluation-catalog';
-export { EvaluationCaseSchema } from './catalog/evaluation-case';
-export { EvaluationSuiteSchema } from './catalog/evaluation-suite';
-export { EvaluationRunConfigSchema } from './catalog/evaluation-run-config';
-export { EvaluationFixtureSchema } from './fixtures/fixture';
-export { runEvaluation } from './runtime/evaluation-runner';
+export { EvaluationMetricSchema } from './contracts/evaluation-metric';
+export { EvaluationRunConfigSchema } from './contracts/evaluation-run-config';
+export { EvaluationRunResultSchema } from './contracts/evaluation-result';
+export { EvaluationSuiteSchema } from './contracts/evaluation-suite';
+export { EvaluationTaskSchema } from './contracts/evaluation-task';
+export { approveBaseline, compareWithBaseline } from './reporting/baseline-comparator';
 export { renderEvaluationReport } from './reporting/report-writer';
-export { compareWithBaseline, approveBaseline } from './reporting/baseline-comparator';
-
+export { runEvaluation } from './runtime/evaluation-runner';
+export { loadEvaluationTaskCatalog } from './runtime/task-loader';

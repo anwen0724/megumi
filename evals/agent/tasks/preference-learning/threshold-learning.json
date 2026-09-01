@@ -1,0 +1,195 @@
+{
+  "taskId": "preference-learning.threshold-learning",
+  "revision": 1,
+  "title": "达到阈值后学习",
+  "objective": "累计反馈达到阈值后应形成有证据支持的稳定 Preference Revision。",
+  "difficulty": "medium",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core"
+  ],
+  "runner": "preference_learning",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": []
+    },
+    "sessions": [],
+    "interests": [
+      {
+        "scenarioInterestId": "typescript",
+        "description": "TypeScript 工程实践",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "scenarioCandidateId": "c1",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/p1",
+        "title": "TypeScript 深度文章 1",
+        "description": "深度内容。",
+        "contentText": "深入工程内容。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "c2",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/p2",
+        "title": "TypeScript 深度文章 2",
+        "description": "深度内容。",
+        "contentText": "深入工程内容。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "c3",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/p3",
+        "title": "TypeScript 深度文章 3",
+        "description": "深度内容。",
+        "contentText": "深入工程内容。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "c4",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/p4",
+        "title": "TypeScript 深度文章 4",
+        "description": "深度内容。",
+        "contentText": "深入工程内容。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "c5",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/p5",
+        "title": "TypeScript 深度文章 5",
+        "description": "深度内容。",
+        "contentText": "深入工程内容。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "recommendations": [
+      {
+        "scenarioRecommendationId": "r1",
+        "candidateScenarioId": "c1",
+        "reason": "相关深度文章",
+        "reaction": "liked"
+      },
+      {
+        "scenarioRecommendationId": "r2",
+        "candidateScenarioId": "c2",
+        "reason": "相关深度文章",
+        "reaction": "liked"
+      },
+      {
+        "scenarioRecommendationId": "r3",
+        "candidateScenarioId": "c3",
+        "reason": "相关深度文章",
+        "reaction": "liked"
+      },
+      {
+        "scenarioRecommendationId": "r4",
+        "candidateScenarioId": "c4",
+        "reason": "相关深度文章",
+        "reaction": "liked"
+      },
+      {
+        "scenarioRecommendationId": "target",
+        "candidateScenarioId": "c5",
+        "reason": "相关深度文章",
+        "reaction": "none"
+      }
+    ],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "input": {
+    "kind": "update_recommendation_feedback",
+    "recommendationId": "target",
+    "reaction": "liked"
+  },
+  "completion": {
+    "kind": "preference_learning_settled",
+    "timeoutMs": 180000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "no_evidence_conflict",
+      "title": "证据无冲突",
+      "evaluator": "rule",
+      "rule": "no_evidence_conflict",
+      "required": true
+    },
+    {
+      "metricId": "feedback_accuracy",
+      "title": "反馈事实准确性",
+      "evaluator": "model",
+      "rubric": "判断本次用户反馈及其变更事实是否被准确记录并用于学习。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "scope_assignment",
+      "title": "偏好作用域判断",
+      "evaluator": "model",
+      "rubric": "判断 Preference 是否归入正确 Interest 或全局作用域，没有错误扩大影响范围。",
+      "minScore": 3,
+      "required": false
+    },
+    {
+      "metricId": "evidence_sufficiency",
+      "title": "长期证据充分性",
+      "evaluator": "model",
+      "rubric": "判断新增或更新 Interest 的结论是否有会话中的明确、可追溯证据支撑。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "stability_usability",
+      "title": "稳定偏好的可用性",
+      "evaluator": "model",
+      "rubric": "判断形成的 Preference 是否稳定、具体，并能被后续推荐上下文直接使用。",
+      "minScore": 3,
+      "required": false
+    }
+  ]
+}

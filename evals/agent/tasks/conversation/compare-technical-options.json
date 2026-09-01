@@ -1,0 +1,126 @@
+{
+  "taskId": "conversation.compare-technical-options",
+  "revision": 1,
+  "title": "比较技术方案并形成决策报告",
+  "objective": "Agent 综合多份 Workspace 材料，形成有证据、有取舍、有风险说明的技术选型报告。",
+  "difficulty": "medium",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core",
+    "analysis",
+    "file-work"
+  ],
+  "runner": "conversation",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": [
+        {
+          "path": "materials/requirements.md",
+          "content": "# 需求\n\n离线优先；单机数据规模低于 2 GiB；TypeScript 团队维护；启动时间优先；必须支持事务和全文检索。\n"
+        },
+        {
+          "path": "materials/sqlite.md",
+          "content": "# SQLite 方案\n\n嵌入式、事务成熟、支持 FTS5、无需独立服务；需要迁移管理和原生模块构建。\n"
+        },
+        {
+          "path": "materials/document-store.md",
+          "content": "# 文档存储方案\n\nJSON 模型灵活、开发直观；复杂事务、关联查询和全文检索需要额外实现，数据一致性依赖应用层。\n"
+        }
+      ]
+    },
+    "sessions": [],
+    "interests": [],
+    "candidates": [],
+    "recommendations": [],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "steps": [
+    {
+      "userInput": "读取 materials 下的三份文档，创建 reports/storage-decision.md。报告必须包含“## 约束与评价标准”“## 方案对比”“## 推荐结论”“## 风险与缓解”，明确推荐一个方案，并让每项关键判断能对应到材料事实。不要修改 materials。",
+      "permissionMode": "full_access"
+    }
+  ],
+  "completion": {
+    "kind": "conversation_steps_terminal",
+    "timeoutMs": 180000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "workspace_files_exist",
+      "title": "目标文件已生成",
+      "evaluator": "rule",
+      "rule": "workspace_files_exist",
+      "paths": [
+        "reports/storage-decision.md"
+      ],
+      "required": true
+    },
+    {
+      "metricId": "storage_decision_structure",
+      "title": "目标文件结构完整",
+      "evaluator": "rule",
+      "rule": "workspace_file_contains",
+      "path": "reports/storage-decision.md",
+      "contains": [
+        "## 约束与评价标准",
+        "## 方案对比",
+        "## 推荐结论",
+        "## 风险与缓解"
+      ],
+      "required": true
+    },
+    {
+      "metricId": "task_completion",
+      "title": "任务完成度",
+      "evaluator": "model",
+      "rubric": "判断 Agent 是否读取全部三份材料、只创建目标报告，并明确给出一个推荐方案。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "evidence_use",
+      "title": "材料证据使用",
+      "evaluator": "model",
+      "rubric": "判断主要对比结论是否可由给定需求和两份方案材料支撑，没有编造关键事实。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "decision_quality",
+      "title": "技术决策质量",
+      "evaluator": "model",
+      "rubric": "判断评价标准、取舍、结论和风险缓解是否形成一致且可执行的技术决策。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "tool_use",
+      "title": "完成了多文件读取与写入",
+      "evaluator": "measurement",
+      "measurement": "toolCalls",
+      "operator": "min",
+      "threshold": 3,
+      "required": true
+    }
+  ]
+}

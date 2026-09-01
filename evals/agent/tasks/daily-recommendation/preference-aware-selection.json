@@ -1,0 +1,151 @@
+{
+  "taskId": "daily-recommendation.preference-aware-selection",
+  "revision": 1,
+  "title": "遵守稳定偏好选择",
+  "objective": "推荐选择应遵守已有正负偏好并保持相关性。",
+  "difficulty": "medium",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core"
+  ],
+  "runner": "daily_recommendation",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": []
+    },
+    "sessions": [],
+    "interests": [
+      {
+        "scenarioInterestId": "typescript",
+        "description": "TypeScript 工程实践",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "scenarioCandidateId": "seed",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/seed",
+        "title": "TypeScript 快讯",
+        "description": "简短快讯。",
+        "contentText": "一则缺乏深度的快讯。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "adjacent"
+      },
+      {
+        "scenarioCandidateId": "a",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/a",
+        "title": "TypeScript 类型系统深度分析",
+        "description": "完整分析类型系统。",
+        "contentText": "深入分析 TypeScript 类型系统的设计与实践。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "b",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/b",
+        "title": "TypeScript 工程迁移指南",
+        "description": "工程迁移案例。",
+        "contentText": "大型项目迁移 TypeScript 的工程经验。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "c",
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/c",
+        "title": "JavaScript 普通资讯",
+        "description": "弱相关资讯。",
+        "contentText": "一般 JavaScript 新闻。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "exploration"
+      }
+    ],
+    "recommendations": [
+      {
+        "scenarioRecommendationId": "seed-rec",
+        "candidateScenarioId": "seed",
+        "reason": "用于形成偏好证据",
+        "reaction": "disliked"
+      }
+    ],
+    "preferences": [
+      {
+        "scopeKey": "interest:evaluation:interest:typescript",
+        "directionId": "prefer-depth",
+        "polarity": "negative",
+        "dimension": "expression_quality",
+        "statement": "避免缺乏实质内容的简短快讯",
+        "supportingRecommendationScenarioIds": [
+          "seed-rec"
+        ]
+      }
+    ],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "input": {
+    "kind": "ensure_daily"
+  },
+  "completion": {
+    "kind": "daily_batch_terminal",
+    "timeoutMs": 180000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "no_evidence_conflict",
+      "title": "证据无冲突",
+      "evaluator": "rule",
+      "rule": "no_evidence_conflict",
+      "required": true
+    },
+    {
+      "metricId": "relevance",
+      "title": "推荐相关性",
+      "evaluator": "model",
+      "rubric": "判断最终推荐是否与当前 Interest 和场景事实直接相关。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "negative_preference",
+      "title": "负向偏好遵守",
+      "evaluator": "model",
+      "rubric": "判断推荐是否遵守已形成的负向 Preference，没有再次选择明确不喜欢的表达或内容。",
+      "minScore": 3,
+      "required": true
+    }
+  ]
+}

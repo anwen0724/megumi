@@ -1,0 +1,65 @@
+{
+  "taskId": "candidate-supply.source-failure-settlement",
+  "revision": 1,
+  "title": "来源无结果结算",
+  "objective": "来源未产出时检查仍应形成明确、可恢复的结算。",
+  "difficulty": "complex",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "reliability"
+  ],
+  "runner": "candidate_supply",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": []
+    },
+    "sessions": [],
+    "interests": [
+      {
+        "scenarioInterestId": "typescript",
+        "description": "TypeScript 编译器演进",
+        "status": "active"
+      }
+    ],
+    "candidates": [],
+    "recommendations": [],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "input": {
+    "kind": "request_candidate_supply"
+  },
+  "completion": {
+    "kind": "candidate_supply_terminal",
+    "timeoutMs": 180000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "reliability_recovery",
+      "title": "可靠性与恢复",
+      "evaluator": "model",
+      "rubric": "判断无结果、来源失败或部分失败时是否有明确结算，且产品状态仍可继续运行和重试。",
+      "minScore": 3,
+      "required": true
+    }
+  ]
+}

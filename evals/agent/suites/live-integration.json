@@ -4,9 +4,8 @@
   "title": "Live Integration",
   "purpose": "使用实时外部依赖验证会话和候选供给的实际表现与趋势。",
   "profile": "live",
-  "caseIds": [
-    "conversation.contextual-answer",
+  "taskIds": [
+    "conversation.create-architecture-note",
     "candidate-supply.relevant-pool-refill"
-  ],
-  "sharedEnvironment": false
+  ]
 }

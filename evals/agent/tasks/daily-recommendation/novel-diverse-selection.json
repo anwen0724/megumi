@@ -1,0 +1,121 @@
+{
+  "taskId": "daily-recommendation.novel-diverse-selection",
+  "revision": 1,
+  "title": "新颖且多样的组合",
+  "objective": "固定 Pool 中的推荐组合应兼顾相关性、新颖性、多样性和适量探索。",
+  "difficulty": "medium",
+  "profiles": [
+    "controlled"
+  ],
+  "tags": [
+    "core"
+  ],
+  "runner": "daily_recommendation",
+  "scenario": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 3,
+    "workspace": {
+      "files": []
+    },
+    "sessions": [],
+    "interests": [
+      {
+        "scenarioInterestId": "typescript",
+        "description": "TypeScript 生态与工程实践",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "scenarioCandidateId": "a",
+        "sourceId": "open_web",
+        "sourceName": "Official",
+        "canonicalUrl": "https://example.test/novel-a",
+        "title": "TypeScript 发布说明",
+        "description": "语言新特性。",
+        "contentText": "官方语言更新。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "b",
+        "sourceId": "open_web",
+        "sourceName": "Engineering Blog",
+        "canonicalUrl": "https://example.test/novel-b",
+        "title": "大型 TypeScript 项目实践",
+        "description": "工程案例。",
+        "contentText": "大型工程的实践经验。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "scenarioCandidateId": "c",
+        "sourceId": "open_web",
+        "sourceName": "Research",
+        "canonicalUrl": "https://example.test/novel-c",
+        "title": "类型系统研究动态",
+        "description": "相邻研究主题。",
+        "contentText": "类型系统研究的新方向。",
+        "matchedInterestScenarioIds": [
+          "typescript"
+        ],
+        "relevance": "exploration"
+      }
+    ],
+    "recommendations": [],
+    "preferences": [],
+    "controlledSearch": [],
+    "permissionDecision": "allow"
+  },
+  "input": {
+    "kind": "ensure_daily"
+  },
+  "completion": {
+    "kind": "daily_batch_terminal",
+    "timeoutMs": 180000
+  },
+  "metrics": [
+    {
+      "metricId": "business_completion_present",
+      "title": "业务执行已完成",
+      "evaluator": "rule",
+      "rule": "business_completion_present",
+      "required": true
+    },
+    {
+      "metricId": "trace_correlated",
+      "title": "Trace 可关联",
+      "evaluator": "rule",
+      "rule": "trace_correlated",
+      "required": true
+    },
+    {
+      "metricId": "relevance",
+      "title": "推荐相关性",
+      "evaluator": "model",
+      "rubric": "判断最终推荐是否与当前 Interest 和场景事实直接相关。",
+      "minScore": 3,
+      "required": true
+    },
+    {
+      "metricId": "novelty",
+      "title": "推荐新颖性",
+      "evaluator": "model",
+      "rubric": "判断推荐是否避免已经消费或语义重复的内容，并提供新的信息价值。",
+      "minScore": 3,
+      "required": false
+    },
+    {
+      "metricId": "diversity_exploration",
+      "title": "多样性与探索",
+      "evaluator": "model",
+      "rubric": "判断推荐组合是否在核心相关内容之外保持合理的来源、主题或探索多样性。",
+      "minScore": 3,
+      "required": true
+    }
+  ]
+}

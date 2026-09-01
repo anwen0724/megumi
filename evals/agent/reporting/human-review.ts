@@ -1,13 +1,19 @@
-/* Imports additive Human Grader results without replacing automated grades. */
+/* Imports additive Human Metric results without replacing automated evaluation. */
 import { z } from 'zod';
-import { GraderResultSchema } from '../runtime/grading';
-import { EvaluationRunResultSchema, type EvaluationRunResult } from '../runtime/evaluation-result';
+import {
+  EvaluationRunResultSchema,
+  TaskMetricResultSchema,
+  type EvaluationRunResult,
+} from '../contracts/evaluation-result';
 
 export const HumanReviewImportSchema = z.object({
   runId: z.string().min(1),
   reviews: z.array(z.object({
-    caseRunId: z.string().min(1),
-    grade: GraderResultSchema.refine((grade) => grade.grader === 'human', 'Review grade must use the human Grader.'),
+    taskRunId: z.string().min(1),
+    result: TaskMetricResultSchema.refine(
+      (result) => result.evaluator === 'human',
+      'Human Review result must use the human evaluator.',
+    ),
   }).strict()),
 }).strict();
 
@@ -16,13 +22,14 @@ export function importHumanReview(result: EvaluationRunResult, raw: unknown): Ev
   if (review.runId !== result.runId) throw new Error('Human Review Run ID does not match the Evaluation result.');
   return EvaluationRunResultSchema.parse({
     ...result,
-    caseResults: result.caseResults.map((caseResult) => ({
-      ...caseResult,
-      grades: [
-        ...caseResult.grades,
-        ...review.reviews.filter((entry) => entry.caseRunId === caseResult.caseRunId).map((entry) => entry.grade),
+    taskResults: result.taskResults.map((taskResult) => ({
+      ...taskResult,
+      metricResults: [
+        ...taskResult.metricResults,
+        ...review.reviews
+          .filter((entry) => entry.taskRunId === taskResult.taskRunId)
+          .map((entry) => entry.result),
       ],
     })),
   });
 }
-

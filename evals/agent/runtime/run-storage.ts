@@ -4,9 +4,9 @@ import path from 'node:path';
 
 export interface EvaluationRunStorage {
   readonly runDirectory: string;
-  caseDirectory(caseRunId: string): string;
+  taskDirectory(taskRunId: string): string;
   writeManifest(manifest: unknown): Promise<void>;
-  writeEvidence(caseRunId: string, evidence: unknown): Promise<string>;
+  writeEvidence(taskRunId: string, evidence: unknown): Promise<string>;
   writeResult(result: unknown): Promise<string>;
   writeBaselineComparison(comparison: unknown): Promise<string>;
   writeReport(content: string): Promise<string>;
@@ -17,10 +17,10 @@ export async function createRunStorage(root: string, runId: string): Promise<Eva
   await mkdir(runDirectory, { recursive: true });
   return {
     runDirectory,
-    caseDirectory: (caseRunId) => path.join(runDirectory, 'cases', safeSegment(caseRunId)),
+    taskDirectory: (taskRunId) => path.join(runDirectory, 'tasks', safeSegment(taskRunId)),
     writeManifest: (manifest) => writeJson(path.join(runDirectory, 'manifest.json'), manifest),
-    async writeEvidence(caseRunId, evidence) {
-      const file = path.join(runDirectory, 'evidence', `${safeSegment(caseRunId)}.json`);
+    async writeEvidence(taskRunId, evidence) {
+      const file = path.join(runDirectory, 'evidence', `${safeSegment(taskRunId)}.json`);
       await writeJson(file, evidence);
       return file;
     },
