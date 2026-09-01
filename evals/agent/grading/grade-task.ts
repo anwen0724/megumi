@@ -94,7 +94,7 @@ async function evaluateModelMetrics(
         judgement: 'not_gradable' as const,
         rationale: `Model Grader unavailable: ${message}`,
         evidenceRefs: [],
-        promptVersion: 'evaluation-model-metrics-v2',
+        promptVersion: 'evaluation-model-metrics-v3',
         evaluatedAt: input.now,
       })),
       usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 },

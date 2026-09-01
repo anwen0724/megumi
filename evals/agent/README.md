@@ -9,7 +9,8 @@ Task JSON
   → 安装 initialState
   → input 调用真实 ProductRuntime
   → 等待真实业务终态
-  → 收集结果、Workspace 产物和 Trace 引用
+  → 用 typed Trace Target 等待并读取原生 Trace
+  → 构造结构化 Evidence 与 Measurement
   → 按 Task 声明的 Metrics 评分
   → 有效运行生成 report.md；基础设施失败生成 diagnostics.md
 ```
@@ -41,7 +42,23 @@ npm run eval:agent -- tasks validate
 npm run eval:agent -- run <config.json>
 ```
 
-`controlled` 使用确定性的来源、权限和时间 Adapter，但模型调用仍通过 `@megumi/ai` 的真实接口；`live` 使用真实来源。两者执行的业务代码相同。
+`controlled` 使用确定性的来源、权限和时间 Adapter，但模型调用仍通过 `@megumi/ai` 的真实接口；启动 Runtime 时使用 `manual` 后台触发策略，避免目标任务被启动补池、每日补偿和偏好积压排空抢占。`live` 使用真实来源和产品默认的 `automatic` 后台触发。两者执行的业务代码相同。
+
+## Trace Target、Evidence 与 Measurement
+
+Evaluation 不按 `input.type` 猜 Trace，也不扫描任意 JSON 猜测结果。真实业务完成后，执行层返回带 `traceKind`、`correlation` 和 `expectation` 的 Trace Target：
+
+- Conversation 用 `executionId` 定位每轮会话 Trace；
+- Interest Understanding 同时保留源 Conversation Trace，只有产生 `interestUnderstandingId` 后才要求理解 Trace；
+- Candidate Supply 只有真正开始执行时，才用 `candidateSupplyId + executionId` 定位 Trace；`no_gap`、`cooldown` 等未执行结果不查询空 Trace；
+- Daily Recommendation 用 `dailyRecommendationBatchId + executionId` 定位本轮批次；
+- Preference Learning 用 `preferenceLearningBatchId` 定位学习批次，`feedbackChangeId` 只用于等待业务完成。
+
+业务结束后，Evaluation 最多等待 2 秒完成 `flush → list → get`。查询失败、应有 Trace 丢失和 Trace 诊断不完整分别记录为 `trace_query_failed`、`correlated_trace_missing` 和 `trace_incomplete`，条件未触发不会误报。
+
+Grader 接收的 Evidence 固定分为 `input`、`context`、`execution`、`output` 和 `measurement`。Trace、Content 和 Measurement 都只通过 Product Host 读取；Daily Recommendation 的历史推荐放在 Context，本轮批次和 `recommendation.published` 放在 Output；Preference Learning 分别保存本批 Feedback、学习前 Revision 与学习后 Revision。
+
+调用次数、Token 和费用由 `@megumi/observability` 从原生 Trace 与 `model.response` Content 派生，不写第二份 Measurement 日志。业务产出数量来自对应的 typed 完成结果。指标无法可靠取得时，Measurement Grader 返回 `not_gradable`，不会把缺失值当作零。
 
 ## 目录职责
 
@@ -53,4 +70,4 @@ npm run eval:agent -- run <config.json>
 - `grading/`：Rule、Model、Measurement 三类评分器。
 - `results/`：结果持久化、报告、诊断、Baseline 与人工复核。
 
-完整 Trace 仍保存在该隔离任务的 Observability Journal 中。Evaluation Observation 只保存 Trace ID、紧凑摘要、业务结果、Workspace 产物和 Measurement，避免复制一套 Trace 数据。
+完整 Trace 仍保存在该隔离任务的 Observability Journal 中。Evaluation Observation 保存 Trace ID、紧凑 Span 摘要、当前任务需要的分区 Content Evidence、业务结果、Workspace 产物和 Measurement，不复制完整 Journal 或 Runtime Event 流。

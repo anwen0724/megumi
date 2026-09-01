@@ -114,8 +114,8 @@ export async function collectTraceEvidence(input: {
   let completedPass = false;
 
   while (
-    Date.now() <= deadline
-    && (!completedPass || hasPendingRequiredTarget(targets, resolvedTargets, failedTargets))
+    !completedPass
+    || (Date.now() <= deadline && hasPendingRequiredTarget(targets, resolvedTargets, failedTargets))
   ) {
     try {
       await input.runtime.host.observability.flush();
