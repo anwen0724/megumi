@@ -2,7 +2,10 @@
 import { describe, expect, it } from 'vitest';
 import { EvaluationTaskSchema } from '../../evals/agent/contracts/evaluation-task';
 import { gradeTask } from '../../evals/agent/grading/grade-task';
-import type { ModelMetricEvaluator } from '../../evals/agent/grading/model-grader';
+import {
+  selectModelGraderEvidence,
+  type ModelMetricEvaluator,
+} from '../../evals/agent/grading/model-grader';
 import { TaskObservationSchema } from '../../evals/agent/execution/observe-task';
 
 describe('Evaluation grading', () => {
@@ -77,6 +80,38 @@ describe('Evaluation grading', () => {
       expect.objectContaining({ metricId: 'tools', judgement: 'not_gradable' }),
     ]));
   });
+
+  it('keeps decision evidence but excludes duplicated Context and Provider payloads from Model Grading', () => {
+    const base = observation();
+    const withDiagnosticPayloads = TaskObservationSchema.parse({
+      ...base,
+      evidence: {
+        ...base.evidence,
+        context: {
+          ...base.evidence.context,
+          traceContent: [contentEvidence('prompt.final')],
+        },
+        execution: {
+          ...base.evidence.execution,
+          traceContent: [
+            contentEvidence('model.provider_request'),
+            contentEvidence('tool.result'),
+            contentEvidence('source.result'),
+          ],
+        },
+        output: {
+          ...base.evidence.output,
+          traceContent: [contentEvidence('model.response')],
+        },
+      },
+    });
+
+    const selected = selectModelGraderEvidence(withDiagnosticPayloads);
+
+    expect(selected.context).not.toHaveProperty('traceContent');
+    expect(selected.execution.traceContent.map(({ kind }) => kind)).toEqual(['tool.result', 'source.result']);
+    expect(selected.output.traceContent.map(({ kind }) => kind)).toEqual(['model.response']);
+  });
 });
 
 function evaluationTask() {
@@ -136,4 +171,11 @@ function observation(unavailable: readonly ('toolCalls')[] = []) {
     measurements,
     issues: [],
   });
+}
+
+function contentEvidence(kind: string) {
+  return {
+    traceId: 'trace:1', sequence: 1, kind, status: 'available' as const,
+    encoding: 'json' as const, mediaType: 'application/json', byteLength: 2, body: '{}',
+  };
 }

@@ -102,7 +102,7 @@ export function createModelMetricEvaluator(input: {
                 rubric: metric.rubric,
                 scoreScale: '0-4',
               })),
-              evidence: request.observation.evidence,
+              evidence: selectModelGraderEvidence(request.observation),
               output: {
                 results: [{
                   metricId: 'string',
@@ -151,6 +151,43 @@ export function createModelMetricEvaluator(input: {
       };
     },
   };
+}
+
+/** Removes duplicated diagnostic payloads while preserving facts needed to judge product behavior. */
+export function selectModelGraderEvidence(observation: TaskObservation) {
+  const evidence = observation.evidence;
+  const productResult = observation.operation === 'conversation' || observation.operation === 'interest_understanding'
+    ? evidence.output.productResult
+    : {};
+  return {
+    input: {
+      task: evidence.input.task,
+      business: evidence.input.business,
+    },
+    context: {
+      business: evidence.context.business,
+    },
+    execution: {
+      outcome: evidence.execution.outcome,
+      traces: evidence.execution.traces,
+      traceContent: evidence.execution.traceContent.filter(isDecisionEvidence),
+    },
+    output: {
+      productResult,
+      business: evidence.output.business,
+      workspaceFiles: evidence.output.workspaceFiles,
+      traceContent: evidence.output.traceContent,
+    },
+    measurement: evidence.measurement,
+  };
+}
+
+function isDecisionEvidence(content: TaskObservation['evidence']['execution']['traceContent'][number]): boolean {
+  return content.kind.startsWith('tool.')
+    || content.kind.startsWith('permission.')
+    || content.kind.startsWith('source.')
+    || content.kind.startsWith('candidate.')
+    || content.kind.startsWith('discovery.');
 }
 
 function emptyOutcome(): ModelMetricEvaluationOutcome {
