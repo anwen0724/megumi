@@ -35,6 +35,7 @@ export interface EvaluationRunnerDependencies {
 /** Executes the selected Tasks and persists one valid quality result or invalid diagnostic result. */
 export async function runEvaluation(input: {
   readonly repositoryRoot: string;
+  readonly evaluationRoot: string;
   readonly catalog: EvaluationTaskCatalog;
   readonly config: EvaluationRunConfig;
   readonly models: ResolvedEvaluationModels;
@@ -44,7 +45,7 @@ export async function runEvaluation(input: {
   const runId = input.dependencies.createRunId?.() ?? `run:${crypto.randomUUID()}`;
   const startedAt = now().toISOString();
   const productVersion = await readProductVersion(input.repositoryRoot);
-  const storage = await createRunStorage(input.config.runRoot, runId);
+  const storage = await createRunStorage(input.evaluationRoot, runId);
   const scheduled = scheduleTasks(input.catalog.resolveTasks(input.config), input.config.repetitions);
   await storage.writeManifest({
     runId,

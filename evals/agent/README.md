@@ -42,6 +42,8 @@ npm run eval:agent -- tasks validate
 npm run eval:agent -- run <config.json>
 ```
 
+运行产物固定保存在 `evals/agent/runs/<runId>/`，属于本地开发评估数据并由 Git 忽略。Run Config 不负责选择输出目录，评估数据不会写入产品 `.megumi`。
+
 `controlled` 使用确定性的来源、权限和时间 Adapter，但模型调用仍通过 `@megumi/ai` 的真实接口；启动 Runtime 时使用 `manual` 后台触发策略，避免目标任务被启动补池、每日补偿和偏好积压排空抢占。`live` 使用真实来源和产品默认的 `automatic` 后台触发。两者执行的业务代码相同。
 
 ## Trace Target、Evidence 与 Measurement
@@ -63,11 +65,13 @@ Grader 接收的 Evidence 固定分为 `input`、`context`、`execution`、`outp
 ## 目录职责
 
 - `contracts/`：Task、Metric、Suite、Run Config 与结果 Contract。
+- `configs/`：可直接运行的开发期评估配置。
 - `tasks/`：可独立扩展的评估任务。
 - `suites/`：按运行目的组合 Task。
 - `adapters/`：Controlled/Live 环境差异以及评估模型解析。
 - `execution/`：隔离环境、初始状态安装、真实产品调用、观察与 Run 编排。
 - `grading/`：Rule、Model、Measurement 三类评分器。
 - `results/`：结果持久化、报告、诊断、Baseline 与人工复核。
+- `runs/`：本地生成的 Run、Observation、隔离产品数据和报告，不提交 Git。
 
 完整 Trace 仍保存在该隔离任务的 Observability Journal 中。Evaluation Observation 保存 Trace ID、紧凑 Span 摘要、当前任务需要的分区 Content Evidence、业务结果、Workspace 产物和 Measurement，不复制完整 Journal 或 Runtime Event 流。

@@ -92,7 +92,6 @@ function runConfig(models: Readonly<Record<'candidateModel' | 'graderModel', unk
     suiteIds: [],
     ...models,
     budget: { maxTasks: 1 },
-    runRoot: '.megumi/evaluation',
   };
 }
 

@@ -65,7 +65,6 @@ export const EvaluationRunConfigSchema = z.object({
     maxEstimatedCostUsd: z.number().positive().optional(),
   }).strict(),
   baseline: z.object({ baselineId: z.string().min(1) }).strict().optional(),
-  runRoot: z.string().min(1),
 }).strict().superRefine((config, context) => {
   if (config.taskIds.length === 0 && config.suiteIds.length === 0) {
     context.addIssue({

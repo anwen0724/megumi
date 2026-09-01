@@ -46,6 +46,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
     });
     const { result, storage } = await runEvaluation({
       repositoryRoot,
+      evaluationRoot,
       catalog,
       config,
       models,
@@ -55,7 +56,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
       ? compareWithBaseline({
           result,
           baseline: EvaluationBaselineSchema.parse(await readJson(path.join(
-            config.runRoot,
+            evaluationRoot,
             'baselines',
             `${config.baseline.baselineId}.json`,
           ))),
@@ -67,7 +68,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
     } else {
       await storage.writeDiagnostics(renderEvaluationDiagnostics(result));
     }
-    await cleanEvaluationRuns({ evaluationRoot: config.runRoot });
+    await cleanEvaluationRuns({ evaluationRoot });
     process.stdout.write(`Evaluation ${result.infrastructureStatus}: ${storage.runDirectory}\n`);
     return;
   }

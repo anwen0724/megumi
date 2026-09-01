@@ -30,13 +30,13 @@ describe('Evaluation execution', () => {
     const config = EvaluationRunConfigSchema.parse({
       profile: 'controlled', taskIds: [task.taskId], suiteIds: [],
       candidateModel: { source: 'current' }, graderModel: { source: 'current' },
-      repetitions: 1, concurrency: 1, budget: { maxTasks: 1 }, runRoot: temporaryRoot,
+      repetitions: 1, concurrency: 1, budget: { maxTasks: 1 },
     });
     const model = resolvedModel();
     const scripted = createScriptedStreams(['The requested task is complete.']);
 
     const { result, storage } = await runEvaluation({
-      repositoryRoot: process.cwd(), catalog, config,
+      repositoryRoot: process.cwd(), evaluationRoot: temporaryRoot, catalog, config,
       models: { candidate: model, grader: model },
       dependencies: {
         createRunId: () => 'run:test',
@@ -59,6 +59,7 @@ describe('Evaluation execution', () => {
         infrastructureStatus: 'valid',
       }],
     });
+    expect(storage.runDirectory).toBe(path.join(temporaryRoot, 'runs', 'run_test'));
     const observationPath = result.taskResults[0]?.observationPath;
     expect(observationPath).toBeTruthy();
     const observation = readFileSync(observationPath!, 'utf8');

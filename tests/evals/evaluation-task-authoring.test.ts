@@ -64,7 +64,6 @@ describe('Evaluation Task authoring', () => {
       repetitions: 1,
       concurrency: 1,
       budget: { maxTasks: 10 },
-      runRoot: path.join(root, 'runs'),
     }));
 
     expect(catalog.tasks.size).toBe(2);
