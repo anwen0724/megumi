@@ -112,7 +112,7 @@ export function createPreferenceLearningRuntime(
         const batch = await observeSpan(
           options.observability,
           'preference.batch.claim',
-          { batchId },
+          { preferenceLearningBatchId: batchId },
           () => Promise.resolve(options.repository.claimPreferenceLearningBatch({
             batchId,
             reason: trigger.reason,
@@ -167,7 +167,7 @@ async function processBatch(
     if (built.status === 'failed') {
       throw new LearningFailure(built.failure.code, built.failure.message);
     }
-    const modelCorrelation = { batchId, modelCallId };
+    const modelCorrelation = { preferenceLearningBatchId: batchId, modelCallId };
     const modelRequest = {
       model: {
         providerId: model.provider,
@@ -207,7 +207,7 @@ async function processBatch(
     const committed = await observeSpan(
       options.observability,
       'preference.commit',
-      { batchId },
+      { preferenceLearningBatchId: batchId },
       () => Promise.resolve(options.repository.commitPreferenceLearningBatch({
         batchId,
         committedAt: options.now(),
@@ -221,7 +221,7 @@ async function processBatch(
       batchId,
       scopes,
       affectedInterestIds: committed.affectedInterestIds,
-    }, { batchId });
+    }, { preferenceLearningBatchId: batchId });
     safeNotifyCommitted(options, committed.affectedInterestIds);
     return { status: 'committed' };
   } catch (error) {
@@ -232,7 +232,7 @@ async function processBatch(
     await observeSpan(
       options.observability,
       'preference.batch.settle',
-      { batchId },
+      { preferenceLearningBatchId: batchId },
       () => Promise.resolve(options.repository.failPreferenceLearningBatch({
         batchId,
         failedAt,
@@ -295,7 +295,7 @@ async function observeLearningTrace(
   try {
     return await observability.withTrace({
       kind: 'preference_learning',
-      correlation: { batchId },
+      correlation: { preferenceLearningBatchId: batchId },
       classifyResult: classifyLearningResult,
     }, runOnce);
   } catch {

@@ -14,7 +14,11 @@ import {
   decodeTraceJournalLine,
   type TraceJournalRecord,
 } from '../persistence/trace-journal-record';
-import { TraceCorrelationSchema } from '../trace/trace-contract';
+import {
+  TRACE_CORRELATION_ARRAY_KEYS,
+  TRACE_CORRELATION_SCALAR_KEYS,
+  TraceCorrelationSchema,
+} from '../trace/trace-contract';
 import type { TraceListQuery, TraceReader, TraceSummaryProjection } from './trace-query';
 import {
   projectTrace,
@@ -32,12 +36,6 @@ const InvalidRecordIdentitySchema = z.object({
   traceId: z.string().uuid(),
   sequence: z.number().int().positive().optional(),
 }).passthrough();
-
-const SCALAR_CORRELATION_KEYS = [
-  'requestId', 'executionId', 'sessionId', 'messageId', 'workspaceId', 'batchId',
-  'compactionId', 'modelCallId', 'toolCallId', 'sourceId', 'candidateId',
-  'recommendationId', 'contentId', 'contentDigest', 'providerAttempt', 'discoveryAttempt',
-] as const;
 
 interface ScannedTraceFacts {
   readonly records: TraceJournalRecord[];
@@ -477,13 +475,14 @@ function correlationSetContains(
   required: TraceProjection['correlations'][number],
 ): boolean {
   const parsed = TraceCorrelationSchema.parse(required);
-  for (const key of SCALAR_CORRELATION_KEYS) {
+  for (const key of TRACE_CORRELATION_SCALAR_KEYS) {
     if (parsed[key] !== undefined && !candidates.some((candidate) => candidate[key] === parsed[key])) {
       return false;
     }
   }
-  return !parsed.recommendationIds || parsed.recommendationIds.every((recommendationId) => (
-    candidates.some((candidate) => candidate.recommendationIds?.includes(recommendationId))
+  return TRACE_CORRELATION_ARRAY_KEYS.every((key) => (
+    parsed[key] === undefined
+    || parsed[key].every((value) => candidates.some((candidate) => candidate[key]?.includes(value)))
   ));
 }
 

@@ -39,7 +39,7 @@ export type CandidateSupplyTrigger =
 export interface CandidateSupplyRuntime {
   start(): Promise<void>;
   notify(trigger: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined;
-  getCheck(candidateSupplyCheckId: string): CandidateSupplyCheck | undefined;
+  getCheck(candidateSupplyId: string): CandidateSupplyCheck | undefined;
   shutdown(): Promise<void>;
 }
 
@@ -177,7 +177,7 @@ export function createCandidateSupplyRuntime(
     let attemptSummary: CandidateSupplyAttemptSummary | undefined;
     let outcome: ExecutionOutcome;
     try {
-      outcome = await withTrace(options.observability, async () => {
+      outcome = await withTrace(options.observability, receipt.candidateSupplyId, async () => {
         const started = await options.startExecution({
           kind: 'candidate_supply',
           requestId: `candidate-supply-request:${randomUUID()}`,
@@ -292,13 +292,13 @@ function createCheck(
   trigger: CandidateSupplyTrigger,
 ): CandidateSupplyCheckReceipt {
   const check = options.repository.createSupplyCheck({
-    candidateSupplyCheckId: options.ids.createCheckId(),
+    candidateSupplyId: options.ids.createCheckId(),
     trigger,
     status: 'queued',
     requestedAt: options.now(),
   });
   return {
-    candidateSupplyCheckId: check.candidateSupplyCheckId,
+    candidateSupplyId: check.candidateSupplyId,
     trigger: check.trigger,
     status: 'queued',
     requestedAt: check.requestedAt,
@@ -337,7 +337,7 @@ function failCheck(
   receipt: CandidateSupplyCheckReceipt,
   error: unknown,
 ): void {
-  const current = options.repository.getSupplyCheck(receipt.candidateSupplyCheckId);
+  const current = options.repository.getSupplyCheck(receipt.candidateSupplyId);
   if (!current || current.status === 'completed' || current.status === 'failed' || current.status === 'interrupted') {
     return;
   }
@@ -476,6 +476,7 @@ function getSnapshot(options: CreateCandidateSupplyRuntimeOptions, now: string):
 
 async function withTrace(
   observability: Observability | undefined,
+  candidateSupplyId: string,
   operation: () => Promise<ExecutionOutcome>,
 ): Promise<ExecutionOutcome> {
   let promise: Promise<ExecutionOutcome> | undefined;
@@ -485,7 +486,7 @@ async function withTrace(
     return await observability.withTrace({
       kind: 'candidate_supply',
       classifyResult: classifyExecutionOutcome,
-      correlation: {},
+      correlation: { candidateSupplyId },
     }, runOnce);
   } catch {
     return runOnce();

@@ -3,6 +3,7 @@
  * Content bodies cross this boundary only through the explicit lazy-read operation.
  */
 import { z } from 'zod';
+import { TraceCorrelationSchema } from '@megumi/observability';
 
 const TraceStatusSchema = z.enum(['ok', 'error', 'cancelled', 'incomplete']);
 const TraceDiagnosticsSchema = z.enum(['complete', 'incomplete']);
@@ -35,19 +36,7 @@ const TraceOutcomeSchema = z.discriminatedUnion('status', [
   }).strict(),
 ]);
 
-export const ObservabilityCorrelationSchema = z.object({
-  requestId: z.string().optional(), executionId: z.string().optional(),
-  sessionId: z.string().optional(), messageId: z.string().optional(),
-  workspaceId: z.string().optional(), batchId: z.string().optional(),
-  compactionId: z.string().optional(), modelCallId: z.string().optional(),
-  toolCallId: z.string().optional(), sourceId: z.string().optional(),
-  candidateId: z.string().optional(), recommendationId: z.string().optional(),
-  recommendationIds: z.array(z.string()).optional(), contentId: z.string().optional(),
-  contentDigest: z.string().optional(), providerAttempt: z.number().int().positive().optional(),
-  discoveryAttempt: z.number().int().positive().optional(),
-  interestUnderstandingId: z.string().optional(), userMessageId: z.string().optional(),
-  assistantMessageId: z.string().optional(),
-}).strict();
+export const ObservabilityCorrelationSchema = TraceCorrelationSchema;
 export type ObservabilityCorrelationUiDto = z.infer<typeof ObservabilityCorrelationSchema>;
 
 export const ObservabilityListPayloadSchema = z.object({

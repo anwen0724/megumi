@@ -78,7 +78,7 @@ export interface Discovery {
   ensureDailyRecommendation(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
   getDailyRecommendationBatch(localDate: string): DailyRecommendationBatch | undefined;
   requestCandidateSupply(trigger?: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined;
-  getCandidateSupplyCheck(candidateSupplyCheckId: string): CandidateSupplyCheck | undefined;
+  getCandidateSupplyCheck(candidateSupplyId: string): CandidateSupplyCheck | undefined;
   getPreferenceLearningBatch(batchId: string): PreferenceLearningBatch | undefined;
   getPreferenceLearningCompletion(feedbackChangeId: string): PreferenceLearningCompletion | undefined;
   /** Reads the persisted Discovery Home projection. */

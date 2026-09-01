@@ -195,7 +195,7 @@ export const CandidateSupplySettlementSchema = z.object({
 export type CandidateSupplySettlement = z.infer<typeof CandidateSupplySettlementSchema>;
 
 const CandidateSupplyCheckBaseSchema = z.object({
-  candidateSupplyCheckId: z.string().min(1),
+  candidateSupplyId: z.string().min(1),
   trigger: z.enum([
     'startup',
     'resume',
@@ -242,7 +242,7 @@ export const CandidateSupplyCheckSchema = z.discriminatedUnion('status', [
 
 export type CandidateSupplyCheck = z.infer<typeof CandidateSupplyCheckSchema>;
 export interface CandidateSupplyCheckReceipt {
-  readonly candidateSupplyCheckId: string;
+  readonly candidateSupplyId: string;
   readonly trigger: CandidateSupplyCheck['trigger'];
   readonly status: 'queued';
   readonly requestedAt: string;
@@ -322,7 +322,7 @@ export interface CandidateSupplyRepository {
   writeSupplyState(state: CandidateSupplyState): void;
   createSupplyCheck(check: CandidateSupplyCheck): CandidateSupplyCheck;
   updateSupplyCheck(check: CandidateSupplyCheck): CandidateSupplyCheck;
-  getSupplyCheck(candidateSupplyCheckId: string): CandidateSupplyCheck | undefined;
+  getSupplyCheck(candidateSupplyId: string): CandidateSupplyCheck | undefined;
   interruptRunningSupplyChecks(input: { readonly interruptedAt: string }): number;
   readSourceState(sourceId: string): CandidateSourceState | undefined;
   settleSourceAttempt(input: {

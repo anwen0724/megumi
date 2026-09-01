@@ -116,7 +116,7 @@ export function createDailyRecommendationAttempts(options: {
       const parsed = PublishInputSchema.safeParse(request.input);
       if (!parsed.success) return toolError('invalid_selection', 'Publication requires valid ordered Candidate IDs and reasons.');
       const result = await observePublication(options.observability, {
-        batchId: attempt.batchId,
+        dailyRecommendationBatchId: attempt.batchId,
         executionId: request.executionId,
       }, () => attempt.repository.publish({
           batchId: attempt.batchId,
@@ -150,7 +150,10 @@ export function createDailyRecommendationAttempts(options: {
 
 async function observePublication<T extends { readonly status: string }>(
   observability: Observability | undefined,
-  correlation: { readonly batchId: string; readonly executionId: string },
+  correlation: {
+    readonly dailyRecommendationBatchId: string;
+    readonly executionId: string;
+  },
   operation: () => T,
 ): Promise<T> {
   let result: T | undefined;

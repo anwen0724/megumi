@@ -88,14 +88,14 @@ export function createDiscoveryOperations(
     },
     getCandidateSupplyCheck(request) {
       const parsed = DiscoveryCandidateSupplyQuerySchema.parse(request);
-      return Promise.resolve(agent.getCandidateSupplyCheck(parsed.candidateSupplyCheckId) ?? null);
+      return Promise.resolve(agent.getCandidateSupplyCheck(parsed.candidateSupplyId) ?? null);
     },
     waitCandidateSupplyCheck: (request) => waitForBusinessFact({
       timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
       read: () => agent.getCandidateSupplyCheck(
         DiscoveryCandidateSupplyQuerySchema.parse({
-          candidateSupplyCheckId: request.candidateSupplyCheckId,
-        }).candidateSupplyCheckId,
+          candidateSupplyId: request.candidateSupplyId,
+        }).candidateSupplyId,
       ),
       terminal: isCandidateSupplyCheckTerminal,
     }),

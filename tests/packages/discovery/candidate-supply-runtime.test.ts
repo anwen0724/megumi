@@ -47,11 +47,11 @@ describe('Candidate Supply Runtime', () => {
     const merged = runtime.notify('consumer_shortfall');
     await starting;
     expect(queued).toBeDefined();
-    expect(merged?.candidateSupplyCheckId).toBe(queued?.candidateSupplyCheckId);
+    expect(merged?.candidateSupplyId).toBe(queued?.candidateSupplyId);
     if (!queued) return;
 
     await vi.waitFor(() => {
-      expect(runtime.getCheck(queued.candidateSupplyCheckId)).toMatchObject({
+      expect(runtime.getCheck(queued.candidateSupplyId)).toMatchObject({
         status: 'completed', reason: 'no_gap',
       });
     });
@@ -88,7 +88,7 @@ describe('Candidate Supply Runtime', () => {
     const receipt = runtime.notify('evaluation');
     if (!receipt) throw new Error('Expected a Candidate Supply Check receipt.');
     await vi.waitFor(() => {
-      expect(runtime.getCheck(receipt.candidateSupplyCheckId)).toMatchObject({
+      expect(runtime.getCheck(receipt.candidateSupplyId)).toMatchObject({
         status: 'completed', reason: 'model_unavailable',
       });
     });

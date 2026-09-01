@@ -12,13 +12,13 @@ describe('Candidate Supply Check repository', () => {
     migrateDatabase({ database });
     const repository = createDiscoveryRepository({ database });
     repository.createSupplyCheck({
-      candidateSupplyCheckId: 'candidate-supply-check:1',
+      candidateSupplyId: 'candidate-supply:1',
       trigger: 'evaluation',
       status: 'queued',
       requestedAt: '2026-01-01T00:00:00.000Z',
     });
     repository.updateSupplyCheck({
-      candidateSupplyCheckId: 'candidate-supply-check:1',
+      candidateSupplyId: 'candidate-supply:1',
       trigger: 'evaluation',
       status: 'completed',
       reason: 'no_gap',
@@ -27,9 +27,8 @@ describe('Candidate Supply Check repository', () => {
       availableBefore: 12,
       availableAfter: 12,
     });
-    expect(repository.getSupplyCheck('candidate-supply-check:1')).toMatchObject({
+    expect(repository.getSupplyCheck('candidate-supply:1')).toMatchObject({
       status: 'completed', reason: 'no_gap', availableAfter: 12,
     });
   });
 });
-

@@ -270,7 +270,9 @@ async function runLifecycle(
   }
 
   const batchId = current?.batchId ?? options.ids.createBatchId();
-  safeRecordContent(options.observability, 'discovery.candidates', snapshot.window.candidates, { batchId });
+  safeRecordContent(options.observability, 'discovery.candidates', snapshot.window.candidates, {
+    dailyRecommendationBatchId: batchId,
+  });
   let executionId: string | undefined;
   const started = await options.startExecution<ClaimRejection>({
     kind: 'daily_recommendation',
@@ -283,7 +285,7 @@ async function runLifecycle(
       const claimed = await observeSpan(
         options.observability,
         'daily.batch.claim',
-        { batchId, executionId: acceptedExecutionId },
+        { dailyRecommendationBatchId: batchId, executionId: acceptedExecutionId },
         () => options.repository.claimBatch({
           batchId,
           localDate,
@@ -358,14 +360,15 @@ async function runLifecycle(
   return observeSpan(
     options.observability,
     'daily.attempt.settle',
-    { batchId, executionId: acceptedExecutionId },
+    { dailyRecommendationBatchId: batchId, executionId: acceptedExecutionId },
     async () => {
       const outcome = await started.completion;
       options.attempts.dispose(acceptedExecutionId);
       const authoritative = options.repository.getBatch(localDate);
       if (authoritative?.status === 'published') {
         safeRecordContent(options.observability, 'recommendation.published', authoritative, {
-          batchId: authoritative.batchId, executionId: acceptedExecutionId,
+          dailyRecommendationBatchId: authoritative.batchId,
+          executionId: acceptedExecutionId,
         });
         safeNotifyCandidateSupply(options, shortfall);
         return { result: publishedResult(authoritative), retry: false };
@@ -487,7 +490,17 @@ function classifyDailyRecommendationResult(
   result: EnsureDailyRecommendationResult,
 ): OperationCompletion {
   if (result.status !== 'failed') {
-    return { outcome: { status: 'ok', code: result.status } };
+    return {
+      outcome: { status: 'ok', code: result.status },
+      ...('batchId' in result
+        ? {
+            correlation: {
+              dailyRecommendationBatchId: result.batchId,
+              ...('executionId' in result ? { executionId: result.executionId } : {}),
+            },
+          }
+        : {}),
+    };
   }
   return {
     outcome: {

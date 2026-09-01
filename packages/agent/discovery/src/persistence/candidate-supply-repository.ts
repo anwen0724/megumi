@@ -695,8 +695,8 @@ function createSupplyCheck(
     INSERT INTO discovery_candidate_supply_checks (
       candidate_supply_check_id, trigger, status, requested_at
     ) VALUES (?, ?, 'queued', ?)
-  ` }).run([check.candidateSupplyCheckId, check.trigger, check.requestedAt]);
-  return readSupplyCheckRequired(database, check.candidateSupplyCheckId);
+  ` }).run([check.candidateSupplyId, check.trigger, check.requestedAt]);
+  return readSupplyCheckRequired(database, check.candidateSupplyId);
 }
 
 function updateSupplyCheck(
@@ -730,31 +730,31 @@ function updateSupplyCheck(
     completedAt,
     failure?.code ?? null,
     failure?.message ?? null,
-    check.candidateSupplyCheckId,
+    check.candidateSupplyId,
   ]);
   if (result.changes !== 1) throw new Error('Candidate Supply Check was not found.');
-  return readSupplyCheckRequired(database, check.candidateSupplyCheckId);
+  return readSupplyCheckRequired(database, check.candidateSupplyId);
 }
 
 function readSupplyCheckRequired(
   database: DatabaseConnection,
-  candidateSupplyCheckId: string,
+  candidateSupplyId: string,
 ): CandidateSupplyCheck {
-  const check = readSupplyCheck(database, candidateSupplyCheckId);
+  const check = readSupplyCheck(database, candidateSupplyId);
   if (!check) throw new Error('Candidate Supply Check was not found.');
   return check;
 }
 
 function readSupplyCheck(
   database: DatabaseConnection,
-  candidateSupplyCheckId: string,
+  candidateSupplyId: string,
 ): CandidateSupplyCheck | undefined {
   const row = database.prepare<SupplyCheckRow>({
     sql: 'SELECT * FROM discovery_candidate_supply_checks WHERE candidate_supply_check_id = ?',
-  }).get([candidateSupplyCheckId]);
+  }).get([candidateSupplyId]);
   if (!row) return undefined;
   const base = {
-    candidateSupplyCheckId: row.candidate_supply_check_id,
+    candidateSupplyId: row.candidate_supply_check_id,
     trigger: row.trigger,
     requestedAt: row.requested_at,
   } as const;

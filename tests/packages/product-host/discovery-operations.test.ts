@@ -18,13 +18,13 @@ describe('Discovery Product Host operations', () => {
     if (!receipt) return;
 
     const settled = await application.runtime.host.discovery.waitCandidateSupplyCheck({
-      candidateSupplyCheckId: receipt.candidateSupplyCheckId,
+      candidateSupplyId: receipt.candidateSupplyId,
       timeoutMs: 2_000,
     });
     expect(settled.status).toBe('completed');
     if (settled.status !== 'completed') return;
     const reread = await application.runtime.host.discovery.getCandidateSupplyCheck({
-      candidateSupplyCheckId: receipt.candidateSupplyCheckId,
+      candidateSupplyId: receipt.candidateSupplyId,
     });
     expect(reread).toEqual(settled.value);
   });

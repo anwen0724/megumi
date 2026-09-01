@@ -72,6 +72,10 @@ export interface TraceCorrelation {
   readonly sessionId?: string;
   readonly messageId?: string;
   readonly workspaceId?: string;
+  readonly candidateSupplyId?: string;
+  readonly dailyRecommendationBatchId?: string;
+  readonly preferenceLearningBatchId?: string;
+  /** Retained only so the Reader can decode v1 Journal records written before explicit batch identities. */
   readonly batchId?: string;
   readonly compactionId?: string;
   readonly modelCallId?: string;
@@ -89,12 +93,52 @@ export interface TraceCorrelation {
   readonly assistantMessageId?: string;
 }
 
+export const TRACE_CORRELATION_STRING_KEYS = [
+  'requestId',
+  'executionId',
+  'sessionId',
+  'messageId',
+  'workspaceId',
+  'candidateSupplyId',
+  'dailyRecommendationBatchId',
+  'preferenceLearningBatchId',
+  'batchId',
+  'compactionId',
+  'modelCallId',
+  'toolCallId',
+  'sourceId',
+  'candidateId',
+  'recommendationId',
+  'contentId',
+  'contentDigest',
+  'interestUnderstandingId',
+  'userMessageId',
+  'assistantMessageId',
+] as const satisfies readonly (keyof TraceCorrelation)[];
+
+export const TRACE_CORRELATION_NUMBER_KEYS = [
+  'providerAttempt',
+  'discoveryAttempt',
+] as const satisfies readonly (keyof TraceCorrelation)[];
+
+export const TRACE_CORRELATION_SCALAR_KEYS = [
+  ...TRACE_CORRELATION_STRING_KEYS,
+  ...TRACE_CORRELATION_NUMBER_KEYS,
+] as const;
+
+export const TRACE_CORRELATION_ARRAY_KEYS = [
+  'recommendationIds',
+] as const satisfies readonly (keyof TraceCorrelation)[];
+
 export const TraceCorrelationSchema: z.ZodType<TraceCorrelation> = z.object({
   requestId: z.string().optional(),
   executionId: z.string().optional(),
   sessionId: z.string().optional(),
   messageId: z.string().optional(),
   workspaceId: z.string().optional(),
+  candidateSupplyId: z.string().optional(),
+  dailyRecommendationBatchId: z.string().optional(),
+  preferenceLearningBatchId: z.string().optional(),
   batchId: z.string().optional(),
   compactionId: z.string().optional(),
   modelCallId: z.string().optional(),

@@ -74,13 +74,14 @@ describe('Preference Learning Runtime', () => {
     }));
     expect(models.completeSimple).toHaveBeenCalledTimes(1);
     expect(observability.withTrace).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'preference_learning', correlation: { batchId: 'batch:1' },
+      kind: 'preference_learning', correlation: { preferenceLearningBatchId: 'batch:1' },
     }), expect.any(Function));
     expect(observability.recordContent).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'preference.learning.result', correlation: { batchId: 'batch:1', modelCallId: 'model-call:1' },
+      kind: 'preference.learning.result',
+      correlation: { preferenceLearningBatchId: 'batch:1', modelCallId: 'model-call:1' },
     }));
     expect(observability.recordContent).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'preference.committed', correlation: { batchId: 'batch:1' },
+      kind: 'preference.committed', correlation: { preferenceLearningBatchId: 'batch:1' },
     }));
     expect(repository.commitPreferenceLearningBatch).toHaveBeenCalledWith({
       batchId: 'batch:1',

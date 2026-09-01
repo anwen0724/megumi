@@ -4,20 +4,15 @@
 import type { DatabaseConnection, DatabaseRow, DatabaseValue } from '@megumi/database';
 import type { TraceListQuery, TraceSummaryProjection } from '../query/trace-query';
 import type { TraceProjection } from '../query/trace-projector';
-import type { TraceCorrelation } from '../trace/trace-contract';
+import {
+  TRACE_CORRELATION_ARRAY_KEYS,
+  TRACE_CORRELATION_NUMBER_KEYS,
+  TRACE_CORRELATION_SCALAR_KEYS,
+  TRACE_CORRELATION_STRING_KEYS,
+  type TraceCorrelation,
+} from '../trace/trace-contract';
 
-export const TRACE_INDEX_SCHEMA_VERSION = 3;
-
-const STRING_CORRELATION_KEYS = [
-  'requestId', 'executionId', 'sessionId', 'messageId', 'workspaceId', 'batchId',
-  'compactionId', 'modelCallId', 'toolCallId', 'sourceId', 'candidateId',
-  'recommendationId', 'contentId', 'contentDigest',
-] as const;
-const NUMBER_CORRELATION_KEYS = ['providerAttempt', 'discoveryAttempt'] as const;
-const SCALAR_CORRELATION_KEYS = [
-  ...STRING_CORRELATION_KEYS,
-  ...NUMBER_CORRELATION_KEYS,
-] as const;
+export const TRACE_INDEX_SCHEMA_VERSION = 4;
 
 export interface JournalCheckpoint {
   readonly filePath: string;
@@ -302,12 +297,12 @@ function insertCorrelations(
   const statement = database.prepare({
     sql: 'INSERT INTO correlations (trace_id, key, value) VALUES (?, ?, ?)',
   });
-  for (const key of SCALAR_CORRELATION_KEYS) {
+  for (const key of TRACE_CORRELATION_SCALAR_KEYS) {
     const value = correlation[key];
     if (value !== undefined) statement.run([traceId, key, String(value)]);
   }
-  for (const recommendationId of correlation.recommendationIds ?? []) {
-    statement.run([traceId, 'recommendationIds', recommendationId]);
+  for (const key of TRACE_CORRELATION_ARRAY_KEYS) {
+    for (const value of correlation[key] ?? []) statement.run([traceId, key, value]);
   }
 }
 
@@ -387,15 +382,17 @@ function appendCorrelationConditions(
   parameters: DatabaseValue[],
   correlation: TraceCorrelation,
 ): void {
-  for (const key of SCALAR_CORRELATION_KEYS) {
+  for (const key of TRACE_CORRELATION_SCALAR_KEYS) {
     const value = correlation[key];
     if (value === undefined) continue;
     conditions.push('EXISTS (SELECT 1 FROM correlations r WHERE r.trace_id = t.trace_id AND r.key = ? AND r.value = ?)');
     parameters.push(key, String(value));
   }
-  for (const recommendationId of correlation.recommendationIds ?? []) {
-    conditions.push('EXISTS (SELECT 1 FROM correlations r WHERE r.trace_id = t.trace_id AND r.key = ? AND r.value = ?)');
-    parameters.push('recommendationIds', recommendationId);
+  for (const key of TRACE_CORRELATION_ARRAY_KEYS) {
+    for (const value of correlation[key] ?? []) {
+      conditions.push('EXISTS (SELECT 1 FROM correlations r WHERE r.trace_id = t.trace_id AND r.key = ? AND r.value = ?)');
+      parameters.push(key, value);
+    }
   }
 }
 
@@ -415,7 +412,7 @@ function loadCorrelations(
     grouped.set(row.trace_id, correlation);
     if (isStringCorrelationKey(row.key)) {
       correlation[row.key] = row.value;
-    } else if (row.key === 'providerAttempt' || row.key === 'discoveryAttempt') {
+    } else if (isNumberCorrelationKey(row.key)) {
       const value = Number(row.value);
       if (Number.isInteger(value) && value > 0) correlation[row.key] = value;
     } else if (row.key === 'recommendationIds') {
@@ -432,8 +429,12 @@ type MutableCorrelation = {
   -readonly [Key in Exclude<keyof TraceCorrelation, 'recommendationIds'>]?: TraceCorrelation[Key];
 } & { recommendationIds?: string[] };
 
-function isStringCorrelationKey(value: string): value is typeof STRING_CORRELATION_KEYS[number] {
-  return STRING_CORRELATION_KEYS.some((key) => key === value);
+function isStringCorrelationKey(value: string): value is typeof TRACE_CORRELATION_STRING_KEYS[number] {
+  return TRACE_CORRELATION_STRING_KEYS.some((key) => key === value);
+}
+
+function isNumberCorrelationKey(value: string): value is typeof TRACE_CORRELATION_NUMBER_KEYS[number] {
+  return TRACE_CORRELATION_NUMBER_KEYS.some((key) => key === value);
 }
 
 function projectRecordLocator(row: RecordLocatorRow): TraceRecordLocator {

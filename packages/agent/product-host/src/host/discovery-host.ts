@@ -53,7 +53,7 @@ export const DiscoveryCandidateSupplyRequestSchema = z.object({
 }).strict();
 export const DiscoveryDailyBatchQuerySchema = z.object({ localDate: z.string().date() }).strict();
 export const DiscoveryCandidateSupplyQuerySchema = z.object({
-  candidateSupplyCheckId: z.string().min(1),
+  candidateSupplyId: z.string().min(1),
 }).strict();
 export const DiscoveryPreferenceLearningQuerySchema = z.object({
   feedbackChangeId: z.string().min(1),

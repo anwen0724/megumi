@@ -146,14 +146,14 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
     };
   }
   const completion = await input.runtime.host.discovery.waitCandidateSupplyCheck({
-    candidateSupplyCheckId: receipt.candidateSupplyCheckId,
+    candidateSupplyId: receipt.candidateSupplyId,
     timeoutMs: input.task.timeoutMs,
   });
   if (completion.status !== 'completed') {
     return {
       outcome: { status: 'timed_out', message: 'Candidate Supply did not settle before timeout.' },
       productResult: { receipt, completion },
-      correlations: [{ candidateSupplyCheckId: receipt.candidateSupplyCheckId }],
+      correlations: [{ candidateSupplyId: receipt.candidateSupplyId }],
     };
   }
   const executionId = completion.value.status === 'completed' ? completion.value.executionId : undefined;
@@ -166,7 +166,7 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
       : { status: 'completed' },
     productResult: { receipt, completion: completion.value, facts },
     correlations: [{
-      candidateSupplyCheckId: receipt.candidateSupplyCheckId,
+      candidateSupplyId: receipt.candidateSupplyId,
       ...(executionId ? { executionId } : {}),
     }],
   };
