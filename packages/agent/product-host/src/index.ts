@@ -10,4 +10,8 @@ export type {
 } from './host/capabilities/attachment-picker';
 export type { LocalFileAvailability } from './host/capabilities/local-file-availability';
 export type { DiagnosticBundleSaver } from './host/capabilities/diagnostic-bundle-saver';
-export type { DiagnosticBundleDto } from './host/observability-host';
+export {
+  ObservabilityCorrelationSchema,
+  type DiagnosticBundleDto,
+  type ObservabilityCorrelationUiDto,
+} from './host/observability-host';

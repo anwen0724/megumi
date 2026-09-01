@@ -53,6 +53,30 @@ describe('Evaluation grading', () => {
     ]));
     expect(result.infrastructureError).toMatchObject({ code: 'model_grader_failed' });
   });
+
+  it('marks an unavailable Measurement as not gradable instead of comparing a synthetic zero', async () => {
+    const result = await gradeTask({
+      task: evaluationTask(),
+      observation: observation(['toolCalls']),
+      modelEvaluator: {
+        async evaluate({ metrics, now }) {
+          return {
+            results: metrics.map((metric) => ({
+              metricId: metric.metricId, title: metric.title, evaluator: 'model' as const,
+              required: metric.required, judgement: 'pass' as const, score: 4,
+              rationale: 'Strong result.', evidenceRefs: [], evaluatedAt: now,
+            })),
+            usage: { modelCalls: 1, inputTokens: 1, outputTokens: 1, estimatedCostUsd: 0 },
+          };
+        },
+      },
+      now: '2026-01-01T00:00:02.000Z',
+    });
+
+    expect(result.results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ metricId: 'tools', judgement: 'not_gradable' }),
+    ]));
+  });
 });
 
 function evaluationTask() {
@@ -76,7 +100,13 @@ function evaluationTask() {
   });
 }
 
-function observation() {
+function observation(unavailable: readonly ('toolCalls')[] = []) {
+  const measurements = {
+    durationMs: 100, inputTokens: 0, outputTokens: 0, modelCalls: 1, toolCalls: 2,
+    sourceCalls: 0, retries: 0, candidatesProduced: 0, recommendationsPublished: 0,
+    preferenceRevisions: 0, estimatedCostUsd: 0, graderModelCalls: 0, graderInputTokens: 0,
+    graderOutputTokens: 0, graderEstimatedCostUsd: 0, unavailable,
+  };
   return TaskObservationSchema.parse({
     observationId: 'observation:1',
     taskId: 'conversation.metric-contract',
@@ -88,15 +118,22 @@ function observation() {
     executionOutcome: { status: 'completed' },
     productResult: { reply: 'Done.' },
     artifacts: { workspaceFiles: { 'out.md': '# Result' } },
-    correlations: [{ executionId: 'execution:1' }],
+    traceTargets: [{
+      traceKind: 'conversation', correlation: { executionId: 'execution:1' }, expectation: 'required',
+    }],
     traceIds: ['trace:1'],
     traceSummaries: [],
-    measurements: {
-      durationMs: 100, inputTokens: 0, outputTokens: 0, modelCalls: 1, toolCalls: 2,
-      sourceCalls: 0, retries: 0, candidatesProduced: 0, recommendationsPublished: 0,
-      preferenceRevisions: 0, estimatedCostUsd: 0, graderModelCalls: 0, graderInputTokens: 0,
-      graderOutputTokens: 0, graderEstimatedCostUsd: 0,
+    evidence: {
+      input: { task: { type: 'conversation' }, business: {}, traceContent: [] },
+      context: { business: {}, traceContent: [] },
+      execution: { outcome: { status: 'completed' }, traces: [], business: {}, traceContent: [] },
+      output: {
+        productResult: { reply: 'Done.' }, workspaceFiles: { 'out.md': '# Result' },
+        business: {}, traceContent: [],
+      },
+      measurement: measurements,
     },
+    measurements,
     issues: [],
   });
 }

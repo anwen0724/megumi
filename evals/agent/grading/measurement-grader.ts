@@ -12,6 +12,21 @@ export function gradeMeasurementMetrics(input: {
   readonly now: string;
 }): TaskMetricResult[] {
   return input.metrics.map((metric) => {
+    if (input.observation.measurements.unavailable.includes(metric.measurement)) {
+      return TaskMetricResultSchema.parse({
+        metricId: metric.metricId,
+        title: metric.title,
+        evaluator: 'measurement',
+        required: metric.required,
+        judgement: 'not_gradable',
+        threshold: metric.threshold,
+        operator: metric.operator,
+        rationale: `${metric.measurement} 未能从本次真实业务结果或 Trace 中可靠获得，不能按零值评分。`,
+        evidenceRefs: [`${input.observation.observationId}#measurements.unavailable`],
+        ruleVersion: 'evaluation-measurements-v2',
+        evaluatedAt: input.now,
+      });
+    }
     const actual = input.observation.measurements[metric.measurement];
     const passed = metric.operator === 'max' ? actual <= metric.threshold : actual >= metric.threshold;
     return TaskMetricResultSchema.parse({
@@ -25,7 +40,7 @@ export function gradeMeasurementMetrics(input: {
       operator: metric.operator,
       rationale: `${metric.measurement} 实际值 ${actual}，要求${metric.operator === 'max' ? '不超过' : '不少于'} ${metric.threshold}。`,
       evidenceRefs: [`${input.observation.observationId}#measurements.${metric.measurement}`],
-      ruleVersion: 'evaluation-measurements-v1',
+      ruleVersion: 'evaluation-measurements-v2',
       evaluatedAt: input.now,
     });
   });

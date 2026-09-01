@@ -25,7 +25,7 @@ import {
 import type { EvaluationTask } from '../contracts/evaluation-task';
 import type { TaskObservation } from '../execution/observe-task';
 
-const PROMPT_VERSION = 'evaluation-model-metrics-v2';
+const PROMPT_VERSION = 'evaluation-model-metrics-v3';
 
 export interface ModelMetricEvaluator {
   evaluate(input: {
@@ -78,7 +78,7 @@ export function createModelMetricEvaluator(input: {
       if (request.metrics.length === 0) return emptyOutcome();
       const response = await models.completeSimple(model, {
         systemPrompt: [
-          'You evaluate one real Megumi product execution from its compact observation.',
+          'You evaluate one real Megumi product execution from structured Evidence.',
           'Score every requested metric independently from 0 to 4 according to its rubric.',
           'Use not_gradable only when the evidence cannot support a judgement.',
           'Do not invent actions or outputs that are absent from the evidence.',
@@ -102,7 +102,7 @@ export function createModelMetricEvaluator(input: {
                 rubric: metric.rubric,
                 scoreScale: '0-4',
               })),
-              observation: request.observation,
+              evidence: request.observation.evidence,
               output: {
                 results: [{
                   metricId: 'string',

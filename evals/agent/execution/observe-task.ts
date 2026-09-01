@@ -1,12 +1,19 @@
 /*
- * Projects one real product execution into compact, gradable facts and native Trace references.
+ * Projects one real product execution into compact product facts, typed Trace
+ * references, and structured Evidence for deterministic and model Graders.
  */
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ProductRuntime } from '@megumi/composition';
 import { z } from 'zod';
+import { EvaluationMeasurementNameSchema } from '../contracts/evaluation-metric';
 import { EvaluationOperationSchema, EvaluationProfileSchema, type EvaluationTask } from '../contracts/evaluation-task';
 import type { ProductTaskExecution } from './execute-task';
+import {
+  TraceEvidenceContentSchema,
+  TraceTargetSchema,
+  collectTraceEvidence,
+} from './trace-evidence';
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 
@@ -34,8 +41,33 @@ export const EvaluationMeasurementsSchema = z.object({
   graderInputTokens: z.number().int().nonnegative().default(0),
   graderOutputTokens: z.number().int().nonnegative().default(0),
   graderEstimatedCostUsd: z.number().nonnegative().default(0),
+  unavailable: z.array(EvaluationMeasurementNameSchema).default([]),
 }).strict();
 export type EvaluationMeasurements = z.infer<typeof EvaluationMeasurementsSchema>;
+
+const TraceContentSectionSchema = z.object({
+  business: JsonRecordSchema,
+  traceContent: z.array(TraceEvidenceContentSchema),
+}).strict();
+
+export const EvaluationEvidenceSchema = z.object({
+  input: TraceContentSectionSchema.extend({ task: JsonRecordSchema }).strict(),
+  context: TraceContentSectionSchema,
+  execution: TraceContentSectionSchema.extend({
+    outcome: z.discriminatedUnion('status', [
+      z.object({ status: z.literal('completed') }).strict(),
+      z.object({ status: z.literal('failed'), message: z.string().min(1) }).strict(),
+      z.object({ status: z.literal('timed_out'), message: z.string().min(1) }).strict(),
+    ]),
+    traces: z.array(JsonRecordSchema),
+  }).strict(),
+  output: TraceContentSectionSchema.extend({
+    productResult: JsonRecordSchema,
+    workspaceFiles: z.record(z.string(), z.string()),
+  }).strict(),
+  measurement: EvaluationMeasurementsSchema,
+}).strict();
+export type EvaluationEvidence = z.infer<typeof EvaluationEvidenceSchema>;
 
 export const TaskObservationSchema = z.object({
   observationId: z.string().min(1),
@@ -52,15 +84,16 @@ export const TaskObservationSchema = z.object({
   ]),
   productResult: JsonRecordSchema,
   artifacts: z.object({ workspaceFiles: z.record(z.string(), z.string()) }).strict(),
-  correlations: z.array(z.record(z.string(), z.string())),
+  traceTargets: z.array(TraceTargetSchema),
   traceIds: z.array(z.string().min(1)),
   traceSummaries: z.array(JsonRecordSchema),
+  evidence: EvaluationEvidenceSchema,
   measurements: EvaluationMeasurementsSchema,
   issues: z.array(ObservationIssueSchema),
 }).strict();
 export type TaskObservation = z.infer<typeof TaskObservationSchema>;
 
-/** Collects compact facts without duplicating Trace records or Content bodies. */
+/** Collects product facts and only the native Trace Evidence exposed by Product Host. */
 export async function observeTask(input: {
   readonly observationId: string;
   readonly task: EvaluationTask;
@@ -71,11 +104,57 @@ export async function observeTask(input: {
   readonly startedAtMs: number;
   readonly collectedAt: string;
 }): Promise<TaskObservation> {
-  await input.runtime.host.observability.flush();
-  const traces = await readCorrelatedTraces(input.runtime, input.task.input.type, input.execution.correlations);
-  const spans = traces.flatMap((trace) => Array.isArray(trace.spans) ? trace.spans : []);
-  const usage = collectModelUsage(traces);
+  const [traceEvidence, workspaceFiles] = await Promise.all([
+    collectTraceEvidence({ runtime: input.runtime, targets: input.execution.traceTargets }),
+    snapshotWorkspace(input.workspacePath),
+  ]);
   const productResult = toJsonRecord(input.execution.productResult);
+  const businessMeasurements = input.execution.businessMeasurements ?? {};
+  const unavailable = new Set(traceEvidence.measurements.unavailable);
+  addUnavailableBusinessMeasurements(input.task.input.type, businessMeasurements, unavailable);
+  const measurements: EvaluationMeasurements = {
+    durationMs: Math.max(0, Date.now() - input.startedAtMs),
+    inputTokens: traceEvidence.measurements.inputTokens,
+    outputTokens: traceEvidence.measurements.outputTokens,
+    modelCalls: traceEvidence.measurements.modelCalls,
+    toolCalls: traceEvidence.measurements.toolCalls,
+    sourceCalls: traceEvidence.measurements.sourceCalls,
+    retries: traceEvidence.measurements.retries,
+    candidatesProduced: businessMeasurements.candidatesProduced ?? 0,
+    recommendationsPublished: businessMeasurements.recommendationsPublished ?? 0,
+    preferenceRevisions: businessMeasurements.preferenceRevisions ?? 0,
+    estimatedCostUsd: traceEvidence.measurements.estimatedCostUsd,
+    graderModelCalls: 0,
+    graderInputTokens: 0,
+    graderOutputTokens: 0,
+    graderEstimatedCostUsd: 0,
+    unavailable: [...unavailable],
+  };
+  const businessEvidence = input.execution.evidence ?? {};
+  const evidence: EvaluationEvidence = {
+    input: {
+      task: toJsonRecord(input.task.input),
+      business: toJsonRecord(businessEvidence.input ?? {}),
+      traceContent: traceEvidence.content.input,
+    },
+    context: {
+      business: toJsonRecord(businessEvidence.context ?? {}),
+      traceContent: traceEvidence.content.context,
+    },
+    execution: {
+      outcome: input.execution.outcome,
+      traces: [...traceEvidence.traceSummaries],
+      business: {},
+      traceContent: traceEvidence.content.execution,
+    },
+    output: {
+      productResult,
+      workspaceFiles,
+      business: toJsonRecord(businessEvidence.output ?? {}),
+      traceContent: traceEvidence.content.output,
+    },
+    measurement: measurements,
+  };
   const observation = {
     observationId: input.observationId,
     taskId: input.task.taskId,
@@ -86,28 +165,13 @@ export async function observeTask(input: {
     input: toJsonRecord(input.task.input),
     executionOutcome: input.execution.outcome,
     productResult,
-    artifacts: { workspaceFiles: await snapshotWorkspace(input.workspacePath) },
-    correlations: input.execution.correlations,
-    traceIds: traces.map(traceIdOf).filter((traceId): traceId is string => traceId !== undefined),
-    traceSummaries: traces.map(summarizeTrace),
-    measurements: {
-      durationMs: Math.max(0, Date.now() - input.startedAtMs),
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      modelCalls: countSpans(spans, (name) => name === 'model.call'),
-      toolCalls: countSpans(spans, (name) => name === 'tool.call'),
-      sourceCalls: countSpans(spans, (name) => name.startsWith('source.')),
-      retries: countSpans(spans, (name) => name.includes('retry')),
-      candidatesProduced: findNonnegativeInteger(productResult, ['availableAfter', 'candidateCount']),
-      recommendationsPublished: countRecommendations(productResult),
-      preferenceRevisions: countArraysAtKeys(productResult, ['resultRevisions', 'revisions']),
-      estimatedCostUsd: usage.estimatedCostUsd,
-      graderModelCalls: 0,
-      graderInputTokens: 0,
-      graderOutputTokens: 0,
-      graderEstimatedCostUsd: 0,
-    },
-    issues: traceIssues(traces),
+    artifacts: { workspaceFiles },
+    traceTargets: input.execution.traceTargets,
+    traceIds: traceEvidence.traceIds,
+    traceSummaries: traceEvidence.traceSummaries,
+    evidence,
+    measurements,
+    issues: traceEvidence.issues,
   };
   return TaskObservationSchema.parse(redactCredentials(observation));
 }
@@ -125,82 +189,20 @@ export function toJsonRecord(value: unknown): Record<string, unknown> {
   return JsonRecordSchema.parse(parsed);
 }
 
-async function readCorrelatedTraces(
-  runtime: ProductRuntime,
+function addUnavailableBusinessMeasurements(
   operation: EvaluationTask['input']['type'],
-  correlations: readonly Readonly<Record<string, string>>[],
-): Promise<Readonly<Record<string, unknown>>[]> {
-  const traces = new Map<string, Record<string, unknown>>();
-  for (const correlation of correlations) {
-    const listed = await runtime.host.observability.listTraces({ traceKind: operation, correlation, limit: 20 });
-    if (listed.status !== 'ok') continue;
-    for (const summary of listed.traces) {
-      if (traces.has(summary.traceId)) continue;
-      const result = await runtime.host.observability.getTrace({ traceId: summary.traceId });
-      if (result.status !== 'found') continue;
-      traces.set(summary.traceId, toJsonRecord(result.trace));
-    }
+  measurements: ProductTaskExecution['businessMeasurements'],
+  unavailable: Set<z.infer<typeof EvaluationMeasurementNameSchema>>,
+): void {
+  if (operation === 'candidate_supply' && measurements?.candidatesProduced === undefined) {
+    unavailable.add('candidatesProduced');
   }
-  return [...traces.values()];
-}
-
-function summarizeTrace(trace: Readonly<Record<string, unknown>>): Record<string, unknown> {
-  const summary = isRecord(trace.summary) ? trace.summary : {};
-  const spans = Array.isArray(trace.spans) ? trace.spans.flatMap((span) => {
-    if (!isRecord(span)) return [];
-    return [{
-      spanId: span.spanId,
-      parentSpanId: span.parentSpanId,
-      name: span.name,
-      status: span.status,
-      durationMs: span.durationMs,
-      metadata: compactMetadata(span.metadata),
-    }];
-  }) : [];
-  return toJsonRecord({
-    traceId: summary.traceId ?? trace.traceId,
-    traceKind: summary.traceKind ?? trace.traceKind,
-    status: summary.status ?? trace.status,
-    diagnostics: summary.diagnostics ?? trace.diagnostics,
-    startedAt: summary.startedAt ?? trace.startedAt,
-    durationMs: summary.durationMs,
-    issueCount: summary.issueCount ?? (Array.isArray(trace.issues) ? trace.issues.length : 0),
-    spans,
-  });
-}
-
-function compactMetadata(value: unknown): unknown {
-  if (!isRecord(value)) return undefined;
-  return Object.fromEntries(Object.entries(value).filter(([key]) => (
-    key === 'toolName' || key === 'providerId' || key === 'modelId' || key === 'sourceId'
-  )));
-}
-
-function traceIssues(traces: readonly Readonly<Record<string, unknown>>[]): ObservationIssue[] {
-  if (traces.length === 0) {
-    return [{
-      code: 'correlated_trace_missing',
-      source: 'trace',
-      message: 'No correlated Trace was available.',
-      impact: 'diagnostic_only',
-    }];
+  if (operation === 'daily_recommendation' && measurements?.recommendationsPublished === undefined) {
+    unavailable.add('recommendationsPublished');
   }
-  return traces.some((trace) => {
-    const summary = isRecord(trace.summary) ? trace.summary : trace;
-    return summary.diagnostics === 'incomplete';
-  })
-    ? [{
-        code: 'trace_incomplete',
-        source: 'trace',
-        message: 'A correlated Trace reports incomplete diagnostic capture.',
-        impact: 'diagnostic_only',
-      }]
-    : [];
-}
-
-function traceIdOf(trace: Readonly<Record<string, unknown>>): string | undefined {
-  const summary = isRecord(trace.summary) ? trace.summary : trace;
-  return typeof summary.traceId === 'string' ? summary.traceId : undefined;
+  if (operation === 'preference_learning' && measurements?.preferenceRevisions === undefined) {
+    unavailable.add('preferenceRevisions');
+  }
 }
 
 async function walk(root: string, directory: string, output: Record<string, string>): Promise<void> {
@@ -221,81 +223,6 @@ function redactCredentials(value: unknown): unknown {
       ? '[REDACTED]'
       : redactCredentials(child),
   ]));
-}
-
-function countSpans(spans: readonly unknown[], matches: (name: string) => boolean): number {
-  return spans.filter((span) => isRecord(span) && typeof span.name === 'string' && matches(span.name)).length;
-}
-
-function collectModelUsage(value: unknown): {
-  readonly inputTokens: number;
-  readonly outputTokens: number;
-  readonly estimatedCostUsd: number;
-} {
-  if (Array.isArray(value)) return value.map(collectModelUsage).reduce(addUsage, emptyUsage());
-  if (!isRecord(value)) return emptyUsage();
-  const own = readUsage(value.usage);
-  return Object.entries(value)
-    .filter(([key]) => key !== 'usage' && key !== 'records')
-    .map(([, child]) => collectModelUsage(child))
-    .reduce(addUsage, own);
-}
-
-function readUsage(value: unknown): ReturnType<typeof emptyUsage> {
-  if (!isRecord(value)) return emptyUsage();
-  const cost = isRecord(value.cost) ? value.cost.total : undefined;
-  return {
-    inputTokens: nonnegativeInteger(value.input),
-    outputTokens: nonnegativeInteger(value.output),
-    estimatedCostUsd: nonnegativeNumber(cost),
-  };
-}
-
-function emptyUsage() {
-  return { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
-}
-
-function addUsage(left: ReturnType<typeof emptyUsage>, right: ReturnType<typeof emptyUsage>) {
-  return {
-    inputTokens: left.inputTokens + right.inputTokens,
-    outputTokens: left.outputTokens + right.outputTokens,
-    estimatedCostUsd: left.estimatedCostUsd + right.estimatedCostUsd,
-  };
-}
-
-function nonnegativeInteger(value: unknown): number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0;
-}
-
-function nonnegativeNumber(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
-}
-
-function findNonnegativeInteger(value: unknown, keys: readonly string[]): number {
-  if (Array.isArray(value)) return Math.max(0, ...value.map((child) => findNonnegativeInteger(child, keys)));
-  if (!isRecord(value)) return 0;
-  for (const key of keys) {
-    const candidate = value[key];
-    if (typeof candidate === 'number' && Number.isInteger(candidate) && candidate >= 0) return candidate;
-  }
-  return Math.max(0, ...Object.values(value).map((child) => findNonnegativeInteger(child, keys)));
-}
-
-function countRecommendations(value: unknown): number {
-  if (Array.isArray(value)) return value.reduce((total, child) => total + countRecommendations(child), 0);
-  if (!isRecord(value)) return 0;
-  const direct = Array.isArray(value.recommendations) ? value.recommendations.length : 0;
-  return direct + Object.entries(value)
-    .filter(([key]) => key !== 'recommendations')
-    .reduce((total, [, child]) => total + countRecommendations(child), 0);
-}
-
-function countArraysAtKeys(value: unknown, keys: readonly string[]): number {
-  if (Array.isArray(value)) return value.reduce((total, child) => total + countArraysAtKeys(child, keys), 0);
-  if (!isRecord(value)) return 0;
-  return Object.entries(value).reduce((total, [key, child]) => (
-    total + (keys.includes(key) && Array.isArray(child) ? child.length : countArraysAtKeys(child, keys))
-  ), 0);
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {

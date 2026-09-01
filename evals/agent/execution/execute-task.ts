@@ -4,6 +4,7 @@
 import type { ProductRuntime } from '@megumi/composition';
 import type { EvaluationTask } from '../contracts/evaluation-task';
 import type { InstalledInitialStateIds } from './initial-state';
+import type { TraceTarget } from './trace-evidence';
 
 export type ProductExecutionOutcome =
   | { readonly status: 'completed' }
@@ -13,7 +14,17 @@ export type ProductExecutionOutcome =
 export interface ProductTaskExecution {
   readonly outcome: ProductExecutionOutcome;
   readonly productResult: unknown;
-  readonly correlations: readonly Readonly<Record<string, string>>[];
+  readonly traceTargets: readonly TraceTarget[];
+  readonly evidence?: {
+    readonly input?: Readonly<Record<string, unknown>>;
+    readonly context?: Readonly<Record<string, unknown>>;
+    readonly output?: Readonly<Record<string, unknown>>;
+  };
+  readonly businessMeasurements?: {
+    readonly candidatesProduced?: number;
+    readonly recommendationsPublished?: number;
+    readonly preferenceRevisions?: number;
+  };
 }
 
 /** Calls the same public product operation used by a normal Host. */
@@ -37,7 +48,7 @@ async function executeConversation(input: Parameters<typeof executeTask>[0]): Pr
   if (input.task.input.type !== 'conversation') throw new Error('Conversation input is required.');
   let sessionId = Object.values(input.initialStateIds.sessions)[0];
   const steps: unknown[] = [];
-  const correlations: Record<string, string>[] = [];
+  const traceTargets: TraceTarget[] = [];
   for (const step of input.task.input.steps) {
     const accepted = await input.runtime.host.session.sendUserInput({
       ...(sessionId ? { sessionId } : {}),
@@ -54,15 +65,15 @@ async function executeConversation(input: Parameters<typeof executeTask>[0]): Pr
       return {
         outcome: { status: 'failed', message: `Product did not start an Agent Execution: ${accepted.payload.type}.` },
         productResult: { steps, accepted },
-        correlations,
+        traceTargets,
       };
     }
     sessionId = accepted.payload.session.id;
-    correlations.push({
+    traceTargets.push(conversationTraceTarget({
       executionId: accepted.payload.run.executionId,
       sessionId,
       messageId: accepted.payload.userMessageId,
-    });
+    }));
     const settled = await waitForCommittedConversation({
       runtime: input.runtime,
       sessionId,
@@ -71,10 +82,10 @@ async function executeConversation(input: Parameters<typeof executeTask>[0]): Pr
     });
     steps.push(settled.result);
     if (settled.outcome.status !== 'completed') {
-      return { outcome: settled.outcome, productResult: { steps, sessionId }, correlations };
+      return { outcome: settled.outcome, productResult: { steps, sessionId }, traceTargets };
     }
   }
-  return { outcome: { status: 'completed' }, productResult: { steps, sessionId }, correlations };
+  return { outcome: { status: 'completed' }, productResult: { steps, sessionId }, traceTargets };
 }
 
 async function executeInterestUnderstanding(input: Parameters<typeof executeTask>[0]): Promise<ProductTaskExecution> {
@@ -96,7 +107,7 @@ async function executeInterestUnderstanding(input: Parameters<typeof executeTask
     return {
       outcome: { status: 'failed', message: `Product did not start the source Conversation: ${accepted.payload.type}.` },
       productResult: accepted,
-      correlations: [],
+      traceTargets: [],
     };
   }
   const conversation = await waitForCommittedConversation({
@@ -105,13 +116,13 @@ async function executeInterestUnderstanding(input: Parameters<typeof executeTask
     executionId: accepted.payload.run.executionId,
     timeoutMs: input.task.timeoutMs,
   });
-  const correlations: Record<string, string>[] = [{
+  const traceTargets: TraceTarget[] = [conversationTraceTarget({
     executionId: accepted.payload.run.executionId,
     sessionId,
     messageId: accepted.payload.userMessageId,
-  }];
+  })];
   if (conversation.outcome.status !== 'completed') {
-    return { outcome: conversation.outcome, productResult: { conversation: conversation.result }, correlations };
+    return { outcome: conversation.outcome, productResult: { conversation: conversation.result }, traceTargets };
   }
   const understanding = await input.runtime.host.discovery.waitInterestUnderstanding({
     executionId: accepted.payload.run.executionId,
@@ -121,18 +132,22 @@ async function executeInterestUnderstanding(input: Parameters<typeof executeTask
     return {
       outcome: { status: 'timed_out', message: 'Interest Understanding did not settle before timeout.' },
       productResult: { conversation: conversation.result, understanding },
-      correlations,
+      traceTargets,
     };
   }
-  correlations.push({
-    interestUnderstandingId: understanding.value.interestUnderstandingId,
-    executionId: accepted.payload.run.executionId,
-    sessionId,
+  traceTargets.push({
+    traceKind: 'interest_understanding',
+    correlation: {
+      interestUnderstandingId: understanding.value.interestUnderstandingId,
+      executionId: accepted.payload.run.executionId,
+      sessionId,
+    },
+    expectation: 'required',
   });
   return {
     outcome: { status: 'completed' },
     productResult: { conversation: conversation.result, understanding: understanding.value },
-    correlations,
+    traceTargets,
   };
 }
 
@@ -142,7 +157,7 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
     return {
       outcome: { status: 'failed', message: 'Product did not accept a Candidate Supply check.' },
       productResult: null,
-      correlations: [],
+      traceTargets: [],
     };
   }
   const completion = await input.runtime.host.discovery.waitCandidateSupplyCheck({
@@ -153,7 +168,7 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
     return {
       outcome: { status: 'timed_out', message: 'Candidate Supply did not settle before timeout.' },
       productResult: { receipt, completion },
-      correlations: [{ candidateSupplyId: receipt.candidateSupplyId }],
+      traceTargets: [],
     };
   }
   const executionId = completion.value.status === 'completed' ? completion.value.executionId : undefined;
@@ -165,10 +180,18 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
       ? { status: 'failed', message: completion.value.failure.message }
       : { status: 'completed' },
     productResult: { receipt, completion: completion.value, facts },
-    correlations: [{
-      candidateSupplyId: receipt.candidateSupplyId,
-      ...(executionId ? { executionId } : {}),
-    }],
+    traceTargets: executionId ? [{
+      traceKind: 'candidate_supply',
+      correlation: { candidateSupplyId: receipt.candidateSupplyId, executionId },
+      expectation: 'required',
+    }] : [],
+    evidence: {
+      context: facts?.status === 'ok' ? { supplyFacts: facts.facts } : {},
+      output: { completion: completion.value },
+    },
+    businessMeasurements: {
+      candidatesProduced: candidateProductionCount(completion.value),
+    },
   };
 }
 
@@ -184,9 +207,10 @@ async function executeDailyRecommendation(input: Parameters<typeof executeTask>[
     return {
       outcome: { status: 'timed_out', message: 'Daily Recommendation did not settle before timeout.' },
       productResult: { accepted, completion },
-      correlations: dailyCorrelations(accepted),
+      traceTargets: dailyTraceTargets(accepted),
     };
   }
+  const settledBatch = completion.status === 'completed' ? completion.value : completion;
   const facts = accepted.status === 'started' || accepted.status === 'in_progress'
     ? await input.runtime.host.discovery.getDailyRecommendationFacts({
         executionId: accepted.executionId,
@@ -194,13 +218,27 @@ async function executeDailyRecommendation(input: Parameters<typeof executeTask>[
         localDate: accepted.localDate,
       })
     : undefined;
-  const failed = 'status' in completion && completion.status === 'failed';
+  const failed = settledBatch.status === 'failed';
   return {
     outcome: failed
-      ? { status: 'failed', message: completion.failure.message }
+      ? {
+          status: 'failed',
+          message: 'failureMessage' in settledBatch
+            ? settledBatch.failureMessage
+            : settledBatch.failure.message,
+        }
       : { status: 'completed' },
-    productResult: { accepted, completion, facts },
-    correlations: dailyCorrelations(accepted),
+    productResult: { accepted, completion: settledBatch, facts },
+    traceTargets: dailyTraceTargets(accepted),
+    evidence: {
+      context: facts?.status === 'ok'
+        ? { recentRecommendations: facts.facts.recentRecommendations }
+        : {},
+      output: { currentBatch: settledBatch },
+    },
+    businessMeasurements: {
+      recommendationsPublished: currentRecommendationCount(accepted, settledBatch),
+    },
   };
 }
 
@@ -218,7 +256,9 @@ async function executePreferenceLearning(input: Parameters<typeof executeTask>[0
     return {
       outcome: { status: 'completed' },
       productResult: { updated },
-      correlations: [{ recommendationId }],
+      traceTargets: [],
+      evidence: { input: { recommendationId, feedbackChange: updated.feedbackChange } },
+      businessMeasurements: { preferenceRevisions: 0 },
     };
   }
   const completion = await input.runtime.host.discovery.waitPreferenceLearning({
@@ -229,7 +269,8 @@ async function executePreferenceLearning(input: Parameters<typeof executeTask>[0
     return {
       outcome: { status: 'timed_out', message: 'Preference Learning did not settle before timeout.' },
       productResult: { updated, completion },
-      correlations: [{ recommendationId, feedbackChangeId: receipt.feedbackChangeId }],
+      traceTargets: [],
+      evidence: { input: { recommendationId, feedbackChange: receipt } },
     };
   }
   const facts = completion.value.batchId
@@ -238,11 +279,27 @@ async function executePreferenceLearning(input: Parameters<typeof executeTask>[0
   return {
     outcome: { status: 'completed' },
     productResult: { updated, completion: completion.value, facts },
-    correlations: [{
-      recommendationId,
-      feedbackChangeId: receipt.feedbackChangeId,
-      ...(completion.value.batchId ? { batchId: completion.value.batchId } : {}),
-    }],
+    traceTargets: completion.value.batchId ? [{
+      traceKind: 'preference_learning',
+      correlation: { preferenceLearningBatchId: completion.value.batchId },
+      expectation: 'required',
+    }] : [],
+    evidence: {
+      input: {
+        recommendationId,
+        feedbackChangeId: receipt.feedbackChangeId,
+        batchFeedback: facts?.status === 'ok' ? facts.facts.feedbackChanges : [],
+      },
+      context: {
+        preferenceRevisionsBefore: facts?.status === 'ok'
+          ? facts.facts.currentPreferences.map(({ scopeKey, revision }) => ({ scopeKey, revision }))
+          : [],
+      },
+      output: { preferenceRevisionsAfter: completion.value.resultRevisions },
+    },
+    businessMeasurements: {
+      preferenceRevisions: completion.value.resultRevisions.length,
+    },
   };
 }
 
@@ -286,11 +343,50 @@ async function waitForCommittedConversation(input: {
   };
 }
 
-function dailyCorrelations(value: Awaited<ReturnType<ProductRuntime['host']['discovery']['ensureDaily']>>): Readonly<Record<string, string>>[] {
+function conversationTraceTarget(correlation: {
+  readonly executionId: string;
+  readonly sessionId: string;
+  readonly messageId: string;
+}): TraceTarget {
+  return { traceKind: 'conversation', correlation, expectation: 'required' };
+}
+
+function dailyTraceTargets(
+  value: Awaited<ReturnType<ProductRuntime['host']['discovery']['ensureDaily']>>,
+): TraceTarget[] {
   if (value.status === 'started' || value.status === 'in_progress') {
-    return [{ executionId: value.executionId, batchId: value.batchId, localDate: value.localDate }];
+    return [{
+      traceKind: 'daily_recommendation',
+      correlation: {
+        dailyRecommendationBatchId: value.batchId,
+        executionId: value.executionId,
+      },
+      expectation: 'required',
+    }];
   }
-  return 'batchId' in value
-    ? [{ batchId: value.batchId, localDate: value.localDate }]
-    : [{ localDate: value.localDate }];
+  return [];
+}
+
+type CandidateSupplyCompletion = NonNullable<Awaited<ReturnType<
+  ProductRuntime['host']['discovery']['getCandidateSupplyCheck']
+>>>;
+
+function candidateProductionCount(value: CandidateSupplyCompletion): number | undefined {
+  if (value.status !== 'completed') return 0;
+  if (!value.executionId) return 0;
+  if (value.availableBefore === undefined || value.availableAfter === undefined) return undefined;
+  return Math.max(0, value.availableAfter - value.availableBefore);
+}
+
+function currentRecommendationCount(
+  accepted: Awaited<ReturnType<ProductRuntime['host']['discovery']['ensureDaily']>>,
+  completion: unknown,
+): number | undefined {
+  if (accepted.status !== 'started' && accepted.status !== 'in_progress') return 0;
+  if (typeof completion !== 'object' || completion === null || !('status' in completion)) return undefined;
+  if (completion.status === 'published' && 'resultCount' in completion && typeof completion.resultCount === 'number') {
+    return completion.resultCount;
+  }
+  if (completion.status === 'failed') return 0;
+  return undefined;
 }
