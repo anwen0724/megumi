@@ -1,38 +1,35 @@
 /*
- * Sends one Evaluation Task through the existing ProductRuntime Host and preserves
+ * Sends one Evaluation Case through the existing ProductRuntime Host and preserves
  * the owning product operation's returned result without inventing a shared status.
  */
 import type { ProductRuntime } from '@megumi/composition';
-import type { EvaluationTask } from '../contracts/evaluation-task';
+import type { EvaluationCase } from '../contracts/evaluation-dataset';
 import type { InstalledInitialStateIds } from './initial-state';
-import type { TraceTarget } from './trace-evidence';
 
 export interface EvaluationSafetyInterruption {
   readonly source: 'evaluation_safety_guard';
   readonly limitMs: number;
 }
 
-export interface ProductTaskExecution {
-  readonly operation: EvaluationTask['input']['type'];
-  readonly productResult: unknown;
-  readonly businessIds: Readonly<Record<string, string | string[]>>;
-  readonly traceTargets: readonly TraceTarget[];
-  readonly interruption?: EvaluationSafetyInterruption;
-  readonly evidence?: {
-    readonly input?: Readonly<Record<string, unknown>>;
-    readonly context?: Readonly<Record<string, unknown>>;
-    readonly output?: Readonly<Record<string, unknown>>;
-  };
-  readonly businessMeasurements?: {
-    readonly candidatesProduced?: number;
-    readonly recommendationsPublished?: number;
-    readonly preferenceRevisions?: number;
-  };
+export interface CaseTraceTarget {
+  readonly traceKind: EvaluationCase['type'];
+  readonly correlation: Readonly<Record<string, string>>;
+  readonly expectation: 'required';
 }
 
-interface TaskExecutionInput {
-  readonly task: EvaluationTask;
-  readonly runtime: ProductRuntime;
+export interface CaseExecutionResult {
+  readonly caseType: EvaluationCase['type'];
+  readonly terminalState: 'settled' | 'interrupted';
+  readonly productResult: unknown;
+  readonly ownerFacts: unknown;
+  readonly businessIds: Readonly<Record<string, string | string[]>>;
+  readonly traceTargets: readonly CaseTraceTarget[];
+  readonly interruption?: EvaluationSafetyInterruption;
+}
+
+interface CaseExecutionInput {
+  readonly evaluationCase: EvaluationCase;
+  readonly runtime: CaseExecutionRuntime;
   readonly initialStateIds: InstalledInitialStateIds;
   readonly candidateModel: { readonly providerId: string; readonly modelId: string };
   readonly now: () => string;
@@ -40,13 +37,30 @@ interface TaskExecutionInput {
   readonly safetyDeadlineMs: number;
 }
 
-/** Calls the same public product operation used by a normal Host. */
-export async function executeTask(input: Omit<TaskExecutionInput, 'safetyDeadlineMs'>): Promise<ProductTaskExecution> {
-  const executionInput: TaskExecutionInput = {
+type CaseExecutionRuntime = {
+  readonly host: {
+    readonly session: Pick<ProductRuntime['host']['session'], 'sendUserInput' | 'readCommittedRun'>;
+    readonly discovery: Pick<ProductRuntime['host']['discovery'],
+      | 'waitInterestUnderstanding'
+      | 'requestCandidateSupply'
+      | 'waitCandidateSupplyCheck'
+      | 'getCandidateSupplyFacts'
+      | 'ensureDaily'
+      | 'waitDailyBatch'
+      | 'getDailyRecommendationFacts'
+      | 'updateRecommendationState'
+      | 'waitPreferenceLearning'
+      | 'getPreferenceLearningFacts'>;
+  };
+};
+
+/** Calls the same public Product Host operation used by a normal Host. */
+export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlineMs'>): Promise<CaseExecutionResult> {
+  const executionInput: CaseExecutionInput = {
     ...input,
     safetyDeadlineMs: Date.now() + input.safetyWallClockLimitMs,
   };
-  switch (executionInput.task.input.type) {
+  switch (executionInput.evaluationCase.type) {
     case 'conversation': return executeConversation(executionInput);
     case 'interest_understanding': return executeInterestUnderstanding(executionInput);
     case 'candidate_supply': return executeCandidateSupply(executionInput);
@@ -55,13 +69,13 @@ export async function executeTask(input: Omit<TaskExecutionInput, 'safetyDeadlin
   }
 }
 
-async function executeConversation(input: TaskExecutionInput): Promise<ProductTaskExecution> {
-  if (input.task.input.type !== 'conversation') throw new Error('Conversation input is required.');
+async function executeConversation(input: CaseExecutionInput): Promise<CaseExecutionResult> {
+  if (input.evaluationCase.type !== 'conversation') throw new Error('Conversation Case is required.');
   let sessionId = Object.values(input.initialStateIds.sessions)[0];
   const executionIds: string[] = [];
   const steps: unknown[] = [];
-  const traceTargets: TraceTarget[] = [];
-  for (const step of input.task.input.steps) {
+  const traceTargets: CaseTraceTarget[] = [];
+  for (const step of input.evaluationCase.input.steps) {
     const accepted = await input.runtime.host.session.sendUserInput({
       ...(sessionId ? { sessionId } : {}),
       projectId: input.initialStateIds.workspaceId,
@@ -75,8 +89,9 @@ async function executeConversation(input: TaskExecutionInput): Promise<ProductTa
     });
     if (accepted.payload.type !== 'agent_run') {
       return execution({
-        operation: 'conversation',
+        caseType: 'conversation', terminalState: 'settled',
         productResult: { steps, acceptance: accepted },
+        ownerFacts: { committedSteps: steps },
         businessIds: sessionId ? { sessionId, executionIds } : { executionIds },
         traceTargets,
       });
@@ -97,8 +112,9 @@ async function executeConversation(input: TaskExecutionInput): Promise<ProductTa
     steps.push(settled.result);
     if (settled.status === 'interrupted') {
       return execution({
-        operation: 'conversation',
+        caseType: 'conversation', terminalState: 'interrupted',
         productResult: { steps, sessionId },
+        ownerFacts: { committedSteps: steps },
         businessIds: { sessionId, executionIds },
         traceTargets,
         interruption: safetyInterruption(input),
@@ -107,21 +123,22 @@ async function executeConversation(input: TaskExecutionInput): Promise<ProductTa
     if (settled.status === 'failed') break;
   }
   return execution({
-    operation: 'conversation',
+    caseType: 'conversation', terminalState: 'settled',
     productResult: { steps, sessionId },
+    ownerFacts: { committedSteps: steps },
     businessIds: { ...(sessionId ? { sessionId } : {}), executionIds },
     traceTargets,
   });
 }
 
-async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<ProductTaskExecution> {
-  if (input.task.input.type !== 'interest_understanding') throw new Error('Interest Understanding input is required.');
+async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<CaseExecutionResult> {
+  if (input.evaluationCase.type !== 'interest_understanding') throw new Error('Interest Understanding Case is required.');
   const sessionId = Object.values(input.initialStateIds.sessions)[0];
   if (!sessionId) throw new Error('Interest Understanding requires one initial Session.');
   const accepted = await input.runtime.host.session.sendUserInput({
     sessionId,
     projectId: input.initialStateIds.workspaceId,
-    text: input.task.input.text,
+    text: input.evaluationCase.input.text,
     modelSelection: {
       provider_id: input.candidateModel.providerId,
       model_id: input.candidateModel.modelId,
@@ -131,14 +148,15 @@ async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<
   });
   if (accepted.payload.type !== 'agent_run') {
     return execution({
-      operation: 'interest_understanding',
+      caseType: 'interest_understanding', terminalState: 'settled',
       productResult: { sourceConversation: { acceptance: accepted } },
+      ownerFacts: {},
       businessIds: { sessionId },
       traceTargets: [],
     });
   }
   const executionId = accepted.payload.run.executionId;
-  const traceTargets: TraceTarget[] = [conversationTraceTarget({
+  const traceTargets: CaseTraceTarget[] = [conversationTraceTarget({
     executionId,
     sessionId,
     messageId: accepted.payload.userMessageId,
@@ -151,8 +169,10 @@ async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<
   });
   if (conversation.status !== 'completed') {
     return execution({
-      operation: 'interest_understanding',
+      caseType: 'interest_understanding',
+      terminalState: conversation.status === 'interrupted' ? 'interrupted' : 'settled',
       productResult: { sourceConversation: conversation.result },
+      ownerFacts: {},
       businessIds: { sessionId, executionId },
       traceTargets,
       ...(conversation.status === 'interrupted' ? { interruption: safetyInterruption(input) } : {}),
@@ -164,8 +184,9 @@ async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<
   });
   if (understanding.status === 'interrupted') {
     return execution({
-      operation: 'interest_understanding',
+      caseType: 'interest_understanding', terminalState: 'interrupted',
       productResult: { sourceConversation: conversation.result },
+      ownerFacts: {},
       businessIds: { sessionId, executionId },
       traceTargets,
       interruption: safetyInterruption(input),
@@ -181,8 +202,9 @@ async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<
     expectation: 'required',
   });
   return execution({
-    operation: 'interest_understanding',
+    caseType: 'interest_understanding', terminalState: 'settled',
     productResult: { sourceConversation: conversation.result, understanding: understanding.value },
+    ownerFacts: { understanding: understanding.value },
     businessIds: {
       sessionId,
       executionId,
@@ -192,15 +214,15 @@ async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<
   });
 }
 
-async function executeCandidateSupply(input: TaskExecutionInput): Promise<ProductTaskExecution> {
+async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseExecutionResult> {
   const receipt = await input.runtime.host.discovery.requestCandidateSupply({ trigger: 'evaluation' });
   if (!receipt) {
     return execution({
-      operation: 'candidate_supply',
+      caseType: 'candidate_supply', terminalState: 'settled',
       productResult: { receipt },
+      ownerFacts: {},
       businessIds: {},
       traceTargets: [],
-      businessMeasurements: { candidatesProduced: 0 },
     });
   }
   const completion = await waitForBackgroundResult({
@@ -212,8 +234,9 @@ async function executeCandidateSupply(input: TaskExecutionInput): Promise<Produc
   });
   if (completion.status === 'interrupted') {
     return execution({
-      operation: 'candidate_supply',
+      caseType: 'candidate_supply', terminalState: 'interrupted',
       productResult: { receipt },
+      ownerFacts: {},
       businessIds: { candidateSupplyId: receipt.candidateSupplyId },
       traceTargets: [],
       interruption: safetyInterruption(input),
@@ -224,8 +247,9 @@ async function executeCandidateSupply(input: TaskExecutionInput): Promise<Produc
     ? await input.runtime.host.discovery.getCandidateSupplyFacts({ executionId })
     : undefined;
   return execution({
-    operation: 'candidate_supply',
-    productResult: { receipt, completion: completion.value, facts },
+    caseType: 'candidate_supply', terminalState: 'settled',
+    productResult: { receipt, completion: completion.value },
+    ownerFacts: facts ?? {},
     businessIds: {
       candidateSupplyId: receipt.candidateSupplyId,
       ...(executionId ? { executionId } : {}),
@@ -235,25 +259,18 @@ async function executeCandidateSupply(input: TaskExecutionInput): Promise<Produc
       correlation: { candidateSupplyId: receipt.candidateSupplyId, executionId },
       expectation: 'required',
     }] : [],
-    evidence: {
-      context: facts?.status === 'ok' ? { supplyFacts: facts.facts } : {},
-      output: { completion: completion.value },
-    },
-    businessMeasurements: { candidatesProduced: candidateProductionCount(completion.value) },
   });
 }
 
-async function executeDailyRecommendation(input: TaskExecutionInput): Promise<ProductTaskExecution> {
+async function executeDailyRecommendation(input: CaseExecutionInput): Promise<CaseExecutionResult> {
   const accepted = await input.runtime.host.discovery.ensureDaily({ trigger: 'manual', now: input.now() });
   if (accepted.status !== 'started' && accepted.status !== 'in_progress') {
     return execution({
-      operation: 'daily_recommendation',
+      caseType: 'daily_recommendation', terminalState: 'settled',
       productResult: { accepted },
+      ownerFacts: {},
       businessIds: 'batchId' in accepted ? { dailyRecommendationBatchId: accepted.batchId } : {},
       traceTargets: [],
-      businessMeasurements: {
-        recommendationsPublished: accepted.status === 'already_published' ? accepted.resultCount : 0,
-      },
     });
   }
   const completion = await waitForBackgroundResult({
@@ -270,8 +287,9 @@ async function executeDailyRecommendation(input: TaskExecutionInput): Promise<Pr
   };
   if (completion.status === 'interrupted') {
     return execution({
-      operation: 'daily_recommendation',
+      caseType: 'daily_recommendation', terminalState: 'interrupted',
       productResult: { accepted },
+      ownerFacts: {},
       businessIds: baseBusinessIds,
       traceTargets,
       interruption: safetyInterruption(input),
@@ -283,46 +301,36 @@ async function executeDailyRecommendation(input: TaskExecutionInput): Promise<Pr
     localDate: accepted.localDate,
   });
   return execution({
-    operation: 'daily_recommendation',
-    productResult: { accepted, completion: completion.value, facts },
+    caseType: 'daily_recommendation', terminalState: 'settled',
+    productResult: { accepted, completion: completion.value },
+    ownerFacts: facts,
     businessIds: {
       ...baseBusinessIds,
       settledExecutionId: completion.value.executionId,
     },
     traceTargets,
-    evidence: {
-      context: facts.status === 'ok' ? { recentRecommendations: facts.facts.recentRecommendations } : {},
-      output: { currentBatch: completion.value },
-    },
-    businessMeasurements: {
-      recommendationsPublished: currentRecommendationCount(completion.value),
-    },
   });
 }
 
-async function executePreferenceLearning(input: TaskExecutionInput): Promise<ProductTaskExecution> {
-  if (input.task.input.type !== 'preference_learning') throw new Error('Preference Learning input is required.');
-  const recommendationId = input.initialStateIds.recommendations[input.task.input.recommendationReferenceId];
+async function executePreferenceLearning(input: CaseExecutionInput): Promise<CaseExecutionResult> {
+  if (input.evaluationCase.type !== 'preference_learning') throw new Error('Preference Learning Case is required.');
+  const recommendationId = input.initialStateIds.recommendations[input.evaluationCase.input.recommendationReferenceId];
   if (!recommendationId) {
-    throw new Error(`Initial Recommendation was not installed: ${input.task.input.recommendationReferenceId}.`);
+    throw new Error(`Initial Recommendation was not installed: ${input.evaluationCase.input.recommendationReferenceId}.`);
   }
   const updated = await input.runtime.host.discovery.updateRecommendationState({
     recommendationId,
     action: 'set_reaction',
-    reaction: input.task.input.reaction === 'none' ? null : input.task.input.reaction,
+    reaction: input.evaluationCase.input.reaction === 'none' ? null : input.evaluationCase.input.reaction,
   });
   const receipt = updated.feedbackChange;
   if (!receipt?.changed || !receipt.feedbackChangeId) {
     return execution({
-      operation: 'preference_learning',
+      caseType: 'preference_learning', terminalState: 'settled',
       productResult: { updated },
+      ownerFacts: {},
       businessIds: { recommendationId },
       traceTargets: [],
-      evidence: {
-        input: { recommendationId, feedbackChange: updated.feedbackChange },
-        context: { preferencesBefore: input.task.initialState.preferences },
-      },
-      businessMeasurements: { preferenceRevisions: 0 },
     });
   }
   const completion = await waitForBackgroundResult({
@@ -334,23 +342,21 @@ async function executePreferenceLearning(input: TaskExecutionInput): Promise<Pro
   });
   if (completion.status === 'interrupted') {
     return execution({
-      operation: 'preference_learning',
+      caseType: 'preference_learning', terminalState: 'interrupted',
       productResult: { updated },
+      ownerFacts: {},
       businessIds: { recommendationId, feedbackChangeId: receipt.feedbackChangeId },
       traceTargets: [],
       interruption: safetyInterruption(input),
-      evidence: {
-        input: { recommendationId, feedbackChange: receipt },
-        context: { preferencesBefore: input.task.initialState.preferences },
-      },
     });
   }
   const facts = completion.value.batchId
     ? await input.runtime.host.discovery.getPreferenceLearningFacts({ batchId: completion.value.batchId })
     : undefined;
   return execution({
-    operation: 'preference_learning',
-    productResult: { updated, completion: completion.value, facts },
+    caseType: 'preference_learning', terminalState: 'settled',
+    productResult: { updated, completion: completion.value },
+    ownerFacts: facts ?? {},
     businessIds: {
       recommendationId,
       feedbackChangeId: receipt.feedbackChangeId,
@@ -361,19 +367,6 @@ async function executePreferenceLearning(input: TaskExecutionInput): Promise<Pro
       correlation: { preferenceLearningBatchId: completion.value.batchId },
       expectation: 'required',
     }] : [],
-    evidence: {
-      input: {
-        recommendationId,
-        feedbackChangeId: receipt.feedbackChangeId,
-        batchFeedback: facts?.status === 'ok' ? facts.facts.feedbackChanges : [],
-      },
-      context: { preferencesBefore: input.task.initialState.preferences },
-      output: {
-        completion: completion.value,
-        preferencesAfter: facts?.status === 'ok' ? facts.facts.currentPreferences : [],
-      },
-    },
-    businessMeasurements: { preferenceRevisions: completion.value.resultRevisions.length },
   });
 }
 
@@ -383,7 +376,7 @@ type ConversationSettlement =
   | { readonly status: 'interrupted'; readonly result: Readonly<Record<string, string>> };
 
 async function waitForCommittedConversation(input: {
-  readonly runtime: ProductRuntime;
+  readonly runtime: CaseExecutionRuntime;
   readonly sessionId: string;
   readonly executionId: string;
   readonly deadlineMs: number;
@@ -431,11 +424,11 @@ async function waitForBackgroundResult<T>(input: {
   return { status: 'interrupted' };
 }
 
-function execution(value: ProductTaskExecution): ProductTaskExecution {
+function execution(value: CaseExecutionResult): CaseExecutionResult {
   return value;
 }
 
-function safetyInterruption(input: TaskExecutionInput): EvaluationSafetyInterruption {
+function safetyInterruption(input: CaseExecutionInput): EvaluationSafetyInterruption {
   return { source: 'evaluation_safety_guard', limitMs: input.safetyWallClockLimitMs };
 }
 
@@ -443,7 +436,7 @@ function conversationTraceTarget(correlation: {
   readonly executionId: string;
   readonly sessionId: string;
   readonly messageId: string;
-}): TraceTarget {
+}): CaseTraceTarget {
   return { traceKind: 'conversation', correlation, expectation: 'required' };
 }
 
@@ -451,29 +444,12 @@ function dailyTraceTargets(
   value: Extract<Awaited<ReturnType<ProductRuntime['host']['discovery']['ensureDaily']>>, {
     readonly status: 'started' | 'in_progress';
   }>,
-): TraceTarget[] {
+): CaseTraceTarget[] {
   return [{
     traceKind: 'daily_recommendation',
     correlation: { dailyRecommendationBatchId: value.batchId },
     expectation: 'required',
   }];
-}
-
-type CandidateSupplyCompletion = NonNullable<Awaited<ReturnType<
-  ProductRuntime['host']['discovery']['getCandidateSupplyCheck']
->>>;
-
-function candidateProductionCount(value: CandidateSupplyCompletion): number | undefined {
-  if (value.status !== 'completed') return 0;
-  if (!value.executionId) return 0;
-  if (value.availableBefore === undefined || value.availableAfter === undefined) return undefined;
-  return Math.max(0, value.availableAfter - value.availableBefore);
-}
-
-type DailyBatch = NonNullable<Awaited<ReturnType<ProductRuntime['host']['discovery']['getDailyBatch']>>>;
-
-function currentRecommendationCount(completion: DailyBatch): number {
-  return completion.status === 'published' ? completion.resultCount : 0;
 }
 
 async function waitForNextPoll(deadlineMs: number): Promise<void> {

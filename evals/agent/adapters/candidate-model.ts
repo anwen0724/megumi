@@ -1,5 +1,5 @@
 /*
- * Resolves Evaluation model selections through Megumi Settings and materializes
+ * Resolves the Candidate Model through Megumi Settings and materializes
  * read-only per-run AI CredentialStores without exposing secrets to artifacts.
  */
 import path from 'node:path';
@@ -12,12 +12,9 @@ import {
   type Settings,
 } from '@megumi/settings';
 import { createSettingsStore } from '@megumi/settings/store';
-import type {
-  EvaluationModelSource,
-  EvaluationRunConfig,
-} from '../contracts/evaluation-run-config';
+import type { CandidateModelSource } from '../contracts/evaluation-run';
 
-export interface ResolvedEvaluationModelConfig {
+export interface ResolvedCandidateModelConfig {
   readonly providerId: string;
   readonly modelId: string;
   readonly api: Api;
@@ -27,42 +24,32 @@ export interface ResolvedEvaluationModelConfig {
   readonly maxOutputTokens: number;
 }
 
-export interface ResolvedEvaluationModel {
-  readonly source: EvaluationModelSource['source'];
-  readonly config: ResolvedEvaluationModelConfig;
+export interface ResolvedCandidateModel {
+  readonly source: CandidateModelSource['source'];
+  readonly config: ResolvedCandidateModelConfig;
   readonly credentials: CredentialStore;
 }
 
-export interface ResolvedEvaluationModels {
-  readonly candidate: ResolvedEvaluationModel;
-  readonly grader: ResolvedEvaluationModel;
-}
-
-/** Resolves both model roles once so every Task uses the same validated public configuration and credentials. */
-export async function resolveEvaluationModels(input: {
-  readonly config: EvaluationRunConfig;
+/** Resolves the Candidate Model once so every selected Case uses the same validated configuration. */
+export async function resolveCandidateModel(input: {
+  readonly source: CandidateModelSource;
   readonly megumiHomePath: string;
   readonly environment: Readonly<Record<string, string | undefined>>;
-}): Promise<ResolvedEvaluationModels> {
+}): Promise<ResolvedCandidateModel> {
   const settings = createSettings({
     store: createSettingsStore({ settingsPath: path.join(input.megumiHomePath, 'settings.json') }),
     environment: createRecordSettingsEnvironment(input.environment),
   });
   const settingsCredentials = createSettingsCredentialStore(settings);
-  const [candidate, grader] = await Promise.all([
-    resolveEvaluationModel(input.config.candidateModel, settings, settingsCredentials, input.environment),
-    resolveEvaluationModel(input.config.graderModel, settings, settingsCredentials, input.environment),
-  ]);
-  return { candidate, grader };
+  return resolveModel(input.source, settings, settingsCredentials, input.environment);
 }
 
-/** Resolves one discriminated model source into the single runtime form consumed by AI composition. */
-async function resolveEvaluationModel(
-  source: EvaluationModelSource,
+async function resolveModel(
+  source: CandidateModelSource,
   settings: Settings,
   settingsCredentials: CredentialStore,
   environment: Readonly<Record<string, string | undefined>>,
-): Promise<ResolvedEvaluationModel> {
+): Promise<ResolvedCandidateModel> {
   if (source.source === 'custom') {
     return {
       source: source.source,
@@ -108,7 +95,7 @@ function currentModelSelection(settings: Settings): { readonly providerId: strin
 }
 
 /** Converts Settings terminology to the Evaluation runtime model vocabulary. */
-function fromSettingsModel(config: ResolvedProviderSettings): ResolvedEvaluationModelConfig {
+function fromSettingsModel(config: ResolvedProviderSettings): ResolvedCandidateModelConfig {
   return {
     providerId: config.provider_id,
     modelId: config.model_id,
@@ -122,7 +109,7 @@ function fromSettingsModel(config: ResolvedProviderSettings): ResolvedEvaluation
 
 /** Resolves a custom model's explicit credential reference into the standard AI CredentialStore. */
 async function resolveCustomCredentials(
-  source: Extract<EvaluationModelSource, { source: 'custom' }>,
+  source: Extract<CandidateModelSource, { source: 'custom' }>,
   settingsCredentials: CredentialStore,
   environment: Readonly<Record<string, string | undefined>>,
 ): Promise<CredentialStore> {

@@ -1,20 +1,21 @@
 /* Returns deterministic external Web Search and Fetch facts from one validated initial state. */
 import type { WebFetch, WebSearch } from '@megumi/tools';
-import type { EvaluationInitialState } from '../../contracts/evaluation-task';
+import type { CaseInitialState } from '../../run/initial-state';
 
-export function createControlledWebTools(initialState: EvaluationInitialState): {
+export function createControlledWebTools(initialState: CaseInitialState): {
   readonly webSearch: WebSearch;
   readonly webFetch: WebFetch;
 } {
-  const results = initialState.controlledSearch;
+  const results = initialState.controlledSources;
   return {
     webSearch: {
       async search(request) {
         request.signal?.throwIfAborted();
         const match = results.find((entry) => request.query.includes(entry.queryIncludes));
+        if (!match) throw new Error(`Controlled Web Search has no result set for query: ${request.query}.`);
         return {
           query: request.query,
-          results: (match?.results ?? []).slice(0, request.count).map((entry) => ({
+          results: match.results.slice(0, request.count).map((entry) => ({
             title: entry.title,
             url: entry.url,
             snippet: entry.snippet ?? entry.content ?? '',

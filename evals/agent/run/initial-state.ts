@@ -1,4 +1,6 @@
-/* Installs validated pre-run state through narrow Owner-specific commands in an isolated database. */
+/*
+ * Normalizes one validated Case and installs its pre-run state through real Owner contracts.
+ */
 import path from 'node:path';
 import { createDatabase, migrateDatabase } from '@megumi/database';
 import { createDiscoveryRepository, type DiscoveryRepository } from '@megumi/discovery';
@@ -7,23 +9,106 @@ import { createSessionStore } from '@megumi/session/store';
 import { createWorkspaceCatalog } from '@megumi/workspace';
 import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
 import { createWorkspaceStore } from '@megumi/workspace/store';
-import type { EvaluationInitialState } from '../contracts/evaluation-task';
+import type { EvaluationCase, WorkspaceFileData } from '../contracts/evaluation-dataset';
+
+type ConversationCase = Extract<EvaluationCase, { readonly type: 'conversation' }>;
+type InterestUnderstandingCase = Extract<EvaluationCase, { readonly type: 'interest_understanding' }>;
+type CandidateSupplyCase = Extract<EvaluationCase, { readonly type: 'candidate_supply' }>;
+type DailyRecommendationCase = Extract<EvaluationCase, { readonly type: 'daily_recommendation' }>;
+type PreferenceLearningCase = Extract<EvaluationCase, { readonly type: 'preference_learning' }>;
+
+export interface CaseInitialState {
+  readonly clock: string;
+  readonly dailyTargetCount: number;
+  readonly workspaceFiles: readonly WorkspaceFileData[];
+  readonly sessions: readonly ConversationCase['initialState']['sessionHistory'][number][];
+  readonly interests: readonly CandidateSupplyCase['initialState']['interests'][number][];
+  readonly candidates: readonly DailyRecommendationCase['initialState']['candidates'][number][];
+  readonly recommendations: readonly PreferenceLearningCase['initialState']['recommendations'][number][];
+  readonly preferences: readonly PreferenceLearningCase['initialState']['preferences'][number][];
+  readonly existingFeedback: readonly PreferenceLearningCase['initialState']['existingFeedback'][number][];
+  readonly controlledSources: readonly CandidateSupplyCase['initialState']['controlledSources'][number][];
+  readonly approvalDecisions: readonly ConversationCase['initialState']['approvalDecisions'][number][];
+}
+
+/** Maps each business-specific Case Initial State to the internal installation input. */
+export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialState {
+  switch (evaluationCase.type) {
+    case 'conversation':
+      return {
+        clock: evaluationCase.initialState.clock,
+        dailyTargetCount: 3,
+        workspaceFiles: evaluationCase.initialState.workspaceFiles,
+        sessions: evaluationCase.initialState.sessionHistory,
+        interests: [], candidates: [], recommendations: [], preferences: [], existingFeedback: [],
+        controlledSources: evaluationCase.initialState.controlledWeb,
+        approvalDecisions: evaluationCase.initialState.approvalDecisions,
+      };
+    case 'interest_understanding':
+      return {
+        clock: evaluationCase.initialState.clock,
+        dailyTargetCount: 3,
+        workspaceFiles: [],
+        sessions: [evaluationCase.initialState.sourceSession],
+        interests: evaluationCase.initialState.existingInterests,
+        candidates: [], recommendations: [], preferences: [], existingFeedback: [], controlledSources: [],
+        approvalDecisions: [],
+      };
+    case 'candidate_supply':
+      return {
+        clock: evaluationCase.initialState.clock,
+        dailyTargetCount: evaluationCase.initialState.targetCount,
+        workspaceFiles: [], sessions: [],
+        interests: evaluationCase.initialState.interests,
+        candidates: evaluationCase.initialState.existingCandidates,
+        recommendations: [], preferences: [], existingFeedback: [],
+        controlledSources: evaluationCase.initialState.controlledSources,
+        approvalDecisions: [],
+      };
+    case 'daily_recommendation':
+      return {
+        clock: evaluationCase.initialState.clock,
+        dailyTargetCount: evaluationCase.initialState.dailyTargetCount,
+        workspaceFiles: [], sessions: [],
+        interests: evaluationCase.initialState.interests,
+        candidates: evaluationCase.initialState.candidates,
+        recommendations: evaluationCase.initialState.previousRecommendations,
+        preferences: evaluationCase.initialState.preferences,
+        existingFeedback: [], controlledSources: [], approvalDecisions: [],
+      };
+    case 'preference_learning':
+      return {
+        clock: evaluationCase.initialState.clock,
+        dailyTargetCount: 3,
+        workspaceFiles: [], sessions: [],
+        interests: evaluationCase.initialState.interests,
+        candidates: evaluationCase.initialState.candidates,
+        recommendations: evaluationCase.initialState.recommendations,
+        preferences: evaluationCase.initialState.preferences,
+        existingFeedback: evaluationCase.initialState.existingFeedback,
+        controlledSources: [], approvalDecisions: [],
+      };
+  }
+}
 
 export interface EvaluationInitialStateOwner {
   installWorkspace(input: { readonly rootPath: string }): Promise<{ readonly workspaceId: string }>;
-  installSession(input: EvaluationInitialState['sessions'][number] & { readonly workspaceId: string }): Promise<{ readonly sessionId: string }>;
-  installInterest(input: EvaluationInitialState['interests'][number]): Promise<{ readonly interestId: string }>;
-  installCandidate(input: EvaluationInitialState['candidates'][number] & {
+  installSession(input: CaseInitialState['sessions'][number] & { readonly workspaceId: string }): Promise<{ readonly sessionId: string }>;
+  installInterest(input: CaseInitialState['interests'][number]): Promise<{ readonly interestId: string }>;
+  installCandidate(input: CaseInitialState['candidates'][number] & {
     readonly interestIds: readonly string[];
   }): Promise<{ readonly candidateId: string }>;
-  installRecommendation(input: EvaluationInitialState['recommendations'][number] & {
+  installRecommendation(input: CaseInitialState['recommendations'][number] & {
     readonly candidateId: string;
   }): Promise<{ readonly recommendationId: string }>;
-  installPreference(input: EvaluationInitialState['preferences'][number] & {
+  installFeedback(input: CaseInitialState['existingFeedback'][number] & {
+    readonly recommendationId: string;
+  }): Promise<void>;
+  installPreference(input: CaseInitialState['preferences'][number] & {
     readonly recommendationIds: readonly string[];
   }): Promise<{ readonly revisionId: string }>;
   verifyInstalled(input: {
-    readonly initialState: EvaluationInitialState;
+    readonly initialState: CaseInitialState;
     readonly ids: InstalledInitialStateIds;
   }): Promise<void>;
 }
@@ -39,7 +124,7 @@ export interface InstalledInitialStateIds {
 
 /** Installs one validated initial state and returns references used by the real product invocation. */
 export async function installInitialState(input: {
-  readonly initialState: EvaluationInitialState;
+  readonly initialState: CaseInitialState;
   readonly workspaceRoot: string;
   readonly owner: EvaluationInitialStateOwner;
 }): Promise<InstalledInitialStateIds> {
@@ -61,6 +146,10 @@ export async function installInitialState(input: {
   for (const entry of input.initialState.recommendations) {
     const candidateId = requireMapped(candidates, entry.candidateReferenceId, 'Candidate');
     recommendations[entry.referenceId] = (await input.owner.installRecommendation({ ...entry, candidateId })).recommendationId;
+  }
+  for (const entry of input.initialState.existingFeedback) {
+    const recommendationId = requireMapped(recommendations, entry.recommendationReferenceId, 'Recommendation');
+    await input.owner.installFeedback({ ...entry, recommendationId });
   }
   const preferenceRevisions = [];
   for (const entry of input.initialState.preferences) {
@@ -274,6 +363,16 @@ export function createDatabaseInitialStateOwner(input: {
         });
       }
       return { recommendationId: recommendation.recommendationId };
+    },
+    async installFeedback(entry) {
+      discovery.updateRecommendationState({
+        recommendationId: entry.recommendationId,
+        action: 'set_reaction',
+        reaction: entry.reaction === 'none' ? null : entry.reaction,
+        now: input.now,
+        feedbackId: `evaluation:feedback:${entry.referenceId}`,
+        feedbackChangeId: `evaluation:feedback-change:${entry.referenceId}`,
+      });
     },
     async installPreference(entry) {
       preferenceIndex += 1;
