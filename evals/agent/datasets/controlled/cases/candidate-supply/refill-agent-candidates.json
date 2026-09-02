@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "caseId": "candidate-supply.refill-agent-candidates",
+  "revision": 1,
+  "name": "补充 Agent 评估候选内容",
+  "description": "验证 Megumi 在固定兴趣和受控来源下补充相关 Candidate。",
+  "metadata": {
+    "tags": ["core", "controlled-source"],
+    "difficulty": "simple",
+    "source": "product-requirement"
+  },
+  "type": "candidate_supply",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "targetCount": 2,
+    "interests": [
+      {
+        "referenceId": "agent-evaluation",
+        "description": "Agent 评估系统设计",
+        "status": "active"
+      }
+    ],
+    "existingCandidates": [],
+    "controlledSources": [
+      {
+        "sourceId": "open_web",
+        "queryIncludes": "Agent",
+        "results": [
+          {
+            "url": "https://example.test/agent-evaluation",
+            "title": "Agent Evaluation Design",
+            "snippet": "Designing datasets, runs, traces, and graders.",
+            "content": "A practical guide to reproducible Agent evaluation datasets and execution records."
+          },
+          {
+            "url": "https://example.test/cooking",
+            "title": "Home Cooking",
+            "snippet": "A weekly recipe collection.",
+            "content": "Recipes unrelated to Agent evaluation."
+          }
+        ]
+      }
+    ]
+  },
+  "input": {
+    "trigger": "evaluation"
+  },
+  "expected": {
+    "admissibleUrls": ["https://example.test/agent-evaluation"],
+    "rejectedUrls": ["https://example.test/cooking"],
+    "minimumAcceptedCount": 1
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "environmentKind": "controlled",
+  "datasetId": "candidate-supply",
+  "revision": 1,
+  "name": "Candidate Supply",
+  "description": "验证 Megumi 围绕当前兴趣补充候选内容。",
+  "caseIds": ["candidate-supply.refill-agent-candidates"]
+}

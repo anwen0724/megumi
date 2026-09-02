@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 2,
+  "caseId": "daily-recommendation.select-relevant-candidate",
+  "revision": 1,
+  "name": "选择相关且未推荐的候选",
+  "description": "验证 Megumi 从固定候选池中发布与兴趣相关且未重复的每日推荐。",
+  "metadata": {
+    "tags": ["core", "selection"],
+    "difficulty": "simple",
+    "source": "product-requirement"
+  },
+  "type": "daily_recommendation",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "dailyTargetCount": 1,
+    "interests": [
+      {
+        "referenceId": "agent-evaluation",
+        "description": "Agent 评估系统设计",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "evaluation-design",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/evaluation-design",
+        "title": "Agent Evaluation Design",
+        "description": "如何分离数据、运行记录和评估器。",
+        "contentText": "A guide to Agent evaluation datasets, execution traces, and graders.",
+        "matchedInterestReferenceIds": ["agent-evaluation"],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "cooking-guide",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/cooking-guide",
+        "title": "家庭烹饪指南",
+        "description": "与当前兴趣无关的内容。",
+        "contentText": "A cooking guide.",
+        "matchedInterestReferenceIds": [],
+        "relevance": "exploration"
+      }
+    ],
+    "previousRecommendations": [],
+    "preferences": []
+  },
+  "input": {
+    "trigger": "manual"
+  },
+  "expected": {
+    "recommendableCandidateReferenceIds": ["evaluation-design"],
+    "excludedCandidateReferenceIds": ["cooking-guide"],
+    "allowedBatchOutcomes": ["published"]
+  }
+}

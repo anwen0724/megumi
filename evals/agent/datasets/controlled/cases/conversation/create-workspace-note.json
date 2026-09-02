@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "caseId": "conversation.create-workspace-note",
+  "revision": 1,
+  "name": "根据材料创建工作区笔记",
+  "description": "验证 Megumi 能读取给定材料并在隔离 Workspace 中创建准确的结果文件。",
+  "metadata": {
+    "tags": ["core", "workspace"],
+    "difficulty": "simple",
+    "source": "product-requirement"
+  },
+  "type": "conversation",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "workspaceFiles": [
+      {
+        "path": "source.md",
+        "content": "# TypeScript 边界规则\n\n来自文件、网络和数据库的未知数据必须先完成运行时校验。"
+      }
+    ],
+    "sessionHistory": [],
+    "controlledWeb": [],
+    "approvalDecisions": []
+  },
+  "input": {
+    "steps": [
+      {
+        "userInput": "读取 source.md，把核心规则整理到 notes.md，并简短告诉我完成了什么。",
+        "permissionMode": "auto"
+      }
+    ]
+  },
+  "expected": {
+    "requiredFiles": ["notes.md"],
+    "expectedFacts": ["外部未知数据必须先进行运行时校验"],
+    "allowedOutcomes": ["completed"]
+  }
+}

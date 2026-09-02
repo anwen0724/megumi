@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "caseId": "interest-understanding.recognize-explicit-interest",
+  "revision": 1,
+  "name": "识别明确表达的长期兴趣",
+  "description": "验证 Megumi 能从一次明确用户表达中形成可追溯的长期兴趣。",
+  "metadata": {
+    "tags": ["core", "explicit-interest"],
+    "difficulty": "simple",
+    "source": "product-requirement"
+  },
+  "type": "interest_understanding",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "sourceSession": {
+      "referenceId": "session",
+      "title": "近期关注",
+      "turns": []
+    },
+    "existingInterests": []
+  },
+  "input": {
+    "text": "我接下来几个月会持续关注 TypeScript Agent 架构和评估方法。"
+  },
+  "expected": {
+    "addedInterestDescriptions": ["TypeScript Agent 架构和评估方法"]
+  }
+}

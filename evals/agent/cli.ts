@@ -18,12 +18,26 @@ import { renderEvaluationDiagnostics, renderEvaluationReport } from './results/r
 import { cleanEvaluationRuns } from './results/retention-cleaner';
 import { runEvaluation } from './execution/run-evaluation';
 import { loadEvaluationTaskCatalog } from './execution/task-loader';
+import { loadDataset, validateDatasets } from './datasets/dataset-loader';
 
 const evaluationRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(evaluationRoot, '..', '..');
 
 async function main(arguments_: readonly string[]): Promise<void> {
   const [command, action, ...rest] = arguments_;
+  if (command === 'datasets' && action === 'validate') {
+    const result = await validateDatasets({ rootDirectory: path.join(evaluationRoot, 'datasets') });
+    process.stdout.write(`Datasets valid: ${result.datasetCount} Datasets, ${result.caseCount} Cases.\n`);
+    return;
+  }
+  if (command === 'datasets' && action === 'show' && rest[0]) {
+    const dataset = await loadDataset({
+      rootDirectory: path.join(evaluationRoot, 'datasets'),
+      identity: rest[0],
+    });
+    process.stdout.write(`${JSON.stringify(dataset, null, 2)}\n`);
+    return;
+  }
   if (command === 'tasks' && action === 'validate') {
     const catalog = await loadEvaluationTaskCatalog(evaluationRoot);
     process.stdout.write(`Tasks valid: ${catalog.tasks.size} Tasks, ${catalog.suites.size} Suites.\n`);
@@ -98,7 +112,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
     process.stdout.write(`Baseline approved: ${target}\n`);
     return;
   }
-  throw new Error('Usage: tasks validate | run <config.json> | human review import <result.json> <review.json> | baseline approve <result.json> [--id id] [--by name] [--root dir]');
+  throw new Error('Usage: datasets validate | datasets show <environment/dataset-id> | tasks validate | run <config.json> | human review import <result.json> <review.json> | baseline approve <result.json> [--id id] [--by name] [--root dir]');
 }
 
 async function readJson(file: string): Promise<unknown> {
