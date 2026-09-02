@@ -8,6 +8,10 @@ import {
   type ObservabilityCorrelationUiDto,
 } from '@megumi/product-host';
 import { z } from 'zod';
+import {
+  projectExecutionProcess,
+  type ExecutionProcess,
+} from './execution-process';
 
 const TraceKindSchema = z.enum([
   'conversation',
@@ -81,6 +85,7 @@ export interface CollectedTraceEvidence {
   readonly traceIds: readonly string[];
   readonly traceSummaries: readonly Readonly<Record<string, unknown>>[];
   readonly content: TraceContentPartitions;
+  readonly executionProcess: ExecutionProcess;
   readonly measurements: TraceMeasurementProjection;
   readonly issues: readonly TraceEvidenceIssue[];
 }
@@ -196,6 +201,7 @@ export async function collectTraceEvidence(input: {
     traceIds: traces.map(({ summary }) => summary.traceId),
     traceSummaries: traces.map(summarizeTrace),
     content,
+    executionProcess: projectExecutionProcess(traces),
     measurements,
     issues,
   };
@@ -403,6 +409,7 @@ function emptyTraceEvidence(): CollectedTraceEvidence {
     traceIds: [],
     traceSummaries: [],
     content: { input: [], context: [], execution: [], output: [] },
+    executionProcess: { attempts: [], issues: [] },
     measurements: { ...mutableEmptyMeasurements(), unavailable: [] },
     issues: [],
   };

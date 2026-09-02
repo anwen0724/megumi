@@ -172,6 +172,7 @@ export function selectModelGraderEvidence(observation: TaskObservation) {
     execution: {
       outcome: evidence.execution.outcome,
       traces: evidence.execution.traces,
+      process: evidence.execution.process,
       traceContent: evidence.execution.traceContent.filter(isDecisionEvidence),
     },
     output: {

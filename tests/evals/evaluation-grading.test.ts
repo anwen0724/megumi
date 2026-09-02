@@ -160,10 +160,14 @@ function observation(unavailable: readonly ('toolCalls')[] = []) {
     }],
     traceIds: ['trace:1'],
     traceSummaries: [],
+    executionProcess: { attempts: [], issues: [] },
     evidence: {
       input: { task: { type: 'conversation' }, business: {}, traceContent: [] },
       context: { business: {}, traceContent: [] },
-      execution: { outcome: { status: 'completed' }, traces: [], business: {}, traceContent: [] },
+      execution: {
+        outcome: { status: 'completed' }, traces: [], process: { attempts: [], issues: [] },
+        business: {}, traceContent: [],
+      },
       output: {
         productResult: { reply: 'Done.' }, workspaceFiles: { 'out.md': '# Result' },
         business: {}, traceContent: [],

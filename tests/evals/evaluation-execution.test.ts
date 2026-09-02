@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { EvaluationRunConfigSchema } from '../../evals/agent/contracts/evaluation-run-config';
 import { EvaluationTaskSchema } from '../../evals/agent/contracts/evaluation-task';
 import { createEvaluationHost } from '../../evals/agent/execution/evaluation-host';
+import { projectExecutionProcess } from '../../evals/agent/execution/execution-process';
 import { runEvaluation } from '../../evals/agent/execution/run-evaluation';
 import type { EvaluationTaskCatalog } from '../../evals/agent/execution/task-loader';
 import type { ModelMetricEvaluator } from '../../evals/agent/grading/model-grader';
@@ -51,22 +52,79 @@ describe('Evaluation execution', () => {
 
     expect(result).toMatchObject({
       infrastructureStatus: 'valid',
-      totals: { passed: 1, failed: 0, invalid: 0 },
+      totals: {
+        result: { passed: 1, failed: 0 },
+        overall: { passed: 0, notEvaluated: 1 },
+        invalid: 0,
+      },
       taskResults: [{
         operation: 'conversation',
-        executionOutcome: { status: 'completed' },
-        judgement: 'passed',
+        productExecution: { operation: 'conversation' },
+        resultJudgement: 'passed',
+        processJudgement: 'not_evaluated',
+        overallJudgement: 'not_evaluated',
         infrastructureStatus: 'valid',
       }],
     });
     expect(storage.runDirectory).toBe(path.join(temporaryRoot, 'runs', 'run_test'));
     const observationPath = result.taskResults[0]?.observationPath;
     expect(observationPath).toBeTruthy();
-    const observation = readFileSync(observationPath!, 'utf8');
-    expect(observation).toContain('"traceIds"');
-    expect(observation).not.toContain('"records"');
+    const observation: unknown = JSON.parse(readFileSync(observationPath!, 'utf8'));
+    expect(observation).toMatchObject({
+      traceIds: [expect.any(String)],
+      executionProcess: {
+        attempts: [{
+          executionId: expect.any(String),
+          traces: [{ steps: expect.any(Array) }],
+        }],
+      },
+    });
+    expect(JSON.stringify(observation)).not.toContain('"records"');
     expect(existsSync(path.join(storage.runDirectory, 'evidence'))).toBe(false);
     expect(readFileSync(path.join(storage.runDirectory, 'manifest.json'), 'utf8')).not.toContain('test-key');
+  });
+
+  it('projects normal Trace details into attempts without inventing cross-Trace order', () => {
+    const process = projectExecutionProcess([
+      traceDetail({
+        traceId: 'trace:attempt-1',
+        executionId: 'execution:attempt-1',
+        spanId: 'span:tool',
+        spanName: 'tool.call',
+        toolName: 'read_file',
+        contentKinds: ['tool.arguments', 'tool.result'],
+      }),
+      traceDetail({
+        traceId: 'trace:attempt-2',
+        executionId: 'execution:attempt-2',
+        spanId: 'span:source',
+        spanName: 'source.search',
+        contentKinds: ['source.request', 'source.result'],
+      }),
+    ]);
+
+    expect(process.attempts).toHaveLength(2);
+    expect(process.attempts[0]).toMatchObject({
+      attemptId: 'execution:attempt-1',
+      executionId: 'execution:attempt-1',
+      traces: [{
+        traceId: 'trace:attempt-1',
+        steps: [{
+          sequence: 2,
+          category: 'tool',
+          name: 'read_file',
+          status: 'ok',
+          contentRefs: [
+            { traceId: 'trace:attempt-1', sequence: 2, kind: 'tool.arguments' },
+            { traceId: 'trace:attempt-1', sequence: 4, kind: 'tool.result' },
+          ],
+        }],
+      }],
+    });
+    expect(process.attempts[1]?.traces[0]?.steps[0]).toMatchObject({
+      category: 'source',
+      name: 'source.search',
+    });
   });
 });
 
@@ -91,9 +149,8 @@ function evaluationTask() {
       type: 'conversation',
       steps: [{ userInput: 'Complete the requested task.', permissionMode: 'full_access' }],
     },
-    timeoutMs: 2_000,
     metrics: [
-      { metricId: 'completion', title: 'Completion', evaluator: 'rule', rule: 'business_completion_present', required: true },
+      { metricId: 'completion', title: 'Completion', dimension: 'result', evaluator: 'rule', rule: 'business_completion_present', required: true },
     ],
   });
 }
@@ -119,4 +176,54 @@ function resolvedModel() {
 function monotonicClock(): () => Date {
   let milliseconds = Date.parse('2026-01-01T00:00:00.000Z');
   return () => new Date(milliseconds++);
+}
+
+function traceDetail(input: {
+  readonly traceId: string;
+  readonly executionId: string;
+  readonly spanId: string;
+  readonly spanName: string;
+  readonly toolName?: string;
+  readonly contentKinds: readonly string[];
+}) {
+  const startedAt = '2026-01-01T00:00:00.000Z';
+  return {
+    summary: {
+      traceId: input.traceId,
+      traceKind: 'daily_recommendation' as const,
+      status: 'completed' as const,
+      diagnostics: 'complete' as const,
+      correlation: {
+        dailyRecommendationBatchId: 'daily-batch:1',
+        executionId: input.executionId,
+      },
+      startedAt,
+      endedAt: '2026-01-01T00:00:01.000Z',
+      durationMs: 1_000,
+      spanCount: 1,
+      eventCount: 1,
+      contentCount: input.contentKinds.length,
+      issueCount: 0,
+    },
+    outcome: { status: 'ok' as const },
+    spans: [{
+      spanId: input.spanId,
+      name: input.spanName,
+      ...(input.toolName ? { metadata: { kind: 'tool_call' as const, toolName: input.toolName } } : {}),
+      correlation: { executionId: input.executionId },
+      startedAt,
+      endedAt: '2026-01-01T00:00:01.000Z',
+      durationMs: 1_000,
+      outcome: { status: 'ok' as const },
+      events: [{ sequence: 3, timestamp: startedAt, type: 'test.event', detail: {} }],
+    }],
+    contents: input.contentKinds.map((kind, index) => ({
+      sequence: 2 + (index * 2), timestamp: startedAt, spanId: input.spanId,
+      kind, mode: 'inline' as const, mediaType: 'application/json', byteLength: 2,
+      correlation: { executionId: input.executionId },
+    })),
+    links: [],
+    issues: [],
+    sourceFiles: ['trace.jsonl'],
+  };
 }

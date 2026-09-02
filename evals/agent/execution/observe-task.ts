@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { EvaluationMeasurementNameSchema } from '../contracts/evaluation-metric';
 import { EvaluationOperationSchema, EvaluationProfileSchema, type EvaluationTask } from '../contracts/evaluation-task';
 import type { ProductTaskExecution } from './execute-task';
+import { ExecutionProcessSchema } from './execution-process';
 import {
   TraceEvidenceContentSchema,
   TraceTargetSchema,
@@ -60,6 +61,7 @@ export const EvaluationEvidenceSchema = z.object({
       z.object({ status: z.literal('timed_out'), message: z.string().min(1) }).strict(),
     ]),
     traces: z.array(JsonRecordSchema),
+    process: ExecutionProcessSchema,
   }).strict(),
   output: TraceContentSectionSchema.extend({
     productResult: JsonRecordSchema,
@@ -87,6 +89,7 @@ export const TaskObservationSchema = z.object({
   traceTargets: z.array(TraceTargetSchema),
   traceIds: z.array(z.string().min(1)),
   traceSummaries: z.array(JsonRecordSchema),
+  executionProcess: ExecutionProcessSchema,
   evidence: EvaluationEvidenceSchema,
   measurements: EvaluationMeasurementsSchema,
   issues: z.array(ObservationIssueSchema),
@@ -144,6 +147,7 @@ export async function observeTask(input: {
     execution: {
       outcome: input.execution.outcome,
       traces: [...traceEvidence.traceSummaries],
+      process: traceEvidence.executionProcess,
       business: {},
       traceContent: traceEvidence.content.execution,
     },
@@ -169,6 +173,7 @@ export async function observeTask(input: {
     traceTargets: input.execution.traceTargets,
     traceIds: traceEvidence.traceIds,
     traceSummaries: traceEvidence.traceSummaries,
+    executionProcess: traceEvidence.executionProcess,
     evidence,
     measurements,
     issues: traceEvidence.issues,
