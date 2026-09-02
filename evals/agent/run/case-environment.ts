@@ -1,7 +1,8 @@
 /*
  * Owns one physically isolated Evaluation Case environment and the real Product Runtime inside it.
  */
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Api, ProviderStreams } from '@megumi/ai';
@@ -28,6 +29,7 @@ export interface CaseEnvironment {
   readonly runtime: ProductRuntime;
   readonly resolvedCase: ResolvedEvaluationCase;
   readonly initialStateIds: InstalledInitialStateIds;
+  readonly initialWorkspaceFiles: Readonly<Record<string, string>>;
   readonly paths: {
     readonly root: string;
     readonly home: string;
@@ -71,6 +73,7 @@ export async function createCaseEnvironment(input: {
       environmentKind: input.resolvedCase.environmentKind,
       files: initialState.workspaceFiles,
     });
+    const initialWorkspaceFiles = await workspaceDigests(workspace);
 
     const migrationsFolder = path.join(input.repositoryRoot, 'packages', 'agent', 'database', 'migrations');
     const owner = createDatabaseInitialStateOwner({ homePath: home, migrationsFolder, now: initialState.clock });
@@ -128,6 +131,7 @@ export async function createCaseEnvironment(input: {
       runtime: composedRuntime,
       resolvedCase: input.resolvedCase,
       initialStateIds,
+      initialWorkspaceFiles,
       paths: { root, home, workspace, database, observability },
       details: {
         environmentKind: input.resolvedCase.environmentKind,
@@ -150,6 +154,24 @@ export async function createCaseEnvironment(input: {
     await runtime?.dispose().catch(() => undefined);
     await rm(root, { recursive: true, force: true }).catch(() => undefined);
     throw error;
+  }
+}
+
+async function workspaceDigests(root: string): Promise<Readonly<Record<string, string>>> {
+  const output: Record<string, string> = {};
+  await walkWorkspace(root, root, output);
+  return output;
+}
+
+async function walkWorkspace(root: string, directory: string, output: Record<string, string>): Promise<void> {
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      await walkWorkspace(root, absolute, output);
+    } else if (entry.isFile()) {
+      const relative = path.relative(root, absolute).replaceAll('\\', '/');
+      output[relative] = createHash('sha256').update(await readFile(absolute)).digest('hex');
+    }
   }
 }
 

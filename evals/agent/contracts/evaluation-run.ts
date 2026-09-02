@@ -26,27 +26,22 @@ const ProviderApiSchema = z.enum([
   'google-generative-ai',
 ]);
 
-export const CandidateModelSourceSchema = z.discriminatedUnion('source', [
-  z.object({ source: z.literal('current') }).strict(),
-  z.object({
-    source: z.literal('configured'), providerId: z.string().min(1), modelId: z.string().min(1),
-  }).strict(),
-  z.object({
-    source: z.literal('custom'), providerId: z.string().min(1), modelId: z.string().min(1),
-    api: ProviderApiSchema, baseUrl: z.string().url(),
-    contextWindowTokens: z.number().int().positive(), maxOutputTokens: z.number().int().positive(),
-    credential: z.discriminatedUnion('source', [
-      z.object({ source: z.literal('settings'), providerId: z.string().min(1) }).strict(),
-      z.object({ source: z.literal('environment'), environmentVariable: z.string().min(1) }).strict(),
-    ]),
-  }).strict(),
-]);
-export type CandidateModelSource = z.infer<typeof CandidateModelSourceSchema>;
+export const CandidateModelConfigSchema = z.object({
+  source: z.literal('explicit'),
+  providerId: z.string().min(1),
+  modelId: z.string().min(1),
+  api: ProviderApiSchema,
+  baseUrl: z.string().url(),
+  contextWindowTokens: z.number().int().positive(),
+  maxOutputTokens: z.number().int().positive(),
+  credentialEnvironmentVariable: z.string().regex(/^[A-Z_][A-Z0-9_]*$/u),
+}).strict();
+export type CandidateModelConfig = z.infer<typeof CandidateModelConfigSchema>;
 
 export const EvaluationRunRequestSchema = z.object({
   datasetIds: z.array(EvaluationIdentitySchema).default([]),
   caseIds: z.array(EvaluationIdentitySchema).default([]),
-  candidateModel: CandidateModelSourceSchema,
+  candidateModel: CandidateModelConfigSchema,
   safetyWallClockLimitMs: z.number().int().positive().default(900_000),
 }).strict().superRefine((request, context) => {
   if (request.datasetIds.length === 0 && request.caseIds.length === 0) {
@@ -59,7 +54,7 @@ export const EvaluationRunRequestSchema = z.object({
 export type EvaluationRunRequest = z.infer<typeof EvaluationRunRequestSchema>;
 
 export const CandidateModelRecordSchema = z.object({
-  source: z.enum(['current', 'configured', 'custom']),
+  source: z.literal('explicit'),
   providerId: z.string().min(1),
   modelId: z.string().min(1),
   api: z.string().min(1),

@@ -1,18 +1,8 @@
 /*
- * Resolves the Candidate Model through Megumi Settings and materializes
- * read-only per-run AI CredentialStores without exposing secrets to artifacts.
+ * Resolves an explicit Candidate Model config into a read-only per-run credential snapshot.
  */
-import path from 'node:path';
 import type { Api, Credential, CredentialStore } from '@megumi/ai';
-import {
-  createRecordSettingsEnvironment,
-  createSettings,
-  createSettingsCredentialStore,
-  type ResolvedProviderSettings,
-  type Settings,
-} from '@megumi/settings';
-import { createSettingsStore } from '@megumi/settings/store';
-import type { CandidateModelSource } from '../contracts/evaluation-run';
+import type { CandidateModelConfig } from '../contracts/evaluation-run';
 
 export interface ResolvedCandidateModelConfig {
   readonly providerId: string;
@@ -25,117 +15,33 @@ export interface ResolvedCandidateModelConfig {
 }
 
 export interface ResolvedCandidateModel {
-  readonly source: CandidateModelSource['source'];
+  readonly source: CandidateModelConfig['source'];
   readonly config: ResolvedCandidateModelConfig;
   readonly credentials: CredentialStore;
 }
 
 /** Resolves the Candidate Model once so every selected Case uses the same validated configuration. */
 export async function resolveCandidateModel(input: {
-  readonly source: CandidateModelSource;
-  readonly megumiHomePath: string;
+  readonly config: CandidateModelConfig;
   readonly environment: Readonly<Record<string, string | undefined>>;
 }): Promise<ResolvedCandidateModel> {
-  const settings = createSettings({
-    store: createSettingsStore({ settingsPath: path.join(input.megumiHomePath, 'settings.json') }),
-    environment: createRecordSettingsEnvironment(input.environment),
-  });
-  const settingsCredentials = createSettingsCredentialStore(settings);
-  return resolveModel(input.source, settings, settingsCredentials, input.environment);
-}
-
-async function resolveModel(
-  source: CandidateModelSource,
-  settings: Settings,
-  settingsCredentials: CredentialStore,
-  environment: Readonly<Record<string, string | undefined>>,
-): Promise<ResolvedCandidateModel> {
-  if (source.source === 'custom') {
-    return {
-      source: source.source,
-      config: {
-        providerId: source.providerId,
-        modelId: source.modelId,
-        api: source.api,
-        baseUrl: source.baseUrl,
-        displayName: source.modelId,
-        contextWindowTokens: source.contextWindowTokens,
-        maxOutputTokens: source.maxOutputTokens,
-      },
-      credentials: await resolveCustomCredentials(source, settingsCredentials, environment),
-    };
-  }
-
-  const selection = source.source === 'current'
-    ? currentModelSelection(settings)
-    : { providerId: source.providerId, modelId: source.modelId };
-  const resolved = settings.resolveProvider({
-    provider_id: selection.providerId,
-    model_id: selection.modelId,
-  });
-  if (resolved.status === 'failed') throw new Error(resolved.failure.message);
+  const key = input.environment[input.config.credentialEnvironmentVariable]?.trim();
+  if (!key) throw new Error(
+    `Required Evaluation credential is missing: ${input.config.credentialEnvironmentVariable}.`,
+  );
   return {
-    source: source.source,
-    config: fromSettingsModel(resolved.config),
-    credentials: await materializeCredentialStore({
-      targetProviderId: resolved.config.provider_id,
-      sourceProviderId: resolved.config.provider_id,
-      source: settingsCredentials,
-    }),
+    source: input.config.source,
+    config: {
+      providerId: input.config.providerId,
+      modelId: input.config.modelId,
+      api: input.config.api,
+      baseUrl: input.config.baseUrl,
+      displayName: input.config.modelId,
+      contextWindowTokens: input.config.contextWindowTokens,
+      maxOutputTokens: input.config.maxOutputTokens,
+    },
+    credentials: createReadOnlyCredentialStore(input.config.providerId, { type: 'api_key', key }),
   };
-}
-
-/** Reads the current product selection without permitting Evaluation to mutate Product Settings. */
-function currentModelSelection(settings: Settings): { readonly providerId: string; readonly modelId: string } {
-  const resolved = settings.resolve();
-  if (resolved.status === 'failed') throw new Error(resolved.failure.message);
-  const selection = resolved.settings.model_selection;
-  if (!selection) throw new Error('Megumi Settings does not define a current model selection.');
-  return { providerId: selection.provider_id, modelId: selection.model_id };
-}
-
-/** Converts Settings terminology to the Evaluation runtime model vocabulary. */
-function fromSettingsModel(config: ResolvedProviderSettings): ResolvedCandidateModelConfig {
-  return {
-    providerId: config.provider_id,
-    modelId: config.model_id,
-    api: config.api,
-    baseUrl: config.base_url,
-    displayName: config.display_name,
-    contextWindowTokens: config.context_window_tokens,
-    maxOutputTokens: config.max_output_tokens,
-  };
-}
-
-/** Resolves a custom model's explicit credential reference into the standard AI CredentialStore. */
-async function resolveCustomCredentials(
-  source: Extract<CandidateModelSource, { source: 'custom' }>,
-  settingsCredentials: CredentialStore,
-  environment: Readonly<Record<string, string | undefined>>,
-): Promise<CredentialStore> {
-  if (source.credential.source === 'settings') {
-    return materializeCredentialStore({
-      targetProviderId: source.providerId,
-      sourceProviderId: source.credential.providerId,
-      source: settingsCredentials,
-    });
-  }
-  const key = environment[source.credential.environmentVariable]?.trim();
-  if (!key) {
-    throw new Error(`Required Evaluation credential is missing: ${source.credential.environmentVariable}.`);
-  }
-  return createReadOnlyCredentialStore(source.providerId, { type: 'api_key', key });
-}
-
-/** Copies one credential into a run-owned store so Evaluation cannot mutate Product Settings. */
-async function materializeCredentialStore(input: {
-  readonly targetProviderId: string;
-  readonly sourceProviderId: string;
-  readonly source: CredentialStore;
-}): Promise<CredentialStore> {
-  const credential = await input.source.read(input.sourceProviderId);
-  if (!credential) throw new Error(`Evaluation credential is missing for Provider: ${input.sourceProviderId}.`);
-  return createReadOnlyCredentialStore(input.targetProviderId, credential);
 }
 
 /** Creates an isolated credential snapshot and rejects mutation attempts from Evaluation callers. */

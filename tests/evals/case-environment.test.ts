@@ -54,7 +54,7 @@ describe('Case Environment', () => {
 function resolvedModel() {
   const credential = { type: 'api_key' as const, key: 'test-key' };
   return {
-    source: 'custom' as const,
+    source: 'explicit' as const,
     config: {
       providerId: 'test', modelId: 'model', api: 'openai-completions' as const,
       baseUrl: 'https://example.test/v1', displayName: 'Test model',
