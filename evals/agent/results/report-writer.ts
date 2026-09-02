@@ -25,19 +25,18 @@ export function renderEvaluationReport(
     '',
   ];
   if (comparison) appendComparison(lines, comparison);
-  lines.push('## Tasks', '');
+  lines.push(
+    '## Tasks', '',
+    '| Task | Operation | 产品结果摘要 | 耗时 | Result | Process | Overall | 报告 |',
+    '| --- | --- | --- | ---: | --- | --- | --- | --- |',
+  );
   for (const taskResult of result.taskResults) {
-    lines.push(
-      `### ${taskResult.taskId} (${taskResult.overallJudgement})`,
-      '',
-      `Operation: \`${taskResult.operation}\`; result: \`${taskResult.resultJudgement}\`; process: \`${taskResult.processJudgement}\`; difficulty: \`${taskResult.difficulty}\`; duration: ${taskResult.productExecution?.durationMs ?? 0} ms.`,
-      `Model calls: ${taskResult.measurements.modelCalls}; tool calls: ${taskResult.measurements.toolCalls}; grader calls: ${taskResult.measurements.graderModelCalls}.`,
-      '',
-    );
-    if (taskResult.observationPath) lines.push(`Observation: \`${taskResult.observationPath}\``, '');
-    appendObservationIssues(lines, taskResult.observationIssues);
-    if (taskResult.metricResults.length > 0) appendMetrics(lines, taskResult.metricResults);
+    const report = taskResult.reportPath
+      ? `[查看单任务报告](${taskResult.reportPath.replaceAll('\\', '/')})`
+      : '—';
+    lines.push(`| ${taskResult.taskId} | ${taskResult.operation} | ${escapeCell(productResultSummary(taskResult))} | ${taskResult.productExecution?.durationMs ?? 0} ms | ${taskResult.resultJudgement} | ${taskResult.processJudgement} | ${taskResult.overallJudgement} | ${report} |`);
   }
+  lines.push('');
   return `${lines.join('\n')}\n`;
 }
 
@@ -74,27 +73,6 @@ function runMetadata(result: EvaluationRunResult): string[] {
   ];
 }
 
-function appendMetrics(
-  lines: string[],
-  metrics: EvaluationRunResult['taskResults'][number]['metricResults'],
-): void {
-  lines.push('| Metric | Dimension | Evaluator | Required | Result | Score/Actual | Reason |', '| --- | --- | --- | --- | --- | --- | --- |');
-  for (const metric of metrics) {
-    lines.push(`| ${metric.metricId} | ${metric.dimension} | ${metric.evaluator} | ${metric.required ? 'yes' : 'no'} | ${metric.judgement} | ${metric.score ?? metric.actual ?? '—'} | ${escapeCell(metric.rationale)} |`);
-  }
-  lines.push('');
-}
-
-function appendObservationIssues(
-  lines: string[],
-  issues: EvaluationRunResult['taskResults'][number]['observationIssues'],
-): void {
-  if (issues.length === 0) return;
-  lines.push('Observation issues:', '');
-  for (const issue of issues) lines.push(`- ${issue.code} (${issue.source}, ${issue.impact}): ${issue.message}`);
-  lines.push('');
-}
-
 function appendComparison(lines: string[], comparison: BaselineComparison): void {
   lines.push(
     '## Baseline Comparison',
@@ -116,4 +94,28 @@ function escapeCell(value: string): string {
 
 function totalsLine(value: EvaluationRunResult['totals']['result']): string {
   return `passed ${value.passed}; failed ${value.failed}; not gradable ${value.notGradable}; not evaluated ${value.notEvaluated}`;
+}
+
+function productResultSummary(task: EvaluationRunResult['taskResults'][number]): string {
+  const result = task.productExecution?.productResult;
+  if (!result) return task.notEvaluatedReason ?? '没有产品执行结果';
+  const completion = recordValue(result.completion);
+  const accepted = recordValue(result.accepted);
+  const understanding = recordValue(result.understanding);
+  const status = stringValue(completion?.status)
+    ?? stringValue(understanding?.status)
+    ?? stringValue(accepted?.status);
+  if (status) return status;
+  if (Array.isArray(result.steps)) return `会话步骤 ${result.steps.length}`;
+  return '已保存公开业务结果';
+}
+
+function recordValue(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Readonly<Record<string, unknown>>
+    : undefined;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }

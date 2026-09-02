@@ -19,6 +19,7 @@ import type { EvaluationTask } from '../contracts/evaluation-task';
 import { gradeTask } from '../grading/grade-task';
 import type { ModelMetricEvaluator } from '../grading/model-grader';
 import { createRunStorage, type EvaluationRunStorage } from '../results/run-storage';
+import { renderTaskReport } from '../results/task-report-writer';
 import { createEvaluationHost, type EvaluationHost } from './evaluation-host';
 import { executeTask } from './execute-task';
 import { observeTask, toJsonRecord } from './observe-task';
@@ -165,7 +166,7 @@ async function runTask(input: {
       graderOutputTokens: graded.modelUsage.outputTokens,
       graderEstimatedCostUsd: graded.modelUsage.estimatedCostUsd,
     };
-    return TaskEvaluationResultSchema.parse({
+    const taskResult = TaskEvaluationResultSchema.parse({
       taskRunId,
       taskId: task.taskId,
       revision: task.revision,
@@ -189,6 +190,12 @@ async function runTask(input: {
       observationIssues: observation.issues,
       ...(graded.infrastructureError ? { infrastructureError: graded.infrastructureError } : {}),
     });
+    const reportPath = await input.storage.writeTaskReport(taskRunId, renderTaskReport({
+      task,
+      observation,
+      result: taskResult,
+    }));
+    return TaskEvaluationResultSchema.parse({ ...taskResult, reportPath });
   } catch (error) {
     return infrastructureFailureResult({
       taskRunId,

@@ -68,8 +68,13 @@ describe('Evaluation execution', () => {
     });
     expect(storage.runDirectory).toBe(path.join(temporaryRoot, 'runs', 'run_test'));
     const observationPath = result.taskResults[0]?.observationPath;
+    const reportPath = result.taskResults[0]?.reportPath;
     expect(observationPath).toBeTruthy();
-    const observation: unknown = JSON.parse(readFileSync(observationPath!, 'utf8'));
+    expect(reportPath).toBe('tasks/conversation.execution-contract_r1/report.md');
+    const observation: unknown = JSON.parse(readFileSync(
+      path.join(storage.runDirectory, observationPath!),
+      'utf8',
+    ));
     expect(observation).toMatchObject({
       traceIds: [expect.any(String)],
       executionProcess: {
@@ -80,6 +85,7 @@ describe('Evaluation execution', () => {
       },
     });
     expect(JSON.stringify(observation)).not.toContain('"records"');
+    expect(readFileSync(path.join(storage.runDirectory, reportPath!), 'utf8')).toContain('## 实际执行过程');
     expect(existsSync(path.join(storage.runDirectory, 'evidence'))).toBe(false);
     expect(readFileSync(path.join(storage.runDirectory, 'manifest.json'), 'utf8')).not.toContain('test-key');
   });

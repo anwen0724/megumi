@@ -7,6 +7,7 @@ export interface EvaluationRunStorage {
   taskDirectory(taskRunId: string): string;
   writeManifest(manifest: unknown): Promise<void>;
   writeObservation(taskRunId: string, observation: unknown): Promise<string>;
+  writeTaskReport(taskRunId: string, content: string): Promise<string>;
   writeResult(result: unknown): Promise<string>;
   writeBaselineComparison(comparison: unknown): Promise<string>;
   writeReport(content: string): Promise<string>;
@@ -21,9 +22,17 @@ export async function createRunStorage(root: string, runId: string): Promise<Eva
     taskDirectory: (taskRunId) => path.join(runDirectory, 'tasks', safeSegment(taskRunId)),
     writeManifest: (manifest) => writeJson(path.join(runDirectory, 'manifest.json'), manifest),
     async writeObservation(taskRunId, observation) {
-      const file = path.join(runDirectory, 'observations', `${safeSegment(taskRunId)}.json`);
+      const relativePath = path.posix.join('tasks', safeSegment(taskRunId), 'observation.json');
+      const file = path.join(runDirectory, relativePath);
       await writeJson(file, observation);
-      return file;
+      return relativePath;
+    },
+    async writeTaskReport(taskRunId, content) {
+      const relativePath = path.posix.join('tasks', safeSegment(taskRunId), 'report.md');
+      const file = path.join(runDirectory, relativePath);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, content, 'utf8');
+      return relativePath;
     },
     async writeResult(result) {
       const file = path.join(runDirectory, 'result.json');
