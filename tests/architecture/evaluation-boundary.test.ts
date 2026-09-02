@@ -18,7 +18,7 @@ describe('Evaluation architecture boundary', () => {
     expect(execution).not.toContain('apiKey:');
     expect(modelSource).toContain('createSettingsCredentialStore');
     expect(grader).not.toContain('readonly apiKey: string');
-    expect(grader).toContain('evidence: selectModelGraderEvidence(request.observation)');
+    expect(grader).toContain('evidence: selectModelGraderEvidence(request.observation, dimension)');
     expect(grader).not.toContain('observation: request.observation');
   });
 

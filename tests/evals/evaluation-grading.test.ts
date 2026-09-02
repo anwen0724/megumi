@@ -84,6 +84,61 @@ describe('Evaluation grading', () => {
     ]));
   });
 
+  it('treats a settled Candidate Supply failure as a completion fact without calling it successful', async () => {
+    const task = EvaluationTaskSchema.parse({
+      ...evaluationTask(),
+      taskId: 'candidate-supply.failed-completion',
+      input: { type: 'candidate_supply' },
+      metrics: [{
+        metricId: 'completion',
+        title: 'Business completion',
+        dimension: 'result',
+        evaluator: 'rule',
+        rule: 'business_completion_present',
+        required: true,
+      }],
+    });
+    const base = observation();
+    const candidateObservation = TaskObservationSchema.parse({
+      ...base,
+      taskId: task.taskId,
+      operation: 'candidate_supply',
+      input: task.input,
+      productResult: {
+        completion: { status: 'completed', reason: 'agent_failed' },
+        facts: { status: 'failed' },
+      },
+      evidence: {
+        ...base.evidence,
+        input: { ...base.evidence.input, task: task.input },
+        output: {
+          ...base.evidence.output,
+          productResult: {
+            completion: { status: 'completed', reason: 'agent_failed' },
+            facts: { status: 'failed' },
+          },
+        },
+      },
+    });
+
+    const result = await gradeTask({
+      task,
+      observation: candidateObservation,
+      modelEvaluator: {
+        async evaluate() { throw new Error('Model Grader should not run.'); },
+      },
+      now: '2026-01-01T00:00:02.000Z',
+    });
+
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        metricId: 'completion',
+        judgement: 'pass',
+        rationale: '公开业务结果包含已结算的完成事实。',
+      }),
+    ]);
+  });
+
   it('selects result and process evidence independently without hiding facts needed by the rubric', () => {
     const base = observation();
     const withDiagnosticPayloads = TaskObservationSchema.parse({

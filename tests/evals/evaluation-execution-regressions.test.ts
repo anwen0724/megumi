@@ -47,6 +47,7 @@ describe('Evaluation execution regressions', () => {
 
   it('associates Daily Recommendation with the stable batch instead of its first Attempt', async () => {
     const task = operationTask('daily_recommendation');
+    const factsExecutionIds: string[] = [];
     const runtime = {
       host: { discovery: {
         async ensureDaily() {
@@ -64,7 +65,8 @@ describe('Evaluation execution regressions', () => {
             startedAt: task.initialState.clock, publishedAt: task.initialState.clock,
           } };
         },
-        async getDailyRecommendationFacts() {
+        async getDailyRecommendationFacts(request: { readonly executionId: string }) {
+          factsExecutionIds.push(request.executionId);
           return { status: 'ok', facts: { recentRecommendations: [] } };
         },
       } },
@@ -80,7 +82,9 @@ describe('Evaluation execution regressions', () => {
     expect(execution.businessIds).toEqual({
       dailyRecommendationBatchId: 'daily-batch:1',
       initialExecutionId: 'execution:first',
+      settledExecutionId: 'execution:second',
     });
+    expect(factsExecutionIds).toEqual(['execution:second']);
     expect(execution.productResult).toMatchObject({
       completion: { status: 'published', executionId: 'execution:second', attemptCount: 2 },
     });

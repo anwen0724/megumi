@@ -137,7 +137,7 @@ async function evaluateModelMetricGroup(
         judgement: 'not_gradable' as const,
         rationale: `Model Grader unavailable: ${message}`,
         evidenceRefs: [],
-        promptVersion: 'evaluation-model-metrics-v3',
+        promptVersion: 'evaluation-model-metrics-v4',
         evaluatedAt: input.now,
       })),
       usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 },

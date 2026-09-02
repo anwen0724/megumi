@@ -28,6 +28,7 @@
   },
   "repetitions": 1,
   "concurrency": 2,
+  "safetyWallClockLimitMs": 900000,
   "budget": {
     "maxTasks": 17,
     "maxInputTokens": 2000000,

@@ -89,7 +89,7 @@ export async function runEvaluation(input: {
     startedAt,
     endedAt: now().toISOString(),
     candidateModel: modelLabel(input.models.candidate),
-    graderModelAndMetricVersion: `${modelLabel(input.models.grader)}@evaluation-model-metrics-v3`,
+    graderModelAndMetricVersion: `${modelLabel(input.models.grader)}@evaluation-model-metrics-v4`,
     environment: {
       productVersion,
       nodeVersion: process.version,

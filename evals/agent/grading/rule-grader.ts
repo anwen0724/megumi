@@ -37,10 +37,10 @@ function evaluateRule(metric: RuleMetric, observation: TaskObservation): {
 } {
   switch (metric.rule) {
     case 'business_completion_present': {
-      const completed = hasSuccessfulBusinessCompletion(observation);
+      const completed = hasBusinessCompletion(observation);
       return outcome(
         completed,
-        completed ? '公开业务结果包含成功结算事实。' : '公开业务结果没有成功结算，或执行被 Evaluation 安全保护中断。',
+        completed ? '公开业务结果包含已结算的完成事实。' : '公开业务结果没有完成结算，或执行被 Evaluation 安全保护中断。',
         observation,
         'productResult',
       );
@@ -86,7 +86,7 @@ function evaluateRule(metric: RuleMetric, observation: TaskObservation): {
   }
 }
 
-function hasSuccessfulBusinessCompletion(observation: TaskObservation): boolean {
+function hasBusinessCompletion(observation: TaskObservation): boolean {
   if (observation.interruption) return false;
   const result = observation.productResult;
   switch (observation.operation) {

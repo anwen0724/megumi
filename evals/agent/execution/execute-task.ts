@@ -264,7 +264,7 @@ async function executeDailyRecommendation(input: TaskExecutionInput): Promise<Pr
     }),
   });
   const traceTargets = dailyTraceTargets(accepted);
-  const businessIds = {
+  const baseBusinessIds = {
     dailyRecommendationBatchId: accepted.batchId,
     initialExecutionId: accepted.executionId,
   };
@@ -272,20 +272,23 @@ async function executeDailyRecommendation(input: TaskExecutionInput): Promise<Pr
     return execution({
       operation: 'daily_recommendation',
       productResult: { accepted },
-      businessIds,
+      businessIds: baseBusinessIds,
       traceTargets,
       interruption: safetyInterruption(input),
     });
   }
   const facts = await input.runtime.host.discovery.getDailyRecommendationFacts({
-    executionId: accepted.executionId,
+    executionId: completion.value.executionId,
     batchId: accepted.batchId,
     localDate: accepted.localDate,
   });
   return execution({
     operation: 'daily_recommendation',
     productResult: { accepted, completion: completion.value, facts },
-    businessIds,
+    businessIds: {
+      ...baseBusinessIds,
+      settledExecutionId: completion.value.executionId,
+    },
     traceTargets,
     evidence: {
       context: facts.status === 'ok' ? { recentRecommendations: facts.facts.recentRecommendations } : {},

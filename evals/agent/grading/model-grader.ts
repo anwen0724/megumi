@@ -25,7 +25,7 @@ import {
 import type { EvaluationTask } from '../contracts/evaluation-task';
 import type { TaskObservation } from '../execution/observe-task';
 
-const PROMPT_VERSION = 'evaluation-model-metrics-v3';
+const PROMPT_VERSION = 'evaluation-model-metrics-v4';
 
 export interface ModelMetricEvaluator {
   evaluate(input: {
