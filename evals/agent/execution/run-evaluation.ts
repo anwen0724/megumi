@@ -24,7 +24,6 @@ import { executeTask } from './execute-task';
 import { observeTask, toJsonRecord } from './observe-task';
 import { createRunBudget } from './run-budget';
 import type { EvaluationTaskCatalog } from './task-loader';
-import type { TraceTarget } from './trace-evidence';
 
 export interface EvaluationRunnerDependencies {
   readonly modelMetricEvaluator: ModelMetricEvaluator;
@@ -179,15 +178,8 @@ async function runTask(input: {
         endedAt: productEndedAt,
         durationMs: productDurationMs,
         productResult: toJsonRecord(execution.productResult),
-        businessIds: collectBusinessIds(execution.traceTargets),
-        ...(execution.outcome.status === 'timed_out'
-          ? {
-              interruption: {
-                source: 'evaluation_safety_guard' as const,
-                limitMs: input.config.safetyWallClockLimitMs,
-              },
-            }
-          : {}),
+        businessIds: execution.businessIds,
+        ...(execution.interruption ? { interruption: execution.interruption } : {}),
       },
       ...judgements(graded.results, graded.infrastructureError !== undefined),
       infrastructureStatus: graded.infrastructureError ? 'invalid' : 'valid',
@@ -346,12 +338,6 @@ function judgementTotals(values: readonly TaskEvaluationResult['overallJudgement
     notGradable: values.filter((value) => value === 'not_gradable').length,
     notEvaluated: values.filter((value) => value === 'not_evaluated').length,
   };
-}
-
-function collectBusinessIds(targets: readonly TraceTarget[]) {
-  return Object.fromEntries(targets.flatMap(({ correlation }) => Object.entries(toJsonRecord(correlation)).filter(
-    (entry): entry is [string, string] => typeof entry[1] === 'string',
-  )));
 }
 
 function publicModel(model: ResolvedEvaluationModel): Record<string, unknown> {

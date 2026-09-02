@@ -84,7 +84,7 @@ describe('Evaluation grading', () => {
     ]));
   });
 
-  it('keeps decision evidence but excludes duplicated Context and Provider payloads from Model Grading', () => {
+  it('selects result and process evidence independently without hiding facts needed by the rubric', () => {
     const base = observation();
     const withDiagnosticPayloads = TaskObservationSchema.parse({
       ...base,
@@ -109,11 +109,14 @@ describe('Evaluation grading', () => {
       },
     });
 
-    const selected = selectModelGraderEvidence(withDiagnosticPayloads);
+    const resultEvidence = selectModelGraderEvidence(withDiagnosticPayloads, 'result');
+    const processEvidence = selectModelGraderEvidence(withDiagnosticPayloads, 'process');
 
-    expect(selected.context).not.toHaveProperty('traceContent');
-    expect(selected.execution.traceContent.map(({ kind }) => kind)).toEqual(['tool.result', 'source.result']);
-    expect(selected.output.traceContent.map(({ kind }) => kind)).toEqual(['model.response']);
+    expect(resultEvidence).not.toHaveProperty('execution');
+    expect(resultEvidence.output.traceContent.map(({ kind }) => kind)).toEqual(['model.response']);
+    expect(processEvidence.context.traceContent.map(({ kind }) => kind)).toEqual(['prompt.final']);
+    expect(processEvidence.execution.traceContent.map(({ kind }) => kind)).toEqual(['tool.result', 'source.result']);
+    expect(processEvidence.execution).toHaveProperty('process');
   });
 });
 
@@ -138,6 +141,15 @@ function evaluationTask() {
 }
 
 function observation(unavailable: readonly ('toolCalls')[] = []) {
+  const productResult = {
+    steps: [{
+      status: 'ok',
+      messages: [{
+        type: 'message',
+        message: { kind: 'assistantReply', status: 'completed', content: 'Done.' },
+      }],
+    }],
+  };
   const measurements = {
     durationMs: 100, inputTokens: 0, outputTokens: 0, modelCalls: 1, toolCalls: 2,
     sourceCalls: 0, retries: 0, candidatesProduced: 0, recommendationsPublished: 0,
@@ -152,8 +164,8 @@ function observation(unavailable: readonly ('toolCalls')[] = []) {
     collectedAt: '2026-01-01T00:00:01.000Z',
     environment: {},
     input: { type: 'conversation' },
-    executionOutcome: { status: 'completed' },
-    productResult: { reply: 'Done.' },
+    productResult,
+    businessIds: { executionId: 'execution:1' },
     artifacts: { workspaceFiles: { 'out.md': '# Result' } },
     traceTargets: [{
       traceKind: 'conversation', correlation: { executionId: 'execution:1' }, expectation: 'required',
@@ -165,11 +177,11 @@ function observation(unavailable: readonly ('toolCalls')[] = []) {
       input: { task: { type: 'conversation' }, business: {}, traceContent: [] },
       context: { business: {}, traceContent: [] },
       execution: {
-        outcome: { status: 'completed' }, traces: [], process: { attempts: [], issues: [] },
+        businessIds: { executionId: 'execution:1' }, traces: [], process: { attempts: [], issues: [] },
         business: {}, traceContent: [],
       },
       output: {
-        productResult: { reply: 'Done.' }, workspaceFiles: { 'out.md': '# Result' },
+        productResult, workspaceFiles: { 'out.md': '# Result' },
         business: {}, traceContent: [],
       },
       measurement: measurements,

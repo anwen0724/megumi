@@ -34,7 +34,7 @@ const ProductExecutionSchema = z.object({
   endedAt: z.string().datetime({ offset: true }),
   durationMs: z.number().nonnegative(),
   productResult: z.record(z.string(), z.unknown()),
-  businessIds: z.record(z.string(), z.string()),
+  businessIds: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
   interruption: z.object({
     source: z.literal('evaluation_safety_guard'),
     limitMs: z.number().int().positive(),

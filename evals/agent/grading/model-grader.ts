@@ -76,6 +76,10 @@ export function createModelMetricEvaluator(input: {
   return {
     async evaluate(request) {
       if (request.metrics.length === 0) return emptyOutcome();
+      const dimension = request.metrics[0]?.dimension;
+      if (!dimension || request.metrics.some((metric) => metric.dimension !== dimension)) {
+        throw new Error('One Model Grader request must contain Metrics from exactly one dimension.');
+      }
       const response = await models.completeSimple(model, {
         systemPrompt: [
           'You evaluate one real Megumi product execution from structured Evidence.',
@@ -103,7 +107,8 @@ export function createModelMetricEvaluator(input: {
                 rubric: metric.rubric,
                 scoreScale: '0-4',
               })),
-              evidence: selectModelGraderEvidence(request.observation),
+              dimension,
+              evidence: selectModelGraderEvidence(request.observation, dimension),
               output: {
                 results: [{
                   metricId: 'string',
@@ -156,12 +161,12 @@ export function createModelMetricEvaluator(input: {
 }
 
 /** Removes duplicated diagnostic payloads while preserving facts needed to judge product behavior. */
-export function selectModelGraderEvidence(observation: TaskObservation) {
+export function selectModelGraderEvidence(
+  observation: TaskObservation,
+  dimension: ModelMetric['dimension'],
+) {
   const evidence = observation.evidence;
-  const productResult = observation.operation === 'conversation' || observation.operation === 'interest_understanding'
-    ? evidence.output.productResult
-    : {};
-  return {
+  const common = {
     input: {
       task: evidence.input.task,
       business: evidence.input.business,
@@ -169,19 +174,28 @@ export function selectModelGraderEvidence(observation: TaskObservation) {
     context: {
       business: evidence.context.business,
     },
-    execution: {
-      outcome: evidence.execution.outcome,
-      traces: evidence.execution.traces,
-      process: evidence.execution.process,
-      traceContent: evidence.execution.traceContent.filter(isDecisionEvidence),
-    },
     output: {
-      productResult,
+      productResult: evidence.output.productResult,
       business: evidence.output.business,
       workspaceFiles: evidence.output.workspaceFiles,
       traceContent: evidence.output.traceContent,
     },
     measurement: evidence.measurement,
+  };
+  if (dimension === 'result') return common;
+  return {
+    ...common,
+    context: {
+      ...common.context,
+      traceContent: evidence.context.traceContent,
+    },
+    execution: {
+      businessIds: evidence.execution.businessIds,
+      interruption: evidence.execution.interruption,
+      traces: evidence.execution.traces,
+      process: evidence.execution.process,
+      traceContent: evidence.execution.traceContent.filter(isDecisionEvidence),
+    },
   };
 }
 

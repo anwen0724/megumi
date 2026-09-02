@@ -51,15 +51,17 @@ const TraceContentSectionSchema = z.object({
   traceContent: z.array(TraceEvidenceContentSchema),
 }).strict();
 
+const EvaluationInterruptionSchema = z.object({
+  source: z.literal('evaluation_safety_guard'),
+  limitMs: z.number().int().positive(),
+}).strict();
+
 export const EvaluationEvidenceSchema = z.object({
   input: TraceContentSectionSchema.extend({ task: JsonRecordSchema }).strict(),
   context: TraceContentSectionSchema,
   execution: TraceContentSectionSchema.extend({
-    outcome: z.discriminatedUnion('status', [
-      z.object({ status: z.literal('completed') }).strict(),
-      z.object({ status: z.literal('failed'), message: z.string().min(1) }).strict(),
-      z.object({ status: z.literal('timed_out'), message: z.string().min(1) }).strict(),
-    ]),
+    businessIds: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+    interruption: EvaluationInterruptionSchema.optional(),
     traces: z.array(JsonRecordSchema),
     process: ExecutionProcessSchema,
   }).strict(),
@@ -79,12 +81,9 @@ export const TaskObservationSchema = z.object({
   collectedAt: z.string().datetime({ offset: true }),
   environment: JsonRecordSchema,
   input: JsonRecordSchema,
-  executionOutcome: z.discriminatedUnion('status', [
-    z.object({ status: z.literal('completed') }).strict(),
-    z.object({ status: z.literal('failed'), message: z.string().min(1) }).strict(),
-    z.object({ status: z.literal('timed_out'), message: z.string().min(1) }).strict(),
-  ]),
   productResult: JsonRecordSchema,
+  businessIds: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+  interruption: EvaluationInterruptionSchema.optional(),
   artifacts: z.object({ workspaceFiles: z.record(z.string(), z.string()) }).strict(),
   traceTargets: z.array(TraceTargetSchema),
   traceIds: z.array(z.string().min(1)),
@@ -145,7 +144,8 @@ export async function observeTask(input: {
       traceContent: traceEvidence.content.context,
     },
     execution: {
-      outcome: input.execution.outcome,
+      businessIds: input.execution.businessIds,
+      ...(input.execution.interruption ? { interruption: input.execution.interruption } : {}),
       traces: [...traceEvidence.traceSummaries],
       process: traceEvidence.executionProcess,
       business: {},
@@ -167,8 +167,9 @@ export async function observeTask(input: {
     collectedAt: input.collectedAt,
     environment: input.environment,
     input: toJsonRecord(input.task.input),
-    executionOutcome: input.execution.outcome,
     productResult,
+    businessIds: input.execution.businessIds,
+    ...(input.execution.interruption ? { interruption: input.execution.interruption } : {}),
     artifacts: { workspaceFiles },
     traceTargets: input.execution.traceTargets,
     traceIds: traceEvidence.traceIds,
@@ -176,7 +177,17 @@ export async function observeTask(input: {
     executionProcess: traceEvidence.executionProcess,
     evidence,
     measurements,
-    issues: traceEvidence.issues,
+    issues: [
+      ...traceEvidence.issues,
+      ...(input.execution.interruption
+        ? [{
+            code: 'evaluation_safety_guard',
+            source: 'collector' as const,
+            message: `Evaluation stopped the isolated product execution after ${input.execution.interruption.limitMs} ms.`,
+            impact: 'diagnostic_only' as const,
+          }]
+        : []),
+    ],
   };
   return TaskObservationSchema.parse(redactCredentials(observation));
 }

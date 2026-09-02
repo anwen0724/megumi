@@ -76,6 +76,48 @@ async function evaluateModelMetrics(
       usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 },
     };
   }
+  const groups = (['result', 'process'] as const)
+    .map((dimension) => metrics.filter((metric) => metric.dimension === dimension))
+    .filter((group) => group.length > 0);
+  const outcomes = await Promise.all(groups.map((group) => evaluateModelMetricGroup(input, group)));
+  const failures = outcomes.flatMap((outcome) => (
+    outcome.infrastructureError ? [outcome.infrastructureError] : []
+  ));
+  return {
+    results: outcomes.flatMap((outcome) => outcome.results),
+    usage: outcomes.reduce((total, outcome) => ({
+      modelCalls: total.modelCalls + outcome.usage.modelCalls,
+      inputTokens: total.inputTokens + outcome.usage.inputTokens,
+      outputTokens: total.outputTokens + outcome.usage.outputTokens,
+      estimatedCostUsd: total.estimatedCostUsd + outcome.usage.estimatedCostUsd,
+    }), { modelCalls: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 }),
+    ...(failures.length > 0
+      ? {
+          infrastructureError: {
+            code: 'model_grader_failed' as const,
+            message: failures.map(({ message }) => message).join('; '),
+          },
+        }
+      : {}),
+  };
+}
+
+async function evaluateModelMetricGroup(
+  input: Parameters<typeof gradeTask>[0],
+  metrics: readonly ModelMetric[],
+): Promise<{
+  readonly results: readonly TaskMetricResult[];
+  readonly usage: {
+    readonly modelCalls: number;
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly estimatedCostUsd: number;
+  };
+  readonly infrastructureError?: {
+    readonly code: 'model_grader_failed';
+    readonly message: string;
+  };
+}> {
   try {
     return await input.modelEvaluator.evaluate({
       task: input.task,

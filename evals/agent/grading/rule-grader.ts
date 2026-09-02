@@ -36,13 +36,15 @@ function evaluateRule(metric: RuleMetric, observation: TaskObservation): {
   readonly evidenceRefs: readonly string[];
 } {
   switch (metric.rule) {
-    case 'business_completion_present':
+    case 'business_completion_present': {
+      const completed = hasSuccessfulBusinessCompletion(observation);
       return outcome(
-        observation.executionOutcome.status === 'completed',
-        observation.executionOutcome.status === 'completed' ? '产品执行已完成。' : `产品执行结果为 ${observation.executionOutcome.status}。`,
+        completed,
+        completed ? '公开业务结果包含成功结算事实。' : '公开业务结果没有成功结算，或执行被 Evaluation 安全保护中断。',
         observation,
-        'executionOutcome',
+        'productResult',
       );
+    }
     case 'no_evidence_conflict':
       return outcome(
         !observation.issues.some((issue) => issue.code === 'observation_conflict'),
@@ -82,6 +84,50 @@ function evaluateRule(metric: RuleMetric, observation: TaskObservation): {
       );
     }
   }
+}
+
+function hasSuccessfulBusinessCompletion(observation: TaskObservation): boolean {
+  if (observation.interruption) return false;
+  const result = observation.productResult;
+  switch (observation.operation) {
+    case 'conversation':
+      return Array.isArray(result.steps)
+        && result.steps.length > 0
+        && result.steps.every(hasCompletedAssistantReply);
+    case 'interest_understanding':
+      return statusOf(result.understanding) === 'completed';
+    case 'candidate_supply':
+      return statusOf(result.completion) === 'completed';
+    case 'daily_recommendation':
+      return statusOf(result.accepted) === 'already_published'
+        || statusOf(result.completion) === 'published';
+    case 'preference_learning': {
+      const feedbackChange = isRecord(result.updated) && isRecord(result.updated.feedbackChange)
+        ? result.updated.feedbackChange
+        : undefined;
+      if (feedbackChange?.changed === false || feedbackChange?.status === 'ignored') return true;
+      return ['learned', 'ignored', 'superseded'].includes(statusOf(result.completion) ?? '');
+    }
+  }
+}
+
+function hasCompletedAssistantReply(value: unknown): boolean {
+  if (!isRecord(value) || value.status !== 'ok' || !Array.isArray(value.messages)) return false;
+  return value.messages.some((entry) => (
+    isRecord(entry)
+    && entry.type === 'message'
+    && isRecord(entry.message)
+    && entry.message.kind === 'assistantReply'
+    && entry.message.status === 'completed'
+  ));
+}
+
+function statusOf(value: unknown): string | undefined {
+  return isRecord(value) && typeof value.status === 'string' ? value.status : undefined;
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function outcome(
