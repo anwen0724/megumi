@@ -1,6 +1,6 @@
 {
   "taskId": "conversation.plan-and-review-delivery",
-  "revision": 2,
+  "revision": 4,
   "title": "规划并复审一次功能交付",
   "objective": "Agent 在同一 Session 中完成多材料分析、两个交付物创建以及后续自检修订。",
   "difficulty": "complex",
@@ -54,92 +54,100 @@
       }
     ]
   },
-  "timeoutMs": 240000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "两轮业务执行均已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "workspace_files_exist",
       "title": "目标文件已生成",
+      "dimension": "result",
       "evaluator": "rule",
+      "required": true,
       "rule": "workspace_files_exist",
       "paths": [
         "delivery/implementation-plan.md",
         "delivery/risk-checklist.md"
-      ],
-      "required": true
+      ]
     },
     {
       "metricId": "implementation_plan_structure",
       "title": "目标文件结构完整",
+      "dimension": "result",
       "evaluator": "rule",
+      "required": true,
       "rule": "workspace_file_contains",
       "path": "delivery/implementation-plan.md",
       "contains": [
         "重启",
         "取消",
         "验证"
-      ],
-      "required": true
+      ]
     },
     {
       "metricId": "risk_checklist_structure",
       "title": "目标文件结构完整",
+      "dimension": "result",
       "evaluator": "rule",
+      "required": true,
       "rule": "workspace_file_contains",
       "path": "delivery/risk-checklist.md",
       "contains": [
         "风险",
         "缓解",
         "验证"
-      ],
-      "required": true
+      ]
     },
     {
       "metricId": "task_completion",
       "title": "多步任务完成度",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断两轮指令是否在同一任务上下文中完成，最终仅保留两份指定交付文档，并说明复审修订。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "planning_quality",
       "title": "实施计划质量",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断计划是否符合现有边界，按依赖顺序覆盖持久状态、瞬时进度、重启恢复、幂等取消和验证。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "review_correction",
       "title": "复审修订质量",
+      "dimension": "process",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断第二轮是否真正利用 review-notes 发现并修正遗漏或矛盾，而不是只声称已检查。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "cross_file_consistency",
       "title": "交付物一致性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断实施计划与风险清单对业务状态、Runtime Event、恢复、取消和验证的表述一致。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "tool_use",
       "title": "完成了多步文件工作",
+      "dimension": "process",
       "evaluator": "measurement",
+      "required": true,
       "measurement": "toolCalls",
       "operator": "min",
-      "threshold": 5,
-      "required": true
+      "threshold": 5
     }
   ]
 }

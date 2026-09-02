@@ -19,16 +19,18 @@ export function renderEvaluationReport(
     '',
     '## Summary',
     '',
-    `Passed ${result.totals.passed}; failed ${result.totals.failed}; not gradable ${result.totals.notGradable}; budget blocked ${result.totals.budgetBlocked}.`,
+    `Result: ${totalsLine(result.totals.result)}.`,
+    `Process: ${totalsLine(result.totals.process)}.`,
+    `Overall: ${totalsLine(result.totals.overall)}. Budget blocked ${result.totals.budgetBlocked}.`,
     '',
   ];
   if (comparison) appendComparison(lines, comparison);
   lines.push('## Tasks', '');
   for (const taskResult of result.taskResults) {
     lines.push(
-      `### ${taskResult.taskId} (${taskResult.judgement})`,
+      `### ${taskResult.taskId} (${taskResult.overallJudgement})`,
       '',
-      `Operation: \`${taskResult.operation}\`; execution: \`${taskResult.executionOutcome.status}\`; difficulty: \`${taskResult.difficulty}\`; duration: ${taskResult.measurements.durationMs} ms.`,
+      `Operation: \`${taskResult.operation}\`; result: \`${taskResult.resultJudgement}\`; process: \`${taskResult.processJudgement}\`; difficulty: \`${taskResult.difficulty}\`; duration: ${taskResult.productExecution?.durationMs ?? 0} ms.`,
       `Model calls: ${taskResult.measurements.modelCalls}; tool calls: ${taskResult.measurements.toolCalls}; grader calls: ${taskResult.measurements.graderModelCalls}.`,
       '',
     );
@@ -76,9 +78,9 @@ function appendMetrics(
   lines: string[],
   metrics: EvaluationRunResult['taskResults'][number]['metricResults'],
 ): void {
-  lines.push('| Metric | Evaluator | Required | Result | Score/Actual | Reason |', '| --- | --- | --- | --- | --- | --- |');
+  lines.push('| Metric | Dimension | Evaluator | Required | Result | Score/Actual | Reason |', '| --- | --- | --- | --- | --- | --- | --- |');
   for (const metric of metrics) {
-    lines.push(`| ${metric.metricId} | ${metric.evaluator} | ${metric.required ? 'yes' : 'no'} | ${metric.judgement} | ${metric.score ?? metric.actual ?? '—'} | ${escapeCell(metric.rationale)} |`);
+    lines.push(`| ${metric.metricId} | ${metric.dimension} | ${metric.evaluator} | ${metric.required ? 'yes' : 'no'} | ${metric.judgement} | ${metric.score ?? metric.actual ?? '—'} | ${escapeCell(metric.rationale)} |`);
   }
   lines.push('');
 }
@@ -110,4 +112,8 @@ function appendComparison(lines: string[], comparison: BaselineComparison): void
 
 function escapeCell(value: string): string {
   return value.replaceAll('|', '\\|').replaceAll('\n', ' ');
+}
+
+function totalsLine(value: EvaluationRunResult['totals']['result']): string {
+  return `passed ${value.passed}; failed ${value.failed}; not gradable ${value.notGradable}; not evaluated ${value.notEvaluated}`;
 }

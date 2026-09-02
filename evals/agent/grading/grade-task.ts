@@ -89,6 +89,7 @@ async function evaluateModelMetrics(
       results: metrics.map((metric) => ({
         metricId: metric.metricId,
         title: metric.title,
+        dimension: metric.dimension,
         evaluator: 'model' as const,
         required: metric.required,
         judgement: 'not_gradable' as const,

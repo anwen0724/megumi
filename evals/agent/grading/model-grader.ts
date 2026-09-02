@@ -99,6 +99,7 @@ export function createModelMetricEvaluator(input: {
               metrics: request.metrics.map((metric) => ({
                 metricId: metric.metricId,
                 title: metric.title,
+                dimension: metric.dimension,
                 rubric: metric.rubric,
                 scoreScale: '0-4',
               })),
@@ -129,6 +130,7 @@ export function createModelMetricEvaluator(input: {
         return TaskMetricResultSchema.parse({
           metricId: metric.metricId,
           title: metric.title,
+          dimension: metric.dimension,
           evaluator: 'model',
           required: metric.required,
           judgement: notGradable ? 'not_gradable' : score >= metric.minScore ? 'pass' : 'fail',

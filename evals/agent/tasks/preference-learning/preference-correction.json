@@ -1,6 +1,6 @@
 {
   "taskId": "preference-learning.preference-correction",
-  "revision": 2,
+  "revision": 4,
   "title": "反馈修正偏好",
   "objective": "相反的新反馈应正确修订已有 Preference，而不是叠加矛盾结论。",
   "difficulty": "medium",
@@ -105,38 +105,41 @@
     "recommendationReferenceId": "target",
     "reaction": "disliked"
   },
-  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "feedback_accuracy",
       "title": "反馈事实准确性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断本次用户反馈及其变更事实是否被准确记录并用于学习。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     },
     {
       "metricId": "revision_retraction",
       "title": "偏好修订与撤回",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断相反或撤销反馈是否正确修订、削弱或撤回旧 Preference，避免并存矛盾结论。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "stability_usability",
       "title": "稳定偏好的可用性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断形成的 Preference 是否稳定、具体，并能被后续推荐上下文直接使用。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     }
   ]
 }

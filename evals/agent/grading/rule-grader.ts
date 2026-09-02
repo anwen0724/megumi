@@ -18,6 +18,7 @@ export function gradeRuleMetrics(input: {
     return TaskMetricResultSchema.parse({
       metricId: metric.metricId,
       title: metric.title,
+      dimension: metric.dimension,
       evaluator: 'rule',
       required: metric.required,
       judgement: result.passed ? 'pass' : 'fail',

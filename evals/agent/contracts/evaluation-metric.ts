@@ -8,6 +8,7 @@ export const StableEvaluationIdSchema = z.string().regex(/^[a-z0-9]+(?:[._-][a-z
 const MetricBaseShape = {
   metricId: StableEvaluationIdSchema,
   title: z.string().trim().min(1),
+  dimension: z.enum(['result', 'process']),
   required: z.boolean().default(true),
 };
 

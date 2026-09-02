@@ -34,17 +34,21 @@ export async function executeTask(input: {
   readonly initialStateIds: InstalledInitialStateIds;
   readonly candidateModel: { readonly providerId: string; readonly modelId: string };
   readonly now: () => string;
+  readonly safetyWallClockLimitMs: number;
 }): Promise<ProductTaskExecution> {
-  switch (input.task.input.type) {
-    case 'conversation': return executeConversation(input);
-    case 'interest_understanding': return executeInterestUnderstanding(input);
-    case 'candidate_supply': return executeCandidateSupply(input);
-    case 'daily_recommendation': return executeDailyRecommendation(input);
-    case 'preference_learning': return executePreferenceLearning(input);
+  const executionInput = { ...input, safetyDeadlineMs: Date.now() + input.safetyWallClockLimitMs };
+  switch (executionInput.task.input.type) {
+    case 'conversation': return executeConversation(executionInput);
+    case 'interest_understanding': return executeInterestUnderstanding(executionInput);
+    case 'candidate_supply': return executeCandidateSupply(executionInput);
+    case 'daily_recommendation': return executeDailyRecommendation(executionInput);
+    case 'preference_learning': return executePreferenceLearning(executionInput);
   }
 }
 
-async function executeConversation(input: Parameters<typeof executeTask>[0]): Promise<ProductTaskExecution> {
+type TaskExecutionInput = Parameters<typeof executeTask>[0] & { readonly safetyDeadlineMs: number };
+
+async function executeConversation(input: TaskExecutionInput): Promise<ProductTaskExecution> {
   if (input.task.input.type !== 'conversation') throw new Error('Conversation input is required.');
   let sessionId = Object.values(input.initialStateIds.sessions)[0];
   const steps: unknown[] = [];
@@ -78,7 +82,7 @@ async function executeConversation(input: Parameters<typeof executeTask>[0]): Pr
       runtime: input.runtime,
       sessionId,
       executionId: accepted.payload.run.executionId,
-      timeoutMs: input.task.timeoutMs,
+      timeoutMs: remainingSafetyMs(input.safetyDeadlineMs),
     });
     steps.push(settled.result);
     if (settled.outcome.status !== 'completed') {
@@ -88,7 +92,7 @@ async function executeConversation(input: Parameters<typeof executeTask>[0]): Pr
   return { outcome: { status: 'completed' }, productResult: { steps, sessionId }, traceTargets };
 }
 
-async function executeInterestUnderstanding(input: Parameters<typeof executeTask>[0]): Promise<ProductTaskExecution> {
+async function executeInterestUnderstanding(input: TaskExecutionInput): Promise<ProductTaskExecution> {
   if (input.task.input.type !== 'interest_understanding') throw new Error('Interest Understanding input is required.');
   const sessionId = Object.values(input.initialStateIds.sessions)[0];
   if (!sessionId) throw new Error('Interest Understanding requires one initial Session.');
@@ -114,7 +118,7 @@ async function executeInterestUnderstanding(input: Parameters<typeof executeTask
     runtime: input.runtime,
     sessionId,
     executionId: accepted.payload.run.executionId,
-    timeoutMs: input.task.timeoutMs,
+    timeoutMs: remainingSafetyMs(input.safetyDeadlineMs),
   });
   const traceTargets: TraceTarget[] = [conversationTraceTarget({
     executionId: accepted.payload.run.executionId,
@@ -126,7 +130,7 @@ async function executeInterestUnderstanding(input: Parameters<typeof executeTask
   }
   const understanding = await input.runtime.host.discovery.waitInterestUnderstanding({
     executionId: accepted.payload.run.executionId,
-    timeoutMs: input.task.timeoutMs,
+    timeoutMs: remainingSafetyMs(input.safetyDeadlineMs),
   });
   if (understanding.status !== 'completed') {
     return {
@@ -151,7 +155,7 @@ async function executeInterestUnderstanding(input: Parameters<typeof executeTask
   };
 }
 
-async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]): Promise<ProductTaskExecution> {
+async function executeCandidateSupply(input: TaskExecutionInput): Promise<ProductTaskExecution> {
   const receipt = await input.runtime.host.discovery.requestCandidateSupply({ trigger: 'evaluation' });
   if (!receipt) {
     return {
@@ -162,7 +166,7 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
   }
   const completion = await input.runtime.host.discovery.waitCandidateSupplyCheck({
     candidateSupplyId: receipt.candidateSupplyId,
-    timeoutMs: input.task.timeoutMs,
+    timeoutMs: remainingSafetyMs(input.safetyDeadlineMs),
   });
   if (completion.status !== 'completed') {
     return {
@@ -195,12 +199,12 @@ async function executeCandidateSupply(input: Parameters<typeof executeTask>[0]):
   };
 }
 
-async function executeDailyRecommendation(input: Parameters<typeof executeTask>[0]): Promise<ProductTaskExecution> {
+async function executeDailyRecommendation(input: TaskExecutionInput): Promise<ProductTaskExecution> {
   const accepted = await input.runtime.host.discovery.ensureDaily({ trigger: 'manual', now: input.now() });
   const completion = accepted.status === 'started' || accepted.status === 'in_progress'
     ? await input.runtime.host.discovery.waitDailyBatch({
         localDate: accepted.localDate,
-        timeoutMs: input.task.timeoutMs,
+        timeoutMs: remainingSafetyMs(input.safetyDeadlineMs),
       })
     : accepted;
   if ('status' in completion && completion.status === 'timed_out') {
@@ -242,7 +246,7 @@ async function executeDailyRecommendation(input: Parameters<typeof executeTask>[
   };
 }
 
-async function executePreferenceLearning(input: Parameters<typeof executeTask>[0]): Promise<ProductTaskExecution> {
+async function executePreferenceLearning(input: TaskExecutionInput): Promise<ProductTaskExecution> {
   if (input.task.input.type !== 'preference_learning') throw new Error('Preference Learning input is required.');
   const recommendationId = input.initialStateIds.recommendations[input.task.input.recommendationReferenceId];
   if (!recommendationId) throw new Error(`Initial Recommendation was not installed: ${input.task.input.recommendationReferenceId}.`);
@@ -263,7 +267,7 @@ async function executePreferenceLearning(input: Parameters<typeof executeTask>[0
   }
   const completion = await input.runtime.host.discovery.waitPreferenceLearning({
     feedbackChangeId: receipt.feedbackChangeId,
-    timeoutMs: input.task.timeoutMs,
+    timeoutMs: remainingSafetyMs(input.safetyDeadlineMs),
   });
   if (completion.status !== 'completed') {
     return {
@@ -389,4 +393,8 @@ function currentRecommendationCount(
   }
   if (completion.status === 'failed') return 0;
   return undefined;
+}
+
+function remainingSafetyMs(deadlineMs: number): number {
+  return Math.max(1, deadlineMs - Date.now());
 }

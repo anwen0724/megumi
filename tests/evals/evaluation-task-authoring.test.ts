@@ -20,7 +20,9 @@ describe('Evaluation Task authoring', () => {
       'content_quality',
       'tool_calls',
     ]);
+    expect(task.metrics.map((metric) => metric.dimension)).toEqual(['result', 'result', 'process']);
     expect(task).not.toHaveProperty('runner');
+    expect(task).not.toHaveProperty('timeoutMs');
   });
 
   it('rejects duplicated Metric IDs and missing initial-state references', () => {
@@ -65,7 +67,7 @@ describe('Evaluation Task authoring', () => {
     });
 
     const catalog = await loadEvaluationTaskCatalog(root);
-    const selected = catalog.resolveTasks(EvaluationRunConfigSchema.parse({
+    const runConfig = EvaluationRunConfigSchema.parse({
       profile: 'controlled',
       taskIds: ['conversation.create-study-note'],
       suiteIds: ['core'],
@@ -74,13 +76,15 @@ describe('Evaluation Task authoring', () => {
       repetitions: 1,
       concurrency: 1,
       budget: { maxTasks: 10 },
-    }));
+    });
+    const selected = catalog.resolveTasks(runConfig);
 
     expect(catalog.tasks.size).toBe(2);
     expect(selected.map((task) => task.taskId)).toEqual([
       'conversation.create-study-note',
       'candidate-supply.refill',
     ]);
+    expect(runConfig.safetyWallClockLimitMs).toBe(900_000);
   });
 });
 
@@ -98,19 +102,21 @@ function conversationTask() {
       type: 'conversation' as const,
       steps: [{ userInput: '读取 source.md，并创建 notes.md。', permissionMode: 'auto' as const }],
     },
-    timeoutMs: 120_000,
     metrics: [
       {
         metricId: 'document_created', title: '文档已创建', evaluator: 'rule' as const,
-        required: true, rule: 'workspace_files_exist' as const, paths: ['notes.md'],
+        dimension: 'result' as const, required: true,
+        rule: 'workspace_files_exist' as const, paths: ['notes.md'],
       },
       {
         metricId: 'content_quality', title: '内容质量', evaluator: 'model' as const,
-        required: true, rubric: '笔记应准确覆盖材料中的核心规则。', minScore: 3,
+        dimension: 'result' as const, required: true,
+        rubric: '笔记应准确覆盖材料中的核心规则。', minScore: 3,
       },
       {
         metricId: 'tool_calls', title: '工具调用次数', evaluator: 'measurement' as const,
-        required: false, measurement: 'toolCalls' as const, operator: 'max' as const, threshold: 6,
+        dimension: 'process' as const, required: false,
+        measurement: 'toolCalls' as const, operator: 'max' as const, threshold: 6,
       },
     ],
   };
@@ -121,10 +127,11 @@ function candidateSupplyTask() {
     taskId: 'candidate-supply.refill', revision: 1, title: '补充候选池',
     objective: '为已有关注补充有效 Candidate。', difficulty: 'medium' as const,
     profiles: ['controlled'] as const, tags: ['core'], initialState: initialState(),
-    input: { type: 'candidate_supply' as const }, timeoutMs: 180_000,
+    input: { type: 'candidate_supply' as const },
     metrics: [{
       metricId: 'completion', title: '业务完成', evaluator: 'rule' as const,
-      required: true, rule: 'business_completion_present' as const,
+      dimension: 'result' as const, required: true,
+      rule: 'business_completion_present' as const,
     }],
   };
 }

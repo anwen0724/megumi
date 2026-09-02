@@ -1,6 +1,6 @@
 {
   "taskId": "candidate-supply.relevant-pool-refill",
-  "revision": 2,
+  "revision": 4,
   "title": "相关候选补池",
   "objective": "Pool 缺口应触发合理搜索并形成相关可用 Candidate。",
   "difficulty": "medium",
@@ -57,45 +57,41 @@
   "input": {
     "type": "candidate_supply"
   },
-  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "no_evidence_conflict",
-      "title": "证据无冲突",
-      "evaluator": "rule",
-      "rule": "no_evidence_conflict",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "search_strategy",
       "title": "搜索策略合理",
+      "dimension": "process",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断 Agent 选择的来源、查询方向和搜索范围是否与现有 Interest、Pool 缺口及预算一致。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     },
     {
       "metricId": "candidate_quality",
       "title": "候选质量",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断产生的 Candidate 是否真实相关、内容完整、可供后续推荐，而不是只看标题或弱相关结果。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "admission_quality",
       "title": "入池判断质量",
+      "dimension": "process",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断入池评估是否正确处理相关性、重复、内容价值、时效性、负向约束和不可信内容。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     }
   ]
 }

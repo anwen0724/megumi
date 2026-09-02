@@ -9,7 +9,9 @@ const BaselineTaskSchema = z.object({
   candidateModel: z.string().min(1),
   graderModelAndMetricVersion: z.string().min(1),
   sampleCount: z.number().int().positive(),
-  passRate: z.number().min(0).max(1),
+  resultPassRate: z.number().min(0).max(1),
+  processPassRate: z.number().min(0).max(1),
+  overallPassRate: z.number().min(0).max(1),
   requiredMetricPassRates: z.record(z.string(), z.number().min(0).max(1)),
   modelMetricScoreAverages: z.record(z.string(), z.number().min(0).max(4)),
   measurementAverages: z.record(z.string(), z.number().nonnegative()),
@@ -52,10 +54,9 @@ export function compareWithBaseline(input: {
     if (!baseline) continue;
     comparable += 1;
     const observations: string[] = [];
-    const currentPassRate = passRate(group);
-    if (currentPassRate < baseline.passRate - input.baseline.passRateTolerance) {
-      observations.push(`${sample.taskId}: pass rate ${currentPassRate.toFixed(3)} < ${baseline.passRate.toFixed(3)}.`);
-    }
+    compareJudgementRate(observations, sample.taskId, 'result', judgementPassRate(group, 'resultJudgement'), baseline.resultPassRate, input.baseline.passRateTolerance);
+    compareJudgementRate(observations, sample.taskId, 'process', judgementPassRate(group, 'processJudgement'), baseline.processPassRate, input.baseline.passRateTolerance);
+    compareJudgementRate(observations, sample.taskId, 'overall', judgementPassRate(group, 'overallJudgement'), baseline.overallPassRate, input.baseline.passRateTolerance);
     for (const [metricId, baselineRate] of Object.entries(baseline.requiredMetricPassRates)) {
       const currentRate = metricPassRate(group, metricId);
       if (currentRate < baselineRate - input.baseline.passRateTolerance) {
@@ -95,7 +96,9 @@ export function approveBaseline(input: {
         candidateModel: input.result.candidateModel,
         graderModelAndMetricVersion: input.result.graderModelAndMetricVersion,
         sampleCount: group.length,
-        passRate: passRate(group),
+        resultPassRate: judgementPassRate(group, 'resultJudgement'),
+        processPassRate: judgementPassRate(group, 'processJudgement'),
+        overallPassRate: judgementPassRate(group, 'overallJudgement'),
         requiredMetricPassRates: Object.fromEntries(requiredMetricIds.map((metricId) => [
           metricId,
           metricPassRate(group, metricId),
@@ -122,8 +125,24 @@ function groupResults(results: readonly TaskEvaluationResult[]): TaskEvaluationR
   return [...groups.values()];
 }
 
-function passRate(group: readonly TaskEvaluationResult[]): number {
-  return group.filter((entry) => entry.judgement === 'passed').length / group.length;
+function judgementPassRate(
+  group: readonly TaskEvaluationResult[],
+  field: 'resultJudgement' | 'processJudgement' | 'overallJudgement',
+): number {
+  return group.filter((entry) => entry[field] === 'passed').length / group.length;
+}
+
+function compareJudgementRate(
+  observations: string[],
+  taskId: string,
+  dimension: 'result' | 'process' | 'overall',
+  current: number,
+  baseline: number,
+  tolerance: number,
+): void {
+  if (current < baseline - tolerance) {
+    observations.push(`${taskId}: ${dimension} pass rate ${current.toFixed(3)} < ${baseline.toFixed(3)}.`);
+  }
 }
 
 function assertValidRun(result: EvaluationRunResult): void {

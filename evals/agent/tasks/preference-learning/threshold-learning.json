@@ -1,6 +1,6 @@
 {
   "taskId": "preference-learning.threshold-learning",
-  "revision": 2,
+  "revision": 4,
   "title": "达到阈值后学习",
   "objective": "累计反馈达到阈值后应形成有证据支持的稳定 Preference Revision。",
   "difficulty": "medium",
@@ -130,53 +130,50 @@
     "recommendationReferenceId": "target",
     "reaction": "liked"
   },
-  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "no_evidence_conflict",
-      "title": "证据无冲突",
-      "evaluator": "rule",
-      "rule": "no_evidence_conflict",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "feedback_accuracy",
       "title": "反馈事实准确性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断本次用户反馈及其变更事实是否被准确记录并用于学习。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "scope_assignment",
       "title": "偏好作用域判断",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断 Preference 是否归入正确 Interest 或全局作用域，没有错误扩大影响范围。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     },
     {
       "metricId": "evidence_sufficiency",
       "title": "长期证据充分性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断新增或更新 Interest 的结论是否有会话中的明确、可追溯证据支撑。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "stability_usability",
       "title": "稳定偏好的可用性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断形成的 Preference 是否稳定、具体，并能被后续推荐上下文直接使用。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     }
   ]
 }

@@ -58,6 +58,7 @@ export const EvaluationRunConfigSchema = z.object({
   graderModel: EvaluationModelSourceSchema,
   repetitions: z.number().int().min(1).max(20).default(1),
   concurrency: z.number().int().min(1).max(8).default(1),
+  safetyWallClockLimitMs: z.number().int().positive().default(900_000),
   budget: z.object({
     maxTasks: z.number().int().positive(),
     maxInputTokens: z.number().int().positive().optional(),

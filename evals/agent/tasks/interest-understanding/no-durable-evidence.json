@@ -1,6 +1,6 @@
 {
   "taskId": "interest-understanding.no-durable-evidence",
-  "revision": 2,
+  "revision": 4,
   "title": "无需长期记录",
   "objective": "一次性表达不应被误写为长期 Interest Evidence。",
   "difficulty": "medium",
@@ -32,30 +32,32 @@
     "type": "interest_understanding",
     "text": "谢谢，今天先聊到这里。"
   },
-  "timeoutMs": 120000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "recognition_accuracy",
       "title": "关注识别准确性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断会话内容是否真的表达了需要长期保存的关注，并正确形成或不形成 Interest Evidence。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "omission",
       "title": "避免遗漏与误识别",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断关注理解是否既没有漏掉明确长期关注，也没有把一次性表达误写成长期关注。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     }
   ]
 }

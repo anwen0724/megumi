@@ -119,7 +119,6 @@ export const EvaluationTaskSchema = z.object({
   tags: z.array(StableEvaluationIdSchema).default([]),
   initialState: EvaluationInitialStateSchema,
   input: EvaluationTaskInputSchema,
-  timeoutMs: z.number().int().positive(),
   metrics: z.array(EvaluationMetricSchema).min(1),
 }).strict().superRefine((task, context) => {
   uniqueValues(task.metrics.map((metric) => metric.metricId), ['metrics'], 'Metric ID', context);

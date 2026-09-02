@@ -1,6 +1,6 @@
 {
   "taskId": "preference-learning.preference-retraction",
-  "revision": 2,
+  "revision": 4,
   "title": "撤销反馈与偏好",
   "objective": "撤销支撑反馈后应撤销或削弱不再有依据的 Preference。",
   "difficulty": "medium",
@@ -105,38 +105,41 @@
     "recommendationReferenceId": "target",
     "reaction": "none"
   },
-  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "evidence_sufficiency",
       "title": "长期证据充分性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断新增或更新 Interest 的结论是否有会话中的明确、可追溯证据支撑。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     },
     {
       "metricId": "revision_retraction",
       "title": "偏好修订与撤回",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断相反或撤销反馈是否正确修订、削弱或撤回旧 Preference，避免并存矛盾结论。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "stability_usability",
       "title": "稳定偏好的可用性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断形成的 Preference 是否稳定、具体，并能被后续推荐上下文直接使用。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     }
   ]
 }

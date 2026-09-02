@@ -16,7 +16,8 @@ describe('Evaluation grading', () => {
         return {
           results: metrics.map((metric) => ({
             metricId: metric.metricId, title: metric.title, evaluator: 'model' as const,
-            required: metric.required, judgement: 'pass' as const, score: 4,
+            dimension: metric.dimension, required: metric.required,
+            judgement: 'pass' as const, score: 4,
             rationale: 'Strong result.', evidenceRefs: ['observation:1#productResult'], evaluatedAt: now,
           })),
           usage: { modelCalls: 1, inputTokens: 10, outputTokens: 5, estimatedCostUsd: 0 },
@@ -32,6 +33,7 @@ describe('Evaluation grading', () => {
     });
 
     expect(result.results.map((entry) => entry.metricId)).toEqual(['file', 'quality', 'tools']);
+    expect(result.results.map((entry) => entry.dimension)).toEqual(['result', 'result', 'process']);
     expect(result.results.every((entry) => entry.judgement === 'pass')).toBe(true);
     expect(result.modelUsage.modelCalls).toBe(1);
     expect(result.infrastructureError).toBeUndefined();
@@ -66,7 +68,8 @@ describe('Evaluation grading', () => {
           return {
             results: metrics.map((metric) => ({
               metricId: metric.metricId, title: metric.title, evaluator: 'model' as const,
-              required: metric.required, judgement: 'pass' as const, score: 4,
+              dimension: metric.dimension, required: metric.required,
+              judgement: 'pass' as const, score: 4,
               rationale: 'Strong result.', evidenceRefs: [], evaluatedAt: now,
             })),
             usage: { modelCalls: 1, inputTokens: 1, outputTokens: 1, estimatedCostUsd: 0 },
@@ -126,11 +129,10 @@ function evaluationTask() {
       type: 'conversation',
       steps: [{ userInput: 'Create a file.', permissionMode: 'full_access' }],
     },
-    timeoutMs: 1_000,
     metrics: [
-      { metricId: 'file', title: 'File exists', evaluator: 'rule', rule: 'workspace_files_exist', paths: ['out.md'], required: true },
-      { metricId: 'quality', title: 'Quality', evaluator: 'model', rubric: 'Judge quality.', minScore: 3, required: true },
-      { metricId: 'tools', title: 'Tool calls', evaluator: 'measurement', measurement: 'toolCalls', operator: 'min', threshold: 1, required: true },
+      { metricId: 'file', title: 'File exists', dimension: 'result', evaluator: 'rule', rule: 'workspace_files_exist', paths: ['out.md'], required: true },
+      { metricId: 'quality', title: 'Quality', dimension: 'result', evaluator: 'model', rubric: 'Judge quality.', minScore: 3, required: true },
+      { metricId: 'tools', title: 'Tool calls', dimension: 'process', evaluator: 'measurement', measurement: 'toolCalls', operator: 'min', threshold: 1, required: true },
     ],
   });
 }

@@ -1,6 +1,6 @@
 {
   "taskId": "daily-recommendation.novel-diverse-selection",
-  "revision": 2,
+  "revision": 4,
   "title": "新颖且多样的组合",
   "objective": "固定 Pool 中的推荐组合应兼顾相关性、新颖性、多样性和适量探索。",
   "difficulty": "medium",
@@ -69,38 +69,41 @@
   "input": {
     "type": "daily_recommendation"
   },
-  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "relevance",
       "title": "推荐相关性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断最终推荐是否与当前 Interest 和场景事实直接相关。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "novelty",
       "title": "推荐新颖性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断推荐是否避免已经消费或语义重复的内容，并提供新的信息价值。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     },
     {
       "metricId": "diversity_exploration",
       "title": "多样性与探索",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断推荐组合是否在核心相关内容之外保持合理的来源、主题或探索多样性。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     }
   ]
 }

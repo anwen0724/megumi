@@ -1,6 +1,6 @@
 {
   "taskId": "interest-understanding.merge-existing-interest",
-  "revision": 2,
+  "revision": 4,
   "title": "归并已有关注",
   "objective": "新证据应归并到语义一致的已有 Interest，而不是无意义重复。",
   "difficulty": "medium",
@@ -38,38 +38,41 @@
     "type": "interest_understanding",
     "text": "我也想持续跟进 TypeScript 6.x 的类型系统变化。"
   },
-  "timeoutMs": 120000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "recognition_accuracy",
       "title": "关注识别准确性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断会话内容是否真的表达了需要长期保存的关注，并正确形成或不形成 Interest Evidence。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     },
     {
       "metricId": "interest_merge",
       "title": "已有关注归并",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断语义一致的新证据是否合并到已有 Interest，避免生成重复关注。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "evidence_sufficiency",
       "title": "长期证据充分性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": false,
       "rubric": "判断新增或更新 Interest 的结论是否有会话中的明确、可追溯证据支撑。",
-      "minScore": 3,
-      "required": false
+      "minScore": 3
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "taskId": "conversation.create-architecture-note",
-  "revision": 2,
+  "revision": 4,
   "title": "创建 TypeScript 架构笔记",
   "objective": "Agent 读取明确要求后，在 Workspace 创建一份结构完整、内容准确的 TypeScript 模块边界笔记。",
   "difficulty": "simple",
@@ -38,62 +38,67 @@
       }
     ]
   },
-  "timeoutMs": 120000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "workspace_files_exist",
       "title": "目标文件已生成",
+      "dimension": "result",
       "evaluator": "rule",
+      "required": true,
       "rule": "workspace_files_exist",
       "paths": [
         "notes/typescript-boundaries.md"
-      ],
-      "required": true
+      ]
     },
     {
       "metricId": "typescript_boundaries_structure",
       "title": "目标文件结构完整",
+      "dimension": "result",
       "evaluator": "rule",
+      "required": true,
       "rule": "workspace_file_contains",
       "path": "notes/typescript-boundaries.md",
       "contains": [
         "# TypeScript 模块边界笔记",
         "## 核心原则",
         "## 检查清单"
-      ],
-      "required": true
+      ]
     },
     {
       "metricId": "task_completion",
       "title": "任务完成度",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断 Agent 是否读取给定材料、创建指定文件，并在回复中准确说明完成结果。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "document_quality",
       "title": "文档质量",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断笔记是否准确提炼模块边界原则，并提供至少三条具体、可执行且不重复的检查项。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "tool_use",
       "title": "完成了文件操作",
+      "dimension": "process",
       "evaluator": "measurement",
+      "required": true,
       "measurement": "toolCalls",
       "operator": "min",
-      "threshold": 1,
-      "required": true
+      "threshold": 1
     }
   ]
 }

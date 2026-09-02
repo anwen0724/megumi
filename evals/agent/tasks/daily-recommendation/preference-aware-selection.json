@@ -1,6 +1,6 @@
 {
   "taskId": "daily-recommendation.preference-aware-selection",
-  "revision": 2,
+  "revision": 4,
   "title": "遵守稳定偏好选择",
   "objective": "推荐选择应遵守已有正负偏好并保持相关性。",
   "difficulty": "medium",
@@ -140,37 +140,32 @@
   "input": {
     "type": "daily_recommendation"
   },
-  "timeoutMs": 180000,
   "metrics": [
     {
       "metricId": "business_completion_present",
       "title": "业务执行已完成",
+      "dimension": "result",
       "evaluator": "rule",
-      "rule": "business_completion_present",
-      "required": true
-    },
-    {
-      "metricId": "no_evidence_conflict",
-      "title": "证据无冲突",
-      "evaluator": "rule",
-      "rule": "no_evidence_conflict",
-      "required": true
+      "required": true,
+      "rule": "business_completion_present"
     },
     {
       "metricId": "relevance",
       "title": "推荐相关性",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断最终推荐是否与当前 Interest 和场景事实直接相关。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     },
     {
       "metricId": "negative_preference",
       "title": "负向偏好遵守",
+      "dimension": "result",
       "evaluator": "model",
+      "required": true,
       "rubric": "判断推荐是否遵守已形成的负向 Preference，没有再次选择明确不喜欢的表达或内容。",
-      "minScore": 3,
-      "required": true
+      "minScore": 3
     }
   ]
 }

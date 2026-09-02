@@ -16,6 +16,7 @@ export function gradeMeasurementMetrics(input: {
       return TaskMetricResultSchema.parse({
         metricId: metric.metricId,
         title: metric.title,
+        dimension: metric.dimension,
         evaluator: 'measurement',
         required: metric.required,
         judgement: 'not_gradable',
@@ -32,6 +33,7 @@ export function gradeMeasurementMetrics(input: {
     return TaskMetricResultSchema.parse({
       metricId: metric.metricId,
       title: metric.title,
+      dimension: metric.dimension,
       evaluator: 'measurement',
       required: metric.required,
       judgement: passed ? 'pass' : 'fail',
