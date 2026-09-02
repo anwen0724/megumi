@@ -49,6 +49,35 @@ describe('Case Environment', () => {
     expect(existsSync(first.paths.root)).toBe(false);
     expect(existsSync(second.paths.root)).toBe(false);
   });
+
+  it('installs the authored Initial State for all five business Case types', async () => {
+    temporaryRoot = mkdtempSync(path.join(tmpdir(), 'megumi-case-types-test-'));
+    const identities = [
+      'controlled/conversation.create-workspace-note',
+      'controlled/interest-understanding.recognize-explicit-interest',
+      'controlled/candidate-supply.refill-agent-candidates',
+      'controlled/daily-recommendation.select-relevant-candidate',
+      'controlled/preference-learning.learn-source-preference',
+    ] as const;
+
+    for (const identity of identities) {
+      const resolvedCase = await loadCase({
+        rootDirectory: path.join(process.cwd(), 'evals', 'agent', 'datasets'),
+        identity,
+      });
+      const environment = await createCaseEnvironment({
+        repositoryRoot: process.cwd(), resolvedCase, candidateModel: resolvedModel(),
+        temporaryParent: temporaryRoot,
+      });
+      try {
+        expect(existsSync(environment.paths.database), identity).toBe(true);
+        expect(environment.resolvedCase.identity).toBe(identity);
+      } finally {
+        await environment.dispose();
+      }
+      expect(existsSync(environment.paths.root), identity).toBe(false);
+    }
+  });
 });
 
 function resolvedModel() {

@@ -26,7 +26,7 @@
     "steps": [
       {
         "userInput": "读取 source.md，把核心规则整理到 notes.md，并简短告诉我完成了什么。",
-        "permissionMode": "auto"
+        "permissionMode": "full_access"
       }
     ]
   },

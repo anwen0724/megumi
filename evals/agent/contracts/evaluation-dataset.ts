@@ -144,7 +144,7 @@ export const CandidateSupplyCaseSchema = z.object({
     targetCount: z.number().int().min(1).max(100),
     interests: z.array(InterestDataSchema).min(1),
     existingCandidates: z.array(CandidateDataSchema).default([]),
-    controlledSources: z.array(ControlledWebDataSchema).min(1),
+    controlledSources: z.array(ControlledWebDataSchema).default([]),
   }).strict(),
   input: z.object({ trigger: z.literal('evaluation') }).strict(),
   expected: z.object({
@@ -244,23 +244,29 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
   const interestReferences = evaluationCase.initialState.interests.map((interest) => interest.referenceId);
   addDuplicateIssues(interestReferences, ['initialState', 'interests'], 'Interest reference', context);
   const interests = new Set(interestReferences);
+  const candidatePath = 'existingCandidates' in evaluationCase.initialState
+    ? 'existingCandidates'
+    : 'candidates';
   const candidates = 'existingCandidates' in evaluationCase.initialState
     ? evaluationCase.initialState.existingCandidates
     : evaluationCase.initialState.candidates;
   const candidateIds = new Set(candidates.map((candidate) => candidate.referenceId));
-  addDuplicateIssues(candidates.map((candidate) => candidate.referenceId), ['initialState', 'candidates'], 'Candidate reference', context);
+  addDuplicateIssues(candidates.map((candidate) => candidate.referenceId), ['initialState', candidatePath], 'Candidate reference', context);
   for (const [candidateIndex, candidate] of candidates.entries()) {
     for (const [referenceIndex, referenceId] of candidate.matchedInterestReferenceIds.entries()) {
-      addMissingReference(interests, referenceId, ['initialState', 'candidates', candidateIndex, 'matchedInterestReferenceIds', referenceIndex], 'Interest', context);
+      addMissingReference(interests, referenceId, ['initialState', candidatePath, candidateIndex, 'matchedInterestReferenceIds', referenceIndex], 'Interest', context);
     }
   }
   if (evaluationCase.type === 'candidate_supply') return;
+  const recommendationPath = evaluationCase.type === 'daily_recommendation'
+    ? 'previousRecommendations'
+    : 'recommendations';
   const recommendations = evaluationCase.type === 'daily_recommendation'
     ? evaluationCase.initialState.previousRecommendations
     : evaluationCase.initialState.recommendations;
   const recommendationIds = new Set(recommendations.map((recommendation) => recommendation.referenceId));
   for (const [index, recommendation] of recommendations.entries()) {
-    addMissingReference(candidateIds, recommendation.candidateReferenceId, ['initialState', 'recommendations', index, 'candidateReferenceId'], 'Candidate', context);
+    addMissingReference(candidateIds, recommendation.candidateReferenceId, ['initialState', recommendationPath, index, 'candidateReferenceId'], 'Candidate', context);
   }
   for (const [preferenceIndex, preference] of evaluationCase.initialState.preferences.entries()) {
     for (const [referenceIndex, referenceId] of preference.supportingRecommendationReferenceIds.entries()) {

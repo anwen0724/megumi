@@ -2,6 +2,8 @@
 
 Adapters 只替换真实产品的外部环境边界，不替换 Product Runtime：
 
-- `controlled/` 固定外部搜索结果、权限决定、时钟和 ID，使重复运行可比较；
-- `live/` 使用实时外部依赖，结果主要用于趋势观察；
-- Model Source Adapter 只读当前 Megumi Settings 和 CredentialStore，并为 Run 建立只读凭据快照；密钥不进入 Run Config 或产物，隔离任务也不会写入用户正式 Home。
+- `controlled/` 固定外部搜索结果、权限决定、时钟和 Profile，使 Case 可重复执行；
+- `live/` 使用真实外部依赖；
+- `candidate-model.ts` 从显式 Run 配置解析候选模型，并只从指定环境变量建立只读凭据快照。
+
+Evaluation 不读取正常产品 Home 中的模型配置或凭据，也不会把密钥写入 Case 或 Run 产物。

@@ -1,4 +1,4 @@
-/* Protects one-way Evaluation dependencies and isolated artifact ownership. */
+/* Protects one-way Evaluation dependencies, credential secrecy, and isolated Trace ownership. */
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
@@ -10,26 +10,25 @@ describe('Evaluation architecture boundary', () => {
     expect(composition).not.toContain('evals/');
   });
 
-  it('keeps credential resolution at the model-source boundary instead of the Run manifest', async () => {
-    const execution = await readFile('evals/agent/execution/run-evaluation.ts', 'utf8');
-    const modelSource = await readFile('evals/agent/adapters/evaluation-model-source.ts', 'utf8');
-    const grader = await readFile('evals/agent/grading/model-grader.ts', 'utf8');
-    expect(execution).not.toContain('apiKeyEnv');
-    expect(execution).not.toContain('apiKey:');
-    expect(modelSource).toContain('createSettingsCredentialStore');
-    expect(grader).not.toContain('readonly apiKey: string');
-    expect(grader).toContain('evidence: selectModelGraderEvidence(request.observation, dimension)');
-    expect(grader).not.toContain('observation: request.observation');
+  it('resolves a Candidate credential from an explicit environment variable without recording it', async () => {
+    const modelSource = await readFile('evals/agent/adapters/candidate-model.ts', 'utf8');
+    const runContract = await readFile('evals/agent/contracts/evaluation-run.ts', 'utf8');
+    const storage = await readFile('evals/agent/run/run-storage.ts', 'utf8');
+    expect(modelSource).toContain('input.environment[input.config.credentialEnvironmentVariable]');
+    expect(modelSource).not.toContain('createSettingsCredentialStore');
+    expect(runContract).toContain('credentialEnvironmentVariable');
+    expect(runContract).not.toMatch(/CandidateModelRecordSchema[\s\S]*credentialEnvironmentVariable/iu);
+    expect(storage).toContain('redactSecrets');
   });
 
-  it('reads Trace, Content, and Measurement only through Product Host', async () => {
-    const evidence = await readFile('evals/agent/execution/trace-evidence.ts', 'utf8');
-    expect(evidence).toContain('runtime.host.observability.listTraces');
-    expect(evidence).toContain('runtime.host.observability.getTrace');
-    expect(evidence).toContain('runtime.host.observability.getContent');
-    expect(evidence).toContain('runtime.host.observability.getTraceMeasurements');
-    expect(evidence).not.toContain("from '@megumi/observability'");
-    expect(evidence).not.toContain('TraceJournal');
-    expect(evidence).not.toContain('DerivedTraceIndex');
+  it('queries Trace through Product Host and archives only the isolated Case Trace store', async () => {
+    const record = await readFile('evals/agent/run/case-record.ts', 'utf8');
+    const environment = await readFile('evals/agent/run/case-environment.ts', 'utf8');
+    expect(record).toContain('runtime.host.observability.flush');
+    expect(record).toContain('runtime.host.observability.listTraces');
+    expect(record).toContain('runtime.host.observability.getHealth');
+    expect(record).not.toContain("from '@megumi/observability'");
+    expect(record).not.toContain('TraceJournal');
+    expect(environment).toContain("const observability = path.join(home, 'logs', 'observability')");
   });
 });

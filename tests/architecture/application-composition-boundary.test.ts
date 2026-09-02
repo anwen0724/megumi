@@ -12,7 +12,7 @@ describe('Application Composition boundary', () => {
 
   it('lets both concrete Hosts call the same public entrypoint', async () => {
     const desktop = await readFile('apps/desktop/src/main/shell-composition/desktop-main-composition.ts', 'utf8');
-    const evaluation = await readFile('evals/agent/execution/evaluation-host.ts', 'utf8');
+    const evaluation = await readFile('evals/agent/run/case-environment.ts', 'utf8');
     expect(desktop).toContain('composeApplication');
     expect(evaluation).toContain('composeApplication');
   });

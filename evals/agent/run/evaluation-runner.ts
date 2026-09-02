@@ -177,7 +177,7 @@ async function runOneCase(input: {
       traceIntegrity = await collectTraceIntegrity({ runtime: environment.runtime, targets: [] })
         .catch((traceError: unknown) => emptyTraceIntegrity(`Trace collection failed: ${errorMessage(traceError)}`));
       await environment.stop().catch((stopError: unknown) => {
-        traceIntegrity = appendTraceIssue(traceIntegrity, `Case Environment stop failed: ${errorMessage(stopError)}`);
+        traceIntegrity = withTraceIssue(traceIntegrity, `Case Environment stop failed: ${errorMessage(stopError)}`);
       });
     }
     resultInput = {
@@ -289,7 +289,7 @@ function emptyTraceIntegrity(issue: string): TraceIntegrity {
   };
 }
 
-function appendTraceIssue(integrity: TraceIntegrity, issue: string): TraceIntegrity {
+function withTraceIssue(integrity: TraceIntegrity, issue: string): TraceIntegrity {
   return { ...integrity, status: 'incomplete', issues: [...integrity.issues, issue] };
 }
 

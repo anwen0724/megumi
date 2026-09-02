@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EvaluationCaseSchema } from '../../evals/agent/contracts/evaluation-dataset';
-import { loadDataset, validateDatasets } from '../../evals/agent/datasets/dataset-loader';
+import { loadCase, loadDataset, validateDatasets } from '../../evals/agent/datasets/dataset-loader';
 
 const DATASET_ROOT = path.resolve('evals', 'agent', 'datasets');
 
@@ -65,6 +65,20 @@ describe('Evaluation Dataset', () => {
     };
 
     expect(() => EvaluationCaseSchema.parse(candidateCase)).toThrow(/Interest reference is duplicated/iu);
+  });
+
+  it('requires controlled search data only for Controlled Candidate Supply Cases', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'megumi-dataset-environment-'));
+    for (const environmentKind of ['controlled', 'live'] as const) {
+      const cases = path.join(root, environmentKind, 'cases', 'candidate-supply');
+      await mkdir(cases, { recursive: true });
+      await writeJson(path.join(cases, 'source.json'), candidateSupplyCase());
+    }
+
+    await expect(loadCase({ rootDirectory: root, identity: 'controlled/candidate-supply.source' }))
+      .rejects.toThrow(/requires at least one controlled source/iu);
+    await expect(loadCase({ rootDirectory: root, identity: 'live/candidate-supply.source' }))
+      .resolves.toMatchObject({ identity: 'live/candidate-supply.source' });
   });
 
   it('returns Dataset members in stable Case identity order', async () => {
@@ -158,6 +172,24 @@ function conversationCase(caseId: string) {
       approvalDecisions: [],
     },
     input: { steps: [{ userInput: 'Answer briefly.', permissionMode: 'auto' }] },
+  };
+}
+
+function candidateSupplyCase() {
+  return {
+    schemaVersion: 2,
+    caseId: 'candidate-supply.source',
+    revision: 1,
+    name: 'Environment-specific source',
+    description: 'Controlled source data is optional only when the Live Adapter supplies it.',
+    type: 'candidate_supply',
+    initialState: {
+      clock: '2026-01-15T08:00:00.000Z',
+      targetCount: 1,
+      interests: [{ referenceId: 'agent', description: 'Agent', status: 'active' }],
+      existingCandidates: [],
+    },
+    input: { trigger: 'evaluation' },
   };
 }
 

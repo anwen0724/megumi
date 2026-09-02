@@ -118,6 +118,13 @@ async function loadCaseCatalog(
       const rawCase = await readJson(file);
       assertSafeCaseContent(rawCase, file);
       const evaluationCase = EvaluationCaseSchema.parse(rawCase);
+      if (
+        environmentKind === 'controlled'
+        && evaluationCase.type === 'candidate_supply'
+        && evaluationCase.initialState.controlledSources.length === 0
+      ) {
+        throw new Error(`Controlled Candidate Supply Case requires at least one controlled source: ${evaluationCase.caseId}.`);
+      }
       if (catalog.has(evaluationCase.caseId)) throw new Error(`Duplicate Case ID in ${environmentKind}: ${evaluationCase.caseId}.`);
       if (typeDirectory !== evaluationCase.type.replaceAll('_', '-')) {
         throw new Error(`Case ${evaluationCase.caseId} is stored under the wrong business directory.`);
@@ -158,8 +165,9 @@ function parseIdentity(value: string, label: string): {
   readonly localId: string;
 } {
   const match = /^(controlled|live)\/([a-z0-9]+(?:[._-][a-z0-9]+)*)$/u.exec(value);
-  if (!match) throw new Error(`${label} identity must be controlled/<id> or live/<id>.`);
-  return { environmentKind: match[1] === 'controlled' ? 'controlled' : 'live', localId: match[2]! };
+  const localId = match?.[2];
+  if (!match || !localId) throw new Error(`${label} identity must be controlled/<id> or live/<id>.`);
+  return { environmentKind: match[1] === 'controlled' ? 'controlled' : 'live', localId };
 }
 
 function formatIdentity(environmentKind: EvaluationEnvironmentKind, localId: string): string {
@@ -230,7 +238,9 @@ function canonicalJson(value: unknown): string {
     return `{${Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`).join(',')}}`;
   }
-  return JSON.stringify(value);
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) throw new Error('Evaluation digest input is not JSON serializable.');
+  return serialized;
 }
 
 function isMissingPath(error: unknown): boolean {
