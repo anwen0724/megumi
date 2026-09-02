@@ -19,6 +19,7 @@ import { cleanEvaluationRuns } from './results/retention-cleaner';
 import { runEvaluation } from './execution/run-evaluation';
 import { loadEvaluationTaskCatalog } from './execution/task-loader';
 import { loadDataset, validateDatasets } from './datasets/dataset-loader';
+import { listMetricDefinitions } from './metrics/metric-catalog';
 
 const evaluationRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(evaluationRoot, '..', '..');
@@ -36,6 +37,10 @@ async function main(arguments_: readonly string[]): Promise<void> {
       identity: rest[0],
     });
     process.stdout.write(`${JSON.stringify(dataset, null, 2)}\n`);
+    return;
+  }
+  if (command === 'metrics' && action === 'list') {
+    process.stdout.write(`${JSON.stringify(listMetricDefinitions(), null, 2)}\n`);
     return;
   }
   if (command === 'tasks' && action === 'validate') {
@@ -112,7 +117,7 @@ async function main(arguments_: readonly string[]): Promise<void> {
     process.stdout.write(`Baseline approved: ${target}\n`);
     return;
   }
-  throw new Error('Usage: datasets validate | datasets show <environment/dataset-id> | tasks validate | run <config.json> | human review import <result.json> <review.json> | baseline approve <result.json> [--id id] [--by name] [--root dir]');
+  throw new Error('Usage: datasets validate | datasets show <environment/dataset-id> | metrics list | tasks validate | run <config.json> | human review import <result.json> <review.json> | baseline approve <result.json> [--id id] [--by name] [--root dir]');
 }
 
 async function readJson(file: string): Promise<unknown> {
