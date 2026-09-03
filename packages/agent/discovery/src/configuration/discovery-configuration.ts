@@ -10,8 +10,9 @@ const LocalTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u);
 
 export interface DiscoveryConfigurationSettings {
   readonly conversationRecognitionEnabled: boolean;
-  readonly dailyGenerationTime: string;
-  readonly dailyTargetCount: number;
+  readonly recommendationGenerationTime: string;
+  readonly recommendationTargetCount: number;
+  readonly recommendationWorkingSetCount: number;
   readonly enabledSources: readonly DiscoverySourceId[];
   readonly candidatePoolMinimumCount: number;
   readonly candidatePoolMaximumCount: number;
@@ -29,8 +30,9 @@ export interface DiscoveryConfigurationStore {
 
 export const UpdateDiscoveryConfigurationRequestSchema = z.object({
   conversationRecognitionEnabled: z.boolean().optional(),
-  dailyGenerationTime: LocalTimeSchema.optional(),
-  dailyTargetCount: z.number().int().min(1).max(100).optional(),
+  recommendationGenerationTime: LocalTimeSchema.optional(),
+  recommendationTargetCount: z.number().int().min(1).max(100).optional(),
+  recommendationWorkingSetCount: z.number().int().min(1).max(200).optional(),
   enabledSources: z.array(z.string().trim().min(1)).min(1).optional(),
   candidatePoolMinimumCount: z.number().int().positive().optional(),
   candidatePoolMaximumCount: z.number().int().positive().optional(),
@@ -58,8 +60,9 @@ export const DiscoverySourceViewSchema = z.object({
 
 export const DiscoveryConfigurationViewSchema = z.object({
   conversationRecognitionEnabled: z.boolean(),
-  dailyGenerationTime: LocalTimeSchema,
-  dailyTargetCount: z.number().int().min(1).max(100),
+  recommendationGenerationTime: LocalTimeSchema,
+  recommendationTargetCount: z.number().int().min(1).max(100),
+  recommendationWorkingSetCount: z.number().int().min(1).max(200),
   candidatePoolMinimumCount: z.number().int().positive(),
   candidatePoolMaximumCount: z.number().int().positive(),
   candidateValidityDays: z.number().int().positive(),
@@ -98,8 +101,9 @@ export function createDiscoveryConfiguration(input: {
     const enabled = new Set(settings.enabledSources);
     return {
       conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
-      dailyGenerationTime: settings.dailyGenerationTime,
-      dailyTargetCount: settings.dailyTargetCount,
+      recommendationGenerationTime: settings.recommendationGenerationTime,
+      recommendationTargetCount: settings.recommendationTargetCount,
+      recommendationWorkingSetCount: settings.recommendationWorkingSetCount,
       candidatePoolMinimumCount: settings.candidatePoolMinimumCount,
       candidatePoolMaximumCount: settings.candidatePoolMaximumCount,
       candidateValidityDays: settings.candidateValidityDays,
@@ -125,8 +129,10 @@ export function createDiscoveryConfiguration(input: {
       }
       const next = {
         conversationRecognitionEnabled: patch.conversationRecognitionEnabled ?? current.conversationRecognitionEnabled,
-        dailyGenerationTime: patch.dailyGenerationTime ?? current.dailyGenerationTime,
-        dailyTargetCount: patch.dailyTargetCount ?? current.dailyTargetCount,
+        recommendationGenerationTime: patch.recommendationGenerationTime ?? current.recommendationGenerationTime,
+        recommendationTargetCount: patch.recommendationTargetCount ?? current.recommendationTargetCount,
+        recommendationWorkingSetCount: patch.recommendationWorkingSetCount
+          ?? current.recommendationWorkingSetCount,
         enabledSources,
         candidatePoolMinimumCount: patch.candidatePoolMinimumCount ?? current.candidatePoolMinimumCount,
         candidatePoolMaximumCount: patch.candidatePoolMaximumCount ?? current.candidatePoolMaximumCount,
@@ -142,6 +148,10 @@ export function createDiscoveryConfiguration(input: {
         candidateValidityDays: next.candidateValidityDays,
         candidateContentExcerptMaxCharacters: next.candidateContentExcerptMaxCharacters,
       });
+      if (next.recommendationTargetCount > next.recommendationWorkingSetCount
+        || next.recommendationWorkingSetCount > next.candidatePoolMaximumCount) {
+        throw new Error('Recommendation count settings are inconsistent.');
+      }
       await input.settings.write(next);
       return view();
     },

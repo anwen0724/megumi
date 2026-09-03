@@ -24,7 +24,7 @@ import {
   type TraceDisplayItem,
 } from './trace-display';
 
-type TraceKindFilter = 'all' | 'conversation' | 'daily_recommendation' | 'candidate_supply'
+type TraceKindFilter = 'all' | 'conversation' | 'recommendation' | 'candidate_supply'
   | 'preference_learning' | 'interest_understanding';
 type TraceStatusFilter = 'all' | ObservabilityTraceSummaryUiDto['status'];
 type ActiveAction = 'refresh' | 'rebuild' | 'export';
@@ -65,7 +65,7 @@ export function DiagnosticsPanel() {
       conversationFallback: t('diagnostics.conversationFallback'),
       deletedSession: t('diagnostics.deletedSession'),
       unassignedSession: t('diagnostics.unassignedSession'),
-      dailyRecommendation: t('diagnostics.traceKinds.dailyRecommendation'),
+      recommendation: t('diagnostics.traceKinds.recommendation'),
       scheduledDiscovery: t('diagnostics.scheduledDiscovery'),
       candidateSupply: t('diagnostics.traceKinds.candidateSupply'),
       candidateSupplyRun: t('diagnostics.candidateSupplyRun'),
@@ -299,7 +299,7 @@ export function DiagnosticsPanel() {
               { value: 'all', label: t('diagnostics.allKinds') },
               { value: 'conversation', label: t('diagnostics.traceKinds.conversation') },
               { value: 'interest_understanding', label: t('diagnostics.traceKinds.interestUnderstanding') },
-              { value: 'daily_recommendation', label: t('diagnostics.traceKinds.dailyRecommendation') },
+              { value: 'recommendation', label: t('diagnostics.traceKinds.recommendation') },
               { value: 'candidate_supply', label: t('diagnostics.traceKinds.candidateSupply') },
               { value: 'preference_learning', label: t('diagnostics.traceKinds.preferenceLearning') },
             ]}

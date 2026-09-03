@@ -230,8 +230,9 @@ describe('Candidate Supply Runtime', () => {
       settings: {
         read: () => ({
           conversationRecognitionEnabled: true,
-          dailyGenerationTime: '08:00',
-          dailyTargetCount: 20,
+          recommendationGenerationTime: '08:00',
+          recommendationTargetCount: 20,
+          recommendationWorkingSetCount: 80,
           enabledSources: ['source:1'],
           candidatePoolMinimumCount: 2,
           candidatePoolMaximumCount: 5,

@@ -8,7 +8,7 @@ import { TraceCorrelationSchema } from '@megumi/observability';
 const TraceStatusSchema = z.enum(['ok', 'error', 'cancelled', 'incomplete']);
 const TraceDiagnosticsSchema = z.enum(['complete', 'incomplete']);
 const TraceKindSchema = z.enum([
-  'conversation', 'interest_understanding', 'daily_recommendation', 'candidate_supply', 'preference_learning', 'unknown',
+  'conversation', 'interest_understanding', 'recommendation', 'candidate_supply', 'preference_learning', 'unknown',
 ]);
 export interface ObservabilityDiagnosticErrorUiDto {
   readonly name: string;
@@ -43,7 +43,7 @@ export const ObservabilityListPayloadSchema = z.object({
   startedAtOrAfter: z.string().datetime({ offset: true }).optional(),
   startedBefore: z.string().datetime({ offset: true }).optional(),
   traceKind: z.enum([
-    'conversation', 'interest_understanding', 'daily_recommendation', 'candidate_supply', 'preference_learning',
+    'conversation', 'interest_understanding', 'recommendation', 'candidate_supply', 'preference_learning',
   ]).optional(),
   status: TraceStatusSchema.optional(),
   correlation: ObservabilityCorrelationSchema.optional(),

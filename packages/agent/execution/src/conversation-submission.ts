@@ -95,7 +95,7 @@ export interface ConversationSubmissionDependencies {
     readonly modelId: string;
   }) => Promise<ConversationModelResolution>;
   readonly recommendations?: {
-    readRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
+    getRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
   };
   readonly observability?: Observability;
 }
@@ -625,7 +625,7 @@ function resolveRecommendationReference(
   | { readonly status: 'failed'; readonly code: string; readonly message: string } {
   let reference: RecommendationReferenceContent | undefined;
   try {
-    reference = dependencies.recommendations?.readRecommendationReference(recommendationId);
+    reference = dependencies.recommendations?.getRecommendationReference(recommendationId);
   } catch {
     return {
       status: 'failed',

@@ -9,7 +9,7 @@ export const MetricScopeSchema = z.enum([
   'conversation',
   'interest_understanding',
   'candidate_supply',
-  'daily_recommendation',
+  'recommendation',
   'preference_learning',
 ]);
 export type MetricScope = z.infer<typeof MetricScopeSchema>;

@@ -121,7 +121,7 @@ export function createCandidateSupplyAttempts(options: {
             executionId,
             startedAt: attempt.startedAt,
             trigger: attempt.trigger,
-            snapshot: attempt.repository.readCandidatePoolSnapshot(attempt.settings),
+            snapshot: attempt.repository.getCandidatePoolSnapshot(attempt.settings),
             enabledSourceIds: [...attempt.enabledSourceIds],
           }
         : undefined;
@@ -191,7 +191,7 @@ export function createCandidateSupplyAttempts(options: {
           return toolSuccess({
             status: 'success',
             results,
-            pool: attempt.repository.readCandidatePoolSnapshot(attempt.settings),
+            pool: attempt.repository.getCandidatePoolSnapshot(attempt.settings),
           });
         },
       ));
@@ -289,7 +289,7 @@ export function createCandidateSupplyAttempts(options: {
             outcomes,
             addedCandidateCount,
             addedInterestMatchCount,
-            pool: attempt.repository.readCandidatePoolSnapshot(attempt.settings),
+            pool: attempt.repository.getCandidatePoolSnapshot(attempt.settings),
           });
         },
       );

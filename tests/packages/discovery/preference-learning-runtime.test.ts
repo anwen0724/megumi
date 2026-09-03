@@ -9,15 +9,15 @@ describe('Preference Learning Runtime', () => {
   it('claims a ready batch, builds Context, completes once, and commits generated Direction IDs', async () => {
     let triggerRead = 0;
     const repository: PreferenceLearningRepository = {
-      readPreferenceLearningTrigger: vi.fn(() => (++triggerRead === 1
-        ? { status: 'ready', reason: 'threshold', pendingFeedbackCount: 3 }
+      getPreferenceLearningTrigger: vi.fn(() => (++triggerRead === 1
+        ? { status: 'ready', reason: 'threshold', pendingReactionCount: 3 }
         : { status: 'idle' })),
       claimPreferenceLearningBatch: vi.fn(() => ({
         batchId: 'batch:1', status: 'running', triggerReason: 'threshold', changeCount: 3,
         retryCount: 0, createdAt: '2026-08-27T08:00:00.000Z',
         startedAt: '2026-08-27T08:00:00.000Z',
       })),
-      readPreferenceLearningFacts: vi.fn(),
+      getPreferenceLearningFacts: vi.fn(),
       commitPreferenceLearningBatch: vi.fn(() => ({
         status: 'committed', revisions: [{ scopeKey: 'interest:interest:1', revision: 1 }],
         affectedInterestIds: ['interest:1'],
@@ -35,7 +35,7 @@ describe('Preference Learning Runtime', () => {
         scopeKey: 'interest:interest:1', baseRevision: 0,
         directions: [{
           directionId: '', polarity: 'positive', dimension: 'topic',
-          statement: 'More runtime internals', supportingFeedbackIds: ['feedback:1'],
+          statement: 'More runtime internals', supportingRecommendationIds: ['recommendation:1'],
         }],
       }],
     }))) };
@@ -61,8 +61,8 @@ describe('Preference Learning Runtime', () => {
     });
 
     await runtime.start({ automaticTriggers: false });
-    expect(repository.readPreferenceLearningTrigger).not.toHaveBeenCalled();
-    runtime.notifyFeedbackChanged();
+    expect(repository.getPreferenceLearningTrigger).not.toHaveBeenCalled();
+    runtime.notifyReactionChanged();
     await vi.waitFor(() => {
       expect(repository.commitPreferenceLearningBatch).toHaveBeenCalledTimes(1);
     });
@@ -92,7 +92,7 @@ describe('Preference Learning Runtime', () => {
         scopeKey: 'interest:interest:1', baseRevision: 0,
         directions: [{
           directionId: 'direction:1', polarity: 'positive', dimension: 'topic',
-          statement: 'More runtime internals', supportingFeedbackIds: ['feedback:1'],
+          statement: 'More runtime internals', supportingRecommendationIds: ['recommendation:1'],
         }],
       }],
     });

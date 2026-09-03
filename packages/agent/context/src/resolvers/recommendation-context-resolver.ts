@@ -1,10 +1,11 @@
-/* Resolves one fixed Daily Recommendation window from authoritative Discovery facts. */
+/* Resolves one fixed Recommendation working set from authoritative execution facts. */
 import type { Message } from '@megumi/ai';
 import type { InstructionReader, SystemInstructionDocument } from '@megumi/instructions';
 import type { ToolDefinition } from '@megumi/tools';
 import type { ContextFailure } from '../context';
 import type {
-  DailyRecommendationContextMaterial,
+  RecommendationContextMaterial,
+  RecommendationFacts,
   DiscoveryFactsReader,
 } from '../discovery-context';
 import {
@@ -13,40 +14,42 @@ import {
   buildSourceContextFailure,
 } from '../context-failure-factory';
 
-export interface ResolveDailyRecommendationContextRequest {
-  readonly kind: 'daily_recommendation';
+export interface ResolveRecommendationContextRequest {
+  readonly kind: 'recommendation';
   readonly executionId: string;
-  readonly batchId: string;
+  readonly requestId: string;
   readonly localDate: string;
   readonly currentMessages: readonly Message[];
   readonly tools: readonly ToolDefinition[];
   readonly signal?: AbortSignal;
 }
 
-export interface DailyRecommendationResolvedContext {
-  readonly kind: 'daily_recommendation';
+export interface RecommendationResolvedContext {
+  readonly kind: 'recommendation';
   readonly localDate: string;
-  readonly material: DailyRecommendationContextMaterial;
+  readonly material: RecommendationContextMaterial;
+  /** Complete objective ranking evidence recorded with Context but excluded from the Prompt. */
+  readonly ranking: RecommendationFacts['ranking'];
   readonly currentMessages: readonly Message[];
   readonly systemInstructions: readonly SystemInstructionDocument[];
   readonly tools: readonly ToolDefinition[];
 }
 
-export type ResolveDailyRecommendationContextResult =
-  | { readonly status: 'resolved'; readonly context: DailyRecommendationResolvedContext }
+export type ResolveRecommendationContextResult =
+  | { readonly status: 'resolved'; readonly context: RecommendationResolvedContext }
   | { readonly status: 'failed'; readonly failure: ContextFailure };
 
-export interface DailyRecommendationContextResolver {
+export interface RecommendationContextResolver {
   resolve(
-    request: ResolveDailyRecommendationContextRequest,
-  ): Promise<ResolveDailyRecommendationContextResult>;
+    request: ResolveRecommendationContextRequest,
+  ): Promise<ResolveRecommendationContextResult>;
 }
 
-/** Creates the resolver for an execution-local Daily Recommendation snapshot. */
-export function createDailyRecommendationContextResolver(dependencies: {
+/** Creates the resolver for an execution-local Recommendation snapshot. */
+export function createRecommendationContextResolver(dependencies: {
   readonly instructionReader: InstructionReader;
   readonly factsReader: DiscoveryFactsReader;
-}): DailyRecommendationContextResolver {
+}): RecommendationContextResolver {
   return {
     async resolve(request) {
       if (request.signal?.aborted) return cancelledResult();
@@ -60,10 +63,10 @@ export function createDailyRecommendationContextResolver(dependencies: {
       }
       try {
         const [systemInstructions, factsResult] = await Promise.all([
-          dependencies.instructionReader.getSystemInstructions('daily_recommendation'),
-          dependencies.factsReader.readDailyRecommendationFacts({
+          dependencies.instructionReader.getSystemInstructions('recommendation'),
+          dependencies.factsReader.readRecommendationFacts({
             executionId: request.executionId,
-            batchId: request.batchId,
+            requestId: request.requestId,
             localDate: request.localDate,
             signal: request.signal,
           }),
@@ -80,30 +83,29 @@ export function createDailyRecommendationContextResolver(dependencies: {
           }));
         }
         const facts = factsResult.facts;
-        if (facts.batch.batchId !== request.batchId || facts.batch.localDate !== request.localDate) {
+        if (facts.execution.requestId !== request.requestId
+          || facts.execution.localDate !== request.localDate) {
           return buildFailedContextResult({
             code: 'context_build_failed',
-            message: 'Daily Recommendation facts do not belong to this Batch.',
+            message: 'Recommendation facts do not belong to this execution.',
             retryable: true,
-            cause: { owner: 'discovery', code: 'batch_mismatch' },
+            cause: { owner: 'discovery', code: 'execution_mismatch' },
           });
         }
-        const material: DailyRecommendationContextMaterial = {
-          batch: facts.batch,
+        const material: RecommendationContextMaterial = {
+          execution: facts.execution,
           interests: facts.interests,
-          explorationPreference: facts.explorationPreference,
+          preferences: facts.preferences,
           candidates: facts.candidates,
           recentRecommendations: facts.recentRecommendations.slice(0, 50),
-          pendingFeedback: facts.pendingFeedback.slice(0, 20),
-          omittedPendingFeedbackCount: facts.omittedPendingFeedbackCount
-            + Math.max(0, facts.pendingFeedback.length - 20),
         };
         return {
           status: 'resolved',
           context: {
-            kind: 'daily_recommendation',
+            kind: 'recommendation',
             localDate: request.localDate,
             material,
+            ranking: facts.ranking,
             currentMessages: [...request.currentMessages],
             systemInstructions,
             tools: [...request.tools],
@@ -121,7 +123,7 @@ export function createDailyRecommendationContextResolver(dependencies: {
   };
 }
 
-function cancelledResult(): ResolveDailyRecommendationContextResult {
+function cancelledResult(): ResolveRecommendationContextResult {
   return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
 }
 

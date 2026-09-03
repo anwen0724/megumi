@@ -31,9 +31,10 @@ describe('useSessionStore', () => {
 
   it('keeps a Recommendation only in an unsaved new-session draft and clears it without creating a Session', () => {
     const recommendation = {
-      recommendationId: 'recommendation:1', batchId: 'batch:1', localDate: '2026-08-22', position: 0,
+      recommendationId: 'recommendation:1', localDate: '2026-08-22', position: 0,
       sourceId: 'open-web', sourceName: 'GitHub', canonicalUrl: 'https://example.com/agent',
-      contentType: 'article' as const, title: 'Agent runtime', recommendationReason: '与你最近的关注相关',
+      contentType: 'article' as const, title: 'Agent runtime', contentSummary: 'Agent runtime 摘要。',
+      recommendationReason: '与你最近的关注相关',
       hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T00:00:00.000Z',
     };
 

@@ -60,7 +60,7 @@ describe('migrateDatabase', () => {
 
     try {
       const result = migrateDatabase({ database });
-      expect(result.currentMigration).toBe('0022_candidate_content_facts');
+      expect(result.currentMigration).toBe('0023_recommendation_redesign');
       expect(tableNames(database)).toContain('__drizzle_migrations');
       const migrationRows = database.prepare<{ hash: string }>({
         sql: 'SELECT hash FROM __drizzle_migrations',

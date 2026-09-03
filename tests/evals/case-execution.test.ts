@@ -107,35 +107,33 @@ describe('Case execution', () => {
     }]);
   });
 
-  it('associates Daily Recommendation with the stable Batch and reads settled Owner facts', async () => {
+  it('associates Recommendation attempts by request ID and reads final database facts', async () => {
+    const collection = recommendationCollection();
     const runtime = testRuntime({ discovery: {
-      async ensureDaily() {
+      async requestRecommendation() {
         return {
-          status: 'started', localDate: '2026-01-15', batchId: 'batch:1', executionId: 'execution:first',
-          requestedCount: 1, actualTarget: 1,
+          status: 'started', localDate: '2026-01-15', requestId: 'request:1',
+          executionId: 'execution:first',
         };
       },
-      async waitDailyBatch() {
-        return { status: 'completed', value: {
-          status: 'published', batchId: 'batch:1', localDate: '2026-01-15', timezone: 'UTC',
-          executionId: 'execution:settled', requestedCount: 1, actualTarget: 1, attemptCount: 2,
-          automaticRetryCount: 1, resultCount: 1, createdAt: now, updatedAt: now, startedAt: now, publishedAt: now,
-        } };
+      async waitRecommendation() {
+        return { status: 'published', collection };
       },
-      async getDailyRecommendationFacts() {
-        return { status: 'failed', failure: { code: 'test_fact', message: 'Recorded Owner response.' } };
+      async getRecommendationCollection() {
+        return collection;
       },
     } });
 
-    const result = await executeCase(executionInput(dailyCase(), runtime));
+    const result = await executeCase(executionInput(recommendationCase(), runtime));
 
     expect(result.businessIds).toEqual({
-      dailyRecommendationBatchId: 'batch:1',
-      initialExecutionId: 'execution:first',
-      settledExecutionId: 'execution:settled',
+      requestId: 'request:1',
+      executionIds: ['execution:first'],
+      recommendationIds: ['recommendation:1'],
     });
+    expect(result.ownerFacts).toEqual(collection);
     expect(result.traceTargets).toEqual([{
-      traceKind: 'daily_recommendation', correlation: { dailyRecommendationBatchId: 'batch:1' },
+      traceKind: 'recommendation', correlation: { requestId: 'request:1' },
       expectation: 'required',
     }]);
   });
@@ -144,16 +142,13 @@ describe('Case execution', () => {
     const runtime = testRuntime({ discovery: {
       async updateRecommendationState() {
         return {
-          recommendation: recommendationView(),
-          feedbackChange: {
-            changed: true, recommendationId: 'recommendation:1', feedbackChangeId: 'feedback-change:1',
-            status: 'pending', changedAt: now,
-          },
+          status: 'updated' as const,
+          state: recommendationState({ reaction: 'liked', reactionRevision: 1, reactionChangedAt: now }),
         };
       },
       async waitPreferenceLearning() {
         return { status: 'completed', value: {
-          feedbackChangeId: 'feedback-change:1', status: 'learned', batchId: 'preference-batch:1',
+          recommendationId: 'recommendation:1', status: 'learned', batchId: 'preference-batch:1',
           resultRevisions: [{ scopeKey: 'interest:1', revision: 1 }], changedAt: now, completedAt: now,
         } };
       },
@@ -167,7 +162,7 @@ describe('Case execution', () => {
     }));
 
     expect(result.businessIds).toMatchObject({
-      recommendationId: 'recommendation:1', feedbackChangeId: 'feedback-change:1',
+      recommendationId: 'recommendation:1',
       preferenceLearningBatchId: 'preference-batch:1',
     });
     expect(result.ownerFacts).toMatchObject({ status: 'failed' });
@@ -190,9 +185,9 @@ function testRuntime(overrides: {
         getInterestFacts: unexpected,
         requestCandidateSupply: unexpected,
         getCandidatePool: unexpected,
-        ensureDaily: unexpected,
-        waitDailyBatch: unexpected,
-        getDailyRecommendationFacts: unexpected,
+        requestRecommendation: unexpected,
+        waitRecommendation: unexpected,
+        getRecommendationCollection: unexpected,
         updateRecommendationState: unexpected,
         waitPreferenceLearning: unexpected,
         getPreferenceLearningFacts: unexpected,
@@ -334,11 +329,12 @@ function candidateCase(): EvaluationCase {
   });
 }
 
-function dailyCase(): EvaluationCase {
+function recommendationCase(): EvaluationCase {
   return EvaluationCaseSchema.parse({
-    ...baseCase('daily_recommendation'),
+    ...baseCase('recommendation'),
     initialState: {
-      clock: now, dailyTargetCount: 1, interests: [{ referenceId: 'interest', description: 'TypeScript' }],
+      clock: now, recommendationTargetCount: 1, recommendationWorkingSetCount: 2,
+      interests: [{ referenceId: 'interest', description: 'TypeScript' }],
       candidates: [candidate()], previousRecommendations: [], preferences: [],
     },
     input: { trigger: 'manual' },
@@ -352,7 +348,7 @@ function preferenceCase(): EvaluationCase {
       clock: now, interests: [{ referenceId: 'interest', description: 'TypeScript' }],
       candidates: [candidate()],
       recommendations: [{ referenceId: 'recommendation', candidateReferenceId: 'candidate', reason: 'Relevant' }],
-      existingFeedback: [], preferences: [],
+      existingReactions: [], preferences: [],
     },
     input: { recommendationReferenceId: 'recommendation', reaction: 'liked' },
   });
@@ -366,11 +362,31 @@ function candidate() {
   };
 }
 
-function recommendationView() {
+function recommendationCollection() {
   return {
-    recommendationId: 'recommendation:1', batchId: 'batch:1', localDate: '2026-01-15', position: 0,
-    sourceId: 'open_web' as const, sourceName: 'Open Web', canonicalUrl: 'https://example.test/item',
-    contentType: 'article' as const, title: 'Item', recommendationReason: 'Relevant',
-    hidden: false, favorite: false, watchLater: false, publishedAt: now,
+    localDate: '2026-01-15',
+    publishedAt: now,
+    items: [{
+      id: 'recommendation:1', candidateId: 'candidate:1', contentIdentity: 'url:https://example.test/item',
+      localDate: '2026-01-15', position: 0, recommendationReason: 'Relevant',
+      selectionBasis: {
+        primaryInterestId: 'interest:1', matchedInterestIds: ['interest:1'],
+        interestRevisions: [{ interestId: 'interest:1', revision: 0 }], preferenceRevisions: [],
+      },
+      publishedAt: now,
+      content: {
+        id: 'content:1', recommendationId: 'recommendation:1', sourceId: 'open_web' as const,
+        sourceName: 'Open Web', canonicalUrl: 'https://example.test/item', contentType: 'article' as const,
+        title: 'Item', contentSummary: 'Item summary', contentTruncated: false,
+      },
+      state: recommendationState(),
+    }],
+  };
+}
+
+function recommendationState(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'state:1', recommendationId: 'recommendation:1', reactionRevision: 0,
+    learnedReactionRevision: 0, updatedAt: now, ...overrides,
   };
 }

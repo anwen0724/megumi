@@ -18,7 +18,7 @@ describe('Evaluation Dataset', () => {
       'controlled/conversation',
       'controlled/interest-understanding',
       'controlled/candidate-supply',
-      'controlled/daily-recommendation',
+      'controlled/recommendation',
       'controlled/preference-learning',
     ] as const;
     const datasets = await Promise.all(identities.map((identity) => loadDataset({
@@ -30,7 +30,7 @@ describe('Evaluation Dataset', () => {
       'conversation',
       'interest_understanding',
       'candidate_supply',
-      'daily_recommendation',
+      'recommendation',
       'preference_learning',
     ]);
     for (const dataset of datasets) {

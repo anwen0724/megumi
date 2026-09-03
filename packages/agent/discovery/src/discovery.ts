@@ -1,7 +1,8 @@
 /*
- * Composes Megumi's content-discovery business operations. Execution is
- * injected as a capability; this module never creates or owns Agent runs.
+ * Composes Discovery business owners while keeping Agent Core as the sole
+ * execution-lifecycle owner and repositories behind public business methods.
  */
+import { candidatePoolSettings } from './candidate-supply/candidate-pool';
 import {
   createCandidateSupplyRuntime,
   type CreateCandidateSupplyRuntimeOptions,
@@ -11,7 +12,6 @@ import type {
   CandidateSupplyResult,
   CandidateSupplyTrigger,
 } from './candidate-supply/candidate-supply';
-import { candidatePoolSettings } from './candidate-supply/candidate-pool';
 import {
   createDiscoveryConfiguration,
   type ConnectDiscoverySourceRequest,
@@ -21,20 +21,16 @@ import {
   type RefreshDiscoverySourceRequest,
   type UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
-import type {
-  DailyRecommendationBatch,
-  EnsureDailyRecommendationRequest,
-  EnsureDailyRecommendationResult,
-} from './daily-recommendation/daily-recommendation';
 import {
-  createDailyRecommendationRuntime,
-  type CreateDailyRecommendationRuntimeOptions,
-} from './daily-recommendation/daily-recommendation-runtime';
-import type {
-  DiscoveryHomeView,
-  GetDiscoveryHomeRequest,
-  SearchRecommendationsRequest,
-  SearchRecommendationsResult,
+  DiscoveryHomeViewSchema,
+  GetDiscoveryHomeRequestSchema,
+  SearchRecommendationsRequestSchema,
+  SearchRecommendationsResultSchema,
+  type DiscoveryHomeView,
+  type GetDiscoveryHomeRequest,
+  type RecommendationView,
+  type SearchRecommendationsRequest,
+  type SearchRecommendationsResult,
 } from './discovery-view';
 import type {
   ChangeInterestRequest,
@@ -50,164 +46,173 @@ import {
   type ObserveConversationTurnRequest,
   type ObserveConversationTurnResult,
 } from './interests/interest-runtime';
-import type { UpdateRecommendationStateRequest } from './recommendations/recommendation';
-import type { RecommendationStateResult } from './persistence/recommendation-repository';
-import type { SourceRegistry } from './sources/source-registry';
 import {
   createPreferenceLearningRuntime,
   type CreatePreferenceLearningRuntimeOptions,
 } from './preferences/preference-learning-runtime';
+import type { PreferenceLearningBatch, PreferenceLearningCompletion } from './preferences/preference';
 import type {
-  PreferenceLearningBatch,
-  PreferenceLearningCompletion,
-} from './preferences/preference';
+  Recommendation,
+  RecommendationCollection,
+  UpdateRecommendationStateRequest,
+} from './recommendation/recommendation';
+import {
+  createRecommendationRuntime,
+  type CreateRecommendationRuntimeOptions,
+  type RequestRecommendationResult,
+  type TodayRecommendationResult,
+  type WaitRecommendationResult,
+} from './recommendation/recommendation-runtime';
+import type { UpdateRecommendationStateResult } from './persistence/recommendation-repository';
+import type { SourceRegistry } from './sources/source-registry';
 
 export interface InterestFacts {
   readonly interests: readonly Interest[];
   readonly evidence: readonly InterestEvidence[];
 }
 
+export interface RecommendationReferenceContent {
+  readonly type: 'recommendation_reference';
+  readonly recommendationId: string;
+  readonly sourceName: string;
+  readonly canonicalUrl: string;
+  readonly title: string;
+  readonly author?: string;
+  readonly publishedAt?: string;
+  readonly description?: string;
+  readonly coverUrl?: string;
+  readonly recommendationReason: string;
+}
+
 export interface Discovery {
-  /** Applies one explicit user Interest change. */
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
-  /** Controls whether one Session contributes Interest Evidence. */
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
-  /** Enqueues one completed conversation turn for Interest extraction when eligible. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
-  /** Reads exact Interest and Evidence business entities by their database identities. */
   getInterestFacts(request: {
     readonly interestIds: readonly string[];
     readonly evidenceIds: readonly string[];
   }): InterestFacts;
-  /** Retracts the Evidence contributed by one Session. */
   retractSessionEvidence(sessionId: string): Promise<void>;
-  /** Starts owned recovery and optionally enables automatic background triggers. */
   startBackground(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
-  /** Ensures the requested Daily Recommendation Batch according to its trigger semantics. */
-  ensureDailyRecommendation(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
-  getDailyRecommendationBatch(localDate: string): DailyRecommendationBatch | undefined;
+  requestRecommendation(request: { readonly trigger: 'scheduled' | 'startup_catchup' | 'manual' }): Promise<RequestRecommendationResult>;
+  waitRecommendation(request: { readonly requestId: string; readonly timeoutMs: number }): Promise<WaitRecommendationResult>;
+  getTodayRecommendation(): TodayRecommendationResult;
+  getRecommendationCollection(localDate: string, includeHidden?: boolean): RecommendationCollection | undefined;
+  getRecommendationById(recommendationId: string): Recommendation | undefined;
+  getRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
   requestCandidateSupply(trigger?: CandidateSupplyTrigger): Promise<CandidateSupplyResult> | undefined;
-  /** Reads the current Candidate Pool through Candidate Supply's rules. */
-  getCandidatePoolSnapshot(): CandidatePoolSnapshot | undefined;
+  getCandidatePool(): CandidatePoolSnapshot | undefined;
   getPreferenceLearningBatch(batchId: string): PreferenceLearningBatch | undefined;
-  getPreferenceLearningCompletion(feedbackChangeId: string): PreferenceLearningCompletion | undefined;
-  /** Reads the persisted Discovery Home projection. */
+  getPreferenceLearningCompletion(recommendationId: string): PreferenceLearningCompletion | undefined;
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
-  /** Searches persisted Recommendations rather than external Sources. */
   searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
-  /** Applies one user-controlled Recommendation state change. */
-  updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<RecommendationStateResult>;
-  /** Reads the current user-facing Discovery configuration. */
+  updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<UpdateRecommendationStateResult>;
   getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
-  /** Validates and persists user-facing Discovery configuration changes. */
   updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
-  /** Starts the interactive connection flow for one browser-session Source. */
   connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
-  /** Rechecks one Source without opening its interactive connection flow. */
   refreshDiscoverySource(request: RefreshDiscoverySourceRequest): Promise<DiscoverySourceView>;
-  /** Rechecks every registered Source and returns one complete projection. */
   refreshDiscoverySources(): Promise<DiscoveryConfigurationView>;
-  /** Stops and drains every background activity owned by Discovery. */
   shutdown(): Promise<void>;
 }
 
 export interface CreateDiscoveryOptions {
   readonly interests?: CreateInterestRuntimeOptions;
-  readonly dailyRecommendation?: CreateDailyRecommendationRuntimeOptions;
+  readonly recommendation?: CreateRecommendationRuntimeOptions;
   readonly candidateSupply?: CreateCandidateSupplyRuntimeOptions;
   readonly preferenceLearning?: CreatePreferenceLearningRuntimeOptions;
-  readonly configuration?: {
-    readonly sourceRegistry: SourceRegistry;
-    readonly settings: DiscoveryConfigurationStore;
-  };
-  readonly onBackgroundError?: (
-    error: unknown,
-    context: {
-      readonly operation: 'source_refresh' | 'candidate_supply_start'
-        | 'preference_learning_start' | 'daily_recommendation_start';
-    },
-  ) => void;
+  readonly configuration?: { readonly sourceRegistry: SourceRegistry; readonly settings: DiscoveryConfigurationStore };
+  readonly onBackgroundError?: (error: unknown, context: {
+    readonly operation: 'source_refresh' | 'candidate_supply_start'
+      | 'preference_learning_start' | 'recommendation_start';
+  }) => void;
 }
 
-/** Composes Megumi's Discovery business operations from its optional capabilities. */
+/** Composes Megumi's Discovery business operations from optional capabilities. */
 export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
-  const preferenceLearningRuntime = options.preferenceLearning
+  const preferenceLearning = options.preferenceLearning
     ? createPreferenceLearningRuntime(options.preferenceLearning)
     : undefined;
-  const dailyRecommendationRuntime = options.dailyRecommendation
-    ? createDailyRecommendationRuntime({
-        ...options.dailyRecommendation,
-        notifyPreferenceLearning: () => preferenceLearningRuntime?.notifyFeedbackChanged(),
-      })
+  const recommendation = options.recommendation
+    ? createRecommendationRuntime(options.recommendation)
     : undefined;
-  const candidateSupplyRuntime = options.candidateSupply
+  const candidateSupply = options.candidateSupply
     ? createCandidateSupplyRuntime(options.candidateSupply)
     : undefined;
-  const interestRuntime = options.interests
+  const interests = options.interests
     ? createInterestRuntime({
         ...options.interests,
         onInterestsChanged: (interestIds) => {
           options.interests?.onInterestsChanged?.(interestIds);
-          requestCandidateSupply(candidateSupplyRuntime, 'interest_changed', options);
+          requestCandidateSupply(candidateSupply, 'interest_changed', options);
         },
       })
     : createDisabledInterestRuntime();
-  const discoveryConfiguration = options.configuration
+  const configuration = options.configuration
     ? createDiscoveryConfiguration(options.configuration)
     : undefined;
 
+  const recommendationRepository = options.recommendation?.repository;
   return {
     async changeInterest(request) {
-      const interest = await interestRuntime.changeInterest(request);
-      requestCandidateSupply(candidateSupplyRuntime, 'interest_changed', options);
+      const interest = await interests.changeInterest(request);
+      requestCandidateSupply(candidateSupply, 'interest_changed', options);
       return interest;
     },
-    setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
-    observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
-    getInterestFacts: (request) => interestRuntime.getInterestFacts(request),
-    retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
+    setSessionParticipation: (request) => interests.setSessionParticipation(request),
+    observeConversationTurn: (request) => interests.observeConversationTurn(request),
+    getInterestFacts: (request) => interests.getInterestFacts(request),
+    retractSessionEvidence: (sessionId) => interests.retractSessionEvidence(sessionId),
     async startBackground(startOptions = {}) {
       const automaticTriggers = startOptions.automaticTriggers ?? true;
       const failures: unknown[] = [];
-      await runBackgroundStartStep(options, failures, 'source_refresh', async () => {
-        if (!discoveryConfiguration) return;
-        const configuration = await discoveryConfiguration.get();
-        await discoveryConfiguration.refreshSources(
-          configuration.sources.filter((source) => source.enabled).map((source) => source.sourceId),
-        );
+      await runBackgroundStep(options, failures, 'source_refresh', async () => {
+        if (!configuration) return;
+        const view = await configuration.get();
+        await configuration.refreshSources(view.sources.filter(({ enabled }) => enabled).map(({ sourceId }) => sourceId));
       });
-      await runBackgroundStartStep(options, failures, 'candidate_supply_start', async () => {
-        await candidateSupplyRuntime?.start({ automaticTriggers });
+      await runBackgroundStep(options, failures, 'candidate_supply_start', async () => {
+        await candidateSupply?.start({ automaticTriggers });
       });
-      await runBackgroundStartStep(options, failures, 'preference_learning_start', async () => {
-        await preferenceLearningRuntime?.start({ automaticTriggers });
+      await runBackgroundStep(options, failures, 'preference_learning_start', async () => {
+        await preferenceLearning?.start({ automaticTriggers });
       });
-      await runBackgroundStartStep(options, failures, 'daily_recommendation_start', async () => {
-        await dailyRecommendationRuntime?.start({ automaticTriggers });
+      await runBackgroundStep(options, failures, 'recommendation_start', async () => {
+        await recommendation?.start({ automaticTriggers });
       });
-      if (failures.length > 0) {
-        throw new AggregateError(failures, 'One or more Discovery background startup steps failed.');
-      }
+      if (failures.length > 0) throw new AggregateError(failures, 'Discovery background startup failed.');
     },
-    ensureDailyRecommendation: (request) => dailyRecommendationRuntime
-      ? dailyRecommendationRuntime.ensure(request)
+    requestRecommendation: (request) => recommendation
+      ? recommendation.request(request)
       : Promise.resolve({
           status: 'failed',
-          localDate: request.now.slice(0, 10),
-          failure: {
-            code: 'daily_recommendation_not_configured',
-            message: 'Daily Recommendation is not configured.',
-            retryable: false,
-          },
+          localDate: new Date().toISOString().slice(0, 10),
+          failure: { code: 'settings_invalid', message: 'Recommendation is not configured.', retryable: false },
         }),
-    getDailyRecommendationBatch: (localDate) => dailyRecommendationRuntime?.getBatch(localDate),
-    requestCandidateSupply: (trigger = 'supply_conditions_changed') => (
-      candidateSupplyRuntime?.requestCheck(trigger)
+    waitRecommendation: (request) => recommendation
+      ? recommendation.wait(request)
+      : Promise.resolve({
+          status: 'failed',
+          localDate: new Date().toISOString().slice(0, 10),
+          failure: { code: 'settings_invalid', message: 'Recommendation is not configured.', retryable: false },
+        }),
+    getTodayRecommendation: () => recommendation
+      ? recommendation.getToday()
+      : { status: 'not_generated', localDate: new Date().toISOString().slice(0, 10) },
+    getRecommendationCollection: (localDate, includeHidden = false) => (
+      recommendationRepository?.getCollection(localDate, includeHidden)
     ),
-    getCandidatePoolSnapshot: () => {
+    getRecommendationById: (recommendationId) => (
+      recommendationRepository?.findRecommendationById(recommendationId)
+    ),
+    getRecommendationReference(recommendationId) {
+      const item = recommendationRepository?.findRecommendationById(recommendationId);
+      return item ? recommendationReference(item) : undefined;
+    },
+    requestCandidateSupply: (trigger = 'supply_conditions_changed') => candidateSupply?.requestCheck(trigger),
+    getCandidatePool: () => {
       if (!options.candidateSupply) return undefined;
       const settings = options.candidateSupply.settings.read();
-      return options.candidateSupply.repository.readCandidatePoolSnapshot(candidatePoolSettings({
+      return options.candidateSupply.repository.getCandidatePoolSnapshot(candidatePoolSettings({
         minimumCount: settings.candidatePoolMinimumCount,
         maximumCount: settings.candidatePoolMaximumCount,
         candidateValidityDays: settings.candidateValidityDays,
@@ -215,72 +220,181 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       }));
     },
     getPreferenceLearningBatch: (id) => options.preferenceLearning?.repository.getPreferenceLearningBatch(id),
-    getPreferenceLearningCompletion: (id) => (
-      options.preferenceLearning?.repository.getPreferenceLearningCompletion(id)
-    ),
-    getDiscoveryHome: (request) => dailyRecommendationRuntime
-      ? Promise.resolve(dailyRecommendationRuntime.getHome(request))
-      : Promise.reject(new Error('Daily Recommendation is not configured.')),
-    searchRecommendations: (request) => dailyRecommendationRuntime
-      ? Promise.resolve(dailyRecommendationRuntime.searchRecommendations(request))
-      : Promise.reject(new Error('Daily Recommendation is not configured.')),
-    updateRecommendationState: (request) => dailyRecommendationRuntime
-      ? Promise.resolve(dailyRecommendationRuntime.updateRecommendationState(request))
-      : Promise.reject(new Error('Daily Recommendation is not configured.')),
-    getDiscoveryConfiguration: () => discoveryConfiguration
-      ? discoveryConfiguration.get()
+    getPreferenceLearningCompletion: (id) => options.preferenceLearning?.repository.getPreferenceLearningCompletion(id),
+    async getDiscoveryHome(rawRequest) {
+      if (!recommendationRepository) throw new Error('Recommendation is not configured.');
+      const request = GetDiscoveryHomeRequestSchema.parse(rawRequest);
+      const limit = request.limit ?? 20;
+      const offset = decodeCursor(request.cursor);
+      const page = recommendationRepository.listRecommendations({
+        view: request.mode === 'timeline' ? 'history' : request.mode,
+        includeHidden: false,
+        offset,
+        limit,
+      });
+      const days = new Map<string, RecommendationView[]>();
+      for (const item of page.items) {
+        const values = days.get(item.localDate) ?? [];
+        values.push(recommendationView(item));
+        days.set(item.localDate, values);
+      }
+      return DiscoveryHomeViewSchema.parse({
+        mode: request.mode,
+        today: todayView(recommendation?.getToday()),
+        days: [...days].map(([localDate, recommendations]) => ({ localDate, recommendations })),
+        interests: options.interests?.repository.listNonDeletedInterests()
+          .filter(({ status }) => status !== 'deleted') ?? [],
+        favoriteCount: recommendationRepository.countRecommendations('favorites'),
+        watchLaterCount: recommendationRepository.countRecommendations('watch_later'),
+        ...(recommendation?.getNextScheduledAt() ? { nextScheduledAt: recommendation.getNextScheduledAt() } : {}),
+        ...(page.hasMore ? { nextCursor: encodeCursor(offset + limit) } : {}),
+      });
+    },
+    async searchRecommendations(rawRequest) {
+      if (!recommendationRepository) throw new Error('Recommendation is not configured.');
+      const request = SearchRecommendationsRequestSchema.parse(rawRequest);
+      const limit = request.limit ?? 20;
+      const offset = decodeCursor(request.cursor);
+      const page = recommendationRepository.searchRecommendations({
+        query: request.query, includeHidden: false, offset, limit,
+      });
+      return SearchRecommendationsResultSchema.parse({
+        query: request.query,
+        recommendations: page.items.map(recommendationView),
+        ...(page.hasMore ? { nextCursor: encodeCursor(offset + limit) } : {}),
+      });
+    },
+    async updateRecommendationState(request) {
+      if (!recommendationRepository) return { status: 'not_found' };
+      const result = recommendationRepository.updateState(request);
+      if (request.action === 'set_reaction' && result.status === 'updated') {
+        preferenceLearning?.notifyReactionChanged();
+      }
+      return result;
+    },
+    getDiscoveryConfiguration: () => configuration
+      ? configuration.get()
       : Promise.reject(new Error('Discovery configuration is not configured.')),
     async updateDiscoveryConfiguration(request) {
-      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
-      const view = await discoveryConfiguration.update(request);
-      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
+      if (!configuration) throw new Error('Discovery configuration is not configured.');
+      const view = await configuration.update(request);
+      requestCandidateSupply(candidateSupply, 'supply_conditions_changed', options);
       return view;
     },
     async connectDiscoverySource(request) {
-      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
-      const view = await discoveryConfiguration.connectSource(request);
-      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
+      if (!configuration) throw new Error('Discovery configuration is not configured.');
+      const view = await configuration.connectSource(request);
+      requestCandidateSupply(candidateSupply, 'supply_conditions_changed', options);
       return view;
     },
     async refreshDiscoverySource(request) {
-      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
-      const view = await discoveryConfiguration.refreshSource(request);
-      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
+      if (!configuration) throw new Error('Discovery configuration is not configured.');
+      const view = await configuration.refreshSource(request);
+      requestCandidateSupply(candidateSupply, 'supply_conditions_changed', options);
       return view;
     },
     async refreshDiscoverySources() {
-      if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
-      const view = await discoveryConfiguration.refreshSources();
-      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
+      if (!configuration) throw new Error('Discovery configuration is not configured.');
+      const view = await configuration.refreshSources();
+      requestCandidateSupply(candidateSupply, 'supply_conditions_changed', options);
       return view;
     },
     async shutdown() {
       await Promise.all([
-        interestRuntime.shutdown(),
-        dailyRecommendationRuntime?.shutdown() ?? Promise.resolve(),
-        candidateSupplyRuntime?.shutdown() ?? Promise.resolve(),
-        preferenceLearningRuntime?.shutdown() ?? Promise.resolve(),
+        interests.shutdown(),
+        recommendation?.shutdown() ?? Promise.resolve(),
+        candidateSupply?.shutdown() ?? Promise.resolve(),
+        preferenceLearning?.shutdown() ?? Promise.resolve(),
       ]);
     },
   };
 }
 
-/** Keeps independent Discovery background owners startable after one startup step fails. */
-async function runBackgroundStartStep(
+function recommendationReference(item: Recommendation): RecommendationReferenceContent {
+  return {
+    type: 'recommendation_reference',
+    recommendationId: item.id,
+    sourceName: item.content.sourceName,
+    canonicalUrl: item.content.canonicalUrl,
+    title: item.content.title,
+    ...(item.content.author ? { author: item.content.author } : {}),
+    ...(item.content.contentPublishedAt ? { publishedAt: item.content.contentPublishedAt } : {}),
+    ...(item.content.description ? { description: item.content.description } : {}),
+    ...(item.content.coverUrl ? { coverUrl: item.content.coverUrl } : {}),
+    recommendationReason: item.recommendationReason,
+  };
+}
+
+function recommendationView(item: Recommendation): RecommendationView {
+  return {
+    recommendationId: item.id,
+    localDate: item.localDate,
+    position: item.position,
+    sourceId: item.content.sourceId,
+    sourceName: item.content.sourceName,
+    canonicalUrl: item.content.canonicalUrl,
+    contentType: item.content.contentType,
+    ...(item.content.sourceContentId ? { sourceContentId: item.content.sourceContentId } : {}),
+    title: item.content.title,
+    ...(item.content.author ? { author: item.content.author } : {}),
+    ...(item.content.contentPublishedAt ? { contentPublishedAt: item.content.contentPublishedAt } : {}),
+    ...(item.content.description ? { description: item.content.description } : {}),
+    contentSummary: item.content.contentSummary,
+    ...(item.content.coverUrl ? { coverUrl: item.content.coverUrl } : {}),
+    recommendationReason: item.recommendationReason,
+    ...(item.state.reaction ? { reaction: item.state.reaction } : {}),
+    hidden: item.state.hiddenAt !== undefined,
+    favorite: item.state.favoriteAt !== undefined,
+    watchLater: item.state.watchLaterAt !== undefined,
+    ...(item.state.firstOpenedAt ? { firstOpenedAt: item.state.firstOpenedAt } : {}),
+    ...(item.state.lastOpenedAt ? { lastOpenedAt: item.state.lastOpenedAt } : {}),
+    publishedAt: item.publishedAt,
+  };
+}
+
+function todayView(value: TodayRecommendationResult | undefined) {
+  if (!value) return { localDate: new Date().toISOString().slice(0, 10), status: 'not_generated', resultCount: 0 };
+  if (value.status === 'published') return {
+    localDate: value.collection.localDate,
+    status: 'published',
+    resultCount: value.collection.items.length,
+    publishedAt: value.collection.publishedAt,
+  };
+  return {
+    localDate: value.localDate,
+    status: value.status,
+    resultCount: 0,
+    ...('requestId' in value ? { requestId: value.requestId } : {}),
+    ...('executionId' in value ? { executionId: value.executionId } : {}),
+    ...('failure' in value ? { failure: value.failure } : {}),
+  };
+}
+
+function encodeCursor(offset: number): string {
+  return `offset:${offset}`;
+}
+
+function decodeCursor(cursor: string | undefined): number {
+  if (!cursor) return 0;
+  const match = /^offset:(\d+)$/u.exec(cursor);
+  if (!match) throw new Error('Recommendation cursor is invalid.');
+  return Number(match[1]);
+}
+
+async function runBackgroundStep(
   options: CreateDiscoveryOptions,
   failures: unknown[],
-  operation: 'source_refresh' | 'candidate_supply_start'
-    | 'preference_learning_start' | 'daily_recommendation_start',
-  start: () => Promise<void>,
+  operation: Parameters<NonNullable<CreateDiscoveryOptions['onBackgroundError']>>[1]['operation'],
+  run: () => Promise<void>,
 ): Promise<void> {
   try {
-    await start();
+    await run();
   } catch (error) {
     failures.push(error);
     try {
       options.onBackgroundError?.(error, { operation });
     } catch {
-      // The observer is the terminal boundary for a best-effort startup diagnostic.
+      // A diagnostic observer cannot change independent startup behavior.
     }
   }
 }
@@ -295,7 +409,7 @@ function requestCandidateSupply(
     try {
       options.onBackgroundError?.(error, { operation: 'candidate_supply_start' });
     } catch {
-      // The observer is the terminal boundary for a background diagnostic.
+      // A diagnostic observer cannot change Candidate Supply behavior.
     }
   });
 }

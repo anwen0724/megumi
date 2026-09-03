@@ -66,43 +66,60 @@ export { createTwitterSource } from './sources/twitter-source';
 export { createDiscoverySourceRegistry, DISCOVERY_SOURCE_IDS } from './sources/source-catalog';
 export { signBilibiliWbiParameters } from './sources/bilibili-wbi';
 export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './candidate-supply/content-identity';
-export { buildDailyCandidateWindow } from './daily-recommendation/candidate-window';
-export { createDailyRecommendationAttempts } from './daily-recommendation/daily-recommendation-attempt';
-export type { DailyRecommendationAttempts } from './daily-recommendation/daily-recommendation-attempt';
-export type { BuildDailyCandidateWindowInput } from './daily-recommendation/candidate-window';
+export { rankRecommendationCandidates } from './recommendation/recommendation-ranking';
+export { createRecommendationRuntime, localDateAt } from './recommendation/recommendation-runtime';
+export type {
+  CreateRecommendationRuntimeOptions,
+  RecommendationExecutionInput,
+  RecommendationFailure,
+  RecommendationFailureCode,
+  RecommendationRuntime,
+  RecommendationTrigger,
+  RequestRecommendationResult,
+  StartRecommendationExecutionResult,
+  TodayRecommendationResult,
+  WaitRecommendationResult,
+} from './recommendation/recommendation-runtime';
+export { createRecommendationAttempts } from './recommendation/recommendation-attempts';
+export type {
+  RecommendationAttempts,
+  StartRecommendationAttemptRequest,
+} from './recommendation/recommendation-attempts';
+export { createRecommendationRepository } from './persistence/recommendation-repository';
+export type {
+  CreateRecommendationRepositoryOptions,
+  PendingReactionChange,
+  PublishRecommendationItem,
+  PublishRecommendationsRequest,
+  PublishRecommendationsResult,
+  RecommendationRepository,
+  UpdateRecommendationStateResult,
+} from './persistence/recommendation-repository';
+export type { RankRecommendationCandidatesInput } from './recommendation/recommendation-ranking';
+export type {
+  Recommendation,
+  RecommendationCollection,
+  RecommendationContent,
+  RecommendationDecision,
+  RecommendationSelectionBasis,
+  RecommendationState,
+  UpdateRecommendationStateRequest,
+  RankedRecommendationCandidate,
+  RecommendationCandidate,
+  RecommendationExclusionReason,
+  RecommendationHistoryItem,
+  RecommendationRankingResult,
+} from './recommendation/recommendation';
 export {
-  DailyRecommendationBatchSchema,
-  DailyRecommendationBatchStatusSchema,
-  DailyRecommendationCandidateSchema,
-  DailyRecommendationFailureSchema,
-  EnsureDailyRecommendationRequestSchema,
-  LocalDateSchema,
-} from './daily-recommendation/daily-recommendation';
-export type {
-  DailyCandidateWindow,
-  DailyRecommendationBatch,
-  DailyRecommendationCandidate,
-  DailyRecommendationInterest,
-  DailyRecommendationSnapshot,
-  DailyRecommendationFailure,
-  EnsureDailyRecommendationRequest,
-  EnsureDailyRecommendationResult,
-} from './daily-recommendation/daily-recommendation';
-export { createDailyRecommendationRuntime } from './daily-recommendation/daily-recommendation-runtime';
-export type {
-  CreateDailyRecommendationRuntimeOptions,
-  DailyRecommendationBackgroundErrorContext,
-  DailyRecommendationRuntime,
-} from './daily-recommendation/daily-recommendation-runtime';
-export { createDailyRecommendationRepository } from './persistence/daily-recommendation-repository';
-export type {
-  ClaimDailyRecommendationBatch,
-  ClaimDailyRecommendationBatchResult,
-  DailyRecommendationRepository,
-  FailDailyRecommendationBatch,
-  PublishDailyRecommendations,
-  PublishDailyRecommendationsResult,
-} from './persistence/daily-recommendation-repository';
+  LocalDateSchema as RecommendationLocalDateSchema,
+  RecommendationCollectionSchema,
+  RecommendationContentSchema,
+  RecommendationDecisionSchema,
+  RecommendationSchema,
+  RecommendationSelectionBasisSchema,
+  RecommendationStateSchema,
+  UpdateRecommendationStateRequestSchema,
+} from './recommendation/recommendation';
 export {
   CandidateInterestMatchSchema,
   CandidatePoolSnapshotSchema,
@@ -179,16 +196,6 @@ export type {
   UpdateDiscoveryConfigurationRequest,
 } from './configuration/discovery-configuration';
 export {
-  RecommendationReferenceContentSchema,
-  RecommendationSchema,
-  UpdateRecommendationStateRequestSchema,
-} from './recommendations/recommendation';
-export type {
-  Recommendation,
-  RecommendationReferenceContent,
-  UpdateRecommendationStateRequest,
-} from './recommendations/recommendation';
-export {
   DiscoveryDayViewSchema,
   DiscoveryHomeModeSchema,
   DiscoveryHomeViewSchema,
@@ -209,14 +216,8 @@ export {
 export type {
   DiscoveryRepository,
   ApplyInterestExtraction,
-  RecommendationSelectionSignal,
-  RecommendationStateResult,
   ValidatedInterestCommand,
 } from './persistence/discovery-repository';
-export type {
-  ReadHomeQuery,
-  RecommendationStateCommand,
-} from './persistence/recommendation-repository';
 export {
   FeedbackReactionSchema,
   LearnedDirectionInputSchema,
@@ -229,7 +230,6 @@ export {
   PreferenceScopeSchema,
   PreferenceSnapshotSchema,
   RecommendationContentEvidenceSchema,
-  RecommendationFeedbackChangeReceiptSchema,
 } from './preferences/preference';
 export type {
   CommitPreferenceLearningBatchResult,
@@ -240,11 +240,10 @@ export type {
   PreferenceLearningBatch,
   PreferenceLearningFacts,
   PreferenceLearningCompletion,
-  PreferenceLearningFeedbackChange,
+  PreferenceLearningReactionChange,
   PreferenceLearningTrigger,
   PreferenceSnapshot,
   RecommendationContentEvidence,
-  RecommendationFeedbackChangeReceipt,
 } from './preferences/preference';
 export {
   createPreferenceLearningRepository,
@@ -256,7 +255,6 @@ export {
 } from './preferences/preference-learning-runtime';
 export type {
   PreferenceLearningRepository,
-  RecordRecommendationFeedbackInput,
 } from './persistence/preference-learning-repository';
 export type {
   DiscoveryDayView,

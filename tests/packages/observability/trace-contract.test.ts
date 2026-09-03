@@ -6,18 +6,17 @@ import { TraceCorrelationSchema, TraceKindSchema } from '@megumi/observability';
 describe('Trace contract', () => {
   it('accepts closed Discovery Trace kinds without opening arbitrary values', () => {
     expect(TraceKindSchema.parse('candidate_supply')).toBe('candidate_supply');
+    expect(TraceKindSchema.parse('recommendation')).toBe('recommendation');
     expect(TraceKindSchema.parse('preference_learning')).toBe('preference_learning');
     expect(TraceKindSchema.safeParse('candidate_supply_custom').success).toBe(false);
   });
 
   it('accepts explicit business correlation identities', () => {
     expect(TraceCorrelationSchema.parse({
-      requestId: 'candidate-supply-request:1',
-      dailyRecommendationBatchId: 'daily-batch:1',
+      requestId: 'recommendation-request:1',
       preferenceLearningBatchId: 'preference-batch:1',
     })).toEqual({
-      requestId: 'candidate-supply-request:1',
-      dailyRecommendationBatchId: 'daily-batch:1',
+      requestId: 'recommendation-request:1',
       preferenceLearningBatchId: 'preference-batch:1',
     });
   });

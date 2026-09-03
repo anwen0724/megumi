@@ -11,9 +11,9 @@ import {
   type ConversationResolvedContext,
 } from './resolvers/conversation-context-resolver';
 import {
-  createDailyRecommendationContextResolver,
-  type DailyRecommendationResolvedContext,
-} from './resolvers/daily-recommendation-context-resolver';
+  createRecommendationContextResolver,
+  type RecommendationResolvedContext,
+} from './resolvers/recommendation-context-resolver';
 import {
   createCandidateSupplyContextResolver,
   type CandidateSupplyResolvedContext,
@@ -24,7 +24,7 @@ import {
 } from './resolvers/preference-learning-context-resolver';
 
 export type ResolvedContext = ConversationResolvedContext
-  | DailyRecommendationResolvedContext | CandidateSupplyResolvedContext
+  | RecommendationResolvedContext | CandidateSupplyResolvedContext
   | PreferenceLearningResolvedContext;
 
 export type ResolveContextRequest =
@@ -37,9 +37,9 @@ export type ResolveContextRequest =
       readonly signal?: AbortSignal;
     }
   | {
-      readonly kind: 'daily_recommendation';
+      readonly kind: 'recommendation';
       readonly executionId: string;
-      readonly batchId: string;
+      readonly requestId: string;
       readonly localDate: string;
       readonly currentMessages: readonly Message[];
       readonly tools: readonly ToolDefinition[];
@@ -81,7 +81,7 @@ export interface ContextResolverDependencies {
 
 export function createContextResolver(dependencies: ContextResolverDependencies): ContextResolver {
   const conversation = createConversationContextResolver(dependencies);
-  const dailyRecommendation = createDailyRecommendationContextResolver({
+  const recommendation = createRecommendationContextResolver({
     instructionReader: dependencies.instructionReader,
     factsReader: dependencies.factsReader,
   });
@@ -97,7 +97,7 @@ export function createContextResolver(dependencies: ContextResolverDependencies)
   return {
     resolve(request) {
       if (request.kind === 'conversation') return conversation.resolve(request);
-      if (request.kind === 'daily_recommendation') return dailyRecommendation.resolve(request);
+      if (request.kind === 'recommendation') return recommendation.resolve(request);
       return request.kind === 'candidate_supply'
         ? candidateSupply.resolve(request)
         : preferenceLearning.resolve(request);

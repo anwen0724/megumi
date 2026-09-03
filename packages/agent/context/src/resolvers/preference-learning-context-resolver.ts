@@ -80,7 +80,7 @@ export function createPreferenceLearningContextResolver(dependencies: {
               batch: factsResult.facts.batch,
               interests: factsResult.facts.interests,
               currentPreferences: factsResult.facts.currentPreferences,
-              feedbackChanges: factsResult.facts.feedbackChanges,
+              reactionChanges: factsResult.facts.reactionChanges,
             },
             currentMessages: [...request.currentMessages],
             systemInstructions,

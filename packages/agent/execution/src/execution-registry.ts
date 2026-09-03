@@ -38,9 +38,8 @@ export interface ConversationExecutionMetadata extends BaseExecutionMetadata {
   readonly permissionMode: PermissionMode;
 }
 
-export interface DailyRecommendationExecutionMetadata extends BaseExecutionMetadata {
-  readonly kind: 'daily_recommendation';
-  readonly batchId: string;
+export interface RecommendationExecutionMetadata extends BaseExecutionMetadata {
+  readonly kind: 'recommendation';
   readonly localDate: string;
 }
 
@@ -48,7 +47,7 @@ export interface CandidateSupplyExecutionMetadata extends BaseExecutionMetadata 
   readonly kind: 'candidate_supply';
 }
 
-export type ExecutionMetadata = ConversationExecutionMetadata | DailyRecommendationExecutionMetadata
+export type ExecutionMetadata = ConversationExecutionMetadata | RecommendationExecutionMetadata
   | CandidateSupplyExecutionMetadata;
 
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'cancelled';

@@ -3,9 +3,8 @@
  */
 import { z } from 'zod';
 import {
-  DailyRecommendationFailureSchema,
   LocalDateSchema,
-} from './daily-recommendation/daily-recommendation';
+} from './recommendation/recommendation';
 import { InterestCreatedFromSchema, InterestDescriptionSchema } from './interests/interest';
 import { DiscoveryContentTypeSchema, DiscoverySourceIdSchema } from './sources/discovery-source';
 
@@ -28,18 +27,21 @@ export const InterestViewSchema = z.object({
 
 export const TodayDiscoveryViewSchema = z.object({
   localDate: LocalDateSchema,
-  status: z.enum(['not_generated', 'waiting_for_candidates', 'running', 'published', 'failed']),
-  batchId: z.string().min(1).optional(),
+  status: z.enum([
+    'not_generated', 'waiting_for_candidates', 'model_unavailable',
+    'running', 'published', 'failed', 'cancelled',
+  ]),
+  requestId: z.string().min(1).optional(),
   executionId: z.string().min(1).optional(),
-  targetCount: z.number().int().min(1).max(100).optional(),
   resultCount: z.number().int().nonnegative(),
-  failure: DailyRecommendationFailureSchema.optional(),
+  failure: z.object({
+    code: z.string().min(1), message: z.string(), retryable: z.boolean(),
+  }).strict().optional(),
   publishedAt: TimestampSchema.optional(),
 }).strict();
 
 export const RecommendationViewSchema = z.object({
   recommendationId: z.string().min(1),
-  batchId: z.string().min(1),
   localDate: LocalDateSchema,
   position: z.number().int().nonnegative(),
   sourceId: DiscoverySourceIdSchema,
@@ -51,6 +53,7 @@ export const RecommendationViewSchema = z.object({
   author: z.string().trim().min(1).optional(),
   contentPublishedAt: TimestampSchema.optional(),
   description: z.string().trim().min(1).optional(),
+  contentSummary: z.string().trim().min(1).max(1000),
   coverUrl: HttpUrlSchema.optional(),
   recommendationReason: z.string().trim().min(1).max(1000),
   reaction: z.enum(['liked', 'disliked']).optional(),

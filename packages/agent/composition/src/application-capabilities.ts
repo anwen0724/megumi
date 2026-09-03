@@ -28,7 +28,7 @@ import {
   createDiscoverySourceRegistry,
   createDiscoveryRepository,
   createCandidateSupplyAttempts,
-  createDailyRecommendationAttempts,
+  createRecommendationAttempts,
   createDiscovery,
   createContextDiscoverySourceRegistry,
   createDiscoveryFactsReader,
@@ -330,8 +330,8 @@ function composeCapabilitiesWithDatabase(
     readCandidateSupplyFacts: (request) => discoveryFactsReaderDelegate
       ? discoveryFactsReaderDelegate.readCandidateSupplyFacts(request)
       : Promise.resolve(discoveryFactsUnavailable()),
-    readDailyRecommendationFacts: (request) => discoveryFactsReaderDelegate
-      ? discoveryFactsReaderDelegate.readDailyRecommendationFacts(request)
+    readRecommendationFacts: (request) => discoveryFactsReaderDelegate
+      ? discoveryFactsReaderDelegate.readRecommendationFacts(request)
       : Promise.resolve(discoveryFactsUnavailable()),
     readPreferenceLearningFacts: (request) => discoveryFactsReaderDelegate
       ? discoveryFactsReaderDelegate.readPreferenceLearningFacts(request)
@@ -443,7 +443,7 @@ function composeCapabilitiesWithDatabase(
     }
   };
 
-  const dailyRecommendationAttempts = createDailyRecommendationAttempts({
+  const recommendationAttempts = createRecommendationAttempts({
     observability: observability.observability,
   });
   const candidateSupplyAttempts = createCandidateSupplyAttempts({
@@ -459,7 +459,7 @@ function composeCapabilitiesWithDatabase(
       maxOutputBytes: 20_000,
       maxProcessCount: 16,
     },
-    dailyRecommendationTools: dailyRecommendationAttempts,
+    recommendationTools: recommendationAttempts,
     candidateSupplyTools: candidateSupplyAttempts,
     ...(options.builtInToolAvailability
       ? { builtInToolAvailability: options.builtInToolAvailability }
@@ -566,7 +566,7 @@ function composeCapabilitiesWithDatabase(
   discoveryFactsReaderDelegate = createDiscoveryFactsReader({
     repository: discoveryRepository,
     candidateSupplyAttempts,
-    dailyRecommendationAttempts,
+    recommendationAttempts,
   });
   discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
     sourceRegistry: discoverySources,
@@ -577,8 +577,9 @@ function composeCapabilitiesWithDatabase(
       return resolved.status === 'ok'
         ? {
             conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
-            dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
-            dailyTargetCount: resolved.settings.discovery.daily_target_count,
+            recommendationGenerationTime: resolved.settings.discovery.recommendation_generation_time,
+            recommendationTargetCount: resolved.settings.discovery.recommendation_target_count,
+            recommendationWorkingSetCount: resolved.settings.discovery.recommendation_working_set_count,
             enabledSources: resolved.settings.discovery.enabled_sources,
             candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
             candidatePoolMaximumCount: resolved.settings.discovery.candidate_pool_maximum_count,
@@ -590,8 +591,9 @@ function composeCapabilitiesWithDatabase(
           }
         : {
             conversationRecognitionEnabled: false,
-            dailyGenerationTime: '08:00',
-            dailyTargetCount: 20,
+            recommendationGenerationTime: '08:00',
+            recommendationTargetCount: 20,
+            recommendationWorkingSetCount: 80,
             enabledSources: [],
             candidatePoolMinimumCount: 100,
             candidatePoolMaximumCount: 200,
@@ -605,8 +607,9 @@ function composeCapabilitiesWithDatabase(
         patch: {
           discovery: {
             conversation_recognition_enabled: next.conversationRecognitionEnabled,
-            daily_generation_time: next.dailyGenerationTime,
-            daily_target_count: next.dailyTargetCount,
+            recommendation_generation_time: next.recommendationGenerationTime,
+            recommendation_target_count: next.recommendationTargetCount,
+            recommendation_working_set_count: next.recommendationWorkingSetCount,
             enabled_sources: [...next.enabledSources],
             candidate_pool_minimum_count: next.candidatePoolMinimumCount,
             candidate_pool_maximum_count: next.candidatePoolMaximumCount,
@@ -679,52 +682,61 @@ function composeCapabilitiesWithDatabase(
         });
       },
     },
-    dailyRecommendation: {
+    recommendation: {
       repository: discoveryRepository,
-      attempts: dailyRecommendationAttempts,
-      observability: observability.observability,
+      attempts: recommendationAttempts,
+      sourceRegistry: discoverySources,
       startExecution: (request) => executions.start(request),
-      now: clock.now,
       settings: {
-        getDiscoverySettings() {
+        resolve() {
           const resolved = settings.resolve();
           return resolved.status === 'ok'
             ? {
-                dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
-                dailyTargetCount: resolved.settings.discovery.daily_target_count,
+                recommendationGenerationTime: resolved.settings.discovery.recommendation_generation_time,
+                recommendationTargetCount: resolved.settings.discovery.recommendation_target_count,
+                recommendationWorkingSetCount: resolved.settings.discovery.recommendation_working_set_count,
+                candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
+                candidatePoolMaximumCount: resolved.settings.discovery.candidate_pool_maximum_count,
+                candidateValidityDays: resolved.settings.discovery.candidate_validity_days,
+                candidateContentExcerptMaxCharacters: resolved.settings.discovery.candidate_content_excerpt_max_characters,
               }
             : {
-                dailyGenerationTime: '08:00',
-                dailyTargetCount: 20,
+                recommendationGenerationTime: '08:00',
+                recommendationTargetCount: 20,
+                recommendationWorkingSetCount: 80,
+                candidatePoolMinimumCount: 100,
+                candidatePoolMaximumCount: 200,
+                candidateValidityDays: 30,
+                candidateContentExcerptMaxCharacters: 8_000,
               };
         },
       },
-      timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      clock,
+      timezone: { get: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
       async resolveModel() {
         const resolved = settings.resolve();
         const selection = resolved.status === 'ok'
           ? resolved.settings.model_selection
           : undefined;
-        if (!selection) return undefined;
+        if (!selection) return { status: 'unavailable' };
         const result = await resolveModel(selection);
-        return result.status === 'ok' ? result.model : undefined;
+        return result.status === 'ok'
+          ? { status: 'ok', model: result.model }
+          : { status: 'unavailable' };
       },
       ids: {
-        createBatchId: () => createId('discovery-batch'),
-        createRecommendationId: () => createId('recommendation'),
-        createFeedbackId: () => createId('feedback'),
-        createFeedbackChangeId: () => createId('feedback-change'),
+        createRequestId: () => createId('recommendation-request'),
       },
       ...(options.timers ? { timers: options.timers } : {}),
       onBackgroundError(error, context) {
         observability.runtimeLogger.write({
           level: 'warn',
           module: 'discovery',
-          code: 'daily_recommendation_background_failed',
-          message: 'Daily Recommendation background work failed.',
+          code: 'recommendation_background_failed',
+          message: 'Recommendation background work failed.',
           correlation: {
-            ...(context.batchId
-              ? { dailyRecommendationBatchId: context.batchId }
+            ...(context.requestId
+              ? { requestId: context.requestId }
               : {}),
             ...(context.executionId ? { executionId: context.executionId } : {}),
           },

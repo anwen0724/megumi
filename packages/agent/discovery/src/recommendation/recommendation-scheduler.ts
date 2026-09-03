@@ -1,17 +1,17 @@
-/* Owns Daily Recommendation wall-clock scheduling, startup catch-up, and timer shutdown. */
-import type { EnsureDailyRecommendationRequest } from './daily-recommendation';
+/* Owns Recommendation wall-clock scheduling, startup catch-up, and timer shutdown. */
+import type { RecommendationTrigger } from './recommendation-runtime';
 
-export interface DailyRecommendationScheduler {
+export interface RecommendationScheduler {
   start(): Promise<void>;
   getNextScheduledAt(): string | undefined;
   shutdown(): Promise<void>;
 }
 
-export interface CreateDailyRecommendationSchedulerOptions {
+export interface CreateRecommendationSchedulerOptions {
   readonly now: () => string;
   readonly timezone: () => string;
   readonly generationTime: () => string;
-  readonly ensure: (request: EnsureDailyRecommendationRequest) => Promise<unknown>;
+  readonly ensure: (request: { readonly trigger: RecommendationTrigger }) => Promise<unknown>;
   readonly onScheduledError: (error: unknown) => void;
   readonly timers?: {
     setTimeout(callback: () => void, delayMs: number): unknown;
@@ -19,10 +19,10 @@ export interface CreateDailyRecommendationSchedulerOptions {
   };
 }
 
-/** Creates the single wall-clock timer owner for Daily Recommendation. */
-export function createDailyRecommendationScheduler(
-  options: CreateDailyRecommendationSchedulerOptions,
-): DailyRecommendationScheduler {
+/** Creates the single wall-clock timer owner for Recommendation. */
+export function createRecommendationScheduler(
+  options: CreateRecommendationSchedulerOptions,
+): RecommendationScheduler {
   const timers = options.timers ?? defaultTimers();
   let accepting = true;
   let started = false;
@@ -63,7 +63,7 @@ export function createDailyRecommendationScheduler(
         options.timezone(),
       );
       if (Date.parse(now) >= Date.parse(scheduledToday)) {
-        await options.ensure({ trigger: 'startup_catchup', now });
+        await options.ensure({ trigger: 'startup_catchup' });
       }
       scheduleNext();
     },
@@ -87,16 +87,16 @@ export function localDateAt(timestamp: string, timezone: string): string {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-async function runScheduledEnsure(options: CreateDailyRecommendationSchedulerOptions): Promise<void> {
+async function runScheduledEnsure(options: CreateRecommendationSchedulerOptions): Promise<void> {
   try {
-    await options.ensure({ trigger: 'schedule', now: options.now() });
+    await options.ensure({ trigger: 'scheduled' });
   } catch (error) {
     reportScheduledError(options, error);
   }
 }
 
 function reportScheduledError(
-  options: CreateDailyRecommendationSchedulerOptions,
+  options: CreateRecommendationSchedulerOptions,
   error: unknown,
 ): void {
   try {
@@ -117,7 +117,7 @@ function nextScheduledTimestamp(now: string, timezone: string, generationTime: s
 
 function scheduledTimestamp(localDate: string, generationTime: string, timezone: string): string {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/u.test(generationTime)) {
-    throw new Error('Discovery dailyGenerationTime must use HH:mm.');
+    throw new Error('Discovery recommendationGenerationTime must use HH:mm.');
   }
   const dateParts = localDate.split('-').map(Number);
   const timeParts = generationTime.split(':').map(Number);

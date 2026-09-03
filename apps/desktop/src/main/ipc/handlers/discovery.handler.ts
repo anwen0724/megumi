@@ -1,11 +1,11 @@
-/* Desktop IPC handlers for daily discovery, interests, and recommendation state. */
+/* Desktop IPC handlers for Discovery interests, Recommendation, and configuration. */
 import {
-  DiscoveryDailyEnsureResultSchema,
+  DiscoveryRecommendationRequestResultSchema,
   DiscoveryConfigurationUiDtoSchema,
   DiscoveryHomeUiResultSchema,
   DiscoveryInterestUiDtoSchema,
   DiscoveryRecommendationSearchUiResultSchema,
-  DiscoveryRecommendationUiDtoSchema,
+  DiscoveryRecommendationStateResultSchema,
   DiscoverySessionParticipationUiDtoSchema,
   DiscoverySourceUiDtoSchema,
   type ProductHostInterface,
@@ -16,7 +16,7 @@ import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
-  DiscoveryDailyEnsureRequestSchema,
+  DiscoveryRecommendationRequestSchema,
   DiscoveryConfigurationGetRequestSchema,
   DiscoveryConfigurationUpdateRequestSchema,
   DiscoveryHomeRequestSchema,
@@ -107,13 +107,13 @@ export function registerDiscoveryHandlers(
     handle: (request) => service.host.discovery.setSessionParticipation(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
-  ipcMain.handle(IPC_CHANNELS.discovery.dailyEnsure, createIpcRequestHandler({
-    channel: IPC_CHANNELS.discovery.dailyEnsure,
-    requestSchema: DiscoveryDailyEnsureRequestSchema,
-    responseSchema: DiscoveryDailyEnsureResultSchema,
+  ipcMain.handle(IPC_CHANNELS.discovery.recommendationRequest, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.recommendationRequest,
+    requestSchema: DiscoveryRecommendationRequestSchema,
+    responseSchema: DiscoveryRecommendationRequestResultSchema,
     responseValidation: 'dev-only',
     logger: options.logger,
-    handle: (request) => service.host.discovery.ensureDaily(request.payload),
+    handle: (request) => service.host.discovery.requestRecommendation(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
   ipcMain.handle(IPC_CHANNELS.discovery.homeGet, createIpcRequestHandler({
@@ -137,12 +137,10 @@ export function registerDiscoveryHandlers(
   ipcMain.handle(IPC_CHANNELS.discovery.recommendationStateUpdate, createIpcRequestHandler({
     channel: IPC_CHANNELS.discovery.recommendationStateUpdate,
     requestSchema: DiscoveryRecommendationStateRequestSchema,
-    responseSchema: DiscoveryRecommendationUiDtoSchema,
+    responseSchema: DiscoveryRecommendationStateResultSchema,
     responseValidation: 'dev-only',
     logger: options.logger,
-    handle: async (request) => (
-      await service.host.discovery.updateRecommendationState(request.payload)
-    ).recommendation,
+    handle: (request) => service.host.discovery.updateRecommendationState(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
 }

@@ -11,7 +11,7 @@ import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 import type {
-  DailyRecommendationContextMaterial,
+  RecommendationContextMaterial,
   ExecutionEnvironment,
 } from '../context';
 import type { PreferenceLearningContextMaterial } from '../discovery-context';
@@ -24,9 +24,9 @@ export interface SystemPromptSources {
   readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
   readonly includeAvailableTools?: boolean;
-  readonly dailyRecommendationMaterial?: {
+  readonly recommendationMaterial?: {
     readonly localDate: string;
-    readonly material: DailyRecommendationContextMaterial;
+    readonly material: RecommendationContextMaterial;
   };
   readonly preferenceLearningMaterial?: {
     readonly startedAt: string;
@@ -39,10 +39,10 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
   for (const document of sources.systemInstructions) {
     sections.push(document.content);
   }
-  if (sources.dailyRecommendationMaterial) {
-    sections.push(renderDailyRecommendationMaterial(
-      sources.dailyRecommendationMaterial.localDate,
-      sources.dailyRecommendationMaterial.material,
+  if (sources.recommendationMaterial) {
+    sections.push(renderRecommendationMaterial(
+      sources.recommendationMaterial.localDate,
+      sources.recommendationMaterial.material,
     ));
   }
   if (sources.preferenceLearningMaterial) {
@@ -67,21 +67,19 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
   return sections.join('\n\n');
 }
 
-function renderDailyRecommendationMaterial(
+function renderRecommendationMaterial(
   localDate: string,
-  material: DailyRecommendationContextMaterial,
+  material: RecommendationContextMaterial,
 ): string {
   return [
-    '<daily_recommendation_material>',
+    '<recommendation_material>',
     `  <local_date>${escapeXmlText(localDate)}</local_date>`,
-    `  <batch>${escapeXmlText(JSON.stringify(material.batch))}</batch>`,
+    `  <execution>${escapeXmlText(JSON.stringify(material.execution))}</execution>`,
     `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
-    `  <exploration_preference>${escapeXmlText(JSON.stringify(material.explorationPreference))}</exploration_preference>`,
+    `  <preferences>${escapeXmlText(JSON.stringify(material.preferences))}</preferences>`,
     `  <candidates>${escapeXmlText(JSON.stringify(material.candidates))}</candidates>`,
     `  <recent_recommendations>${escapeXmlText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
-    `  <pending_feedback>${escapeXmlText(JSON.stringify(material.pendingFeedback))}</pending_feedback>`,
-    `  <omitted_pending_feedback_count>${material.omittedPendingFeedbackCount}</omitted_pending_feedback_count>`,
-    '</daily_recommendation_material>',
+    '</recommendation_material>',
   ].join('\n');
 }
 
@@ -95,7 +93,7 @@ function renderPreferenceLearningMaterial(
     `  <batch>${escapeXmlText(JSON.stringify(material.batch))}</batch>`,
     `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
     `  <current_preferences>${escapeXmlText(JSON.stringify(material.currentPreferences))}</current_preferences>`,
-    `  <feedback_changes>${escapeXmlText(JSON.stringify(material.feedbackChanges))}</feedback_changes>`,
+    `  <reaction_changes>${escapeXmlText(JSON.stringify(material.reactionChanges))}</reaction_changes>`,
     '</preference_learning_material>',
   ].join('\n');
 }

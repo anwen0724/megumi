@@ -1,6 +1,6 @@
 /*
  * Defines Context-owned Discovery source seams plus the bounded Facts and Material
- * contracts for Candidate Supply, Daily Recommendation, and Preference Learning.
+ * contracts for Candidate Supply, Recommendation, and Preference Learning.
  * Discovery implements the read seams; only Context decides model-visible shape.
  */
 
@@ -18,7 +18,7 @@ export interface ContextPreferenceDirection {
   readonly polarity: PreferencePolarity;
   readonly dimension: PreferenceDimension;
   readonly statement: string;
-  readonly supportingFeedbackIds: readonly string[];
+  readonly supportingRecommendationIds: readonly string[];
   readonly updatedAt: string;
 }
 
@@ -96,16 +96,19 @@ export interface CandidateSupplyContextMaterial {
   readonly sources: readonly ContextDiscoverySourceFact[];
 }
 
-export interface DailyRecommendationHistoryFact {
+export interface RecommendationHistoryFact {
+  readonly recommendationId: string;
   readonly contentIdentity: string;
   readonly sourceName: string;
+  readonly contentType: string;
   readonly title: string;
   readonly recommendationReason: string;
   readonly publishedAt: string;
-  readonly matchedInterestIds?: readonly string[];
+  readonly matchedInterestIds: readonly string[];
+  readonly reaction?: 'liked' | 'disliked';
 }
 
-export interface DailyRecommendationCandidateFact extends CandidateSummaryFact {
+export interface RecommendationCandidateFact extends CandidateSummaryFact {
   readonly matchedInterestIds: readonly string[];
   readonly interestMatches: readonly {
     readonly interestId: string;
@@ -114,54 +117,50 @@ export interface DailyRecommendationCandidateFact extends CandidateSummaryFact {
   }[];
 }
 
-export interface PendingRecommendationFeedbackFact {
-  readonly feedbackId: string;
-  readonly recommendationId: string;
-  readonly reaction: 'liked' | 'disliked';
-  readonly changedAt: string;
-  readonly learnedFeedbackRevision: number;
-  readonly title: string;
-  readonly sourceName: string;
-  readonly contentType: string;
-  readonly description?: string;
-  readonly matchedInterestIds: readonly string[];
-}
-
-export interface DailyRecommendationFacts {
+export interface RecommendationFacts {
   readonly asOf: string;
-  readonly batch: {
-    readonly batchId: string;
+  readonly execution: {
+    readonly requestId: string;
     readonly localDate: string;
-    readonly requestedCount: number;
     readonly actualTarget: number;
-    readonly availableCount: number;
-    readonly readBudget: number;
+    readonly eligibleCount: number;
+    readonly workingSetCount: number;
   };
   readonly interests: readonly DiscoveryInterestFact[];
-  readonly explorationPreference: ContextPreferenceSnapshot;
-  readonly candidates: readonly DailyRecommendationCandidateFact[];
-  readonly recentRecommendations: readonly DailyRecommendationHistoryFact[];
-  readonly pendingFeedback: readonly PendingRecommendationFeedbackFact[];
-  readonly omittedPendingFeedbackCount: number;
+  readonly preferences: readonly ContextPreferenceSnapshot[];
+  readonly candidates: readonly RecommendationCandidateFact[];
+  readonly recentRecommendations: readonly RecommendationHistoryFact[];
+  readonly ranking: readonly {
+    readonly candidateId: string;
+    readonly eligible: boolean;
+    readonly exclusionReason?: string;
+    readonly rank?: number;
+    readonly relevanceRank?: number;
+    readonly rankingFacts?: {
+      readonly currentInterestCount: number;
+      readonly historicalInterestCount: number;
+      readonly currentSourceCount: number;
+      readonly historicalSourceCount: number;
+      readonly currentContentTypeCount: number;
+      readonly historicalContentTypeCount: number;
+    };
+  }[];
 }
 
-export interface DailyRecommendationContextMaterial {
-  readonly batch: DailyRecommendationFacts['batch'];
+export interface RecommendationContextMaterial {
+  readonly execution: RecommendationFacts['execution'];
   readonly interests: readonly DiscoveryInterestFact[];
-  readonly explorationPreference: ContextPreferenceSnapshot;
-  readonly candidates: readonly DailyRecommendationCandidateFact[];
-  readonly recentRecommendations: readonly DailyRecommendationHistoryFact[];
-  readonly pendingFeedback: readonly PendingRecommendationFeedbackFact[];
-  readonly omittedPendingFeedbackCount: number;
+  readonly preferences: readonly ContextPreferenceSnapshot[];
+  readonly candidates: readonly RecommendationCandidateFact[];
+  readonly recentRecommendations: readonly RecommendationHistoryFact[];
 }
 
-export interface PreferenceLearningFeedbackFact {
-  readonly feedbackChangeId: string;
-  readonly feedbackId: string;
+export interface PreferenceLearningReactionFact {
   readonly recommendationId: string;
-  readonly previousReaction?: 'liked' | 'disliked';
+  readonly learnedReaction?: 'liked' | 'disliked';
+  readonly learnedReactionRevision: number;
   readonly currentReaction?: 'liked' | 'disliked';
-  readonly feedbackRevision: number;
+  readonly currentReactionRevision: number;
   readonly changedAt: string;
   readonly requiresCorrection: boolean;
   readonly recommendation: {
@@ -198,14 +197,14 @@ export interface PreferenceLearningFacts {
     readonly revision: number;
   }[];
   readonly currentPreferences: readonly ContextPreferenceSnapshot[];
-  readonly feedbackChanges: readonly PreferenceLearningFeedbackFact[];
+  readonly reactionChanges: readonly PreferenceLearningReactionFact[];
 }
 
 export interface PreferenceLearningContextMaterial {
   readonly batch: PreferenceLearningFacts['batch'];
   readonly interests: PreferenceLearningFacts['interests'];
   readonly currentPreferences: readonly ContextPreferenceSnapshot[];
-  readonly feedbackChanges: readonly PreferenceLearningFeedbackFact[];
+  readonly reactionChanges: readonly PreferenceLearningReactionFact[];
 }
 
 export type ReadDiscoveryFactsResult<T> =
@@ -219,12 +218,12 @@ export interface DiscoveryFactsReader {
     readonly executionId: string;
     readonly signal?: AbortSignal;
   }): Promise<ReadDiscoveryFactsResult<CandidateSupplyFacts>>;
-  readDailyRecommendationFacts(request: {
+  readRecommendationFacts(request: {
     readonly executionId: string;
-    readonly batchId: string;
+    readonly requestId: string;
     readonly localDate: string;
     readonly signal?: AbortSignal;
-  }): Promise<ReadDiscoveryFactsResult<DailyRecommendationFacts>>;
+  }): Promise<ReadDiscoveryFactsResult<RecommendationFacts>>;
   readPreferenceLearningFacts(request: {
     readonly batchId: string;
     readonly signal?: AbortSignal;

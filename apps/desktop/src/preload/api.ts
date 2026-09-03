@@ -57,10 +57,11 @@ import type {
   VoiceTtsKeyUiResult,
   DiscoveryInterestUiDto,
   DiscoverySessionParticipationUiDto,
-  DiscoveryDailyEnsureResult,
+  DiscoveryRecommendationRequestResult,
   DiscoveryHomeUiResult,
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
+  DiscoveryRecommendationStateResult,
   DiscoveryConfigurationUiDto,
   DiscoverySourceCredentialStatusUiResult,
   DiscoverySourceUiDto,
@@ -109,7 +110,7 @@ import type {
   VoiceModelCapabilityPayload,
   DiscoveryInterestChangePayload,
   DiscoverySessionParticipationPayload,
-  DiscoveryDailyEnsurePayload,
+  DiscoveryRecommendationRequestPayload,
   DiscoveryHomePayload,
   DiscoveryRecommendationSearchPayload,
   DiscoveryRecommendationStatePayload,
@@ -439,10 +440,10 @@ export const api = {
       request: BusinessRequest<DiscoverySessionParticipationPayload, typeof IPC_CHANNELS.discovery.sessionParticipationSet>,
     ): Promise<RuntimeIpcResult<DiscoverySessionParticipationUiDto, typeof IPC_CHANNELS.discovery.sessionParticipationSet>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.sessionParticipationSet, request),
-    ensureDaily: (
-      request: BusinessRequest<DiscoveryDailyEnsurePayload, typeof IPC_CHANNELS.discovery.dailyEnsure>,
-    ): Promise<RuntimeIpcResult<DiscoveryDailyEnsureResult, typeof IPC_CHANNELS.discovery.dailyEnsure>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.dailyEnsure, request),
+    requestRecommendation: (
+      request: BusinessRequest<DiscoveryRecommendationRequestPayload, typeof IPC_CHANNELS.discovery.recommendationRequest>,
+    ): Promise<RuntimeIpcResult<DiscoveryRecommendationRequestResult, typeof IPC_CHANNELS.discovery.recommendationRequest>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationRequest, request),
     getHome: (
       request: BusinessRequest<DiscoveryHomePayload, typeof IPC_CHANNELS.discovery.homeGet>,
     ): Promise<RuntimeIpcResult<DiscoveryHomeUiResult, typeof IPC_CHANNELS.discovery.homeGet>> =>
@@ -453,7 +454,7 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationsSearch, request),
     updateRecommendationState: (
       request: BusinessRequest<DiscoveryRecommendationStatePayload, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>,
-    ): Promise<RuntimeIpcResult<DiscoveryRecommendationUiDto, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>> =>
+    ): Promise<RuntimeIpcResult<DiscoveryRecommendationStateResult, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
   },
   voiceInput: {

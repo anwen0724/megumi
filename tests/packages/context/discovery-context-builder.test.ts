@@ -4,13 +4,13 @@ import { createContext } from '../../../packages/agent/context/src';
 import { completedMessage, model, workspaceSource } from './context-test-fixtures';
 
 function options() {
-  const readDailyRecommendationFacts = vi.fn(async () => ({
+  const readRecommendationFacts = vi.fn(async () => ({
     status: 'ok' as const,
     facts: {
       asOf: '2026-08-27T08:00:00.000Z',
-      batch: {
-        batchId: 'batch:1', localDate: '2026-08-27', requestedCount: 3,
-        actualTarget: 1, availableCount: 1, readBudget: 1,
+      execution: {
+        requestId: 'request:1', localDate: '2026-08-27',
+        actualTarget: 1, eligibleCount: 1, workingSetCount: 1,
       },
       interests: [{
         interestId: 'interest:1', description: 'Agent architecture', interestRevision: 1,
@@ -19,14 +19,14 @@ function options() {
           interestId: 'interest:1', revision: 0, directions: [],
         },
       }],
-      explorationPreference: {
+      preferences: [{
         scopeKey: 'exploration', scope: 'exploration' as const, revision: 1,
         directions: [{
           directionId: 'direction:exploration', polarity: 'positive' as const,
           dimension: 'topic' as const, statement: 'Prefer local-first system design.',
-          supportingFeedbackIds: ['feedback:exploration'], updatedAt: '2026-08-27T07:00:00.000Z',
+          supportingRecommendationIds: ['recommendation:exploration'], updatedAt: '2026-08-27T07:00:00.000Z',
         }],
-      },
+      }],
       candidates: [{
         candidateId: 'candidate:1', contentIdentity: 'identity:1', sourceName: 'Example',
         canonicalUrl: 'https://example.com/agent', contentType: 'article', title: 'Agent guide',
@@ -40,8 +40,7 @@ function options() {
         }],
       }],
       recentRecommendations: [],
-      pendingFeedback: [],
-      omittedPendingFeedbackCount: 0,
+      ranking: [{ candidateId: 'candidate:1', eligible: true, rank: 0, relevanceRank: 0 }],
     },
   }));
   return {
@@ -53,7 +52,7 @@ function options() {
     workspaceSource: workspaceSource(),
     instructionReader: {
       getSystemInstructions: vi.fn(async () => [
-        { instructionId: 'megumi.daily-recommendation', sourcePath: '/daily.md', content: 'daily' },
+        { instructionId: 'megumi.recommendation', sourcePath: '/recommendation.md', content: 'recommendation' },
       ]),
       getEffectiveInstructions: vi.fn(),
     },
@@ -61,7 +60,7 @@ function options() {
     models: { completeSimple: vi.fn(async () => completedMessage()) },
     discoveryFactsReader: {
       readCandidateSupplyFacts: vi.fn(),
-      readDailyRecommendationFacts,
+      readRecommendationFacts,
       readPreferenceLearningFacts: vi.fn(),
     },
     discoverySourceRegistry: { listContextSources: vi.fn(() => []) },
@@ -69,13 +68,13 @@ function options() {
 }
 
 describe('Discovery Context ownership', () => {
-  it('reads Daily Recommendation facts inside Context instead of accepting Runtime material', async () => {
+  it('reads Recommendation facts inside Context instead of accepting Runtime material', async () => {
     const dependencies = options();
     const result = await createContext(dependencies).build({
       modelCallContext: {
         modelCallId: 'model-call:1',
         run: {
-          kind: 'daily_recommendation', executionId: 'execution:1', batchId: 'batch:1',
+          kind: 'recommendation', executionId: 'execution:1', requestId: 'request:1',
           localDate: '2026-08-27', model,
         },
         tools: [],
@@ -83,8 +82,8 @@ describe('Discovery Context ownership', () => {
       currentMessages: [],
     });
 
-    expect(dependencies.discoveryFactsReader.readDailyRecommendationFacts).toHaveBeenCalledWith({
-      executionId: 'execution:1', batchId: 'batch:1', localDate: '2026-08-27', signal: undefined,
+    expect(dependencies.discoveryFactsReader.readRecommendationFacts).toHaveBeenCalledWith({
+      executionId: 'execution:1', requestId: 'request:1', localDate: '2026-08-27', signal: undefined,
     });
     expect(result).toMatchObject({ status: 'ready' });
     if (result.status === 'ready') {

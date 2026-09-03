@@ -256,8 +256,9 @@ describe('Product Host runtime schemas', () => {
     expect(SettingsUpdatePayloadSchema.safeParse({
       discovery: {
         conversationRecognitionEnabled: true,
-        dailyGenerationTime: '09:30',
-        dailyTargetCount: 24,
+        recommendationGenerationTime: '09:30',
+        recommendationTargetCount: 24,
+        recommendationWorkingSetCount: 80,
         enabledSources: ['bilibili', 'open_web'],
       },
     }).success).toBe(false);

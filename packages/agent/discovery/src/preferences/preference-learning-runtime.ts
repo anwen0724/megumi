@@ -16,7 +16,7 @@ const ModelDirectionSchema = z.object({
     'topic', 'source', 'author', 'content_type', 'recency', 'expression_quality',
   ]),
   statement: z.string().trim().min(1).max(1000),
-  supportingFeedbackIds: z.array(z.string().min(1)).min(1),
+  supportingRecommendationIds: z.array(z.string().min(1)).min(1),
 }).strict();
 const ModelResultSchema = z.object({
   scopes: z.array(z.object({
@@ -28,7 +28,7 @@ const ModelResultSchema = z.object({
 
 export interface PreferenceLearningRuntime {
   start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
-  notifyFeedbackChanged(): void;
+  notifyReactionChanged(): void;
   shutdown(): Promise<void>;
 }
 
@@ -52,7 +52,7 @@ export interface CreatePreferenceLearningRuntimeOptions {
   readonly onBackgroundError?: (error: unknown) => void;
 }
 
-/** Creates the single background owner for durable Feedback-to-Preference learning. */
+/** Creates the single background owner for durable Reaction-to-Preference learning. */
 export function createPreferenceLearningRuntime(
   options: CreatePreferenceLearningRuntimeOptions,
 ): PreferenceLearningRuntime {
@@ -99,7 +99,7 @@ export function createPreferenceLearningRuntime(
 
   async function drain(): Promise<void> {
     while (accepting) {
-      const trigger = options.repository.readPreferenceLearningTrigger({ now: options.now() });
+      const trigger = options.repository.getPreferenceLearningTrigger({ now: options.now() });
       if (trigger.status === 'idle') return;
       if (trigger.status === 'scheduled') {
         schedule(trigger.dueAt);
@@ -135,7 +135,7 @@ export function createPreferenceLearningRuntime(
       options.repository.interruptPreferenceLearningBatches({ now: options.now() });
       if (startOptions.automaticTriggers ?? true) wake();
     },
-    notifyFeedbackChanged: wake,
+    notifyReactionChanged: wake,
     async shutdown() {
       accepting = false;
       clearTimer();

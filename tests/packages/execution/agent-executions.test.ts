@@ -266,7 +266,7 @@ describe('Agent Executions and conversation submission', () => {
     }));
   });
 
-  it('starts Daily Recommendation with Batch metadata and a fixed Pool Context', async () => {
+  it('starts Recommendation with request metadata and Context-owned facts', async () => {
     let launched: LaunchAgentExecutionInput | undefined;
     const executions = createAgentExecutions({
       ids: { createExecutionId: () => 'execution:daily', createSessionMessageId: () => 'unused' },
@@ -286,25 +286,20 @@ describe('Agent Executions and conversation submission', () => {
       },
     });
     const started = await executions.start({
-      kind: 'daily_recommendation',
+      kind: 'recommendation',
       requestId: 'request:daily',
-      batchId: 'batch:daily',
       localDate: '2026-08-27',
       model,
-      material: {
-        requestedCount: 20, actualTarget: 1, availableCount: 1, readBudget: 1,
-        interests: [], candidates: [], recentRecommendations: [], recentFeedback: [],
-      },
       accept: async () => ({ status: 'accepted' }),
       onSettled: () => undefined,
     });
 
     expect(started.status).toBe('started');
     expect(launched).toMatchObject({
-      kind: 'daily_recommendation',
-      metadata: { kind: 'daily_recommendation', batchId: 'batch:daily', localDate: '2026-08-27' },
+      kind: 'recommendation',
+      metadata: { kind: 'recommendation', requestId: 'request:daily', localDate: '2026-08-27' },
       runContext: {
-        kind: 'daily_recommendation', executionId: 'execution:daily', batchId: 'batch:daily',
+        kind: 'recommendation', executionId: 'execution:daily', requestId: 'request:daily',
       },
     });
     if (started.status === 'started') await started.completion;
@@ -412,10 +407,11 @@ describe('Agent Executions and conversation submission', () => {
       return { status: 'created' as const, session: { ...session, session_id: id } };
     });
     const recommendation = {
-      recommendationId: 'recommendation:1', batchId: 'batch:1', localDate: '2026-08-22', position: 0,
+      recommendationId: 'recommendation:1', localDate: '2026-08-22', position: 0,
       sourceId: 'open-web' as const, sourceName: 'GitHub', canonicalUrl: 'https://example.com/agent',
       contentType: 'article' as const, title: 'Agent runtime', author: 'Example',
-      description: 'A concrete implementation.', recommendationReason: 'Relevant to your interests.',
+      description: 'A concrete implementation.', contentSummary: 'A concrete Agent runtime summary.',
+      recommendationReason: 'Relevant to your interests.',
       hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T00:00:00.000Z',
     };
     const { runtime, testLaunch } = fixture({
@@ -432,7 +428,7 @@ describe('Agent Executions and conversation submission', () => {
         history: { getCommittedBranch: vi.fn() },
         branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
         resolveModel: async () => ({ status: 'ok', model }),
-        recommendations: { readRecommendationReference: () => ({
+        recommendations: { getRecommendationReference: () => ({
           type: 'recommendation_reference', recommendationId: recommendation.recommendationId,
           sourceName: recommendation.sourceName, canonicalUrl: recommendation.canonicalUrl,
           title: recommendation.title, author: recommendation.author, description: recommendation.description,
@@ -475,7 +471,7 @@ describe('Agent Executions and conversation submission', () => {
         history: { getCommittedBranch: vi.fn() },
         branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
         resolveModel: async () => ({ status: 'ok', model }),
-        recommendations: { readRecommendationReference: () => undefined },
+        recommendations: { getRecommendationReference: () => undefined },
       },
     });
 

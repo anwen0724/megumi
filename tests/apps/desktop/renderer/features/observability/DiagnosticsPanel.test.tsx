@@ -16,7 +16,7 @@ describe('DiagnosticsPanel', () => {
   const listMessages = vi.fn();
 
   beforeEach(() => {
-    list.mockReset().mockResolvedValue(success({ status: 'ok', traces: [summary, dailySummary] }));
+    list.mockReset().mockResolvedValue(success({ status: 'ok', traces: [summary, recommendationSummary] }));
     get.mockReset().mockResolvedValue(success({ status: 'found', trace: detail }));
     getContent.mockReset().mockResolvedValue(success({
       status: 'available',
@@ -67,7 +67,7 @@ describe('DiagnosticsPanel', () => {
 
     expect(await screen.findByText('Sleep chat')).toBeInTheDocument();
     expect(screen.getByText("I'm going to sleep")).toBeInTheDocument();
-    expect(screen.getByText('Daily recommendation · Aug 26')).toBeInTheDocument();
+    expect(screen.getByText('Recommendation · Aug 26')).toBeInTheDocument();
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ payload: { limit: 200 } }));
     expect(listSessions).toHaveBeenCalled();
     expect(listMessages).toHaveBeenCalledWith(expect.objectContaining({
@@ -103,12 +103,12 @@ describe('DiagnosticsPanel', () => {
     await user.click(screen.getByRole('combobox', { name: 'Session' }));
     await user.click(screen.getByRole('option', { name: 'Sleep chat' }));
     await user.click(screen.getByRole('combobox', { name: 'Trace type' }));
-    await user.click(screen.getByRole('option', { name: 'Daily recommendation' }));
+    await user.click(screen.getByRole('option', { name: 'Recommendation' }));
 
     expect(screen.queryByText("I'm going to sleep")).not.toBeInTheDocument();
-    const dailyGroup = screen.getByText('Daily recommendation · Aug 26').closest('section');
-    expect(dailyGroup).not.toBeNull();
-    expect(within(dailyGroup!).getByText('Scheduled discovery')).toBeInTheDocument();
+    const recommendationGroup = screen.getByText('Recommendation · Aug 26').closest('section');
+    expect(recommendationGroup).not.toBeNull();
+    expect(within(recommendationGroup!).getByText('Scheduled discovery')).toBeInTheDocument();
 
     await user.click(screen.getByRole('combobox', { name: 'Execution result' }));
     await user.click(screen.getByRole('option', { name: 'Failed' }));
@@ -135,24 +135,26 @@ describe('DiagnosticsPanel', () => {
 
   it('selects immediately and ignores an older Trace response after a faster later selection', async () => {
     const conversationRequest = deferred<ReturnType<typeof success>>();
-    const dailyRequest = deferred<ReturnType<typeof success>>();
+    const recommendationRequest = deferred<ReturnType<typeof success>>();
     get.mockImplementation((request: { readonly payload: { readonly traceId: string } }) => (
       request.payload.traceId === summary.traceId
         ? conversationRequest.promise
-        : dailyRequest.promise
+        : recommendationRequest.promise
     ));
     const user = userEvent.setup();
     render(<DiagnosticsPanel />);
 
     const conversationButton = await screen.findByRole('button', { name: /I'm going to sleep/i });
-    const dailyButton = screen.getByRole('button', { name: /Scheduled discovery/i });
+    const recommendationButton = screen.getByRole('button', { name: /Scheduled discovery/i });
     await user.click(conversationButton);
     expect(conversationButton).toHaveAttribute('aria-pressed', 'true');
-    await user.click(dailyButton);
-    expect(dailyButton).toHaveAttribute('aria-pressed', 'true');
+    await user.click(recommendationButton);
+    expect(recommendationButton).toHaveAttribute('aria-pressed', 'true');
     expect(conversationButton).toHaveAttribute('aria-pressed', 'false');
 
-    dailyRequest.resolve(success({ status: 'found', trace: { ...detail, summary: dailySummary } }));
+    recommendationRequest.resolve(success({
+      status: 'found', trace: { ...detail, summary: recommendationSummary },
+    }));
     await waitFor(() => expect(screen.getAllByText('Scheduled discovery')).toHaveLength(2));
     conversationRequest.resolve(success({ status: 'found', trace: detail }));
     await waitFor(() => expect(screen.getAllByText('Scheduled discovery')).toHaveLength(2));
@@ -177,10 +179,10 @@ const summary = {
   durationMs: 1_000, spanCount: 1, eventCount: 1, contentCount: 1, issueCount: 1,
 };
 
-const dailySummary = {
-  traceId: 'trace:daily:1', traceKind: 'daily_recommendation' as const,
+const recommendationSummary = {
+  traceId: 'trace:recommendation:1', traceKind: 'recommendation' as const,
   status: 'error' as const, diagnostics: 'complete' as const,
-  correlation: { executionId: 'execution:2', batchId: 'batch:1' },
+  correlation: { executionId: 'execution:2', requestId: 'request:1' },
   startedAt: '2026-08-26T07:30:00.000Z', endedAt: '2026-08-26T07:30:42.000Z',
   durationMs: 42_000, spanCount: 2, eventCount: 0, contentCount: 1, issueCount: 0,
 };

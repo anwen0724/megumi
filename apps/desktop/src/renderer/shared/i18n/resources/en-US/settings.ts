@@ -348,7 +348,7 @@ export const settings = {
       userDeny: 'User denied', cancelled: 'Cancelled',
     },
     traceKinds: {
-      conversation: 'Conversation', interestUnderstanding: 'Interest understanding', dailyRecommendation: 'Daily recommendation', candidateSupply: 'Candidate supply',
+      conversation: 'Conversation', interestUnderstanding: 'Interest understanding', recommendation: 'Recommendation', candidateSupply: 'Candidate supply',
       preferenceLearning: 'Preference learning',
     },
     candidateSupplyRun: 'Replenish Candidate Pool',

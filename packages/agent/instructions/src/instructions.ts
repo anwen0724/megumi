@@ -9,7 +9,7 @@ import { loadSystemInstructionDocuments } from './instruction-content-loader';
 
 export type InstructionProfile =
   | 'conversation'
-  | 'daily_recommendation'
+  | 'recommendation'
   | 'candidate_supply'
   | 'preference_learning';
 

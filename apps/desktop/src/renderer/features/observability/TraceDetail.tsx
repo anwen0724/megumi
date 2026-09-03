@@ -543,7 +543,7 @@ function captureReason(reason: string, t: TFunction<'settings'>): string {
 function traceKindName(kind: string, t: TFunction<'settings'>): string {
   if (kind === 'conversation') return t('diagnostics.traceKinds.conversation');
   if (kind === 'interest_understanding') return t('diagnostics.traceKinds.interestUnderstanding');
-  if (kind === 'daily_recommendation') return t('diagnostics.traceKinds.dailyRecommendation');
+  if (kind === 'recommendation') return t('diagnostics.traceKinds.recommendation');
   if (kind === 'candidate_supply') return t('diagnostics.traceKinds.candidateSupply');
   if (kind === 'preference_learning') return t('diagnostics.traceKinds.preferenceLearning');
   return t('diagnostics.unknownTraceKind');

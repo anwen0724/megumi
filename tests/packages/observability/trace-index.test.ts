@@ -33,7 +33,7 @@ describe('Trace Index', () => {
     };
     index.replace({ traces: [trace], records: [locator], checkpoints: [checkpoint] });
 
-    expect(traceIds(index.queryTraces({ traceKind: 'daily_recommendation' }))).toEqual([trace.traceId]);
+    expect(traceIds(index.queryTraces({ traceKind: 'recommendation' }))).toEqual([trace.traceId]);
     expect(traceIds(index.queryTraces({ status: 'ok' }))).toEqual([trace.traceId]);
     expect(traceIds(index.queryTraces({ spanName: 'source.search' }))).toEqual([trace.traceId]);
     expect(traceIds(index.queryTraces({ contentKind: 'source.result' }))).toEqual([trace.traceId]);
@@ -43,7 +43,6 @@ describe('Trace Index', () => {
       { sessionId: 'session-1' },
       { messageId: 'message-1' },
       { workspaceId: 'workspace-1' },
-      { dailyRecommendationBatchId: 'daily-batch-1' },
       { preferenceLearningBatchId: 'preference-batch-1' },
       { compactionId: 'compaction-1' },
       { modelCallId: 'model-call-1' },
@@ -125,14 +124,13 @@ function indexedTrace() {
     {
       ...base(traceId, 1),
       type: 'trace.started',
-      traceKind: 'daily_recommendation',
+      traceKind: 'recommendation',
       correlation: {
         requestId: 'request-1',
         executionId: 'execution-1',
         sessionId: 'session-1',
         messageId: 'message-1',
         workspaceId: 'workspace-1',
-        dailyRecommendationBatchId: 'daily-batch-1',
         preferenceLearningBatchId: 'preference-batch-1',
         compactionId: 'compaction-1',
         modelCallId: 'model-call-1',

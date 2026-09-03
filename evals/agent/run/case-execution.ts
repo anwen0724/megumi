@@ -45,9 +45,9 @@ type CaseExecutionRuntime = {
       | 'getInterestFacts'
       | 'requestCandidateSupply'
       | 'getCandidatePool'
-      | 'ensureDaily'
-      | 'waitDailyBatch'
-      | 'getDailyRecommendationFacts'
+      | 'requestRecommendation'
+      | 'waitRecommendation'
+      | 'getRecommendationCollection'
       | 'updateRecommendationState'
       | 'waitPreferenceLearning'
       | 'getPreferenceLearningFacts'>;
@@ -66,7 +66,7 @@ export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlin
     case 'conversation': return executeConversation(executionInput);
     case 'interest_understanding': return executeInterestUnderstanding(executionInput);
     case 'candidate_supply': return executeCandidateSupply(executionInput);
-    case 'daily_recommendation': return executeDailyRecommendation(executionInput);
+    case 'recommendation': return executeRecommendation(executionInput);
     case 'preference_learning': return executePreferenceLearning(executionInput);
   }
 }
@@ -264,32 +264,37 @@ async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseEx
   });
 }
 
-async function executeDailyRecommendation(input: CaseExecutionInput): Promise<CaseExecutionResult> {
-  const accepted = await input.runtime.host.discovery.ensureDaily({ trigger: 'manual', now: input.now() });
+async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExecutionResult> {
+  if (input.evaluationCase.type !== 'recommendation') throw new Error('Recommendation Case is required.');
+  const accepted = await input.runtime.host.discovery.requestRecommendation({
+    trigger: input.evaluationCase.input.trigger,
+  });
   if (accepted.status !== 'started' && accepted.status !== 'in_progress') {
     return execution({
-      caseType: 'daily_recommendation', terminalState: 'settled',
+      caseType: 'recommendation', terminalState: 'settled',
       productResult: { accepted },
-      ownerFacts: {},
-      businessIds: 'batchId' in accepted ? { dailyRecommendationBatchId: accepted.batchId } : {},
+      ownerFacts: accepted.status === 'already_published' ? accepted.collection : {},
+      businessIds: accepted.status === 'already_published'
+        ? { recommendationIds: accepted.collection.items.map(({ id }) => id) }
+        : {},
       traceTargets: [],
     });
   }
-  const completion = await waitForBackgroundResult({
-    deadlineMs: input.safetyDeadlineMs,
-    wait: (timeoutMs) => input.runtime.host.discovery.waitDailyBatch({
-      localDate: accepted.localDate,
-      timeoutMs,
+  const completion = await waitForProductResult(
+    input.runtime.host.discovery.waitRecommendation({
+      requestId: accepted.requestId,
+      timeoutMs: Math.min(300_000, Math.max(1, input.safetyDeadlineMs - Date.now())),
     }),
-  });
-  const traceTargets = dailyTraceTargets(accepted);
+    input.safetyDeadlineMs,
+  );
+  const traceTargets = recommendationTraceTargets(accepted.requestId);
   const baseBusinessIds = {
-    dailyRecommendationBatchId: accepted.batchId,
-    initialExecutionId: accepted.executionId,
+    requestId: accepted.requestId,
+    executionIds: [accepted.executionId],
   };
-  if (completion.status === 'interrupted') {
+  if (completion.status === 'interrupted' || completion.value.status === 'timed_out') {
     return execution({
-      caseType: 'daily_recommendation', terminalState: 'interrupted',
+      caseType: 'recommendation', terminalState: 'interrupted',
       productResult: { accepted },
       ownerFacts: {},
       businessIds: baseBusinessIds,
@@ -297,18 +302,22 @@ async function executeDailyRecommendation(input: CaseExecutionInput): Promise<Ca
       interruption: safetyInterruption(input),
     });
   }
-  const facts = await input.runtime.host.discovery.getDailyRecommendationFacts({
-    executionId: completion.value.executionId,
-    batchId: accepted.batchId,
-    localDate: accepted.localDate,
-  });
+  const facts = completion.value.status === 'published'
+    ? await input.runtime.host.discovery.getRecommendationCollection({
+        localDate: accepted.localDate,
+        includeHidden: true,
+      })
+    : null;
+  const recommendationIds = completion.value.status === 'published'
+    ? completion.value.collection.items.map(({ id }) => id)
+    : [];
   return execution({
-    caseType: 'daily_recommendation', terminalState: 'settled',
+    caseType: 'recommendation', terminalState: 'settled',
     productResult: { accepted, completion: completion.value },
     ownerFacts: facts,
     businessIds: {
       ...baseBusinessIds,
-      settledExecutionId: completion.value.executionId,
+      recommendationIds,
     },
     traceTargets,
   });
@@ -325,8 +334,7 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
     action: 'set_reaction',
     reaction: input.evaluationCase.input.reaction === 'none' ? null : input.evaluationCase.input.reaction,
   });
-  const receipt = updated.feedbackChange;
-  if (!receipt?.changed || !receipt.feedbackChangeId) {
+  if (updated.status === 'not_found') {
     return execution({
       caseType: 'preference_learning', terminalState: 'settled',
       productResult: { updated },
@@ -335,38 +343,38 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
       traceTargets: [],
     });
   }
-  const completion = await waitForBackgroundResult({
-    deadlineMs: input.safetyDeadlineMs,
-    wait: (timeoutMs) => input.runtime.host.discovery.waitPreferenceLearning({
-      feedbackChangeId: receipt.feedbackChangeId,
-      timeoutMs,
+  const completion = await waitForProductResult(
+    input.runtime.host.discovery.waitPreferenceLearning({
+      recommendationId,
+      timeoutMs: Math.min(300_000, Math.max(1, input.safetyDeadlineMs - Date.now())),
     }),
-  });
-  if (completion.status === 'interrupted') {
+    input.safetyDeadlineMs,
+  );
+  if (completion.status === 'interrupted' || completion.value.status === 'timed_out') {
     return execution({
       caseType: 'preference_learning', terminalState: 'interrupted',
       productResult: { updated },
       ownerFacts: {},
-      businessIds: { recommendationId, feedbackChangeId: receipt.feedbackChangeId },
+      businessIds: { recommendationId },
       traceTargets: [],
       interruption: safetyInterruption(input),
     });
   }
-  const facts = completion.value.batchId
-    ? await input.runtime.host.discovery.getPreferenceLearningFacts({ batchId: completion.value.batchId })
+  const learned = completion.value.value;
+  const facts = learned.batchId
+    ? await input.runtime.host.discovery.getPreferenceLearningFacts({ batchId: learned.batchId })
     : undefined;
   return execution({
     caseType: 'preference_learning', terminalState: 'settled',
-    productResult: { updated, completion: completion.value },
+    productResult: { updated, completion: learned },
     ownerFacts: facts ?? {},
     businessIds: {
       recommendationId,
-      feedbackChangeId: receipt.feedbackChangeId,
-      ...(completion.value.batchId ? { preferenceLearningBatchId: completion.value.batchId } : {}),
+      ...(learned.batchId ? { preferenceLearningBatchId: learned.batchId } : {}),
     },
-    traceTargets: completion.value.batchId ? [{
+    traceTargets: learned.batchId ? [{
       traceKind: 'preference_learning',
-      correlation: { preferenceLearningBatchId: completion.value.batchId },
+      correlation: { preferenceLearningBatchId: learned.batchId },
       expectation: 'required',
     }] : [],
   });
@@ -502,22 +510,6 @@ async function readInterestUnderstandingOutcome(
   return InterestUnderstandingOutcomeSchema.parse(JSON.parse(serialized));
 }
 
-async function waitForBackgroundResult<T>(input: {
-  readonly deadlineMs: number;
-  readonly wait: (timeoutMs: number) => Promise<
-    | { readonly status: 'completed'; readonly value: T }
-    | { readonly status: 'timed_out' }
-  >;
-}): Promise<ProductWaitResult<T>> {
-  while (Date.now() < input.deadlineMs) {
-    const timeoutMs = Math.min(300_000, Math.max(1, input.deadlineMs - Date.now()));
-    const result = await input.wait(timeoutMs);
-    if (result.status === 'completed') return result;
-    if (timeoutMs === 1 || Date.now() >= input.deadlineMs) break;
-  }
-  return { status: 'interrupted' };
-}
-
 function execution(value: CaseExecutionResult): CaseExecutionResult {
   return value;
 }
@@ -534,14 +526,10 @@ function conversationTraceTarget(correlation: {
   return { traceKind: 'conversation', correlation, expectation: 'required' };
 }
 
-function dailyTraceTargets(
-  value: Extract<Awaited<ReturnType<ProductRuntime['host']['discovery']['ensureDaily']>>, {
-    readonly status: 'started' | 'in_progress';
-  }>,
-): CaseTraceTarget[] {
+function recommendationTraceTargets(requestId: string): CaseTraceTarget[] {
   return [{
-    traceKind: 'daily_recommendation',
-    correlation: { dailyRecommendationBatchId: value.batchId },
+    traceKind: 'recommendation',
+    correlation: { requestId },
     expectation: 'required',
   }];
 }

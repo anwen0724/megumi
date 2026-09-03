@@ -7,7 +7,7 @@ import { DiagnosticErrorSchema, type DiagnosticError } from '../diagnostic-error
 export const TraceKindSchema = z.enum([
   'conversation',
   'interest_understanding',
-  'daily_recommendation',
+  'recommendation',
   'candidate_supply',
   'preference_learning',
 ]);
@@ -41,8 +41,8 @@ export const TRACE_SPAN_NAMES = [
   'candidate.supply.check',
   'candidate.submit',
   'candidate.pool.snapshot',
-  'daily.batch.claim',
-  'daily.attempt.settle',
+  'recommendation.snapshot',
+  'recommendation.attempt.settle',
   'recommendation.publish',
   'preference.batch.claim',
   'preference.commit',
@@ -72,7 +72,6 @@ export interface TraceCorrelation {
   readonly sessionId?: string;
   readonly messageId?: string;
   readonly workspaceId?: string;
-  readonly dailyRecommendationBatchId?: string;
   readonly preferenceLearningBatchId?: string;
   /** Retained only so the Reader can decode v1 Journal records written before explicit batch identities. */
   readonly batchId?: string;
@@ -97,7 +96,6 @@ export const TRACE_CORRELATION_STRING_KEYS = [
   'sessionId',
   'messageId',
   'workspaceId',
-  'dailyRecommendationBatchId',
   'preferenceLearningBatchId',
   'batchId',
   'compactionId',
@@ -132,7 +130,6 @@ export const TraceCorrelationSchema: z.ZodType<TraceCorrelation> = z.object({
   sessionId: z.string().optional(),
   messageId: z.string().optional(),
   workspaceId: z.string().optional(),
-  dailyRecommendationBatchId: z.string().optional(),
   preferenceLearningBatchId: z.string().optional(),
   batchId: z.string().optional(),
   compactionId: z.string().optional(),
@@ -227,6 +224,12 @@ export const TraceEventSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('recommendation.selection.conflict'),
     conflictCount: z.number().int().positive(),
+  }).strict(),
+  z.object({
+    type: z.literal('recommendation.working_set.expanded'),
+    requestId: z.string().min(1),
+    executionId: z.string().min(1),
+    exposedCount: z.number().int().nonnegative(),
   }).strict(),
 ]);
 export type TraceEvent = z.infer<typeof TraceEventSchema>;

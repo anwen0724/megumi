@@ -156,12 +156,13 @@ export const CandidateSupplyCaseSchema = z.object({
   }).strict().optional(),
 }).strict();
 
-export const DailyRecommendationCaseSchema = z.object({
+export const RecommendationCaseSchema = z.object({
   ...CaseBaseShape,
-  type: z.literal('daily_recommendation'),
+  type: z.literal('recommendation'),
   initialState: z.object({
     clock: TimestampSchema,
-    dailyTargetCount: z.number().int().min(1).max(100),
+    recommendationTargetCount: z.number().int().min(1).max(100),
+    recommendationWorkingSetCount: z.number().int().min(1).max(200),
     interests: z.array(InterestDataSchema).min(1),
     candidates: z.array(CandidateDataSchema).min(1),
     previousRecommendations: z.array(RecommendationDataSchema).default([]),
@@ -171,11 +172,11 @@ export const DailyRecommendationCaseSchema = z.object({
   expected: z.object({
     recommendableCandidateReferenceIds: z.array(ReferenceIdSchema).optional(),
     excludedCandidateReferenceIds: z.array(ReferenceIdSchema).optional(),
-    allowedBatchOutcomes: z.array(z.enum(['published', 'failed'])).min(1).optional(),
+    allowedOutcomes: z.array(z.enum(['published', 'failed'])).min(1).optional(),
   }).strict().optional(),
 }).strict();
 
-const FeedbackDataSchema = z.object({
+const ReactionDataSchema = z.object({
   referenceId: ReferenceIdSchema,
   recommendationReferenceId: ReferenceIdSchema,
   reaction: z.enum(['liked', 'disliked', 'none']),
@@ -189,7 +190,7 @@ export const PreferenceLearningCaseSchema = z.object({
     interests: z.array(InterestDataSchema).min(1),
     candidates: z.array(CandidateDataSchema).min(1),
     recommendations: z.array(RecommendationDataSchema).min(1),
-    existingFeedback: z.array(FeedbackDataSchema).default([]),
+    existingReactions: z.array(ReactionDataSchema).default([]),
     preferences: z.array(PreferenceDataSchema).default([]),
   }).strict(),
   input: z.object({
@@ -208,7 +209,7 @@ const EvaluationCaseUnionSchema = z.discriminatedUnion('type', [
   ConversationCaseSchema,
   InterestUnderstandingCaseSchema,
   CandidateSupplyCaseSchema,
-  DailyRecommendationCaseSchema,
+  RecommendationCaseSchema,
   PreferenceLearningCaseSchema,
 ]);
 export type EvaluationCase = z.infer<typeof EvaluationCaseUnionSchema>;
@@ -269,10 +270,19 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
     }
     return;
   }
-  const recommendationPath = evaluationCase.type === 'daily_recommendation'
+  if (evaluationCase.type === 'recommendation'
+    && evaluationCase.initialState.recommendationWorkingSetCount
+      < evaluationCase.initialState.recommendationTargetCount) {
+    context.addIssue({
+      code: 'custom',
+      path: ['initialState', 'recommendationWorkingSetCount'],
+      message: 'recommendationWorkingSetCount cannot be smaller than recommendationTargetCount.',
+    });
+  }
+  const recommendationPath = evaluationCase.type === 'recommendation'
     ? 'previousRecommendations'
     : 'recommendations';
-  const recommendations = evaluationCase.type === 'daily_recommendation'
+  const recommendations = evaluationCase.type === 'recommendation'
     ? evaluationCase.initialState.previousRecommendations
     : evaluationCase.initialState.recommendations;
   const recommendationIds = new Set(recommendations.map((recommendation) => recommendation.referenceId));
@@ -286,8 +296,8 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
   }
   if (evaluationCase.type === 'preference_learning') {
     addMissingReference(recommendationIds, evaluationCase.input.recommendationReferenceId, ['input', 'recommendationReferenceId'], 'Recommendation', context);
-    for (const [index, feedback] of evaluationCase.initialState.existingFeedback.entries()) {
-      addMissingReference(recommendationIds, feedback.recommendationReferenceId, ['initialState', 'existingFeedback', index, 'recommendationReferenceId'], 'Recommendation', context);
+    for (const [index, reaction] of evaluationCase.initialState.existingReactions.entries()) {
+      addMissingReference(recommendationIds, reaction.recommendationReferenceId, ['initialState', 'existingReactions', index, 'recommendationReferenceId'], 'Recommendation', context);
     }
   }
 }

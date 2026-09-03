@@ -95,9 +95,9 @@ export function createCandidateSupplyRepository(
         },
       });
     },
-    readCandidatePoolSnapshot(settings) {
+    getCandidatePoolSnapshot(settings) {
       return database.transaction({
-        operation: () => readCandidatePoolSnapshot(database, options.clock.now(), settings),
+        operation: () => getCandidatePoolSnapshot(database, options.clock.now(), settings),
       });
     },
     submitCandidate(request) {
@@ -192,7 +192,7 @@ function submitCandidate(
   };
 }
 
-function readCandidatePoolSnapshot(
+function getCandidatePoolSnapshot(
   database: DatabaseConnection,
   at: string,
   settingsInput: CandidatePoolSettings,

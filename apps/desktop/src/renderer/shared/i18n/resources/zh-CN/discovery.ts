@@ -79,7 +79,7 @@ export const discovery = {
   settingsDescription: '设置 Megumi 每天生成发现的时间、数量和使用的内容来源。',
   recognition: '允许从已授权会话中理解关注',
   generationTime: '每日生成时间',
-  targetCount: '每日推荐数量',
+  targetCount: '推荐数量',
   sources: '内容来源',
   sourcesDescription: '至少保留一个内容来源，后续接入的新来源也会显示在这里。',
   configureSources: '配置',

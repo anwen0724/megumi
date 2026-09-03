@@ -10,7 +10,7 @@ describe('DiscoveryPage', () => {
   const searchRecommendations = vi.fn();
   const updateRecommendationState = vi.fn();
   const changeInterest = vi.fn();
-  const ensureDaily = vi.fn();
+  const requestRecommendation = vi.fn();
   const configurationGet = vi.fn();
   const configurationUpdate = vi.fn();
 
@@ -23,23 +23,30 @@ describe('DiscoveryPage', () => {
       recommendations: [recommendation({ recommendationId: 'recommendation:search', title: 'Agent 搜索结果' })],
     }));
     updateRecommendationState.mockReset().mockImplementation(async (request) => ok({
-      ...recommendation(),
-      favorite: request.payload.action === 'set_favorite' ? request.payload.favorite : false,
+      status: 'updated',
+      state: recommendationState({
+        favoriteAt: request.payload.action === 'set_favorite' && request.payload.favorite
+          ? '2026-08-22T10:00:00.000Z'
+          : undefined,
+      }),
     }));
     changeInterest.mockReset().mockResolvedValue(ok({
       interestId: 'interest:2', description: '秋招信息', status: 'active', createdFrom: 'manual',
       userManagedAt: '2026-08-22T08:00:00.000Z', createdAt: '2026-08-22T08:00:00.000Z', updatedAt: '2026-08-22T08:00:00.000Z',
     }));
-    ensureDaily.mockReset().mockResolvedValue(ok({ status: 'started', localDate: '2026-08-22', batchId: 'batch:2', executionId: 'execution:2' }));
+    requestRecommendation.mockReset().mockResolvedValue(ok({
+      status: 'started', requestId: 'request:2', executionId: 'execution:2',
+    }));
     configurationGet.mockReset().mockResolvedValue(ok(discoveryConfiguration()));
     configurationUpdate.mockReset().mockImplementation(async (request) => ok(discoveryConfiguration({
-      dailyTargetCount: request.payload.dailyTargetCount,
+      recommendationTargetCount: request.payload.recommendationTargetCount,
     })));
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
         discovery: {
-          getHome, searchRecommendations, updateRecommendationState, changeInterest, ensureDaily,
+          getHome, searchRecommendations, updateRecommendationState, changeInterest,
+          requestRecommendation,
           getConfiguration: configurationGet, updateConfiguration: configurationUpdate,
         },
       },
@@ -185,7 +192,7 @@ describe('DiscoveryPage', () => {
 
     expect(searchRecommendations).toHaveBeenCalledOnce();
     expect(searchRecommendations.mock.calls[0][0].payload).toEqual({ query: 'Agent', limit: 60 });
-    expect(ensureDaily).not.toHaveBeenCalled();
+    expect(requestRecommendation).not.toHaveBeenCalled();
     expect(await screen.findByText('Agent 搜索结果')).toBeInTheDocument();
     expect(screen.getAllByTestId(/^recommendation-recommendation:/)).toHaveLength(8);
     expect(screen.queryByRole('button', { name: /显示更多/ })).not.toBeInTheDocument();
@@ -230,16 +237,16 @@ describe('DiscoveryPage', () => {
     expect(screen.getByRole('switch', { name: '开放 Web' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
-    const count = screen.getByRole('spinbutton', { name: '每日推荐数量' });
+    const count = screen.getByRole('spinbutton', { name: '推荐数量' });
     await user.clear(count);
     await user.type(count, '36');
     await user.click(screen.getByRole('button', { name: '保存发现设置' }));
 
     expect(configurationUpdate.mock.calls.at(-1)?.[0].payload).toMatchObject({
-      dailyTargetCount: 36,
+      recommendationTargetCount: 36,
       enabledSources: ['bilibili', 'open_web'],
     });
-    expect(ensureDaily).not.toHaveBeenCalled();
+    expect(requestRecommendation).not.toHaveBeenCalled();
   });
 
   it('keeps interests readable until edited and places destructive actions in an overflow menu', async () => {
@@ -296,7 +303,7 @@ describe('DiscoveryPage', () => {
     getHome.mockResolvedValue(ok({
       ...homeView(),
       today: {
-        localDate: '2026-08-22', status: 'failed', batchId: 'batch:1', executionId: 'execution:1', resultCount: 0,
+        localDate: '2026-08-22', status: 'failed', requestId: 'request:1', executionId: 'execution:1', resultCount: 0,
         failure: { code: 'source_unavailable', message: '暂时无法访问内容来源。', retryable: true },
       },
       days: [],
@@ -307,7 +314,7 @@ describe('DiscoveryPage', () => {
     expect(await screen.findByText('今天的发现生成失败。')).toBeInTheDocument();
     expect(screen.getByText('暂时无法访问内容来源。')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '重试' }));
-    expect(ensureDaily).toHaveBeenCalledOnce();
+    expect(requestRecommendation).toHaveBeenCalledOnce();
   });
 
   it('shows Candidate replenishment and refreshes until Daily Recommendation advances', async () => {
@@ -343,8 +350,9 @@ function homeView(options: {
   return {
     mode: options.mode ?? 'timeline',
     today: {
-      localDate: '2026-08-22', status: 'published' as const, batchId: 'batch:1', executionId: 'execution:1',
-      targetCount: 20, resultCount: 1, publishedAt: '2026-08-22T08:00:00.000Z',
+      localDate: '2026-08-22', status: 'published' as const,
+      requestId: 'request:1', executionId: 'execution:1', resultCount: 1,
+      publishedAt: '2026-08-22T08:00:00.000Z',
     },
     days: [{ localDate: '2026-08-22', recommendations: options.recommendations ?? [recommendation()] }],
     interests: [{
@@ -359,12 +367,24 @@ function homeView(options: {
 
 function recommendation(overrides: Record<string, unknown> = {}) {
   return {
-    recommendationId: 'recommendation:1', batchId: 'batch:1', localDate: '2026-08-22', position: 0,
+    recommendationId: 'recommendation:1', localDate: '2026-08-22', position: 0,
     sourceId: 'bilibili', sourceName: 'Bilibili', canonicalUrl: 'https://www.bilibili.com/video/BV1', contentType: 'video' as const,
     sourceContentId: 'BV1', title: 'Agent Harness 深入实践', author: '技术UP主',
     contentPublishedAt: '2026-08-21T09:00:00.000Z', description: '从运行循环到工具环境的完整拆解。',
+    contentSummary: 'Agent Harness 工程实践摘要。',
     coverUrl: 'https://i.example.com/cover.jpg', recommendationReason: '因为它直接讨论你关心的工程实现。',
     hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T08:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function recommendationState(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'recommendation-state:1',
+    recommendationId: 'recommendation:1',
+    reactionRevision: 0,
+    learnedReactionRevision: 0,
+    updatedAt: '2026-08-22T10:00:00.000Z',
     ...overrides,
   };
 }
@@ -372,8 +392,9 @@ function recommendation(overrides: Record<string, unknown> = {}) {
 function discoveryConfiguration(overrides: Record<string, unknown> = {}) {
   return {
     conversationRecognitionEnabled: false,
-    dailyGenerationTime: '08:00',
-    dailyTargetCount: 20,
+    recommendationGenerationTime: '08:00',
+    recommendationTargetCount: 20,
+    recommendationWorkingSetCount: 80,
     sources: [
       { sourceId: 'bilibili', name: '哔哩哔哩', access: 'public_http' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: true, connectionState: 'ready' as const },
       { sourceId: 'open_web', name: '开放 Web', access: 'configured_provider' as const, supportedModes: ['relevance' as const, 'recent' as const], enabled: true, connectionState: 'ready' as const },

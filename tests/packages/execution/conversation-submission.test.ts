@@ -101,7 +101,7 @@ describe('Conversation Submission Trace', () => {
     const conversation = createConversationSubmission({
       dependencies: dependencies({
         observability,
-        recommendations: { readRecommendationReference: () => ({
+        recommendations: { getRecommendationReference: () => ({
           type: 'recommendation_reference', recommendationId: 'recommendation:1',
           sourceName: 'Source', canonicalUrl: 'https://example.com/item', title: 'Item',
           description: 'Description', recommendationReason: 'Relevant',

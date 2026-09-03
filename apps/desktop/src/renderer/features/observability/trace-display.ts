@@ -11,7 +11,7 @@ export interface TraceDisplayLabels {
   readonly conversationFallback: string;
   readonly deletedSession: string;
   readonly unassignedSession: string;
-  readonly dailyRecommendation: string;
+  readonly recommendation: string;
   readonly scheduledDiscovery: string;
   readonly candidateSupply: string;
   readonly candidateSupplyRun: string;
@@ -21,7 +21,7 @@ export interface TraceDisplayLabels {
   readonly interestUnderstandingRun: string;
 }
 
-type TraceDisplayKind = 'conversation' | 'interest_understanding' | 'daily_recommendation'
+type TraceDisplayKind = 'conversation' | 'interest_understanding' | 'recommendation'
   | 'candidate_supply' | 'preference_learning';
 
 export interface TraceDisplayItem {
@@ -67,14 +67,14 @@ export function createTraceDisplayItems(input: {
   );
 
   return input.traces.map((summary) => {
-    if (summary.traceKind === 'daily_recommendation') {
+    if (summary.traceKind === 'recommendation') {
       const day = formatTraceDay(summary.startedAt, input.locale);
       return {
         summary,
         title: input.labels.scheduledDiscovery,
         groupId: `daily:${day}`,
-        groupTitle: `${input.labels.dailyRecommendation} · ${day}`,
-        groupKind: 'daily_recommendation',
+        groupTitle: `${input.labels.recommendation} · ${day}`,
+        groupKind: 'recommendation',
       };
     }
     if (summary.traceKind === 'candidate_supply') {

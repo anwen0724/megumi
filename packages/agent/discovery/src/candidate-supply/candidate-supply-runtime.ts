@@ -159,7 +159,7 @@ async function runCheck(
   if (activeInterests.length === 0) {
     return notNeeded(requestId, trigger, requestedAt, options.now(), 'no_active_interest');
   }
-  const before = options.repository.readCandidatePoolSnapshot(poolSettings);
+  const before = options.repository.getCandidatePoolSnapshot(poolSettings);
   if (before.minimumShortfall === 0) {
     return notNeeded(requestId, trigger, requestedAt, options.now(), 'no_gap');
   }
@@ -347,7 +347,7 @@ function safeSnapshot(
   settings: ReturnType<typeof candidatePoolSettings>,
 ): CandidatePoolSnapshot | undefined {
   try {
-    return repository.readCandidatePoolSnapshot(settings);
+    return repository.getCandidatePoolSnapshot(settings);
   } catch {
     return undefined;
   }

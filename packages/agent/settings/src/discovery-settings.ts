@@ -1,4 +1,4 @@
-/* Defines persisted and resolved settings for personalized daily discovery. */
+/* Defines persisted and resolved settings for personalized discovery. */
 import { z } from 'zod';
 
 export const DiscoverySourceIdSchema = z.string().trim().min(1);
@@ -20,10 +20,11 @@ export const TwitterAttemptBudgetResolvedSchema = z.object({
   max_results_per_attempt: z.number().int().min(1).max(200),
 }).strict();
 
-export const DiscoverySettingsRawSchema = z.object({
+const DiscoverySettingsRawShape = {
   conversation_recognition_enabled: z.boolean().optional(),
-  daily_generation_time: LocalTimeSchema.optional(),
-  daily_target_count: z.number().int().min(1).max(100).optional(),
+  recommendation_generation_time: LocalTimeSchema.optional(),
+  recommendation_target_count: z.number().int().min(1).max(100).optional(),
+  recommendation_working_set_count: z.number().int().min(1).max(200).optional(),
   enabled_sources: SourceIdsSchema.optional(),
   candidate_pool_minimum_count: z.number().int().positive().optional(),
   candidate_pool_maximum_count: z.number().int().positive().optional(),
@@ -31,21 +32,36 @@ export const DiscoverySettingsRawSchema = z.object({
   candidate_content_excerpt_max_characters: z.number().int().positive().optional(),
   candidate_supply_check_interval_minutes: z.number().int().positive().optional(),
   twitter_budget: TwitterAttemptBudgetRawSchema.optional(),
-}).strict();
+} as const;
+
+export const DiscoverySettingsRawSchema = z.object(DiscoverySettingsRawShape).strict().superRefine((settings, context) => {
+  if (settings.recommendation_target_count !== undefined
+    && settings.recommendation_working_set_count !== undefined
+    && settings.recommendation_target_count > settings.recommendation_working_set_count) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Recommendation target exceeds working set.' });
+  }
+  if (settings.recommendation_working_set_count !== undefined
+    && settings.candidate_pool_maximum_count !== undefined
+    && settings.recommendation_working_set_count > settings.candidate_pool_maximum_count) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Recommendation working set exceeds Candidate Pool.' });
+  }
+});
 
 const DiscoveryProviderCredentialFileSchema = z.object({
   credential: z.string().trim().min(1).optional(),
 }).passthrough();
 
-export const DiscoverySettingsFileRawSchema = DiscoverySettingsRawSchema.extend({
+export const DiscoverySettingsFileRawSchema = z.object({
+  ...DiscoverySettingsRawShape,
   zhihu: DiscoveryProviderCredentialFileSchema.optional(),
   twitter: DiscoveryProviderCredentialFileSchema.optional(),
 }).passthrough();
 
 export const DiscoverySettingsResolvedSchema = z.object({
   conversation_recognition_enabled: z.boolean(),
-  daily_generation_time: LocalTimeSchema,
-  daily_target_count: z.number().int().min(1).max(100),
+  recommendation_generation_time: LocalTimeSchema,
+  recommendation_target_count: z.number().int().min(1).max(100),
+  recommendation_working_set_count: z.number().int().min(1).max(200),
   enabled_sources: SourceIdsSchema,
   candidate_pool_minimum_count: z.number().int().positive(),
   candidate_pool_maximum_count: z.number().int().positive(),
@@ -54,10 +70,12 @@ export const DiscoverySettingsResolvedSchema = z.object({
   candidate_supply_check_interval_minutes: z.number().int().positive(),
   twitter_budget: TwitterAttemptBudgetResolvedSchema,
 }).strict().refine(
-  ({ candidate_pool_minimum_count: minimum, candidate_pool_maximum_count: maximum }) => (
-    minimum < Math.floor(maximum * 0.8)
+  (settings) => (
+    settings.candidate_pool_minimum_count < Math.floor(settings.candidate_pool_maximum_count * 0.8)
+      && settings.recommendation_target_count <= settings.recommendation_working_set_count
+      && settings.recommendation_working_set_count <= settings.candidate_pool_maximum_count
   ),
-  'candidate_pool_minimum_count must be lower than 80% of candidate_pool_maximum_count.',
+  'Discovery count settings are inconsistent.',
 );
 
 export type DiscoverySourceId = z.infer<typeof DiscoverySourceIdSchema>;
@@ -66,8 +84,9 @@ export type DiscoverySettingsResolved = z.infer<typeof DiscoverySettingsResolved
 
 export const DEFAULT_DISCOVERY_SETTINGS = DiscoverySettingsResolvedSchema.parse({
   conversation_recognition_enabled: false,
-  daily_generation_time: '08:00',
-  daily_target_count: 20,
+  recommendation_generation_time: '08:00',
+  recommendation_target_count: 20,
+  recommendation_working_set_count: 80,
   enabled_sources: ['bilibili', 'open_web'],
   candidate_pool_minimum_count: 100,
   candidate_pool_maximum_count: 200,

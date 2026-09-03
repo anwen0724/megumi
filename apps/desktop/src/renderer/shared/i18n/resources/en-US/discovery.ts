@@ -76,7 +76,7 @@ export const discovery = {
   settingsDescription: 'Choose when Megumi prepares discoveries and how many it should aim for.',
   recognition: 'Understand interests from allowed conversations',
   generationTime: 'Generation time',
-  targetCount: 'Daily recommendation count',
+  targetCount: 'Recommendation count',
   sources: 'Sources',
   sourcesDescription: 'At least one content source must remain enabled.',
   configureSources: 'Configure',

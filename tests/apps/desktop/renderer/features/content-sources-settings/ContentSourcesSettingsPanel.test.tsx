@@ -108,8 +108,9 @@ function settings() {
 function configuration() {
   return {
     conversationRecognitionEnabled: false,
-    dailyGenerationTime: '08:00',
-    dailyTargetCount: 20,
+    recommendationGenerationTime: '08:00',
+    recommendationTargetCount: 20,
+    recommendationWorkingSetCount: 80,
     sources: [
       source('bilibili', '哔哩哔哩', 'public_http', 'ready'),
       source('open_web', '开放 Web', 'configured_provider', 'ready'),

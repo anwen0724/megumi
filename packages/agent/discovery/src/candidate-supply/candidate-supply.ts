@@ -131,7 +131,7 @@ export interface CandidateSupplyRepository {
   /** Reads one Candidate by any deterministic identity. */
   findCandidateByIdentity(identity: CandidateIdentity): CandidateWithMatches | undefined;
   /** Reads the current derived Candidate Pool and lazily expires its read range. */
-  readCandidatePoolSnapshot(settings: CandidatePoolSettings): CandidatePoolSnapshot;
+  getCandidatePoolSnapshot(settings: CandidatePoolSettings): CandidatePoolSnapshot;
   /** Atomically validates, deduplicates, capacity-checks, and persists one Candidate submission. */
   submitCandidate(request: SubmitCandidateRequest): CandidateSubmissionResult;
 }

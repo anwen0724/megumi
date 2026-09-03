@@ -14,21 +14,22 @@ import type { EvaluationCase, WorkspaceFileData } from '../contracts/evaluation-
 type ConversationCase = Extract<EvaluationCase, { readonly type: 'conversation' }>;
 type InterestUnderstandingCase = Extract<EvaluationCase, { readonly type: 'interest_understanding' }>;
 type CandidateSupplyCase = Extract<EvaluationCase, { readonly type: 'candidate_supply' }>;
-type DailyRecommendationCase = Extract<EvaluationCase, { readonly type: 'daily_recommendation' }>;
+type RecommendationCase = Extract<EvaluationCase, { readonly type: 'recommendation' }>;
 type PreferenceLearningCase = Extract<EvaluationCase, { readonly type: 'preference_learning' }>;
 
 export interface CaseInitialState {
   readonly clock: string;
-  readonly dailyTargetCount: number;
+  readonly recommendationTargetCount: number;
+  readonly recommendationWorkingSetCount: number;
   readonly candidatePoolMinimumCount: number;
   readonly candidatePoolMaximumCount: number;
   readonly workspaceFiles: readonly WorkspaceFileData[];
   readonly sessions: readonly ConversationCase['initialState']['sessionHistory'][number][];
   readonly interests: readonly CandidateSupplyCase['initialState']['interests'][number][];
-  readonly candidates: readonly DailyRecommendationCase['initialState']['candidates'][number][];
+  readonly candidates: readonly RecommendationCase['initialState']['candidates'][number][];
   readonly recommendations: readonly PreferenceLearningCase['initialState']['recommendations'][number][];
   readonly preferences: readonly PreferenceLearningCase['initialState']['preferences'][number][];
-  readonly existingFeedback: readonly PreferenceLearningCase['initialState']['existingFeedback'][number][];
+  readonly existingReactions: readonly PreferenceLearningCase['initialState']['existingReactions'][number][];
   readonly controlledSources: readonly CandidateSupplyCase['initialState']['controlledSources'][number][];
   readonly approvalDecisions: readonly ConversationCase['initialState']['approvalDecisions'][number][];
 }
@@ -39,44 +40,48 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
     case 'conversation':
       return {
         clock: evaluationCase.initialState.clock,
-        dailyTargetCount: 3,
+        recommendationTargetCount: 3,
+        recommendationWorkingSetCount: 20,
         candidatePoolMinimumCount: 100,
         candidatePoolMaximumCount: 200,
         workspaceFiles: evaluationCase.initialState.workspaceFiles,
         sessions: evaluationCase.initialState.sessionHistory,
-        interests: [], candidates: [], recommendations: [], preferences: [], existingFeedback: [],
+        interests: [], candidates: [], recommendations: [], preferences: [], existingReactions: [],
         controlledSources: evaluationCase.initialState.controlledWeb,
         approvalDecisions: evaluationCase.initialState.approvalDecisions,
       };
     case 'interest_understanding':
       return {
         clock: evaluationCase.initialState.clock,
-        dailyTargetCount: 3,
+        recommendationTargetCount: 3,
+        recommendationWorkingSetCount: 20,
         candidatePoolMinimumCount: 100,
         candidatePoolMaximumCount: 200,
         workspaceFiles: [],
         sessions: [evaluationCase.initialState.sourceSession],
         interests: evaluationCase.initialState.existingInterests,
-        candidates: [], recommendations: [], preferences: [], existingFeedback: [], controlledSources: [],
+        candidates: [], recommendations: [], preferences: [], existingReactions: [], controlledSources: [],
         approvalDecisions: [],
       };
     case 'candidate_supply':
       return {
         clock: evaluationCase.initialState.clock,
-        dailyTargetCount: 3,
+        recommendationTargetCount: 3,
+        recommendationWorkingSetCount: 20,
         candidatePoolMinimumCount: evaluationCase.initialState.minimumCount,
         candidatePoolMaximumCount: evaluationCase.initialState.maximumCount,
         workspaceFiles: [], sessions: [],
         interests: evaluationCase.initialState.interests,
         candidates: evaluationCase.initialState.existingCandidates,
-        recommendations: [], preferences: [], existingFeedback: [],
+        recommendations: [], preferences: [], existingReactions: [],
         controlledSources: evaluationCase.initialState.controlledSources,
         approvalDecisions: [],
       };
-    case 'daily_recommendation':
+    case 'recommendation':
       return {
         clock: evaluationCase.initialState.clock,
-        dailyTargetCount: evaluationCase.initialState.dailyTargetCount,
+        recommendationTargetCount: evaluationCase.initialState.recommendationTargetCount,
+        recommendationWorkingSetCount: evaluationCase.initialState.recommendationWorkingSetCount,
         candidatePoolMinimumCount: 100,
         candidatePoolMaximumCount: 200,
         workspaceFiles: [], sessions: [],
@@ -84,12 +89,13 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
         candidates: evaluationCase.initialState.candidates,
         recommendations: evaluationCase.initialState.previousRecommendations,
         preferences: evaluationCase.initialState.preferences,
-        existingFeedback: [], controlledSources: [], approvalDecisions: [],
+        existingReactions: [], controlledSources: [], approvalDecisions: [],
       };
     case 'preference_learning':
       return {
         clock: evaluationCase.initialState.clock,
-        dailyTargetCount: 3,
+        recommendationTargetCount: 3,
+        recommendationWorkingSetCount: 20,
         candidatePoolMinimumCount: 100,
         candidatePoolMaximumCount: 200,
         workspaceFiles: [], sessions: [],
@@ -97,7 +103,7 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
         candidates: evaluationCase.initialState.candidates,
         recommendations: evaluationCase.initialState.recommendations,
         preferences: evaluationCase.initialState.preferences,
-        existingFeedback: evaluationCase.initialState.existingFeedback,
+        existingReactions: evaluationCase.initialState.existingReactions,
         controlledSources: [], approvalDecisions: [],
       };
   }
@@ -113,7 +119,7 @@ export interface EvaluationInitialStateOwner {
   installRecommendation(input: CaseInitialState['recommendations'][number] & {
     readonly candidateId: string;
   }): Promise<{ readonly recommendationId: string }>;
-  installFeedback(input: CaseInitialState['existingFeedback'][number] & {
+  installReaction(input: CaseInitialState['existingReactions'][number] & {
     readonly recommendationId: string;
   }): Promise<void>;
   installPreference(input: CaseInitialState['preferences'][number] & {
@@ -159,9 +165,9 @@ export async function installInitialState(input: {
     const candidateId = requireMapped(candidates, entry.candidateReferenceId, 'Candidate');
     recommendations[entry.referenceId] = (await input.owner.installRecommendation({ ...entry, candidateId })).recommendationId;
   }
-  for (const entry of input.initialState.existingFeedback) {
+  for (const entry of input.initialState.existingReactions) {
     const recommendationId = requireMapped(recommendations, entry.recommendationReferenceId, 'Recommendation');
-    await input.owner.installFeedback({ ...entry, recommendationId });
+    await input.owner.installReaction({ ...entry, recommendationId });
   }
   const preferenceRevisions = [];
   for (const entry of input.initialState.preferences) {
@@ -294,68 +300,58 @@ export function createDatabaseInitialStateOwner(input: {
     async installRecommendation(entry) {
       recommendationIndex += 1;
       const localDate = `2025-01-${String(recommendationIndex).padStart(2, '0')}`;
-      const batchId = `evaluation:batch:${recommendationIndex}`;
-      const executionId = `evaluation:recommendation-execution:${recommendationIndex}`;
-      const claimed = discovery.claimBatch({
-        batchId,
-        localDate,
-        timezone: 'UTC',
-        executionId,
-        requestedCount: 1,
-        actualTarget: 1,
-        now: input.now,
-      });
-      if (claimed.status !== 'claimed') {
-        throw new Error(`Initial-state Recommendation Batch was not claimed: ${batchId}.`);
+      const candidate = discovery.findCandidateById(entry.candidateId);
+      const primaryInterestId = candidate?.interestMatches[0]?.interestId;
+      if (!candidate || !primaryInterestId) {
+        throw new Error(`Initial-state Recommendation Candidate has no Interest: ${entry.candidateId}.`);
       }
       const result = discovery.publish({
-        batchId,
-        executionId,
+        localDate,
+        snapshotAt: input.now,
         publishedAt: input.now,
-        allowedCandidateIds: [entry.candidateId],
         items: [{
-          recommendationId: `evaluation:recommendation:${entry.referenceId}`,
           candidateId: entry.candidateId,
+          sourceName: candidate.candidate.sourceId,
           recommendationReason: entry.reason,
+          selectionBasis: {
+            primaryInterestId,
+            matchedInterestIds: candidate.interestMatches.map(({ interestId }) => interestId),
+            interestRevisions: candidate.interestMatches.map(({ interestId }) => ({
+              interestId,
+              revision: 0,
+            })),
+            preferenceRevisions: [],
+          },
         }],
       });
       if (result.status !== 'published') {
         throw new Error(`Initial Recommendation publication failed: ${entry.referenceId}.`);
       }
-      const recommendation = result.recommendations[0];
+      const recommendation = result.collection.items[0];
       if (!recommendation) throw new Error('Initial-state Recommendation publication returned no result.');
       if (entry.reaction !== 'none') {
-        discovery.updateRecommendationState({
-          recommendationId: recommendation.recommendationId,
+        discovery.updateState({
+          recommendationId: recommendation.id,
           action: 'set_reaction',
           reaction: entry.reaction,
-          now: input.now,
-          feedbackId: `evaluation:feedback:${recommendationIndex}`,
-          feedbackChangeId: `evaluation:feedback-change:${recommendationIndex}`,
         });
       }
-      return { recommendationId: recommendation.recommendationId };
+      return { recommendationId: recommendation.id };
     },
-    async installFeedback(entry) {
-      discovery.updateRecommendationState({
+    async installReaction(entry) {
+      discovery.updateState({
         recommendationId: entry.recommendationId,
         action: 'set_reaction',
         reaction: entry.reaction === 'none' ? null : entry.reaction,
-        now: input.now,
-        feedbackId: `evaluation:feedback:${entry.referenceId}`,
-        feedbackChangeId: `evaluation:feedback-change:${entry.referenceId}`,
       });
     },
     async installPreference(entry) {
       preferenceIndex += 1;
-      for (const [index, recommendationId] of entry.recommendationIds.entries()) {
-        discovery.updateRecommendationState({
+      for (const recommendationId of entry.recommendationIds) {
+        discovery.updateState({
           recommendationId,
           action: 'set_reaction',
           reaction: entry.polarity === 'positive' ? 'liked' : 'disliked',
-          now: input.now,
-          feedbackId: `evaluation:preference-feedback:${preferenceIndex}:${index + 1}`,
-          feedbackChangeId: `evaluation:preference-change:${preferenceIndex}:${index + 1}`,
         });
       }
       const batchId = `evaluation:preference-batch:${preferenceIndex}`;
@@ -365,8 +361,8 @@ export function createDatabaseInitialStateOwner(input: {
         now: input.now,
         limit: 20,
       });
-      if (!batch) throw new Error(`Initial-state Preference Batch had no pending Feedback: ${batchId}.`);
-      const facts = discovery.readPreferenceLearningFacts(batchId);
+      if (!batch) throw new Error(`Initial-state Preference Batch had no pending Reaction: ${batchId}.`);
+      const facts = discovery.getPreferenceLearningFacts(batchId);
       if (!facts) throw new Error(`Initial-state Preference facts were unavailable: ${batchId}.`);
       const result = discovery.commitPreferenceLearningBatch({
         batchId,
@@ -379,7 +375,7 @@ export function createDatabaseInitialStateOwner(input: {
             polarity: entry.polarity,
             dimension: entry.dimension,
             statement: entry.statement,
-            supportingFeedbackIds: facts.feedbackChanges.map((change) => change.feedbackId),
+            supportingRecommendationIds: [...entry.recommendationIds],
           }],
         }],
       });
@@ -415,7 +411,7 @@ function verifyInitialState(
     }
   }
   for (const recommendationId of Object.values(ids.recommendations)) {
-    if (!discovery.readRecommendationReference(recommendationId)) {
+    if (!discovery.getRecommendationReference(recommendationId)) {
       throw new Error(`Installed Recommendation could not be read: ${recommendationId}.`);
     }
   }

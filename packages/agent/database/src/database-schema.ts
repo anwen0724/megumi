@@ -206,83 +206,83 @@ export const discoverySessionPolicies = sqliteTable('discovery_session_policies'
   uniqueIndex('idx_discovery_session_policies_session').on(table.sessionId),
 ]);
 
-export const discoveryBatches = sqliteTable('discovery_batches', {
-  batchId: text('batch_id').primaryKey(),
+export const discoveryRecommendations = sqliteTable('discovery_recommendations', {
+  id: text('id').primaryKey(),
+  candidateId: text('candidate_id').notNull().references(() => discoveryCandidates.id),
+  contentIdentity: text('content_identity').notNull(),
   localDate: text('local_date').notNull(),
-  timezone: text('timezone').notNull(),
-  status: text('status').notNull(),
-  executionId: text('execution_id').notNull(),
-  requestedCount: integer('requested_count').notNull(),
-  targetCount: integer('target_count').notNull(),
-  attemptCount: integer('attempt_count').notNull().default(1),
-  automaticRetryCount: integer('automatic_retry_count').notNull().default(0),
-  resultCount: integer('result_count').notNull().default(0),
-  failureCode: text('failure_code'),
-  failureMessage: text('failure_message'),
-  createdAt: text('created_at').notNull(),
-  updatedAt: text('updated_at').notNull(),
-  startedAt: text('started_at').notNull(),
-  publishedAt: text('published_at'),
+  position: integer('position').notNull(),
+  recommendationReason: text('recommendation_reason').notNull(),
+  selectionBasisJson: jsonText('selection_basis_json').notNull(),
+  publishedAt: text('published_at').notNull(),
 }, (table) => [
-  uniqueIndex('idx_discovery_batches_local_date').on(table.localDate),
-  check('check_discovery_batches_status', sql`${table.status} IN ('running', 'published', 'failed')`),
-  check('check_discovery_batches_requested_count', sql`${table.requestedCount} BETWEEN 1 AND 100`),
-  check('check_discovery_batches_target_count', sql`${table.targetCount} BETWEEN 1 AND 100`),
-  check('check_discovery_batches_attempt_count', sql`${table.attemptCount} >= 1`),
-  check('check_discovery_batches_automatic_retry_count', sql`${table.automaticRetryCount} BETWEEN 0 AND 2`),
-  check('check_discovery_batches_result_count', sql`${table.resultCount} >= 0`),
-  index('idx_discovery_batches_status').on(table.status),
-  index('idx_discovery_batches_published_at').on(table.publishedAt),
+  uniqueIndex('idx_discovery_recommendations_candidate').on(table.candidateId),
+  uniqueIndex('idx_discovery_recommendations_content_identity').on(table.contentIdentity),
+  uniqueIndex('idx_discovery_recommendations_date_position').on(table.localDate, table.position),
+  check('check_discovery_recommendations_position', sql`${table.position} >= 0`),
+  check('check_discovery_recommendations_reason', sql`length(trim(${table.recommendationReason})) BETWEEN 1 AND 1000`),
+  index('idx_discovery_recommendations_date').on(table.localDate, table.position),
+  index('idx_discovery_recommendations_published_at').on(table.publishedAt),
 ]);
 
-export const discoveryRecommendations = sqliteTable('discovery_recommendations', {
-  recommendationId: text('recommendation_id').primaryKey(),
-  batchId: text('batch_id').notNull().references(() => discoveryBatches.batchId, { onDelete: 'cascade' }),
-  candidateId: text('candidate_id').references(() => discoveryCandidates.id),
-  contentIdentity: text('content_identity').notNull(),
-  position: integer('position').notNull(),
+export const discoveryRecommendationContents = sqliteTable('discovery_recommendation_contents', {
+  id: text('id').primaryKey(),
+  recommendationId: text('recommendation_id').notNull()
+    .references(() => discoveryRecommendations.id, { onDelete: 'cascade' }),
   sourceId: text('source_id').notNull(),
   sourceName: text('source_name').notNull(),
-  canonicalUrl: text('canonical_url').notNull(),
-  title: text('title').notNull(),
-  contentType: text('content_type').notNull(),
   sourceContentId: text('source_content_id'),
+  canonicalUrl: text('canonical_url').notNull(),
+  contentType: text('content_type').notNull(),
+  title: text('title').notNull(),
   author: text('author'),
   contentPublishedAt: text('content_published_at'),
   description: text('description'),
+  contentSummary: text('content_summary').notNull(),
+  contentExcerpt: text('content_excerpt'),
+  contentTruncated: integer('content_truncated').notNull().default(0),
   coverUrl: text('cover_url'),
-  recommendationReason: text('recommendation_reason').notNull(),
+}, (table) => [
+  uniqueIndex('idx_discovery_recommendation_contents_recommendation').on(table.recommendationId),
+  check('check_discovery_recommendation_contents_source_id', sql`length(trim(${table.sourceId})) > 0`),
+  check('check_discovery_recommendation_contents_source_name', sql`length(trim(${table.sourceName})) > 0`),
+  check('check_discovery_recommendation_contents_url', sql`length(trim(${table.canonicalUrl})) > 0`),
+  check('check_discovery_recommendation_contents_type', sql`${table.contentType} IN ('video', 'article', 'news', 'project', 'post', 'page', 'other')`),
+  check('check_discovery_recommendation_contents_title', sql`length(trim(${table.title})) > 0`),
+  check('check_discovery_recommendation_contents_summary', sql`length(trim(${table.contentSummary})) BETWEEN 1 AND 1000`),
+  check('check_discovery_recommendation_contents_excerpt', sql`${table.contentExcerpt} IS NULL OR length(trim(${table.contentExcerpt})) > 0`),
+  check('check_discovery_recommendation_contents_truncated', sql`${table.contentTruncated} IN (0, 1)`),
+  check('check_discovery_recommendation_contents_excerpt_shape', sql`${table.contentExcerpt} IS NOT NULL OR ${table.contentTruncated} = 0`),
+  index('idx_discovery_recommendation_contents_source').on(table.sourceId, table.recommendationId),
+]);
+
+export const discoveryRecommendationStates = sqliteTable('discovery_recommendation_states', {
+  id: text('id').primaryKey(),
+  recommendationId: text('recommendation_id').notNull()
+    .references(() => discoveryRecommendations.id, { onDelete: 'cascade' }),
   reaction: text('reaction'),
-  feedbackId: text('feedback_id'),
-  feedbackRevision: integer('feedback_revision').notNull().default(0),
-  learnedFeedbackRevision: integer('learned_feedback_revision').notNull().default(0),
-  matchedInterestIdsJson: jsonText('matched_interest_ids_json').notNull(),
-  interestRevisionsJson: jsonText('interest_revisions_json').notNull(),
-  preferenceRevisionsJson: jsonText('preference_revisions_json').notNull(),
-  contentEvidenceJson: jsonText('content_evidence_json').notNull(),
-  hiddenAt: text('hidden_at'),
+  reactionRevision: integer('reaction_revision').notNull().default(0),
+  reactionChangedAt: text('reaction_changed_at'),
+  learnedReaction: text('learned_reaction'),
+  learnedReactionRevision: integer('learned_reaction_revision').notNull().default(0),
   favoriteAt: text('favorite_at'),
   watchLaterAt: text('watch_later_at'),
+  hiddenAt: text('hidden_at'),
   firstOpenedAt: text('first_opened_at'),
   lastOpenedAt: text('last_opened_at'),
-  publishedAt: text('published_at').notNull(),
-  stateUpdatedAt: text('state_updated_at'),
+  updatedAt: text('updated_at').notNull(),
 }, (table) => [
-  uniqueIndex('idx_discovery_recommendations_content_identity').on(table.contentIdentity),
-  uniqueIndex('idx_discovery_recommendations_candidate').on(table.candidateId).where(sql`${table.candidateId} IS NOT NULL`),
-  uniqueIndex('idx_discovery_recommendations_feedback_id').on(table.feedbackId).where(sql`${table.feedbackId} IS NOT NULL`),
-  uniqueIndex('idx_discovery_recommendations_batch_position').on(table.batchId, table.position),
-  check('check_discovery_recommendations_position', sql`${table.position} >= 0`),
-  check('check_discovery_recommendations_source_id', sql`length(trim(${table.sourceId})) > 0`),
-  check('check_discovery_recommendations_source_name', sql`length(trim(${table.sourceName})) > 0`),
-  check('check_discovery_recommendations_canonical_url', sql`length(trim(${table.canonicalUrl})) > 0`),
-  check('check_discovery_recommendations_title', sql`length(trim(${table.title})) > 0`),
-  check('check_discovery_recommendations_content_type', sql`${table.contentType} IN ('video', 'article', 'news', 'project', 'post', 'page', 'other')`),
-  check('check_discovery_recommendations_reason', sql`length(trim(${table.recommendationReason})) BETWEEN 1 AND 1000`),
-  check('check_discovery_recommendations_reaction', sql`${table.reaction} IS NULL OR ${table.reaction} IN ('liked', 'disliked')`),
-  index('idx_discovery_recommendations_published_at').on(table.publishedAt),
-  index('idx_discovery_recommendations_favorite_at').on(table.favoriteAt),
-  index('idx_discovery_recommendations_watch_later_at').on(table.watchLaterAt),
+  uniqueIndex('idx_discovery_recommendation_states_recommendation').on(table.recommendationId),
+  check('check_discovery_recommendation_states_reaction', sql`${table.reaction} IS NULL OR ${table.reaction} IN ('liked', 'disliked')`),
+  check('check_discovery_recommendation_states_learned_reaction', sql`${table.learnedReaction} IS NULL OR ${table.learnedReaction} IN ('liked', 'disliked')`),
+  check('check_discovery_recommendation_states_revisions', sql`${table.reactionRevision} >= 0 AND ${table.learnedReactionRevision} >= 0 AND ${table.learnedReactionRevision} <= ${table.reactionRevision}`),
+  check('check_discovery_recommendation_states_reaction_zero', sql`${table.reactionRevision} > 0 OR (${table.reaction} IS NULL AND ${table.reactionChangedAt} IS NULL AND ${table.learnedReaction} IS NULL)`),
+  check('check_discovery_recommendation_states_reaction_time', sql`${table.reactionRevision} = 0 OR ${table.reactionChangedAt} IS NOT NULL`),
+  check('check_discovery_recommendation_states_learned_matches_current', sql`${table.learnedReactionRevision} <> ${table.reactionRevision} OR ${table.learnedReaction} IS ${table.reaction}`),
+  check('check_discovery_recommendation_states_opened_shape', sql`(${table.firstOpenedAt} IS NULL AND ${table.lastOpenedAt} IS NULL) OR (${table.firstOpenedAt} IS NOT NULL AND ${table.lastOpenedAt} IS NOT NULL AND ${table.firstOpenedAt} <= ${table.lastOpenedAt})`),
+  index('idx_discovery_recommendation_states_favorite').on(table.favoriteAt),
+  index('idx_discovery_recommendation_states_watch_later').on(table.watchLaterAt),
+  index('idx_discovery_recommendation_states_pending_reaction').on(table.reactionRevision, table.learnedReactionRevision),
 ]);
 
 export const discoveryCandidates = sqliteTable('discovery_candidates', {
@@ -334,28 +334,6 @@ export const discoveryCandidateInterestMatches = sqliteTable('discovery_candidat
   check('check_discovery_candidate_interest_matches_reason', sql`length(trim(${table.matchReason})) BETWEEN 1 AND 1000`),
 ]);
 
-export const discoveryFeedbackChanges = sqliteTable('discovery_feedback_changes', {
-  feedbackChangeId: text('feedback_change_id').primaryKey(),
-  feedbackId: text('feedback_id').notNull(),
-  recommendationId: text('recommendation_id').notNull()
-    .references(() => discoveryRecommendations.recommendationId, { onDelete: 'cascade' }),
-  previousReaction: text('previous_reaction'),
-  currentReaction: text('current_reaction'),
-  feedbackRevision: integer('feedback_revision').notNull(),
-  status: text('status').notNull(),
-  requiresCorrection: integer('requires_correction').notNull().default(0),
-  batchId: text('batch_id'),
-  changedAt: text('changed_at').notNull(),
-  processedAt: text('processed_at'),
-}, (table) => [
-  check('check_discovery_feedback_changes_previous_reaction', sql`${table.previousReaction} IS NULL OR ${table.previousReaction} IN ('liked', 'disliked')`),
-  check('check_discovery_feedback_changes_current_reaction', sql`${table.currentReaction} IS NULL OR ${table.currentReaction} IN ('liked', 'disliked')`),
-  check('check_discovery_feedback_changes_status', sql`${table.status} IN ('pending', 'batched', 'processed', 'superseded', 'ignored')`),
-  check('check_discovery_feedback_changes_correction', sql`${table.requiresCorrection} IN (0, 1)`),
-  uniqueIndex('idx_discovery_feedback_changes_feedback_revision').on(table.feedbackId, table.feedbackRevision),
-  index('idx_discovery_feedback_changes_pending').on(table.status, table.changedAt),
-]);
-
 export const discoveryPreferenceLearningBatches = sqliteTable('discovery_preference_learning_batches', {
   batchId: text('batch_id').primaryKey(),
   status: text('status').notNull(),
@@ -368,6 +346,8 @@ export const discoveryPreferenceLearningBatches = sqliteTable('discovery_prefere
   completedAt: text('completed_at'),
   failureCode: text('failure_code'),
   failureMessage: text('failure_message'),
+  reactionSnapshotsJson: text('reaction_snapshots_json').notNull().default('[]'),
+  resultRevisionsJson: text('result_revisions_json').notNull().default('[]'),
 }, (table) => [
   check('check_discovery_preference_learning_batches_status', sql`${table.status} IN ('running', 'succeeded', 'failed')`),
   check('check_discovery_preference_learning_batches_trigger', sql`${table.triggerReason} IN ('threshold', 'deadline', 'correction', 'retry')`),
@@ -402,11 +382,14 @@ export const discoveryPreferenceDirections = sqliteTable('discovery_preference_d
   index('idx_discovery_preference_directions_scope').on(table.scopeKey),
 ]);
 
-export const discoveryPreferenceDirectionFeedback = sqliteTable('discovery_preference_direction_feedback', {
+export const discoveryPreferenceDirectionRecommendations = sqliteTable('discovery_preference_direction_recommendations', {
+  id: text('id').primaryKey(),
   directionId: text('direction_id').notNull()
     .references(() => discoveryPreferenceDirections.directionId, { onDelete: 'cascade' }),
-  feedbackId: text('feedback_id').notNull(),
+  recommendationId: text('recommendation_id').notNull()
+    .references(() => discoveryRecommendations.id, { onDelete: 'cascade' }),
 }, (table) => [
-  uniqueIndex('idx_discovery_preference_direction_feedback_key').on(table.directionId, table.feedbackId),
-  index('idx_discovery_preference_direction_feedback_feedback').on(table.feedbackId),
+  uniqueIndex('idx_discovery_preference_direction_recommendations_pair')
+    .on(table.directionId, table.recommendationId),
+  index('idx_discovery_preference_direction_recommendations_recommendation').on(table.recommendationId),
 ]);

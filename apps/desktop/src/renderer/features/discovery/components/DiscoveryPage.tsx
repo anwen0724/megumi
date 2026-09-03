@@ -97,9 +97,9 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
 
   async function ensureToday() {
     setError(null);
-    const result = await window.megumi.discovery.ensureDaily(createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.discovery.dailyEnsure,
-      { trigger: 'manual', now: new Date().toISOString() },
+    const result = await window.megumi.discovery.requestRecommendation(createRendererRuntimeIpcRequest(
+      IPC_CHANNELS.discovery.recommendationRequest,
+      { trigger: 'manual' },
     ));
     if (!result.ok || result.data.status === 'failed') {
       setError(t('actionFailed'));
@@ -113,11 +113,24 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
       IPC_CHANNELS.discovery.recommendationStateUpdate,
       { recommendationId, ...action },
     ));
-    if (!result.ok) {
+    if (!result.ok || result.data.status === 'not_found') {
       setError(t('actionFailed'));
       return;
     }
-    const update = (item: DiscoveryRecommendationUiDto) => item.recommendationId === recommendationId ? result.data : item;
+    const state = result.data.state;
+    const update = (item: DiscoveryRecommendationUiDto): DiscoveryRecommendationUiDto => (
+      item.recommendationId === recommendationId
+        ? {
+            ...item,
+            ...(state.reaction ? { reaction: state.reaction } : { reaction: undefined }),
+            hidden: state.hiddenAt !== undefined,
+            favorite: state.favoriteAt !== undefined,
+            watchLater: state.watchLaterAt !== undefined,
+            ...(state.firstOpenedAt ? { firstOpenedAt: state.firstOpenedAt } : {}),
+            ...(state.lastOpenedAt ? { lastOpenedAt: state.lastOpenedAt } : {}),
+          }
+        : item
+    );
     setSearchResults((items) => action.action === 'set_hidden' && action.hidden ? items.filter((item) => item.recommendationId !== recommendationId) : items.map(update));
     setHome((current) => current ? {
       ...current,

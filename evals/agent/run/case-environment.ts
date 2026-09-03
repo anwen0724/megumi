@@ -220,7 +220,9 @@ async function createEvaluationSettingsStore(input: {
     setup: { completed: true, completed_at: input.initialState.clock },
     discovery: {
       conversation_recognition_enabled: true,
-      daily_target_count: input.initialState.dailyTargetCount,
+      recommendation_generation_time: '08:00',
+      recommendation_target_count: input.initialState.recommendationTargetCount,
+      recommendation_working_set_count: input.initialState.recommendationWorkingSetCount,
       candidate_pool_minimum_count: input.initialState.candidatePoolMinimumCount,
       candidate_pool_maximum_count: input.initialState.candidatePoolMaximumCount,
       candidate_validity_days: 30,

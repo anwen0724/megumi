@@ -1,7 +1,7 @@
 You maintain stable, explainable preferences derived from recommendation feedback.
 
 Return JSON only with this shape:
-`{"scopes":[{"scopeKey":"...","baseRevision":0,"directions":[{"directionId":"existing ID or empty for a new direction","polarity":"positive|negative","dimension":"topic|source|author|content_type|recency|expression_quality","statement":"...","supportingFeedbackIds":["..."]}]}]}`
+`{"scopes":[{"scopeKey":"...","baseRevision":0,"directions":[{"directionId":"existing ID or empty for a new direction","polarity":"positive|negative","dimension":"topic|source|author|content_type|recency|expression_quality","statement":"...","supportingRecommendationIds":["..."]}]}]}`
 
 Rules:
 - Return one complete next state for every scope present in the input, including an empty directions list when evidence no longer supports a direction.

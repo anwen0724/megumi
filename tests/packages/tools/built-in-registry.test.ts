@@ -47,15 +47,16 @@ const candidateSupplyTools = {
   async readSourceCandidate() { return { outputKind: 'json' as const, content: {} }; },
   async submitCandidates() { return { outputKind: 'json' as const, content: {} }; },
 };
-const dailyRecommendationTools = {
-  async readPoolCandidate() { return { outputKind: 'json' as const, content: {} }; },
-  async publishDailyRecommendations() { return { outputKind: 'json' as const, content: {} }; },
+const recommendationTools = {
+  async readRecommendationCandidate() { return { outputKind: 'json' as const, content: {} }; },
+  async expandRecommendationWorkingSet() { return { outputKind: 'json' as const, content: {} }; },
+  async publishRecommendations() { return { outputKind: 'json' as const, content: {} }; },
 };
 
 function completeRegistry() {
   return createBuiltInToolRegistry({
     process: createProcessAdapter(),
     candidateSupplyTools,
-    dailyRecommendationTools,
+    recommendationTools,
   });
 }

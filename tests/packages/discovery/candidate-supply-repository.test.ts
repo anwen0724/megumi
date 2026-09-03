@@ -230,7 +230,7 @@ describe('CandidateSupplyRepository', () => {
       settings,
     });
 
-    expect(repository.readCandidatePoolSnapshot(settings)).toMatchObject({
+    expect(repository.getCandidatePoolSnapshot(settings)).toMatchObject({
       asOf: now,
       minimumCount: 2,
       targetCount: 4,
@@ -258,7 +258,7 @@ describe('CandidateSupplyRepository', () => {
       },
     });
 
-    expect(repository.readCandidatePoolSnapshot(settings)).toMatchObject({ availableCount: 0, candidates: [] });
+    expect(repository.getCandidatePoolSnapshot(settings)).toMatchObject({ availableCount: 0, candidates: [] });
     expect(repository.findCandidateById('candidate:1')).toMatchObject({ candidate: { status: 'expired' } });
   });
 
@@ -279,7 +279,7 @@ describe('CandidateSupplyRepository', () => {
       matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
       settings: capped,
     })).toMatchObject({ status: 'ignored', reason: 'capacity_reached' });
-    expect(repository.readCandidatePoolSnapshot(capped).availableCount).toBe(2);
+    expect(repository.getCandidatePoolSnapshot(capped).availableCount).toBe(2);
   });
 
   it('still adds a missing Interest match after the Pool reaches the target', () => {
@@ -308,7 +308,7 @@ describe('CandidateSupplyRepository', () => {
       addedCandidateCount: 0,
       addedInterestMatchCount: 1,
     });
-    expect(repository.readCandidatePoolSnapshot(capped).availableByInterest).toEqual({
+    expect(repository.getCandidatePoolSnapshot(capped).availableByInterest).toEqual({
       'interest:1': 2,
       'interest:2': 1,
     });

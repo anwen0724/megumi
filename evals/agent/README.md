@@ -18,7 +18,7 @@ Evaluation 不实现第二套业务流程。每个 Case 都由独立 Evaluation 
 - `controlled/conversation`
 - `controlled/interest-understanding`
 - `controlled/candidate-supply`
-- `controlled/daily-recommendation`
+- `controlled/recommendation`
 - `controlled/preference-learning`
 
 Case 的 `initialState` 是对应业务执行前必须存在的产品状态，`input` 是要通过真实 Product Host 发起的动作，`expected` 留给未来评估器使用。`expected` 会保存在 Case 快照中，但绝不会进入候选 Agent 的上下文。

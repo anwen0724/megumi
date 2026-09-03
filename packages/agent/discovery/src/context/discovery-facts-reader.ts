@@ -7,12 +7,12 @@ import type {
   CandidateSupplyFacts,
   ContextDiscoverySourceRegistry,
   ContextPreferenceSnapshot,
-  DailyRecommendationFacts,
+  RecommendationFacts,
   DiscoveryFactsReader,
   PreferenceLearningFacts as ContextPreferenceLearningFacts,
 } from '@megumi/context';
 import type { CandidateSupplyAttempts } from '../candidate-supply/candidate-supply-attempts';
-import type { DailyRecommendationAttempts } from '../daily-recommendation/daily-recommendation-attempt';
+import type { RecommendationAttempts } from '../recommendation/recommendation-attempts';
 import type { DiscoveryRepository } from '../persistence/discovery-repository';
 import type { SourceRegistry } from '../sources/source-registry';
 
@@ -20,7 +20,7 @@ import type { SourceRegistry } from '../sources/source-registry';
 export function createDiscoveryFactsReader(options: {
   readonly repository: DiscoveryRepository;
   readonly candidateSupplyAttempts: CandidateSupplyAttempts;
-  readonly dailyRecommendationAttempts: DailyRecommendationAttempts;
+  readonly recommendationAttempts: RecommendationAttempts;
 }): DiscoveryFactsReader {
   return {
     async readCandidateSupplyFacts(request) {
@@ -53,63 +53,73 @@ export function createDiscoveryFactsReader(options: {
       return { status: 'ok', facts };
     },
 
-    async readDailyRecommendationFacts(request) {
+    async readRecommendationFacts(request) {
       if (request.signal?.aborted) return { status: 'cancelled' };
-      const attempt = options.dailyRecommendationAttempts.readContextSnapshot(request.executionId);
-      if (!attempt || attempt.batchId !== request.batchId) {
-        return missing('daily_recommendation_attempt_not_found');
+      const attempt = options.recommendationAttempts.getSnapshot(request.executionId);
+      if (!attempt || attempt.requestId !== request.requestId || attempt.localDate !== request.localDate) {
+        return missing('recommendation_attempt_not_found');
       }
-      const batch = options.repository.getBatch(request.localDate);
-      if (!batch || batch.batchId !== request.batchId) return missing('daily_batch_not_found');
-      const preferenceSnapshots = options.repository.listPreferenceSnapshots();
+      const preferenceSnapshots = attempt.preferences;
       const preferences = preferenceByInterest(preferenceSnapshots);
-      const interests = options.repository.listNonDeletedInterests()
-        .filter(({ status }) => status === 'active')
-        .map((interest) => ({
+      const interests = attempt.interests.map((interest) => ({
           interestId: interest.interestId,
           description: interest.description,
           status: interest.status,
           interestRevision: interest.revision,
           preference: preferences.get(interest.interestId) ?? emptyPreference(interest.interestId),
         }));
-      const snapshot = attempt.snapshot;
-      const facts: DailyRecommendationFacts = {
-        asOf: batch.updatedAt,
-        batch: {
-          batchId: batch.batchId,
-          localDate: batch.localDate,
-          requestedCount: snapshot.window.requestedCount,
-          actualTarget: snapshot.window.actualTarget,
-          availableCount: snapshot.window.availableCount,
-          readBudget: Math.min(snapshot.window.candidates.length, 20),
+      const facts: RecommendationFacts = {
+        asOf: attempt.snapshotAt,
+        execution: {
+          requestId: attempt.requestId,
+          localDate: attempt.localDate,
+          actualTarget: attempt.actualTarget,
+          eligibleCount: attempt.rankedCandidates.length,
+          workingSetCount: attempt.workingSetCount,
         },
         interests,
-        explorationPreference: explorationPreference(preferenceSnapshots),
-        candidates: snapshot.window.candidates.map((candidate) => ({
-          ...candidateSummary(candidate),
-          matchedInterestIds: candidate.interestMatches.map(({ interestId }) => interestId),
-          interestMatches: candidate.interestMatches.map(({ interestId, relevance, matchReason }) => ({
+        preferences: preferenceSnapshots.map(contextPreference),
+        candidates: attempt.rankedCandidates.slice(0, attempt.workingSetCount).map((entry) => ({
+          ...candidateSummary({ ...entry.candidate, sourceName: entry.sourceName }),
+          matchedInterestIds: entry.interestMatches.map(({ interestId }) => interestId),
+          interestMatches: entry.interestMatches.map(({ interestId, relevance, matchReason }) => ({
             interestId,
             relevance,
             matchReason,
           })),
         })),
-        recentRecommendations: snapshot.recentRecommendations.map((recommendation) => ({
+        recentRecommendations: attempt.history.map((recommendation) => ({
+          recommendationId: recommendation.id,
           contentIdentity: recommendation.contentIdentity,
-          sourceName: recommendation.sourceName,
-          title: recommendation.title,
+          sourceName: recommendation.content.sourceName,
+          contentType: recommendation.content.contentType,
+          title: recommendation.content.title,
           recommendationReason: recommendation.recommendationReason,
           publishedAt: recommendation.publishedAt,
+          matchedInterestIds: recommendation.selectionBasis.matchedInterestIds,
+          ...(recommendation.state.reaction ? { reaction: recommendation.state.reaction } : {}),
         })),
-        pendingFeedback: snapshot.pendingFeedback.map((feedback) => ({ ...feedback })),
-        omittedPendingFeedbackCount: snapshot.omittedPendingFeedbackCount,
+        ranking: [
+          ...attempt.rankedCandidates.map((entry) => ({
+            candidateId: entry.candidate.id,
+            eligible: true as const,
+            rank: entry.rank,
+            relevanceRank: entry.relevanceRank,
+            rankingFacts: entry.rankingFacts,
+          })),
+          ...attempt.exclusions.map((entry) => ({
+            candidateId: entry.candidateId,
+            eligible: false as const,
+            exclusionReason: entry.reason,
+          })),
+        ],
       };
       return { status: 'ok', facts };
     },
 
     async readPreferenceLearningFacts(request) {
       if (request.signal?.aborted) return { status: 'cancelled' };
-      const facts = options.repository.readPreferenceLearningFacts(request.batchId);
+      const facts = options.repository.getPreferenceLearningFacts(request.batchId);
       if (!facts) return missing('preference_learning_batch_not_found');
       const interests = options.repository.listNonDeletedInterests();
       const contextFacts: ContextPreferenceLearningFacts = {
@@ -126,13 +136,12 @@ export function createDiscoveryFactsReader(options: {
           revision: interest.revision,
         })),
         currentPreferences: facts.currentPreferences.map(contextPreference),
-        feedbackChanges: facts.feedbackChanges.map((change) => ({
-          feedbackChangeId: change.feedbackChangeId,
-          feedbackId: change.feedbackId,
+        reactionChanges: facts.reactionChanges.map((change) => ({
           recommendationId: change.recommendationId,
-          ...(change.previousReaction ? { previousReaction: change.previousReaction } : {}),
+          ...(change.learnedReaction ? { learnedReaction: change.learnedReaction } : {}),
+          learnedReactionRevision: change.learnedReactionRevision,
           ...(change.currentReaction ? { currentReaction: change.currentReaction } : {}),
-          feedbackRevision: change.feedbackRevision,
+          currentReactionRevision: change.currentReactionRevision,
           changedAt: change.changedAt,
           requiresCorrection: change.requiresCorrection,
           recommendation: {
@@ -202,18 +211,6 @@ function emptyPreference(interestId: string): ContextPreferenceSnapshot {
     scopeKey: `interest:${interestId}`,
     scope: 'interest',
     interestId,
-    revision: 0,
-    directions: [],
-  };
-}
-
-function explorationPreference(
-  snapshots: ReturnType<DiscoveryRepository['listPreferenceSnapshots']>,
-): ContextPreferenceSnapshot {
-  const snapshot = snapshots.find(({ scope }) => scope === 'exploration');
-  return snapshot ? contextPreference(snapshot) : {
-    scopeKey: 'exploration',
-    scope: 'exploration',
     revision: 0,
     directions: [],
   };

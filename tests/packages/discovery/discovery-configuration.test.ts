@@ -24,8 +24,9 @@ describe('Discovery configuration', () => {
   it('projects registered source facts and persists only validated configuration', async () => {
     let settings = {
       conversationRecognitionEnabled: false,
-      dailyGenerationTime: '08:00',
-      dailyTargetCount: 20,
+      recommendationGenerationTime: '08:00',
+      recommendationTargetCount: 20,
+      recommendationWorkingSetCount: 80,
       candidatePoolMinimumCount: 100,
       candidatePoolMaximumCount: 200,
       candidateValidityDays: 30,
@@ -45,8 +46,9 @@ describe('Discovery configuration', () => {
 
     expect(await configuration.get()).toEqual({
       conversationRecognitionEnabled: false,
-      dailyGenerationTime: '08:00',
-      dailyTargetCount: 20,
+      recommendationGenerationTime: '08:00',
+      recommendationTargetCount: 20,
+      recommendationWorkingSetCount: 80,
       candidatePoolMinimumCount: 100,
       candidatePoolMaximumCount: 200,
       candidateValidityDays: 30,
@@ -86,8 +88,9 @@ describe('Discovery configuration', () => {
       settings: {
         read: () => ({
           conversationRecognitionEnabled: false,
-          dailyGenerationTime: '08:00',
-          dailyTargetCount: 20,
+          recommendationGenerationTime: '08:00',
+          recommendationTargetCount: 20,
+          recommendationWorkingSetCount: 80,
           candidatePoolMinimumCount: 100,
           candidatePoolMaximumCount: 200,
           candidateValidityDays: 30,
@@ -121,8 +124,9 @@ describe('Discovery configuration', () => {
         settings: {
           read: () => ({
             conversationRecognitionEnabled: false,
-            dailyGenerationTime: '08:00',
-            dailyTargetCount: 20,
+            recommendationGenerationTime: '08:00',
+            recommendationTargetCount: 20,
+            recommendationWorkingSetCount: 80,
             candidatePoolMinimumCount: 100,
             candidatePoolMaximumCount: 200,
             candidateValidityDays: 30,
@@ -147,9 +151,10 @@ describe('Discovery configuration', () => {
   it.each([
     { enabledSources: [] },
     { enabledSources: ['missing'] },
-    { dailyGenerationTime: '8:00' },
-    { dailyTargetCount: 0 },
-    { dailyTargetCount: 101 },
+    { recommendationGenerationTime: '8:00' },
+    { recommendationTargetCount: 0 },
+    { recommendationTargetCount: 101 },
+    { recommendationTargetCount: 81, recommendationWorkingSetCount: 80 },
   ])('rejects invalid updates without writing: %j', async (patch) => {
     const write = vi.fn();
     const configuration = createDiscoveryConfiguration({
@@ -157,8 +162,9 @@ describe('Discovery configuration', () => {
       settings: {
         read: () => ({
           conversationRecognitionEnabled: false,
-          dailyGenerationTime: '08:00',
-          dailyTargetCount: 20,
+          recommendationGenerationTime: '08:00',
+          recommendationTargetCount: 20,
+          recommendationWorkingSetCount: 80,
           candidatePoolMinimumCount: 100,
           candidatePoolMaximumCount: 200,
           candidateValidityDays: 30,

@@ -13,20 +13,20 @@ describe('Discovery Context source ownership', () => {
     const candidateRuntime = source(
       'packages/agent/discovery/src/candidate-supply/candidate-supply-runtime.ts',
     );
-    const dailyRuntime = source(
-      'packages/agent/discovery/src/daily-recommendation/daily-recommendation-runtime.ts',
+    const recommendationRuntime = source(
+      'packages/agent/discovery/src/recommendation/recommendation-runtime.ts',
     );
 
     expect(contextContract).not.toMatch(/RunContext[\s\S]{0,500}readonly material:/u);
     expect(execution).not.toContain('readonly material:');
     expect(candidateRuntime).not.toContain('buildMaterial');
-    expect(dailyRuntime).not.toContain('contextMaterial');
+    expect(recommendationRuntime).not.toContain('contextMaterial');
   });
 
   it('requires each Discovery Resolver to read its own authoritative Facts', () => {
     for (const file of [
       'packages/agent/context/src/resolvers/candidate-supply-context-resolver.ts',
-      'packages/agent/context/src/resolvers/daily-recommendation-context-resolver.ts',
+      'packages/agent/context/src/resolvers/recommendation-context-resolver.ts',
       'packages/agent/context/src/resolvers/preference-learning-context-resolver.ts',
     ]) {
       expect(source(file)).toContain('factsReader');

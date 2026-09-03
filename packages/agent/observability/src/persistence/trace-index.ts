@@ -458,7 +458,7 @@ function projectCheckpoint(row: CheckpointRow): JournalCheckpoint {
 
 function parseTraceKind(value: string): TraceSummaryProjection['traceKind'] {
   return value === 'conversation'
-    || value === 'daily_recommendation'
+    || value === 'recommendation'
     || value === 'candidate_supply'
     || value === 'preference_learning'
     ? value

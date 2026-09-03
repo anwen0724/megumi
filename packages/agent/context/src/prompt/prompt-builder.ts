@@ -11,7 +11,7 @@ import type { SessionAttachmentReader } from '@megumi/session';
 import type { ContextFailure, Prompt } from '../context';
 import type { ResolvedContext } from '../context-resolver';
 import type { ConversationResolvedContext } from '../resolvers/conversation-context-resolver';
-import type { DailyRecommendationResolvedContext } from '../resolvers/daily-recommendation-context-resolver';
+import type { RecommendationResolvedContext } from '../resolvers/recommendation-context-resolver';
 import type { CandidateSupplyResolvedContext } from '../resolvers/candidate-supply-context-resolver';
 import type { PreferenceLearningResolvedContext } from '../resolvers/preference-learning-context-resolver';
 import { buildContextMessages, type MaterializedHistory } from './context-message-builder';
@@ -31,7 +31,7 @@ export type BuildPromptResult =
     }
   | {
       readonly status: 'built';
-      readonly kind: 'daily_recommendation';
+      readonly kind: 'recommendation';
       readonly prompt: Prompt;
     }
   | {
@@ -59,8 +59,8 @@ export function createPromptBuilder(dependencies: PromptBuilderDependencies): Pr
       if (request.context.kind === 'conversation') {
         return buildConversationPrompt(request.context, dependencies, request.signal);
       }
-      if (request.context.kind === 'daily_recommendation') {
-        return buildDailyRecommendationPrompt(request.context);
+      if (request.context.kind === 'recommendation') {
+        return buildRecommendationPrompt(request.context);
       }
       return request.context.kind === 'candidate_supply'
         ? buildCandidateSupplyPrompt(request.context)
@@ -165,16 +165,16 @@ async function buildConversationPrompt(
   };
 }
 
-function buildDailyRecommendationPrompt(
-  context: DailyRecommendationResolvedContext,
+function buildRecommendationPrompt(
+  context: RecommendationResolvedContext,
 ): BuildPromptResult {
   return {
     status: 'built',
-    kind: 'daily_recommendation',
+    kind: 'recommendation',
     prompt: {
       systemPrompt: buildSystemPrompt({
         systemInstructions: context.systemInstructions,
-        dailyRecommendationMaterial: {
+        recommendationMaterial: {
           localDate: context.localDate,
           material: context.material,
         },

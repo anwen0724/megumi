@@ -84,7 +84,7 @@ export type CaseSnapshot = z.infer<typeof CaseSnapshotSchema>;
 const TraceTargetResultSchema = z.object({
   traceKind: z.enum([
     'conversation', 'interest_understanding', 'candidate_supply',
-    'daily_recommendation', 'preference_learning',
+    'recommendation', 'preference_learning',
   ]),
   correlation: z.record(z.string(), z.string()),
   matchedTraceIds: z.array(z.string().min(1)),
@@ -96,7 +96,7 @@ export const CaseRunResultSchema = z.object({
   caseIdentity: EvaluationIdentitySchema,
   caseType: z.enum([
     'conversation', 'interest_understanding', 'candidate_supply',
-    'daily_recommendation', 'preference_learning',
+    'recommendation', 'preference_learning',
   ]),
   recordStatus: z.enum(['recorded', 'infrastructure_failed']),
   startedAt: TimestampSchema,

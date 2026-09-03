@@ -1,43 +1,48 @@
-/* Protects the strict Desktop IPC boundary for Daily Recommendation operations. */
+/* Protects the strict Desktop IPC boundary for Recommendation operations. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { registerDiscoveryHandlers } from '@megumi/desktop/main/ipc/handlers/discovery.handler';
 
 describe('registerDiscoveryHandlers', () => {
-  it('forwards a valid Daily Recommendation request through the Product Host', async () => {
+  it('forwards a valid Recommendation request through the Product Host', async () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const handle = vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
       handlers.set(channel, handler);
     });
-    const ensureDaily = vi.fn(async () => ({
-      status: 'waiting_for_candidates' as const,
+    const requestRecommendation = vi.fn(async () => ({
+      status: 'started' as const,
       localDate: '2026-08-22',
-      requestedCount: 20,
+      requestId: 'request:discovery:1',
+      executionId: 'execution:1',
     }));
 
     registerDiscoveryHandlers(
-      { host: { discovery: { ensureDaily } } as never },
+      { host: { discovery: { requestRecommendation } } as never },
       { ipcMain: { handle } as never },
     );
 
-    const response = await handlers.get(IPC_CHANNELS.discovery.dailyEnsure)?.({}, {
+    const response = await handlers.get(IPC_CHANNELS.discovery.recommendationRequest)?.({}, {
       requestId: 'request:discovery:1',
-      payload: { trigger: 'manual', now: '2026-08-22T10:00:00.000Z' },
+      payload: { trigger: 'manual' },
       meta: {
-        channel: IPC_CHANNELS.discovery.dailyEnsure,
+        channel: IPC_CHANNELS.discovery.recommendationRequest,
         createdAt: '2026-08-22T10:00:00.000Z',
         source: 'renderer',
       },
     });
 
-    expect(ensureDaily).toHaveBeenCalledWith({
+    expect(requestRecommendation).toHaveBeenCalledWith({
       trigger: 'manual',
-      now: '2026-08-22T10:00:00.000Z',
     });
     expect(response).toMatchObject({
       ok: true,
-      data: { status: 'waiting_for_candidates', localDate: '2026-08-22', requestedCount: 20 },
+      data: {
+        status: 'started',
+        localDate: '2026-08-22',
+        requestId: 'request:discovery:1',
+        executionId: 'execution:1',
+      },
     });
   });
 
@@ -114,8 +119,9 @@ describe('registerDiscoveryHandlers', () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const refreshSources = vi.fn(async () => ({
       conversationRecognitionEnabled: true,
-      dailyGenerationTime: '08:00',
-      dailyTargetCount: 20,
+      recommendationGenerationTime: '08:00',
+      recommendationTargetCount: 20,
+      recommendationWorkingSetCount: 80,
       candidatePoolMinimumCount: 100,
       candidatePoolMaximumCount: 200,
       candidateValidityDays: 30,

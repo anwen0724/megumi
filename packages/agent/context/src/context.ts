@@ -13,7 +13,7 @@ import type { ToolDefinition } from '@megumi/tools';
 import type { ContextUsageEstimate } from './context-usage-calculator';
 import type {
   CandidateSupplyContextMaterial,
-  DailyRecommendationContextMaterial,
+  RecommendationContextMaterial,
   PreferenceLearningContextMaterial,
 } from './discovery-context';
 
@@ -48,11 +48,11 @@ export interface ConversationRunContext extends BaseRunContext {
   readonly userInput: UserInput;
 }
 
-/** Candidate Pool facts fixed before one Daily Recommendation execution starts. */
-export interface DailyRecommendationRunContext extends BaseRunContext {
-  readonly kind: 'daily_recommendation';
+/** Recommendation snapshot identity fixed before one execution starts. */
+export interface RecommendationRunContext extends BaseRunContext {
+  readonly kind: 'recommendation';
   readonly executionId: string;
-  readonly batchId: string;
+  readonly requestId: string;
   readonly localDate: string;
 }
 
@@ -72,7 +72,7 @@ export interface PreferenceLearningRunContext extends BaseRunContext {
   readonly startedAt: string;
 }
 
-export type RunContext = ConversationRunContext | DailyRecommendationRunContext
+export type RunContext = ConversationRunContext | RecommendationRunContext
   | CandidateSupplyRunContext | PreferenceLearningRunContext;
 
 /** Facts fixed before one model call; never persisted. */
@@ -129,7 +129,7 @@ export interface ContextFailure {
 
 export type {
   CandidateSupplyContextMaterial,
-  DailyRecommendationContextMaterial,
+  RecommendationContextMaterial,
   PreferenceLearningContextMaterial,
 };
 

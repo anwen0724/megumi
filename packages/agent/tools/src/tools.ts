@@ -26,8 +26,9 @@ import type { ToolProcessDescriptor } from './built-ins/run-command';
 import type { BuiltInToolContext } from './built-ins/workspace-file-access';
 import type { SearchContentOperation } from './built-ins/search-content';
 import type { ReadSourceCandidateOperation } from './built-ins/read-source-candidate';
-import type { ReadPoolCandidateOperation } from './built-ins/read-pool-candidate';
-import type { PublishDailyRecommendationsOperation } from './built-ins/publish-daily-recommendations';
+import type { ReadRecommendationCandidateOperation } from './built-ins/read-recommendation-candidate';
+import type { ExpandRecommendationWorkingSetOperation } from './built-ins/expand-recommendation-working-set';
+import type { PublishRecommendationsOperation } from './built-ins/publish-recommendations';
 import type { SubmitCandidatesOperation } from './built-ins/submit-candidates';
 import { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 import {
@@ -154,7 +155,7 @@ export interface CreateToolsRequest {
   readonly sandbox: Sandbox;
   readonly executionPolicy: ToolExecutionPolicy;
   readonly builtInToolAvailability?: BuiltInToolAvailability;
-  readonly dailyRecommendationTools?: DailyRecommendationToolOperations;
+  readonly recommendationTools?: RecommendationToolOperations;
   readonly candidateSupplyTools?: CandidateSupplyToolOperations;
   /** Replaces only the external search adapter; the Tool pipeline stays real. */
   readonly webSearch?: WebSearch;
@@ -167,8 +168,8 @@ export type CandidateSupplyToolOperations = SearchContentOperation
   & SubmitCandidatesOperation
   & { ownsExecution(executionId: string): boolean };
 
-export type DailyRecommendationToolOperations = ReadPoolCandidateOperation
-  & PublishDailyRecommendationsOperation;
+export type RecommendationToolOperations = ReadRecommendationCandidateOperation
+  & ExpandRecommendationWorkingSetOperation & PublishRecommendationsOperation;
 
 interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
@@ -183,7 +184,7 @@ export function createTools(request: CreateToolsRequest): Tools {
   const registry = createBuiltInToolRegistry({
     ...(process ? { process } : {}),
     ...(request.candidateSupplyTools ? { candidateSupplyTools: request.candidateSupplyTools } : {}),
-    ...(request.dailyRecommendationTools ? { dailyRecommendationTools: request.dailyRecommendationTools } : {}),
+    ...(request.recommendationTools ? { recommendationTools: request.recommendationTools } : {}),
   });
   const routers = new Map<string, ModelCallRegistration>();
   const executions = new Map<string, ToolExecutionBinding>();
@@ -197,8 +198,8 @@ export function createTools(request: CreateToolsRequest): Tools {
       if (bindingRequest.toolGroupId === 'conversation' && bindingRequest.subject.kind !== 'session') {
         return failedBinding('workspace_unavailable', 'Conversation tools require a Session-backed Workspace.');
       }
-      if (bindingRequest.toolGroupId === 'daily_recommendation' && !request.dailyRecommendationTools) {
-        return failedBinding('tool_group_unavailable', 'Daily Recommendation tools are not configured.');
+      if (bindingRequest.toolGroupId === 'recommendation' && !request.recommendationTools) {
+        return failedBinding('tool_group_unavailable', 'Recommendation tools are not configured.');
       }
       if (bindingRequest.toolGroupId === 'candidate_supply' && !request.candidateSupplyTools) {
         return failedBinding('tool_group_unavailable', 'Candidate supply tools are not configured.');

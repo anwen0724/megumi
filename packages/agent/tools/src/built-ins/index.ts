@@ -17,8 +17,13 @@ import { listDirectoryToolDefinition, listDirectoryToolHandler } from './list-di
 import { movePathToolDefinition, movePathToolHandler } from './move-path';
 import { readFileToolDefinition, readFileToolHandler } from './read-file';
 import { createReadSourceCandidateToolHandler, readSourceCandidateToolDefinition, type ReadSourceCandidateOperation } from './read-source-candidate';
-import { createReadPoolCandidateToolHandler, readPoolCandidateToolDefinition, type ReadPoolCandidateOperation } from './read-pool-candidate';
-import { createPublishDailyRecommendationsToolHandler, publishDailyRecommendationsToolDefinition, type PublishDailyRecommendationsOperation } from './publish-daily-recommendations';
+import { createReadRecommendationCandidateToolHandler, readRecommendationCandidateToolDefinition, type ReadRecommendationCandidateOperation } from './read-recommendation-candidate';
+import { createPublishRecommendationsToolHandler, publishRecommendationsToolDefinition, type PublishRecommendationsOperation } from './publish-recommendations';
+import {
+  createExpandRecommendationWorkingSetToolHandler,
+  expandRecommendationWorkingSetToolDefinition,
+  type ExpandRecommendationWorkingSetOperation,
+} from './expand-recommendation-working-set';
 import {
   createRunCommandToolDefinition,
   createRunCommandToolHandler,
@@ -38,7 +43,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'web_search', 'web_fetch', 'update_plan',
   'search_content',
   'read_source_candidate', 'submit_candidates',
-  'read_pool_candidate', 'publish_daily_recommendations',
+  'read_recommendation_candidate', 'expand_recommendation_working_set', 'publish_recommendations',
 ] as const;
 
 export type BuiltInToolName = (typeof BUILT_IN_TOOL_NAMES)[number];
@@ -57,7 +62,8 @@ export function createBuiltInToolRegistry(request: {
   readonly process?: ToolProcessDescriptor;
   readonly candidateSupplyTools?: SearchContentOperation & ReadSourceCandidateOperation
     & SubmitCandidatesOperation;
-  readonly dailyRecommendationTools?: ReadPoolCandidateOperation & PublishDailyRecommendationsOperation;
+  readonly recommendationTools?: ReadRecommendationCandidateOperation
+    & ExpandRecommendationWorkingSetOperation & PublishRecommendationsOperation;
 }): ToolRegistry<BuiltInToolContext> {
   const pairs: Array<{
     readonly definition: ToolDefinition;
@@ -91,11 +97,15 @@ export function createBuiltInToolRegistry(request: {
       executionMode: 'serial' as const,
       },
     ] : []),
-    ...(request.dailyRecommendationTools ? [
-      { definition: readPoolCandidateToolDefinition, handler: createReadPoolCandidateToolHandler(request.dailyRecommendationTools) },
+    ...(request.recommendationTools ? [
+      { definition: readRecommendationCandidateToolDefinition, handler: createReadRecommendationCandidateToolHandler(request.recommendationTools) },
       {
-        definition: publishDailyRecommendationsToolDefinition,
-        handler: createPublishDailyRecommendationsToolHandler(request.dailyRecommendationTools),
+        definition: expandRecommendationWorkingSetToolDefinition,
+        handler: createExpandRecommendationWorkingSetToolHandler(request.recommendationTools),
+      },
+      {
+        definition: publishRecommendationsToolDefinition,
+        handler: createPublishRecommendationsToolHandler(request.recommendationTools),
         executionMode: 'serial' as const,
       },
     ] : []),

@@ -14,8 +14,9 @@ describe('Discovery Settings', () => {
       settings: {
         discovery: {
           conversation_recognition_enabled: false,
-          daily_generation_time: '08:00',
-          daily_target_count: 20,
+          recommendation_generation_time: '08:00',
+          recommendation_target_count: 20,
+          recommendation_working_set_count: 80,
           enabled_sources: ['bilibili', 'open_web'],
           candidate_content_excerpt_max_characters: 8_000,
         },
@@ -30,8 +31,9 @@ describe('Discovery Settings', () => {
       patch: {
         discovery: {
           conversation_recognition_enabled: true,
-          daily_generation_time: '21:35',
-          daily_target_count: 37,
+          recommendation_generation_time: '21:35',
+          recommendation_target_count: 37,
+          recommendation_working_set_count: 90,
           enabled_sources: [' bilibili ', 'open_web', 'bilibili'],
         },
       },
@@ -39,8 +41,9 @@ describe('Discovery Settings', () => {
     expect(store.document).toMatchObject({
       discovery: {
         conversation_recognition_enabled: true,
-        daily_generation_time: '21:35',
-        daily_target_count: 37,
+        recommendation_generation_time: '21:35',
+        recommendation_target_count: 37,
+        recommendation_working_set_count: 90,
         enabled_sources: ['bilibili', 'open_web'],
       },
     });
@@ -52,12 +55,14 @@ describe('Discovery Settings', () => {
   });
 
   it.each([
-    { daily_generation_time: '8:00' },
-    { daily_generation_time: '24:00' },
-    { daily_generation_time: '12:60' },
-    { daily_target_count: 0 },
-    { daily_target_count: 101 },
-    { daily_target_count: 1.5 },
+    { recommendation_generation_time: '8:00' },
+    { recommendation_generation_time: '24:00' },
+    { recommendation_generation_time: '12:60' },
+    { recommendation_target_count: 0 },
+    { recommendation_target_count: 101 },
+    { recommendation_target_count: 1.5 },
+    { recommendation_target_count: 81, recommendation_working_set_count: 80 },
+    { recommendation_working_set_count: 201 },
     { candidate_content_excerpt_max_characters: 0 },
     { enabled_sources: [''] },
     { enabled_sources: ['   '] },

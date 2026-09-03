@@ -1,5 +1,5 @@
 /*
- * Defines durable Recommendation Feedback, Preference Learning Batch, and
+ * Defines durable Recommendation Reaction, Preference Learning Batch, and
  * stable Preference revision contracts for the Discovery owner.
  */
 import { z } from 'zod';
@@ -31,7 +31,7 @@ export const PreferenceDirectionSchema = z.object({
   polarity: PreferencePolaritySchema,
   dimension: PreferenceDimensionSchema,
   statement: z.string().trim().min(1).max(1000),
-  supportingFeedbackIds: z.array(z.string().min(1)).min(1),
+  supportingRecommendationIds: z.array(z.string().min(1)).min(1),
   updatedAt: TimestampSchema,
 }).strict();
 
@@ -104,13 +104,12 @@ export interface PreferenceLearningAffectedScope {
   readonly baseRevision: number;
 }
 
-export interface PreferenceLearningFeedbackChange {
-  readonly feedbackChangeId: string;
-  readonly feedbackId: string;
+export interface PreferenceLearningReactionChange {
   readonly recommendationId: string;
-  readonly previousReaction?: 'liked' | 'disliked';
+  readonly learnedReaction?: 'liked' | 'disliked';
+  readonly learnedReactionRevision: number;
   readonly currentReaction?: 'liked' | 'disliked';
-  readonly feedbackRevision: number;
+  readonly currentReactionRevision: number;
   readonly changedAt: string;
   readonly requiresCorrection: boolean;
   readonly recommendation: {
@@ -130,16 +129,16 @@ export interface PreferenceLearningFacts {
   readonly batch: PreferenceLearningBatch;
   readonly affectedScopes: readonly PreferenceLearningAffectedScope[];
   readonly currentPreferences: readonly PreferenceSnapshot[];
-  readonly feedbackChanges: readonly PreferenceLearningFeedbackChange[];
+  readonly reactionChanges: readonly PreferenceLearningReactionChange[];
 }
 
 export type PreferenceLearningTrigger =
   | { readonly status: 'idle' }
-  | { readonly status: 'scheduled'; readonly pendingFeedbackCount: number; readonly dueAt: string }
+  | { readonly status: 'scheduled'; readonly pendingReactionCount: number; readonly dueAt: string }
   | {
       readonly status: 'ready';
       readonly reason: 'threshold' | 'deadline' | 'correction' | 'retry';
-      readonly pendingFeedbackCount: number;
+      readonly pendingReactionCount: number;
     };
 
 export type CommitPreferenceLearningBatchResult =
@@ -156,26 +155,12 @@ export type CommitPreferenceLearningBatchResult =
         | 'revision_conflict'
         | 'invalid_interest_reference'
         | 'invalid_direction_reference'
-        | 'invalid_feedback_reference';
+        | 'invalid_recommendation_reference';
     };
 
-export const RecommendationFeedbackChangeReceiptSchema = z.discriminatedUnion('changed', [
-  z.object({
-    changed: z.literal(false),
-    recommendationId: z.string().min(1),
-  }).strict(),
-  z.object({
-    changed: z.literal(true),
-    recommendationId: z.string().min(1),
-    feedbackChangeId: z.string().min(1),
-    status: z.enum(['pending', 'ignored']),
-    changedAt: TimestampSchema,
-  }).strict(),
-]);
-
 export const PreferenceLearningCompletionSchema = z.object({
-  feedbackChangeId: z.string().min(1),
-  status: z.enum(['pending', 'batched', 'superseded', 'ignored', 'learned', 'failed']),
+  recommendationId: z.string().min(1),
+  status: z.enum(['pending', 'batched', 'learned', 'failed']),
   batchId: z.string().min(1).optional(),
   resultRevisions: z.array(z.object({
     scopeKey: z.string().min(1),
@@ -192,5 +177,4 @@ export type PreferenceDirection = z.infer<typeof PreferenceDirectionSchema>;
 export type PreferenceLearningBatch = z.infer<typeof PreferenceLearningBatchSchema>;
 export type LearnedScopeInput = z.infer<typeof LearnedScopeInputSchema>;
 export type RecommendationContentEvidence = z.infer<typeof RecommendationContentEvidenceSchema>;
-export type RecommendationFeedbackChangeReceipt = z.infer<typeof RecommendationFeedbackChangeReceiptSchema>;
 export type PreferenceLearningCompletion = z.infer<typeof PreferenceLearningCompletionSchema>;

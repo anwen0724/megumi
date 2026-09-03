@@ -156,8 +156,8 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
         IPC_CHANNELS.discovery.configurationUpdate,
         {
           conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
-          dailyGenerationTime: settings.dailyGenerationTime,
-          dailyTargetCount: settings.dailyTargetCount,
+          recommendationGenerationTime: settings.recommendationGenerationTime,
+          recommendationTargetCount: settings.recommendationTargetCount,
           enabledSources: settings.sources.filter((source) => source.enabled).map((source) => source.sourceId),
         },
       ));
@@ -229,8 +229,8 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
   const settingsValid = Boolean(
     settings
     && settings.sources.some((source) => source.enabled)
-    && settings.dailyTargetCount >= 1
-    && settings.dailyTargetCount <= 100,
+    && settings.recommendationTargetCount >= 1
+    && settings.recommendationTargetCount <= 100,
   );
 
   return (
@@ -265,7 +265,7 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
               <h2 id="interest-manager-title" className="text-xl font-semibold tracking-[-0.025em] text-[var(--color-text)]">{t('managementTitle')}</h2>
               <p className="mt-1 max-w-md text-sm leading-5 text-[var(--color-text-muted)]">{t('managementDescription')}</p>
               <p className="mt-2 text-xs font-medium text-[var(--color-text-subtle)]">
-                {t('managementSummary', { count: interests.length, time: settings?.dailyGenerationTime ?? '—' })}
+                {t('managementSummary', { count: interests.length, time: settings?.recommendationGenerationTime ?? '—' })}
               </p>
             </div>
             <button
@@ -472,10 +472,10 @@ function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
               <Switch checked={settings.conversationRecognitionEnabled} disabled={busy} label={t('recognition')} onCheckedChange={(checked) => onUpdate((current) => ({ ...current, conversationRecognitionEnabled: checked }))} />
             </SettingRow>
             <SettingRow label={t('generationTime')} htmlFor="discovery-generation-time">
-              <input id="discovery-generation-time" type="time" value={settings.dailyGenerationTime} disabled={busy} onChange={(event) => onUpdate((current) => ({ ...current, dailyGenerationTime: event.target.value }))} className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20" />
+              <input id="discovery-generation-time" type="time" value={settings.recommendationGenerationTime} disabled={busy} onChange={(event) => onUpdate((current) => ({ ...current, recommendationGenerationTime: event.target.value }))} className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20" />
             </SettingRow>
             <SettingRow label={t('targetCount')} htmlFor="discovery-target-count">
-              <input id="discovery-target-count" aria-label={t('targetCount')} type="number" min={1} max={100} value={settings.dailyTargetCount} disabled={busy} onChange={(event) => onUpdate((current) => ({ ...current, dailyTargetCount: Number(event.target.value) }))} className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20" />
+              <input id="discovery-target-count" aria-label={t('targetCount')} type="number" min={1} max={100} value={settings.recommendationTargetCount} disabled={busy} onChange={(event) => onUpdate((current) => ({ ...current, recommendationTargetCount: Number(event.target.value) }))} className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20" />
             </SettingRow>
           </div>
 

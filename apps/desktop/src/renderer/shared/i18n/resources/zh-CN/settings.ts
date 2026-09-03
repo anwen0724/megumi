@@ -351,7 +351,7 @@ export const settings = {
       userDeny: '用户拒绝', cancelled: '已取消',
     },
     traceKinds: {
-      conversation: '会话', interestUnderstanding: '关注理解', dailyRecommendation: '每日推荐', candidateSupply: '候选供给',
+      conversation: '会话', interestUnderstanding: '关注理解', recommendation: '推荐', candidateSupply: '候选供给',
       preferenceLearning: '偏好学习',
     },
     candidateSupplyRun: '补充候选池',

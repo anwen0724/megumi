@@ -31,7 +31,7 @@ import type {
   ContextWorkspaceSource,
   ConversationRunContext,
   CandidateSupplyRunContext,
-  DailyRecommendationRunContext,
+  RecommendationRunContext,
   PreferenceLearningRunContext,
   Prompt,
 } from './context';
@@ -124,8 +124,8 @@ class DefaultContext implements ContextCapabilities {
       ...('executionId' in run ? { executionId: run.executionId } : {}),
       modelCallId: request.modelCallContext.modelCallId,
       ...(run.kind === 'conversation' ? { sessionId: run.sessionId } : {}),
-      ...(run.kind === 'daily_recommendation'
-        ? { dailyRecommendationBatchId: run.batchId }
+      ...(run.kind === 'recommendation'
+        ? { requestId: run.requestId }
         : run.kind === 'preference_learning'
           ? { preferenceLearningBatchId: run.batchId }
           : {}),
@@ -138,8 +138,8 @@ class DefaultContext implements ContextCapabilities {
               run.sessionId,
               () => this.buildExclusive(request, run),
             )
-          : run.kind === 'daily_recommendation'
-            ? await this.buildDailyRecommendation(request, run)
+          : run.kind === 'recommendation'
+            ? await this.buildRecommendation(request, run)
             : run.kind === 'candidate_supply'
               ? await this.buildCandidateSupply(request, run)
               : await this.buildPreferenceLearning(request, run);
@@ -259,24 +259,24 @@ class DefaultContext implements ContextCapabilities {
     return this.finalizePrompt(prepared.prompt, prepared.capacity, estimate);
   }
 
-  private async buildDailyRecommendation(
+  private async buildRecommendation(
     request: BuildContextRequest,
-    run: DailyRecommendationRunContext,
+    run: RecommendationRunContext,
   ): Promise<BuildContextResult> {
     if (request.signal?.aborted) {
       return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
     }
     const correlation = {
       executionId: run.executionId,
-      batchId: run.batchId,
+      requestId: run.requestId,
       modelCallId: request.modelCallContext.modelCallId,
     };
     const resolved = await observeSpan(this.options.observability, {
       name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
     }, () => this.resolver.resolve({
-      kind: 'daily_recommendation',
+      kind: 'recommendation',
       executionId: run.executionId,
-      batchId: run.batchId,
+      requestId: run.requestId,
       localDate: run.localDate,
       currentMessages: request.currentMessages,
       tools: request.modelCallContext.tools,
@@ -606,7 +606,7 @@ function unavailableDiscoveryFactsReader(): DiscoveryFactsReader {
   });
   return {
     readCandidateSupplyFacts: unavailable,
-    readDailyRecommendationFacts: unavailable,
+    readRecommendationFacts: unavailable,
     readPreferenceLearningFacts: unavailable,
   };
 }

@@ -56,7 +56,7 @@ describe('Case Environment', () => {
       'controlled/conversation.create-workspace-note',
       'controlled/interest-understanding.recognize-explicit-interest',
       'controlled/candidate-supply.refill-agent-candidates',
-      'controlled/daily-recommendation.select-relevant-candidate',
+      'controlled/recommendation.select-relevant-candidate',
       'controlled/preference-learning.learn-source-preference',
     ] as const;
 

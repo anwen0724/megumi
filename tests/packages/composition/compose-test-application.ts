@@ -37,8 +37,9 @@ export function composeTestApplication(responses: readonly string[] = ['Test rep
     model_selection: { provider_id: 'test', model_id: 'model' },
     discovery: {
       conversation_recognition_enabled: true,
-      daily_generation_time: '08:00',
-      daily_target_count: 20,
+      recommendation_generation_time: '08:00',
+      recommendation_target_count: 20,
+      recommendation_working_set_count: 80,
       enabled_sources: ['open_web'],
     },
   };

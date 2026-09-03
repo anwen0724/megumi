@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 1,
-  "environmentKind": "controlled",
-  "datasetId": "daily-recommendation",
-  "revision": 1,
-  "name": "Daily Recommendation",
-  "description": "验证 Megumi 从候选池形成每日推荐。",
-  "caseIds": ["daily-recommendation.select-relevant-candidate"]
-}

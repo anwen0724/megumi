@@ -46,15 +46,15 @@ describe('Database table ownership', () => {
         'discovery_interests',
         'discovery_interest_evidence',
         'discovery_session_policies',
-        'discovery_batches',
         'discovery_recommendations',
+        'discovery_recommendation_contents',
+        'discovery_recommendation_states',
         'discovery_candidates',
         'discovery_candidate_interest_matches',
-        'discovery_feedback_changes',
         'discovery_preference_learning_batches',
         'discovery_preference_scopes',
         'discovery_preference_directions',
-        'discovery_preference_direction_feedback',
+        'discovery_preference_direction_recommendations',
       ],
     });
   });

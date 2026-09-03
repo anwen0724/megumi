@@ -7,21 +7,13 @@ import {
 } from './candidate-supply-repository';
 import type { CandidateSupplyRepository } from '../candidate-supply/candidate-supply';
 import {
-  createDailyRecommendationRepository,
-  type DailyRecommendationRepository,
-} from './daily-recommendation-repository';
-import {
   createInterestRepository,
   type InterestRepository,
 } from './interest-repository';
 import {
   createRecommendationRepository,
-  type RecommendationRepositoryOperations,
+  type RecommendationRepository,
 } from './recommendation-repository';
-import {
-  migrateRecommendationIdentities,
-  type RecommendationIdentityMigrationResult,
-} from './recommendation-identity-migration';
 import {
   createPreferenceLearningRepository,
   type PreferenceLearningRepository,
@@ -31,14 +23,8 @@ export type {
   ApplyInterestExtraction,
   ValidatedInterestCommand,
 } from './interest-repository';
-export type { RecommendationSelectionSignal, RecommendationStateResult } from './recommendation-repository';
-
 export interface DiscoveryRepository
-  extends InterestRepository, DailyRecommendationRepository, RecommendationRepositoryOperations,
-    CandidateSupplyRepository, PreferenceLearningRepository {
-  /** Migrates legacy Recommendation identities before normal Discovery work begins. */
-  migrateRecommendationIdentities(): RecommendationIdentityMigrationResult;
-}
+  extends InterestRepository, RecommendationRepository, CandidateSupplyRepository, PreferenceLearningRepository {}
 
 /** Creates the stable Discovery repository from its focused persistence owners. */
 export function createDiscoveryRepository(options: {
@@ -57,16 +43,16 @@ export function createDiscoveryRepository(options: {
         ids: options.candidateIds,
       })
     : createCandidateSupplyRepository(options.database);
-  const recommendations = createRecommendationRepository(options.database);
-  const dailyRecommendation = createDailyRecommendationRepository(options.database);
+  const recommendations = createRecommendationRepository({
+    database: options.database,
+    ...(options.clock ? { clock: options.clock } : {}),
+  });
   const preferences = createPreferenceLearningRepository(options.database);
 
   return {
     ...interests,
-    ...dailyRecommendation,
-    ...recommendations.operations,
+    ...recommendations,
     ...candidateSupply,
     ...preferences,
-    migrateRecommendationIdentities: () => migrateRecommendationIdentities(options.database),
   };
 }

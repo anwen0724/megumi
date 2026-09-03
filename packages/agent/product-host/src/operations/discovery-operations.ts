@@ -5,7 +5,7 @@ import type { DiscoveryHost } from '../host/discovery-host';
 import {
   DiscoveryBackgroundWaitOptionsSchema,
   DiscoveryCandidateSupplyRequestSchema,
-  DiscoveryDailyRecommendationFactsQuerySchema,
+  DiscoveryRecommendationFactsQuerySchema,
   DiscoveryPreferenceLearningFactsQuerySchema,
   DiscoveryFactsResultSchema,
   DiscoveryInterestFactsPayloadSchema,
@@ -18,8 +18,11 @@ export function createDiscoveryOperations(
     Discovery,
     | 'changeInterest'
     | 'setSessionParticipation'
-    | 'ensureDailyRecommendation'
-    | 'getDailyRecommendationBatch'
+    | 'requestRecommendation'
+    | 'waitRecommendation'
+    | 'getTodayRecommendation'
+    | 'getRecommendationCollection'
+    | 'getRecommendationById'
     | 'getDiscoveryHome'
     | 'searchRecommendations'
     | 'updateRecommendationState'
@@ -30,7 +33,7 @@ export function createDiscoveryOperations(
     | 'refreshDiscoverySources'
     | 'getInterestFacts'
     | 'requestCandidateSupply'
-    | 'getCandidatePoolSnapshot'
+    | 'getCandidatePool'
     | 'getPreferenceLearningBatch'
     | 'getPreferenceLearningCompletion'
   >,
@@ -44,15 +47,15 @@ export function createDiscoveryOperations(
     refreshSources: () => agent.refreshDiscoverySources(),
     changeInterest: (request) => agent.changeInterest(request),
     setSessionParticipation: (request) => agent.setSessionParticipation(request),
-    ensureDaily: (request) => agent.ensureDailyRecommendation(request),
-    getDailyBatch: (request) => Promise.resolve(
-      agent.getDailyRecommendationBatch(request.localDate) ?? null,
+    requestRecommendation: (request) => agent.requestRecommendation(request),
+    waitRecommendation: (request) => agent.waitRecommendation(request),
+    getTodayRecommendation: () => Promise.resolve(agent.getTodayRecommendation()),
+    getRecommendationCollection: (request) => Promise.resolve(
+      agent.getRecommendationCollection(request.localDate, request.includeHidden) ?? null,
     ),
-    waitDailyBatch: (request) => waitForBusinessFact({
-      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
-      read: () => agent.getDailyRecommendationBatch(request.localDate),
-      terminal: (value) => value.status === 'published' || value.status === 'failed',
-    }),
+    getRecommendationById: (request) => Promise.resolve(
+      agent.getRecommendationById(request.recommendationId) ?? null,
+    ),
     getHome: (request) => agent.getDiscoveryHome(request),
     searchRecommendations: (request) => agent.searchRecommendations(request),
     updateRecommendationState: (request) => agent.updateRecommendationState(request),
@@ -66,10 +69,10 @@ export function createDiscoveryOperations(
       if (!result) throw new Error('Candidate Supply is not configured.');
       return result;
     },
-    getCandidatePool: () => Promise.resolve(agent.getCandidatePoolSnapshot() ?? null),
-    async getDailyRecommendationFacts(request) {
-      const result = await facts.readDailyRecommendationFacts(
-        DiscoveryDailyRecommendationFactsQuerySchema.parse(request),
+    getCandidatePool: () => Promise.resolve(agent.getCandidatePool() ?? null),
+    async getRecommendationFacts(request) {
+      const result = await facts.readRecommendationFacts(
+        DiscoveryRecommendationFactsQuerySchema.parse(request),
       );
       DiscoveryFactsResultSchema.parse(result);
       return result;
@@ -79,7 +82,7 @@ export function createDiscoveryOperations(
     ),
     getPreferenceLearning(request) {
       const parsed = DiscoveryPreferenceLearningQuerySchema.parse(request);
-      return Promise.resolve(agent.getPreferenceLearningCompletion(parsed.feedbackChangeId) ?? null);
+      return Promise.resolve(agent.getPreferenceLearningCompletion(parsed.recommendationId) ?? null);
     },
     async getPreferenceLearningFacts(request) {
       const result = await facts.readPreferenceLearningFacts(
@@ -92,10 +95,10 @@ export function createDiscoveryOperations(
       timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
       read: () => agent.getPreferenceLearningCompletion(
         DiscoveryPreferenceLearningQuerySchema.parse({
-          feedbackChangeId: request.feedbackChangeId,
-        }).feedbackChangeId,
+          recommendationId: request.recommendationId,
+        }).recommendationId,
       ),
-      terminal: (value) => ['learned', 'superseded', 'ignored', 'failed'].includes(value.status),
+      terminal: (value) => value.status === 'learned' || value.status === 'failed',
     }),
   };
 }

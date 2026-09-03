@@ -12,11 +12,12 @@ import type {
   ListSkillsUiResponse,
   RefreshSkillsUiResponse,
   WorkspaceOpenFileUiResult,
-  DiscoveryDailyEnsureResult,
+  DiscoveryRecommendationRequestResult,
   DiscoveryHomeUiResult,
   DiscoveryInterestUiDto,
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
+  DiscoveryRecommendationStateResult,
   DiscoverySessionParticipationUiDto,
   DiscoveryConfigurationUiDto,
   DiscoverySourceCredentialStatusUiResult,
@@ -36,7 +37,7 @@ import type {
   SkillListPayload,
   SkillRefreshPayload,
   WorkspaceFileOpenPayload,
-  DiscoveryDailyEnsurePayload,
+  DiscoveryRecommendationRequestPayload,
   DiscoveryHomePayload,
   DiscoveryInterestChangePayload,
   DiscoveryRecommendationSearchPayload,
@@ -93,11 +94,11 @@ export type DiscoverySourceRefreshPreloadData = DiscoverySourceUiDto;
 export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
 export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
 export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;
-export type DiscoveryDailyEnsurePreloadPayload = DiscoveryDailyEnsurePayload;
-export type DiscoveryDailyEnsurePreloadData = DiscoveryDailyEnsureResult;
+export type DiscoveryRecommendationRequestPreloadPayload = DiscoveryRecommendationRequestPayload;
+export type DiscoveryRecommendationRequestPreloadData = DiscoveryRecommendationRequestResult;
 export type DiscoveryHomePreloadPayload = DiscoveryHomePayload;
 export type DiscoveryHomePreloadData = DiscoveryHomeUiResult;
 export type DiscoveryRecommendationSearchPreloadPayload = DiscoveryRecommendationSearchPayload;
 export type DiscoveryRecommendationSearchPreloadData = DiscoveryRecommendationSearchUiResult;
 export type DiscoveryRecommendationStatePreloadPayload = DiscoveryRecommendationStatePayload;
-export type DiscoveryRecommendationStatePreloadData = DiscoveryRecommendationUiDto;
+export type DiscoveryRecommendationStatePreloadData = DiscoveryRecommendationStateResult;
