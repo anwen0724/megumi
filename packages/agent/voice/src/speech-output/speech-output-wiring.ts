@@ -7,13 +7,16 @@
  * whole trigger chain is testable without a database.
  */
 
-import { sessionMessageText, type SessionMessage } from '@megumi/session';
+import { sessionMessageText, type SessionAssistantReplyMessage } from '@megumi/session';
 import type { Settings } from '@megumi/settings';
 import type { SpeechOutputRuntime } from './speech-output-runtime';
 
 export interface SpeechOutputWiringDeps {
   readonly settings: Pick<Settings, 'resolve' | 'resolveVoiceTts' | 'readVoiceTtsApiKey'>;
-  readonly findAssistantReplyByExecutionId: (sessionId: string, executionId: string) => SessionMessage | undefined;
+  readonly findAssistantReplyBySessionIdAndExecutionId: (input: {
+    readonly session_id: string;
+    readonly execution_id: string;
+  }) => SessionAssistantReplyMessage | undefined;
   readonly speechOutput: SpeechOutputRuntime;
 }
 
@@ -62,8 +65,11 @@ export function onRunEndedForSpeechOutput(
   if (tts.status === 'failed') return { status: 'skipped', reason: 'tts_resolution_failed' };
 
   const credential = deps.settings.readVoiceTtsApiKey({});
-  const reply = deps.findAssistantReplyByExecutionId(event.sessionId, event.executionId);
-  if (!reply || reply.message_kind !== 'assistant_reply') return { status: 'skipped', reason: 'no_reply' };
+  const reply = deps.findAssistantReplyBySessionIdAndExecutionId({
+    session_id: event.sessionId,
+    execution_id: event.executionId,
+  });
+  if (!reply) return { status: 'skipped', reason: 'no_reply' };
   const text = sessionMessageText(reply).trim();
   if (!text) return { status: 'skipped', reason: 'empty_text' };
 

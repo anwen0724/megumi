@@ -67,7 +67,10 @@ export interface CreateSessionBranchDraftsOptions {
   };
   clock?: { now(): string };
   entries?: {
-    findMessageEntry(input: { session_id: string; message_id: string }): SessionEntry | undefined;
+    findMessageEntryBySessionIdAndMessageId(input: {
+      session_id: string;
+      message_id: string;
+    }): SessionEntry | undefined;
   };
 }
 
@@ -170,7 +173,7 @@ function resolveSourceEntryId(
   options: CreateSessionBranchDraftsOptions,
   request: CreateSessionBranchDraftRequest,
 ): string {
-  return options.entries?.findMessageEntry({
+  return options.entries?.findMessageEntryBySessionIdAndMessageId({
     session_id: request.session_id,
     message_id: request.source_message_id,
   })?.entry_id ?? `message:${request.source_message_id}`;

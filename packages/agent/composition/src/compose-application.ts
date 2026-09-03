@@ -188,8 +188,8 @@ function composeApplicationRuntime(
         const result = onRunEndedForSpeechOutput(
           {
             settings,
-            findAssistantReplyByExecutionId: (sessionId, executionId) =>
-              sessionStore.findAssistantReplyByExecutionId(sessionId, executionId),
+            findAssistantReplyBySessionIdAndExecutionId: (request) =>
+              sessionStore.findAssistantReplyBySessionIdAndExecutionId(request),
             speechOutput,
           },
           event,

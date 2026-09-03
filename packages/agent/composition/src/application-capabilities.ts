@@ -470,7 +470,11 @@ function composeCapabilitiesWithDatabase(
   // The bus is the second producer's entry point too: branch facts publish here.
   const branches = createSessionBranchDrafts({
     events,
-    entries: { findMessageEntry: (request) => sessionStore.findMessageEntry(request) },
+    entries: {
+      findMessageEntryBySessionIdAndMessageId: (request) => (
+        sessionStore.findMessageEntryBySessionIdAndMessageId(request)
+      ),
+    },
   });
   const discoveryRepository = createDiscoveryRepository({ database });
   const interestExtractor = createInterestExtractor({

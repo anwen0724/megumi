@@ -96,7 +96,7 @@ export function createSessionCatalog(options: CreateSessionCatalogOptions): Sess
     },
     archiveSession(request) {
       try {
-        const session = options.store.updateSessionArchiveState(request);
+        const session = options.store.archiveSession(request);
         return session ? { status: 'archived', session } : { status: 'not_found' };
       } catch (error) {
         return sessionFailure(error);

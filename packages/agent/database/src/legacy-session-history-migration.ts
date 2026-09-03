@@ -67,11 +67,19 @@ export function prepareLegacySessionHistoryMigration(database: DatabaseConnectio
         ` }).all([runId]);
         const user = messages.find((message) => message.role === 'user');
         if (!user) continue;
-        const userEntry = findMessageEntry(database, user.session_id, user.message_id);
+        const userEntry = findMessageEntryBySessionIdAndMessageId(
+          database,
+          user.session_id,
+          user.message_id,
+        );
         if (!userEntry) continue;
         const finalAssistant = [...messages].reverse().find((message) => message.role === 'assistant');
         const finalEntry = finalAssistant
-          ? findMessageEntry(database, finalAssistant.session_id, finalAssistant.message_id)
+          ? findMessageEntryBySessionIdAndMessageId(
+              database,
+              finalAssistant.session_id,
+              finalAssistant.message_id,
+            )
           : undefined;
         const events = database.prepare<LegacyEventRow>({ sql: `
           SELECT event_id, run_id, session_id, event_type, sequence, created_at, payload_json
@@ -274,7 +282,11 @@ function findExistingSemanticMessage(
       : message.content_text === item.contentText;
   });
   if (!matched) return undefined;
-  const entry = findMessageEntry(database, matched.session_id, matched.message_id);
+  const entry = findMessageEntryBySessionIdAndMessageId(
+    database,
+    matched.session_id,
+    matched.message_id,
+  );
   return entry ? { message: matched, entry } : undefined;
 }
 
@@ -288,7 +300,11 @@ function toolCallIds(message: Record<string, unknown>): string[] {
     : [];
 }
 
-function findMessageEntry(database: DatabaseConnection, sessionId: string, messageId: string): { entry_id: string } | undefined {
+function findMessageEntryBySessionIdAndMessageId(
+  database: DatabaseConnection,
+  sessionId: string,
+  messageId: string,
+): { entry_id: string } | undefined {
   return database.prepare<{ entry_id: string }>({ sql: `
     SELECT entry_id FROM session_entries WHERE session_id = ? AND message_id = ?
     ORDER BY created_at, entry_id LIMIT 1

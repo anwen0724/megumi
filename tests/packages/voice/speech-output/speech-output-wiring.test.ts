@@ -6,7 +6,7 @@ import type { ReadSpeechOutputRequest, SpeechOutputRuntime } from '../../../../p
 
 function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiringDeps & {
   speechOutput: SpeechOutputRuntime & { reads: ReadSpeechOutputRequest[] };
-  findAssistantReplyByExecutionId: ReturnType<typeof vi.fn>;
+  findAssistantReplyBySessionIdAndExecutionId: ReturnType<typeof vi.fn>;
 } {
   const reads: ReadSpeechOutputRequest[] = [];
   const speechOutput = {
@@ -15,7 +15,7 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
     subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
     reads,
   };
-  const findAssistantReplyByExecutionId = vi.fn(() => ({
+  const findAssistantReplyBySessionIdAndExecutionId = vi.fn(() => ({
     message_kind: 'assistant_reply' as const,
     message_id: 'reply-1',
     session_id: 'session-1',
@@ -27,7 +27,7 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
   }));
   const base = {
     speechOutput,
-    findAssistantReplyByExecutionId,
+    findAssistantReplyBySessionIdAndExecutionId,
     settings: {
       resolve: vi.fn(() => ({
         status: 'ok' as const,
@@ -72,7 +72,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
     expect(failed).toEqual({ status: 'ignored' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
-    expect(wiring.findAssistantReplyByExecutionId).not.toHaveBeenCalled();
+    expect(wiring.findAssistantReplyBySessionIdAndExecutionId).not.toHaveBeenCalled();
   });
 
   it('stops the read-aloud when the run is cancelled', () => {
@@ -112,7 +112,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('skips runs without an assistant reply', () => {
     const wiring = deps();
-    wiring.findAssistantReplyByExecutionId.mockReturnValueOnce(undefined);
+    wiring.findAssistantReplyBySessionIdAndExecutionId.mockReturnValueOnce(undefined);
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'skipped', reason: 'no_reply' });
@@ -124,7 +124,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('skips replies with nothing readable', () => {
     const wiring = deps();
-    wiring.findAssistantReplyByExecutionId.mockReturnValueOnce({
+    wiring.findAssistantReplyBySessionIdAndExecutionId.mockReturnValueOnce({
       message_kind: 'assistant_reply' as const,
       message_id: 'reply-2',
       session_id: 'session-1',

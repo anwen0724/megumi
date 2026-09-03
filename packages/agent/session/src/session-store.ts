@@ -11,10 +11,13 @@ import {
   SessionAssistantReplyPayloadSchema,
   SessionModelResponsePayloadSchema,
   SessionToolResultPayloadSchema,
+  SessionUserMessageSchema,
   SessionUserMessagePayloadSchema,
   type SessionAssistantContent,
+  type SessionAssistantReplyMessage,
   type SessionMessage,
   type SessionMessageKind,
+  type UserMessage,
 } from './session-message';
 import { normalizeLegacyAssistantContent, normalizeLegacyUserMessagePayload } from './legacy-content-normalizer';
 import type { Session } from './session';
@@ -23,39 +26,46 @@ type Nullable<T> = T | null;
 
 export interface SessionStore {
   runInTransaction<T>(operation: () => T): T;
+
   insertSession(session: Session): Session;
   findSessionById(sessionId: string): Session | undefined;
   listSessionsByWorkspaceId(workspaceId: string): Session[];
-  updateSessionArchiveState(input: { session_id: string; archived_at: string }): Session | undefined;
-  insertMessage(message: SessionMessage): SessionMessage;
-  findMessageById(messageId: string): SessionMessage | undefined;
-  listMessagesBySessionId(sessionId: string): SessionMessage[];
-  listMessagesByExecutionId(sessionId: string, executionId: string): SessionMessage[];
-  findAssistantReplyByExecutionId(sessionId: string, executionId: string): SessionMessage | undefined;
-  listUserMessagesByExecutionIds(executionIds: string[]): SessionMessage[];
-  listMessagesByIds(messageIds: string[]): SessionMessage[];
-  insertMessageAttachments(attachments: SessionMessageAttachment[]): void;
-  listAttachmentsByMessageIds(messageIds: string[]): SessionMessageAttachment[];
-  findAttachmentById(attachmentId: string): SessionMessageAttachment | undefined;
-  insertEntry(entry: SessionEntry): SessionEntry;
-  findEntryById(entryId: string): SessionEntry | undefined;
-  findMessageEntry(input: { session_id: string; message_id: string }): SessionEntry | undefined;
-  listEntriesBySessionId(sessionId: string): SessionEntry[];
-  updateEntryParent(input: { entry_id: string; parent_entry_id?: string }): SessionEntry | undefined;
-  updateActiveEntry(input: {
+  archiveSession(input: { session_id: string; archived_at: string }): Session | undefined;
+  updateSessionActiveEntry(input: {
     session_id: string;
     active_entry_id?: string;
     updated_at: string;
   }): Session | undefined;
-  insertCompactionSummary(compaction: SessionCompactionSummary): SessionCompactionSummary;
-  findCompactionSummaryById(compactionId: string): SessionCompactionSummary | undefined;
-  listCompactionSummariesByIds(compactionIds: string[]): SessionCompactionSummary[];
-  listCompactionSummariesBySessionId(sessionId: string): SessionCompactionSummary[];
+
+  insertMessage(message: SessionMessage): SessionMessage;
+  findMessageById(messageId: string): SessionMessage | undefined;
+  listMessagesBySessionId(sessionId: string): SessionMessage[];
+  findAssistantReplyBySessionIdAndExecutionId(input: {
+    session_id: string;
+    execution_id: string;
+  }): SessionAssistantReplyMessage | undefined;
+  listUserMessagesByExecutionIds(executionIds: string[]): UserMessage[];
+  listMessagesByIds(messageIds: string[]): SessionMessage[];
+
+  insertMessageAttachments(attachments: SessionMessageAttachment[]): void;
+  listAttachmentsByMessageIds(messageIds: string[]): SessionMessageAttachment[];
+  findAttachmentById(attachmentId: string): SessionMessageAttachment | undefined;
+
+  insertEntry(entry: SessionEntry): SessionEntry;
+  findEntryById(entryId: string): SessionEntry | undefined;
+  findMessageEntryBySessionIdAndMessageId(input: {
+    session_id: string;
+    message_id: string;
+  }): SessionEntry | undefined;
+  listEntriesBySessionId(sessionId: string): SessionEntry[];
+  updateEntryParent(input: { entry_id: string; parent_entry_id?: string }): SessionEntry | undefined;
+
   insertCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord;
   updateCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord | undefined;
   findCompactionById(compactionId: string): SessionCompactionRecord | undefined;
   listCompactionsBySessionId(sessionId: string): SessionCompactionRecord[];
   listRunningCompactions(): SessionCompactionRecord[];
+  listCompletedCompactionSummariesByIds(compactionIds: string[]): SessionCompactionSummary[];
 }
 
 export function createSessionStore(input: { database: DatabaseConnection }): SessionStore {
@@ -97,7 +107,7 @@ class DatabaseSessionStore implements SessionStore {
     ` }).all([workspaceId]).map(fromSessionRow);
   }
 
-  updateSessionArchiveState(input: {
+  archiveSession(input: {
     session_id: string;
     archived_at: string;
   }): Session | undefined {
@@ -108,6 +118,24 @@ class DatabaseSessionStore implements SessionStore {
           updated_at = @archived_at
       WHERE session_id = @session_id
     ` }).run(input);
+    return this.findSessionById(input.session_id);
+  }
+
+  updateSessionActiveEntry(input: {
+    session_id: string;
+    active_entry_id?: string;
+    updated_at: string;
+  }): Session | undefined {
+    this.database.prepare({ sql: `
+      UPDATE sessions
+      SET active_entry_id = @active_entry_id,
+          updated_at = @updated_at
+      WHERE session_id = @session_id
+    ` }).run({
+      session_id: input.session_id,
+      active_entry_id: input.active_entry_id ?? null,
+      updated_at: input.updated_at,
+    });
     return this.findSessionById(input.session_id);
   }
 
@@ -139,31 +167,28 @@ class DatabaseSessionStore implements SessionStore {
     ` }).all([sessionId]).map(fromMessageRow);
   }
 
-  listMessagesByExecutionId(sessionId: string, executionId: string): SessionMessage[] {
-    return this.database.prepare<SessionMessageRow>({ sql: `
-      SELECT * FROM session_messages
-      WHERE session_id = ? AND execution_id = ?
-      ORDER BY created_at ASC, message_id ASC
-    ` }).all([sessionId, executionId]).map(fromMessageRow);
-  }
-
-  findAssistantReplyByExecutionId(sessionId: string, executionId: string): SessionMessage | undefined {
+  findAssistantReplyBySessionIdAndExecutionId(input: {
+    session_id: string;
+    execution_id: string;
+  }): SessionAssistantReplyMessage | undefined {
     const row = this.database.prepare<SessionMessageRow>({ sql: `
       SELECT * FROM session_messages
-      WHERE session_id = ? AND execution_id = ? AND message_kind = 'assistant_reply'
+      WHERE session_id = @session_id
+        AND execution_id = @execution_id
+        AND message_kind = 'assistant_reply'
       LIMIT 1
-    ` }).get([sessionId, executionId]);
-    return row ? fromMessageRow(row) : undefined;
+    ` }).get(input);
+    return row ? SessionAssistantReplyMessageSchema.parse(fromMessageRow(row)) : undefined;
   }
 
-  listUserMessagesByExecutionIds(executionIds: string[]): SessionMessage[] {
+  listUserMessagesByExecutionIds(executionIds: string[]): UserMessage[] {
     if (executionIds.length === 0) return [];
     const placeholders = executionIds.map(() => '?').join(', ');
     return this.database.prepare<SessionMessageRow>({ sql: `
       SELECT * FROM session_messages
       WHERE execution_id IN (${placeholders}) AND message_kind = 'user_message'
       ORDER BY created_at ASC, message_id ASC
-    ` }).all(executionIds).map(fromMessageRow);
+    ` }).all(executionIds).map((row) => SessionUserMessageSchema.parse(fromMessageRow(row)));
   }
 
   listMessagesByIds(messageIds: string[]): SessionMessage[] {
@@ -225,7 +250,10 @@ class DatabaseSessionStore implements SessionStore {
     return row ? fromEntryRow(row) : undefined;
   }
 
-  findMessageEntry(input: { session_id: string; message_id: string }): SessionEntry | undefined {
+  findMessageEntryBySessionIdAndMessageId(input: {
+    session_id: string;
+    message_id: string;
+  }): SessionEntry | undefined {
     const row = this.database.prepare<SessionEntryRow>({ sql: `
       SELECT * FROM session_entries
       WHERE session_id = @session_id
@@ -256,61 +284,6 @@ class DatabaseSessionStore implements SessionStore {
       parent_entry_id: input.parent_entry_id ?? null,
     });
     return this.findEntryById(input.entry_id);
-  }
-
-  updateActiveEntry(input: {
-    session_id: string;
-    active_entry_id?: string;
-    updated_at: string;
-  }): Session | undefined {
-    this.database.prepare({ sql: `
-      UPDATE sessions
-      SET active_entry_id = @active_entry_id,
-          updated_at = @updated_at
-      WHERE session_id = @session_id
-    ` }).run({
-      session_id: input.session_id,
-      active_entry_id: input.active_entry_id ?? null,
-      updated_at: input.updated_at,
-    });
-    return this.findSessionById(input.session_id);
-  }
-
-  insertCompactionSummary(compaction: SessionCompactionSummary): SessionCompactionSummary {
-    this.insertCompaction({
-      compactionId: compaction.compaction_id,
-      sessionId: compaction.session_id,
-      anchorEntryId: compaction.covered_until_entry_id,
-      trigger: 'legacy',
-      status: 'completed',
-      summary: compaction,
-      startedAt: compaction.created_at,
-      completedAt: compaction.created_at,
-    });
-    return compaction;
-  }
-
-  findCompactionSummaryById(compactionId: string): SessionCompactionSummary | undefined {
-    return this.findCompactionById(compactionId)?.summary;
-  }
-
-  listCompactionSummariesByIds(compactionIds: string[]): SessionCompactionSummary[] {
-    if (compactionIds.length === 0) return [];
-    const placeholders = compactionIds.map(() => '?').join(', ');
-    return this.database.prepare<SessionCompactionRow>({ sql: `
-      SELECT * FROM session_compactions
-      WHERE compaction_id IN (${placeholders})
-        AND status = 'completed'
-    ` }).all(compactionIds).flatMap((row) => {
-      const summary = fromCompactionRow(row).summary;
-      return summary ? [summary] : [];
-    });
-  }
-
-  listCompactionSummariesBySessionId(sessionId: string): SessionCompactionSummary[] {
-    return this.listCompactionsBySessionId(sessionId).flatMap((record) => (
-      record.summary ? [record.summary] : []
-    ));
   }
 
   /** Inserts the unique Session-owned lifecycle record. */
@@ -371,6 +344,21 @@ class DatabaseSessionStore implements SessionStore {
       WHERE status = 'running'
       ORDER BY started_at ASC, compaction_id ASC
     ` }).all().map(fromCompactionRow);
+  }
+
+  listCompletedCompactionSummariesByIds(
+    compactionIds: string[],
+  ): SessionCompactionSummary[] {
+    if (compactionIds.length === 0) return [];
+    const placeholders = compactionIds.map(() => '?').join(', ');
+    return this.database.prepare<SessionCompactionRow>({ sql: `
+      SELECT * FROM session_compactions
+      WHERE compaction_id IN (${placeholders})
+        AND status = 'completed'
+    ` }).all(compactionIds).flatMap((row) => {
+      const summary = fromCompactionRow(row).summary;
+      return summary ? [summary] : [];
+    });
   }
 }
 

@@ -38,6 +38,7 @@ import type {
   SessionMessage,
   SessionMessageWithAttachments,
   SessionUserContent,
+  UserMessage,
 } from './session-message';
 import { sessionFailure, type SessionFailure } from './session';
 import type { SessionStore } from './session-store';
@@ -133,7 +134,7 @@ export interface ListUserMessagesByExecutionIdsRequest {
 }
 
 export type ListUserMessagesByExecutionIdsResult =
-  | { status: 'ok'; messages: SessionMessage[] }
+  | { status: 'ok'; messages: UserMessage[] }
   | { status: 'failed'; failure: SessionFailure };
 
 export interface GetActiveHistoryRequest {
@@ -293,7 +294,7 @@ class DefaultSessionHistory implements SessionHistory {
           message_id: request.message_id,
           created_at: request.created_at,
         });
-        this.options.store.updateActiveEntry({
+        this.options.store.updateSessionActiveEntry({
           session_id: request.session_id,
           active_entry_id: entry.entry_id,
           updated_at: request.created_at,
@@ -354,7 +355,10 @@ class DefaultSessionHistory implements SessionHistory {
     const replay = this.replayMessage(message);
     if (replay) return replay;
     try {
-      if (this.options.store.findAssistantReplyByExecutionId(request.session_id, request.execution_id)) {
+      if (this.options.store.findAssistantReplyBySessionIdAndExecutionId({
+        session_id: request.session_id,
+        execution_id: request.execution_id,
+      })) {
         return {
           status: 'failed',
           failure: {
@@ -431,7 +435,7 @@ class DefaultSessionHistory implements SessionHistory {
       const attachmentsByMessageId = groupAttachments(
         this.options.store.listAttachmentsByMessageIds([...messagesById.keys()]),
       );
-      const compactions = this.options.store.listCompactionSummariesByIds(
+      const compactions = this.options.store.listCompletedCompactionSummariesByIds(
         path.flatMap((entry) => entry.compaction_id ? [entry.compaction_id] : []),
       );
       const compactionsById = new Map(compactions.map((item) => [item.compaction_id, item]));
@@ -536,7 +540,7 @@ class DefaultSessionHistory implements SessionHistory {
           message_id: message.message_id,
           created_at: message.completed_at ?? message.created_at,
         });
-        this.options.store.updateActiveEntry({
+        this.options.store.updateSessionActiveEntry({
           session_id: message.session_id,
           active_entry_id: entry.entry_id,
           updated_at: message.completed_at ?? message.created_at,
@@ -553,7 +557,7 @@ class DefaultSessionHistory implements SessionHistory {
       const existing = this.options.store.findMessageById(message.message_id);
       if (!existing) return undefined;
       if (!sameValue(existing, message)) return messageIdentityConflict();
-      const entry = this.options.store.findMessageEntry({
+      const entry = this.options.store.findMessageEntryBySessionIdAndMessageId({
         session_id: message.session_id,
         message_id: message.message_id,
       });
@@ -573,7 +577,7 @@ class DefaultSessionHistory implements SessionHistory {
       const existing = this.options.store.findMessageById(message.message_id);
       if (!existing) return undefined;
       if (!sameValue(existing, message)) return messageIdentityConflict();
-      const entry = this.options.store.findMessageEntry({
+      const entry = this.options.store.findMessageEntryBySessionIdAndMessageId({
         session_id: message.session_id,
         message_id: message.message_id,
       });

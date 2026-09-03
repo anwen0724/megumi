@@ -116,7 +116,7 @@ export function createSessionEntryGraph(input: { store: SessionStore }): Session
             };
           }
         }
-        const session = input.store.updateActiveEntry(request);
+        const session = input.store.updateSessionActiveEntry(request);
         return session
           ? { status: 'updated', session }
           : {

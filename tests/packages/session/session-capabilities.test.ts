@@ -584,7 +584,7 @@ describe('Session capabilities', () => {
       status: 'failed',
       failure: { code: 'active_entry_changed' },
     });
-    expect(repository.findCompactionSummaryById('C-stale')).toBeUndefined();
+    expect(repository.findCompactionById('C-stale')?.summary).toBeUndefined();
   });
 
   it('returns empty active path for a new session', async () => {

@@ -237,7 +237,7 @@ function completeCompaction(
           || (!request.firstKeptEntryId
             && session.active_entry_id !== request.coveredUntilEntryId)
         ) {
-          options.store.updateActiveEntry({
+          options.store.updateSessionActiveEntry({
             session_id: request.sessionId,
             active_entry_id: entry.entry_id,
             updated_at: request.completedAt,
