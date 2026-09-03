@@ -8,11 +8,11 @@ const CONVERSATION_TOOL_NAMES = new Set([
 ]);
 
 const CANDIDATE_SUPPLY_TOOL_NAMES = new Set([
-  'search_content', 'read_source_candidate', 'submit_candidates',
+  'update_plan', 'search_content', 'read_source_candidate', 'submit_candidates',
 ]);
 
 const DAILY_RECOMMENDATION_TOOL_NAMES = new Set([
-  'read_pool_candidate', 'publish_daily_recommendations',
+  'update_plan', 'read_pool_candidate', 'publish_daily_recommendations',
 ]);
 
 export function toolBelongsToGroup(toolName: string, groupId: BuiltInToolGroupId): boolean {

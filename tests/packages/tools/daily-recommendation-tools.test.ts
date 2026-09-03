@@ -67,6 +67,7 @@ describe('Daily Recommendation Tools', () => {
     if (modelCall.status !== 'prepared') throw new Error('Expected Tool definitions.');
 
     expect(modelCall.binding.definitions.map(({ name }) => name)).toEqual([
+      'update_plan',
       'read_pool_candidate',
       'publish_daily_recommendations',
     ]);

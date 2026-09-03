@@ -6,6 +6,7 @@
  * sources and depends on neither ModelCallContext nor the full Model.
  */
 
+import type { Message } from '@megumi/ai';
 import type { SessionAttachmentReader } from '@megumi/session';
 import type { ContextFailure, Prompt } from '../context';
 import type { ResolvedContext } from '../context-resolver';
@@ -14,6 +15,7 @@ import type { DailyRecommendationResolvedContext } from '../resolvers/daily-reco
 import type { CandidateSupplyResolvedContext } from '../resolvers/candidate-supply-context-resolver';
 import type { PreferenceLearningResolvedContext } from '../resolvers/preference-learning-context-resolver';
 import { buildContextMessages, type MaterializedHistory } from './context-message-builder';
+import { escapeXmlText } from './prompt-markup-formatter';
 import { buildSystemPrompt } from './system-prompt-builder';
 
 export interface PromptBuilderDependencies {
@@ -97,16 +99,40 @@ function buildCandidateSupplyPrompt(
     prompt: {
       systemPrompt: buildSystemPrompt({
         systemInstructions: context.systemInstructions,
-        candidateSupplyMaterial: {
-          startedAt: context.startedAt,
-          material: context.material,
-        },
         tools: context.tools,
+        includeAvailableTools: false,
       }),
-      messages: [...context.currentMessages],
+      messages: buildCandidateSupplyMessages(context),
       tools: [...context.tools],
     },
   };
+}
+
+/** Replaces the internal kickoff placeholder with the current execution facts. */
+function buildCandidateSupplyMessages(
+  context: CandidateSupplyResolvedContext,
+): readonly Message[] {
+  const taskMessage: Message = {
+    role: 'user',
+    content: renderCandidateSupplyTask(context),
+    timestamp: context.currentMessages[0]?.timestamp ?? Date.parse(context.startedAt),
+  };
+  return [taskMessage, ...context.currentMessages.slice(1)];
+}
+
+function renderCandidateSupplyTask(context: CandidateSupplyResolvedContext): string {
+  const material = context.material;
+  return [
+    'Execute the following Candidate Supply task.',
+    '',
+    '<candidate_supply_material>',
+    `  <started_at>${escapeXmlText(context.startedAt)}</started_at>`,
+    `  <execution>${escapeXmlText(JSON.stringify(material.execution))}</execution>`,
+    `  <pool>${escapeXmlText(JSON.stringify(material.pool))}</pool>`,
+    `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
+    `  <sources>${escapeXmlText(JSON.stringify(material.sources))}</sources>`,
+    '</candidate_supply_material>',
+  ].join('\n');
 }
 
 async function buildConversationPrompt(

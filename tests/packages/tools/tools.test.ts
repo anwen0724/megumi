@@ -34,7 +34,7 @@ describe('Tools ModelCall routing', () => {
     expect(modelCall.status).toBe('prepared');
     if (modelCall.status !== 'prepared') return;
     expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual([
-      'search_content', 'read_source_candidate', 'submit_candidates',
+      'update_plan', 'search_content', 'read_source_candidate', 'submit_candidates',
     ]);
     const invocations = [
       { toolName: 'search_content', input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 10, targetInterestIds: [] } },

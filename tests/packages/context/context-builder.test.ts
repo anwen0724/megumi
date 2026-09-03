@@ -88,7 +88,7 @@ function fixture(tokens = 50): CreateContextOptions {
 }
 
 describe('Context.build', () => {
-  it('preserves the original conversation System Prompt organization through the public Context seam', async () => {
+  it('keeps fixed and Tool-specific guidelines separate through the public Context seam', async () => {
     const options = fixture();
     options.instructionReader.getSystemInstructions = vi.fn(async () => [
       {
@@ -118,7 +118,8 @@ describe('Context.build', () => {
     if (result.status !== 'ready') return;
     expect(result.prompt.systemPrompt).toBe([
       'Original identity paragraph.',
-      'Behavior guidelines:\n- Original fixed guidance.\n- Tool guidance remains in the same list.',
+      'Behavior guidelines:\n- Original fixed guidance.',
+      'Tool guidelines:\n- Tool guidance remains in the same list.',
       '<effective_instructions>\n  User and project-specific instructions and guidelines:\n  <instruction path="/workspace/AGENTS.md">\n    rules\n  </instruction>\n</effective_instructions>',
       '<available_tools>\n  In addition to the tools above, you may have access to other custom tools depending on the project.\n- inspect_result: Inspect result evidence.\n</available_tools>',
       '<execution_environment>\n  <working_directory>/workspace/packages/app</working_directory>\n  <operating_system>Linux</operating_system>\n  <shell>POSIX shell</shell>\n</execution_environment>',

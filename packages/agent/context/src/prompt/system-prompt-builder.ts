@@ -11,12 +11,11 @@ import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 import type {
-  CandidateSupplyContextMaterial,
   DailyRecommendationContextMaterial,
   ExecutionEnvironment,
 } from '../context';
 import type { PreferenceLearningContextMaterial } from '../discovery-context';
-import { escapeXmlAttribute } from './prompt-markup-formatter';
+import { escapeXmlAttribute, escapeXmlText } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
   readonly systemInstructions: readonly SystemInstructionDocument[];
@@ -24,13 +23,10 @@ export interface SystemPromptSources {
   readonly skills?: SkillView;
   readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
+  readonly includeAvailableTools?: boolean;
   readonly dailyRecommendationMaterial?: {
     readonly localDate: string;
     readonly material: DailyRecommendationContextMaterial;
-  };
-  readonly candidateSupplyMaterial?: {
-    readonly startedAt: string;
-    readonly material: CandidateSupplyContextMaterial;
   };
   readonly preferenceLearningMaterial?: {
     readonly startedAt: string;
@@ -40,24 +36,13 @@ export interface SystemPromptSources {
 
 export function buildSystemPrompt(sources: SystemPromptSources): string {
   const sections: string[] = [];
-  const conversationDocument = sources.systemInstructions.find(
-    (document) => document.instructionId === 'megumi.conversation',
-  );
   for (const document of sources.systemInstructions) {
-    sections.push(document === conversationDocument
-      ? appendToolGuidelines(document.content, sources.tools)
-      : document.content);
+    sections.push(document.content);
   }
   if (sources.dailyRecommendationMaterial) {
     sections.push(renderDailyRecommendationMaterial(
       sources.dailyRecommendationMaterial.localDate,
       sources.dailyRecommendationMaterial.material,
-    ));
-  }
-  if (sources.candidateSupplyMaterial) {
-    sections.push(renderCandidateSupplyMaterial(
-      sources.candidateSupplyMaterial.startedAt,
-      sources.candidateSupplyMaterial.material,
     ));
   }
   if (sources.preferenceLearningMaterial) {
@@ -66,13 +51,13 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
       sources.preferenceLearningMaterial.material,
     ));
   }
-  const guidance = conversationDocument ? '' : renderToolGuidelines(sources.tools);
+  const guidance = renderToolGuidelines(sources.tools);
   if (guidance) sections.push(guidance);
   const effective = sources.effectiveInstructions
     ? renderEffectiveInstructions(sources.effectiveInstructions)
     : '';
   if (effective) sections.push(effective);
-  const tools = renderAvailableTools(sources.tools);
+  const tools = sources.includeAvailableTools === false ? '' : renderAvailableTools(sources.tools);
   if (tools) sections.push(tools);
   const catalog = sources.skills ? renderSkillCatalog(sources.skills) : '';
   if (catalog) sections.push(catalog);
@@ -82,34 +67,19 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
   return sections.join('\n\n');
 }
 
-function renderCandidateSupplyMaterial(
-  startedAt: string,
-  material: CandidateSupplyContextMaterial,
-): string {
-  return [
-    '<candidate_supply_material>',
-    `  <started_at>${escapePromptText(startedAt)}</started_at>`,
-    `  <execution>${escapePromptText(JSON.stringify(material.execution))}</execution>`,
-    `  <pool>${escapePromptText(JSON.stringify(material.pool))}</pool>`,
-    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
-    `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
-    '</candidate_supply_material>',
-  ].join('\n');
-}
-
 function renderDailyRecommendationMaterial(
   localDate: string,
   material: DailyRecommendationContextMaterial,
 ): string {
   return [
     '<daily_recommendation_material>',
-    `  <local_date>${escapePromptText(localDate)}</local_date>`,
-    `  <batch>${escapePromptText(JSON.stringify(material.batch))}</batch>`,
-    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
-    `  <exploration_preference>${escapePromptText(JSON.stringify(material.explorationPreference))}</exploration_preference>`,
-    `  <candidates>${escapePromptText(JSON.stringify(material.candidates))}</candidates>`,
-    `  <recent_recommendations>${escapePromptText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
-    `  <pending_feedback>${escapePromptText(JSON.stringify(material.pendingFeedback))}</pending_feedback>`,
+    `  <local_date>${escapeXmlText(localDate)}</local_date>`,
+    `  <batch>${escapeXmlText(JSON.stringify(material.batch))}</batch>`,
+    `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
+    `  <exploration_preference>${escapeXmlText(JSON.stringify(material.explorationPreference))}</exploration_preference>`,
+    `  <candidates>${escapeXmlText(JSON.stringify(material.candidates))}</candidates>`,
+    `  <recent_recommendations>${escapeXmlText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
+    `  <pending_feedback>${escapeXmlText(JSON.stringify(material.pendingFeedback))}</pending_feedback>`,
     `  <omitted_pending_feedback_count>${material.omittedPendingFeedbackCount}</omitted_pending_feedback_count>`,
     '</daily_recommendation_material>',
   ].join('\n');
@@ -121,37 +91,20 @@ function renderPreferenceLearningMaterial(
 ): string {
   return [
     '<preference_learning_material>',
-    `  <started_at>${escapePromptText(startedAt)}</started_at>`,
-    `  <batch>${escapePromptText(JSON.stringify(material.batch))}</batch>`,
-    `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
-    `  <current_preferences>${escapePromptText(JSON.stringify(material.currentPreferences))}</current_preferences>`,
-    `  <feedback_changes>${escapePromptText(JSON.stringify(material.feedbackChanges))}</feedback_changes>`,
+    `  <started_at>${escapeXmlText(startedAt)}</started_at>`,
+    `  <batch>${escapeXmlText(JSON.stringify(material.batch))}</batch>`,
+    `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
+    `  <current_preferences>${escapeXmlText(JSON.stringify(material.currentPreferences))}</current_preferences>`,
+    `  <feedback_changes>${escapeXmlText(JSON.stringify(material.feedbackChanges))}</feedback_changes>`,
     '</preference_learning_material>',
   ].join('\n');
-}
-
-function escapePromptText(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-}
-
-/** Preserves the original single Behavior-guidelines list for conversation prompts. */
-function appendToolGuidelines(
-  fixedGuidance: string,
-  tools: readonly ToolDefinition[],
-): string {
-  const items = tools.flatMap((tool) => tool.promptGuidelines ?? []);
-  if (items.length === 0) return fixedGuidance;
-  const renderedItems = items.map((item) => `- ${item}`).join('\n');
-  return fixedGuidance.startsWith('Behavior guidelines:')
-    ? `${fixedGuidance}\n${renderedItems}`
-    : `${fixedGuidance}\n\nBehavior guidelines:\n${renderedItems}`;
 }
 
 /** Tool-specific prompt guidance follows the profile documents. */
 function renderToolGuidelines(tools: readonly ToolDefinition[]): string {
   const items = tools.flatMap((tool) => tool.promptGuidelines ?? []);
   if (items.length === 0) return '';
-  return ['Behavior guidelines:', ...items.map((item) => `- ${item}`)].join('\n');
+  return ['Tool guidelines:', ...items.map((item) => `- ${item}`)].join('\n');
 }
 
 /** ④ Available tools: a guidance line plus one line per tool; the promptSnippet wins over the folded, truncated description. */

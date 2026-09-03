@@ -89,7 +89,7 @@ describe('PromptBuilder', () => {
 
     const text = result.prompt.systemPrompt;
     const identity = text.indexOf('system');
-    const guidance = text.indexOf('Behavior guidelines:');
+    const guidance = text.indexOf('Tool guidelines:');
     const effective = text.indexOf('<effective_instructions>');
     const availableTools = text.indexOf('<available_tools>');
     const environment = text.indexOf('<execution_environment>');
@@ -111,7 +111,7 @@ describe('PromptBuilder', () => {
     expect(text).toContain('- read_file: Read file contents.');
     expect(text).toContain('- run_command: Run a command and return output previews.');
     // Profile content precedes the tool-specific behavior guideline section.
-    const behavior = text.indexOf('Behavior guidelines:');
+    const behavior = text.indexOf('Tool guidelines:');
     const profileContent = text.indexOf('Be concise in your responses.');
     const toolGuideline = text.indexOf('Command output is redacted; sensitive values are replaced before they reach you.');
     expect(profileContent).toBeLessThan(behavior);
