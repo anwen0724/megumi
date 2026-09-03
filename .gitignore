@@ -21,7 +21,7 @@ worktrees/
 .idea/
 docs/
 .codegraph
-evals/agent/runs/
+evals/agent/records/
 
 # TypeScript incremental build cache
 *.tsbuildinfo

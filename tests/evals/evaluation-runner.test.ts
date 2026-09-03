@@ -57,7 +57,7 @@ describe('Evaluation Run', () => {
         recordStatus: 'recorded',
       }],
     });
-    expect(result.runDirectory).toBe(path.join(roots.evaluationRoot, 'runs', 'run.test'));
+    expect(result.runDirectory).toBe(path.join(roots.evaluationRoot, 'records', 'run.test'));
     const caseDirectory = path.join(result.runDirectory, 'cases', 'controlled.conversation.record-facts.r1');
     expect(existsSync(path.join(caseDirectory, 'case.json'))).toBe(true);
     expect(existsSync(path.join(caseDirectory, 'result.json'))).toBe(true);
@@ -99,7 +99,7 @@ describe('Evaluation Run', () => {
       datasetRoot: roots.datasetRoot, request,
       environment: { TEST_EVALUATION_API_KEY: 'test-key' },
     })).rejects.toThrow(/missing-dataset|cannot read evaluation json/iu);
-    expect(existsSync(path.join(roots.evaluationRoot, 'runs'))).toBe(false);
+    expect(existsSync(path.join(roots.evaluationRoot, 'records'))).toBe(false);
   });
 
   it('records one Case infrastructure failure and still runs the remaining Case', async () => {

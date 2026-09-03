@@ -34,9 +34,9 @@ export async function createRunStorage(input: {
   readonly evaluationRoot: string;
   readonly runId: string;
 }): Promise<EvaluationRunStorage> {
-  const runsRoot = path.join(path.resolve(input.evaluationRoot), 'runs');
-  await mkdir(runsRoot, { recursive: true });
-  const runDirectory = path.join(runsRoot, input.runId);
+  const recordsRoot = path.join(path.resolve(input.evaluationRoot), 'records');
+  await mkdir(recordsRoot, { recursive: true });
+  const runDirectory = path.join(recordsRoot, input.runId);
   await mkdir(runDirectory);
   await mkdir(path.join(runDirectory, 'cases'));
 

@@ -68,7 +68,7 @@ npm run eval:agent -- run --candidate .\candidate-model.json --dataset controlle
 
 每个 Case 执行时会临时创建一套 Home、Workspace、业务 SQLite、Observability 存储和 Product Runtime。这是为了隔离不同 Case 以及正常产品数据；Case 结束后临时环境会被删除，下一 Case 不复用任何运行状态。
 
-结果保存在 `evals/agent/runs/<runId>/`：
+结果保存在 `evals/agent/records/<runId>/`：
 
 ```text
 run.json
@@ -97,4 +97,4 @@ cases/<caseRunId>/
 - `metrics/`：只读 Metric Catalog。
 - `adapters/`：候选模型解析以及 Controlled/Live 外部环境差异。
 - `run/`：Case 环境、Initial State 安装、真实业务驱动、Trace/产物归档和 Run 编排。
-- `runs/`：本地生成且不提交 Git 的不可变运行记录。
+- `records/`：本地生成且不提交 Git 的不可变运行记录。
