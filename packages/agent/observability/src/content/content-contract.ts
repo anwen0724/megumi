@@ -34,6 +34,7 @@ export const CONTENT_KINDS = [
   'interest.understanding.input',
   'interest.understanding.result',
   'interest.committed',
+  'interest.understanding.outcome',
 ] as const;
 
 export const ContentKindSchema = z.enum(CONTENT_KINDS);

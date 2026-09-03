@@ -5,6 +5,7 @@ export { createDiscovery } from './discovery';
 export type {
   CreateDiscoveryOptions,
   Discovery,
+  InterestFacts,
 } from './discovery';
 export {
   InterestCreatedFromSchema,
@@ -25,14 +26,6 @@ export type {
   ObserveConversationTurnRequest,
   ObserveConversationTurnResult,
 } from './interests/interest-runtime';
-export {
-  InterestUnderstandingSchema,
-  isInterestUnderstandingTerminal,
-} from './interests/interest-understanding';
-export type {
-  InterestUnderstanding,
-  InterestUnderstandingReceipt,
-} from './interests/interest-understanding';
 export type {
   ChangeInterestRequest,
   Interest,

@@ -3,6 +3,7 @@
  * the owning product operation's returned result without inventing a shared status.
  */
 import type { ProductRuntime } from '@megumi/composition';
+import { z } from 'zod';
 import type { EvaluationCase } from '../contracts/evaluation-dataset';
 import type { InstalledInitialStateIds } from './initial-state';
 
@@ -41,7 +42,7 @@ type CaseExecutionRuntime = {
   readonly host: {
     readonly session: Pick<ProductRuntime['host']['session'], 'sendUserInput' | 'readCommittedRun'>;
     readonly discovery: Pick<ProductRuntime['host']['discovery'],
-      | 'waitInterestUnderstanding'
+      | 'getInterestFacts'
       | 'requestCandidateSupply'
       | 'waitCandidateSupplyCheck'
       | 'getCandidateSupplyFacts'
@@ -51,6 +52,8 @@ type CaseExecutionRuntime = {
       | 'updateRecommendationState'
       | 'waitPreferenceLearning'
       | 'getPreferenceLearningFacts'>;
+    readonly observability: Pick<ProductRuntime['host']['observability'],
+      'flush' | 'listTraces' | 'getTrace' | 'getContent'>;
   };
 };
 
@@ -178,9 +181,10 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
       ...(conversation.status === 'interrupted' ? { interruption: safetyInterruption(input) } : {}),
     });
   }
-  const understanding = await waitForBackgroundResult({
+  const understanding = await waitForInterestUnderstandingTrace({
+    runtime: input.runtime,
+    executionId,
     deadlineMs: input.safetyDeadlineMs,
-    wait: (timeoutMs) => input.runtime.host.discovery.waitInterestUnderstanding({ executionId, timeoutMs }),
   });
   if (understanding.status === 'interrupted') {
     return execution({
@@ -194,21 +198,31 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
   }
   traceTargets.push({
     traceKind: 'interest_understanding',
-    correlation: {
-      interestUnderstandingId: understanding.value.interestUnderstandingId,
-      executionId,
-      sessionId,
-    },
+    correlation: { executionId, sessionId },
     expectation: 'required',
   });
+  const outcome = understanding.value.outcome;
+  const ownerFacts = outcome
+    ? await input.runtime.host.discovery.getInterestFacts({
+        interestIds: outcome.changedInterestIds,
+        evidenceIds: outcome.evidenceIds,
+      })
+    : { interests: [], evidence: [] };
   return execution({
     caseType: 'interest_understanding', terminalState: 'settled',
-    productResult: { sourceConversation: conversation.result, understanding: understanding.value },
-    ownerFacts: { understanding: understanding.value },
+    productResult: {
+      sourceConversation: conversation.result,
+      understandingTrace: understanding.value.trace,
+      ...(outcome ? { outcome } : {}),
+    },
+    ownerFacts,
     businessIds: {
       sessionId,
       executionId,
-      interestUnderstandingId: understanding.value.interestUnderstandingId,
+      ...(outcome ? {
+        interestIds: outcome.changedInterestIds,
+        evidenceIds: outcome.evidenceIds,
+      } : {}),
     },
     traceTargets,
   });
@@ -407,6 +421,69 @@ async function waitForCommittedConversation(input: {
 type ProductWaitResult<T> =
   | { readonly status: 'completed'; readonly value: T }
   | { readonly status: 'interrupted' };
+
+const InterestUnderstandingOutcomeSchema = z.object({
+  outcome: z.enum(['evidence_committed', 'no_durable_evidence']),
+  changedInterestIds: z.array(z.string().min(1)),
+  evidenceIds: z.array(z.string().min(1)),
+}).strict();
+type InterestTraceDetail = Extract<
+  Awaited<ReturnType<CaseExecutionRuntime['host']['observability']['getTrace']>>,
+  { readonly status: 'found' }
+>['trace'];
+
+async function waitForInterestUnderstandingTrace(input: {
+  readonly runtime: CaseExecutionRuntime;
+  readonly executionId: string;
+  readonly deadlineMs: number;
+}): Promise<ProductWaitResult<{
+  readonly trace: InterestTraceDetail;
+  readonly outcome?: z.infer<typeof InterestUnderstandingOutcomeSchema>;
+}>> {
+  while (Date.now() <= input.deadlineMs) {
+    await input.runtime.host.observability.flush();
+    const listed = await input.runtime.host.observability.listTraces({
+      traceKind: 'interest_understanding',
+      correlation: { executionId: input.executionId },
+      limit: 5,
+    });
+    if (listed.status === 'failed') throw new Error(listed.message);
+    const settled = listed.traces.find((trace) => trace.status !== 'incomplete');
+    if (settled) {
+      const detail = await input.runtime.host.observability.getTrace({ traceId: settled.traceId });
+      if (detail.status === 'failed') throw new Error(detail.message);
+      if (detail.status === 'found') {
+        const outcomeCheckpoint = [...detail.trace.contents].reverse().find(
+          (content) => content.kind === 'interest.understanding.outcome',
+        );
+        const outcome = outcomeCheckpoint
+          ? await readInterestUnderstandingOutcome(input.runtime, settled.traceId, outcomeCheckpoint.sequence)
+          : undefined;
+        if (settled.status === 'ok' && !outcome) {
+          throw new Error('Completed Interest Understanding Trace has no terminal outcome content.');
+        }
+        return {
+          status: 'completed',
+          value: { trace: detail.trace, ...(outcome ? { outcome } : {}) },
+        };
+      }
+    }
+    await waitForNextPoll(input.deadlineMs);
+  }
+  return { status: 'interrupted' };
+}
+
+async function readInterestUnderstandingOutcome(
+  runtime: CaseExecutionRuntime,
+  traceId: string,
+  sequence: number,
+): Promise<z.infer<typeof InterestUnderstandingOutcomeSchema> | undefined> {
+  const result = await runtime.host.observability.getContent({ traceId, sequence });
+  if (result.status === 'failed') throw new Error(result.message);
+  if (result.status !== 'available' || result.content.encoding === 'binary') return undefined;
+  const serialized = result.content.encoding === 'json' ? result.content.json : result.content.text;
+  return InterestUnderstandingOutcomeSchema.parse(JSON.parse(serialized));
+}
 
 async function waitForBackgroundResult<T>(input: {
   readonly deadlineMs: number;

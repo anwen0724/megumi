@@ -13,20 +13,18 @@ import {
   InterestExtractionResultSchema,
   type ChangeInterestRequest,
   type Interest,
+  type InterestEvidence,
   type SessionParticipation,
   type SetSessionParticipationRequest,
 } from './interest';
 import {
   createInterestExtractionQueue,
   type InterestExtractionJob,
+  type InterestExtractionOutcome,
   type InterestExtractionQueue,
 } from './interest-extraction-queue';
 import type { InterestExtractor } from './interest-extraction';
 import type { InterestRepository } from '../persistence/interest-repository';
-import type {
-  InterestUnderstanding,
-  InterestUnderstandingReceipt,
-} from './interest-understanding';
 
 export interface ObserveConversationTurnRequest {
   readonly sessionId: string;
@@ -37,7 +35,7 @@ export interface ObserveConversationTurnRequest {
 }
 
 export type ObserveConversationTurnResult =
-  | { readonly status: 'accepted'; readonly receipt: InterestUnderstandingReceipt }
+  | { readonly status: 'accepted' }
   | {
       readonly status: 'skipped';
       readonly reason: 'recognition_disabled' | 'session_excluded' | 'before_effective_from' | 'shutting_down';
@@ -56,7 +54,6 @@ export interface CreateInterestRuntimeOptions {
   >;
   readonly extractor: InterestExtractor['extract'];
   readonly ids: {
-    createInterestUnderstandingId(): string;
     createInterestId(): string;
     createEvidenceId(): string;
   };
@@ -73,8 +70,14 @@ export interface InterestRuntime {
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
   /** Enqueues one eligible completed turn without blocking conversation completion. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
-  getInterestUnderstanding(interestUnderstandingId: string): InterestUnderstanding | undefined;
-  findInterestUnderstandingByExecution(executionId: string): InterestUnderstanding | undefined;
+  /** Reads the exact Interest and Evidence business facts requested by their identities. */
+  getInterestFacts(request: {
+    readonly interestIds: readonly string[];
+    readonly evidenceIds: readonly string[];
+  }): {
+    readonly interests: readonly Interest[];
+    readonly evidence: readonly InterestEvidence[];
+  };
   /** Retracts one Session's Evidence and unsupported inferred Interests. */
   retractSessionEvidence(sessionId: string): Promise<void>;
   /** Stops and drains the owned extraction worker. */
@@ -84,49 +87,16 @@ export interface InterestRuntime {
 /** Creates Interest commands and the owned post-conversation extraction worker. */
 export function createInterestRuntime(options: CreateInterestRuntimeOptions): InterestRuntime {
   let accepting = true;
-  options.repository.interruptRunningInterestUnderstandings({ interruptedAt: options.clock.now() });
   const queue = createInterestExtractionQueue({
-    process: async (job, signal) => {
-      const startedAt = options.clock.now();
-      options.repository.updateInterestUnderstanding({
-        ...interestUnderstandingBase(job),
-        status: 'running',
-        startedAt,
-      });
-      try {
-        const result = await withInterestUnderstandingTrace(options, job, () => (
-          processJob(options, job, signal)
-        ));
-        options.repository.updateInterestUnderstanding({
-          ...interestUnderstandingBase(job),
-          status: 'completed',
-          startedAt,
-          completedAt: options.clock.now(),
-          ...result,
-          changedInterestIds: [...result.changedInterestIds],
-          evidenceIds: [...result.evidenceIds],
-        });
-      } catch (error) {
-        options.repository.updateInterestUnderstanding({
-          ...interestUnderstandingBase(job),
-          status: signal.aborted ? 'interrupted' : 'failed',
-          startedAt,
-          completedAt: options.clock.now(),
-          failure: {
-            code: signal.aborted ? 'operation_interrupted' : 'interest_understanding_failed',
-            message: error instanceof Error ? error.message : String(error),
-          },
-        });
-        throw error;
-      }
-    },
+    process: (job, signal) => processJob(options, job, signal),
+    observe: (job, operation) => withInterestUnderstandingTrace(options, job, operation),
     onError: (error, job) => options.onError?.(error, job),
   });
 
   return {
     async changeInterest(request) {
       const now = options.clock.now();
-      return options.repository.changeInterest(request.action === 'create'
+      return options.repository.applyInterestChange(request.action === 'create'
         ? {
             action: 'create',
             interestId: options.ids.createInterestId(),
@@ -142,17 +112,16 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
       const session = options.sessions.getSession({ session_id: request.sessionId });
       if (session.status !== 'found') throw new Error('Session was not found.');
       const now = options.clock.now();
-      const policy = options.repository.setSessionParticipation({
+      const result = options.repository.applySessionParticipationChange({
         sessionId: request.sessionId,
         participation: request.participation,
         effectiveFrom: now,
         updatedAt: now,
       });
-      if (request.participation === 'excluded') {
-        const affected = options.repository.retractSessionEvidence(request.sessionId, now);
-        if (affected.length > 0) options.onInterestsChanged?.(affected);
+      if (result.affectedInterestIds.length > 0) {
+        options.onInterestsChanged?.(result.affectedInterestIds);
       }
-      return policy;
+      return result.participation;
     },
 
     observeConversationTurn(request) {
@@ -160,38 +129,27 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
       const admission = canProcess(options, request.sessionId, request.completedAt);
       if (admission) return { status: 'skipped', reason: admission };
       const queuedAt = options.clock.now();
-      const receipt = options.repository.createInterestUnderstanding({
-        interestUnderstandingId: options.ids.createInterestUnderstandingId(),
-        executionId: request.executionId,
-        sessionId: request.sessionId,
-        userMessageId: request.userMessageId,
-        assistantMessageId: request.assistantMessageId,
-        status: 'queued',
-        queuedAt,
-      });
-      const job = queue.submit({ ...request, queuedAt, interestUnderstandingId: receipt.interestUnderstandingId });
-      return job
-        ? { status: 'accepted', receipt: {
-            interestUnderstandingId: receipt.interestUnderstandingId,
-            executionId: receipt.executionId,
-            status: 'queued',
-            queuedAt: receipt.queuedAt,
-          } }
-        : interruptedAdmission(options, receipt);
+      return queue.submit({ ...request, queuedAt })
+        ? { status: 'accepted' }
+        : { status: 'skipped', reason: 'shutting_down' };
     },
 
-    getInterestUnderstanding: (id) => options.repository.getInterestUnderstanding(id),
-    findInterestUnderstandingByExecution: (id) => options.repository.findInterestUnderstandingByExecution(id),
+    getInterestFacts: ({ interestIds, evidenceIds }) => ({
+      interests: options.repository.listInterestsByIds(interestIds),
+      evidence: options.repository.listInterestEvidenceByIds(evidenceIds),
+    }),
 
     async retractSessionEvidence(sessionId) {
-      const affected = options.repository.retractSessionEvidence(sessionId, options.clock.now());
+      const affected = options.repository.retractSessionEvidence({
+        sessionId,
+        retractedAt: options.clock.now(),
+      });
       if (affected.length > 0) options.onInterestsChanged?.(affected);
     },
 
     async shutdown() {
       accepting = false;
       await queue.shutdown();
-      options.repository.interruptRunningInterestUnderstandings({ interruptedAt: options.clock.now() });
     },
   };
 }
@@ -205,8 +163,7 @@ export function createDisabledInterestRuntime(): InterestRuntime {
     changeInterest: unavailable,
     setSessionParticipation: unavailable,
     observeConversationTurn: () => ({ status: 'skipped', reason: 'recognition_disabled' }),
-    getInterestUnderstanding: () => undefined,
-    findInterestUnderstandingByExecution: () => undefined,
+    getInterestFacts: () => ({ interests: [], evidence: [] }),
     retractSessionEvidence: async () => undefined,
     shutdown: async () => undefined,
   };
@@ -220,7 +177,7 @@ function canProcess(
   if (!options.settings.getDiscoverySettings().conversationRecognitionEnabled) {
     return 'recognition_disabled';
   }
-  const policy = options.repository.getSessionParticipation(sessionId);
+  const policy = options.repository.findSessionParticipationBySessionId(sessionId);
   if (policy?.participation === 'excluded') return 'session_excluded';
   if (policy?.participation === 'included' && completedAt < policy.effectiveFrom) {
     return 'before_effective_from';
@@ -233,12 +190,8 @@ async function processJob(
   options: CreateInterestRuntimeOptions,
   job: InterestExtractionJob,
   signal: AbortSignal,
-): Promise<{
-  readonly outcome: 'evidence_committed' | 'no_durable_evidence';
-  readonly changedInterestIds: readonly string[];
-  readonly evidenceIds: readonly string[];
-}> {
-  if (signal.aborted) throw new Error('Interest Understanding was interrupted.');
+): Promise<InterestExtractionOutcome> {
+  throwIfAborted(signal);
   if (canProcess(options, job.sessionId, job.completedAt)) return noDurableEvidence();
   if (options.sessions.getSession({ session_id: job.sessionId }).status !== 'found') return noDurableEvidence();
   const committed = await observeInterestSpan(options, 'interest.turn.resolve', job, () => Promise.resolve(
@@ -259,11 +212,11 @@ async function processJob(
   ));
   if (!user || !assistant) return noDurableEvidence();
 
-  const interests = options.repository.listInterests();
-  const pendingEvidence = options.repository.listPendingEvidence();
+  const interests = options.repository.listNonDeletedInterests();
+  const pendingEvidence = options.repository.listPendingInterestEvidence();
   const resolvedModel = await observeInterestSpan(options, 'model.resolve', job, options.resolveModel);
   if (resolvedModel.status === 'failed') throw new Error(resolvedModel.failure.message);
-  if (signal.aborted) throw new Error('Interest Understanding was interrupted.');
+  throwIfAborted(signal);
   const extracted = await options.extractor({
     job,
     userText: sessionMessageText(user.message),
@@ -273,7 +226,7 @@ async function processJob(
     model: resolvedModel.model,
     signal,
   });
-  if (signal.aborted) throw new Error('Interest Understanding was interrupted.');
+  throwIfAborted(signal);
 
   const durable = await observeInterestSpan(options, 'interest.result.validate', job, async () => {
     const validated = InterestExtractionResultSchema.parse(extracted);
@@ -322,14 +275,12 @@ async function processJob(
   };
 }
 
-async function withInterestUnderstandingTrace<T extends {
-  readonly outcome: 'evidence_committed' | 'no_durable_evidence';
-}>(
+async function withInterestUnderstandingTrace(
   options: CreateInterestRuntimeOptions,
   job: InterestExtractionJob,
-  operation: () => Promise<T>,
-): Promise<T> {
-  let promise: Promise<T> | undefined;
+  operation: () => Promise<InterestExtractionOutcome>,
+): Promise<InterestExtractionOutcome> {
+  let promise: Promise<InterestExtractionOutcome> | undefined;
   const runOnce = () => (promise ??= operation());
   if (!options.observability) return runOnce();
   try {
@@ -354,7 +305,9 @@ async function withInterestUnderstandingTrace<T extends {
       } catch {
         // Linking is diagnostic-only and cannot block Interest Understanding.
       }
-      return runOnce();
+      const result = await runOnce();
+      safeRecordInterestContent(options, 'interest.understanding.outcome', result, job);
+      return result;
     });
   } catch {
     return runOnce();
@@ -383,7 +336,7 @@ async function observeInterestSpan<T>(
 
 function safeRecordInterestContent(
   options: CreateInterestRuntimeOptions,
-  kind: 'interest.understanding.result' | 'interest.committed',
+  kind: 'interest.understanding.result' | 'interest.committed' | 'interest.understanding.outcome',
   value: unknown,
   job: InterestExtractionJob,
 ): void {
@@ -396,24 +349,12 @@ function safeRecordInterestContent(
 
 function interestCorrelation(job: InterestExtractionJob): TraceCorrelation {
   return {
-    interestUnderstandingId: job.interestUnderstandingId,
     executionId: job.executionId,
     sessionId: job.sessionId,
     messageId: job.userMessageId,
     userMessageId: job.userMessageId,
     assistantMessageId: job.assistantMessageId,
   };
-}
-
-function interestUnderstandingBase(job: InterestExtractionJob) {
-  return {
-    interestUnderstandingId: job.interestUnderstandingId,
-    executionId: job.executionId,
-    sessionId: job.sessionId,
-    userMessageId: job.userMessageId,
-    assistantMessageId: job.assistantMessageId,
-    queuedAt: job.queuedAt,
-  } as const;
 }
 
 function noDurableEvidence() {
@@ -424,15 +365,8 @@ function noDurableEvidence() {
   } as const;
 }
 
-function interruptedAdmission(
-  options: CreateInterestRuntimeOptions,
-  receipt: InterestUnderstanding,
-): Extract<ObserveConversationTurnResult, { readonly status: 'skipped' }> {
-  options.repository.updateInterestUnderstanding({
-    ...receipt,
-    status: 'interrupted',
-    completedAt: options.clock.now(),
-    failure: { code: 'shutting_down', message: 'Interest runtime is shutting down.' },
-  });
-  return { status: 'skipped', reason: 'shutting_down' };
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new DOMException('Interest Understanding was interrupted.', 'AbortError');
+  }
 }

@@ -111,7 +111,6 @@ function safeRecord(
 
 function interestCorrelation(job: InterestExtractionJob): TraceCorrelation {
   return {
-    interestUnderstandingId: job.interestUnderstandingId,
     executionId: job.executionId,
     sessionId: job.sessionId,
     messageId: job.userMessageId,

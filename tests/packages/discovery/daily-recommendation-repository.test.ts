@@ -18,7 +18,7 @@ describe('DailyRecommendationRepository', () => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
     discovery = createDiscoveryRepository({ database });
-    discovery.changeInterest({
+    discovery.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
   });

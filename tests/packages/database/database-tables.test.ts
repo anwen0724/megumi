@@ -46,7 +46,6 @@ describe('Database table ownership', () => {
         'discovery_interests',
         'discovery_interest_evidence',
         'discovery_session_policies',
-        'discovery_interest_understandings',
         'discovery_batches',
         'discovery_recommendations',
         'discovery_candidate_queries',

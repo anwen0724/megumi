@@ -1,6 +1,6 @@
-/* Verifies Interest Understanding exposes one durable completion and correlated Trace. */
+/* Verifies Interest Understanding is observed by Trace while business results stay in Interest tables. */
 // @vitest-environment node
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   composeTestApplication,
   type TestApplication,
@@ -10,10 +10,10 @@ let application: TestApplication | undefined;
 afterEach(async () => { await application?.cleanup(); application = undefined; });
 
 describe('Interest Understanding Runtime', () => {
-  it('settles independently from Conversation and uses the same business id in Trace', async () => {
+  it('records a terminal outcome and resolves its Interest and Evidence business facts', async () => {
     application = composeTestApplication([
       'I will remember that interest.',
-      '{"evidence":[]}',
+      '{"evidence":[{"description":"Agent architecture","effect":"support","confidence":"high"}]}',
     ]);
     await application.runtime.start();
     const opened = await application.runtime.host.workspace.useExistingProject();
@@ -26,23 +26,51 @@ describe('Interest Understanding Runtime', () => {
     });
     if (submitted.payload.type !== 'agent_run') throw new Error('Test Run did not start.');
 
-    const settled = await application.runtime.host.discovery.waitInterestUnderstanding({
-      executionId: submitted.payload.run.executionId,
-      timeoutMs: 2_000,
-    });
-    expect(settled.status).toBe('completed');
-    if (settled.status !== 'completed') return;
-    expect(settled.value).toMatchObject({ status: 'completed', outcome: 'no_durable_evidence' });
-    expect(settled.value.executionId).toBe(submitted.payload.run.executionId);
-
-    await application.runtime.host.observability.flush();
-    const traces = await application.runtime.host.observability.listTraces({
-      traceKind: 'interest_understanding',
-      correlation: { interestUnderstandingId: settled.value.interestUnderstandingId },
-      limit: 5,
-    });
+    let traces!: Awaited<
+      ReturnType<TestApplication['runtime']['host']['observability']['listTraces']>
+    >;
+    await vi.waitFor(async () => {
+      await application!.runtime.host.observability.flush();
+      traces = await application!.runtime.host.observability.listTraces({
+        traceKind: 'interest_understanding',
+        correlation: { executionId: submitted.payload.run.executionId },
+        limit: 5,
+      });
+      expect(traces.status).toBe('ok');
+      if (traces.status === 'ok') expect(traces.traces[0]?.status).toBe('ok');
+    }, { timeout: 10_000 });
     expect(traces.status).toBe('ok');
     if (traces.status !== 'ok') return;
     expect(traces.traces).toHaveLength(1);
+    expect(traces.traces[0]?.correlation).toMatchObject({
+      executionId: submitted.payload.run.executionId,
+      sessionId: submitted.payload.session.id,
+      userMessageId: submitted.payload.userMessageId,
+    });
+
+    const detail = await application.runtime.host.observability.getTrace({
+      traceId: traces.traces[0]!.traceId,
+    });
+    expect(detail.status).toBe('found');
+    if (detail.status !== 'found') return;
+    const checkpoint = detail.trace.contents.find(
+      (content) => content.kind === 'interest.understanding.outcome',
+    );
+    expect(checkpoint).toBeDefined();
+    const content = await application.runtime.host.observability.getContent({
+      traceId: detail.trace.summary.traceId,
+      sequence: checkpoint!.sequence,
+    });
+    expect(content.status).toBe('available');
+    if (content.status !== 'available' || content.content.encoding === 'binary') return;
+    const outcome = JSON.parse(
+      content.content.encoding === 'json' ? content.content.json : content.content.text,
+    ) as { changedInterestIds: string[]; evidenceIds: string[] };
+    const facts = await application.runtime.host.discovery.getInterestFacts({
+      interestIds: outcome.changedInterestIds,
+      evidenceIds: outcome.evidenceIds,
+    });
+    expect(facts.interests).toMatchObject([{ description: 'Agent architecture' }]);
+    expect(facts.evidence).toMatchObject([{ description: 'Agent architecture', status: 'applied' }]);
   });
 });

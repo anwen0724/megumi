@@ -2,7 +2,6 @@
  * Owns the single-process FIFO and one-worker lifecycle for Interest extraction.
  */
 export interface InterestExtractionJob {
-  readonly interestUnderstandingId: string;
   readonly sessionId: string;
   readonly executionId: string;
   readonly userMessageId: string;
@@ -10,6 +9,12 @@ export interface InterestExtractionJob {
   readonly completedAt: string;
   readonly queuedAt: string;
   readonly sequence: number;
+}
+
+export interface InterestExtractionOutcome {
+  readonly outcome: 'evidence_committed' | 'no_durable_evidence';
+  readonly changedInterestIds: readonly string[];
+  readonly evidenceIds: readonly string[];
 }
 
 export interface InterestExtractionQueue {
@@ -21,10 +26,23 @@ export interface InterestExtractionQueue {
 
 /** Creates the owned single-worker queue for post-conversation Interest extraction. */
 export function createInterestExtractionQueue(options: {
-  readonly process: (job: InterestExtractionJob, signal: AbortSignal) => Promise<void>;
+  readonly process: (
+    job: InterestExtractionJob,
+    signal: AbortSignal,
+  ) => Promise<InterestExtractionOutcome>;
+  /** Starts diagnostic observation at acceptance, before the worker releases this job. */
+  readonly observe?: (
+    job: InterestExtractionJob,
+    operation: () => Promise<InterestExtractionOutcome>,
+  ) => Promise<InterestExtractionOutcome>;
   readonly onError?: (error: unknown, job: InterestExtractionJob) => void;
 }): InterestExtractionQueue {
-  const pending: InterestExtractionJob[] = [];
+  interface PendingJob {
+    readonly job: InterestExtractionJob;
+    start(signal: AbortSignal): Promise<InterestExtractionOutcome>;
+  }
+
+  const pending: PendingJob[] = [];
   let accepting = true;
   let worker: Promise<void> | undefined;
   let sequence = 0;
@@ -34,16 +52,16 @@ export function createInterestExtractionQueue(options: {
   const drain = async (): Promise<void> => {
     try {
       while (accepting && pending.length > 0) {
-        const job = pending.shift();
-        if (!job) break;
+        const pendingJob = pending.shift();
+        if (!pendingJob) break;
         const controller = new AbortController();
         activeController = controller;
         try {
-          await options.process(job, controller.signal);
+          await pendingJob.start(controller.signal);
         } catch (error) {
           if (!controller.signal.aborted) {
             try {
-              options.onError?.(error, job);
+              options.onError?.(error, pendingJob.job);
             } catch {
               // An error observer cannot create a second unobserved worker failure.
             }
@@ -67,15 +85,31 @@ export function createInterestExtractionQueue(options: {
     submit(input) {
       if (!accepting) return undefined;
       const job = Object.freeze({ ...input, sequence: ++sequence });
-      pending.push(job);
+      let startProcessing: ((signal: AbortSignal) => void) | undefined;
+      const signal = new Promise<AbortSignal>((resolve) => { startProcessing = resolve; });
+      const operation = async () => options.process(job, await signal);
+      const completion = options.observe ? options.observe(job, operation) : operation();
+      pending.push({
+        job,
+        start(nextSignal) {
+          startProcessing?.(nextSignal);
+          startProcessing = undefined;
+          return completion;
+        },
+      });
       startWorker();
       return job;
     },
     async shutdown() {
       accepting = false;
-      pending.length = 0;
+      const interrupted = pending.splice(0);
+      const interruptedWork = interrupted.map((pendingJob) => {
+        const controller = new AbortController();
+        controller.abort();
+        return pendingJob.start(controller.signal);
+      });
       activeController?.abort();
-      await worker;
+      await Promise.allSettled([...(worker ? [worker] : []), ...interruptedWork]);
     },
   };
 }

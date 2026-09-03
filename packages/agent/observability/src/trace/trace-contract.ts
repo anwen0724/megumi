@@ -88,7 +88,6 @@ export interface TraceCorrelation {
   readonly contentDigest?: string;
   readonly providerAttempt?: number;
   readonly discoveryAttempt?: number;
-  readonly interestUnderstandingId?: string;
   readonly userMessageId?: string;
   readonly assistantMessageId?: string;
 }
@@ -111,7 +110,6 @@ export const TRACE_CORRELATION_STRING_KEYS = [
   'recommendationId',
   'contentId',
   'contentDigest',
-  'interestUnderstandingId',
   'userMessageId',
   'assistantMessageId',
 ] as const satisfies readonly (keyof TraceCorrelation)[];
@@ -151,7 +149,6 @@ export const TraceCorrelationSchema: z.ZodType<TraceCorrelation> = z.object({
   contentDigest: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   providerAttempt: z.number().int().positive().optional(),
   discoveryAttempt: z.number().int().positive().optional(),
-  interestUnderstandingId: z.string().optional(),
   userMessageId: z.string().optional(),
   assistantMessageId: z.string().optional(),
 }).strict();

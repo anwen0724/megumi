@@ -65,6 +65,7 @@ describe('Interest extraction queue', () => {
         userMessageId: `user:${index}`,
         assistantMessageId: `assistant:${index}`,
         completedAt: '2026-08-22T10:00:00.000Z',
+        queuedAt: '2026-08-22T10:00:00.000Z',
       });
     }
 
@@ -82,6 +83,7 @@ describe('Interest extraction queue', () => {
           signal.addEventListener('abort', () => resolve(), { once: true });
         });
         workerFinished = true;
+        return { outcome: 'no_durable_evidence', changedInterestIds: [], evidenceIds: [] };
       },
     });
     queue.submit({
@@ -90,6 +92,7 @@ describe('Interest extraction queue', () => {
       userMessageId: 'user:1',
       assistantMessageId: 'assistant:1',
       completedAt: '2026-08-22T10:00:00.000Z',
+      queuedAt: '2026-08-22T10:00:00.000Z',
     });
     await started.promise;
 
@@ -104,7 +107,32 @@ describe('Interest extraction queue', () => {
       userMessageId: 'user:2',
       assistantMessageId: 'assistant:2',
       completedAt: '2026-08-22T10:01:00.000Z',
+      queuedAt: '2026-08-22T10:01:00.000Z',
     })).toBeUndefined();
+  });
+
+  it('starts observation when a job is accepted before worker processing begins', async () => {
+    const events: string[] = [];
+    const queue = createInterestExtractionQueue({
+      observe: async (_job, operation) => {
+        events.push('trace_started');
+        return operation();
+      },
+      process: async () => {
+        events.push('worker_started');
+        return { outcome: 'no_durable_evidence', changedInterestIds: [], evidenceIds: [] };
+      },
+    });
+
+    queue.submit({
+      sessionId: 'session:1', executionId: 'execution:1', userMessageId: 'user:1',
+      assistantMessageId: 'assistant:1', completedAt: '2026-08-22T10:00:00.000Z',
+      queuedAt: '2026-08-22T10:00:00.000Z',
+    });
+
+    expect(events[0]).toBe('trace_started');
+    await vi.waitFor(() => expect(events).toEqual(['trace_started', 'worker_started']));
+    await queue.shutdown();
   });
 });
 
@@ -116,6 +144,7 @@ function input() {
       userMessageId: 'user:1',
       assistantMessageId: 'assistant:1',
       completedAt: '2026-08-22T10:00:00.000Z',
+      queuedAt: '2026-08-22T10:00:00.000Z',
       sequence: 1,
     },
     userText: '我想持续关注 Agent 工程化',

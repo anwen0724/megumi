@@ -43,7 +43,7 @@ export function createDiscoveryFactsReader(options: {
           uncoveredInterestIds: attempt.snapshot.gap.uncoveredInterestIds,
           consumerShortfalls: attempt.snapshot.gap.consumerShortfalls,
         },
-        interests: options.repository.listInterests()
+        interests: options.repository.listNonDeletedInterests()
           .filter(({ status }) => status === 'active')
           .map((interest) => ({
             interestId: interest.interestId,
@@ -97,7 +97,7 @@ export function createDiscoveryFactsReader(options: {
       if (!batch || batch.batchId !== request.batchId) return missing('daily_batch_not_found');
       const preferenceSnapshots = options.repository.listPreferenceSnapshots();
       const preferences = preferenceByInterest(preferenceSnapshots);
-      const interests = options.repository.listInterests()
+      const interests = options.repository.listNonDeletedInterests()
         .filter(({ status }) => status === 'active')
         .map((interest) => ({
           interestId: interest.interestId,
@@ -147,7 +147,7 @@ export function createDiscoveryFactsReader(options: {
       if (request.signal?.aborted) return { status: 'cancelled' };
       const facts = options.repository.readPreferenceLearningFacts(request.batchId);
       if (!facts) return missing('preference_learning_batch_not_found');
-      const interests = options.repository.listInterests();
+      const interests = options.repository.listNonDeletedInterests();
       const contextFacts: ContextPreferenceLearningFacts = {
         asOf: facts.batch.startedAt,
         batch: {

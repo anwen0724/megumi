@@ -1,6 +1,7 @@
 /*
  * Owns durable Interest, Evidence, and Session participation transactions.
  */
+import crypto from 'node:crypto';
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import {
   InterestDescriptionSchema,
@@ -11,10 +12,6 @@ import {
   type InterestEvidence,
   type SessionParticipation,
 } from '../interests/interest';
-import {
-  InterestUnderstandingSchema,
-  type InterestUnderstanding,
-} from '../interests/interest-understanding';
 
 export type ValidatedInterestCommand =
   | { readonly action: 'create'; readonly interestId: string; readonly description: string; readonly now: string }
@@ -37,203 +34,119 @@ export interface ApplyInterestExtraction {
 }
 
 export interface InterestRepository {
-  /** Creates the durable receipt before work enters the in-memory queue. */
-  createInterestUnderstanding(operation: InterestUnderstanding): InterestUnderstanding;
-  /** Persists one status transition for an existing Interest Understanding. */
-  updateInterestUnderstanding(operation: InterestUnderstanding): InterestUnderstanding;
-  getInterestUnderstanding(interestUnderstandingId: string): InterestUnderstanding | undefined;
-  findInterestUnderstandingByExecution(executionId: string): InterestUnderstanding | undefined;
-  interruptRunningInterestUnderstandings(input: { readonly interruptedAt: string }): number;
-  /** Applies one user-owned Interest command atomically. */
-  changeInterest(command: ValidatedInterestCommand): Interest;
-  /** Lists durable non-deleted Interests in stable order. */
-  listInterests(): readonly Interest[];
+  /** Finds one Interest by its database identity without hiding soft-deleted rows. */
+  findInterestById(interestId: string): Interest | undefined;
+  /** Lists the requested Interests, including soft-deleted rows, in stable creation order. */
+  listInterestsByIds(interestIds: readonly string[]): readonly Interest[];
+  /** Lists active and paused Interests in stable creation order. */
+  listNonDeletedInterests(): readonly Interest[];
+  /** Finds one Interest Evidence row by its database identity. */
+  findInterestEvidenceById(evidenceId: string): InterestEvidence | undefined;
+  /** Lists the requested Evidence rows in stable creation order. */
+  listInterestEvidenceByIds(
+    evidenceIds: readonly string[],
+  ): readonly InterestEvidence[];
   /** Lists Evidence that has not yet formed or changed an Interest. */
-  listPendingEvidence(): readonly InterestEvidence[];
+  listPendingInterestEvidence(): readonly InterestEvidence[];
+  /** Finds one Session Participation row by its database identity. */
+  findSessionParticipationById(
+    sessionParticipationId: string,
+  ): SessionParticipation | undefined;
+  /** Finds the unique Participation policy associated with one Session. */
+  findSessionParticipationBySessionId(
+    sessionId: string,
+  ): SessionParticipation | undefined;
+  /** Applies one validated Interest command atomically. */
+  applyInterestChange(command: ValidatedInterestCommand): Interest;
   /** Applies one validated extraction result with its Evidence changes atomically. */
   applyInterestExtraction(command: ApplyInterestExtraction): readonly Interest[];
-  /** Reads the current conversation participation policy. */
-  getSessionParticipation(sessionId: string): SessionParticipation | undefined;
-  /** Replaces the current conversation participation policy atomically. */
-  setSessionParticipation(command: {
+  /** Applies a Participation change and any required Evidence retraction atomically. */
+  applySessionParticipationChange(command: {
     readonly sessionId: string;
     readonly participation: 'included' | 'excluded';
     readonly effectiveFrom: string;
     readonly updatedAt: string;
-  }): SessionParticipation;
+  }): {
+    readonly participation: SessionParticipation;
+    readonly affectedInterestIds: readonly string[];
+  };
   /** Retracts a Session's Evidence and removes unsupported inferred Interests atomically. */
-  retractSessionEvidence(sessionId: string, retractedAt: string): readonly string[];
+  retractSessionEvidence(input: {
+    readonly sessionId: string;
+    readonly retractedAt: string;
+  }): readonly string[];
 }
 
 /** Creates the Interest persistence implementation over one Database connection. */
 export function createInterestRepository(database: DatabaseConnection): InterestRepository {
   return {
-    createInterestUnderstanding: (operation) => createInterestUnderstanding(database, operation),
-    updateInterestUnderstanding: (operation) => updateInterestUnderstanding(database, operation),
-    getInterestUnderstanding: (id) => readInterestUnderstanding(database, 'interest_understanding_id', id),
-    findInterestUnderstandingByExecution: (id) => readInterestUnderstanding(database, 'execution_id', id),
-    interruptRunningInterestUnderstandings: ({ interruptedAt }) => database.prepare({ sql: `
-      UPDATE discovery_interest_understandings
-      SET status = 'interrupted', completed_at = ?, failure_code = 'process_interrupted',
-          failure_message = 'Interest Understanding was interrupted before completion.'
-      WHERE status IN ('queued', 'running')
-    ` }).run([interruptedAt]).changes,
-    changeInterest: (command) => database.transaction({
-      operation: () => changeInterest(database, command),
-    }),
-    listInterests: () => database.prepare<InterestRow>({ sql: `
+    findInterestById: (interestId) => readInterest(database, interestId),
+    listInterestsByIds(interestIds) {
+      if (interestIds.length === 0) return [];
+      const placeholders = interestIds.map(() => '?').join(', ');
+      return database.prepare<InterestRow>({ sql: `
+        SELECT * FROM discovery_interests
+        WHERE interest_id IN (${placeholders})
+        ORDER BY created_at, interest_id
+      ` }).all(interestIds).map(interestFromRow);
+    },
+    listNonDeletedInterests: () => database.prepare<InterestRow>({ sql: `
       SELECT * FROM discovery_interests
       WHERE status <> 'deleted'
       ORDER BY created_at, interest_id
     ` }).all().map(interestFromRow),
-    listPendingEvidence: () => database.prepare<EvidenceRow>({ sql: `
+    findInterestEvidenceById: (evidenceId) => readEvidence(database, evidenceId),
+    listInterestEvidenceByIds(evidenceIds) {
+      if (evidenceIds.length === 0) return [];
+      const placeholders = evidenceIds.map(() => '?').join(', ');
+      return database.prepare<EvidenceRow>({ sql: `
+        SELECT * FROM discovery_interest_evidence
+        WHERE evidence_id IN (${placeholders})
+        ORDER BY created_at, evidence_id
+      ` }).all(evidenceIds).map(evidenceFromRow);
+    },
+    listPendingInterestEvidence: () => database.prepare<EvidenceRow>({ sql: `
       SELECT * FROM discovery_interest_evidence
       WHERE status = 'pending'
       ORDER BY created_at, evidence_id
     ` }).all().map(evidenceFromRow),
+    findSessionParticipationById: (sessionParticipationId) => (
+      findSessionParticipation(database, 'session_participation_id', sessionParticipationId)
+    ),
+    findSessionParticipationBySessionId: (sessionId) => (
+      findSessionParticipation(database, 'session_id', sessionId)
+    ),
+    applyInterestChange: (command) => database.transaction({
+      operation: () => applyInterestChange(database, command),
+    }),
     applyInterestExtraction: (command) => database.transaction({
       operation: () => applyInterestExtraction(database, command),
     }),
-    getSessionParticipation(sessionId) {
-      const row = database.prepare<SessionParticipationRow>({
-        sql: 'SELECT * FROM discovery_session_policies WHERE session_id = ?',
-      }).get([sessionId]);
-      return row ? participationFromRow(row) : undefined;
-    },
-    setSessionParticipation: (command) => database.transaction({
+    applySessionParticipationChange: (command) => database.transaction({
       operation: () => {
-        database.prepare({ sql: `
-          INSERT INTO discovery_session_policies (
-            session_id, participation, effective_from, updated_at
-          ) VALUES (?, ?, ?, ?)
-          ON CONFLICT(session_id) DO UPDATE SET
-            participation = excluded.participation,
-            effective_from = excluded.effective_from,
-            updated_at = excluded.updated_at
-        ` }).run([
+        upsertSessionParticipation(database, command);
+        const participation = findSessionParticipation(
+          database,
+          'session_id',
           command.sessionId,
-          command.participation,
-          command.effectiveFrom,
-          command.updatedAt,
-        ]);
-        return SessionParticipationSchema.parse(command);
+        );
+        if (!participation) {
+          throw new Error('Session Participation was not found after upsert.');
+        }
+        const affectedInterestIds = command.participation === 'excluded'
+          ? retractSessionEvidence(database, command.sessionId, command.updatedAt)
+          : [];
+        return { participation, affectedInterestIds };
       },
     }),
-    retractSessionEvidence: (sessionId, retractedAt) => database.transaction({
-      operation: () => retractSessionEvidence(database, sessionId, retractedAt),
+    retractSessionEvidence: (input) => database.transaction({
+      operation: () => retractSessionEvidence(database, input.sessionId, input.retractedAt),
     }),
   };
 }
 
-function createInterestUnderstanding(
-  database: DatabaseConnection,
-  rawOperation: InterestUnderstanding,
-): InterestUnderstanding {
-  const operation = InterestUnderstandingSchema.parse(rawOperation);
-  database.prepare({ sql: `
-    INSERT INTO discovery_interest_understandings (
-      interest_understanding_id, execution_id, session_id, user_message_id,
-      assistant_message_id, status, queued_at
-    ) VALUES (?, ?, ?, ?, ?, 'queued', ?)
-  ` }).run([
-    operation.interestUnderstandingId,
-    operation.executionId,
-    operation.sessionId,
-    operation.userMessageId,
-    operation.assistantMessageId,
-    operation.queuedAt,
-  ]);
-  return readInterestUnderstandingRequired(database, operation.interestUnderstandingId);
-}
-
-function updateInterestUnderstanding(
-  database: DatabaseConnection,
-  rawOperation: InterestUnderstanding,
-): InterestUnderstanding {
-  const operation = InterestUnderstandingSchema.parse(rawOperation);
-  const changedInterestIds = operation.status === 'completed' ? operation.changedInterestIds : [];
-  const evidenceIds = operation.status === 'completed' ? operation.evidenceIds : [];
-  const outcome = operation.status === 'completed' ? operation.outcome : null;
-  const failure = operation.status === 'failed' || operation.status === 'interrupted'
-    ? operation.failure
-    : undefined;
-  const completedAt = operation.status === 'completed'
-    || operation.status === 'failed'
-    || operation.status === 'interrupted'
-    ? operation.completedAt
-    : null;
-  const result = database.prepare({ sql: `
-    UPDATE discovery_interest_understandings
-    SET status = ?, outcome = ?, changed_interest_ids_json = ?, evidence_ids_json = ?,
-        started_at = ?, completed_at = ?, failure_code = ?, failure_message = ?
-    WHERE interest_understanding_id = ?
-  ` }).run([
-    operation.status,
-    outcome,
-    JSON.stringify(changedInterestIds),
-    JSON.stringify(evidenceIds),
-    operation.status === 'queued' ? null : operation.startedAt ?? null,
-    completedAt,
-    failure?.code ?? null,
-    failure?.message ?? null,
-    operation.interestUnderstandingId,
-  ]);
-  if (result.changes !== 1) throw new Error('Interest Understanding was not found.');
-  return readInterestUnderstandingRequired(database, operation.interestUnderstandingId);
-}
-
-function readInterestUnderstandingRequired(
-  database: DatabaseConnection,
-  interestUnderstandingId: string,
-): InterestUnderstanding {
-  const value = readInterestUnderstanding(database, 'interest_understanding_id', interestUnderstandingId);
-  if (!value) throw new Error('Interest Understanding was not found.');
-  return value;
-}
-
-function readInterestUnderstanding(
-  database: DatabaseConnection,
-  column: 'interest_understanding_id' | 'execution_id',
-  value: string,
-): InterestUnderstanding | undefined {
-  const row = database.prepare<InterestUnderstandingRow>({
-    sql: `SELECT * FROM discovery_interest_understandings WHERE ${column} = ?`,
-  }).get([value]);
-  if (!row) return undefined;
-  const base = {
-    interestUnderstandingId: row.interest_understanding_id,
-    executionId: row.execution_id,
-    sessionId: row.session_id,
-    userMessageId: row.user_message_id,
-    assistantMessageId: row.assistant_message_id,
-    queuedAt: row.queued_at,
-  } as const;
-  if (row.status === 'queued') return InterestUnderstandingSchema.parse({ ...base, status: 'queued' });
-  if (row.status === 'running') {
-    return InterestUnderstandingSchema.parse({ ...base, status: 'running', startedAt: row.started_at });
-  }
-  if (row.status === 'completed') {
-    return InterestUnderstandingSchema.parse({
-      ...base,
-      status: 'completed',
-      outcome: row.outcome,
-      changedInterestIds: JSON.parse(row.changed_interest_ids_json),
-      evidenceIds: JSON.parse(row.evidence_ids_json),
-      startedAt: row.started_at,
-      completedAt: row.completed_at,
-    });
-  }
-  return InterestUnderstandingSchema.parse({
-    ...base,
-    status: row.status,
-    ...(row.started_at ? { startedAt: row.started_at } : {}),
-    completedAt: row.completed_at,
-    failure: { code: row.failure_code, message: row.failure_message },
-  });
-}
-
 /** Applies one already-validated Interest state transition inside the caller transaction. */
-function changeInterest(database: DatabaseConnection, command: ValidatedInterestCommand): Interest {
+function applyInterestChange(database: DatabaseConnection, command: ValidatedInterestCommand): Interest {
   if (command.action === 'create') {
     const description = InterestDescriptionSchema.parse(command.description);
     database.prepare({ sql: `
@@ -462,6 +375,7 @@ function evidenceFromRow(row: EvidenceRow): InterestEvidence {
 
 function participationFromRow(row: SessionParticipationRow): SessionParticipation {
   return SessionParticipationSchema.parse({
+    sessionParticipationId: row.session_participation_id,
     sessionId: row.session_id,
     participation: row.participation,
     effectiveFrom: row.effective_from,
@@ -497,25 +411,47 @@ type EvidenceRow = DatabaseRow & {
 };
 
 type SessionParticipationRow = DatabaseRow & {
+  session_participation_id: string;
   session_id: string;
   participation: string;
   effective_from: string;
   updated_at: string;
 };
 
-type InterestUnderstandingRow = DatabaseRow & {
-  interest_understanding_id: string;
-  execution_id: string;
-  session_id: string;
-  user_message_id: string;
-  assistant_message_id: string;
-  status: string;
-  outcome: string | null;
-  changed_interest_ids_json: string;
-  evidence_ids_json: string;
-  queued_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  failure_code: string | null;
-  failure_message: string | null;
-};
+function findSessionParticipation(
+  database: DatabaseConnection,
+  column: 'session_participation_id' | 'session_id',
+  value: string,
+): SessionParticipation | undefined {
+  const row = database.prepare<SessionParticipationRow>({
+    sql: `SELECT * FROM discovery_session_policies WHERE ${column} = ?`,
+  }).get([value]);
+  return row ? participationFromRow(row) : undefined;
+}
+
+/** Upserts one Session policy while preserving its existing database identity. */
+function upsertSessionParticipation(
+  database: DatabaseConnection,
+  command: {
+    readonly sessionId: string;
+    readonly participation: 'included' | 'excluded';
+    readonly effectiveFrom: string;
+    readonly updatedAt: string;
+  },
+): void {
+  database.prepare({ sql: `
+    INSERT INTO discovery_session_policies (
+      session_participation_id, session_id, participation, effective_from, updated_at
+    ) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(session_id) DO UPDATE SET
+      participation = excluded.participation,
+      effective_from = excluded.effective_from,
+      updated_at = excluded.updated_at
+  ` }).run([
+    `session-participation:${crypto.randomUUID()}`,
+    command.sessionId,
+    command.participation,
+    command.effectiveFrom,
+    command.updatedAt,
+  ]);
+}

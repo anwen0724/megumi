@@ -38,6 +38,7 @@ import type {
 import type {
   ChangeInterestRequest,
   Interest,
+  InterestEvidence,
   SessionParticipation,
   SetSessionParticipationRequest,
 } from './interests/interest';
@@ -59,7 +60,11 @@ import type {
   PreferenceLearningBatch,
   PreferenceLearningCompletion,
 } from './preferences/preference';
-import type { InterestUnderstanding } from './interests/interest-understanding';
+
+export interface InterestFacts {
+  readonly interests: readonly Interest[];
+  readonly evidence: readonly InterestEvidence[];
+}
 
 export interface Discovery {
   /** Applies one explicit user Interest change. */
@@ -68,8 +73,11 @@ export interface Discovery {
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
   /** Enqueues one completed conversation turn for Interest extraction when eligible. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
-  getInterestUnderstanding(interestUnderstandingId: string): InterestUnderstanding | undefined;
-  findInterestUnderstandingByExecution(executionId: string): InterestUnderstanding | undefined;
+  /** Reads exact Interest and Evidence business entities by their database identities. */
+  getInterestFacts(request: {
+    readonly interestIds: readonly string[];
+    readonly evidenceIds: readonly string[];
+  }): InterestFacts;
   /** Retracts the Evidence contributed by one Session. */
   retractSessionEvidence(sessionId: string): Promise<void>;
   /** Starts owned recovery and optionally enables automatic background triggers. */
@@ -181,8 +189,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     },
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
     observeConversationTurn: (request) => interestRuntime.observeConversationTurn(request),
-    getInterestUnderstanding: (id) => interestRuntime.getInterestUnderstanding(id),
-    findInterestUnderstandingByExecution: (id) => interestRuntime.findInterestUnderstandingByExecution(id),
+    getInterestFacts: (request) => interestRuntime.getInterestFacts(request),
     retractSessionEvidence: (sessionId) => interestRuntime.retractSessionEvidence(sessionId),
     async startBackground(startOptions = {}) {
       const automaticTriggers = startOptions.automaticTriggers ?? true;

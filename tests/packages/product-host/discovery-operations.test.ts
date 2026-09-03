@@ -1,4 +1,4 @@
-/* Verifies Product Host exposes durable Discovery receipts without owning their state. */
+/* Verifies Product Host exposes durable Discovery business facts without owning their state. */
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -29,12 +29,15 @@ describe('Discovery Product Host operations', () => {
     expect(reread).toEqual(settled.value);
   });
 
-  it('returns a bounded timeout instead of inferring completion from Trace or Log', async () => {
+  it('reads exact Interest business facts by IDs', async () => {
     application = composeTestApplication();
     await application.runtime.start();
-    await expect(application.runtime.host.discovery.waitInterestUnderstanding({
-      interestUnderstandingId: 'interest-understanding:missing',
-      timeoutMs: 1,
-    })).resolves.toEqual({ status: 'timed_out' });
+    const interest = await application.runtime.host.discovery.changeInterest({
+      action: 'create', description: 'TypeScript architecture',
+    });
+    await expect(application.runtime.host.discovery.getInterestFacts({
+      interestIds: [interest.interestId, 'interest:missing'],
+      evidenceIds: [],
+    })).resolves.toEqual({ interests: [interest], evidence: [] });
   });
 });

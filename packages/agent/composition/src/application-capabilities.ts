@@ -636,7 +636,6 @@ function composeCapabilitiesWithDatabase(
       },
       extractor: (input) => interestExtractor.extract(input),
       ids: {
-        createInterestUnderstandingId: () => createId('interest-understanding'),
         createInterestId: () => createId('interest'),
         createEvidenceId: () => createId('evidence'),
       },

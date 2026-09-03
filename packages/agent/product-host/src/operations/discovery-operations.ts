@@ -10,12 +10,12 @@ import {
   DiscoveryDailyRecommendationFactsQuerySchema,
   DiscoveryPreferenceLearningFactsQuerySchema,
   DiscoveryFactsResultSchema,
-  DiscoveryInterestUnderstandingQuerySchema,
+  DiscoveryInterestFactsPayloadSchema,
+  DiscoveryInterestFactsResultSchema,
   DiscoveryPreferenceLearningQuerySchema,
 } from '../host/discovery-host';
 import {
   isCandidateSupplyCheckTerminal,
-  isInterestUnderstandingTerminal,
 } from '@megumi/discovery';
 
 export function createDiscoveryOperations(
@@ -33,8 +33,7 @@ export function createDiscoveryOperations(
     | 'connectDiscoverySource'
     | 'refreshDiscoverySource'
     | 'refreshDiscoverySources'
-    | 'getInterestUnderstanding'
-    | 'findInterestUnderstandingByExecution'
+    | 'getInterestFacts'
     | 'requestCandidateSupply'
     | 'getCandidateSupplyCheck'
     | 'getPreferenceLearningBatch'
@@ -62,26 +61,10 @@ export function createDiscoveryOperations(
     getHome: (request) => agent.getDiscoveryHome(request),
     searchRecommendations: (request) => agent.searchRecommendations(request),
     updateRecommendationState: (request) => agent.updateRecommendationState(request),
-    getInterestUnderstanding(request) {
-      const parsed = DiscoveryInterestUnderstandingQuerySchema.parse(request);
-      return Promise.resolve('interestUnderstandingId' in parsed
-        ? agent.getInterestUnderstanding(parsed.interestUnderstandingId) ?? null
-        : agent.findInterestUnderstandingByExecution(parsed.executionId) ?? null);
+    getInterestFacts(request) {
+      const result = agent.getInterestFacts(DiscoveryInterestFactsPayloadSchema.parse(request));
+      return Promise.resolve(DiscoveryInterestFactsResultSchema.parse(result));
     },
-    waitInterestUnderstanding: (request) => waitForBusinessFact({
-      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
-      read: () => {
-        const parsed = DiscoveryInterestUnderstandingQuerySchema.parse(
-          'interestUnderstandingId' in request
-            ? { interestUnderstandingId: request.interestUnderstandingId }
-            : { executionId: request.executionId },
-        );
-        return 'interestUnderstandingId' in parsed
-          ? agent.getInterestUnderstanding(parsed.interestUnderstandingId)
-          : agent.findInterestUnderstandingByExecution(parsed.executionId);
-      },
-      terminal: isInterestUnderstandingTerminal,
-    }),
     requestCandidateSupply(request = { trigger: 'evaluation' }) {
       const parsed = DiscoveryCandidateSupplyRequestSchema.parse(request);
       return Promise.resolve(agent.requestCandidateSupply(parsed.trigger) ?? null);

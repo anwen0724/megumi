@@ -23,7 +23,7 @@ describe('Daily Recommendation Tools', () => {
 
   it('exposes only local Candidate reading and terminal publication to the Agent', async () => {
     const discovery = createDiscoveryRepository({ database });
-    discovery.changeInterest({
+    discovery.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
     discovery.beginQuery({

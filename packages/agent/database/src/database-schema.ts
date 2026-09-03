@@ -196,12 +196,14 @@ export const discoveryInterestEvidence = sqliteTable('discovery_interest_evidenc
 ]);
 
 export const discoverySessionPolicies = sqliteTable('discovery_session_policies', {
-  sessionId: text('session_id').primaryKey().references(() => sessions.sessionId, { onDelete: 'cascade' }),
+  sessionParticipationId: text('session_participation_id').primaryKey(),
+  sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   participation: text('participation').notNull(),
   effectiveFrom: text('effective_from').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
   check('check_discovery_session_policies_participation', sql`${table.participation} IN ('included', 'excluded')`),
+  uniqueIndex('idx_discovery_session_policies_session').on(table.sessionId),
 ]);
 
 export const discoveryBatches = sqliteTable('discovery_batches', {

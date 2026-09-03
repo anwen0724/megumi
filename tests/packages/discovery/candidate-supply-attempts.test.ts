@@ -20,7 +20,7 @@ describe('CandidateSupplyAttempts', () => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
     repository = createDiscoveryRepository({ database });
-    repository.changeInterest({
+    repository.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
   });

@@ -71,7 +71,7 @@ describe('DailyRecommendationRuntime', () => {
   });
 
   it('fixes requestedCount from settings and publishes every available Candidate when A is below D', async () => {
-    discovery.changeInterest({
+    discovery.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
     const candidateIds = [
@@ -130,7 +130,7 @@ describe('DailyRecommendationRuntime', () => {
   });
 
   it('retries the same Batch twice after execution failure and publishes on the third attempt', async () => {
-    discovery.changeInterest({
+    discovery.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
     const candidateId = admitCandidate(discovery, 'Retry guide');

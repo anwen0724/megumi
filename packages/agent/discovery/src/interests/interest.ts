@@ -36,6 +36,7 @@ export const InterestEvidenceSchema = z.object({
 }).strict();
 
 export const SessionParticipationSchema = z.object({
+  sessionParticipationId: z.string().min(1),
   sessionId: z.string().min(1),
   participation: z.enum(['included', 'excluded']),
   effectiveFrom: TimestampSchema,

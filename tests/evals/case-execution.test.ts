@@ -34,30 +34,45 @@ describe('Case execution', () => {
     });
   });
 
-  it('waits for Interest Understanding after the source Conversation settles', async () => {
+  it('waits for the terminal Interest Trace and reads final business facts by result IDs', async () => {
+    const outcome = {
+      outcome: 'evidence_committed' as const,
+      changedInterestIds: ['interest:1'],
+      evidenceIds: ['evidence:1'],
+    };
     const runtime = testRuntime({
       session: {
         async sendUserInput() { return agentRun('execution:interest', 'session:source'); },
         async readCommittedRun(request) { return committedReply(request.executionId); },
       },
       discovery: {
-        async waitInterestUnderstanding() {
-          return { status: 'completed', value: {
-            interestUnderstandingId: 'understanding:1', executionId: 'execution:interest',
-            sessionId: 'session:source', userMessageId: 'message:user', assistantMessageId: 'message:assistant',
-            status: 'completed', outcome: 'evidence_committed', changedInterestIds: ['interest:1'],
-            evidenceIds: ['evidence:1'], queuedAt: now, startedAt: now, completedAt: now,
-          } };
+        async getInterestFacts() {
+          return {
+            interests: [{
+              interestId: 'interest:1', description: 'TypeScript', status: 'active',
+              createdFrom: 'conversation', revision: 1, createdAt: now, updatedAt: now,
+            }],
+            evidence: [{
+              evidenceId: 'evidence:1', interestId: 'interest:1', sessionId: 'session:source',
+              messageId: 'message:user', description: 'TypeScript', effect: 'support',
+              confidence: 'high', status: 'applied', createdAt: now, appliedAt: now,
+            }],
+          };
         },
       },
+      observability: interestObservability(outcome),
     });
 
     const result = await executeCase(executionInput(interestCase(), runtime, {
       sessions: { source: 'session:source' },
     }));
 
-    expect(result.businessIds).toMatchObject({ interestUnderstandingId: 'understanding:1' });
-    expect(result.ownerFacts).toMatchObject({ understanding: { status: 'completed' } });
+    expect(result.businessIds).toMatchObject({
+      executionId: 'execution:interest', interestIds: ['interest:1'], evidenceIds: ['evidence:1'],
+    });
+    expect(result.ownerFacts).toMatchObject({
+      interests: [{ interestId: 'interest:1' }], evidence: [{ evidenceId: 'evidence:1' }],
+    });
   });
 
   it('waits for Candidate Supply and reads final facts from its Owner query', async () => {
@@ -154,6 +169,7 @@ describe('Case execution', () => {
 function testRuntime(overrides: {
   readonly session?: Partial<TestRuntime['host']['session']>;
   readonly discovery?: Partial<TestRuntime['host']['discovery']>;
+  readonly observability?: Partial<TestRuntime['host']['observability']>;
 }): TestRuntime {
   return {
     host: {
@@ -163,7 +179,7 @@ function testRuntime(overrides: {
         ...overrides.session,
       },
       discovery: {
-        waitInterestUnderstanding: unexpected,
+        getInterestFacts: unexpected,
         requestCandidateSupply: unexpected,
         waitCandidateSupplyCheck: unexpected,
         getCandidateSupplyFacts: unexpected,
@@ -175,6 +191,57 @@ function testRuntime(overrides: {
         getPreferenceLearningFacts: unexpected,
         ...overrides.discovery,
       },
+      observability: {
+        flush: unexpected,
+        listTraces: unexpected,
+        getTrace: unexpected,
+        getContent: unexpected,
+        ...overrides.observability,
+      },
+    },
+  };
+}
+
+function interestObservability(outcome: {
+  readonly outcome: 'evidence_committed' | 'no_durable_evidence';
+  readonly changedInterestIds: readonly string[];
+  readonly evidenceIds: readonly string[];
+}): TestRuntime['host']['observability'] {
+  const traceId = '11111111-1111-4111-8111-111111111111';
+  const correlation = { executionId: 'execution:interest', sessionId: 'session:source' };
+  const summary = {
+    traceId, traceKind: 'interest_understanding' as const, status: 'ok' as const,
+    diagnostics: 'complete' as const, correlation, startedAt: now, endedAt: now,
+    durationMs: 0, spanCount: 0, eventCount: 0, contentCount: 1, issueCount: 0,
+  };
+  return {
+    async flush() {},
+    async listTraces() { return { status: 'ok', traces: [summary] }; },
+    async getTrace() {
+      return {
+        status: 'found',
+        trace: {
+          summary,
+          outcome: { status: 'ok', code: outcome.outcome },
+          spans: [],
+          contents: [{
+            sequence: 1, timestamp: now, kind: 'interest.understanding.outcome',
+            mode: 'inline', contentId: 'a'.repeat(64), mediaType: 'application/json',
+            byteLength: 1, correlation,
+          }],
+          links: [], issues: [], sourceFiles: [],
+        },
+      };
+    },
+    async getContent() {
+      const json = JSON.stringify(outcome);
+      return {
+        status: 'available',
+        content: {
+          encoding: 'json', contentId: 'a'.repeat(64), mediaType: 'application/json',
+          byteLength: new TextEncoder().encode(json).byteLength, json,
+        },
+      };
     },
   };
 }

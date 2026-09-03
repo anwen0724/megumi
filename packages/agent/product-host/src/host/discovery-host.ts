@@ -15,8 +15,8 @@ import {
   EnsureDailyRecommendationRequestSchema,
   DailyRecommendationBatchSchema,
   GetDiscoveryHomeRequestSchema,
+  InterestEvidenceSchema,
   InterestSchema,
-  InterestUnderstandingSchema,
   CandidateSupplyCheckSchema,
   PreferenceLearningBatchSchema,
   PreferenceLearningCompletionSchema,
@@ -44,10 +44,10 @@ export const DiscoveryDailyEnsurePayloadSchema = EnsureDailyRecommendationReques
 export const DiscoveryHomePayloadSchema = GetDiscoveryHomeRequestSchema;
 export const DiscoveryRecommendationSearchPayloadSchema = SearchRecommendationsRequestSchema;
 export const DiscoveryRecommendationStatePayloadSchema = UpdateRecommendationStateRequestSchema;
-export const DiscoveryInterestUnderstandingQuerySchema = z.union([
-  z.object({ interestUnderstandingId: z.string().min(1) }).strict(),
-  z.object({ executionId: z.string().min(1) }).strict(),
-]);
+export const DiscoveryInterestFactsPayloadSchema = z.object({
+  interestIds: z.array(z.string().min(1)),
+  evidenceIds: z.array(z.string().min(1)),
+}).strict();
 export const DiscoveryCandidateSupplyRequestSchema = z.object({
   trigger: z.literal('evaluation').default('evaluation'),
 }).strict();
@@ -114,7 +114,10 @@ export const DiscoveryRecommendationStateResultSchema = z.object({
   recommendation: RecommendationViewSchema,
   feedbackChange: RecommendationFeedbackChangeReceiptSchema.optional(),
 }).strict();
-export const DiscoveryInterestUnderstandingResultSchema = InterestUnderstandingSchema.nullable();
+export const DiscoveryInterestFactsResultSchema = z.object({
+  interests: z.array(InterestSchema),
+  evidence: z.array(InterestEvidenceSchema),
+}).strict();
 export const DiscoveryCandidateSupplyResultSchema = CandidateSupplyCheckSchema.nullable();
 export const DiscoveryDailyBatchResultSchema = DailyRecommendationBatchSchema.nullable();
 export const DiscoveryPreferenceLearningResultSchema = PreferenceLearningCompletionSchema.nullable();
@@ -126,7 +129,7 @@ export type DiscoveryDailyEnsurePayload = z.infer<typeof DiscoveryDailyEnsurePay
 export type DiscoveryHomePayload = z.infer<typeof DiscoveryHomePayloadSchema>;
 export type DiscoveryRecommendationSearchPayload = z.infer<typeof DiscoveryRecommendationSearchPayloadSchema>;
 export type DiscoveryRecommendationStatePayload = z.infer<typeof DiscoveryRecommendationStatePayloadSchema>;
-export type DiscoveryInterestUnderstandingQuery = z.infer<typeof DiscoveryInterestUnderstandingQuerySchema>;
+export type DiscoveryInterestFactsPayload = z.infer<typeof DiscoveryInterestFactsPayloadSchema>;
 export type DiscoveryCandidateSupplyRequest = z.infer<typeof DiscoveryCandidateSupplyRequestSchema>;
 export type DiscoveryCandidateSupplyQuery = z.infer<typeof DiscoveryCandidateSupplyQuerySchema>;
 export type DiscoveryPreferenceLearningQuery = z.infer<typeof DiscoveryPreferenceLearningQuerySchema>;
@@ -145,7 +148,7 @@ export type DiscoveryHomeUiResult = z.infer<typeof DiscoveryHomeUiResultSchema>;
 export type DiscoveryRecommendationSearchUiResult = z.infer<typeof DiscoveryRecommendationSearchUiResultSchema>;
 export type DiscoveryRecommendationUiDto = z.infer<typeof DiscoveryRecommendationUiDtoSchema>;
 export type DiscoveryRecommendationStateResult = z.infer<typeof DiscoveryRecommendationStateResultSchema>;
-export type DiscoveryInterestUnderstandingResult = z.infer<typeof DiscoveryInterestUnderstandingResultSchema>;
+export type DiscoveryInterestFactsResult = z.infer<typeof DiscoveryInterestFactsResultSchema>;
 export type DiscoveryCandidateSupplyResult = z.infer<typeof DiscoveryCandidateSupplyResultSchema>;
 export type DiscoveryDailyBatchResult = z.infer<typeof DiscoveryDailyBatchResultSchema>;
 export type DiscoveryPreferenceLearningResult = z.infer<typeof DiscoveryPreferenceLearningResultSchema>;
@@ -174,10 +177,7 @@ export interface DiscoveryHost {
   getHome(request: DiscoveryHomePayload): Promise<DiscoveryHomeUiResult>;
   searchRecommendations(request: DiscoveryRecommendationSearchPayload): Promise<DiscoveryRecommendationSearchUiResult>;
   updateRecommendationState(request: DiscoveryRecommendationStatePayload): Promise<DiscoveryRecommendationStateResult>;
-  getInterestUnderstanding(request: DiscoveryInterestUnderstandingQuery): Promise<DiscoveryInterestUnderstandingResult>;
-  waitInterestUnderstanding(
-    request: DiscoveryInterestUnderstandingQuery & DiscoveryBackgroundWaitOptions,
-  ): Promise<DiscoveryBackgroundWaitResult<NonNullable<DiscoveryInterestUnderstandingResult>>>;
+  getInterestFacts(request: DiscoveryInterestFactsPayload): Promise<DiscoveryInterestFactsResult>;
   requestCandidateSupply(request?: DiscoveryCandidateSupplyRequest): Promise<DiscoveryCandidateSupplyResult>;
   getCandidateSupplyCheck(request: DiscoveryCandidateSupplyQuery): Promise<DiscoveryCandidateSupplyResult>;
   waitCandidateSupplyCheck(

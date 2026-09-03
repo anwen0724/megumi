@@ -240,14 +240,14 @@ export function createDatabaseInitialStateOwner(input: {
       return { sessionId: created.session.session_id };
     },
     async installInterest(entry) {
-      const interest = discovery.changeInterest({
+      const interest = discovery.applyInterestChange({
         action: 'create',
         interestId: `evaluation:interest:${entry.referenceId}`,
         description: entry.description,
         now: input.now,
       });
       if (entry.status === 'paused') {
-        discovery.changeInterest({ action: 'pause', interestId: interest.interestId, now: input.now });
+        discovery.applyInterestChange({ action: 'pause', interestId: interest.interestId, now: input.now });
       }
       return { interestId: interest.interestId };
     },
@@ -294,7 +294,7 @@ export function createDatabaseInitialStateOwner(input: {
           now: input.now,
         });
       }
-      const interestRevisions = discovery.listInterests()
+      const interestRevisions = discovery.listNonDeletedInterests()
         .filter((interest) => entry.interestIds.includes(interest.interestId))
         .map((interest) => ({ interestId: interest.interestId, revision: interest.revision }));
       const [admitted] = discovery.commitAdmission({
@@ -433,7 +433,7 @@ function verifyInitialState(
       throw new Error(`Installed Session could not be read: ${sessionId}.`);
     }
   }
-  const interestIds = new Set(discovery.listInterests().map((interest) => interest.interestId));
+  const interestIds = new Set(discovery.listNonDeletedInterests().map((interest) => interest.interestId));
   for (const interestId of Object.values(ids.interests)) {
     if (!interestIds.has(interestId)) throw new Error(`Installed Interest could not be read: ${interestId}.`);
   }

@@ -18,14 +18,14 @@ describe('CandidateSupplyRepository', () => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
     repository = createDiscoveryRepository({ database });
-    repository.changeInterest({
+    repository.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
   });
   afterEach(() => database.close());
 
   it('atomically persists a Query and merges stable Candidate identities', () => {
-    const interestId = repository.listInterests()[0]?.interestId;
+    const interestId = repository.listNonDeletedInterests()[0]?.interestId;
     expect(interestId).toBeDefined();
     repository.beginQuery({
       queryId: 'query:1', executionId: 'execution:1', sourceId: 'open_web',
@@ -52,7 +52,7 @@ describe('CandidateSupplyRepository', () => {
   });
 
   it('commits one complete assessment and Interest relation in one transaction', () => {
-    const interestId = repository.listInterests()[0]!.interestId;
+    const interestId = repository.listNonDeletedInterests()[0]!.interestId;
     const candidateId = searchOne(repository).candidates[0]!.candidateId;
 
     const [candidate] = repository.commitAdmission({
@@ -71,7 +71,7 @@ describe('CandidateSupplyRepository', () => {
   it('rolls back the whole admission batch when one decision is invalid', () => {
     const first = searchOne(repository, 'query:1', 'https://example.com/a').candidates[0]!;
     const second = searchOne(repository, 'query:2', 'https://example.com/b').candidates[0]!;
-    const interestId = repository.listInterests()[0]!.interestId;
+    const interestId = repository.listNonDeletedInterests()[0]!.interestId;
 
     expect(() => repository.commitAdmission({
       executionId: 'execution:1', assessmentVersion: 'candidate-admission:v1', assessedAt: now,
@@ -128,10 +128,10 @@ describe('CandidateSupplyRepository', () => {
       executionId: 'execution:1', assessmentVersion: 'candidate-admission:v1', assessedAt: now,
       decisions: [{
         candidateId, decision: 'reject', relevance: 'direct',
-        matchedInterestIds: [repository.listInterests()[0]!.interestId],
+        matchedInterestIds: [repository.listNonDeletedInterests()[0]!.interestId],
         contentValue: 'substantive', novelty: 'novel', temporalValidity: 'valid',
         negativeConstraint: 'clear', reasonCode: 'stale', reason: 'Contradictory.',
-        interestRevisions: [{ interestId: repository.listInterests()[0]!.interestId, revision: 1 }],
+        interestRevisions: [{ interestId: repository.listNonDeletedInterests()[0]!.interestId, revision: 1 }],
         preferenceRevisions: [], preferenceAlignment: [],
       }],
     })).toThrow('does not match its assessment dimensions');
@@ -218,7 +218,7 @@ describe('CandidateSupplyRepository', () => {
     const first = searchOne(repository).candidates[0]!;
     repository.commitAdmission({
       executionId: 'execution:1', assessmentVersion: 'candidate-admission:v1', assessedAt: now,
-      decisions: [admit(first.candidateId, repository.listInterests()[0]!.interestId)],
+      decisions: [admit(first.candidateId, repository.listNonDeletedInterests()[0]!.interestId)],
     });
     repository.beginQuery({
       queryId: 'query:capacity', executionId: 'execution:1', sourceId: 'open_web',
