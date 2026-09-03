@@ -48,8 +48,8 @@ export interface SessionStore {
   listMessagesByIds(messageIds: string[]): SessionMessage[];
 
   insertMessageAttachments(attachments: SessionMessageAttachment[]): void;
-  listAttachmentsByMessageIds(messageIds: string[]): SessionMessageAttachment[];
   findAttachmentById(attachmentId: string): SessionMessageAttachment | undefined;
+  listAttachmentsByMessageIds(messageIds: string[]): SessionMessageAttachment[];
 
   insertEntry(entry: SessionEntry): SessionEntry;
   findEntryById(entryId: string): SessionEntry | undefined;
@@ -213,6 +213,13 @@ class DatabaseSessionStore implements SessionStore {
     for (const attachment of attachments) insert.run(toAttachmentRow(attachment));
   }
 
+  findAttachmentById(attachmentId: string): SessionMessageAttachment | undefined {
+    const row = this.database.prepare<SessionMessageAttachmentRow>({
+      sql: 'SELECT * FROM session_message_attachments WHERE attachment_id = ?',
+    }).get([attachmentId]);
+    return row ? fromAttachmentRow(row) : undefined;
+  }
+
   listAttachmentsByMessageIds(messageIds: string[]): SessionMessageAttachment[] {
     if (messageIds.length === 0) return [];
     const placeholders = messageIds.map(() => '?').join(', ');
@@ -221,13 +228,6 @@ class DatabaseSessionStore implements SessionStore {
       WHERE message_id IN (${placeholders})
       ORDER BY message_id ASC, ordinal ASC
     ` }).all(messageIds).map(fromAttachmentRow);
-  }
-
-  findAttachmentById(attachmentId: string): SessionMessageAttachment | undefined {
-    const row = this.database.prepare<SessionMessageAttachmentRow>({
-      sql: 'SELECT * FROM session_message_attachments WHERE attachment_id = ?',
-    }).get([attachmentId]);
-    return row ? fromAttachmentRow(row) : undefined;
   }
 
   insertEntry(entry: SessionEntry): SessionEntry {
