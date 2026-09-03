@@ -74,7 +74,12 @@ describe('WorkspaceStore', () => {
     const { database, store } = createWorkspaceStoreFixture();
     try {
       store.upsertWorkspace(workspace());
-      store.insertChangeSet(changeSet());
+      store.upsertChangeSet(changeSet());
+      expect(store.findChangeSetByScope({
+        workspace_id: 'workspace:one',
+        session_id: 'session:one',
+        execution_id: 'run:one',
+      })).toEqual(changeSet());
       store.upsertChangedFile(changedFile());
       store.upsertChangedFile(changedFile({ changed_file_id: 'changed-file:other', change_kind: 'modified', effect_type: 'modified' }));
 
@@ -88,7 +93,12 @@ describe('WorkspaceStore', () => {
         status: 'finalized', changed_file_count: 1, finalized_at: '2026-05-16T00:01:00.000Z',
       }));
       expect(second).toEqual(first);
-      expect(store.getChangeSummary('change-set:one')).toEqual({
+      expect(store.findChangeSetByScope({
+        workspace_id: 'workspace:one',
+        session_id: 'session:one',
+        execution_id: 'run:one',
+      })).toEqual(first);
+      expect(store.findChangeSummaryByChangeSetId('change-set:one')).toEqual({
         change_set: first,
         files: [changedFile({ change_kind: 'modified', effect_type: 'modified' })],
       });
@@ -99,7 +109,7 @@ describe('WorkspaceStore', () => {
     const { database, store } = createWorkspaceStoreFixture();
     try {
       store.upsertWorkspace(workspace());
-      store.insertChangeSet(changeSet());
+      store.upsertChangeSet(changeSet());
       expect(store.deleteWorkspace('workspace:one')).toBe('blocked');
       expect(store.findWorkspaceById('workspace:one')).toEqual(workspace());
     } finally { database.close(); }
@@ -122,6 +132,15 @@ describe('WorkspaceStore', () => {
 
       expect(store.deleteWorkspace('workspace:one')).toBe('blocked');
       expect(store.findWorkspaceById('workspace:one')).toEqual(workspace());
+    } finally { database.close(); }
+  });
+
+  it('does not expose replaced Repository method names', () => {
+    const { database, store } = createWorkspaceStoreFixture();
+    try {
+      expect(store).not.toHaveProperty('insertChangeSet');
+      expect(store).not.toHaveProperty('findOpenChangeSet');
+      expect(store).not.toHaveProperty('getChangeSummary');
     } finally { database.close(); }
   });
 });

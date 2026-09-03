@@ -23,9 +23,11 @@ export interface WorkspaceStore {
     updated_at: string;
   }): Workspace | undefined;
   deleteWorkspace(workspaceId: string): 'deleted' | 'not_found' | 'blocked';
-  insertChangeSet(changeSet: WorkspaceChangeSet): WorkspaceChangeSet;
+  /** Inserts a ChangeSet or updates its mutable lifecycle fields by identity. */
+  upsertChangeSet(changeSet: WorkspaceChangeSet): WorkspaceChangeSet;
   findChangeSetById(changeSetId: string): WorkspaceChangeSet | undefined;
-  findOpenChangeSet(input: {
+  /** Finds the unique ChangeSet for one Workspace, Session, and Execution scope. */
+  findChangeSetByScope(input: {
     workspace_id: string;
     session_id: string;
     execution_id: string;
@@ -38,7 +40,8 @@ export interface WorkspaceStore {
   upsertChangedFile(file: WorkspaceChangedFile): WorkspaceChangedFile;
   listChangedFilesByChangeSetId(changeSetId: string): WorkspaceChangedFile[];
   listChangedFilesByExecutionId(executionId: string): WorkspaceChangedFile[];
-  getChangeSummary(changeSetId: string): WorkspaceChangeSummary | undefined;
+  /** Finds the ChangeSet and ChangedFile projection for one ChangeSet identity. */
+  findChangeSummaryByChangeSetId(changeSetId: string): WorkspaceChangeSummary | undefined;
 }
 
 export interface CreateWorkspaceStoreRequest {
@@ -159,7 +162,7 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
       }
     },
 
-    insertChangeSet(changeSet) {
+    upsertChangeSet(changeSet) {
       database.prepare({ sql: `
         INSERT INTO workspace_changes (
           change_set_id, workspace_id, session_id, execution_id, status, effect_coverage,
@@ -184,15 +187,12 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
       return row ? fromChangeSetRow(row) : undefined;
     },
 
-    findOpenChangeSet(input) {
+    findChangeSetByScope(input) {
       const row = database.prepare<ChangeSetRow>({ sql: `
         SELECT * FROM workspace_changes
         WHERE workspace_id = @workspace_id
           AND session_id = @session_id
           AND execution_id = @execution_id
-          AND status = 'open'
-        ORDER BY created_at ASC, change_set_id ASC
-        LIMIT 1
       ` }).get(input);
       return row ? fromChangeSetRow(row) : undefined;
     },
@@ -272,7 +272,7 @@ export function createWorkspaceStore(request: CreateWorkspaceStoreRequest): Work
       ` }).all([executionId]).map(fromChangedFileRow);
     },
 
-    getChangeSummary(changeSetId) {
+    findChangeSummaryByChangeSetId(changeSetId) {
       const change_set = store.findChangeSetById(changeSetId);
       return change_set
         ? { change_set, files: store.listChangedFilesByChangeSetId(changeSetId) }

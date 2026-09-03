@@ -124,14 +124,14 @@ function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorksp
     changeSets: [] as WorkspaceChangeSet[], files: [] as WorkspaceChangedFile[],
     upsertWorkspace: vi.fn(), findWorkspaceById: vi.fn(), findWorkspaceByRootPathKey: vi.fn(), listWorkspaces: vi.fn(() => []),
     updateWorkspaceStatus: vi.fn(), deleteWorkspace: vi.fn(() => 'not_found' as const),
-    insertChangeSet(changeSet: WorkspaceChangeSet) {
+    upsertChangeSet(changeSet: WorkspaceChangeSet) {
       const existing = store.changeSets.find((item) => item.change_set_id === changeSet.change_set_id);
       if (existing) { Object.assign(existing, changeSet); return existing; }
       store.changeSets.push(changeSet); return changeSet;
     },
     findChangeSetById(id: string) { return store.changeSets.find((item) => item.change_set_id === id); },
-    findOpenChangeSet(input: { workspace_id: string; session_id: string; execution_id: string }) {
-      return store.changeSets.find((item) => item.workspace_id === input.workspace_id && item.session_id === input.session_id && item.execution_id === input.execution_id && item.status === 'open');
+    findChangeSetByScope(input: { workspace_id: string; session_id: string; execution_id: string }) {
+      return store.changeSets.find((item) => item.workspace_id === input.workspace_id && item.session_id === input.session_id && item.execution_id === input.execution_id);
     },
     listChangeSetsByExecutionId(executionId: string) { return store.changeSets.filter((item) => item.execution_id === executionId); },
     finalizeChangeSet(input: { change_set_id: string; finalized_at: string }) {
@@ -149,7 +149,7 @@ function fakeStore(options: { failChangedFileWrite?: boolean } = {}): FakeWorksp
     },
     listChangedFilesByChangeSetId(id: string) { return store.files.filter((file) => file.change_set_id === id); },
     listChangedFilesByExecutionId(executionId: string) { const ids = new Set(store.changeSets.filter((item) => item.execution_id === executionId).map((item) => item.change_set_id)); return store.files.filter((file) => ids.has(file.change_set_id)); },
-    getChangeSummary(id: string) { const change_set = store.changeSets.find((item) => item.change_set_id === id); return change_set ? { change_set, files: store.files.filter((file) => file.change_set_id === id) } : undefined; },
+    findChangeSummaryByChangeSetId(id: string) { const change_set = store.changeSets.find((item) => item.change_set_id === id); return change_set ? { change_set, files: store.files.filter((file) => file.change_set_id === id) } : undefined; },
   };
   return store;
 }

@@ -115,14 +115,14 @@ export interface WorkspaceChangeDiagnostic {
 export interface CreateWorkspaceChangesRequest {
   store: Pick<
     WorkspaceStore,
-    | 'insertChangeSet'
-    | 'findOpenChangeSet'
+    | 'upsertChangeSet'
+    | 'findChangeSetByScope'
     | 'listChangeSetsByExecutionId'
     | 'finalizeChangeSet'
     | 'upsertChangedFile'
     | 'listChangedFilesByChangeSetId'
     | 'listChangedFilesByExecutionId'
-    | 'getChangeSummary'
+    | 'findChangeSummaryByChangeSetId'
   >;
   ids?: { change_set_id?: () => string; changed_file_id?: () => string };
   now?: () => string;
@@ -183,20 +183,22 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
     },
 
     finalizeChangeSet(request) {
-      const open = options.store.findOpenChangeSet(request);
-      if (open) {
-        const finalized = options.store.finalizeChangeSet({ change_set_id: open.change_set_id, finalized_at: request.finalized_at });
-        return finalized ? { status: 'finalized', change_set: finalized } : { status: 'not_found' };
+      const existing = options.store.findChangeSetByScope(request);
+      if (!existing) return { status: 'not_found' };
+      if (existing.status === 'finalized') {
+        return { status: 'finalized', change_set: existing };
       }
-      const finalized = options.store.listChangeSetsByExecutionId(request.execution_id)
-        .find((changeSet) => changeSet.workspace_id === request.workspace_id
-          && changeSet.session_id === request.session_id
-          && changeSet.status === 'finalized');
-      return finalized ? { status: 'finalized', change_set: finalized } : { status: 'not_found' };
+      const finalized = options.store.finalizeChangeSet({
+        change_set_id: existing.change_set_id,
+        finalized_at: request.finalized_at,
+      });
+      return finalized
+        ? { status: 'finalized', change_set: finalized }
+        : { status: 'not_found' };
     },
 
     getChangeSummary(request) {
-      const summary = options.store.getChangeSummary(request.change_set_id);
+      const summary = options.store.findChangeSummaryByChangeSetId(request.change_set_id);
       return summary ? { status: 'found', summary } : { status: 'not_found', change_set_id: request.change_set_id };
     },
 
@@ -208,7 +210,7 @@ export function createWorkspaceChanges(options: CreateWorkspaceChangesRequest): 
 
     listChangeSummaries(request) {
       return { summaries: options.store.listChangeSetsByExecutionId(request.execution_id)
-        .map((changeSet) => options.store.getChangeSummary(changeSet.change_set_id))
+        .map((changeSet) => options.store.findChangeSummaryByChangeSetId(changeSet.change_set_id))
         .filter((summary): summary is WorkspaceChangeSummary => Boolean(summary)) };
     },
   };
@@ -302,19 +304,15 @@ function getOrCreateOpenChangeSet(input: {
   scope: WorkspaceChangeExecutionScope;
   coverage: WorkspaceEffectCoverage;
 }): WorkspaceChangeSet | undefined {
-  const open = input.store.findOpenChangeSet(input.scope);
-  if (open) {
-    if (open.effect_coverage === 'complete' && input.coverage === 'unknown') {
-      return input.store.insertChangeSet({ ...open, effect_coverage: 'unknown' });
+  const existing = input.store.findChangeSetByScope(input.scope);
+  if (existing) {
+    if (existing.status === 'finalized') return undefined;
+    if (existing.effect_coverage === 'complete' && input.coverage === 'unknown') {
+      return input.store.upsertChangeSet({ ...existing, effect_coverage: 'unknown' });
     }
-    return open;
+    return existing;
   }
-  const finalized = input.store.listChangeSetsByExecutionId(input.scope.execution_id)
-    .some((changeSet) => changeSet.workspace_id === input.scope.workspace_id
-      && changeSet.session_id === input.scope.session_id
-      && changeSet.status === 'finalized');
-  if (finalized) return undefined;
-  return input.store.insertChangeSet({
+  return input.store.upsertChangeSet({
     change_set_id: input.changeSetId(),
     workspace_id: input.scope.workspace_id,
     session_id: input.scope.session_id,
