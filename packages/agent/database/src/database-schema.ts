@@ -49,6 +49,12 @@ export const sessionEntries = sqliteTable('session_entries', {
   index('idx_session_entries_type').on(table.sessionId, table.entryType),
   index('idx_session_entries_message').on(table.sessionId, table.messageId),
   index('idx_session_entries_compaction').on(table.sessionId, table.compactionId),
+  uniqueIndex('idx_session_entries_message_identity')
+    .on(table.messageId)
+    .where(sql`${table.entryType} = 'message' AND ${table.messageId} IS NOT NULL`),
+  uniqueIndex('idx_session_entries_compaction_identity')
+    .on(table.compactionId)
+    .where(sql`${table.entryType} = 'compaction' AND ${table.compactionId} IS NOT NULL`),
 ]);
 
 export const sessionMessages = sqliteTable('session_messages', {
