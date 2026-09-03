@@ -33,14 +33,14 @@
         "relevance": "direct"
       },
       {
-        "referenceId": "cooking-guide",
+        "referenceId": "ai-assistant-exploration",
         "sourceId": "open_web",
         "sourceName": "Controlled Web",
-        "canonicalUrl": "https://example.test/cooking-guide",
-        "title": "家庭烹饪指南",
-        "description": "与当前兴趣无关的内容。",
-        "contentText": "A cooking guide.",
-        "matchedInterestReferenceIds": [],
+        "canonicalUrl": "https://example.test/ai-assistant-exploration",
+        "title": "AI 助手产品探索",
+        "description": "与 Agent 评估存在较弱关联的产品观察。",
+        "contentText": "A broad product note about AI assistants.",
+        "matchedInterestReferenceIds": ["agent-evaluation"],
         "relevance": "exploration"
       }
     ],
@@ -52,7 +52,7 @@
   },
   "expected": {
     "recommendableCandidateReferenceIds": ["evaluation-design"],
-    "excludedCandidateReferenceIds": ["cooking-guide"],
+    "excludedCandidateReferenceIds": ["ai-assistant-exploration"],
     "allowedBatchOutcomes": ["published"]
   }
 }

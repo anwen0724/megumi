@@ -26,7 +26,7 @@ describe('DailyRecommendationRuntime', () => {
   beforeEach(() => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
-    discovery = createDiscoveryRepository({ database });
+    discovery = createDiscoveryRepository({ database, clock: { now: () => now } });
   });
 
   afterEach(() => database.close());
@@ -50,10 +50,9 @@ describe('DailyRecommendationRuntime', () => {
   it('does not create a Batch or start a model execution when no Candidate is available', async () => {
     const repository = createDailyRecommendationRepository(database);
     const startExecution = vi.fn();
-    const notifyCandidateSupply = vi.fn();
     const runtime = createDailyRecommendationRuntime(runtimeOptions(
       repository,
-      { startExecution, notifyCandidateSupply },
+      { startExecution },
     ));
 
     const result = await runtime.ensure({ trigger: 'manual', now });
@@ -63,7 +62,6 @@ describe('DailyRecommendationRuntime', () => {
     });
     expect(repository.getBatch('2026-08-27')).toBeUndefined();
     expect(startExecution).not.toHaveBeenCalled();
-    expect(notifyCandidateSupply).toHaveBeenCalledWith(5);
     expect(runtime.getHome({ mode: 'timeline', limit: 20 }).today).toEqual({
       localDate: '2026-08-27', status: 'waiting_for_candidates', resultCount: 0,
     });
@@ -203,38 +201,29 @@ function runtimeOptions(
       createRecommendationId: () => `recommendation:${crypto.randomUUID()}`,
     },
     now: () => now,
-    notifyCandidateSupply: vi.fn(),
     ...overrides,
   };
 }
 
 function admitCandidate(repository: DiscoveryRepository, title: string): string {
   const suffix = title.toLowerCase().replaceAll(' ', '-');
-  repository.beginQuery({
-    queryId: `query:${suffix}`, executionId: 'execution:supply', sourceId: 'open_web',
-    query: title, mode: 'relevance', targetInterestIds: ['interest:1'], startedAt: now,
-  });
-  const candidate = repository.commitSearchResult({
-    queryId: `query:${suffix}`, completedAt: now, hardLimit: 100,
-    items: [{
+  const submission = repository.submitCandidate({
+    content: {
       sourceId: 'open_web', sourceName: 'example.com', sourceContentId: suffix,
       canonicalUrl: `https://example.com/${suffix}`, contentType: 'article', title,
       description: `${title} with concrete implementation detail.`,
-    }],
-  }).candidates[0];
-  if (!candidate) throw new Error('Expected Candidate material.');
-  repository.commitAdmission({
-    executionId: 'execution:supply', assessmentVersion: 'candidate-admission:v1', assessedAt: now,
-    decisions: [{
-      candidateId: candidate.candidateId, decision: 'admit', relevance: 'direct',
-      matchedInterestIds: ['interest:1'], contentValue: 'substantive', novelty: 'novel',
-      temporalValidity: 'valid', negativeConstraint: 'clear', reason: `${title} is useful.`,
-      interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
-      preferenceRevisions: [{ scopeKey: 'interest:interest:1', revision: 0 }],
-      preferenceAlignment: [],
-    }],
+    },
+    selectionReason: `${title} is related to the active Interest.`,
+    matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+    settings: {
+      minimumCount: 100,
+      targetCount: 160,
+      maximumCount: 200,
+      candidateValidityDays: 30,
+    },
   });
-  return candidate.candidateId;
+  if (submission.status !== 'created') throw new Error('Expected Candidate to be created.');
+  return submission.candidate.id;
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

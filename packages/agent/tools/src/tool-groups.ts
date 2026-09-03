@@ -8,7 +8,7 @@ const CONVERSATION_TOOL_NAMES = new Set([
 ]);
 
 const CANDIDATE_SUPPLY_TOOL_NAMES = new Set([
-  'search_content', 'read_source_candidate', 'commit_candidate_admission',
+  'search_content', 'read_source_candidate', 'submit_candidates',
 ]);
 
 const DAILY_RECOMMENDATION_TOOL_NAMES = new Set([

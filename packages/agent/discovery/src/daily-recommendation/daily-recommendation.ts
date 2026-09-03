@@ -16,29 +16,18 @@ export const DailyRecommendationFailureSchema = z.object({
 }).strict();
 
 export const EnsureDailyRecommendationRequestSchema = z.object({
-  trigger: z.enum(['schedule', 'startup_catchup', 'manual', 'retry', 'candidate_available']),
+  trigger: z.enum(['schedule', 'startup_catchup', 'manual', 'retry']),
   now: TimestampSchema,
 }).strict();
 
 export const DailyRecommendationCandidateSchema = CandidateSchema.extend({
-  admission: z.object({
-    assessmentId: z.string().min(1),
-    assessmentVersion: z.string().min(1),
+  sourceName: z.string().trim().min(1),
+  interestMatches: z.array(z.object({
+    id: z.string().min(1),
+    candidateId: z.string().min(1),
+    interestId: z.string().min(1),
     relevance: z.enum(['direct', 'adjacent', 'exploration']),
-    matchedInterestIds: z.array(z.string().min(1)),
-    reason: z.string().trim().min(1).max(1000),
-    interestRevisions: z.array(z.object({
-      interestId: z.string().min(1), revision: z.number().int().nonnegative(),
-    }).strict()),
-    preferenceRevisions: z.array(z.object({
-      scopeKey: z.string().min(1), revision: z.number().int().nonnegative(),
-    }).strict()),
-    preferenceAlignment: z.array(z.object({
-      directionId: z.string().min(1),
-      relation: z.enum(['aligned', 'conflicted', 'neutral']),
-      reason: z.string().min(1),
-    }).strict()),
-  }).strict(),
+  }).strict()).min(1),
 }).strict();
 
 const DailyRecommendationBatchBaseShape = {

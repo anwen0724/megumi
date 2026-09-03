@@ -92,12 +92,7 @@ function renderCandidateSupplyMaterial(
     `  <execution>${escapePromptText(JSON.stringify(material.execution))}</execution>`,
     `  <pool>${escapePromptText(JSON.stringify(material.pool))}</pool>`,
     `  <interests>${escapePromptText(JSON.stringify(material.interests))}</interests>`,
-    `  <exploration_preference>${escapePromptText(JSON.stringify(material.explorationPreference))}</exploration_preference>`,
-    `  <negative_constraints>${escapePromptText(JSON.stringify(material.negativeConstraints))}</negative_constraints>`,
     `  <sources>${escapePromptText(JSON.stringify(material.sources))}</sources>`,
-    `  <recent_query_outcomes>${escapePromptText(JSON.stringify(material.recentQueryOutcomes))}</recent_query_outcomes>`,
-    `  <pending_admission_batch>${escapePromptText(JSON.stringify(material.pendingAdmissionBatch))}</pending_admission_batch>`,
-    `  <remaining_budget>${escapePromptText(JSON.stringify(material.remainingBudget))}</remaining_budget>`,
     '</candidate_supply_material>',
   ].join('\n');
 }

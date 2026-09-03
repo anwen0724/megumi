@@ -53,7 +53,8 @@ describe('Evaluation Dataset', () => {
       type: 'candidate_supply',
       initialState: {
         clock: '2026-01-15T08:00:00.000Z',
-        targetCount: 1,
+        minimumCount: 1,
+        maximumCount: 3,
         interests: [
           { referenceId: 'agent', description: 'Agent', status: 'active' },
           { referenceId: 'agent', description: 'Agent Evaluation', status: 'active' },
@@ -61,7 +62,7 @@ describe('Evaluation Dataset', () => {
         existingCandidates: [],
         controlledSources: [{ sourceId: 'open_web', queryIncludes: 'Agent', results: [] }],
       },
-      input: { trigger: 'evaluation' },
+      input: { trigger: 'supply_conditions_changed' },
     };
 
     expect(() => EvaluationCaseSchema.parse(candidateCase)).toThrow(/Interest reference is duplicated/iu);
@@ -185,11 +186,12 @@ function candidateSupplyCase() {
     type: 'candidate_supply',
     initialState: {
       clock: '2026-01-15T08:00:00.000Z',
-      targetCount: 1,
+      minimumCount: 1,
+      maximumCount: 3,
       interests: [{ referenceId: 'agent', description: 'Agent', status: 'active' }],
       existingCandidates: [],
     },
-    input: { trigger: 'evaluation' },
+    input: { trigger: 'supply_conditions_changed' },
   };
 }
 

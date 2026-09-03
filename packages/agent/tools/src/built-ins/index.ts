@@ -5,10 +5,10 @@ import type { ToolHandler, ToolRegistration } from '../tool-handler';
 import { createToolRegistry, type ToolRegistry } from '../tool-registry';
 import { createDirectoryToolDefinition, createDirectoryToolHandler } from './create-directory';
 import {
-  commitCandidateAdmissionToolDefinition,
-  createCommitCandidateAdmissionToolHandler,
-  type CommitCandidateAdmissionOperation,
-} from './commit-candidate-admission';
+  createSubmitCandidatesToolHandler,
+  submitCandidatesToolDefinition,
+  type SubmitCandidatesOperation,
+} from './submit-candidates';
 import { copyPathToolDefinition, copyPathToolHandler } from './copy-path';
 import { deletePathToolDefinition, deletePathToolHandler } from './delete-path';
 import { editFileToolDefinition, editFileToolHandler } from './edit-file';
@@ -37,7 +37,7 @@ export const BUILT_IN_TOOL_NAMES = [
   'create_directory', 'copy_path', 'move_path', 'delete_path', 'run_command',
   'web_search', 'web_fetch', 'update_plan',
   'search_content',
-  'read_source_candidate', 'commit_candidate_admission',
+  'read_source_candidate', 'submit_candidates',
   'read_pool_candidate', 'publish_daily_recommendations',
 ] as const;
 
@@ -56,7 +56,7 @@ const BUILT_IN_TOOL_SOURCE: ToolSource = {
 export function createBuiltInToolRegistry(request: {
   readonly process?: ToolProcessDescriptor;
   readonly candidateSupplyTools?: SearchContentOperation & ReadSourceCandidateOperation
-    & CommitCandidateAdmissionOperation;
+    & SubmitCandidatesOperation;
   readonly dailyRecommendationTools?: ReadPoolCandidateOperation & PublishDailyRecommendationsOperation;
 }): ToolRegistry<BuiltInToolContext> {
   const pairs: Array<{
@@ -86,8 +86,8 @@ export function createBuiltInToolRegistry(request: {
       { definition: searchContentToolDefinition, handler: createSearchContentToolHandler(request.candidateSupplyTools) },
       { definition: readSourceCandidateToolDefinition, handler: createReadSourceCandidateToolHandler(request.candidateSupplyTools) },
       {
-      definition: commitCandidateAdmissionToolDefinition,
-      handler: createCommitCandidateAdmissionToolHandler(request.candidateSupplyTools),
+      definition: submitCandidatesToolDefinition,
+      handler: createSubmitCandidatesToolHandler(request.candidateSupplyTools),
       executionMode: 'serial' as const,
       },
     ] : []),

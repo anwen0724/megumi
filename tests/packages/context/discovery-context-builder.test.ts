@@ -30,11 +30,8 @@ function options() {
       candidates: [{
         candidateId: 'candidate:1', contentIdentity: 'identity:1', sourceName: 'Example',
         canonicalUrl: 'https://example.com/agent', contentType: 'article', title: 'Agent guide',
-        relevance: 'direct' as const, matchedInterestIds: ['interest:1'],
-        admissionReason: 'Directly useful.',
-        assessmentId: 'assessment:1', assessmentVersion: 'candidate-admission:v1',
-        interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
-        preferenceRevisions: [],
+        matchedInterestIds: ['interest:1'], selectionReason: 'Related to the active Interest.',
+        interestMatches: [{ interestId: 'interest:1', relevance: 'direct' as const }],
       }],
       recentRecommendations: [],
       pendingFeedback: [],

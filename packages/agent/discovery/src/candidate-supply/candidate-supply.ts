@@ -1,38 +1,26 @@
 /*
- * Defines Candidate Supply's durable business contracts without owning persistence or Agent execution.
+ * Defines Candidate Supply's business entities, results, and persistence contract.
  */
 import { z } from 'zod';
 import {
   DiscoveryContentTypeSchema,
-  SourceContentDetailSchema,
   SourceContentSchema,
   SourceSearchModeSchema,
-  type SourceContent,
-  type SourceContentDetail,
 } from '../sources/discovery-source';
+import type { SourceContent } from '../sources/discovery-source';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 
-export const CandidateStatusSchema = z.enum([
-  'preparing',
-  'pending_admission',
-  'available',
-  'reserved',
-  'consumed',
-  'rejected',
-  'expired',
-]);
+export const CandidateStatusSchema = z.enum(['available', 'consumed', 'expired']);
 export type CandidateStatus = z.infer<typeof CandidateStatusSchema>;
 
-export const CandidateRelevanceSchema = z.enum(['direct', 'adjacent', 'exploration', 'none']);
+export const CandidateRelevanceSchema = z.enum(['direct', 'adjacent', 'exploration']);
 export type CandidateRelevance = z.infer<typeof CandidateRelevanceSchema>;
 
 export const CandidateSchema = z.object({
-  candidateId: z.string().min(1),
+  id: z.string().min(1),
   contentIdentity: z.string().min(1),
-  status: CandidateStatusSchema,
-  primarySourceId: z.string().min(1),
-  primarySourceName: z.string().min(1),
+  sourceId: z.string().min(1),
   sourceContentId: z.string().min(1).optional(),
   canonicalUrl: z.string().url(),
   contentType: DiscoveryContentTypeSchema,
@@ -40,307 +28,217 @@ export const CandidateSchema = z.object({
   author: z.string().trim().min(1).optional(),
   publishedAt: TimestampSchema.optional(),
   description: z.string().trim().min(1).optional(),
-  contentText: z.string().trim().min(1).optional(),
   coverUrl: z.string().url().optional(),
-  firstSeenAt: TimestampSchema,
-  lastSeenAt: TimestampSchema,
+  selectionReason: z.string().trim().min(1).max(1000),
+  status: CandidateStatusSchema,
+  createdAt: TimestampSchema,
   expiresAt: TimestampSchema,
-  statusUpdatedAt: TimestampSchema,
 }).strict();
 export type Candidate = z.infer<typeof CandidateSchema>;
 
-const DecisionRevisionFields = {
-  interestRevisions: z.array(z.object({
-    interestId: z.string().min(1),
-    revision: z.number().int().nonnegative(),
-  }).strict()),
-  preferenceRevisions: z.array(z.object({
-    scopeKey: z.string().min(1),
-    revision: z.number().int().nonnegative(),
-  }).strict()),
-  preferenceAlignment: z.array(z.object({
-    directionId: z.string().min(1),
-    relation: z.enum(['aligned', 'conflicted', 'neutral']),
-    reason: z.string().trim().min(1).max(1000),
-  }).strict()),
-};
+export const CandidateInterestMatchSchema = z.object({
+  id: z.string().min(1),
+  candidateId: z.string().min(1),
+  interestId: z.string().min(1),
+  relevance: CandidateRelevanceSchema,
+}).strict();
+export type CandidateInterestMatch = z.infer<typeof CandidateInterestMatchSchema>;
 
-export const CandidateAdmissionDecisionSchema = z.discriminatedUnion('decision', [
-  z.object({
-    candidateId: z.string().min(1),
-    decision: z.literal('admit'),
-    relevance: z.enum(['direct', 'adjacent', 'exploration']),
-    matchedInterestIds: z.array(z.string().min(1)),
-    contentValue: z.literal('substantive'),
-    novelty: z.literal('novel'),
-    temporalValidity: z.literal('valid'),
-    negativeConstraint: z.literal('clear'),
-    ...DecisionRevisionFields,
-    reason: z.string().trim().min(1).max(1000),
-  }).strict(),
-  z.object({
-    candidateId: z.string().min(1),
-    decision: z.literal('needs_detail'),
-    reason: z.string().trim().min(1).max(1000),
-  }).strict(),
-  z.object({
-    candidateId: z.string().min(1),
-    decision: z.literal('reject'),
-    relevance: CandidateRelevanceSchema,
-    matchedInterestIds: z.array(z.string().min(1)),
-    contentValue: z.enum(['substantive', 'low_value']),
-    novelty: z.enum(['novel', 'semantic_duplicate']),
-    temporalValidity: z.enum(['valid', 'stale', 'uncertain']),
-    negativeConstraint: z.enum(['clear', 'conflict']),
-    ...DecisionRevisionFields,
-    duplicateOfCandidateId: z.string().min(1).optional(),
-    duplicateOfRecommendationId: z.string().min(1).optional(),
-    reasonCode: z.enum([
-      'insufficient_content',
-      'unrelated',
-      'low_value',
-      'semantic_duplicate',
-      'stale',
-      'negative_constraint',
-    ]),
-    reason: z.string().trim().min(1).max(1000),
-  }).strict(),
-]);
-export type CandidateAdmissionDecision = z.infer<typeof CandidateAdmissionDecisionSchema>;
-
-export interface CandidateSupplyThresholds {
-  readonly lowWatermark: number;
-  readonly target: number;
-  readonly hardLimit: number;
+export interface CandidateWithMatches {
+  readonly candidate: Candidate;
+  readonly interestMatches: readonly CandidateInterestMatch[];
 }
 
-export interface CandidatePoolGap {
-  readonly totalShortfall: number;
-  readonly uncoveredInterestIds: readonly string[];
-  readonly consumerShortfalls: readonly {
-    readonly consumer: 'daily' | 'proactive';
-    readonly count: number;
-  }[];
+export interface CandidatePoolSettings {
+  readonly minimumCount: number;
+  readonly targetCount: number;
+  readonly maximumCount: number;
+  readonly candidateValidityDays: number;
 }
 
 export interface CandidatePoolSnapshot {
-  readonly thresholds: CandidateSupplyThresholds;
-  readonly counts: Readonly<Record<CandidateStatus, number>>;
-  readonly activeCount: number;
-  readonly gap: CandidatePoolGap;
-  readonly pendingCandidates: readonly Candidate[];
-  readonly nextRecheckAt?: string;
+  readonly asOf: string;
+  readonly minimumCount: number;
+  readonly targetCount: number;
+  readonly maximumCount: number;
+  readonly availableCount: number;
+  readonly minimumShortfall: number;
+  readonly targetShortfall: number;
+  readonly availableByInterest: Readonly<Record<string, number>>;
+  readonly candidates: readonly CandidateWithMatches[];
 }
 
-export interface CandidateQueryOutcome {
-  readonly queryId: string;
-  readonly executionId: string;
-  readonly sourceId: string;
-  readonly query: string;
-  readonly normalizedQuery: string;
-  readonly mode: z.infer<typeof SourceSearchModeSchema>;
-  readonly targetInterestIds: readonly string[];
-  readonly status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted';
-  readonly rawResultCount: number;
-  readonly invalidResultCount: number;
-  readonly newCandidateCount: number;
-  readonly mergedCandidateCount: number;
-  readonly alreadyRecommendedCount: number;
-  readonly capacityRejectedCount: number;
-  readonly startedAt: string;
-  readonly completedAt?: string;
-  readonly failureCode?: string;
-}
-
-export interface CandidateMaterialResult {
-  readonly query: CandidateQueryOutcome;
-  readonly candidates: readonly Candidate[];
-}
-
-export interface CandidatePotentialDuplicate {
-  readonly kind: 'candidate' | 'recommendation';
-  readonly id: string;
-  readonly title: string;
-  readonly description?: string;
-}
-
-export interface CandidateSupplyState {
-  readonly consecutiveZeroYieldCount: number;
-  readonly retryAt?: string;
-  readonly nextRecheckAt?: string;
-  readonly lastSettlement?: CandidateSupplySettlement;
-  readonly updatedAt: string;
-}
-
-export const CandidateSupplySettlementSchema = z.object({
-  executionId: z.string().min(1).optional(),
-  reason: z.enum([
-    'fulfilled',
-    'budget_exhausted',
-    'no_available_source',
-    'zero_yield',
-    'agent_failed',
-    'cancelled',
-  ]),
-  remainingGap: z.object({
-    totalShortfall: z.number().int().nonnegative(),
-    uncoveredInterestIds: z.array(z.string().min(1)),
-    consumerShortfalls: z.array(z.object({
-      consumer: z.enum(['daily', 'proactive']),
-      count: z.number().int().positive(),
-    }).strict()),
-  }).strict(),
-  settledAt: TimestampSchema,
-}).strict();
-export type CandidateSupplySettlement = z.infer<typeof CandidateSupplySettlementSchema>;
-
-const CandidateSupplyCheckBaseSchema = z.object({
-  candidateSupplyId: z.string().min(1),
-  trigger: z.enum([
-    'startup',
-    'resume',
-    'interest_changed',
-    'configuration_changed',
-    'candidate_state_changed',
-    'consumer_shortfall',
-    'scheduled_recheck',
-    'evaluation',
-  ]),
-  requestedAt: TimestampSchema,
+export const CandidatePoolSnapshotSchema: z.ZodType<CandidatePoolSnapshot> = z.object({
+  asOf: TimestampSchema,
+  minimumCount: z.number().int().positive(),
+  targetCount: z.number().int().positive(),
+  maximumCount: z.number().int().positive(),
+  availableCount: z.number().int().nonnegative(),
+  minimumShortfall: z.number().int().nonnegative(),
+  targetShortfall: z.number().int().nonnegative(),
+  availableByInterest: z.record(z.string(), z.number().int().nonnegative()),
+  candidates: z.array(z.object({
+    candidate: CandidateSchema,
+    interestMatches: z.array(CandidateInterestMatchSchema),
+  }).strict()),
 }).strict();
 
-export const CandidateSupplyCheckSchema = z.discriminatedUnion('status', [
-  CandidateSupplyCheckBaseSchema.extend({ status: z.literal('queued') }).strict(),
-  CandidateSupplyCheckBaseSchema.extend({ status: z.literal('running'), startedAt: TimestampSchema }).strict(),
-  CandidateSupplyCheckBaseSchema.extend({
-    status: z.literal('completed'),
-    reason: z.enum([
-      'no_gap',
-      'cooldown',
-      'fulfilled',
-      'budget_exhausted',
-      'no_available_source',
-      'model_unavailable',
-      'zero_yield',
-      'agent_failed',
-      'cancelled',
-    ]),
-    executionId: z.string().min(1).optional(),
-    availableBefore: z.number().int().nonnegative().optional(),
-    availableAfter: z.number().int().nonnegative().optional(),
-    remainingGap: CandidateSupplySettlementSchema.shape.remainingGap.optional(),
-    startedAt: TimestampSchema.optional(),
-    completedAt: TimestampSchema,
-  }).strict(),
-  CandidateSupplyCheckBaseSchema.extend({
-    status: z.enum(['failed', 'interrupted']),
-    failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
-    startedAt: TimestampSchema.optional(),
-    completedAt: TimestampSchema,
-  }).strict(),
-]);
-
-export type CandidateSupplyCheck = z.infer<typeof CandidateSupplyCheckSchema>;
-export interface CandidateSupplyCheckReceipt {
-  readonly candidateSupplyId: string;
-  readonly trigger: CandidateSupplyCheck['trigger'];
-  readonly status: 'queued';
-  readonly requestedAt: string;
-}
-
-export function isCandidateSupplyCheckTerminal(value: CandidateSupplyCheck): boolean {
-  return value.status === 'completed' || value.status === 'failed' || value.status === 'interrupted';
-}
-
-export interface CandidateSourceState {
+export interface CandidateIdentity {
   readonly sourceId: string;
-  readonly consecutiveFailureCount: number;
-  readonly retryAt?: string;
-  readonly lastFailureCode?: string;
-  readonly updatedAt: string;
+  readonly sourceContentId?: string;
+  readonly canonicalUrl: string;
+  readonly contentIdentity: string;
 }
+
+export interface SubmitCandidateRequest {
+  readonly content: SourceContent;
+  readonly selectionReason: string;
+  readonly matches: readonly {
+    readonly interestId: string;
+    readonly relevance: CandidateRelevance;
+  }[];
+  readonly settings: CandidatePoolSettings;
+}
+
+export type CandidateSubmissionResult =
+  | {
+      readonly status: 'created' | 'matched_existing';
+      readonly candidate: Candidate;
+      readonly interestMatches: readonly CandidateInterestMatch[];
+      readonly addedCandidateCount: number;
+      readonly addedInterestMatchCount: number;
+    }
+  | {
+      readonly status: 'ignored';
+      readonly reason:
+        | 'capacity_reached'
+        | 'duplicate_match'
+        | 'no_active_interest'
+        | 'terminal_duplicate';
+      readonly addedCandidateCount: 0;
+      readonly addedInterestMatchCount: 0;
+    };
 
 export interface CandidateSupplyRepository {
-  beginQuery(input: {
-    readonly queryId: string;
-    readonly executionId: string;
-    readonly sourceId: string;
-    readonly query: string;
-    readonly mode: 'relevance' | 'recent';
-    readonly targetInterestIds: readonly string[];
-    readonly startedAt: string;
-  }): CandidateQueryOutcome;
-  commitSearchResult(input: {
-    readonly queryId: string;
-    readonly completedAt: string;
-    readonly items: readonly SourceContent[];
-    readonly invalidResultCount?: number;
-    readonly hardLimit: number;
-  }): CandidateMaterialResult;
-  failQuery(input: {
-    readonly queryId: string;
-    readonly status: 'failed' | 'cancelled' | 'interrupted';
-    readonly completedAt: string;
-    readonly failureCode: string;
-    readonly failureMessage: string;
-  }): CandidateQueryOutcome;
-  interruptRunningQueries(now: string): number;
-  readCandidate(candidateId: string): Candidate | undefined;
-  listPotentialDuplicates(candidateId: string, limit: number): readonly CandidatePotentialDuplicate[];
-  listNegativeConstraints(): readonly string[];
-  commitCandidateDetail(input: {
-    readonly candidateId: string;
-    readonly detail: SourceContentDetail;
-    readonly now: string;
-  }): Candidate;
-  commitAdmission(input: {
-    readonly executionId: string;
-    readonly assessmentVersion: string;
-    readonly assessedAt: string;
-    readonly decisions: readonly CandidateAdmissionDecision[];
-  }): readonly Candidate[];
-  getPoolSnapshot(input: {
-    readonly now: string;
-    readonly dailyTargetCount: number;
-    readonly proactiveTargetCount: number;
-    readonly dailyShortfall?: number;
-    readonly proactiveShortfall?: number;
-  }): CandidatePoolSnapshot;
-  listRecentQueryOutcomes(input: {
-    readonly now: string;
-    readonly withinDays: number;
-    readonly limit: number;
-  }): readonly CandidateQueryOutcome[];
-  isQueryCoolingDown(input: {
-    readonly sourceId: string;
-    readonly query: string;
-    readonly mode: 'relevance' | 'recent';
-    readonly targetInterestIds: readonly string[];
-    readonly now: string;
-  }): boolean;
-  readSupplyState(): CandidateSupplyState | undefined;
-  writeSupplyState(state: CandidateSupplyState): void;
-  createSupplyCheck(check: CandidateSupplyCheck): CandidateSupplyCheck;
-  updateSupplyCheck(check: CandidateSupplyCheck): CandidateSupplyCheck;
-  getSupplyCheck(candidateSupplyId: string): CandidateSupplyCheck | undefined;
-  interruptRunningSupplyChecks(input: { readonly interruptedAt: string }): number;
-  readSourceState(sourceId: string): CandidateSourceState | undefined;
-  settleSourceAttempt(input: {
-    readonly sourceId: string;
-    readonly result: 'success' | 'failed' | 'cancelled' | 'persistence_error';
-    readonly failureCode?: string;
-    readonly providerRetryAt?: string;
-    readonly now: string;
-  }): CandidateSourceState;
-  invalidateAdmissions(input: {
-    readonly interestIds: readonly string[];
-    readonly now: string;
-  }): number;
+  /** Reads one Candidate and lazily expires it when required. */
+  findCandidateById(id: string): CandidateWithMatches | undefined;
+  /** Reads one Candidate by any deterministic identity. */
+  findCandidateByIdentity(identity: CandidateIdentity): CandidateWithMatches | undefined;
+  /** Reads the current derived Candidate Pool and lazily expires its read range. */
+  readCandidatePoolSnapshot(settings: CandidatePoolSettings): CandidatePoolSnapshot;
+  /** Atomically validates, deduplicates, capacity-checks, and persists one Candidate submission. */
+  submitCandidate(request: SubmitCandidateRequest): CandidateSubmissionResult;
 }
 
-export interface CandidateSupplyContextSource {
-  getSnapshot(now: string): CandidatePoolSnapshot;
+export type CandidateSupplyTrigger =
+  | 'startup'
+  | 'scheduled'
+  | 'interest_changed'
+  | 'supply_conditions_changed';
+
+export interface CandidateSupplyResultBase {
+  readonly requestId: string;
+  readonly trigger: CandidateSupplyTrigger;
+  readonly requestedAt: string;
+  readonly completedAt: string;
+  readonly addedCandidateCount: number;
+  readonly addedInterestMatchCount: number;
 }
+
+export type CandidateSupplyResult =
+  | CandidateSupplyResultBase & {
+      readonly status: 'not_needed';
+      readonly reason: 'no_gap' | 'no_active_interest' | 'supply_in_progress';
+    }
+  | CandidateSupplyResultBase & {
+      readonly status: 'fulfilled';
+      readonly executionId: string;
+      readonly availableCount: number;
+      readonly remainingReplenishmentCount: 0;
+    }
+  | CandidateSupplyResultBase & {
+      readonly status: 'partially_fulfilled';
+      readonly executionId: string;
+      readonly availableCount: number;
+      readonly remainingReplenishmentCount: number;
+      readonly reason: 'no_more_result' | 'no_related_content' | 'sources_exhausted';
+    }
+  | CandidateSupplyResultBase & {
+      readonly status: 'unfulfilled';
+      readonly executionId?: string;
+      readonly availableCount: number;
+      readonly remainingReplenishmentCount: number;
+      readonly reason:
+        | 'no_available_source'
+        | 'no_search_result'
+        | 'no_related_content'
+        | 'sources_exhausted';
+    }
+  | CandidateSupplyResultBase & {
+      readonly status: 'failed';
+      readonly executionId?: string;
+      readonly availableCount?: number;
+      readonly remainingReplenishmentCount?: number;
+      readonly failure: {
+        readonly code: string;
+        readonly message: string;
+        readonly retryable: boolean;
+      };
+    }
+  | CandidateSupplyResultBase & {
+      readonly status: 'cancelled';
+      readonly executionId: string;
+      readonly availableCount: number;
+      readonly remainingReplenishmentCount: number;
+    };
+
+const CandidateSupplyResultBaseSchema = z.object({
+  requestId: z.string().min(1),
+  trigger: z.enum(['startup', 'scheduled', 'interest_changed', 'supply_conditions_changed']),
+  requestedAt: TimestampSchema,
+  completedAt: TimestampSchema,
+  addedCandidateCount: z.number().int().nonnegative(),
+  addedInterestMatchCount: z.number().int().nonnegative(),
+});
+const CandidateSupplyProgressSchema = z.object({
+  executionId: z.string().min(1),
+  availableCount: z.number().int().nonnegative(),
+  remainingReplenishmentCount: z.number().int().nonnegative(),
+});
+
+export const CandidateSupplyResultSchema: z.ZodType<CandidateSupplyResult> = z.discriminatedUnion('status', [
+  CandidateSupplyResultBaseSchema.extend({
+    status: z.literal('not_needed'),
+    reason: z.enum(['no_gap', 'no_active_interest', 'supply_in_progress']),
+  }).strict(),
+  CandidateSupplyResultBaseSchema.merge(CandidateSupplyProgressSchema).extend({
+    status: z.literal('fulfilled'),
+    remainingReplenishmentCount: z.literal(0),
+  }).strict(),
+  CandidateSupplyResultBaseSchema.merge(CandidateSupplyProgressSchema).extend({
+    status: z.literal('partially_fulfilled'),
+    reason: z.enum(['no_more_result', 'no_related_content', 'sources_exhausted']),
+  }).strict(),
+  CandidateSupplyResultBaseSchema.merge(CandidateSupplyProgressSchema.omit({ executionId: true })).extend({
+    status: z.literal('unfulfilled'),
+    executionId: z.string().min(1).optional(),
+    reason: z.enum(['no_available_source', 'no_search_result', 'no_related_content', 'sources_exhausted']),
+  }).strict(),
+  CandidateSupplyResultBaseSchema.extend({
+    status: z.literal('failed'),
+    executionId: z.string().min(1).optional(),
+    availableCount: z.number().int().nonnegative().optional(),
+    remainingReplenishmentCount: z.number().int().nonnegative().optional(),
+    failure: z.object({
+      code: z.string().min(1),
+      message: z.string(),
+      retryable: z.boolean(),
+    }).strict(),
+  }).strict(),
+  CandidateSupplyResultBaseSchema.merge(CandidateSupplyProgressSchema).extend({
+    status: z.literal('cancelled'),
+  }).strict(),
+]);
 
 export const CandidateSupplySearchInputSchema = z.object({
   sourceId: z.string().trim().min(1),
@@ -351,9 +249,16 @@ export const CandidateSupplySearchInputSchema = z.object({
 }).strict();
 export type CandidateSupplySearchInput = z.infer<typeof CandidateSupplySearchInputSchema>;
 
-export const CandidateSupplyCommitInputSchema = z.object({
-  decisions: z.array(CandidateAdmissionDecisionSchema).min(1).max(50),
+export const CandidateSupplySubmitInputSchema = z.object({
+  items: z.array(z.object({
+    resultId: z.string().min(1),
+    selectionReason: z.string().trim().min(1).max(1000),
+    matches: z.array(z.object({
+      interestId: z.string().min(1),
+      relevance: CandidateRelevanceSchema,
+    }).strict()).min(1),
+  }).strict()).min(1).max(50),
 }).strict();
-export type CandidateSupplyCommitInput = z.infer<typeof CandidateSupplyCommitInputSchema>;
+export type CandidateSupplySubmitInput = z.infer<typeof CandidateSupplySubmitInputSchema>;
 
-export { SourceContentDetailSchema, SourceContentSchema };
+export { SourceContentSchema };

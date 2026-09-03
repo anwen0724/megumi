@@ -27,62 +27,28 @@ export function createDiscoveryFactsReader(options: {
       if (request.signal?.aborted) return { status: 'cancelled' };
       const attempt = options.candidateSupplyAttempts.readContextState(request.executionId);
       if (!attempt) return missing('candidate_supply_attempt_not_found');
-      const preferenceSnapshots = options.repository.listPreferenceSnapshots();
-      const preferences = preferenceByInterest(preferenceSnapshots);
       const facts: CandidateSupplyFacts = {
-        asOf: attempt.asOf,
+        asOf: attempt.snapshot.asOf,
         executionId: request.executionId,
         startedAt: attempt.startedAt,
         trigger: attempt.trigger,
         pool: {
-          counts: attempt.snapshot.counts,
-          lowWatermark: attempt.snapshot.thresholds.lowWatermark,
-          target: attempt.snapshot.thresholds.target,
-          hardLimit: attempt.snapshot.thresholds.hardLimit,
-          totalShortfall: attempt.snapshot.gap.totalShortfall,
-          uncoveredInterestIds: attempt.snapshot.gap.uncoveredInterestIds,
-          consumerShortfalls: attempt.snapshot.gap.consumerShortfalls,
+          minimumCount: attempt.snapshot.minimumCount,
+          targetCount: attempt.snapshot.targetCount,
+          maximumCount: attempt.snapshot.maximumCount,
+          availableCount: attempt.snapshot.availableCount,
+          minimumShortfall: attempt.snapshot.minimumShortfall,
+          targetShortfall: attempt.snapshot.targetShortfall,
+          availableByInterest: attempt.snapshot.availableByInterest,
         },
+        sourceIds: attempt.enabledSourceIds,
         interests: options.repository.listNonDeletedInterests()
           .filter(({ status }) => status === 'active')
           .map((interest) => ({
             interestId: interest.interestId,
             description: interest.description,
-            status: interest.status,
             interestRevision: interest.revision,
-            preference: preferences.get(interest.interestId) ?? emptyPreference(interest.interestId),
           })),
-        explorationPreference: explorationPreference(preferenceSnapshots),
-        negativeConstraints: options.repository.listNegativeConstraints(),
-        recentQueryOutcomes: options.repository.listRecentQueryOutcomes({
-          now: attempt.asOf, withinDays: 30, limit: 50,
-        }).map((query) => ({
-          queryId: query.queryId,
-          query: query.query,
-          sourceId: query.sourceId,
-          mode: query.mode,
-          targetInterestIds: query.targetInterestIds,
-          status: query.status === 'interrupted' ? 'cancelled' : query.status,
-          normalizedResultCount: Math.max(0, query.rawResultCount - query.invalidResultCount),
-          newCandidateCount: query.newCandidateCount,
-          mergedCandidateCount: query.mergedCandidateCount,
-          alreadyRecommendedCount: query.alreadyRecommendedCount,
-          capacityRejectedCount: query.capacityRejectedCount,
-          ...(query.failureCode ? { failureCode: query.failureCode } : {}),
-          ...(query.completedAt ? { completedAt: query.completedAt } : {}),
-        })),
-        pendingCandidates: attempt.snapshot.pendingCandidates.map((candidate) => ({
-          candidate: candidateSummary(candidate),
-          potentialDuplicates: options.repository
-            .listPotentialDuplicates(candidate.candidateId, 10)
-            .map((duplicate) => ({
-              kind: duplicate.kind,
-              identity: duplicate.id,
-              title: duplicate.title,
-              similarity: 'semantic' as const,
-            })),
-        })),
-        budget: attempt.budget,
       };
       return { status: 'ok', facts };
     },
@@ -121,14 +87,12 @@ export function createDiscoveryFactsReader(options: {
         explorationPreference: explorationPreference(preferenceSnapshots),
         candidates: snapshot.window.candidates.map((candidate) => ({
           ...candidateSummary(candidate),
-          assessmentId: candidate.admission.assessmentId,
-          assessmentVersion: candidate.admission.assessmentVersion,
-          relevance: candidate.admission.relevance,
-          matchedInterestIds: candidate.admission.matchedInterestIds,
-          admissionReason: candidate.admission.reason,
-          interestRevisions: candidate.admission.interestRevisions,
-          preferenceRevisions: candidate.admission.preferenceRevisions,
-          preferenceAlignment: candidate.admission.preferenceAlignment,
+          selectionReason: candidate.selectionReason,
+          matchedInterestIds: candidate.interestMatches.map(({ interestId }) => interestId),
+          interestMatches: candidate.interestMatches.map(({ interestId, relevance }) => ({
+            interestId,
+            relevance,
+          })),
         })),
         recentRecommendations: snapshot.recentRecommendations.map((recommendation) => ({
           contentIdentity: recommendation.contentIdentity,
@@ -192,13 +156,11 @@ export function createDiscoveryFactsReader(options: {
 /** Projects Source Registry capability and cooldown facts without exposing adapters. */
 export function createContextDiscoverySourceRegistry(options: {
   readonly sourceRegistry: SourceRegistry;
-  readonly repository: DiscoveryRepository;
 }): ContextDiscoverySourceRegistry {
   return {
     listContextSources({ at }) {
       return options.sourceRegistry.listSources().map(({ descriptor, availability }) => {
-        const persisted = options.repository.readSourceState(descriptor.id);
-        const retryAt = latestTimestamp(availability.retryAt, persisted?.retryAt);
+        const retryAt = availability.retryAt;
         return {
           sourceId: descriptor.id,
           name: descriptor.name,
@@ -258,32 +220,29 @@ function explorationPreference(
 }
 
 function candidateSummary(candidate: {
-  readonly candidateId: string;
+  readonly id: string;
   readonly contentIdentity: string;
-  readonly primarySourceId: string;
-  readonly primarySourceName: string;
+  readonly sourceId: string;
+  readonly sourceName: string;
   readonly canonicalUrl: string;
   readonly contentType: string;
   readonly title: string;
   readonly author?: string;
   readonly publishedAt?: string;
   readonly description?: string;
-  readonly contentText?: string;
 }) {
   return {
-    candidateId: candidate.candidateId,
+    candidateId: candidate.id,
     contentIdentity: candidate.contentIdentity,
-    sourceId: candidate.primarySourceId,
-    sourceName: candidate.primarySourceName,
+    sourceId: candidate.sourceId,
+    sourceName: candidate.sourceName,
     canonicalUrl: candidate.canonicalUrl,
     contentType: candidate.contentType,
     title: candidate.title,
     ...(candidate.author ? { author: candidate.author } : {}),
     ...(candidate.publishedAt ? { contentPublishedAt: candidate.publishedAt } : {}),
     ...(candidate.description ? { description: candidate.description } : {}),
-    evidenceCompleteness: candidate.contentText ? 'full' as const
-      : candidate.description ? 'partial' as const
-        : 'metadata_only' as const,
+    evidenceCompleteness: candidate.description ? 'partial' as const : 'metadata_only' as const,
   };
 }
 
@@ -292,8 +251,4 @@ function missing(code: string) {
     status: 'failed' as const,
     failure: { code, message: 'The requested Discovery Context facts are unavailable.' },
   });
-}
-
-function latestTimestamp(...values: readonly (string | undefined)[]): string | undefined {
-  return values.filter((value): value is string => Boolean(value)).sort().at(-1);
 }

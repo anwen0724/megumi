@@ -2,7 +2,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createDiscoveryRepository } from '@megumi/discovery';
+import { canonicalContentIdentity, createDiscoveryRepository } from '@megumi/discovery';
 
 describe('Recommendation content identity migration', () => {
   let database: DatabaseConnection;
@@ -23,7 +23,12 @@ describe('Recommendation content identity migration', () => {
     expect(database.prepare<{ recommendation_id: string; content_identity: string }>({ sql: `
       SELECT recommendation_id, content_identity FROM discovery_recommendations ORDER BY recommendation_id
     ` }).all()).toEqual([
-      { recommendation_id: 'recommendation:1', content_identity: 'content:v2:platform:zhihu:answer:456' },
+      {
+        recommendation_id: 'recommendation:1',
+        content_identity: canonicalContentIdentity({
+          canonicalUrl: 'https://www.zhihu.com/question/123/answer/456',
+        }),
+      },
       { recommendation_id: 'recommendation:2', content_identity: 'content:legacy-duplicate:recommendation:2' },
     ]);
   });

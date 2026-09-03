@@ -28,7 +28,7 @@ import type { SearchContentOperation } from './built-ins/search-content';
 import type { ReadSourceCandidateOperation } from './built-ins/read-source-candidate';
 import type { ReadPoolCandidateOperation } from './built-ins/read-pool-candidate';
 import type { PublishDailyRecommendationsOperation } from './built-ins/publish-daily-recommendations';
-import type { CommitCandidateAdmissionOperation } from './built-ins/commit-candidate-admission';
+import type { SubmitCandidatesOperation } from './built-ins/submit-candidates';
 import { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 import {
   createCancelledToolResult,
@@ -164,7 +164,7 @@ export interface CreateToolsRequest {
 
 export type CandidateSupplyToolOperations = SearchContentOperation
   & ReadSourceCandidateOperation
-  & CommitCandidateAdmissionOperation
+  & SubmitCandidatesOperation
   & { ownsExecution(executionId: string): boolean };
 
 export type DailyRecommendationToolOperations = ReadPoolCandidateOperation

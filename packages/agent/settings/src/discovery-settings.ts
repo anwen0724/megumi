@@ -25,6 +25,10 @@ export const DiscoverySettingsRawSchema = z.object({
   daily_generation_time: LocalTimeSchema.optional(),
   daily_target_count: z.number().int().min(1).max(100).optional(),
   enabled_sources: SourceIdsSchema.optional(),
+  candidate_pool_minimum_count: z.number().int().positive().optional(),
+  candidate_pool_maximum_count: z.number().int().positive().optional(),
+  candidate_validity_days: z.number().int().positive().optional(),
+  candidate_supply_check_interval_minutes: z.number().int().positive().optional(),
   twitter_budget: TwitterAttemptBudgetRawSchema.optional(),
 }).strict();
 
@@ -42,8 +46,17 @@ export const DiscoverySettingsResolvedSchema = z.object({
   daily_generation_time: LocalTimeSchema,
   daily_target_count: z.number().int().min(1).max(100),
   enabled_sources: SourceIdsSchema,
+  candidate_pool_minimum_count: z.number().int().positive(),
+  candidate_pool_maximum_count: z.number().int().positive(),
+  candidate_validity_days: z.number().int().positive(),
+  candidate_supply_check_interval_minutes: z.number().int().positive(),
   twitter_budget: TwitterAttemptBudgetResolvedSchema,
-}).strict();
+}).strict().refine(
+  ({ candidate_pool_minimum_count: minimum, candidate_pool_maximum_count: maximum }) => (
+    minimum < Math.floor(maximum * 0.8)
+  ),
+  'candidate_pool_minimum_count must be lower than 80% of candidate_pool_maximum_count.',
+);
 
 export type DiscoverySourceId = z.infer<typeof DiscoverySourceIdSchema>;
 export type DiscoverySettingsRaw = z.infer<typeof DiscoverySettingsRawSchema>;
@@ -54,6 +67,10 @@ export const DEFAULT_DISCOVERY_SETTINGS = DiscoverySettingsResolvedSchema.parse(
   daily_generation_time: '08:00',
   daily_target_count: 20,
   enabled_sources: ['bilibili', 'open_web'],
+  candidate_pool_minimum_count: 100,
+  candidate_pool_maximum_count: 200,
+  candidate_validity_days: 30,
+  candidate_supply_check_interval_minutes: 360,
   twitter_budget: {
     max_search_calls: 3,
     max_results_per_search: 20,

@@ -39,7 +39,7 @@ export const TRACE_SPAN_NAMES = [
   'discovery.selection',
   'discovery.attempt.settle',
   'candidate.supply.check',
-  'candidate.admission.commit',
+  'candidate.submit',
   'candidate.pool.snapshot',
   'daily.batch.claim',
   'daily.attempt.settle',
@@ -72,7 +72,6 @@ export interface TraceCorrelation {
   readonly sessionId?: string;
   readonly messageId?: string;
   readonly workspaceId?: string;
-  readonly candidateSupplyId?: string;
   readonly dailyRecommendationBatchId?: string;
   readonly preferenceLearningBatchId?: string;
   /** Retained only so the Reader can decode v1 Journal records written before explicit batch identities. */
@@ -98,7 +97,6 @@ export const TRACE_CORRELATION_STRING_KEYS = [
   'sessionId',
   'messageId',
   'workspaceId',
-  'candidateSupplyId',
   'dailyRecommendationBatchId',
   'preferenceLearningBatchId',
   'batchId',
@@ -134,7 +132,6 @@ export const TraceCorrelationSchema: z.ZodType<TraceCorrelation> = z.object({
   sessionId: z.string().optional(),
   messageId: z.string().optional(),
   workspaceId: z.string().optional(),
-  candidateSupplyId: z.string().optional(),
   dailyRecommendationBatchId: z.string().optional(),
   preferenceLearningBatchId: z.string().optional(),
   batchId: z.string().optional(),

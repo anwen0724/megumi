@@ -27,7 +27,7 @@ describe('Daily Recommendation Candidate window', () => {
     });
 
     expect(result).toMatchObject({ availableCount: 2, requestedCount: 5, actualTarget: 2, windowLimit: 2 });
-    expect(result.candidates.map(({ candidateId }) => candidateId)).toEqual(['candidate:1', 'candidate:2']);
+    expect(result.candidates.map(({ id }) => id)).toEqual(['candidate:1', 'candidate:2']);
   });
 
   it('round-robins active Interests and gives exploration Candidates a non-tail lane', () => {
@@ -41,12 +41,12 @@ describe('Daily Recommendation Candidate window', () => {
         candidate('a-direct-old', 'direct', ['interest:a'], '2026-08-21T00:00:00.000Z'),
         candidate('b-adjacent', 'adjacent', ['interest:b'], '2026-08-20T00:00:00.000Z'),
         candidate('b-direct', 'direct', ['interest:b'], '2026-08-23T00:00:00.000Z'),
-        candidate('explore-new', 'exploration', [], '2026-08-25T00:00:00.000Z'),
-        candidate('explore-old', 'exploration', [], '2026-08-24T00:00:00.000Z'),
+        candidate('explore-new', 'exploration', ['interest:a'], '2026-08-25T00:00:00.000Z'),
+        candidate('explore-old', 'exploration', ['interest:a'], '2026-08-24T00:00:00.000Z'),
       ],
     });
 
-    expect(result.candidates.map(({ candidateId }) => candidateId)).toEqual([
+    expect(result.candidates.map(({ id }) => id)).toEqual([
       'a-direct-old',
       'b-direct',
       'explore-old',
@@ -78,31 +78,31 @@ describe('Daily Recommendation Candidate window', () => {
 });
 
 function candidate(
-  candidateId: string,
-  relevance: DailyRecommendationCandidate['admission']['relevance'],
+  id: string,
+  relevance: DailyRecommendationCandidate['interestMatches'][number]['relevance'],
   matchedInterestIds: readonly string[],
   statusUpdatedAt: string,
   overrides: Partial<DailyRecommendationCandidate> = {},
 ): DailyRecommendationCandidate {
   return {
-    candidateId,
-    contentIdentity: `identity:${candidateId}`,
+    id,
+    contentIdentity: `identity:${id}`,
     status: 'available',
-    primarySourceId: 'open_web',
-    primarySourceName: 'example.com',
-    canonicalUrl: `https://example.com/${candidateId}`,
+    sourceId: 'open_web',
+    sourceName: 'example.com',
+    canonicalUrl: `https://example.com/${id}`,
     contentType: 'article',
-    title: candidateId,
-    description: `${candidateId} description`,
-    firstSeenAt: '2026-08-20T00:00:00.000Z',
-    lastSeenAt: '2026-08-26T00:00:00.000Z',
+    title: id,
+    description: `${id} description`,
+    selectionReason: `${id} is related to the active Interest.`,
+    createdAt: statusUpdatedAt,
     expiresAt: '2026-09-01T00:00:00.000Z',
-    statusUpdatedAt,
-    admission: {
+    interestMatches: matchedInterestIds.map((interestId, index) => ({
+      id: `match:${id}:${index}`,
+      candidateId: id,
+      interestId,
       relevance,
-      matchedInterestIds,
-      reason: `${candidateId} admission`,
-    },
+    })),
     ...overrides,
   };
 }

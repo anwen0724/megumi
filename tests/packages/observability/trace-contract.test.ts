@@ -12,11 +12,11 @@ describe('Trace contract', () => {
 
   it('accepts explicit business correlation identities', () => {
     expect(TraceCorrelationSchema.parse({
-      candidateSupplyId: 'candidate-supply:1',
+      requestId: 'candidate-supply-request:1',
       dailyRecommendationBatchId: 'daily-batch:1',
       preferenceLearningBatchId: 'preference-batch:1',
     })).toEqual({
-      candidateSupplyId: 'candidate-supply:1',
+      requestId: 'candidate-supply-request:1',
       dailyRecommendationBatchId: 'daily-batch:1',
       preferenceLearningBatchId: 'preference-batch:1',
     });

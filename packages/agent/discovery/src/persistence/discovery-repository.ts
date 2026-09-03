@@ -43,9 +43,20 @@ export interface DiscoveryRepository
 /** Creates the stable Discovery repository from its focused persistence owners. */
 export function createDiscoveryRepository(options: {
   readonly database: DatabaseConnection;
+  readonly clock?: { now(): string };
+  readonly candidateIds?: {
+    createCandidateId(): string;
+    createInterestMatchId(): string;
+  };
 }): DiscoveryRepository {
   const interests = createInterestRepository(options.database);
-  const candidateSupply = createCandidateSupplyRepository(options.database);
+  const candidateSupply = options.clock && options.candidateIds
+    ? createCandidateSupplyRepository({
+        database: options.database,
+        clock: options.clock,
+        ids: options.candidateIds,
+      })
+    : createCandidateSupplyRepository(options.database);
   const recommendations = createRecommendationRepository(options.database);
   const dailyRecommendation = createDailyRecommendationRepository(options.database);
   const preferences = createPreferenceLearningRepository(options.database);

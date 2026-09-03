@@ -1,7 +1,6 @@
 /* Defines renderer-safe Discovery DTOs and strict Host request/response schemas. */
 import { z } from 'zod';
 import type {
-  CandidateSupplyFacts,
   DailyRecommendationFacts,
   PreferenceLearningFacts,
   ReadDiscoveryFactsResult,
@@ -17,7 +16,8 @@ import {
   GetDiscoveryHomeRequestSchema,
   InterestEvidenceSchema,
   InterestSchema,
-  CandidateSupplyCheckSchema,
+  CandidatePoolSnapshotSchema,
+  CandidateSupplyResultSchema,
   PreferenceLearningBatchSchema,
   PreferenceLearningCompletionSchema,
   RecommendationFeedbackChangeReceiptSchema,
@@ -49,16 +49,13 @@ export const DiscoveryInterestFactsPayloadSchema = z.object({
   evidenceIds: z.array(z.string().min(1)),
 }).strict();
 export const DiscoveryCandidateSupplyRequestSchema = z.object({
-  trigger: z.literal('evaluation').default('evaluation'),
+  trigger: z.enum(['startup', 'scheduled', 'interest_changed', 'supply_conditions_changed'])
+    .default('supply_conditions_changed'),
 }).strict();
 export const DiscoveryDailyBatchQuerySchema = z.object({ localDate: z.string().date() }).strict();
-export const DiscoveryCandidateSupplyQuerySchema = z.object({
-  candidateSupplyId: z.string().min(1),
-}).strict();
 export const DiscoveryPreferenceLearningQuerySchema = z.object({
   feedbackChangeId: z.string().min(1),
 }).strict();
-export const DiscoveryCandidateSupplyFactsQuerySchema = z.object({ executionId: z.string().min(1) }).strict();
 export const DiscoveryDailyRecommendationFactsQuerySchema = z.object({
   executionId: z.string().min(1),
   batchId: z.string().min(1),
@@ -118,7 +115,8 @@ export const DiscoveryInterestFactsResultSchema = z.object({
   interests: z.array(InterestSchema),
   evidence: z.array(InterestEvidenceSchema),
 }).strict();
-export const DiscoveryCandidateSupplyResultSchema = CandidateSupplyCheckSchema.nullable();
+export const DiscoveryCandidateSupplyResultSchema = CandidateSupplyResultSchema;
+export const DiscoveryCandidatePoolResultSchema = CandidatePoolSnapshotSchema.nullable();
 export const DiscoveryDailyBatchResultSchema = DailyRecommendationBatchSchema.nullable();
 export const DiscoveryPreferenceLearningResultSchema = PreferenceLearningCompletionSchema.nullable();
 export const DiscoveryPreferenceLearningBatchResultSchema = PreferenceLearningBatchSchema.nullable();
@@ -131,7 +129,6 @@ export type DiscoveryRecommendationSearchPayload = z.infer<typeof DiscoveryRecom
 export type DiscoveryRecommendationStatePayload = z.infer<typeof DiscoveryRecommendationStatePayloadSchema>;
 export type DiscoveryInterestFactsPayload = z.infer<typeof DiscoveryInterestFactsPayloadSchema>;
 export type DiscoveryCandidateSupplyRequest = z.infer<typeof DiscoveryCandidateSupplyRequestSchema>;
-export type DiscoveryCandidateSupplyQuery = z.infer<typeof DiscoveryCandidateSupplyQuerySchema>;
 export type DiscoveryPreferenceLearningQuery = z.infer<typeof DiscoveryPreferenceLearningQuerySchema>;
 export type DiscoveryBackgroundWaitOptions = z.infer<typeof DiscoveryBackgroundWaitOptionsSchema>;
 export type DiscoveryConfigurationGetPayload = z.infer<typeof DiscoveryConfigurationGetPayloadSchema>;
@@ -150,10 +147,10 @@ export type DiscoveryRecommendationUiDto = z.infer<typeof DiscoveryRecommendatio
 export type DiscoveryRecommendationStateResult = z.infer<typeof DiscoveryRecommendationStateResultSchema>;
 export type DiscoveryInterestFactsResult = z.infer<typeof DiscoveryInterestFactsResultSchema>;
 export type DiscoveryCandidateSupplyResult = z.infer<typeof DiscoveryCandidateSupplyResultSchema>;
+export type DiscoveryCandidatePoolResult = z.infer<typeof DiscoveryCandidatePoolResultSchema>;
 export type DiscoveryDailyBatchResult = z.infer<typeof DiscoveryDailyBatchResultSchema>;
 export type DiscoveryPreferenceLearningResult = z.infer<typeof DiscoveryPreferenceLearningResultSchema>;
 export type DiscoveryPreferenceLearningBatchResult = z.infer<typeof DiscoveryPreferenceLearningBatchResultSchema>;
-export type DiscoveryCandidateSupplyFactsResult = ReadDiscoveryFactsResult<CandidateSupplyFacts>;
 export type DiscoveryDailyRecommendationFactsResult = ReadDiscoveryFactsResult<DailyRecommendationFacts>;
 export type DiscoveryPreferenceLearningFactsResult = ReadDiscoveryFactsResult<PreferenceLearningFacts>;
 
@@ -179,13 +176,7 @@ export interface DiscoveryHost {
   updateRecommendationState(request: DiscoveryRecommendationStatePayload): Promise<DiscoveryRecommendationStateResult>;
   getInterestFacts(request: DiscoveryInterestFactsPayload): Promise<DiscoveryInterestFactsResult>;
   requestCandidateSupply(request?: DiscoveryCandidateSupplyRequest): Promise<DiscoveryCandidateSupplyResult>;
-  getCandidateSupplyCheck(request: DiscoveryCandidateSupplyQuery): Promise<DiscoveryCandidateSupplyResult>;
-  waitCandidateSupplyCheck(
-    request: DiscoveryCandidateSupplyQuery & DiscoveryBackgroundWaitOptions,
-  ): Promise<DiscoveryBackgroundWaitResult<NonNullable<DiscoveryCandidateSupplyResult>>>;
-  getCandidateSupplyFacts(
-    request: z.infer<typeof DiscoveryCandidateSupplyFactsQuerySchema>,
-  ): Promise<DiscoveryCandidateSupplyFactsResult>;
+  getCandidatePool(): Promise<DiscoveryCandidatePoolResult>;
   getDailyRecommendationFacts(
     request: z.infer<typeof DiscoveryDailyRecommendationFactsQuerySchema>,
   ): Promise<DiscoveryDailyRecommendationFactsResult>;

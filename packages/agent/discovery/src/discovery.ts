@@ -4,13 +4,14 @@
  */
 import {
   createCandidateSupplyRuntime,
-  type CandidateSupplyTrigger,
   type CreateCandidateSupplyRuntimeOptions,
 } from './candidate-supply/candidate-supply-runtime';
 import type {
-  CandidateSupplyCheck,
-  CandidateSupplyCheckReceipt,
+  CandidatePoolSnapshot,
+  CandidateSupplyResult,
+  CandidateSupplyTrigger,
 } from './candidate-supply/candidate-supply';
+import { candidatePoolSettings } from './candidate-supply/candidate-pool';
 import {
   createDiscoveryConfiguration,
   type ConnectDiscoverySourceRequest,
@@ -85,8 +86,9 @@ export interface Discovery {
   /** Ensures the requested Daily Recommendation Batch according to its trigger semantics. */
   ensureDailyRecommendation(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
   getDailyRecommendationBatch(localDate: string): DailyRecommendationBatch | undefined;
-  requestCandidateSupply(trigger?: CandidateSupplyTrigger): CandidateSupplyCheckReceipt | undefined;
-  getCandidateSupplyCheck(candidateSupplyId: string): CandidateSupplyCheck | undefined;
+  requestCandidateSupply(trigger?: CandidateSupplyTrigger): Promise<CandidateSupplyResult> | undefined;
+  /** Reads the current Candidate Pool through Candidate Supply's rules. */
+  getCandidatePoolSnapshot(): CandidatePoolSnapshot | undefined;
   getPreferenceLearningBatch(batchId: string): PreferenceLearningBatch | undefined;
   getPreferenceLearningCompletion(feedbackChangeId: string): PreferenceLearningCompletion | undefined;
   /** Reads the persisted Discovery Home projection. */
@@ -111,7 +113,7 @@ export interface Discovery {
 
 export interface CreateDiscoveryOptions {
   readonly interests?: CreateInterestRuntimeOptions;
-  readonly dailyRecommendation?: Omit<CreateDailyRecommendationRuntimeOptions, 'notifyCandidateSupply'>;
+  readonly dailyRecommendation?: CreateDailyRecommendationRuntimeOptions;
   readonly candidateSupply?: CreateCandidateSupplyRuntimeOptions;
   readonly preferenceLearning?: CreatePreferenceLearningRuntimeOptions;
   readonly configuration?: {
@@ -129,47 +131,24 @@ export interface CreateDiscoveryOptions {
 
 /** Composes Megumi's Discovery business operations from its optional capabilities. */
 export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
-  let candidateSupplyRuntime: ReturnType<typeof createCandidateSupplyRuntime> | undefined;
   const preferenceLearningRuntime = options.preferenceLearning
-    ? createPreferenceLearningRuntime({
-        ...options.preferenceLearning,
-        onPreferencesCommitted: (interestIds) => {
-          options.preferenceLearning?.onPreferencesCommitted?.(interestIds);
-          if (!options.candidateSupply || interestIds.length === 0) return;
-          options.candidateSupply.repository.invalidateAdmissions({
-            interestIds,
-            now: options.candidateSupply.now(),
-          });
-          candidateSupplyRuntime?.notify('candidate_state_changed');
-        },
-      })
+    ? createPreferenceLearningRuntime(options.preferenceLearning)
     : undefined;
   const dailyRecommendationRuntime = options.dailyRecommendation
     ? createDailyRecommendationRuntime({
         ...options.dailyRecommendation,
-        notifyCandidateSupply: () => candidateSupplyRuntime?.notify('consumer_shortfall'),
         notifyPreferenceLearning: () => preferenceLearningRuntime?.notifyFeedbackChanged(),
       })
     : undefined;
-  candidateSupplyRuntime = options.candidateSupply
-    ? createCandidateSupplyRuntime({
-        ...options.candidateSupply,
-        onPoolAvailable: () => {
-          options.candidateSupply?.onPoolAvailable?.();
-          dailyRecommendationRuntime?.notifyCandidatesAvailable();
-        },
-      })
+  const candidateSupplyRuntime = options.candidateSupply
+    ? createCandidateSupplyRuntime(options.candidateSupply)
     : undefined;
   const interestRuntime = options.interests
     ? createInterestRuntime({
         ...options.interests,
         onInterestsChanged: (interestIds) => {
           options.interests?.onInterestsChanged?.(interestIds);
-          options.candidateSupply?.repository.invalidateAdmissions({
-            interestIds,
-            now: options.candidateSupply.now(),
-          });
-          candidateSupplyRuntime?.notify('interest_changed');
+          requestCandidateSupply(candidateSupplyRuntime, 'interest_changed', options);
         },
       })
     : createDisabledInterestRuntime();
@@ -180,11 +159,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
   return {
     async changeInterest(request) {
       const interest = await interestRuntime.changeInterest(request);
-      options.candidateSupply?.repository.invalidateAdmissions({
-        interestIds: [interest.interestId],
-        now: options.candidateSupply.now(),
-      });
-      candidateSupplyRuntime?.notify('interest_changed');
+      requestCandidateSupply(candidateSupplyRuntime, 'interest_changed', options);
       return interest;
     },
     setSessionParticipation: (request) => interestRuntime.setSessionParticipation(request),
@@ -226,8 +201,18 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
           },
         }),
     getDailyRecommendationBatch: (localDate) => dailyRecommendationRuntime?.getBatch(localDate),
-    requestCandidateSupply: (trigger = 'evaluation') => candidateSupplyRuntime?.notify(trigger),
-    getCandidateSupplyCheck: (id) => candidateSupplyRuntime?.getCheck(id),
+    requestCandidateSupply: (trigger = 'supply_conditions_changed') => (
+      candidateSupplyRuntime?.requestCheck(trigger)
+    ),
+    getCandidatePoolSnapshot: () => {
+      if (!options.candidateSupply) return undefined;
+      const settings = options.candidateSupply.settings.read();
+      return options.candidateSupply.repository.readCandidatePoolSnapshot(candidatePoolSettings({
+        minimumCount: settings.candidatePoolMinimumCount,
+        maximumCount: settings.candidatePoolMaximumCount,
+        candidateValidityDays: settings.candidateValidityDays,
+      }));
+    },
     getPreferenceLearningBatch: (id) => options.preferenceLearning?.repository.getPreferenceLearningBatch(id),
     getPreferenceLearningCompletion: (id) => (
       options.preferenceLearning?.repository.getPreferenceLearningCompletion(id)
@@ -247,25 +232,25 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     async updateDiscoveryConfiguration(request) {
       if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
       const view = await discoveryConfiguration.update(request);
-      candidateSupplyRuntime?.notify('configuration_changed');
+      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
       return view;
     },
     async connectDiscoverySource(request) {
       if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
       const view = await discoveryConfiguration.connectSource(request);
-      candidateSupplyRuntime?.notify('configuration_changed');
+      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
       return view;
     },
     async refreshDiscoverySource(request) {
       if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
       const view = await discoveryConfiguration.refreshSource(request);
-      candidateSupplyRuntime?.notify('configuration_changed');
+      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
       return view;
     },
     async refreshDiscoverySources() {
       if (!discoveryConfiguration) throw new Error('Discovery configuration is not configured.');
       const view = await discoveryConfiguration.refreshSources();
-      candidateSupplyRuntime?.notify('configuration_changed');
+      requestCandidateSupply(candidateSupplyRuntime, 'supply_conditions_changed', options);
       return view;
     },
     async shutdown() {
@@ -297,4 +282,19 @@ async function runBackgroundStartStep(
       // The observer is the terminal boundary for a best-effort startup diagnostic.
     }
   }
+}
+
+function requestCandidateSupply(
+  runtime: ReturnType<typeof createCandidateSupplyRuntime> | undefined,
+  trigger: CandidateSupplyTrigger,
+  options: CreateDiscoveryOptions,
+): void {
+  if (!runtime) return;
+  void runtime.requestCheck(trigger).catch((error) => {
+    try {
+      options.onBackgroundError?.(error, { operation: 'candidate_supply_start' });
+    } catch {
+      // The observer is the terminal boundary for a background diagnostic.
+    }
+  });
 }

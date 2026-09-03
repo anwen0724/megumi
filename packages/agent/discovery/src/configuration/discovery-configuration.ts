@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import type { DiscoverySourceId } from '../sources/discovery-source';
 import type { SourceRegistry } from '../sources/source-registry';
+import { candidatePoolSettings } from '../candidate-supply/candidate-pool';
 
 const LocalTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u);
 
@@ -12,6 +13,10 @@ export interface DiscoveryConfigurationSettings {
   readonly dailyGenerationTime: string;
   readonly dailyTargetCount: number;
   readonly enabledSources: readonly DiscoverySourceId[];
+  readonly candidatePoolMinimumCount: number;
+  readonly candidatePoolMaximumCount: number;
+  readonly candidateValidityDays: number;
+  readonly candidateSupplyCheckIntervalMinutes: number;
 }
 
 export interface DiscoveryConfigurationStore {
@@ -26,6 +31,10 @@ export const UpdateDiscoveryConfigurationRequestSchema = z.object({
   dailyGenerationTime: LocalTimeSchema.optional(),
   dailyTargetCount: z.number().int().min(1).max(100).optional(),
   enabledSources: z.array(z.string().trim().min(1)).min(1).optional(),
+  candidatePoolMinimumCount: z.number().int().positive().optional(),
+  candidatePoolMaximumCount: z.number().int().positive().optional(),
+  candidateValidityDays: z.number().int().positive().optional(),
+  candidateSupplyCheckIntervalMinutes: z.number().int().positive().optional(),
 }).strict();
 export const ConnectDiscoverySourceRequestSchema = z.object({
   sourceId: z.string().trim().min(1),
@@ -49,6 +58,10 @@ export const DiscoveryConfigurationViewSchema = z.object({
   conversationRecognitionEnabled: z.boolean(),
   dailyGenerationTime: LocalTimeSchema,
   dailyTargetCount: z.number().int().min(1).max(100),
+  candidatePoolMinimumCount: z.number().int().positive(),
+  candidatePoolMaximumCount: z.number().int().positive(),
+  candidateValidityDays: z.number().int().positive(),
+  candidateSupplyCheckIntervalMinutes: z.number().int().positive(),
   sources: z.array(DiscoverySourceViewSchema),
 }).strict();
 
@@ -84,6 +97,10 @@ export function createDiscoveryConfiguration(input: {
       conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
       dailyGenerationTime: settings.dailyGenerationTime,
       dailyTargetCount: settings.dailyTargetCount,
+      candidatePoolMinimumCount: settings.candidatePoolMinimumCount,
+      candidatePoolMaximumCount: settings.candidatePoolMaximumCount,
+      candidateValidityDays: settings.candidateValidityDays,
+      candidateSupplyCheckIntervalMinutes: settings.candidateSupplyCheckIntervalMinutes,
       sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) => sourceView({
         descriptor, availability, enabled: enabled.has(descriptor.id),
       })),
@@ -102,12 +119,23 @@ export function createDiscoveryConfiguration(input: {
       if (enabledSources.some((sourceId) => !registered.has(sourceId))) {
         throw new Error('Discovery configuration contains an unregistered source.');
       }
-      await input.settings.write({
+      const next = {
         conversationRecognitionEnabled: patch.conversationRecognitionEnabled ?? current.conversationRecognitionEnabled,
         dailyGenerationTime: patch.dailyGenerationTime ?? current.dailyGenerationTime,
         dailyTargetCount: patch.dailyTargetCount ?? current.dailyTargetCount,
         enabledSources,
+        candidatePoolMinimumCount: patch.candidatePoolMinimumCount ?? current.candidatePoolMinimumCount,
+        candidatePoolMaximumCount: patch.candidatePoolMaximumCount ?? current.candidatePoolMaximumCount,
+        candidateValidityDays: patch.candidateValidityDays ?? current.candidateValidityDays,
+        candidateSupplyCheckIntervalMinutes: patch.candidateSupplyCheckIntervalMinutes
+          ?? current.candidateSupplyCheckIntervalMinutes,
+      };
+      candidatePoolSettings({
+        minimumCount: next.candidatePoolMinimumCount,
+        maximumCount: next.candidatePoolMaximumCount,
+        candidateValidityDays: next.candidateValidityDays,
       });
+      await input.settings.write(next);
       return view();
     },
     async connectSource(request) {

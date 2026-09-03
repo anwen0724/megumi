@@ -81,27 +81,17 @@ export function createCandidateSupplyContextResolver(dependencies: {
             cause: { owner: 'discovery', code: 'execution_mismatch' },
           });
         }
-        const items = factsResult.facts.pendingCandidates.slice(0, 50).map((item) => ({
-          ...item,
-          potentialDuplicates: item.potentialDuplicates.slice(0, 10),
-        }));
+        const sourceIds = new Set(factsResult.facts.sourceIds);
         const material: CandidateSupplyContextMaterial = {
           execution: { startedAt: request.startedAt, trigger: request.trigger },
           pool: factsResult.facts.pool,
           interests: factsResult.facts.interests,
-          explorationPreference: factsResult.facts.explorationPreference,
-          negativeConstraints: factsResult.facts.negativeConstraints,
           sources: dependencies.sourceRegistry.listContextSources({
             executionId: request.executionId,
             at: factsResult.facts.asOf,
-          }),
-          recentQueryOutcomes: factsResult.facts.recentQueryOutcomes.slice(0, 50),
-          pendingAdmissionBatch: {
-            items,
-            totalCount: factsResult.facts.pendingCandidates.length,
-            truncated: items.length < factsResult.facts.pendingCandidates.length,
-          },
-          remainingBudget: factsResult.facts.budget,
+          }).filter(({ sourceId, availability }) => (
+            sourceIds.has(sourceId) && availability === 'ready'
+          )),
         };
         return {
           status: 'resolved',

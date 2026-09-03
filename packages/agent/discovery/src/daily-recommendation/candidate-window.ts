@@ -42,10 +42,10 @@ function buildRepresentativeOrder(
 ): readonly DailyRecommendationCandidate[] {
   const interestIds = [...new Set(activeInterestIds)];
   const interestQueues = interestIds.map((interestId) => candidates
-    .filter((candidate) => candidate.admission.matchedInterestIds.includes(interestId))
+    .filter((candidate) => candidate.interestMatches.some((match) => match.interestId === interestId))
     .sort(compareInterestCandidate));
   const explorationQueue = candidates
-    .filter((candidate) => candidate.admission.relevance === 'exploration')
+    .filter((candidate) => candidate.interestMatches.some(({ relevance }) => relevance === 'exploration'))
     .sort(compareOldestAvailable);
   const ordered: DailyRecommendationCandidate[] = [];
   const used = new Set<string>();
@@ -56,19 +56,19 @@ function buildRepresentativeOrder(
       const candidate = nextUnused(queue, used);
       if (!candidate) continue;
       ordered.push(candidate);
-      used.add(candidate.candidateId);
+      used.add(candidate.id);
       added = true;
     }
     const exploration = nextUnused(explorationQueue, used);
     if (exploration) {
       ordered.push(exploration);
-      used.add(exploration.candidateId);
+      used.add(exploration.id);
       added = true;
     }
     if (!added) break;
   }
 
-  const remaining = candidates.filter(({ candidateId }) => !used.has(candidateId)).sort(compareInterestCandidate);
+  const remaining = candidates.filter(({ id }) => !used.has(id)).sort(compareInterestCandidate);
   return [...ordered, ...remaining];
 }
 
@@ -76,23 +76,27 @@ function nextUnused(
   queue: readonly DailyRecommendationCandidate[],
   used: ReadonlySet<string>,
 ): DailyRecommendationCandidate | undefined {
-  return queue.find(({ candidateId }) => !used.has(candidateId));
+  return queue.find(({ id }) => !used.has(id));
 }
 
 function compareInterestCandidate(left: DailyRecommendationCandidate, right: DailyRecommendationCandidate): number {
-  const relevance = relevanceRank(left.admission.relevance) - relevanceRank(right.admission.relevance);
+  const relevance = candidateRelevanceRank(left) - candidateRelevanceRank(right);
   return relevance || compareOldestAvailable(left, right);
 }
 
-function relevanceRank(relevance: DailyRecommendationCandidate['admission']['relevance']): number {
+function relevanceRank(relevance: DailyRecommendationCandidate['interestMatches'][number]['relevance']): number {
   if (relevance === 'direct') return 0;
   if (relevance === 'adjacent') return 1;
   return 2;
 }
 
 function compareOldestAvailable(left: DailyRecommendationCandidate, right: DailyRecommendationCandidate): number {
-  return left.statusUpdatedAt.localeCompare(right.statusUpdatedAt)
-    || left.candidateId.localeCompare(right.candidateId);
+  return left.createdAt.localeCompare(right.createdAt)
+    || left.id.localeCompare(right.id);
+}
+
+function candidateRelevanceRank(candidate: DailyRecommendationCandidate): number {
+  return Math.min(...candidate.interestMatches.map(({ relevance }) => relevanceRank(relevance)));
 }
 
 function requireRequestedCount(value: number): number {

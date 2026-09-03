@@ -44,8 +44,7 @@ type CaseExecutionRuntime = {
     readonly discovery: Pick<ProductRuntime['host']['discovery'],
       | 'getInterestFacts'
       | 'requestCandidateSupply'
-      | 'waitCandidateSupplyCheck'
-      | 'getCandidateSupplyFacts'
+      | 'getCandidatePool'
       | 'ensureDaily'
       | 'waitDailyBatch'
       | 'getDailyRecommendationFacts'
@@ -229,50 +228,39 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
 }
 
 async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseExecutionResult> {
-  const receipt = await input.runtime.host.discovery.requestCandidateSupply({ trigger: 'evaluation' });
-  if (!receipt) {
-    return execution({
-      caseType: 'candidate_supply', terminalState: 'settled',
-      productResult: { receipt },
-      ownerFacts: {},
-      businessIds: {},
-      traceTargets: [],
-    });
-  }
-  const completion = await waitForBackgroundResult({
-    deadlineMs: input.safetyDeadlineMs,
-    wait: (timeoutMs) => input.runtime.host.discovery.waitCandidateSupplyCheck({
-      candidateSupplyId: receipt.candidateSupplyId,
-      timeoutMs,
+  if (input.evaluationCase.type !== 'candidate_supply') throw new Error('Candidate Supply Case is required.');
+  const completion = await waitForProductResult(
+    input.runtime.host.discovery.requestCandidateSupply({
+      trigger: input.evaluationCase.input.trigger,
     }),
-  });
+    input.safetyDeadlineMs,
+  );
   if (completion.status === 'interrupted') {
     return execution({
       caseType: 'candidate_supply', terminalState: 'interrupted',
-      productResult: { receipt },
+      productResult: {},
       ownerFacts: {},
-      businessIds: { candidateSupplyId: receipt.candidateSupplyId },
+      businessIds: {},
       traceTargets: [],
       interruption: safetyInterruption(input),
     });
   }
-  const executionId = 'executionId' in completion.value ? completion.value.executionId : undefined;
-  const facts = executionId
-    ? await input.runtime.host.discovery.getCandidateSupplyFacts({ executionId })
-    : undefined;
+  const result = completion.value;
+  const executionId = 'executionId' in result ? result.executionId : undefined;
+  const pool = await input.runtime.host.discovery.getCandidatePool();
   return execution({
     caseType: 'candidate_supply', terminalState: 'settled',
-    productResult: { receipt, completion: completion.value },
-    ownerFacts: facts ?? {},
+    productResult: result,
+    ownerFacts: pool ?? {},
     businessIds: {
-      candidateSupplyId: receipt.candidateSupplyId,
+      requestId: result.requestId,
       ...(executionId ? { executionId } : {}),
     },
-    traceTargets: executionId ? [{
+    traceTargets: [{
       traceKind: 'candidate_supply',
-      correlation: { candidateSupplyId: receipt.candidateSupplyId, executionId },
+      correlation: { requestId: result.requestId },
       expectation: 'required',
-    }] : [],
+    }],
   });
 }
 
@@ -421,6 +409,35 @@ async function waitForCommittedConversation(input: {
 type ProductWaitResult<T> =
   | { readonly status: 'completed'; readonly value: T }
   | { readonly status: 'interrupted' };
+
+async function waitForProductResult<T>(
+  result: Promise<T>,
+  deadlineMs: number,
+): Promise<ProductWaitResult<T>> {
+  const timeoutMs = Math.max(0, deadlineMs - Date.now());
+  if (timeoutMs === 0) return { status: 'interrupted' };
+  return new Promise<ProductWaitResult<T>>((resolve, reject) => {
+    let completed = false;
+    const timer = setTimeout(() => {
+      completed = true;
+      resolve({ status: 'interrupted' });
+    }, timeoutMs);
+    void result.then(
+      (value) => {
+        if (completed) return;
+        completed = true;
+        clearTimeout(timer);
+        resolve({ status: 'completed', value });
+      },
+      (error: unknown) => {
+        if (completed) return;
+        completed = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 const InterestUnderstandingOutcomeSchema = z.object({
   outcome: z.enum(['evidence_committed', 'no_durable_evidence']),

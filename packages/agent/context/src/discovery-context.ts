@@ -39,16 +39,13 @@ export interface DiscoveryInterestFact {
 }
 
 export interface CandidatePoolFact {
-  readonly counts: Readonly<Record<string, number>>;
-  readonly lowWatermark: number;
-  readonly target: number;
-  readonly hardLimit: number;
-  readonly totalShortfall: number;
-  readonly uncoveredInterestIds: readonly string[];
-  readonly consumerShortfalls: readonly {
-    readonly consumer: 'daily' | 'proactive';
-    readonly count: number;
-  }[];
+  readonly minimumCount: number;
+  readonly targetCount: number;
+  readonly maximumCount: number;
+  readonly availableCount: number;
+  readonly minimumShortfall: number;
+  readonly targetShortfall: number;
+  readonly availableByInterest: Readonly<Record<string, number>>;
 }
 
 export interface CandidateSummaryFact {
@@ -65,50 +62,18 @@ export interface CandidateSummaryFact {
   readonly evidenceCompleteness?: 'full' | 'partial' | 'metadata_only';
 }
 
-export interface CandidateDuplicateFact {
-  readonly kind: 'candidate' | 'recommendation';
-  readonly identity: string;
-  readonly title: string;
-  readonly similarity: 'identity' | 'url' | 'source_content' | 'semantic';
-}
-
-export interface PendingAdmissionCandidateFact {
-  readonly candidate: CandidateSummaryFact;
-  readonly potentialDuplicates: readonly CandidateDuplicateFact[];
-}
-
-export interface DiscoveryQueryOutcomeFact {
-  readonly queryId: string;
-  readonly query: string;
-  readonly sourceId: string;
-  readonly mode: string;
-  readonly targetInterestIds: readonly string[];
-  readonly status: 'running' | 'succeeded' | 'failed' | 'cancelled';
-  readonly normalizedResultCount: number;
-  readonly newCandidateCount: number;
-  readonly mergedCandidateCount: number;
-  readonly alreadyRecommendedCount: number;
-  readonly capacityRejectedCount: number;
-  readonly failureCode?: string;
-  readonly completedAt?: string;
-}
-
 export interface CandidateSupplyFacts {
   readonly asOf: string;
   readonly executionId: string;
   readonly startedAt: string;
   readonly trigger: string;
   readonly pool: CandidatePoolFact;
-  readonly interests: readonly DiscoveryInterestFact[];
-  readonly explorationPreference: ContextPreferenceSnapshot;
-  readonly negativeConstraints: readonly string[];
-  readonly recentQueryOutcomes: readonly DiscoveryQueryOutcomeFact[];
-  readonly pendingCandidates: readonly PendingAdmissionCandidateFact[];
-  readonly budget: {
-    readonly searchesRemaining: number;
-    readonly readsRemaining: number;
-    readonly rawResultsRemaining: number;
-  };
+  readonly sourceIds: readonly string[];
+  readonly interests: readonly {
+    readonly interestId: string;
+    readonly description: string;
+    readonly interestRevision: number;
+  }[];
 }
 
 export interface ContextDiscoverySourceFact {
@@ -124,17 +89,8 @@ export interface ContextDiscoverySourceFact {
 export interface CandidateSupplyContextMaterial {
   readonly execution: { readonly startedAt: string; readonly trigger: string };
   readonly pool: CandidatePoolFact;
-  readonly interests: readonly DiscoveryInterestFact[];
-  readonly explorationPreference: ContextPreferenceSnapshot;
-  readonly negativeConstraints: readonly string[];
+  readonly interests: CandidateSupplyFacts['interests'];
   readonly sources: readonly ContextDiscoverySourceFact[];
-  readonly recentQueryOutcomes: readonly DiscoveryQueryOutcomeFact[];
-  readonly pendingAdmissionBatch: {
-    readonly items: readonly PendingAdmissionCandidateFact[];
-    readonly totalCount: number;
-    readonly truncated: boolean;
-  };
-  readonly remainingBudget: CandidateSupplyFacts['budget'];
 }
 
 export interface DailyRecommendationHistoryFact {
@@ -147,23 +103,11 @@ export interface DailyRecommendationHistoryFact {
 }
 
 export interface DailyRecommendationCandidateFact extends CandidateSummaryFact {
-  readonly assessmentId: string;
-  readonly assessmentVersion: string;
-  readonly relevance: 'direct' | 'adjacent' | 'exploration';
+  readonly selectionReason: string;
   readonly matchedInterestIds: readonly string[];
-  readonly admissionReason: string;
-  readonly interestRevisions: readonly {
+  readonly interestMatches: readonly {
     readonly interestId: string;
-    readonly revision: number;
-  }[];
-  readonly preferenceRevisions: readonly {
-    readonly scopeKey: string;
-    readonly revision: number;
-  }[];
-  readonly preferenceAlignment?: readonly {
-    readonly directionId: string;
-    readonly relation: 'aligned' | 'conflicted' | 'neutral';
-    readonly reason: string;
+    readonly relevance: 'direct' | 'adjacent' | 'exploration';
   }[];
 }
 

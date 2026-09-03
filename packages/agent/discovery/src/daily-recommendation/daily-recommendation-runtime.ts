@@ -60,7 +60,6 @@ export interface CreateDailyRecommendationRuntimeOptions {
     createFeedbackChangeId?(): string;
   };
   readonly now: () => string;
-  readonly notifyCandidateSupply: (shortfall: number) => void;
   readonly notifyPreferenceLearning?: () => void;
   readonly observability?: Observability;
   readonly timers?: {
@@ -77,7 +76,6 @@ export interface DailyRecommendationRuntime {
   start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   ensure(request: EnsureDailyRecommendationRequest): Promise<EnsureDailyRecommendationResult>;
   getBatch(localDate: string): DailyRecommendationBatch | undefined;
-  notifyCandidatesAvailable(): void;
   getHome(request: GetDiscoveryHomeRequest): DiscoveryHomeView;
   searchRecommendations(request: SearchRecommendationsRequest): SearchRecommendationsResult;
   updateRecommendationState(request: UpdateRecommendationStateRequest): RecommendationStateResult;
@@ -150,12 +148,6 @@ export function createDailyRecommendationRuntime(
     },
     ensure,
     getBatch: (localDate) => options.repository.getBatch(localDate),
-    notifyCandidatesAvailable() {
-      if (!accepting) return;
-      void ensure({ trigger: 'candidate_available', now: options.now() }).catch((error) => {
-        reportBackgroundError(options, error, { operation: 'automatic_retry' });
-      });
-    },
     getHome(request) {
       const nextScheduledAt = scheduler.getNextScheduledAt();
       const home = options.repository.readHome({
@@ -251,8 +243,6 @@ async function runLifecycle(
   safeRecordContent(options.observability, 'candidate.pool.snapshot', {
     localDate, requestedCount, snapshot,
   });
-  const shortfall = Math.max(0, requestedCount - snapshot.window.availableCount);
-  if (shortfall > 0) safeNotifyCandidateSupply(options, shortfall);
   if (snapshot.window.availableCount === 0) {
     setWaitingForCandidates(true);
     const result: EnsureDailyRecommendationResult = {
@@ -370,7 +360,6 @@ async function runLifecycle(
           dailyRecommendationBatchId: authoritative.batchId,
           executionId: acceptedExecutionId,
         });
-        safeNotifyCandidateSupply(options, shortfall);
         return { result: publishedResult(authoritative), retry: false };
       }
       const failure = failureFromOutcome(outcome);
@@ -452,18 +441,6 @@ function failed(
 
 function shouldRetry(batch: DailyRecommendationBatch | undefined): boolean {
   return batch?.status === 'failed' && batch.attemptCount < 3;
-}
-
-function safeNotifyCandidateSupply(
-  options: CreateDailyRecommendationRuntimeOptions,
-  shortfall: number,
-): void {
-  if (shortfall <= 0) return;
-  try {
-    options.notifyCandidateSupply(shortfall);
-  } catch {
-    // Supply notification is a separate recovery concern after Daily decisions.
-  }
 }
 
 async function observeTrace(

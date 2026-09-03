@@ -22,33 +22,27 @@ describe('Daily Recommendation Tools', () => {
   afterEach(() => database.close());
 
   it('exposes only local Candidate reading and terminal publication to the Agent', async () => {
-    const discovery = createDiscoveryRepository({ database });
+    const discovery = createDiscoveryRepository({ database, clock: { now: () => now } });
     discovery.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
-    discovery.beginQuery({
-      queryId: 'query:1', executionId: 'execution:supply', sourceId: 'open_web',
-      query: 'Agent architecture', mode: 'relevance', targetInterestIds: ['interest:1'], startedAt: now,
-    });
-    const candidate = discovery.commitSearchResult({
-      queryId: 'query:1', completedAt: now, hardLimit: 10,
-      items: [{
+    const submission = discovery.submitCandidate({
+      content: {
         sourceId: 'open_web', sourceName: 'example.com', sourceContentId: 'guide',
         canonicalUrl: 'https://example.com/guide', contentType: 'article', title: 'Agent guide',
         description: 'A compact description.',
-      }],
-    }).candidates[0];
-    if (!candidate) throw new Error('Expected Candidate material.');
-    discovery.commitAdmission({
-      executionId: 'execution:supply', assessmentVersion: 'candidate-admission:v1', assessedAt: now,
-      decisions: [{
-        candidateId: candidate.candidateId, decision: 'admit', relevance: 'direct',
-        matchedInterestIds: ['interest:1'], contentValue: 'substantive', novelty: 'novel',
-        temporalValidity: 'valid', negativeConstraint: 'clear', reason: 'Directly useful.',
-        interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
-        preferenceRevisions: [], preferenceAlignment: [],
-      }],
+      },
+      selectionReason: 'Related to the active Agent architecture Interest.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      settings: {
+        minimumCount: 100,
+        targetCount: 160,
+        maximumCount: 200,
+        candidateValidityDays: 30,
+      },
     });
+    if (submission.status !== 'created') throw new Error('Expected Candidate material.');
+    const candidate = submission.candidate;
 
     const repository = createDailyRecommendationRepository(database);
     const snapshot = repository.readSnapshot({ now, requestedCount: 1 });
@@ -77,18 +71,18 @@ describe('Daily Recommendation Tools', () => {
       'publish_daily_recommendations',
     ]);
     const read = modelCall.binding.routeToolCall({
-      toolCallId: 'call:read', toolName: 'read_pool_candidate', input: { candidateId: candidate.candidateId },
+      toolCallId: 'call:read', toolName: 'read_pool_candidate', input: { candidateId: candidate.id },
     });
     if (read.status !== 'routed') throw new Error('Expected local read Tool routing.');
     await expect(modelCall.binding.executeToolInvocation({ invocation: read.invocation })).resolves.toMatchObject({
       type: 'succeeded',
-      normalizedResult: { kind: 'json', content: expect.stringContaining(candidate.candidateId) },
+      normalizedResult: { kind: 'json', content: expect.stringContaining(candidate.id) },
     });
 
     const publish = modelCall.binding.routeToolCall({
       toolCallId: 'call:publish',
       toolName: 'publish_daily_recommendations',
-      input: { items: [{ candidateId: candidate.candidateId, recommendationReason: 'Directly useful today.' }] },
+      input: { items: [{ candidateId: candidate.id, recommendationReason: 'Directly useful today.' }] },
     });
     if (publish.status !== 'routed') throw new Error('Expected publication Tool routing.');
     await expect(modelCall.binding.executeToolInvocation({ invocation: publish.invocation })).resolves.toMatchObject({

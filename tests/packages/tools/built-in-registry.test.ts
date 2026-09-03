@@ -45,7 +45,7 @@ describe('built-in Tool Registry', () => {
 const candidateSupplyTools = {
   async searchContent() { return { outputKind: 'json' as const, content: {} }; },
   async readSourceCandidate() { return { outputKind: 'json' as const, content: {} }; },
-  async commitCandidateAdmission() { return { outputKind: 'json' as const, content: {} }; },
+  async submitCandidates() { return { outputKind: 'json' as const, content: {} }; },
 };
 const dailyRecommendationTools = {
   async readPoolCandidate() { return { outputKind: 'json' as const, content: {} }; },

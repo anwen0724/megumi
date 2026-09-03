@@ -68,7 +68,7 @@ export function createDailyRecommendationAttempts(options: {
       if (attempts.has(request.executionId)) {
         throw new Error(`Daily Recommendation attempt already exists: ${request.executionId}.`);
       }
-      const allowedCandidateIds = request.snapshot.window.candidates.map(({ candidateId }) => candidateId);
+      const allowedCandidateIds = request.snapshot.window.candidates.map(({ id }) => id);
       attempts.set(request.executionId, {
         batchId: request.batchId,
         snapshot: request.snapshot,
@@ -104,9 +104,9 @@ export function createDailyRecommendationAttempts(options: {
       if (attempt.readCandidateIds.size >= attempt.readBudget) {
         return toolError('read_budget_exhausted', 'The local Candidate read budget is exhausted.');
       }
-      const candidate = attempt.repository.readCandidate(parsed.data.candidateId);
+      const candidate = attempt.repository.findDailyCandidateById(parsed.data.candidateId);
       if (!candidate) return toolError('candidate_not_found', 'Candidate is no longer available locally.');
-      attempt.readCandidateIds.add(candidate.candidateId);
+      attempt.readCandidateIds.add(candidate.id);
       return toolSuccess({ status: 'read', candidate });
     },
     async publishDailyRecommendations(request) {

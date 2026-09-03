@@ -26,7 +26,7 @@ describe('Candidate Supply architecture boundaries', () => {
       expect(supply, forbidden).not.toContain(forbidden);
     }
     expect(supply).toContain("kind: 'candidate_supply'");
-    expect(supply).toContain('commitAdmission');
+    expect(supply).toContain('submitCandidates');
   });
 });
 

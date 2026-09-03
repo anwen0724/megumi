@@ -476,7 +476,17 @@ function composeCapabilitiesWithDatabase(
       ),
     },
   });
-  const discoveryRepository = createDiscoveryRepository({ database });
+  const clock = options.clock ?? { now: () => new Date().toISOString() };
+  const createId = (scope: string) => options.createApplicationId?.(scope)
+    ?? `${scope}:${crypto.randomUUID()}`;
+  const discoveryRepository = createDiscoveryRepository({
+    database,
+    clock,
+    candidateIds: {
+      createCandidateId: () => createId('candidate'),
+      createInterestMatchId: () => createId('candidate-interest-match'),
+    },
+  });
   const interestExtractor = createInterestExtractor({
     models: modelComposition.models,
     observability: observability.observability,
@@ -498,9 +508,6 @@ function composeCapabilitiesWithDatabase(
     },
   });
 
-  const clock = options.clock ?? { now: () => new Date().toISOString() };
-  const createId = (scope: string) => options.createApplicationId?.(scope)
-    ?? `${scope}:${crypto.randomUUID()}`;
   const ids = {
     createExecutionId: () => createId('execution'),
     createModelCallId: () => createId('model-call'),
@@ -563,7 +570,6 @@ function composeCapabilitiesWithDatabase(
   });
   discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
     sourceRegistry: discoverySources,
-    repository: discoveryRepository,
   });
   const discoveryConfigurationSettings = {
     read() {
@@ -574,12 +580,21 @@ function composeCapabilitiesWithDatabase(
             dailyGenerationTime: resolved.settings.discovery.daily_generation_time,
             dailyTargetCount: resolved.settings.discovery.daily_target_count,
             enabledSources: resolved.settings.discovery.enabled_sources,
+            candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
+            candidatePoolMaximumCount: resolved.settings.discovery.candidate_pool_maximum_count,
+            candidateValidityDays: resolved.settings.discovery.candidate_validity_days,
+            candidateSupplyCheckIntervalMinutes:
+              resolved.settings.discovery.candidate_supply_check_interval_minutes,
           }
         : {
             conversationRecognitionEnabled: false,
             dailyGenerationTime: '08:00',
             dailyTargetCount: 20,
             enabledSources: [],
+            candidatePoolMinimumCount: 100,
+            candidatePoolMaximumCount: 200,
+            candidateValidityDays: 30,
+            candidateSupplyCheckIntervalMinutes: 360,
           };
     },
     write(next: import('@megumi/discovery').DiscoveryConfigurationSettings) {
@@ -590,6 +605,10 @@ function composeCapabilitiesWithDatabase(
             daily_generation_time: next.dailyGenerationTime,
             daily_target_count: next.dailyTargetCount,
             enabled_sources: [...next.enabledSources],
+            candidate_pool_minimum_count: next.candidatePoolMinimumCount,
+            candidate_pool_maximum_count: next.candidatePoolMaximumCount,
+            candidate_validity_days: next.candidateValidityDays,
+            candidate_supply_check_interval_minutes: next.candidateSupplyCheckIntervalMinutes,
           },
         },
       });
@@ -751,7 +770,7 @@ function composeCapabilitiesWithDatabase(
       settings: discoveryConfigurationSettings,
       startExecution: (request) => executions.start(request),
       now: clock.now,
-      ids: { createCheckId: () => createId('candidate-supply-check') },
+      ids: { createRequestId: () => createId('candidate-supply-request') },
       observability: observability.observability,
       ...(options.timers ? {
         timers: {

@@ -20,6 +20,8 @@ type PreferenceLearningCase = Extract<EvaluationCase, { readonly type: 'preferen
 export interface CaseInitialState {
   readonly clock: string;
   readonly dailyTargetCount: number;
+  readonly candidatePoolMinimumCount: number;
+  readonly candidatePoolMaximumCount: number;
   readonly workspaceFiles: readonly WorkspaceFileData[];
   readonly sessions: readonly ConversationCase['initialState']['sessionHistory'][number][];
   readonly interests: readonly CandidateSupplyCase['initialState']['interests'][number][];
@@ -38,6 +40,8 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
       return {
         clock: evaluationCase.initialState.clock,
         dailyTargetCount: 3,
+        candidatePoolMinimumCount: 100,
+        candidatePoolMaximumCount: 200,
         workspaceFiles: evaluationCase.initialState.workspaceFiles,
         sessions: evaluationCase.initialState.sessionHistory,
         interests: [], candidates: [], recommendations: [], preferences: [], existingFeedback: [],
@@ -48,6 +52,8 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
       return {
         clock: evaluationCase.initialState.clock,
         dailyTargetCount: 3,
+        candidatePoolMinimumCount: 100,
+        candidatePoolMaximumCount: 200,
         workspaceFiles: [],
         sessions: [evaluationCase.initialState.sourceSession],
         interests: evaluationCase.initialState.existingInterests,
@@ -57,7 +63,9 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
     case 'candidate_supply':
       return {
         clock: evaluationCase.initialState.clock,
-        dailyTargetCount: evaluationCase.initialState.targetCount,
+        dailyTargetCount: 3,
+        candidatePoolMinimumCount: evaluationCase.initialState.minimumCount,
+        candidatePoolMaximumCount: evaluationCase.initialState.maximumCount,
         workspaceFiles: [], sessions: [],
         interests: evaluationCase.initialState.interests,
         candidates: evaluationCase.initialState.existingCandidates,
@@ -69,6 +77,8 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
       return {
         clock: evaluationCase.initialState.clock,
         dailyTargetCount: evaluationCase.initialState.dailyTargetCount,
+        candidatePoolMinimumCount: 100,
+        candidatePoolMaximumCount: 200,
         workspaceFiles: [], sessions: [],
         interests: evaluationCase.initialState.interests,
         candidates: evaluationCase.initialState.candidates,
@@ -80,6 +90,8 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
       return {
         clock: evaluationCase.initialState.clock,
         dailyTargetCount: 3,
+        candidatePoolMinimumCount: 100,
+        candidatePoolMaximumCount: 200,
         workspaceFiles: [], sessions: [],
         interests: evaluationCase.initialState.interests,
         candidates: evaluationCase.initialState.candidates,
@@ -188,7 +200,7 @@ export function createDatabaseInitialStateOwner(input: {
 }): DatabaseInitialStateOwner {
   const database = createDatabase({ filename: path.join(input.homePath, 'sqlite', 'megumi.sqlite') });
   migrateDatabase({ database, migrationsFolder: input.migrationsFolder });
-  const discovery = createDiscoveryRepository({ database });
+  const discovery = createDiscoveryRepository({ database, clock: { now: () => input.now } });
   const sessionStore = createSessionStore({ database });
   const sessions = createSessionCatalog({ store: sessionStore, now: () => input.now });
   const history = createSessionHistory({ store: sessionStore });
@@ -197,7 +209,6 @@ export function createDatabaseInitialStateOwner(input: {
     file_system: createNodeWorkspaceFileSystem(),
     now: () => input.now,
   });
-  let candidateIndex = 0;
   let recommendationIndex = 0;
   let preferenceIndex = 0;
 
@@ -252,72 +263,31 @@ export function createDatabaseInitialStateOwner(input: {
       return { interestId: interest.interestId };
     },
     async installCandidate(entry) {
-      candidateIndex += 1;
-      const executionId = `evaluation:candidate-execution:${candidateIndex}`;
-      const queryId = `evaluation:query:${candidateIndex}`;
-      discovery.beginQuery({
-        queryId,
-        executionId,
-        sourceId: entry.sourceId,
-        query: entry.title,
-        mode: 'relevance',
-        targetInterestIds: entry.interestIds,
-        startedAt: input.now,
-      });
-      const material = discovery.commitSearchResult({
-        queryId,
-        completedAt: input.now,
-        hardLimit: 100,
-        items: [{
+      const result = discovery.submitCandidate({
+        content: {
           sourceId: entry.sourceId,
           sourceName: entry.sourceName,
           canonicalUrl: entry.canonicalUrl,
           contentType: 'article',
           title: entry.title,
-          ...(!entry.contentText && entry.description ? { description: entry.description } : {}),
-        }],
-      });
-      const candidate = material.candidates[0];
-      if (!candidate) throw new Error(`Initial Candidate was not materialized: ${entry.referenceId}.`);
-      if (entry.contentText) {
-        discovery.commitCandidateDetail({
-          candidateId: candidate.candidateId,
-          detail: {
-            sourceId: entry.sourceId,
-            sourceName: entry.sourceName,
-            canonicalUrl: entry.canonicalUrl,
-            contentType: 'article',
-            title: entry.title,
-            ...(entry.description ? { description: entry.description } : {}),
-            contentText: entry.contentText,
-          },
-          now: input.now,
-        });
-      }
-      const interestRevisions = discovery.listNonDeletedInterests()
-        .filter((interest) => entry.interestIds.includes(interest.interestId))
-        .map((interest) => ({ interestId: interest.interestId, revision: interest.revision }));
-      const [admitted] = discovery.commitAdmission({
-        executionId,
-        assessmentVersion: 'evaluation-initial-state-v1',
-        assessedAt: input.now,
-        decisions: [{
-          candidateId: candidate.candidateId,
-          decision: 'admit',
+          ...(entry.description ? { description: entry.description } : {}),
+        },
+        selectionReason: 'Installed by the isolated Evaluation initial-state owner.',
+        matches: entry.interestIds.map((interestId) => ({
+          interestId,
           relevance: entry.relevance,
-          matchedInterestIds: [...entry.interestIds],
-          contentValue: 'substantive',
-          novelty: 'novel',
-          temporalValidity: 'valid',
-          negativeConstraint: 'clear',
-          interestRevisions,
-          preferenceRevisions: [],
-          preferenceAlignment: [],
-          reason: 'Installed by the isolated Evaluation initial-state owner.',
-        }],
+        })),
+        settings: {
+          minimumCount: 100,
+          targetCount: 160,
+          maximumCount: 200,
+          candidateValidityDays: 30,
+        },
       });
-      if (!admitted) throw new Error(`Initial Candidate admission failed: ${entry.referenceId}.`);
-      return { candidateId: admitted.candidateId };
+      if (result.status === 'ignored') {
+        throw new Error(`Initial Candidate installation failed: ${entry.referenceId} (${result.reason}).`);
+      }
+      return { candidateId: result.candidate.id };
     },
     async installRecommendation(entry) {
       recommendationIndex += 1;
@@ -438,7 +408,9 @@ function verifyInitialState(
     if (!interestIds.has(interestId)) throw new Error(`Installed Interest could not be read: ${interestId}.`);
   }
   for (const candidateId of Object.values(ids.candidates)) {
-    if (!discovery.readCandidate(candidateId)) throw new Error(`Installed Candidate could not be read: ${candidateId}.`);
+    if (!discovery.findCandidateById(candidateId)) {
+      throw new Error(`Installed Candidate could not be read: ${candidateId}.`);
+    }
   }
   for (const recommendationId of Object.values(ids.recommendations)) {
     if (!discovery.readRecommendationReference(recommendationId)) {

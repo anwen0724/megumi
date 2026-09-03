@@ -64,9 +64,9 @@ export {
   type ToolExecutionSubject,
 } from './tools';
 export {
-  commitCandidateAdmissionToolDefinition,
-  type CommitCandidateAdmissionOperation,
-} from './built-ins/commit-candidate-admission';
+  submitCandidatesToolDefinition,
+  type SubmitCandidatesOperation,
+} from './built-ins/submit-candidates';
 export { toolBelongsToGroup, type BuiltInToolGroupId } from './tool-groups';
 export type { WorkspaceFileAccess } from './built-ins/workspace-file-access';
 export {

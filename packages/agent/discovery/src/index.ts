@@ -104,24 +104,19 @@ export type {
   PublishDailyRecommendationsResult,
 } from './persistence/daily-recommendation-repository';
 export {
-  CandidateAdmissionDecisionSchema,
+  CandidateInterestMatchSchema,
+  CandidatePoolSnapshotSchema,
+  CandidateRelevanceSchema,
   CandidateSchema,
   CandidateStatusSchema,
-  CandidateSupplySettlementSchema,
-  CandidateSupplyCheckSchema,
-  isCandidateSupplyCheckTerminal,
-  CandidateSupplyCommitInputSchema,
+  CandidateSupplyResultSchema,
   CandidateSupplySearchInputSchema,
+  CandidateSupplySubmitInputSchema,
 } from './candidate-supply/candidate-supply';
 export {
   assertCandidateTransition,
   candidateExpiresAt,
-  candidatePoolGap,
-  candidateQueryKey,
-  candidateSupplyThresholds,
-  hasCandidatePoolGap,
-  isCandidateContentAssessable,
-  normalizeCandidateQuery,
+  candidatePoolSettings,
 } from './candidate-supply/candidate-pool';
 export { createCandidateSupplyAttempts } from './candidate-supply/candidate-supply-attempts';
 export type {
@@ -131,27 +126,23 @@ export type {
 export { createCandidateSupplyRuntime } from './candidate-supply/candidate-supply-runtime';
 export type {
   CandidateSupplyRuntime,
-  CandidateSupplyTrigger,
   CreateCandidateSupplyRuntimeOptions,
 } from './candidate-supply/candidate-supply-runtime';
 export type {
   Candidate,
-  CandidateAdmissionDecision,
-  CandidateMaterialResult,
-  CandidatePoolGap,
+  CandidateIdentity,
+  CandidateInterestMatch,
+  CandidatePoolSettings,
   CandidatePoolSnapshot,
-  CandidatePotentialDuplicate,
-  CandidateQueryOutcome,
   CandidateStatus,
-  CandidateSupplyCommitInput,
+  CandidateSubmissionResult,
   CandidateSupplyRepository,
+  CandidateSupplyResult,
   CandidateSupplySearchInput,
-  CandidateSupplySettlement,
-  CandidateSupplyCheck,
-  CandidateSupplyCheckReceipt,
-  CandidateSupplyThresholds,
-  CandidateSupplyState,
-  CandidateSourceState,
+  CandidateSupplySubmitInput,
+  CandidateSupplyTrigger,
+  CandidateWithMatches,
+  SubmitCandidateRequest,
 } from './candidate-supply/candidate-supply';
 export type {
   DiscoveryContentType,
@@ -209,6 +200,8 @@ export {
   TodayDiscoveryViewSchema,
 } from './discovery-view';
 export { createDiscoveryRepository } from './persistence/discovery-repository';
+export { createCandidateSupplyRepository } from './persistence/candidate-supply-repository';
+export type { CreateCandidateSupplyRepositoryOptions } from './persistence/candidate-supply-repository';
 export {
   createContextDiscoverySourceRegistry,
   createDiscoveryFactsReader,

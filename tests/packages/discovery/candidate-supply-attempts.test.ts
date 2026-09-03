@@ -1,216 +1,236 @@
-/* Verifies Candidate Supply Tool operations persist facts before returning model-visible results. */
+/* Verifies Candidate Supply Agent tools keep search evidence transient and persist only submitted facts. */
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
 import {
   createCandidateSupplyAttempts,
+  createCandidateSupplyRepository,
   createDiscoveryRepository,
   createSourceRegistry,
-  type DiscoveryRepository,
+  type CandidateSupplyRepository,
   type DiscoverySource,
 } from '@megumi/discovery';
 
-const now = '2026-08-27T00:00:00.000Z';
+const now = '2026-09-03T00:00:00.000Z';
+const settings = {
+  minimumCount: 1,
+  targetCount: 4,
+  maximumCount: 5,
+  candidateValidityDays: 30,
+};
 
 describe('CandidateSupplyAttempts', () => {
   let database: DatabaseConnection;
-  let repository: DiscoveryRepository;
+  let repository: CandidateSupplyRepository;
 
   beforeEach(() => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
-    repository = createDiscoveryRepository({ database });
-    repository.applyInterestChange({
+    createDiscoveryRepository({ database }).applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
+    let candidate = 0;
+    let match = 0;
+    repository = createCandidateSupplyRepository({
+      database,
+      clock: { now: () => now },
+      ids: {
+        createCandidateId: () => `candidate:${++candidate}`,
+        createInterestMatchId: () => `match:${++match}`,
+      },
+    });
   });
+
   afterEach(() => database.close());
 
-  it('returns a persisted admission batch and commits the typed assessment', async () => {
+  it('keeps Source search results out of business tables until the Agent submits them', async () => {
     const attempts = createCandidateSupplyAttempts();
-    attempts.start({
-      executionId: 'execution:1', startedAt: now, trigger: 'startup',
-      repository, sourceRegistry: createSourceRegistry([source()]),
-      enabledSourceIds: ['source:1'], initialCandidateIds: [],
-      getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
-      now: () => now,
-    });
+    attempts.start(attemptInput(repository, source()));
 
-    const searched = await attempts.searchContent({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: {
-        sourceId: 'source:1', query: 'Agent architecture', mode: 'relevance', limit: 10,
-        targetInterestIds: ['interest:1'],
+    const searched = await attempts.searchContent(toolRequest({
+      sourceId: 'source:1',
+      query: 'Agent architecture',
+      mode: 'relevance',
+      limit: 10,
+      targetInterestIds: ['interest:1'],
+    }));
+
+    expect(searched).toMatchObject({
+      content: {
+        status: 'success',
+        results: [expect.objectContaining({
+          resultId: expect.any(String),
+          content: expect.objectContaining({ title: 'Agent architecture' }),
+        })],
       },
     });
-    expect(searched.isError).not.toBe(true);
-    const searchedContent = searched.content as { admissionBatch: Array<{ candidate: { candidateId: string } }> };
-    const candidateId = searchedContent.admissionBatch[0]!.candidate.candidateId;
-    expect(repository.readCandidate(candidateId)?.status).toBe('pending_admission');
+    expect(database.prepare<{ count: number }>({
+      sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
+    }).get()?.count).toBe(0);
 
-    const committed = await attempts.commitCandidateAdmission({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: { decisions: [{
-        candidateId, decision: 'admit', relevance: 'direct', matchedInterestIds: ['interest:1'],
-        contentValue: 'substantive', novelty: 'novel', temporalValidity: 'valid',
-        negativeConstraint: 'clear', reason: 'Useful implementation detail.',
-        interestRevisions: [{ interestId: 'interest:1', revision: 1 }],
-        preferenceRevisions: [{ scopeKey: 'interest:interest:1', revision: 0 }],
-        preferenceAlignment: [],
-      }] },
-    });
-    expect(committed.isError).not.toBe(true);
-    expect(repository.readCandidate(candidateId)?.status).toBe('available');
-  });
+    const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!.resultId;
+    const submitted = await attempts.submitCandidates(toolRequest({
+      items: [{
+        resultId,
+        selectionReason: 'Directly discusses Agent architecture.',
+        matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      }],
+    }));
 
-  it('keeps Source and business commits successful when diagnostic capture throws', async () => {
-    const throwingObservability = {
-      withTrace: () => { throw new Error('trace unavailable'); },
-      withSpan: () => { throw new Error('span unavailable'); },
-      recordContent: () => { throw new Error('content unavailable'); },
-      recordEvent: () => { throw new Error('event unavailable'); },
-      linkTrace: () => { throw new Error('link unavailable'); },
-    } as import('@megumi/observability').Observability;
-    const attempts = createCandidateSupplyAttempts({ observability: throwingObservability });
-    attempts.start({
-      executionId: 'execution:1', startedAt: now, trigger: 'startup',
-      repository, sourceRegistry: createSourceRegistry([source()]),
-      enabledSourceIds: ['source:1'], initialCandidateIds: [],
-      getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
-      now: () => now,
-    });
-
-    const result = await attempts.searchContent({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: { sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [] },
-    });
-    expect(result.isError).not.toBe(true);
-    expect(repository.listRecentQueryOutcomes({ now, withinDays: 30, limit: 10 }))
-      .toMatchObject([{ status: 'succeeded', newCandidateCount: 1 }]);
-  });
-
-  it('does not accept needs_detail when the Candidate Source cannot read more content', async () => {
-    const attempts = createCandidateSupplyAttempts();
-    attempts.start({
-      executionId: 'execution:1', startedAt: now, trigger: 'startup',
-      repository, sourceRegistry: createSourceRegistry([source(false)]),
-      enabledSourceIds: ['source:1'], initialCandidateIds: [],
-      getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
-      now: () => now,
-    });
-    const searched = await attempts.searchContent({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: {
-        sourceId: 'source:1', query: 'Agent architecture', mode: 'relevance', limit: 10,
-        targetInterestIds: ['interest:1'],
+    expect(submitted).toMatchObject({
+      content: {
+        status: 'submitted',
+        addedCandidateCount: 1,
+        addedInterestMatchCount: 1,
       },
     });
-    const candidateId = (searched.content as {
-      admissionBatch: Array<{ candidate: { candidateId: string } }>;
-    }).admissionBatch[0]!.candidate.candidateId;
-
-    const committed = await attempts.commitCandidateAdmission({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: { decisions: [{ candidateId, decision: 'needs_detail', reason: 'Need the full article.' }] },
+    expect(repository.findCandidateById('candidate:1')).toMatchObject({
+      candidate: { status: 'available' },
     });
-
-    expect(committed).toMatchObject({ isError: true, content: { code: 'admission_commit_failed' } });
-    expect(repository.readCandidate(candidateId)?.status).toBe('pending_admission');
   });
 
-  it('reads a preparing Candidate once and returns it to the admission batch', async () => {
+  it('reads optional Source detail into the transient result without persisting it', async () => {
     const attempts = createCandidateSupplyAttempts();
-    attempts.start({
-      executionId: 'execution:1', startedAt: now, trigger: 'startup',
-      repository, sourceRegistry: createSourceRegistry([source(true, false)]),
-      enabledSourceIds: ['source:1'], initialCandidateIds: [],
-      getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
-      now: () => now,
-    });
-    const searched = await attempts.searchContent({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: {
-        sourceId: 'source:1', query: 'Agent architecture', mode: 'relevance', limit: 10,
-        targetInterestIds: ['interest:1'],
-      },
-    });
-    const candidateId = (searched.content as {
-      admissionBatch: Array<{ candidate: { candidateId: string } }>;
-    }).admissionBatch[0]!.candidate.candidateId;
-    expect(repository.readCandidate(candidateId)?.status).toBe('preparing');
+    attempts.start(attemptInput(repository, source()));
+    const searched = await attempts.searchContent(toolRequest({
+      sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
+    }));
+    const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!.resultId;
 
-    const read = await attempts.readSourceCandidate({
-      executionId: 'execution:1', signal: new AbortController().signal, input: { candidateId },
-    });
+    const read = await attempts.readSourceCandidate(toolRequest({ resultId }));
 
-    expect(read.isError).not.toBe(true);
-    expect(repository.readCandidate(candidateId)).toMatchObject({
-      status: 'pending_admission', contentText: 'Full implementation detail.',
-    });
-    await expect(attempts.readSourceCandidate({
-      executionId: 'execution:1', signal: new AbortController().signal, input: { candidateId },
-    })).resolves.toMatchObject({ isError: true, content: { code: 'candidate_already_read' } });
-  });
-
-  it('stops before a thirteenth search and does not create a Query for it', async () => {
-    const attempts = createCandidateSupplyAttempts();
-    const emptySource = source();
-    emptySource.search = async () => ({ status: 'success', items: [] });
-    attempts.start({
-      executionId: 'execution:1', startedAt: now, trigger: 'startup',
-      repository, sourceRegistry: createSourceRegistry([emptySource]),
-      enabledSourceIds: ['source:1'], initialCandidateIds: [],
-      getSnapshot: () => repository.getPoolSnapshot({ now, dailyTargetCount: 1, proactiveTargetCount: 0 }),
-      now: () => now,
-    });
-
-    for (let index = 0; index < 12; index += 1) {
-      await expect(attempts.searchContent({
-        executionId: 'execution:1', signal: new AbortController().signal,
-        input: {
-          sourceId: 'source:1', query: `Agent ${index}`, mode: 'relevance', limit: 1,
-          targetInterestIds: ['interest:1'],
+    expect(read).toMatchObject({
+      content: {
+        status: 'success',
+        result: {
+          resultId,
+          content: expect.objectContaining({ contentText: 'Full implementation detail.' }),
         },
-      })).resolves.not.toMatchObject({ isError: true });
-    }
-    await expect(attempts.searchContent({
-      executionId: 'execution:1', signal: new AbortController().signal,
-      input: {
-        sourceId: 'source:1', query: 'Agent overflow', mode: 'relevance', limit: 1,
-        targetInterestIds: ['interest:1'],
       },
-    })).resolves.toMatchObject({ isError: true, content: { code: 'search_budget_exhausted' } });
-    expect(repository.listRecentQueryOutcomes({ now, withinDays: 30, limit: 50 })).toHaveLength(12);
+    });
+    expect(database.prepare<{ count: number }>({
+      sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
+    }).get()?.count).toBe(0);
+  });
+
+  it('isolates one Source failure and permits a later Source call in the same execution', async () => {
+    const failing = source('source:failed');
+    failing.search = async () => ({
+      status: 'failed',
+      failure: { code: 'network_error', message: 'Unavailable.', retryable: true },
+    });
+    const attempts = createCandidateSupplyAttempts();
+    attempts.start({
+      ...attemptInput(repository, source()),
+      sourceRegistry: createSourceRegistry([failing, source()]),
+      enabledSourceIds: ['source:failed', 'source:1'],
+    });
+
+    await expect(attempts.searchContent(toolRequest({
+      sourceId: 'source:failed', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
+    }))).resolves.toMatchObject({ isError: true, content: { code: 'network_error' } });
+    await expect(attempts.searchContent(toolRequest({
+      sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
+    }))).resolves.toMatchObject({ content: { status: 'success' } });
+    expect(attempts.summarize('execution:1')).toMatchObject({
+      sourceFailureCount: 1,
+      searchResultCount: 1,
+    });
+  });
+
+  it('records Source provider responses and normalized results as Trace evidence', async () => {
+    const recordContent = vi.fn();
+    const attempts = createCandidateSupplyAttempts({
+      observability: {
+        withTrace: async (_request, operation) => operation(),
+        withSpan: async (_request, operation) => operation(),
+        recordContent,
+        recordEvent: () => undefined,
+        linkTrace: () => undefined,
+      },
+    });
+    attempts.start(attemptInput(repository, source()));
+
+    await attempts.searchContent(toolRequest({
+      sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
+    }));
+
+    expect(recordContent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'source.provider_response' }));
+    expect(recordContent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'source.result' }));
+  });
+
+  it('does not implement a Candidate Supply search or read budget', async () => {
+    const attempts = createCandidateSupplyAttempts();
+    attempts.start(attemptInput(repository, source()));
+
+    for (let index = 0; index < 13; index += 1) {
+      await expect(attempts.searchContent(toolRequest({
+        sourceId: 'source:1',
+        query: `Agent ${index}`,
+        mode: 'relevance',
+        limit: 1,
+        targetInterestIds: ['interest:1'],
+      }))).resolves.not.toMatchObject({ isError: true });
+    }
   });
 });
 
-function source(supportsRead = true, assessable = true): DiscoverySource {
+function attemptInput(repository: CandidateSupplyRepository, discoverySource: DiscoverySource) {
+  return {
+    executionId: 'execution:1',
+    startedAt: now,
+    trigger: 'startup' as const,
+    repository,
+    sourceRegistry: createSourceRegistry([discoverySource]),
+    enabledSourceIds: [discoverySource.descriptor.id],
+    settings,
+    now: () => now,
+  };
+}
+
+function toolRequest(input: unknown) {
+  return {
+    executionId: 'execution:1',
+    signal: new AbortController().signal,
+    input,
+  };
+}
+
+function source(id = 'source:1'): DiscoverySource {
   return {
     descriptor: {
-      id: 'source:1', name: 'Source 1', access: 'public_http',
-      supportedModes: ['relevance', 'recent'], supportsRead,
+      id, name: id, access: 'public_http',
+      supportedModes: ['relevance', 'recent'], supportsRead: true,
     },
     getAvailability: () => ({ state: 'ready' }),
-    async search() {
+    async search(request) {
+      request.onProviderResponse?.({ status: 200, body: { items: 1 } });
       return {
         status: 'success',
         items: [{
-          sourceId: 'source:1', sourceName: 'Source 1', sourceContentId: 'article:1',
-          canonicalUrl: 'https://example.com/article/1', contentType: 'article',
+          sourceId: id,
+          sourceName: id,
+          sourceContentId: 'article:1',
+          canonicalUrl: `https://example.com/${id}/article/1`,
+          contentType: 'article',
           title: 'Agent architecture',
-          ...(assessable ? { description: 'Concrete patterns and implementation trade-offs.' } : {}),
+          description: 'Concrete patterns and implementation trade-offs.',
         }],
       };
     },
-    ...(supportsRead ? { async read() {
+    async read() {
       return {
         status: 'success',
         detail: {
-          sourceId: 'source:1', sourceName: 'Source 1', sourceContentId: 'article:1',
-          canonicalUrl: 'https://example.com/article/1', contentType: 'article',
-          title: 'Agent architecture', contentText: 'Full implementation detail.',
+          sourceId: id,
+          sourceName: id,
+          sourceContentId: 'article:1',
+          canonicalUrl: `https://example.com/${id}/article/1`,
+          contentType: 'article',
+          title: 'Agent architecture',
+          contentText: 'Full implementation detail.',
         },
       };
-    } } : {}),
+    },
   };
 }

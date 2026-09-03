@@ -17,7 +17,7 @@ describe('DailyRecommendationRepository', () => {
   beforeEach(() => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
-    discovery = createDiscoveryRepository({ database });
+    discovery = createDiscoveryRepository({ database, clock: { now: () => now } });
     discovery.applyInterestChange({
       action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
     });
@@ -25,7 +25,7 @@ describe('DailyRecommendationRepository', () => {
 
   afterEach(() => database.close());
 
-  it('reads eligible Candidate, active Assessment, Interest, and history facts in one bounded snapshot', () => {
+  it('reads eligible Candidate, active Interest match, and history facts in one bounded snapshot', () => {
     const direct = admitCandidate(discovery, 'direct', ['interest:1'], 'Direct guide');
     const exploration = admitCandidate(discovery, 'exploration', [], 'Exploration guide');
     const repository = createDailyRecommendationRepository(database);
@@ -33,7 +33,7 @@ describe('DailyRecommendationRepository', () => {
     const snapshot = repository.readSnapshot({ now, requestedCount: 5 });
 
     expect(snapshot.window).toMatchObject({ availableCount: 2, actualTarget: 2, requestedCount: 5 });
-    expect(snapshot.window.candidates.map(({ candidateId }) => candidateId)).toEqual([
+    expect(snapshot.window.candidates.map(({ id }) => id)).toEqual([
       direct,
       exploration,
     ]);
@@ -71,8 +71,8 @@ describe('DailyRecommendationRepository', () => {
       { candidateId: second, position: 0 },
       { candidateId: first, position: 1 },
     ]);
-    expect(discovery.readCandidate(first)?.status).toBe('consumed');
-    expect(discovery.readCandidate(second)?.status).toBe('consumed');
+    expect(discovery.findCandidateById(first)?.candidate.status).toBe('consumed');
+    expect(discovery.findCandidateById(second)?.candidate.status).toBe('consumed');
     expect(repository.getBatch('2026-08-27')).toMatchObject({
       status: 'published', requestedCount: 5, actualTarget: 2, resultCount: 2,
     });
@@ -84,16 +84,14 @@ describe('DailyRecommendationRepository', () => {
     });
 
     const publishedBasis = database.prepare<PublishedBasisRow>({ sql: `
-      SELECT assessment_id, assessment_version, matched_interest_ids_json,
-        interest_revisions_json, preference_revisions_json, content_evidence_json
+      SELECT matched_interest_ids_json, interest_revisions_json,
+        preference_revisions_json, content_evidence_json
       FROM discovery_recommendations WHERE recommendation_id = ?
     ` }).get(['recommendation:2']);
     expect(publishedBasis).toMatchObject({
-      assessment_id: expect.any(String),
-      assessment_version: 'candidate-admission:v1',
       matched_interest_ids_json: '["interest:1"]',
       interest_revisions_json: '[{"interestId":"interest:1","revision":1}]',
-      preference_revisions_json: '[{"scopeKey":"interest:interest:1","revision":0}]',
+      preference_revisions_json: '[]',
     });
     expect(JSON.parse(publishedBasis?.content_evidence_json ?? '')).toEqual({
       sourceId: 'open_web',
@@ -147,7 +145,7 @@ describe('DailyRecommendationRepository', () => {
     });
 
     expect(result).toEqual({ status: 'selection_conflict', unavailableCandidateIds: [first] });
-    expect(discovery.readCandidate(second)?.status).toBe('available');
+    expect(discovery.findCandidateById(second)?.candidate.status).toBe('available');
     expect(repository.getBatch('2026-08-27')).toMatchObject({ status: 'running', resultCount: 0 });
   });
 
@@ -197,44 +195,27 @@ function admitCandidate(
   title: string,
 ): string {
   const suffix = title.toLowerCase().replaceAll(' ', '-');
-  repository.beginQuery({
-    queryId: `query:${suffix}`, executionId: 'execution:supply', sourceId: 'open_web',
-    query: title, mode: 'relevance', targetInterestIds: matchedInterestIds, startedAt: now,
-  });
-  const candidate = repository.commitSearchResult({
-    queryId: `query:${suffix}`, completedAt: now, hardLimit: 100,
-    items: [{
+  const activeInterestIds = matchedInterestIds.length > 0 ? matchedInterestIds : ['interest:1'];
+  const submission = repository.submitCandidate({
+    content: {
       sourceId: 'open_web', sourceName: 'example.com', sourceContentId: suffix,
       canonicalUrl: `https://example.com/${suffix}`, contentType: 'article', title,
       description: `${title} with concrete implementation detail.`,
-    }],
-  }).candidates[0];
-  if (!candidate) throw new Error('Expected Candidate material.');
-  repository.commitAdmission({
-    executionId: 'execution:supply', assessmentVersion: 'candidate-admission:v1', assessedAt: now,
-    decisions: [{
-      candidateId: candidate.candidateId,
-      decision: 'admit',
-      relevance,
-      matchedInterestIds: [...matchedInterestIds],
-      contentValue: 'substantive',
-      novelty: 'novel',
-      temporalValidity: 'valid',
-      negativeConstraint: 'clear',
-      reason: `${title} is useful.`,
-      interestRevisions: matchedInterestIds.map((interestId) => ({ interestId, revision: 1 })),
-      preferenceRevisions: matchedInterestIds.map((interestId) => ({
-        scopeKey: `interest:${interestId}`, revision: 0,
-      })),
-      preferenceAlignment: [],
-    }],
+    },
+    selectionReason: `${title} is related to an active Interest.`,
+    matches: activeInterestIds.map((interestId) => ({ interestId, relevance })),
+    settings: {
+      minimumCount: 100,
+      targetCount: 160,
+      maximumCount: 200,
+      candidateValidityDays: 30,
+    },
   });
-  return candidate.candidateId;
+  if (submission.status !== 'created') throw new Error('Expected Candidate to be created.');
+  return submission.candidate.id;
 }
 
 interface PublishedBasisRow {
-  readonly assessment_id: string | null;
-  readonly assessment_version: string | null;
   readonly matched_interest_ids_json: string;
   readonly interest_revisions_json: string;
   readonly preference_revisions_json: string;

@@ -148,6 +148,13 @@
       "when": 1788393602000,
       "tag": "0020_interest_business_facts",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788432000000,
+      "tag": "0021_candidate_supply_redesign",
+      "breakpoints": true
     }
   ]
 }

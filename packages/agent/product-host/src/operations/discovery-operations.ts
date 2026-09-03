@@ -4,9 +4,7 @@ import type { DiscoveryFactsReader } from '@megumi/context';
 import type { DiscoveryHost } from '../host/discovery-host';
 import {
   DiscoveryBackgroundWaitOptionsSchema,
-  DiscoveryCandidateSupplyQuerySchema,
   DiscoveryCandidateSupplyRequestSchema,
-  DiscoveryCandidateSupplyFactsQuerySchema,
   DiscoveryDailyRecommendationFactsQuerySchema,
   DiscoveryPreferenceLearningFactsQuerySchema,
   DiscoveryFactsResultSchema,
@@ -14,9 +12,6 @@ import {
   DiscoveryInterestFactsResultSchema,
   DiscoveryPreferenceLearningQuerySchema,
 } from '../host/discovery-host';
-import {
-  isCandidateSupplyCheckTerminal,
-} from '@megumi/discovery';
 
 export function createDiscoveryOperations(
   agent: Pick<
@@ -35,7 +30,7 @@ export function createDiscoveryOperations(
     | 'refreshDiscoverySources'
     | 'getInterestFacts'
     | 'requestCandidateSupply'
-    | 'getCandidateSupplyCheck'
+    | 'getCandidatePoolSnapshot'
     | 'getPreferenceLearningBatch'
     | 'getPreferenceLearningCompletion'
   >,
@@ -65,30 +60,13 @@ export function createDiscoveryOperations(
       const result = agent.getInterestFacts(DiscoveryInterestFactsPayloadSchema.parse(request));
       return Promise.resolve(DiscoveryInterestFactsResultSchema.parse(result));
     },
-    requestCandidateSupply(request = { trigger: 'evaluation' }) {
+    async requestCandidateSupply(request = { trigger: 'supply_conditions_changed' }) {
       const parsed = DiscoveryCandidateSupplyRequestSchema.parse(request);
-      return Promise.resolve(agent.requestCandidateSupply(parsed.trigger) ?? null);
-    },
-    getCandidateSupplyCheck(request) {
-      const parsed = DiscoveryCandidateSupplyQuerySchema.parse(request);
-      return Promise.resolve(agent.getCandidateSupplyCheck(parsed.candidateSupplyId) ?? null);
-    },
-    waitCandidateSupplyCheck: (request) => waitForBusinessFact({
-      timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
-      read: () => agent.getCandidateSupplyCheck(
-        DiscoveryCandidateSupplyQuerySchema.parse({
-          candidateSupplyId: request.candidateSupplyId,
-        }).candidateSupplyId,
-      ),
-      terminal: isCandidateSupplyCheckTerminal,
-    }),
-    async getCandidateSupplyFacts(request) {
-      const result = await facts.readCandidateSupplyFacts(
-        DiscoveryCandidateSupplyFactsQuerySchema.parse(request),
-      );
-      DiscoveryFactsResultSchema.parse(result);
+      const result = agent.requestCandidateSupply(parsed.trigger);
+      if (!result) throw new Error('Candidate Supply is not configured.');
       return result;
     },
+    getCandidatePool: () => Promise.resolve(agent.getCandidatePoolSnapshot() ?? null),
     async getDailyRecommendationFacts(request) {
       const result = await facts.readDailyRecommendationFacts(
         DiscoveryDailyRecommendationFactsQuerySchema.parse(request),

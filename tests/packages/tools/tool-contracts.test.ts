@@ -31,9 +31,9 @@ describe('Tool public contracts', () => {
     expect(Object.keys(definition)).toEqual(['name', 'description', 'parameters']);
   });
 
-  it('publishes the typed Candidate admission Tool definition', () => {
-    expect(PublicTools.commitCandidateAdmissionToolDefinition).toMatchObject({
-      name: 'commit_candidate_admission',
+  it('publishes the typed Candidate submission Tool definition', () => {
+    expect(PublicTools.submitCandidatesToolDefinition).toMatchObject({
+      name: 'submit_candidates',
       parameters: { type: 'object' },
     });
   });

@@ -10,23 +10,24 @@ let application: TestApplication | undefined;
 afterEach(async () => { await application?.cleanup(); application = undefined; });
 
 describe('Discovery Product Host operations', () => {
-  it('requests, waits for, and rereads one durable Candidate Supply Check', async () => {
+  it('returns the final Candidate Supply result and exposes the derived Candidate Pool', async () => {
     application = composeTestApplication();
     await application.runtime.start();
-    const receipt = await application.runtime.host.discovery.requestCandidateSupply({ trigger: 'evaluation' });
-    expect(receipt).not.toBeNull();
-    if (!receipt) return;
-
-    const settled = await application.runtime.host.discovery.waitCandidateSupplyCheck({
-      candidateSupplyId: receipt.candidateSupplyId,
-      timeoutMs: 2_000,
+    const result = await application.runtime.host.discovery.requestCandidateSupply({
+      trigger: 'supply_conditions_changed',
     });
-    expect(settled.status).toBe('completed');
-    if (settled.status !== 'completed') return;
-    const reread = await application.runtime.host.discovery.getCandidateSupplyCheck({
-      candidateSupplyId: receipt.candidateSupplyId,
+    expect(result).toMatchObject({
+      status: 'not_needed',
+      reason: 'no_active_interest',
+      trigger: 'supply_conditions_changed',
+      addedCandidateCount: 0,
     });
-    expect(reread).toEqual(settled.value);
+    await expect(application.runtime.host.discovery.getCandidatePool()).resolves.toMatchObject({
+      minimumCount: 100,
+      targetCount: 160,
+      maximumCount: 200,
+      availableCount: 0,
+    });
   });
 
   it('reads exact Interest business facts by IDs', async () => {

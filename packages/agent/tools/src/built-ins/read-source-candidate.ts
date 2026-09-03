@@ -14,9 +14,9 @@ export interface ReadSourceCandidateOperation {
 
 export const readSourceCandidateToolDefinition = {
   name: 'read_source_candidate',
-  description: 'Read one Candidate from its primary Source and persist validated detail.',
-  promptSnippet: 'Read and persist additional Source detail for one Candidate in this Supply execution.',
-  parameters: Type.Object({ candidateId: Type.String() }) as unknown as JsonSchemaObject,
+  description: 'Read optional detail for one Source result in the current Candidate Supply execution.',
+  promptSnippet: 'Read additional Source detail only when the search metadata is insufficient.',
+  parameters: Type.Object({ resultId: Type.String() }) as unknown as JsonSchemaObject,
 };
 
 /** Creates the thin Tool Handler for Candidate Supply detail reading. */

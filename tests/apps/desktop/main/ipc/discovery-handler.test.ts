@@ -116,6 +116,10 @@ describe('registerDiscoveryHandlers', () => {
       conversationRecognitionEnabled: true,
       dailyGenerationTime: '08:00',
       dailyTargetCount: 20,
+      candidatePoolMinimumCount: 100,
+      candidatePoolMaximumCount: 200,
+      candidateValidityDays: 30,
+      candidateSupplyCheckIntervalMinutes: 360,
       sources: [],
     }));
     registerDiscoveryHandlers(

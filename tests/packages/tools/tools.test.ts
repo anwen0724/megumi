@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createTools, type BuiltInToolName } from '@megumi/tools';
 
 describe('Tools ModelCall routing', () => {
-  it('routes Candidate Supply search, read, and admission through its own Tool Group', async () => {
+  it('routes Candidate Supply search, transient read, and submission through its own Tool Group', async () => {
     const calls: string[] = [];
     const tools = createTools({
       settings: { resolveWebSearch: () => ({ status: 'failed' }), readWebSearchApiKey: () => ({ status: 'missing' }) },
@@ -22,7 +22,7 @@ describe('Tools ModelCall routing', () => {
         ownsExecution: (executionId) => executionId === 'execution:supply',
         async searchContent() { calls.push('search'); return { outputKind: 'json', content: { status: 'ok' } }; },
         async readSourceCandidate() { calls.push('read'); return { outputKind: 'json', content: { status: 'ok' } }; },
-        async commitCandidateAdmission() { calls.push('commit'); return { outputKind: 'json', content: { status: 'ok' } }; },
+        async submitCandidates() { calls.push('submit'); return { outputKind: 'json', content: { status: 'ok' } }; },
       },
     });
     const execution = tools.bindExecution({
@@ -34,19 +34,28 @@ describe('Tools ModelCall routing', () => {
     expect(modelCall.status).toBe('prepared');
     if (modelCall.status !== 'prepared') return;
     expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual([
-      'search_content', 'read_source_candidate', 'commit_candidate_admission',
+      'search_content', 'read_source_candidate', 'submit_candidates',
     ]);
     const invocations = [
       { toolName: 'search_content', input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 10, targetInterestIds: [] } },
-      { toolName: 'read_source_candidate', input: { candidateId: 'candidate:1' } },
-      { toolName: 'commit_candidate_admission', input: { decisions: [{ candidateId: 'candidate:1', decision: 'needs_detail', reason: 'Need detail.' }] } },
+      { toolName: 'read_source_candidate', input: { resultId: 'result:1' } },
+      {
+        toolName: 'submit_candidates',
+        input: {
+          items: [{
+            resultId: 'result:1',
+            selectionReason: 'Related to the active Interest.',
+            matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+          }],
+        },
+      },
     ];
     for (const { toolName, input } of invocations) {
       const routed = modelCall.binding.routeToolCall({ toolCallId: `call:${toolName}`, toolName, input });
       expect(routed.status).toBe('routed');
       if (routed.status === 'routed') await modelCall.binding.executeToolInvocation({ invocation: routed.invocation });
     }
-    expect(calls).toEqual(['search', 'read', 'commit']);
+    expect(calls).toEqual(['search', 'read', 'submit']);
   });
 
   it('keeps one ModelCall view stable while a later ModelCall sees new availability', async () => {

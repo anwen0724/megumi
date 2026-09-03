@@ -173,12 +173,12 @@ function unsupportedSourceCase() {
     name: 'Unsupported source', description: 'Fails only while composing its Controlled Adapter.',
     type: 'candidate_supply',
     initialState: {
-      clock: now, targetCount: 1,
+      clock: now, minimumCount: 1, maximumCount: 3,
       interests: [{ referenceId: 'interest', description: 'TypeScript', status: 'active' }],
       existingCandidates: [],
       controlledSources: [{ sourceId: 'unsupported', queryIncludes: 'TypeScript', results: [] }],
     },
-    input: { trigger: 'evaluation' },
+    input: { trigger: 'supply_conditions_changed' },
   };
 }
 

@@ -330,7 +330,6 @@ function mergeTraceIdentityCorrelation(
     ...(additional.executionId ? { executionId: additional.executionId } : {}),
     ...(additional.sessionId ? { sessionId: additional.sessionId } : {}),
     ...(additional.workspaceId ? { workspaceId: additional.workspaceId } : {}),
-    ...(additional.candidateSupplyId ? { candidateSupplyId: additional.candidateSupplyId } : {}),
     ...(additional.dailyRecommendationBatchId
       ? { dailyRecommendationBatchId: additional.dailyRecommendationBatchId }
       : {}),
@@ -344,14 +343,11 @@ function mergeTraceIdentityCorrelation(
 function correlationContains(candidate: TraceCorrelation, required: TraceCorrelation): boolean {
   return required.requestId === undefined || candidate.requestId === required.requestId
     ? required.executionId === undefined || candidate.executionId === required.executionId
-      ? required.candidateSupplyId === undefined
-        || candidate.candidateSupplyId === required.candidateSupplyId
-        ? required.dailyRecommendationBatchId === undefined
-          || candidate.dailyRecommendationBatchId === required.dailyRecommendationBatchId
-          ? required.preferenceLearningBatchId === undefined
-            || candidate.preferenceLearningBatchId === required.preferenceLearningBatchId
-            ? required.batchId === undefined || candidate.batchId === required.batchId
-            : false
+      ? required.dailyRecommendationBatchId === undefined
+        || candidate.dailyRecommendationBatchId === required.dailyRecommendationBatchId
+        ? required.preferenceLearningBatchId === undefined
+          || candidate.preferenceLearningBatchId === required.preferenceLearningBatchId
+          ? required.batchId === undefined || candidate.batchId === required.batchId
           : false
         : false
       : false

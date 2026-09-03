@@ -221,6 +221,10 @@ async function createEvaluationSettingsStore(input: {
     discovery: {
       conversation_recognition_enabled: true,
       daily_target_count: input.initialState.dailyTargetCount,
+      candidate_pool_minimum_count: input.initialState.candidatePoolMinimumCount,
+      candidate_pool_maximum_count: input.initialState.candidatePoolMaximumCount,
+      candidate_validity_days: 30,
+      candidate_supply_check_interval_minutes: 360,
       enabled_sources: ['open_web'],
     },
     model_selection: { provider_id: config.providerId, model_id: config.modelId },

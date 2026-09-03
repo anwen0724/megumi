@@ -29,7 +29,7 @@ function migrateRecommendationIdentitiesInTransaction(
   ` }).all();
   const pendingIds = new Set(rows
     .filter((row) => (
-      !row.content_identity.startsWith('content:v2:')
+      !row.content_identity.startsWith('content:sha256:')
       && !row.content_identity.startsWith('content:legacy-duplicate:')
     ))
     .map((row) => row.recommendation_id));
@@ -37,7 +37,7 @@ function migrateRecommendationIdentitiesInTransaction(
 
   const canonicalById = new Map(rows.map((row) => [
     row.recommendation_id,
-    row.content_identity.startsWith('content:v2:')
+    row.content_identity.startsWith('content:sha256:')
       ? row.content_identity
       : canonicalContentIdentity({ canonicalUrl: row.canonical_url }),
   ]));

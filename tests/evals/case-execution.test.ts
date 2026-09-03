@@ -75,28 +75,36 @@ describe('Case execution', () => {
     });
   });
 
-  it('waits for Candidate Supply and reads final facts from its Owner query', async () => {
+  it('waits for Candidate Supply and reads the final Candidate Pool from its Owner', async () => {
     const runtime = testRuntime({ discovery: {
       async requestCandidateSupply() {
-        return { candidateSupplyId: 'supply:1', trigger: 'evaluation', status: 'queued', requestedAt: now };
+        return {
+          requestId: 'request:supply',
+          trigger: 'supply_conditions_changed',
+          requestedAt: now,
+          completedAt: now,
+          addedCandidateCount: 1,
+          addedInterestMatchCount: 1,
+          status: 'fulfilled',
+          executionId: 'execution:supply',
+          availableCount: 2,
+          remainingReplenishmentCount: 0,
+        };
       },
-      async waitCandidateSupplyCheck() {
-        return { status: 'completed', value: {
-          candidateSupplyId: 'supply:1', trigger: 'evaluation', requestedAt: now,
-          status: 'completed', reason: 'fulfilled', executionId: 'execution:supply', completedAt: now,
-        } };
-      },
-      async getCandidateSupplyFacts() {
-        return { status: 'failed', failure: { code: 'test_fact', message: 'Recorded Owner response.' } };
+      async getCandidatePool() {
+        return { availableCount: 2, targetCount: 2 };
       },
     } });
 
     const result = await executeCase(executionInput(candidateCase(), runtime));
 
-    expect(result.businessIds).toEqual({ candidateSupplyId: 'supply:1', executionId: 'execution:supply' });
-    expect(result.ownerFacts).toEqual({
-      status: 'failed', failure: { code: 'test_fact', message: 'Recorded Owner response.' },
-    });
+    expect(result.businessIds).toEqual({ requestId: 'request:supply', executionId: 'execution:supply' });
+    expect(result.ownerFacts).toEqual({ availableCount: 2, targetCount: 2 });
+    expect(result.traceTargets).toEqual([{
+      traceKind: 'candidate_supply',
+      correlation: { requestId: 'request:supply' },
+      expectation: 'required',
+    }]);
   });
 
   it('associates Daily Recommendation with the stable Batch and reads settled Owner facts', async () => {
@@ -181,8 +189,7 @@ function testRuntime(overrides: {
       discovery: {
         getInterestFacts: unexpected,
         requestCandidateSupply: unexpected,
-        waitCandidateSupplyCheck: unexpected,
-        getCandidateSupplyFacts: unexpected,
+        getCandidatePool: unexpected,
         ensureDaily: unexpected,
         waitDailyBatch: unexpected,
         getDailyRecommendationFacts: unexpected,
@@ -319,11 +326,11 @@ function candidateCase(): EvaluationCase {
   return EvaluationCaseSchema.parse({
     ...baseCase('candidate_supply'),
     initialState: {
-      clock: now, targetCount: 1,
+      clock: now, minimumCount: 1, maximumCount: 3,
       interests: [{ referenceId: 'interest', description: 'TypeScript' }], existingCandidates: [],
       controlledSources: [{ sourceId: 'open_web', queryIncludes: 'TypeScript', results: [] }],
     },
-    input: { trigger: 'evaluation' },
+    input: { trigger: 'supply_conditions_changed' },
   });
 }
 

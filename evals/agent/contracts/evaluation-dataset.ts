@@ -141,17 +141,18 @@ export const CandidateSupplyCaseSchema = z.object({
   type: z.literal('candidate_supply'),
   initialState: z.object({
     clock: TimestampSchema,
-    targetCount: z.number().int().min(1).max(100),
+    minimumCount: z.number().int().positive(),
+    maximumCount: z.number().int().min(2),
     interests: z.array(InterestDataSchema).min(1),
     existingCandidates: z.array(CandidateDataSchema).default([]),
     controlledSources: z.array(ControlledWebDataSchema).default([]),
   }).strict(),
-  input: z.object({ trigger: z.literal('evaluation') }).strict(),
+  input: z.object({ trigger: z.literal('supply_conditions_changed') }).strict(),
   expected: z.object({
-    admissibleUrls: z.array(z.string().url()).optional(),
+    relatedUrls: z.array(z.string().url()).optional(),
     duplicateUrls: z.array(z.string().url()).optional(),
-    rejectedUrls: z.array(z.string().url()).optional(),
-    minimumAcceptedCount: z.number().int().nonnegative().optional(),
+    unrelatedUrls: z.array(z.string().url()).optional(),
+    minimumCreatedCount: z.number().int().nonnegative().optional(),
   }).strict().optional(),
 }).strict();
 
@@ -257,7 +258,17 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
       addMissingReference(interests, referenceId, ['initialState', candidatePath, candidateIndex, 'matchedInterestReferenceIds', referenceIndex], 'Interest', context);
     }
   }
-  if (evaluationCase.type === 'candidate_supply') return;
+  if (evaluationCase.type === 'candidate_supply') {
+    const targetCount = Math.floor(evaluationCase.initialState.maximumCount * 0.8);
+    if (evaluationCase.initialState.minimumCount >= targetCount) {
+      context.addIssue({
+        code: 'custom',
+        path: ['initialState', 'minimumCount'],
+        message: 'minimumCount must be smaller than the derived 80% targetCount.',
+      });
+    }
+    return;
+  }
   const recommendationPath = evaluationCase.type === 'daily_recommendation'
     ? 'previousRecommendations'
     : 'recommendations';

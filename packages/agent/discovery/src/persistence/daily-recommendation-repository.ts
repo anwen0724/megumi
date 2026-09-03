@@ -7,6 +7,7 @@ import { CandidateSchema, type Candidate } from '../candidate-supply/candidate-s
 import { buildDailyCandidateWindow } from '../daily-recommendation/candidate-window';
 import {
   DailyRecommendationBatchSchema,
+  DailyRecommendationCandidateSchema,
   LocalDateSchema,
   type DailyRecommendationBatch,
   type DailyRecommendationCandidate,
@@ -71,7 +72,7 @@ export interface DailyRecommendationRepository extends RecommendationRepositoryO
   /** Reads one consistent and bounded Candidate, Interest, Recommendation, and feedback snapshot. */
   readSnapshot(input: { readonly now: string; readonly requestedCount: number }): DailyRecommendationSnapshot;
   /** Reads one persisted Candidate for an execution-scoped local-read Tool. */
-  readCandidate(candidateId: string): Candidate | undefined;
+  findDailyCandidateById(candidateId: string): Candidate | undefined;
   /** Claims the unique Batch for one local date. */
   claimBatch(command: ClaimDailyRecommendationBatch): ClaimDailyRecommendationBatchResult;
   /** Atomically creates Recommendation snapshots, consumes Candidates, and publishes the Batch. */
@@ -96,9 +97,9 @@ export function createDailyRecommendationRepository(database: DatabaseConnection
         operation: () => readSnapshot(database, now, requestedCount),
       });
     },
-    readCandidate(candidateId) {
+    findDailyCandidateById(candidateId) {
       const row = database.prepare<CandidateRow>({
-        sql: 'SELECT * FROM discovery_candidates WHERE candidate_id = ?',
+        sql: 'SELECT * FROM discovery_candidates WHERE id = ?',
       }).get([z.string().min(1).parse(candidateId)]);
       return row ? candidateFromRow(row) : undefined;
     },
@@ -210,20 +211,18 @@ function readSnapshot(
     SELECT interest_id, description FROM discovery_interests
     WHERE status = 'active' ORDER BY created_at, interest_id
   ` }).all().map((row) => ({ interestId: row.interest_id, description: row.description }));
-  const candidates = database.prepare<CandidateAssessmentRow>({ sql: `
-    SELECT c.*, a.assessment_id, a.assessment_version, a.relevance,
-      a.matched_interest_ids_json, a.reason AS admission_reason,
-      a.interest_revisions_json, a.preference_revisions_json, a.preference_alignment_json
+  const candidates = database.prepare<CandidateRow>({ sql: `
+    SELECT DISTINCT c.*
     FROM discovery_candidates c
-    JOIN discovery_candidate_assessments a ON a.candidate_id = c.candidate_id
-      AND a.active = 1 AND a.decision = 'admit'
+    JOIN discovery_candidate_interest_matches m ON m.candidate_id = c.id
+    JOIN discovery_interests i ON i.interest_id = m.interest_id AND i.status = 'active'
     WHERE c.status = 'available' AND c.expires_at > ?
       AND NOT EXISTS (
         SELECT 1 FROM discovery_recommendations r
-        WHERE r.candidate_id = c.candidate_id OR r.content_identity = c.content_identity
+        WHERE r.candidate_id = c.id OR r.content_identity = c.content_identity
       )
-    ORDER BY c.status_updated_at, c.candidate_id
-  ` }).all([now]).map(candidateFromAssessmentRow);
+    ORDER BY c.created_at, c.id
+  ` }).all([now]).map((row) => dailyCandidateFromRow(database, row));
   return {
     window: buildDailyCandidateWindow({
       now,
@@ -259,11 +258,11 @@ function publishSelection(
     return RecommendationSchema.parse({
       recommendationId: item.recommendationId,
       batchId: command.batchId,
-      candidateId: candidate.candidateId,
+      candidateId: candidate.id,
       contentIdentity: candidate.contentIdentity,
       position,
-      sourceId: candidate.primarySourceId,
-      sourceName: candidate.primarySourceName,
+      sourceId: candidate.sourceId,
+      sourceName: candidate.sourceId,
       canonicalUrl: candidate.canonicalUrl,
       contentType: candidate.contentType,
       ...(candidate.sourceContentId ? { sourceContentId: candidate.sourceContentId } : {}),
@@ -281,14 +280,14 @@ function publishSelection(
     const candidateId = recommendation.candidateId;
     if (!candidateId) throw new Error('New Daily Recommendation is missing its Candidate reference.');
     const updated = database.prepare({ sql: `
-      UPDATE discovery_candidates SET status = 'consumed', status_updated_at = ?
-      WHERE candidate_id = ? AND status = 'available' AND expires_at > ?
+      UPDATE discovery_candidates SET status = 'consumed'
+      WHERE id = ? AND status = 'available' AND expires_at > ?
         AND NOT EXISTS (
           SELECT 1 FROM discovery_recommendations r
-          WHERE r.candidate_id = discovery_candidates.candidate_id
+          WHERE r.candidate_id = discovery_candidates.id
             OR r.content_identity = discovery_candidates.content_identity
         )
-    ` }).run([command.publishedAt, candidateId, command.publishedAt]);
+    ` }).run([candidateId, command.publishedAt]);
     if (updated.changes !== 1) throw new SelectionConflict([candidateId]);
     recommendationWriter.insertForPublication(recommendation);
     persistRecommendationBasis(database, recommendation.recommendationId, candidateId);
@@ -316,38 +315,28 @@ function persistRecommendationBasis(
   recommendationId: string,
   candidateId: string,
 ): void {
-  const assessment = database.prepare<CandidateAssessmentRow>({ sql: `
-    SELECT c.*, a.assessment_id, a.assessment_version, a.relevance,
-      a.matched_interest_ids_json, a.reason AS admission_reason,
-      a.interest_revisions_json, a.preference_revisions_json, a.preference_alignment_json
-    FROM discovery_candidates c
-    JOIN discovery_candidate_assessments a ON a.candidate_id = c.candidate_id
-      AND a.active = 1 AND a.decision = 'admit'
-    WHERE c.candidate_id = ?
+  const candidate = database.prepare<CandidateRow>({ sql: `
+    SELECT * FROM discovery_candidates WHERE id = ?
   ` }).get([candidateId]);
-  if (!assessment) throw new Error('Published Candidate has no active admission Assessment.');
+  if (!candidate) throw new Error('Published Candidate was not found.');
+  const matches = readActiveMatches(database, candidateId);
   const contentEvidence = {
-    sourceId: assessment.primary_source_id,
-    canonicalUrl: assessment.canonical_url,
-    title: assessment.title,
-    ...(assessment.description ? { description: assessment.description } : {}),
-    ...(assessment.content_text ? { contentText: assessment.content_text } : {}),
-    completeness: assessment.content_text ? 'full'
-      : assessment.description ? 'partial'
+    sourceId: candidate.source_id,
+    canonicalUrl: candidate.canonical_url,
+    title: candidate.title,
+    ...(candidate.description ? { description: candidate.description } : {}),
+    completeness: candidate.description ? 'partial'
         : 'metadata_only',
   };
   database.prepare({ sql: `
     UPDATE discovery_recommendations SET
-      assessment_id = ?, assessment_version = ?,
       matched_interest_ids_json = ?, interest_revisions_json = ?,
       preference_revisions_json = ?, content_evidence_json = ?
     WHERE recommendation_id = ?
   ` }).run([
-    assessment.assessment_id,
-    assessment.assessment_version,
-    assessment.matched_interest_ids_json,
-    assessment.interest_revisions_json,
-    assessment.preference_revisions_json,
+    JSON.stringify(matches.map(({ interestId }) => interestId)),
+    JSON.stringify(readInterestRevisions(database, matches.map(({ interestId }) => interestId))),
+    JSON.stringify([]),
     JSON.stringify(contentEvidence),
     recommendationId,
   ]);
@@ -374,14 +363,16 @@ function readPublishableCandidate(
 ): Candidate | undefined {
   const row = database.prepare<CandidateRow>({ sql: `
     SELECT c.* FROM discovery_candidates c
-    WHERE c.candidate_id = ? AND c.status = 'available' AND c.expires_at > ?
+    WHERE c.id = ? AND c.status = 'available' AND c.expires_at > ?
       AND EXISTS (
-        SELECT 1 FROM discovery_candidate_assessments a
-        WHERE a.candidate_id = c.candidate_id AND a.active = 1 AND a.decision = 'admit'
+        SELECT 1
+        FROM discovery_candidate_interest_matches m
+        JOIN discovery_interests i ON i.interest_id = m.interest_id AND i.status = 'active'
+        WHERE m.candidate_id = c.id
       )
       AND NOT EXISTS (
         SELECT 1 FROM discovery_recommendations r
-        WHERE r.candidate_id = c.candidate_id OR r.content_identity = c.content_identity
+        WHERE r.candidate_id = c.id OR r.content_identity = c.content_identity
       )
   ` }).get([candidateId, now]);
   return row ? candidateFromRow(row) : undefined;
@@ -465,44 +456,68 @@ function recommendationFromRow(row: RecommendationRow): Recommendation {
   });
 }
 
-function candidateFromAssessmentRow(row: CandidateAssessmentRow): DailyRecommendationCandidate {
-  const candidate = candidateFromRow(row);
-  return {
-    ...candidate,
-    admission: {
-      assessmentId: row.assessment_id,
-      assessmentVersion: row.assessment_version,
-      relevance: z.enum(['direct', 'adjacent', 'exploration']).parse(row.relevance),
-      matchedInterestIds: parseStringArray(row.matched_interest_ids_json),
-      reason: row.admission_reason,
-      interestRevisions: parseInterestRevisions(row.interest_revisions_json),
-      preferenceRevisions: parsePreferenceRevisions(row.preference_revisions_json),
-      preferenceAlignment: parsePreferenceAlignment(row.preference_alignment_json),
-    },
-  };
+function dailyCandidateFromRow(
+  database: DatabaseConnection,
+  row: CandidateRow,
+): DailyRecommendationCandidate {
+  return DailyRecommendationCandidateSchema.parse({
+    ...candidateFromRow(row),
+    sourceName: row.source_id,
+    interestMatches: readActiveMatches(database, row.id),
+  });
 }
 
 function candidateFromRow(row: CandidateRow): Candidate {
   return CandidateSchema.parse({
-    candidateId: row.candidate_id,
+    id: row.id,
     contentIdentity: row.content_identity,
-    status: row.status,
-    primarySourceId: row.primary_source_id,
-    primarySourceName: row.primary_source_name,
+    sourceId: row.source_id,
     ...(row.source_content_id ? { sourceContentId: row.source_content_id } : {}),
     canonicalUrl: row.canonical_url,
     contentType: row.content_type,
     title: row.title,
     ...(row.author ? { author: row.author } : {}),
-    ...(row.content_published_at ? { publishedAt: row.content_published_at } : {}),
+    ...(row.published_at ? { publishedAt: row.published_at } : {}),
     ...(row.description ? { description: row.description } : {}),
-    ...(row.content_text ? { contentText: row.content_text } : {}),
     ...(row.cover_url ? { coverUrl: row.cover_url } : {}),
-    firstSeenAt: row.first_seen_at,
-    lastSeenAt: row.last_seen_at,
+    selectionReason: row.selection_reason,
+    status: row.status,
+    createdAt: row.created_at,
     expiresAt: row.expires_at,
-    statusUpdatedAt: row.status_updated_at,
   });
+}
+
+function readActiveMatches(database: DatabaseConnection, candidateId: string) {
+  return database.prepare<{
+    id: string;
+    candidate_id: string;
+    interest_id: string;
+    relevance: string;
+  }>({ sql: `
+    SELECT m.*
+    FROM discovery_candidate_interest_matches m
+    JOIN discovery_interests i ON i.interest_id = m.interest_id AND i.status = 'active'
+    WHERE m.candidate_id = ?
+    ORDER BY m.id
+  ` }).all([candidateId]).map((row) => ({
+    id: row.id,
+    candidateId: row.candidate_id,
+    interestId: row.interest_id,
+    relevance: z.enum(['direct', 'adjacent', 'exploration']).parse(row.relevance),
+  }));
+}
+
+function readInterestRevisions(database: DatabaseConnection, interestIds: readonly string[]) {
+  if (interestIds.length === 0) return [];
+  const placeholders = interestIds.map(() => '?').join(', ');
+  return database.prepare<{ interest_id: string; revision: number }>({ sql: `
+    SELECT interest_id, revision FROM discovery_interests
+    WHERE interest_id IN (${placeholders})
+    ORDER BY interest_id
+  ` }).all(interestIds).map((row) => ({
+    interestId: row.interest_id,
+    revision: row.revision,
+  }));
 }
 
 function readBatchByIdRequired(database: DatabaseConnection, batchId: string): DailyRecommendationBatch {
@@ -563,26 +578,6 @@ function parseStringArray(value: string): string[] {
   return z.array(z.string().min(1)).parse(parsed);
 }
 
-function parseInterestRevisions(value: string) {
-  return z.array(z.object({
-    interestId: z.string().min(1), revision: z.number().int().nonnegative(),
-  }).strict()).parse(JSON.parse(value));
-}
-
-function parsePreferenceRevisions(value: string) {
-  return z.array(z.object({
-    scopeKey: z.string().min(1), revision: z.number().int().nonnegative(),
-  }).strict()).parse(JSON.parse(value));
-}
-
-function parsePreferenceAlignment(value: string) {
-  return z.array(z.object({
-    directionId: z.string().min(1),
-    relation: z.enum(['aligned', 'conflicted', 'neutral']),
-    reason: z.string().min(1),
-  }).strict()).parse(JSON.parse(value));
-}
-
 function requireString(value: string | null, message: string): string {
   if (!value) throw new Error(message);
   return value;
@@ -608,18 +603,10 @@ class BatchConflict extends Error {
 }
 
 type CandidateRow = DatabaseRow & {
-  candidate_id: string; content_identity: string; status: string;
-  primary_source_id: string; primary_source_name: string; source_content_id: string | null;
+  id: string; content_identity: string; source_id: string; source_content_id: string | null;
   canonical_url: string; content_type: string; title: string; author: string | null;
-  content_published_at: string | null; description: string | null; content_text: string | null;
-  cover_url: string | null; first_seen_at: string; last_seen_at: string;
-  expires_at: string; status_updated_at: string;
-};
-type CandidateAssessmentRow = CandidateRow & {
-  assessment_id: string; assessment_version: string; relevance: string | null;
-  matched_interest_ids_json: string; admission_reason: string;
-  interest_revisions_json: string; preference_revisions_json: string;
-  preference_alignment_json: string;
+  published_at: string | null; description: string | null; cover_url: string | null;
+  selection_reason: string; status: string; created_at: string; expires_at: string;
 };
 type InterestRow = DatabaseRow & { interest_id: string; description: string };
 type BatchRow = DatabaseRow & {

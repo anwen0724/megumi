@@ -12,7 +12,8 @@
   "type": "candidate_supply",
   "initialState": {
     "clock": "2026-01-15T08:00:00.000Z",
-    "targetCount": 2,
+    "minimumCount": 1,
+    "maximumCount": 3,
     "interests": [
       {
         "referenceId": "agent-evaluation",
@@ -43,11 +44,11 @@
     ]
   },
   "input": {
-    "trigger": "evaluation"
+    "trigger": "supply_conditions_changed"
   },
   "expected": {
-    "admissibleUrls": ["https://example.test/agent-evaluation"],
-    "rejectedUrls": ["https://example.test/cooking"],
-    "minimumAcceptedCount": 1
+    "relatedUrls": ["https://example.test/agent-evaluation"],
+    "unrelatedUrls": ["https://example.test/cooking"],
+    "minimumCreatedCount": 1
   }
 }
