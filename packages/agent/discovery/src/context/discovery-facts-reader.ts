@@ -243,9 +243,10 @@ function candidateSummary(candidate: {
     ...(candidate.publishedAt ? { contentPublishedAt: candidate.publishedAt } : {}),
     ...(candidate.description ? { description: candidate.description } : {}),
     contentSummary: candidate.contentSummary,
-    ...(candidate.contentExcerpt ? { contentExcerpt: candidate.contentExcerpt } : {}),
     contentTruncated: candidate.contentTruncated,
-    evidenceCompleteness: candidate.description ? 'partial' as const : 'metadata_only' as const,
+    evidenceCompleteness: candidate.contentExcerpt
+      ? candidate.contentTruncated ? 'partial' as const : 'full' as const
+      : candidate.description ? 'partial' as const : 'metadata_only' as const,
   };
 }
 

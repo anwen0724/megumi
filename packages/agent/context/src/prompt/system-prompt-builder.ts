@@ -10,10 +10,7 @@ import type { SystemInstructionDocument } from '@megumi/instructions';
 import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
-import type {
-  RecommendationContextMaterial,
-  ExecutionEnvironment,
-} from '../context';
+import type { ExecutionEnvironment } from '../context';
 import type { PreferenceLearningContextMaterial } from '../discovery-context';
 import { escapeXmlAttribute, escapeXmlText } from './prompt-markup-formatter';
 
@@ -24,10 +21,6 @@ export interface SystemPromptSources {
   readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
   readonly includeAvailableTools?: boolean;
-  readonly recommendationMaterial?: {
-    readonly localDate: string;
-    readonly material: RecommendationContextMaterial;
-  };
   readonly preferenceLearningMaterial?: {
     readonly startedAt: string;
     readonly material: PreferenceLearningContextMaterial;
@@ -38,12 +31,6 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
   const sections: string[] = [];
   for (const document of sources.systemInstructions) {
     sections.push(document.content);
-  }
-  if (sources.recommendationMaterial) {
-    sections.push(renderRecommendationMaterial(
-      sources.recommendationMaterial.localDate,
-      sources.recommendationMaterial.material,
-    ));
   }
   if (sources.preferenceLearningMaterial) {
     sections.push(renderPreferenceLearningMaterial(
@@ -65,22 +52,6 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
     sections.push(renderExecutionEnvironment(sources.executionEnvironment));
   }
   return sections.join('\n\n');
-}
-
-function renderRecommendationMaterial(
-  localDate: string,
-  material: RecommendationContextMaterial,
-): string {
-  return [
-    '<recommendation_material>',
-    `  <local_date>${escapeXmlText(localDate)}</local_date>`,
-    `  <execution>${escapeXmlText(JSON.stringify(material.execution))}</execution>`,
-    `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
-    `  <preferences>${escapeXmlText(JSON.stringify(material.preferences))}</preferences>`,
-    `  <candidates>${escapeXmlText(JSON.stringify(material.candidates))}</candidates>`,
-    `  <recent_recommendations>${escapeXmlText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
-    '</recommendation_material>',
-  ].join('\n');
 }
 
 function renderPreferenceLearningMaterial(

@@ -31,7 +31,6 @@ function options() {
         candidateId: 'candidate:1', contentIdentity: 'identity:1', sourceName: 'Example',
         canonicalUrl: 'https://example.com/agent', contentType: 'article', title: 'Agent guide',
         contentSummary: 'A grounded Candidate summary.',
-        contentExcerpt: 'Original Source evidence.',
         contentTruncated: false,
         matchedInterestIds: ['interest:1'],
         interestMatches: [{
@@ -70,6 +69,14 @@ function options() {
 describe('Discovery Context ownership', () => {
   it('reads Recommendation facts inside Context instead of accepting Runtime material', async () => {
     const dependencies = options();
+    dependencies.instructionReader.getSystemInstructions.mockResolvedValue([
+      { instructionId: 'megumi.common', sourcePath: '/common.md', content: 'common' },
+      { instructionId: 'megumi.recommendation', sourcePath: '/recommendation.md', content: 'recommendation' },
+    ]);
+    const recommendationTools = [{
+      name: 'publish_recommendations', description: 'Publish recommendations.',
+      promptSnippet: 'Publish recommendations.', parameters: { type: 'object' },
+    }];
     const result = await createContext(dependencies).build({
       modelCallContext: {
         modelCallId: 'model-call:1',
@@ -77,9 +84,11 @@ describe('Discovery Context ownership', () => {
           kind: 'recommendation', executionId: 'execution:1', requestId: 'request:1',
           localDate: '2026-08-27', model,
         },
-        tools: [],
+        tools: recommendationTools,
       },
-      currentMessages: [],
+      currentMessages: [{
+        role: 'user', content: '开始本次 Recommendation 执行。', timestamp: 1,
+      }],
     });
 
     expect(dependencies.discoveryFactsReader.readRecommendationFacts).toHaveBeenCalledWith({
@@ -87,8 +96,17 @@ describe('Discovery Context ownership', () => {
     });
     expect(result).toMatchObject({ status: 'ready' });
     if (result.status === 'ready') {
-      expect(result.prompt.systemPrompt).toContain('Agent guide');
-      expect(result.prompt.systemPrompt).toContain('Prefer local-first system design.');
+      expect(result.prompt.systemPrompt).toBe('common\n\nrecommendation');
+      expect(result.prompt.systemPrompt).not.toContain('<recommendation_material>');
+      expect(result.prompt.systemPrompt).not.toContain('<available_tools>');
+      expect(result.prompt.messages).toHaveLength(1);
+      expect(result.prompt.messages[0]).toMatchObject({ role: 'user', timestamp: 1 });
+      expect(result.prompt.messages[0]?.content).toContain('Execute the following Recommendation task.');
+      expect(result.prompt.messages[0]?.content).toContain('<recommendation_material>');
+      expect(result.prompt.messages[0]?.content).toContain('Agent guide');
+      expect(result.prompt.messages[0]?.content).toContain('Prefer local-first system design.');
+      expect(result.prompt.messages[0]?.content).not.toContain('contentExcerpt');
+      expect(result.prompt.tools).toEqual(recommendationTools);
     }
   });
 

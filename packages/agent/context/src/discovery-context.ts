@@ -108,7 +108,7 @@ export interface RecommendationHistoryFact {
   readonly reaction?: 'liked' | 'disliked';
 }
 
-export interface RecommendationCandidateFact extends CandidateSummaryFact {
+export interface RecommendationCandidateFact extends Omit<CandidateSummaryFact, 'contentExcerpt'> {
   readonly matchedInterestIds: readonly string[];
   readonly interestMatches: readonly {
     readonly interestId: string;

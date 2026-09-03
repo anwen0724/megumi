@@ -174,14 +174,40 @@ function buildRecommendationPrompt(
     prompt: {
       systemPrompt: buildSystemPrompt({
         systemInstructions: context.systemInstructions,
-        recommendationMaterial: {
-          localDate: context.localDate,
-          material: context.material,
-        },
         tools: context.tools,
+        includeAvailableTools: false,
       }),
-      messages: [...context.currentMessages],
+      messages: buildRecommendationMessages(context),
       tools: [...context.tools],
     },
   };
+}
+
+/** Replaces the internal kickoff placeholder with the frozen Recommendation task. */
+function buildRecommendationMessages(
+  context: RecommendationResolvedContext,
+): readonly Message[] {
+  const taskMessage: Message = {
+    role: 'user',
+    content: renderRecommendationTask(context),
+    timestamp: context.currentMessages[0]?.timestamp
+      ?? Date.parse(`${context.localDate}T00:00:00.000Z`),
+  };
+  return [taskMessage, ...context.currentMessages.slice(1)];
+}
+
+function renderRecommendationTask(context: RecommendationResolvedContext): string {
+  const material = context.material;
+  return [
+    'Execute the following Recommendation task.',
+    '',
+    '<recommendation_material>',
+    `  <local_date>${escapeXmlText(context.localDate)}</local_date>`,
+    `  <execution>${escapeXmlText(JSON.stringify(material.execution))}</execution>`,
+    `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
+    `  <preferences>${escapeXmlText(JSON.stringify(material.preferences))}</preferences>`,
+    `  <candidates>${escapeXmlText(JSON.stringify(material.candidates))}</candidates>`,
+    `  <recent_recommendations>${escapeXmlText(JSON.stringify(material.recentRecommendations))}</recent_recommendations>`,
+    '</recommendation_material>',
+  ].join('\n');
 }
