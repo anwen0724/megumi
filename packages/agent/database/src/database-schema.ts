@@ -123,6 +123,11 @@ export const workspaceChanges = sqliteTable('workspace_changes', {
 }, (table) => [
   index('idx_workspace_changes_execution').on(table.executionId),
   index('idx_workspace_changes_workspace_created').on(table.workspaceId, table.createdAt),
+  uniqueIndex('idx_workspace_changes_scope').on(
+    table.workspaceId,
+    table.sessionId,
+    table.executionId,
+  ),
 ]);
 
 export const workspaceChangedFiles = sqliteTable('workspace_changed_files', {

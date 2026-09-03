@@ -134,11 +134,9 @@ function createMigratedDatabase(): DatabaseConnection {
 function copyMigrationsBeforeIdentityConstraint(target: string): void {
   fs.mkdirSync(path.join(target, 'meta'), { recursive: true });
   const journal = JSON.parse(fs.readFileSync(path.join(migrationsRoot, 'meta/_journal.json'), 'utf8')) as {
-    entries: Array<{ readonly tag: string }>;
+    entries: Array<{ readonly idx: number; readonly tag: string }>;
   };
-  const releasedEntries = journal.entries.filter((entry) => (
-    entry.tag !== '0018_session_entry_identity'
-  ));
+  const releasedEntries = journal.entries.filter((entry) => entry.idx < 18);
   for (const entry of releasedEntries) {
     fs.copyFileSync(
       path.join(migrationsRoot, `${entry.tag}.sql`),
