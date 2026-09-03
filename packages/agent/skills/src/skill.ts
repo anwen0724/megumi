@@ -64,8 +64,9 @@ export interface SelectedSkillContent {
   readonly content: string;
 }
 
-/** The only durable user setting for a Skill, keyed by normalized skillPath. */
+/** A persisted Skill availability row with independent storage identity. */
 export interface SkillAvailability {
+  readonly skillAvailabilityId: string;
   readonly skillPath: string;
   readonly available: boolean;
   readonly updatedAt: string;

@@ -294,8 +294,15 @@ class SkillsImpl implements Skills {
           return { status: 'failed', failure: { code: 'internal', message: messageFromError(error, 'Failed to delete Skill package.') } };
         }
         // The file is gone: complete snapshot exclusion and availability convergence even if cancelled now.
+        const availabilityRecord = this.records().find(
+          (record) => comparableSkillPath(record.skillPath) === comparableSkillPath(skill.skillPath),
+        );
+        if (availabilityRecord) {
+          this.availabilityStore.deleteSkillAvailabilityById(
+            availabilityRecord.skillAvailabilityId,
+          );
+        }
         this.dropAvailabilityRecord(skill.skillPath);
-        this.availabilityStore.delete(skill.skillPath);
         for (const [key, snapshot] of this.scopes) {
           this.scopes.set(key, {
             ...snapshot,
@@ -371,12 +378,11 @@ class SkillsImpl implements Skills {
         if (!skill) {
           return { status: 'failed', failure: { code: 'skill_not_found', skillPath: request.skillPath } };
         }
-        const availability: SkillAvailability = {
+        const availability = this.availabilityStore.upsertSkillAvailability({
           skillPath: skill.skillPath,
           available,
           updatedAt: this.clock.now(),
-        };
-        this.availabilityStore.save(availability);
+        });
         this.upsertAvailabilityRecord(availability);
         return { status: 'ok', availability: { ...availability } };
       } catch (error) {
@@ -436,7 +442,9 @@ class SkillsImpl implements Skills {
     const stale = cleanupStaleAvailability({ roots, records: this.records(), signal });
     throwIfAborted(signal);
     for (const record of stale) {
-      this.availabilityStore.delete(record.skillPath);
+      this.availabilityStore.deleteSkillAvailabilityById(
+        record.skillAvailabilityId,
+      );
       this.dropAvailabilityRecord(record.skillPath);
     }
     const unavailable = result.scans.length > 0 && result.scans.every((scan) => scan.status === 'unavailable');
@@ -522,7 +530,7 @@ class SkillsImpl implements Skills {
 
   private records(): readonly SkillAvailability[] {
     if (!this.availabilityRecords) {
-      this.availabilityRecords = this.availabilityStore.list();
+      this.availabilityRecords = this.availabilityStore.listAllSkillAvailability();
     }
     return this.availabilityRecords;
   }
