@@ -224,6 +224,7 @@ async function createEvaluationSettingsStore(input: {
       candidate_pool_minimum_count: input.initialState.candidatePoolMinimumCount,
       candidate_pool_maximum_count: input.initialState.candidatePoolMaximumCount,
       candidate_validity_days: 30,
+      candidate_content_excerpt_max_characters: 8_000,
       candidate_supply_check_interval_minutes: 360,
       enabled_sources: ['open_web'],
     },

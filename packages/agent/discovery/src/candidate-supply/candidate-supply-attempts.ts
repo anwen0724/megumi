@@ -8,6 +8,7 @@ import {
   CandidateSupplySearchInputSchema,
   CandidateSupplySubmitInputSchema,
   SourceContentSchema,
+  SourceContentDetailSchema,
   type CandidatePoolSettings,
   type CandidatePoolSnapshot,
   type CandidateSupplyRepository,
@@ -272,7 +273,7 @@ export function createCandidateSupplyAttempts(options: {
             if (!result) continue;
             const outcome = attempt.repository.submitCandidate({
               content: sourceContent(result.content),
-              selectionReason: item.selectionReason,
+              contentSummary: item.contentSummary,
               matches: item.matches,
               settings: attempt.settings,
             });
@@ -314,8 +315,8 @@ function summary(attempt: CandidateSupplyAttempt): CandidateSupplyAttemptSummary
   };
 }
 
-function sourceContent(content: SourceContent | SourceContentDetail): SourceContent {
-  return SourceContentSchema.parse({
+function sourceContent(content: SourceContent | SourceContentDetail): SourceContentDetail {
+  return SourceContentDetailSchema.parse({
     sourceId: content.sourceId,
     sourceName: content.sourceName,
     ...(content.sourceContentId ? { sourceContentId: content.sourceContentId } : {}),
@@ -327,6 +328,9 @@ function sourceContent(content: SourceContent | SourceContentDetail): SourceCont
     ...(content.description ? { description: content.description } : {}),
     ...(content.coverUrl ? { coverUrl: content.coverUrl } : {}),
     ...(content.engagement ? { engagement: content.engagement } : {}),
+    ...('contentText' in content && content.contentText
+      ? { contentText: content.contentText }
+      : {}),
   });
 }
 

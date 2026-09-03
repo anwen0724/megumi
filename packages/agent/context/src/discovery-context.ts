@@ -59,6 +59,9 @@ export interface CandidateSummaryFact {
   readonly author?: string;
   readonly contentPublishedAt?: string;
   readonly description?: string;
+  readonly contentSummary: string;
+  readonly contentExcerpt?: string;
+  readonly contentTruncated: boolean;
   readonly evidenceCompleteness?: 'full' | 'partial' | 'metadata_only';
 }
 
@@ -103,11 +106,11 @@ export interface DailyRecommendationHistoryFact {
 }
 
 export interface DailyRecommendationCandidateFact extends CandidateSummaryFact {
-  readonly selectionReason: string;
   readonly matchedInterestIds: readonly string[];
   readonly interestMatches: readonly {
     readonly interestId: string;
     readonly relevance: 'direct' | 'adjacent' | 'exploration';
+    readonly matchReason: string;
   }[];
 }
 

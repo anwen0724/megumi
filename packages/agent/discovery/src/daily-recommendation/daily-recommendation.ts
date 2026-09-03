@@ -27,6 +27,7 @@ export const DailyRecommendationCandidateSchema = CandidateSchema.extend({
     candidateId: z.string().min(1),
     interestId: z.string().min(1),
     relevance: z.enum(['direct', 'adjacent', 'exploration']),
+    matchReason: z.string().trim().min(1).max(1000),
   }).strict()).min(1),
 }).strict();
 

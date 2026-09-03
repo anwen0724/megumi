@@ -28,6 +28,7 @@ export const DiscoverySettingsRawSchema = z.object({
   candidate_pool_minimum_count: z.number().int().positive().optional(),
   candidate_pool_maximum_count: z.number().int().positive().optional(),
   candidate_validity_days: z.number().int().positive().optional(),
+  candidate_content_excerpt_max_characters: z.number().int().positive().optional(),
   candidate_supply_check_interval_minutes: z.number().int().positive().optional(),
   twitter_budget: TwitterAttemptBudgetRawSchema.optional(),
 }).strict();
@@ -49,6 +50,7 @@ export const DiscoverySettingsResolvedSchema = z.object({
   candidate_pool_minimum_count: z.number().int().positive(),
   candidate_pool_maximum_count: z.number().int().positive(),
   candidate_validity_days: z.number().int().positive(),
+  candidate_content_excerpt_max_characters: z.number().int().positive(),
   candidate_supply_check_interval_minutes: z.number().int().positive(),
   twitter_budget: TwitterAttemptBudgetResolvedSchema,
 }).strict().refine(
@@ -70,6 +72,7 @@ export const DEFAULT_DISCOVERY_SETTINGS = DiscoverySettingsResolvedSchema.parse(
   candidate_pool_minimum_count: 100,
   candidate_pool_maximum_count: 200,
   candidate_validity_days: 30,
+  candidate_content_excerpt_max_characters: 8_000,
   candidate_supply_check_interval_minutes: 360,
   twitter_budget: {
     max_search_calls: 3,

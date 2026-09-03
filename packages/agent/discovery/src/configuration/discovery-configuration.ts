@@ -16,6 +16,7 @@ export interface DiscoveryConfigurationSettings {
   readonly candidatePoolMinimumCount: number;
   readonly candidatePoolMaximumCount: number;
   readonly candidateValidityDays: number;
+  readonly candidateContentExcerptMaxCharacters: number;
   readonly candidateSupplyCheckIntervalMinutes: number;
 }
 
@@ -34,6 +35,7 @@ export const UpdateDiscoveryConfigurationRequestSchema = z.object({
   candidatePoolMinimumCount: z.number().int().positive().optional(),
   candidatePoolMaximumCount: z.number().int().positive().optional(),
   candidateValidityDays: z.number().int().positive().optional(),
+  candidateContentExcerptMaxCharacters: z.number().int().positive().optional(),
   candidateSupplyCheckIntervalMinutes: z.number().int().positive().optional(),
 }).strict();
 export const ConnectDiscoverySourceRequestSchema = z.object({
@@ -61,6 +63,7 @@ export const DiscoveryConfigurationViewSchema = z.object({
   candidatePoolMinimumCount: z.number().int().positive(),
   candidatePoolMaximumCount: z.number().int().positive(),
   candidateValidityDays: z.number().int().positive(),
+  candidateContentExcerptMaxCharacters: z.number().int().positive(),
   candidateSupplyCheckIntervalMinutes: z.number().int().positive(),
   sources: z.array(DiscoverySourceViewSchema),
 }).strict();
@@ -100,6 +103,7 @@ export function createDiscoveryConfiguration(input: {
       candidatePoolMinimumCount: settings.candidatePoolMinimumCount,
       candidatePoolMaximumCount: settings.candidatePoolMaximumCount,
       candidateValidityDays: settings.candidateValidityDays,
+      candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
       candidateSupplyCheckIntervalMinutes: settings.candidateSupplyCheckIntervalMinutes,
       sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) => sourceView({
         descriptor, availability, enabled: enabled.has(descriptor.id),
@@ -127,6 +131,8 @@ export function createDiscoveryConfiguration(input: {
         candidatePoolMinimumCount: patch.candidatePoolMinimumCount ?? current.candidatePoolMinimumCount,
         candidatePoolMaximumCount: patch.candidatePoolMaximumCount ?? current.candidatePoolMaximumCount,
         candidateValidityDays: patch.candidateValidityDays ?? current.candidateValidityDays,
+        candidateContentExcerptMaxCharacters: patch.candidateContentExcerptMaxCharacters
+          ?? current.candidateContentExcerptMaxCharacters,
         candidateSupplyCheckIntervalMinutes: patch.candidateSupplyCheckIntervalMinutes
           ?? current.candidateSupplyCheckIntervalMinutes,
       };
@@ -134,6 +140,7 @@ export function createDiscoveryConfiguration(input: {
         minimumCount: next.candidatePoolMinimumCount,
         maximumCount: next.candidatePoolMaximumCount,
         candidateValidityDays: next.candidateValidityDays,
+        candidateContentExcerptMaxCharacters: next.candidateContentExcerptMaxCharacters,
       });
       await input.settings.write(next);
       return view();

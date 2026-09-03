@@ -296,8 +296,10 @@ export const discoveryCandidates = sqliteTable('discovery_candidates', {
   author: text('author'),
   publishedAt: text('published_at'),
   description: text('description'),
+  contentSummary: text('content_summary').notNull(),
+  contentExcerpt: text('content_excerpt'),
+  contentTruncated: integer('content_truncated').notNull().default(0),
   coverUrl: text('cover_url'),
-  selectionReason: text('selection_reason').notNull(),
   status: text('status').notNull().default('available'),
   createdAt: text('created_at').notNull(),
   expiresAt: text('expires_at').notNull(),
@@ -309,7 +311,10 @@ export const discoveryCandidates = sqliteTable('discovery_candidates', {
     .where(sql`${table.sourceContentId} IS NOT NULL`),
   check('check_discovery_candidates_content_type', sql`${table.contentType} IN ('video', 'article', 'news', 'project', 'post', 'page', 'other')`),
   check('check_discovery_candidates_title', sql`length(trim(${table.title})) > 0`),
-  check('check_discovery_candidates_selection_reason', sql`length(trim(${table.selectionReason})) > 0`),
+  check('check_discovery_candidates_content_summary', sql`length(trim(${table.contentSummary})) BETWEEN 1 AND 1000`),
+  check('check_discovery_candidates_content_excerpt', sql`${table.contentExcerpt} IS NULL OR length(trim(${table.contentExcerpt})) > 0`),
+  check('check_discovery_candidates_content_truncated', sql`${table.contentTruncated} IN (0, 1)`),
+  check('check_discovery_candidates_excerpt_shape', sql`${table.contentExcerpt} IS NOT NULL OR ${table.contentTruncated} = 0`),
   check('check_discovery_candidates_status', sql`${table.status} IN ('available', 'consumed', 'expired')`),
   check('check_discovery_candidates_expiry', sql`${table.expiresAt} > ${table.createdAt}`),
   index('idx_discovery_candidates_status_expires').on(table.status, table.expiresAt),
@@ -321,10 +326,12 @@ export const discoveryCandidateInterestMatches = sqliteTable('discovery_candidat
     .references(() => discoveryCandidates.id, { onDelete: 'cascade' }),
   interestId: text('interest_id').notNull().references(() => discoveryInterests.interestId),
   relevance: text('relevance').notNull(),
+  matchReason: text('match_reason').notNull(),
 }, (table) => [
   uniqueIndex('idx_discovery_candidate_interest_matches_pair').on(table.candidateId, table.interestId),
   index('idx_discovery_candidate_interest_matches_interest').on(table.interestId, table.candidateId),
   check('check_discovery_candidate_interest_matches_relevance', sql`${table.relevance} IN ('direct', 'adjacent', 'exploration')`),
+  check('check_discovery_candidate_interest_matches_reason', sql`length(trim(${table.matchReason})) BETWEEN 1 AND 1000`),
 ]);
 
 export const discoveryFeedbackChanges = sqliteTable('discovery_feedback_changes', {

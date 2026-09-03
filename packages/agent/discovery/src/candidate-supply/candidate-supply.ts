@@ -5,9 +5,10 @@ import { z } from 'zod';
 import {
   DiscoveryContentTypeSchema,
   SourceContentSchema,
+  SourceContentDetailSchema,
   SourceSearchModeSchema,
 } from '../sources/discovery-source';
-import type { SourceContent } from '../sources/discovery-source';
+import type { SourceContentDetail } from '../sources/discovery-source';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 
@@ -28,8 +29,10 @@ export const CandidateSchema = z.object({
   author: z.string().trim().min(1).optional(),
   publishedAt: TimestampSchema.optional(),
   description: z.string().trim().min(1).optional(),
+  contentSummary: z.string().trim().min(1).max(1000),
+  contentExcerpt: z.string().trim().min(1).optional(),
+  contentTruncated: z.boolean(),
   coverUrl: z.string().url().optional(),
-  selectionReason: z.string().trim().min(1).max(1000),
   status: CandidateStatusSchema,
   createdAt: TimestampSchema,
   expiresAt: TimestampSchema,
@@ -41,6 +44,7 @@ export const CandidateInterestMatchSchema = z.object({
   candidateId: z.string().min(1),
   interestId: z.string().min(1),
   relevance: CandidateRelevanceSchema,
+  matchReason: z.string().trim().min(1).max(1000),
 }).strict();
 export type CandidateInterestMatch = z.infer<typeof CandidateInterestMatchSchema>;
 
@@ -54,6 +58,7 @@ export interface CandidatePoolSettings {
   readonly targetCount: number;
   readonly maximumCount: number;
   readonly candidateValidityDays: number;
+  readonly candidateContentExcerptMaxCharacters: number;
 }
 
 export interface CandidatePoolSnapshot {
@@ -91,11 +96,12 @@ export interface CandidateIdentity {
 }
 
 export interface SubmitCandidateRequest {
-  readonly content: SourceContent;
-  readonly selectionReason: string;
+  readonly content: SourceContentDetail;
+  readonly contentSummary: string;
   readonly matches: readonly {
     readonly interestId: string;
     readonly relevance: CandidateRelevance;
+    readonly matchReason: string;
   }[];
   readonly settings: CandidatePoolSettings;
 }
@@ -252,13 +258,14 @@ export type CandidateSupplySearchInput = z.infer<typeof CandidateSupplySearchInp
 export const CandidateSupplySubmitInputSchema = z.object({
   items: z.array(z.object({
     resultId: z.string().min(1),
-    selectionReason: z.string().trim().min(1).max(1000),
+    contentSummary: z.string().trim().min(1).max(1000),
     matches: z.array(z.object({
       interestId: z.string().min(1),
       relevance: CandidateRelevanceSchema,
+      matchReason: z.string().trim().min(1).max(1000),
     }).strict()).min(1),
   }).strict()).min(1).max(50),
 }).strict();
 export type CandidateSupplySubmitInput = z.infer<typeof CandidateSupplySubmitInputSchema>;
 
-export { SourceContentSchema };
+export { SourceContentDetailSchema, SourceContentSchema };

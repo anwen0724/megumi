@@ -479,8 +479,10 @@ function candidateFromRow(row: CandidateRow): Candidate {
     ...(row.author ? { author: row.author } : {}),
     ...(row.published_at ? { publishedAt: row.published_at } : {}),
     ...(row.description ? { description: row.description } : {}),
+    contentSummary: row.content_summary,
+    ...(row.content_excerpt ? { contentExcerpt: row.content_excerpt } : {}),
+    contentTruncated: row.content_truncated === 1,
     ...(row.cover_url ? { coverUrl: row.cover_url } : {}),
-    selectionReason: row.selection_reason,
     status: row.status,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
@@ -493,6 +495,7 @@ function readActiveMatches(database: DatabaseConnection, candidateId: string) {
     candidate_id: string;
     interest_id: string;
     relevance: string;
+    match_reason: string;
   }>({ sql: `
     SELECT m.*
     FROM discovery_candidate_interest_matches m
@@ -504,6 +507,7 @@ function readActiveMatches(database: DatabaseConnection, candidateId: string) {
     candidateId: row.candidate_id,
     interestId: row.interest_id,
     relevance: z.enum(['direct', 'adjacent', 'exploration']).parse(row.relevance),
+    matchReason: row.match_reason,
   }));
 }
 
@@ -606,7 +610,8 @@ type CandidateRow = DatabaseRow & {
   id: string; content_identity: string; source_id: string; source_content_id: string | null;
   canonical_url: string; content_type: string; title: string; author: string | null;
   published_at: string | null; description: string | null; cover_url: string | null;
-  selection_reason: string; status: string; created_at: string; expires_at: string;
+  content_summary: string; content_excerpt: string | null; content_truncated: number;
+  status: string; created_at: string; expires_at: string;
 };
 type InterestRow = DatabaseRow & { interest_id: string; description: string };
 type BatchRow = DatabaseRow & {

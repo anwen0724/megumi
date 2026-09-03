@@ -152,6 +152,7 @@ async function runCheck(
     minimumCount: configuration.candidatePoolMinimumCount,
     maximumCount: configuration.candidatePoolMaximumCount,
     candidateValidityDays: configuration.candidateValidityDays,
+    candidateContentExcerptMaxCharacters: configuration.candidateContentExcerptMaxCharacters,
   });
   const activeInterests = options.repository.listNonDeletedInterests()
     .filter(({ status }) => status === 'active');

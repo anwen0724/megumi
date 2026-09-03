@@ -94,7 +94,9 @@ function candidate(
     contentType: 'article',
     title: id,
     description: `${id} description`,
-    selectionReason: `${id} is related to the active Interest.`,
+    contentSummary: `${id} content summary`,
+    contentExcerpt: `${id} source excerpt`,
+    contentTruncated: false,
     createdAt: statusUpdatedAt,
     expiresAt: '2026-09-01T00:00:00.000Z',
     interestMatches: matchedInterestIds.map((interestId, index) => ({
@@ -102,6 +104,7 @@ function candidate(
       candidateId: id,
       interestId,
       relevance,
+      matchReason: `${id} is related to ${interestId}.`,
     })),
     ...overrides,
   };

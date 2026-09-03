@@ -583,6 +583,8 @@ function composeCapabilitiesWithDatabase(
             candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
             candidatePoolMaximumCount: resolved.settings.discovery.candidate_pool_maximum_count,
             candidateValidityDays: resolved.settings.discovery.candidate_validity_days,
+            candidateContentExcerptMaxCharacters:
+              resolved.settings.discovery.candidate_content_excerpt_max_characters,
             candidateSupplyCheckIntervalMinutes:
               resolved.settings.discovery.candidate_supply_check_interval_minutes,
           }
@@ -594,6 +596,7 @@ function composeCapabilitiesWithDatabase(
             candidatePoolMinimumCount: 100,
             candidatePoolMaximumCount: 200,
             candidateValidityDays: 30,
+            candidateContentExcerptMaxCharacters: 8_000,
             candidateSupplyCheckIntervalMinutes: 360,
           };
     },
@@ -608,6 +611,7 @@ function composeCapabilitiesWithDatabase(
             candidate_pool_minimum_count: next.candidatePoolMinimumCount,
             candidate_pool_maximum_count: next.candidatePoolMaximumCount,
             candidate_validity_days: next.candidateValidityDays,
+            candidate_content_excerpt_max_characters: next.candidateContentExcerptMaxCharacters,
             candidate_supply_check_interval_minutes: next.candidateSupplyCheckIntervalMinutes,
           },
         },

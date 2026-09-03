@@ -202,13 +202,18 @@ function admitCandidate(
       canonicalUrl: `https://example.com/${suffix}`, contentType: 'article', title,
       description: `${title} with concrete implementation detail.`,
     },
-    selectionReason: `${title} is related to an active Interest.`,
-    matches: activeInterestIds.map((interestId) => ({ interestId, relevance })),
+    contentSummary: `${title} with concrete implementation detail.`,
+    matches: activeInterestIds.map((interestId) => ({
+      interestId,
+      relevance,
+      matchReason: `${title} is related to this active Interest.`,
+    })),
     settings: {
       minimumCount: 100,
       targetCount: 160,
       maximumCount: 200,
       candidateValidityDays: 30,
+      candidateContentExcerptMaxCharacters: 8_000,
     },
   });
   if (submission.status !== 'created') throw new Error('Expected Candidate to be created.');

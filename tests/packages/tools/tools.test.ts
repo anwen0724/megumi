@@ -44,8 +44,11 @@ describe('Tools ModelCall routing', () => {
         input: {
           items: [{
             resultId: 'result:1',
-            selectionReason: 'Related to the active Interest.',
-            matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+            contentSummary: 'A grounded Candidate summary.',
+            matches: [{
+              interestId: 'interest:1', relevance: 'direct',
+              matchReason: 'Related to the active Interest.',
+            }],
           }],
         },
       },

@@ -17,6 +17,7 @@ const settings = {
   targetCount: 4,
   maximumCount: 5,
   candidateValidityDays: 30,
+  candidateContentExcerptMaxCharacters: 8_000,
 };
 
 describe('CandidateSupplyAttempts', () => {
@@ -72,8 +73,12 @@ describe('CandidateSupplyAttempts', () => {
     const submitted = await attempts.submitCandidates(toolRequest({
       items: [{
         resultId,
-        selectionReason: 'Directly discusses Agent architecture.',
-        matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+        contentSummary: 'A grounded summary of Agent architecture patterns.',
+        matches: [{
+          interestId: 'interest:1',
+          relevance: 'direct',
+          matchReason: 'Directly discusses Agent architecture.',
+        }],
       }],
     }));
 
@@ -85,11 +90,16 @@ describe('CandidateSupplyAttempts', () => {
       },
     });
     expect(repository.findCandidateById('candidate:1')).toMatchObject({
-      candidate: { status: 'available' },
+      candidate: {
+        status: 'available',
+        contentSummary: 'A grounded summary of Agent architecture patterns.',
+        contentExcerpt: 'Concrete patterns and implementation trade-offs.',
+        contentTruncated: false,
+      },
     });
   });
 
-  it('reads optional Source detail into the transient result without persisting it', async () => {
+  it('keeps Source detail transient until submission and then persists bounded evidence', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start(attemptInput(repository, source()));
     const searched = await attempts.searchContent(toolRequest({
@@ -111,6 +121,27 @@ describe('CandidateSupplyAttempts', () => {
     expect(database.prepare<{ count: number }>({
       sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
     }).get()?.count).toBe(0);
+
+    await attempts.submitCandidates(toolRequest({
+      items: [{
+        resultId,
+        contentSummary: 'The Source explains implementation details.',
+        matches: [{
+          interestId: 'interest:1', relevance: 'direct', matchReason: 'Direct implementation guidance.',
+        }],
+      }],
+    }));
+
+    expect(repository.findCandidateById('candidate:1')).toMatchObject({
+      candidate: {
+        contentSummary: 'The Source explains implementation details.',
+        contentExcerpt: 'Full implementation detail.',
+        contentTruncated: false,
+      },
+      interestMatches: [expect.objectContaining({
+        matchReason: 'Direct implementation guidance.',
+      })],
+    });
   });
 
   it('isolates one Source failure and permits a later Source call in the same execution', async () => {

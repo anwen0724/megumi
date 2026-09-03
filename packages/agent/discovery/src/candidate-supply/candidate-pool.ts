@@ -10,15 +10,26 @@ export function candidatePoolSettings(input: {
   readonly minimumCount: number;
   readonly maximumCount: number;
   readonly candidateValidityDays: number;
+  readonly candidateContentExcerptMaxCharacters: number;
 }): CandidatePoolSettings {
   const minimumCount = positiveInteger(input.minimumCount, 'minimumCount');
   const maximumCount = positiveInteger(input.maximumCount, 'maximumCount');
   const candidateValidityDays = positiveInteger(input.candidateValidityDays, 'candidateValidityDays');
+  const candidateContentExcerptMaxCharacters = positiveInteger(
+    input.candidateContentExcerptMaxCharacters,
+    'candidateContentExcerptMaxCharacters',
+  );
   const targetCount = Math.floor(maximumCount * 0.8);
   if (minimumCount >= targetCount) {
     throw new Error('minimumCount must be lower than 80% of maximumCount.');
   }
-  return { minimumCount, targetCount, maximumCount, candidateValidityDays };
+  return {
+    minimumCount,
+    targetCount,
+    maximumCount,
+    candidateValidityDays,
+    candidateContentExcerptMaxCharacters,
+  };
 }
 
 /** Calculates Candidate expiry from its creation time and the configured common validity. */

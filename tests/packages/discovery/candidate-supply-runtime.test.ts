@@ -50,8 +50,8 @@ describe('Candidate Supply Runtime', () => {
     for (const url of ['https://example.com/one', 'https://example.com/two']) {
       repository.submitCandidate({
         content: content(url),
-        selectionReason: 'Related.',
-        matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+        contentSummary: 'Related content.',
+        matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
         settings: poolSettings(),
       });
     }
@@ -81,8 +81,8 @@ describe('Candidate Supply Runtime', () => {
         ]) {
           repository.submitCandidate({
             content: content(url),
-            selectionReason: 'Related.',
-            matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+            contentSummary: 'Related content.',
+            matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
             settings: poolSettings(),
           });
         }
@@ -182,8 +182,8 @@ describe('Candidate Supply Runtime', () => {
         if (accepted.status !== 'accepted') return { status: 'rejected', reason: accepted.reason };
         repository.submitCandidate({
           content: content(),
-          selectionReason: 'Related.',
-          matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+          contentSummary: 'Related content.',
+          matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
           settings: poolSettings(),
         });
         return {
@@ -236,6 +236,7 @@ describe('Candidate Supply Runtime', () => {
           candidatePoolMinimumCount: 2,
           candidatePoolMaximumCount: 5,
           candidateValidityDays: 30,
+          candidateContentExcerptMaxCharacters: 8_000,
           candidateSupplyCheckIntervalMinutes: 360,
         }),
         write: () => undefined,
@@ -257,6 +258,7 @@ function poolSettings() {
     targetCount: 4,
     maximumCount: 5,
     candidateValidityDays: 30,
+    candidateContentExcerptMaxCharacters: 8_000,
   };
 }
 

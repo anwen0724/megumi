@@ -15,11 +15,11 @@ export interface SubmitCandidatesOperation {
 export const submitCandidatesToolDefinition = {
   name: 'submit_candidates',
   description: 'Submit Source results that are related to one or more active Interests.',
-  promptSnippet: 'Submit related Source results with their Interest matches and a concrete selection reason.',
+  promptSnippet: 'Submit related Source results with a grounded content summary and a concrete reason for each Interest match.',
   parameters: Type.Object({
     items: Type.Array(Type.Object({
       resultId: Type.String(),
-      selectionReason: Type.String(),
+      contentSummary: Type.String(),
       matches: Type.Array(Type.Object({
         interestId: Type.String(),
         relevance: Type.Union([
@@ -27,6 +27,7 @@ export const submitCandidatesToolDefinition = {
           Type.Literal('adjacent'),
           Type.Literal('exploration'),
         ]),
+        matchReason: Type.String(),
       }), { minItems: 1 }),
     }), { minItems: 1, maxItems: 50 }),
   }) as unknown as JsonSchemaObject,

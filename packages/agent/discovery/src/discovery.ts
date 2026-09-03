@@ -211,6 +211,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         minimumCount: settings.candidatePoolMinimumCount,
         maximumCount: settings.candidatePoolMaximumCount,
         candidateValidityDays: settings.candidateValidityDays,
+        candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
       }));
     },
     getPreferenceLearningBatch: (id) => options.preferenceLearning?.repository.getPreferenceLearningBatch(id),

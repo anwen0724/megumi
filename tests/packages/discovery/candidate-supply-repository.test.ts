@@ -15,6 +15,7 @@ const settings = {
   maximumCount: 5,
   targetCount: 4,
   candidateValidityDays: 30,
+  candidateContentExcerptMaxCharacters: 50,
 };
 
 describe('CandidateSupplyRepository', () => {
@@ -51,10 +52,16 @@ describe('CandidateSupplyRepository', () => {
   it('creates one Candidate and all active Interest matches atomically', () => {
     const result = repository.submitCandidate({
       content: content(),
-      selectionReason: 'Directly covers Agent architecture.',
+      contentSummary: 'A grounded summary of the implementation patterns.',
       matches: [
-        { interestId: 'interest:1', relevance: 'direct' },
-        { interestId: 'interest:2', relevance: 'adjacent' },
+        {
+          interestId: 'interest:1', relevance: 'direct',
+          matchReason: 'Directly covers Agent architecture.',
+        },
+        {
+          interestId: 'interest:2', relevance: 'adjacent',
+          matchReason: 'Shows TypeScript implementation patterns.',
+        },
       ],
       settings,
     });
@@ -65,30 +72,62 @@ describe('CandidateSupplyRepository', () => {
         id: 'candidate:1',
         sourceId: 'source:1',
         status: 'available',
-        selectionReason: 'Directly covers Agent architecture.',
+        contentSummary: 'A grounded summary of the implementation patterns.',
+        contentExcerpt: 'Full implementation detail.',
+        contentTruncated: false,
         createdAt: now,
         expiresAt: '2026-10-03T00:00:00.000Z',
       },
       addedCandidateCount: 1,
       addedInterestMatchCount: 2,
     });
-    expect(repository.findCandidateById('candidate:1')?.interestMatches).toHaveLength(2);
+    expect(repository.findCandidateById('candidate:1')?.interestMatches).toEqual([
+      expect.objectContaining({
+        interestId: 'interest:1',
+        relevance: 'direct',
+        matchReason: 'Directly covers Agent architecture.',
+      }),
+      expect.objectContaining({
+        interestId: 'interest:2',
+        relevance: 'adjacent',
+        matchReason: 'Shows TypeScript implementation patterns.',
+      }),
+    ]);
+  });
+
+  it('stores a bounded original excerpt and records when Source content was truncated', () => {
+    const result = repository.submitCandidate({
+      content: { ...content(), contentText: '0123456789ABCDEFGHIJ' },
+      contentSummary: 'A summary grounded in the complete Source content.',
+      matches: [{
+        interestId: 'interest:1', relevance: 'direct', matchReason: 'Direct relation.',
+      }],
+      settings: { ...settings, candidateContentExcerptMaxCharacters: 10 },
+    });
+
+    expect(result).toMatchObject({
+      status: 'created',
+      candidate: {
+        contentExcerpt: '0123456789',
+        contentTruncated: true,
+      },
+    });
   });
 
   it('adds only missing active matches to an existing available Candidate', () => {
     repository.submitCandidate({
       content: content(),
-      selectionReason: 'Initial relation.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'Initial summary.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Initial relation.' }],
       settings,
     });
 
     const result = repository.submitCandidate({
       content: { ...content(), title: 'Changed metadata must not replace the original' },
-      selectionReason: 'Another confirmed relation.',
+      contentSummary: 'Changed summary must not replace the original.',
       matches: [
-        { interestId: 'interest:1', relevance: 'adjacent' },
-        { interestId: 'interest:2', relevance: 'exploration' },
+        { interestId: 'interest:1', relevance: 'adjacent', matchReason: 'Duplicate relation.' },
+        { interestId: 'interest:2', relevance: 'exploration', matchReason: 'Another confirmed relation.' },
       ],
       settings,
     });
@@ -100,24 +139,30 @@ describe('CandidateSupplyRepository', () => {
       addedInterestMatchCount: 1,
     });
     expect(repository.findCandidateById('candidate:1')?.interestMatches).toEqual([
-      expect.objectContaining({ id: 'candidate-interest-match:1', interestId: 'interest:1', relevance: 'direct' }),
-      expect.objectContaining({ id: 'candidate-interest-match:2', interestId: 'interest:2', relevance: 'exploration' }),
+      expect.objectContaining({
+        id: 'candidate-interest-match:1', interestId: 'interest:1', relevance: 'direct',
+        matchReason: 'Initial relation.',
+      }),
+      expect.objectContaining({
+        id: 'candidate-interest-match:2', interestId: 'interest:2', relevance: 'exploration',
+        matchReason: 'Another confirmed relation.',
+      }),
     ]);
   });
 
   it('ignores a duplicate that is already terminal and never revives it', () => {
     repository.submitCandidate({
       content: content(),
-      selectionReason: 'Initial relation.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'Initial summary.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Initial relation.' }],
       settings,
     });
     database.prepare({ sql: "UPDATE discovery_candidates SET status = 'consumed' WHERE id = 'candidate:1'" }).run();
 
     expect(repository.submitCandidate({
       content: content(),
-      selectionReason: 'Rediscovered.',
-      matches: [{ interestId: 'interest:2', relevance: 'direct' }],
+      contentSummary: 'Rediscovered summary.',
+      matches: [{ interestId: 'interest:2', relevance: 'direct', matchReason: 'Rediscovered.' }],
       settings,
     })).toMatchObject({
       status: 'ignored',
@@ -138,11 +183,11 @@ describe('CandidateSupplyRepository', () => {
 
     const result = repository.submitCandidate({
       content: content(),
-      selectionReason: 'Has one current relation.',
+      contentSummary: 'Current summary.',
       matches: [
-        { interestId: 'interest:1', relevance: 'direct' },
-        { interestId: 'interest:2', relevance: 'direct' },
-        { interestId: 'interest:missing', relevance: 'adjacent' },
+        { interestId: 'interest:1', relevance: 'direct', matchReason: 'Has one current relation.' },
+        { interestId: 'interest:2', relevance: 'direct', matchReason: 'Paused relation.' },
+        { interestId: 'interest:missing', relevance: 'adjacent', matchReason: 'Missing relation.' },
       ],
       settings,
     });
@@ -159,8 +204,8 @@ describe('CandidateSupplyRepository', () => {
 
     expect(repository.submitCandidate({
       content: content(),
-      selectionReason: 'No longer current.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'No longer current.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'No longer current.' }],
       settings,
     })).toMatchObject({ status: 'ignored', reason: 'no_active_interest' });
     expect(database.prepare<{ count: number }>({
@@ -171,17 +216,17 @@ describe('CandidateSupplyRepository', () => {
   it('derives the global Pool and per-Interest counts from active matches', () => {
     repository.submitCandidate({
       content: content('https://example.com/one'),
-      selectionReason: 'Matches both.',
+      contentSummary: 'Matches both interests.',
       matches: [
-        { interestId: 'interest:1', relevance: 'direct' },
-        { interestId: 'interest:2', relevance: 'adjacent' },
+        { interestId: 'interest:1', relevance: 'direct', matchReason: 'Direct match.' },
+        { interestId: 'interest:2', relevance: 'adjacent', matchReason: 'Adjacent match.' },
       ],
       settings,
     });
     repository.submitCandidate({
       content: content('https://example.com/two'),
-      selectionReason: 'Matches TypeScript.',
-      matches: [{ interestId: 'interest:2', relevance: 'direct' }],
+      contentSummary: 'Matches TypeScript.',
+      matches: [{ interestId: 'interest:2', relevance: 'direct', matchReason: 'Matches TypeScript.' }],
       settings,
     });
 
@@ -200,8 +245,8 @@ describe('CandidateSupplyRepository', () => {
   it('lazily expires read candidates and excludes them from the same Pool read', () => {
     repository.submitCandidate({
       content: content(),
-      selectionReason: 'Temporary.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'Temporary.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Temporary.' }],
       settings: { ...settings, candidateValidityDays: 1 },
     });
     repository = createCandidateSupplyRepository({
@@ -222,16 +267,16 @@ describe('CandidateSupplyRepository', () => {
     for (const url of ['https://example.com/one', 'https://example.com/two']) {
       repository.submitCandidate({
         content: content(url),
-        selectionReason: 'Related.',
-        matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+        contentSummary: 'Related content.',
+        matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
         settings: capped,
       });
     }
 
     expect(repository.submitCandidate({
       content: content('https://example.com/three'),
-      selectionReason: 'Related.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'Related content.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
       settings: capped,
     })).toMatchObject({ status: 'ignored', reason: 'capacity_reached' });
     expect(repository.readCandidatePoolSnapshot(capped).availableCount).toBe(2);
@@ -242,21 +287,21 @@ describe('CandidateSupplyRepository', () => {
     const firstContent = content('https://example.com/one');
     repository.submitCandidate({
       content: firstContent,
-      selectionReason: 'Related to Agent architecture.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'Related to Agent architecture.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related to Agent architecture.' }],
       settings: capped,
     });
     repository.submitCandidate({
       content: content('https://example.com/two'),
-      selectionReason: 'Related to Agent architecture.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'Related to Agent architecture.',
+      matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related to Agent architecture.' }],
       settings: capped,
     });
 
     expect(repository.submitCandidate({
       content: firstContent,
-      selectionReason: 'Also related to TypeScript.',
-      matches: [{ interestId: 'interest:2', relevance: 'adjacent' }],
+      contentSummary: 'Changed summary must not replace the original.',
+      matches: [{ interestId: 'interest:2', relevance: 'adjacent', matchReason: 'Also related to TypeScript.' }],
       settings: capped,
     })).toMatchObject({
       status: 'matched_existing',
@@ -279,5 +324,6 @@ function content(url = 'https://example.com/article') {
     contentType: 'article' as const,
     title: 'Agent architecture in practice',
     description: 'Concrete implementation patterns.',
+    contentText: 'Full implementation detail.',
   };
 }

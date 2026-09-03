@@ -213,13 +213,17 @@ function admitCandidate(repository: DiscoveryRepository, title: string): string 
       canonicalUrl: `https://example.com/${suffix}`, contentType: 'article', title,
       description: `${title} with concrete implementation detail.`,
     },
-    selectionReason: `${title} is related to the active Interest.`,
-    matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+    contentSummary: `${title} with concrete implementation detail.`,
+    matches: [{
+      interestId: 'interest:1', relevance: 'direct',
+      matchReason: `${title} is related to the active Interest.`,
+    }],
     settings: {
       minimumCount: 100,
       targetCount: 160,
       maximumCount: 200,
       candidateValidityDays: 30,
+      candidateContentExcerptMaxCharacters: 8_000,
     },
   });
   if (submission.status !== 'created') throw new Error('Expected Candidate to be created.');

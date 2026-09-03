@@ -36,12 +36,45 @@ describe('Candidate Supply redesign migration', () => {
       expect(() => database.prepare({ sql: `
         INSERT INTO discovery_candidates (
           id, content_identity, source_id, canonical_url, content_type, title,
-          selection_reason, status, created_at, expires_at
+          content_summary, status, created_at, expires_at
         ) VALUES (
           'candidate:invalid', 'content:invalid', 'source:1', 'https://example.com',
-          'article', 'Title', 'Reason', 'available', ?, ?
+          'article', 'Title', 'Summary', 'available', ?, ?
         )
       ` }).run(['2026-09-03T00:00:00.000Z', '2026-09-02T00:00:00.000Z'])).toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
+  it('clears pre-amendment Candidates and installs durable content and match fields', () => {
+    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-candidate-content-amendment-'));
+    const previousMigrations = path.join(tempRoot, 'previous-migrations');
+    copyMigrationsBefore(previousMigrations, 22);
+    const database = createDatabase({ filename: path.join(tempRoot, 'megumi.sqlite3') });
+
+    try {
+      migrateDatabase({ database, migrationsFolder: previousMigrations });
+      database.prepare({ sql: `
+        INSERT INTO discovery_candidates (
+          id, content_identity, source_id, canonical_url, content_type, title,
+          selection_reason, status, created_at, expires_at
+        ) VALUES (
+          'candidate:old', 'content:old', 'source:1', 'https://example.com/old',
+          'article', 'Old Candidate', 'Old reason', 'available', ?, ?
+        )
+      ` }).run(['2026-09-03T00:00:00.000Z', '2026-10-03T00:00:00.000Z']);
+
+      migrateDatabase({ database, migrationsFolder: migrationsRoot });
+
+      expect(database.prepare<{ count: number }>({
+        sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
+      }).get()?.count).toBe(0);
+      expect(columnNames(database, 'discovery_candidates')).toEqual(expect.arrayContaining([
+        'content_summary', 'content_excerpt', 'content_truncated',
+      ]));
+      expect(columnNames(database, 'discovery_candidates')).not.toContain('selection_reason');
+      expect(columnNames(database, 'discovery_candidate_interest_matches')).toContain('match_reason');
     } finally {
       database.close();
     }
@@ -49,11 +82,15 @@ describe('Candidate Supply redesign migration', () => {
 });
 
 function copyMigrationsBeforeRedesign(target: string): void {
+  copyMigrationsBefore(target, 21);
+}
+
+function copyMigrationsBefore(target: string, migrationIndex: number): void {
   fs.mkdirSync(path.join(target, 'meta'), { recursive: true });
   const journal = JSON.parse(fs.readFileSync(path.join(migrationsRoot, 'meta/_journal.json'), 'utf8')) as {
     entries: Array<{ readonly idx: number; readonly tag: string }>;
   };
-  const releasedEntries = journal.entries.filter((entry) => entry.idx < 21);
+  const releasedEntries = journal.entries.filter((entry) => entry.idx < migrationIndex);
   for (const entry of releasedEntries) {
     fs.copyFileSync(path.join(migrationsRoot, `${entry.tag}.sql`), path.join(target, `${entry.tag}.sql`));
   }
@@ -61,6 +98,12 @@ function copyMigrationsBeforeRedesign(target: string): void {
     ...journal,
     entries: releasedEntries,
   }));
+}
+
+function columnNames(database: DatabaseConnection, table: string): readonly string[] {
+  return database.prepare<{ name: string }>({ sql: `PRAGMA table_info(${table})` })
+    .all()
+    .map(({ name }) => name);
 }
 
 function seedLegacyCandidate(database: DatabaseConnection): void {

@@ -272,16 +272,18 @@ export function createDatabaseInitialStateOwner(input: {
           title: entry.title,
           ...(entry.description ? { description: entry.description } : {}),
         },
-        selectionReason: 'Installed by the isolated Evaluation initial-state owner.',
+        contentSummary: entry.description ?? entry.title,
         matches: entry.interestIds.map((interestId) => ({
           interestId,
           relevance: entry.relevance,
+          matchReason: 'Installed by the isolated Evaluation initial-state owner.',
         })),
         settings: {
           minimumCount: 100,
           targetCount: 160,
           maximumCount: 200,
           candidateValidityDays: 30,
+          candidateContentExcerptMaxCharacters: 8_000,
         },
       });
       if (result.status === 'ignored') {

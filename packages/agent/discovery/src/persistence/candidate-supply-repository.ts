@@ -7,7 +7,7 @@ import {
   CandidateInterestMatchSchema,
   CandidateRelevanceSchema,
   CandidateSchema,
-  SourceContentSchema,
+  SourceContentDetailSchema,
   type Candidate,
   type CandidateIdentity,
   type CandidateInterestMatch,
@@ -35,8 +35,10 @@ interface CandidateRow extends DatabaseRow {
   readonly author: string | null;
   readonly published_at: string | null;
   readonly description: string | null;
+  readonly content_summary: string;
+  readonly content_excerpt: string | null;
+  readonly content_truncated: number;
   readonly cover_url: string | null;
-  readonly selection_reason: string;
   readonly status: string;
   readonly created_at: string;
   readonly expires_at: string;
@@ -47,6 +49,7 @@ interface MatchRow extends DatabaseRow {
   readonly candidate_id: string;
   readonly interest_id: string;
   readonly relevance: string;
+  readonly match_reason: string;
 }
 
 export interface CreateCandidateSupplyRepositoryOptions {
@@ -110,9 +113,10 @@ function submitCandidate(
   options: CreateCandidateSupplyRepositoryOptions,
   request: SubmitCandidateRequest,
 ): CandidateSubmissionResult {
-  const content = SourceContentSchema.parse(request.content);
-  const selectionReason = requireText(request.selectionReason, 'selectionReason');
+  const content = SourceContentDetailSchema.parse(request.content);
+  const contentSummary = requireBoundedText(request.contentSummary, 'contentSummary', 1000);
   const settings = requireSettings(request.settings);
+  const excerpt = candidateExcerpt(content.contentText ?? content.description, settings);
   const matches = uniqueMatches(request.matches);
   const activeMatches = findActiveMatches(database, matches);
   if (activeMatches.length === 0) return ignored('no_active_interest');
@@ -154,9 +158,9 @@ function submitCandidate(
   database.prepare({ sql: `
     INSERT INTO discovery_candidates (
       id, content_identity, source_id, source_content_id, canonical_url, content_type,
-      title, author, published_at, description, cover_url, selection_reason,
-      status, created_at, expires_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?, ?)
+      title, author, published_at, description, content_summary, content_excerpt,
+      content_truncated, cover_url, status, created_at, expires_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?, ?)
   ` }).run([
     id,
     identity.contentIdentity,
@@ -168,8 +172,10 @@ function submitCandidate(
     content.author?.trim() ?? null,
     content.publishedAt ?? null,
     content.description?.trim() ?? null,
+    contentSummary,
+    excerpt.contentExcerpt ?? null,
+    excerpt.contentTruncated ? 1 : 0,
     content.coverUrl ?? null,
-    selectionReason,
     now,
     expiresAt,
   ]);
@@ -235,8 +241,16 @@ function readCandidatePoolSnapshot(
 
 function findActiveMatches(
   database: DatabaseConnection,
-  matches: readonly { readonly interestId: string; readonly relevance: string }[],
-): readonly { readonly interestId: string; readonly relevance: 'direct' | 'adjacent' | 'exploration' }[] {
+  matches: readonly {
+    readonly interestId: string;
+    readonly relevance: string;
+    readonly matchReason: string;
+  }[],
+): readonly {
+  readonly interestId: string;
+  readonly relevance: 'direct' | 'adjacent' | 'exploration';
+  readonly matchReason: string;
+}[] {
   if (matches.length === 0) return [];
   const placeholders = matches.map(() => '?').join(', ');
   const active = new Set(database.prepare<{ interest_id: string }>({ sql: `
@@ -245,9 +259,10 @@ function findActiveMatches(
   ` }).all(matches.map(({ interestId }) => interestId)).map(({ interest_id }) => interest_id));
   return matches
     .filter(({ interestId }) => active.has(interestId))
-    .map(({ interestId, relevance }) => ({
+    .map(({ interestId, relevance, matchReason }) => ({
       interestId,
       relevance: CandidateRelevanceSchema.parse(relevance),
+      matchReason,
     }));
 }
 
@@ -255,7 +270,11 @@ function insertMatches(
   database: DatabaseConnection,
   options: CreateCandidateSupplyRepositoryOptions,
   candidateId: string,
-  matches: readonly { readonly interestId: string; readonly relevance: string }[],
+  matches: readonly {
+    readonly interestId: string;
+    readonly relevance: string;
+    readonly matchReason: string;
+  }[],
 ): readonly CandidateInterestMatch[] {
   const inserted: CandidateInterestMatch[] = [];
   for (const match of matches) {
@@ -264,11 +283,19 @@ function insertMatches(
       candidateId,
       interestId: match.interestId,
       relevance: match.relevance,
+      matchReason: match.matchReason,
     });
     database.prepare({ sql: `
-      INSERT INTO discovery_candidate_interest_matches (id, candidate_id, interest_id, relevance)
-      VALUES (?, ?, ?, ?)
-    ` }).run([value.id, value.candidateId, value.interestId, value.relevance]);
+      INSERT INTO discovery_candidate_interest_matches (
+        id, candidate_id, interest_id, relevance, match_reason
+      ) VALUES (?, ?, ?, ?, ?)
+    ` }).run([
+      value.id,
+      value.candidateId,
+      value.interestId,
+      value.relevance,
+      value.matchReason,
+    ]);
     inserted.push(value);
   }
   return inserted;
@@ -319,6 +346,7 @@ function readMatches(database: DatabaseConnection, candidateId: string): readonl
     candidateId: row.candidate_id,
     interestId: row.interest_id,
     relevance: row.relevance,
+    matchReason: row.match_reason,
   }));
 }
 
@@ -358,8 +386,10 @@ function candidateFromRow(row: CandidateRow): Candidate {
     ...(row.author ? { author: row.author } : {}),
     ...(row.published_at ? { publishedAt: row.published_at } : {}),
     ...(row.description ? { description: row.description } : {}),
+    contentSummary: row.content_summary,
+    ...(row.content_excerpt ? { contentExcerpt: row.content_excerpt } : {}),
+    contentTruncated: row.content_truncated === 1,
     ...(row.cover_url ? { coverUrl: row.cover_url } : {}),
-    selectionReason: row.selection_reason,
     status: row.status,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
@@ -378,13 +408,25 @@ function normalizeIdentity(identity: CandidateIdentity): CandidateIdentity {
 
 function uniqueMatches(
   matches: SubmitCandidateRequest['matches'],
-): readonly { readonly interestId: string; readonly relevance: 'direct' | 'adjacent' | 'exploration' }[] {
-  const unique = new Map<string, 'direct' | 'adjacent' | 'exploration'>();
+): readonly {
+  readonly interestId: string;
+  readonly relevance: 'direct' | 'adjacent' | 'exploration';
+  readonly matchReason: string;
+}[] {
+  const unique = new Map<string, {
+    readonly relevance: 'direct' | 'adjacent' | 'exploration';
+    readonly matchReason: string;
+  }>();
   for (const match of matches) {
     const interestId = requireText(match.interestId, 'interestId');
-    if (!unique.has(interestId)) unique.set(interestId, CandidateRelevanceSchema.parse(match.relevance));
+    if (!unique.has(interestId)) {
+      unique.set(interestId, {
+        relevance: CandidateRelevanceSchema.parse(match.relevance),
+        matchReason: requireBoundedText(match.matchReason, 'matchReason', 1000),
+      });
+    }
   }
-  return [...unique].map(([interestId, relevance]) => ({ interestId, relevance }));
+  return [...unique].map(([interestId, match]) => ({ interestId, ...match }));
 }
 
 function requireSettings(settings: CandidatePoolSettings): CandidatePoolSettings {
@@ -401,7 +443,25 @@ function requireSettings(settings: CandidatePoolSettings): CandidatePoolSettings
   if (!Number.isInteger(settings.candidateValidityDays) || settings.candidateValidityDays <= 0) {
     throw new Error('candidateValidityDays must be a positive integer.');
   }
+  if (!Number.isInteger(settings.candidateContentExcerptMaxCharacters)
+    || settings.candidateContentExcerptMaxCharacters <= 0) {
+    throw new Error('candidateContentExcerptMaxCharacters must be a positive integer.');
+  }
   return settings;
+}
+
+/** Forms a code-point-safe prefix while preserving whether Source evidence was incomplete. */
+function candidateExcerpt(
+  sourceText: string | undefined,
+  settings: CandidatePoolSettings,
+): Pick<Candidate, 'contentExcerpt' | 'contentTruncated'> {
+  if (!sourceText) return { contentTruncated: false };
+  const characters = [...sourceText];
+  const contentTruncated = characters.length > settings.candidateContentExcerptMaxCharacters;
+  return {
+    contentExcerpt: characters.slice(0, settings.candidateContentExcerptMaxCharacters).join(''),
+    contentTruncated,
+  };
 }
 
 function parseTimestamp(value: string): string {
@@ -413,6 +473,14 @@ function parseTimestamp(value: string): string {
 function requireText(value: string, field: string): string {
   const normalized = value.trim();
   if (!normalized) throw new Error(`${field} cannot be empty.`);
+  return normalized;
+}
+
+function requireBoundedText(value: string, field: string, maxCharacters: number): string {
+  const normalized = requireText(value, field);
+  if ([...normalized].length > maxCharacters) {
+    throw new Error(`${field} cannot exceed ${maxCharacters} characters.`);
+  }
   return normalized;
 }
 

@@ -32,13 +32,17 @@ describe('Daily Recommendation Tools', () => {
         canonicalUrl: 'https://example.com/guide', contentType: 'article', title: 'Agent guide',
         description: 'A compact description.',
       },
-      selectionReason: 'Related to the active Agent architecture Interest.',
-      matches: [{ interestId: 'interest:1', relevance: 'direct' }],
+      contentSummary: 'A compact description.',
+      matches: [{
+        interestId: 'interest:1', relevance: 'direct',
+        matchReason: 'Related to the active Agent architecture Interest.',
+      }],
       settings: {
         minimumCount: 100,
         targetCount: 160,
         maximumCount: 200,
         candidateValidityDays: 30,
+        candidateContentExcerptMaxCharacters: 8_000,
       },
     });
     if (submission.status !== 'created') throw new Error('Expected Candidate material.');

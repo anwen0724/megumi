@@ -17,6 +17,7 @@ describe('Discovery Settings', () => {
           daily_generation_time: '08:00',
           daily_target_count: 20,
           enabled_sources: ['bilibili', 'open_web'],
+          candidate_content_excerpt_max_characters: 8_000,
         },
       },
     });
@@ -57,6 +58,7 @@ describe('Discovery Settings', () => {
     { daily_target_count: 0 },
     { daily_target_count: 101 },
     { daily_target_count: 1.5 },
+    { candidate_content_excerpt_max_characters: 0 },
     { enabled_sources: [''] },
     { enabled_sources: ['   '] },
   ])('rejects an invalid Discovery patch: %j', (discovery) => {

@@ -119,6 +119,7 @@ describe('registerDiscoveryHandlers', () => {
       candidatePoolMinimumCount: 100,
       candidatePoolMaximumCount: 200,
       candidateValidityDays: 30,
+      candidateContentExcerptMaxCharacters: 8_000,
       candidateSupplyCheckIntervalMinutes: 360,
       sources: [],
     }));

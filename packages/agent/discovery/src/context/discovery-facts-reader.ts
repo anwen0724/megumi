@@ -87,11 +87,11 @@ export function createDiscoveryFactsReader(options: {
         explorationPreference: explorationPreference(preferenceSnapshots),
         candidates: snapshot.window.candidates.map((candidate) => ({
           ...candidateSummary(candidate),
-          selectionReason: candidate.selectionReason,
           matchedInterestIds: candidate.interestMatches.map(({ interestId }) => interestId),
-          interestMatches: candidate.interestMatches.map(({ interestId, relevance }) => ({
+          interestMatches: candidate.interestMatches.map(({ interestId, relevance, matchReason }) => ({
             interestId,
             relevance,
+            matchReason,
           })),
         })),
         recentRecommendations: snapshot.recentRecommendations.map((recommendation) => ({
@@ -230,6 +230,9 @@ function candidateSummary(candidate: {
   readonly author?: string;
   readonly publishedAt?: string;
   readonly description?: string;
+  readonly contentSummary: string;
+  readonly contentExcerpt?: string;
+  readonly contentTruncated: boolean;
 }) {
   return {
     candidateId: candidate.id,
@@ -242,6 +245,9 @@ function candidateSummary(candidate: {
     ...(candidate.author ? { author: candidate.author } : {}),
     ...(candidate.publishedAt ? { contentPublishedAt: candidate.publishedAt } : {}),
     ...(candidate.description ? { description: candidate.description } : {}),
+    contentSummary: candidate.contentSummary,
+    ...(candidate.contentExcerpt ? { contentExcerpt: candidate.contentExcerpt } : {}),
+    contentTruncated: candidate.contentTruncated,
     evidenceCompleteness: candidate.description ? 'partial' as const : 'metadata_only' as const,
   };
 }
