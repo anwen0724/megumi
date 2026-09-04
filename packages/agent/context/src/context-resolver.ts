@@ -5,7 +5,7 @@ import type { SessionHistory } from '@megumi/session';
 import type { Skills } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 import type { ContextFailure, ContextWorkspaceSource } from './context';
-import type { ContextDiscoverySourceRegistry, DiscoveryFactsReader } from './discovery-context';
+import type { ContextDiscoverySourceRegistry, DiscoveryFactsReader } from './discovery-context-types';
 import {
   createConversationContextResolver,
   type ConversationResolvedContext,

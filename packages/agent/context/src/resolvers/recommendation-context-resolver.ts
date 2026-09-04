@@ -7,7 +7,7 @@ import type {
   RecommendationContextMaterial,
   RecommendationFacts,
   DiscoveryFactsReader,
-} from '../discovery-context';
+} from '../discovery-context-types';
 import {
   buildCancelledContextFailure,
   buildFailedContextResult,

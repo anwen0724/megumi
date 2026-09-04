@@ -15,7 +15,7 @@ import type {
   CandidateSupplyContextMaterial,
   RecommendationContextMaterial,
   PreferenceLearningContextMaterial,
-} from './discovery-context';
+} from './discovery-context-types';
 
 export interface ExecutionEnvironment {
   readonly workingDirectory: string;

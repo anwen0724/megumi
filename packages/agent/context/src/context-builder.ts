@@ -39,7 +39,7 @@ import type {
   ContextDiscoverySourceRegistry,
   DiscoveryFactsReader,
   ReadDiscoveryFactsResult,
-} from './discovery-context';
+} from './discovery-context-types';
 import {
   buildCancelledContextFailure,
   buildFailedContextResult,

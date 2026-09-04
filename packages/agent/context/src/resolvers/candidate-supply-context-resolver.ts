@@ -7,7 +7,7 @@ import type {
   CandidateSupplyContextMaterial,
   ContextDiscoverySourceRegistry,
   DiscoveryFactsReader,
-} from '../discovery-context';
+} from '../discovery-context-types';
 import {
   buildCancelledContextFailure,
   buildFailedContextResult,

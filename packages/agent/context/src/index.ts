@@ -37,7 +37,7 @@ export type {
   PreferenceLearningFacts,
   PreferenceLearningContextMaterial as DiscoveryPreferenceLearningContextMaterial,
   ReadDiscoveryFactsResult,
-} from './discovery-context';
+} from './discovery-context-types';
 export { createContext, type ContextCapabilities, type CreateContextOptions } from './context-builder';
 export {
   DEFAULT_COMPACTION_POLICY,

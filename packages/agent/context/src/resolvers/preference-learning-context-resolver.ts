@@ -5,7 +5,7 @@ import type { ContextFailure } from '../context';
 import type {
   DiscoveryFactsReader,
   PreferenceLearningContextMaterial,
-} from '../discovery-context';
+} from '../discovery-context-types';
 import {
   buildCancelledContextFailure,
   buildFailedContextResult,
