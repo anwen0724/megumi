@@ -8,6 +8,20 @@ const now = '2026-01-15T08:00:00.000Z';
 type TestRuntime = Parameters<typeof executeCase>[0]['runtime'];
 
 describe('Case execution', () => {
+  it('treats a committed cancellation as terminal and does not execute the next step', async () => {
+    let calls = 0;
+    const runtime = testRuntime({ session: {
+      async sendUserInput() { calls += 1; return agentRun('cancelled', 'session:1'); },
+      async readCommittedRun() {
+        const reply = committedReply('cancelled');
+        return { ...reply, messages: reply.messages.map((entry) => entry.type === 'message' && entry.message.kind === 'assistantReply'
+          ? { ...entry, message: { ...entry.message, status: 'cancelled' as const } } : entry) };
+      },
+    } });
+    const result = await executeCase({ ...executionInput(conversationCase(), runtime), safetyWallClockLimitMs: 60 });
+    expect(result.terminalState).toBe('settled');
+    expect(calls).toBe(1);
+  });
   it('keeps every Conversation step in the same Session and waits for committed replies', async () => {
     const sessionInputs: Array<string | undefined> = [];
     let execution = 0;
@@ -146,11 +160,11 @@ describe('Case execution', () => {
           state: recommendationState({ reaction: 'liked', reactionRevision: 1, reactionChangedAt: now }),
         };
       },
-      async waitPreferenceLearning() {
-        return { status: 'completed', value: {
+      async getPreferenceLearning() {
+        return {
           recommendationId: 'recommendation:1', status: 'learned',
           currentReactionRevision: 1, learnedReactionRevision: 1, changedAt: now, preferences: [],
-        } };
+        };
       },
     } });
 
@@ -188,6 +202,8 @@ function testRuntime(overrides: {
         getRecommendationCollection: unexpected,
         updateRecommendationState: unexpected,
         waitPreferenceLearning: unexpected,
+        getPreferenceLearning: unexpected,
+        getPreferenceLearningStatus: unexpected,
         ...overrides.discovery,
       },
       observability: {

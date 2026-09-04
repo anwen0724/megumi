@@ -312,6 +312,7 @@ function composeApplicationRuntime(
     }),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
+    stop: () => resources.stop({ discovery, executions, conversation }),
     dispose: () => resources.dispose({
       discovery,
       executions,

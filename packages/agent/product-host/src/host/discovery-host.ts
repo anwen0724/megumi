@@ -1,5 +1,6 @@
 /* Defines renderer-safe Discovery DTOs and strict Product Host request/response schemas. */
 import { z } from 'zod';
+import type { PreferenceLearningStatus } from '@megumi/discovery';
 import type { ReadDiscoveryFactsResult, RecommendationFacts } from '@megumi/context';
 import {
   CandidatePoolSnapshotSchema,
@@ -204,6 +205,7 @@ export interface DiscoveryHost {
   getRecommendationFacts(request: z.infer<typeof DiscoveryRecommendationFactsQuerySchema>): Promise<DiscoveryRecommendationFactsResult>;
   /** Returns current/learned feedback versions and persisted Preference details, not a run record. */
   getPreferenceLearning(request: DiscoveryPreferenceLearningQuery): Promise<DiscoveryPreferenceLearningResult>;
+  getPreferenceLearningStatus(request: DiscoveryPreferenceLearningQuery): Promise<PreferenceLearningStatus>;
   /** Waits for the current feedback revision to be learned, or returns a bounded timeout. */
   waitPreferenceLearning(
     request: DiscoveryPreferenceLearningQuery & DiscoveryBackgroundWaitOptions,

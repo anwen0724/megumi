@@ -24,9 +24,16 @@ export interface PreferenceLearningRuntime {
   notifyReactionChanged(): void;
   /** Supplies only the active immutable work snapshot to Context. */
   getActivePreferenceLearningFacts(batchId: string): PreferenceLearningFacts | undefined;
+  /** Returns current scheduling/attempt state without persisting execution history. */
+  getPreferenceLearningStatus(recommendationId: string): PreferenceLearningStatus;
   /** Cancels pending work and waits until no result can commit. */
   shutdown(): Promise<void>;
 }
+export type PreferenceLearningStatus =
+  | { readonly status: 'idle' }
+  | { readonly status: 'scheduled'; readonly dueAt: string }
+  | { readonly status: 'running'; readonly batchId: string }
+  | { readonly status: 'failed'; readonly batchId: string; readonly code: string; readonly message: string; readonly retryAt?: string };
 export interface CreatePreferenceLearningRuntimeOptions {
   readonly repository: PreferenceLearningRepository;
   readonly context: Pick<ContextBuilder, 'build'>;
@@ -50,12 +57,16 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
   let controller: AbortController | undefined;
   let rerunRequested = false;
   let failures = 0;
+  let dueAt: string | undefined;
+  let lastFailure: { readonly facts: PreferenceLearningFacts; readonly code: string; readonly message: string } | undefined;
   const clearTimer = () => {
     if (timer !== undefined) timers.clear(timer);
     timer = undefined;
+    dueAt = undefined;
   };
   const schedule = (delayMs: number) => {
     clearTimer();
+    dueAt = new Date(Date.parse(options.now()) + Math.max(0, delayMs)).toISOString();
     timer = timers.set(Math.max(0, delayMs), () => { timer = undefined; wake(); });
   };
   const wake = () => {
@@ -87,18 +98,29 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
       }
       if (!accepting || signal.aborted) return;
       if (result.status === 'failed') {
+        lastFailure = { facts, code: result.failure.code, message: result.failure.message };
         failures += 1;
         // A new feedback revision or restart can retry again; old failures do not poll forever.
         if (result.retryable && failures < 3) schedule(60_000);
         return;
       }
       failures = 0;
+      lastFailure = undefined;
     }
   }
   return {
     async start(startOptions = {}) { accepting = true; failures = 0; if (startOptions.automaticTriggers ?? true) wake(); },
-    notifyReactionChanged() { failures = 0; wake(); },
+    notifyReactionChanged() { failures = 0; lastFailure = undefined; wake(); },
     getActivePreferenceLearningFacts: (id) => active?.batch.batchId === id ? active : undefined,
+    getPreferenceLearningStatus(recommendationId) {
+      if (active?.reactionChanges.some((entry) => entry.recommendationId === recommendationId)) return { status: 'running', batchId: active.batch.batchId };
+      const completion = options.repository.getPreferenceLearningCompletion(recommendationId);
+      if (!completion || completion.status === 'learned') return { status: 'idle' };
+      if (lastFailure?.facts.reactionChanges.some((entry) => entry.recommendationId === recommendationId && entry.currentReactionRevision === completion.currentReactionRevision)) {
+        return { status: 'failed', batchId: lastFailure.facts.batch.batchId, code: lastFailure.code, message: lastFailure.message, ...(dueAt ? { retryAt: dueAt } : {}) };
+      }
+      return dueAt ? { status: 'scheduled', dueAt } : { status: 'idle' };
+    },
     async shutdown() {
       accepting = false;
       clearTimer();

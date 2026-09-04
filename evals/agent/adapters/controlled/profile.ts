@@ -6,24 +6,17 @@ import {
   describeControlledDiscoverySources,
 } from './discovery-source';
 import type { CaseInitialState } from '../../run/initial-state';
-
-export interface ControlledTimerDriver {
-  readonly timers: {
-    setTimeout(callback: () => void, delayMs: number): unknown;
-    clearTimeout(handle: unknown): void;
-  };
-  runDue(): void;
-}
+import { createControlledClock } from './clock';
 
 export function createControlledProfile(input: {
   readonly caseId: string;
   readonly initialState: CaseInitialState;
 }) {
-  const timerDriver = createControlledTimers();
+  const timerDriver = createControlledClock(input.initialState.clock);
   const webTools = createControlledWebTools(input.initialState);
   return {
     profile: 'controlled' as const,
-    now: () => input.initialState.clock,
+    now: timerDriver.now,
     createId: createDeterministicIdFactory(input.caseId),
     ...webTools,
     discoverySourceRegistry: createControlledDiscoverySourceRegistry({ initialState: input.initialState, ...webTools }),
@@ -45,24 +38,3 @@ function createDeterministicIdFactory(prefix: string): (scope: string) => string
   };
 }
 
-function createControlledTimers(): ControlledTimerDriver {
-  let nextHandle = 0;
-  const callbacks = new Map<number, () => void>();
-  return {
-    timers: {
-      setTimeout(callback) {
-        const handle = ++nextHandle;
-        callbacks.set(handle, callback);
-        return handle;
-      },
-      clearTimeout(handle) {
-        if (typeof handle === 'number') callbacks.delete(handle);
-      },
-    },
-    runDue() {
-      const due = [...callbacks.entries()];
-      callbacks.clear();
-      for (const [, callback] of due) callback();
-    },
-  };
-}

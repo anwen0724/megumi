@@ -149,7 +149,8 @@ async function runOneCase(input: {
         providerId: input.candidateModel.config.providerId,
         modelId: input.candidateModel.config.modelId,
       },
-      now: () => input.resolvedCase.case.initialState.clock,
+      now: environment.now,
+      ...(environment.advanceTime ? { advanceTime: environment.advanceTime } : {}),
       safetyWallClockLimitMs: input.safetyWallClockLimitMs,
     });
     traceIntegrity = await collectTraceIntegrity({

@@ -29,6 +29,8 @@ export interface ProductRuntime {
   readonly logger: ProductRuntimeLogger;
   /** Starts Host-ready product behavior exactly once using the first caller's trigger mode. */
   start(options?: ProductRuntimeStartOptions): Promise<void>;
+  /** Stops business execution while retaining resources for final read-only capture. */
+  stop(): Promise<void>;
   subscribeRuntimeEvents(filter: EventFilter, handler: EventHandler): EventSubscription;
   subscribeSpeechOutputEvents(handler: SpeechOutputEventListener): SpeechOutputSubscription;
   dispose(): Promise<void>;
@@ -42,9 +44,11 @@ export function createApplicationRuntime(input: {
   readonly subscribeRuntimeEvents: ProductRuntime['subscribeRuntimeEvents'];
   readonly subscribeSpeechOutputEvents: ProductRuntime['subscribeSpeechOutputEvents'];
   readonly dispose: () => Promise<void>;
+  readonly stop: () => Promise<void>;
 }): ProductRuntime {
   let startPromise: Promise<void> | undefined;
   let disposePromise: Promise<void> | undefined;
+  let stopPromise: Promise<void> | undefined;
   return {
     host: input.host,
     logger: input.logger,
@@ -54,13 +58,17 @@ export function createApplicationRuntime(input: {
       startPromise ??= (async () => {
         const settings = await input.host.settings.get();
         if (settings.status === 'failed') throw new Error('Settings are invalid; product background startup was blocked.');
-        if (disposePromise) throw new Error('Product runtime has already begun disposal.');
+        if (disposePromise || stopPromise) throw new Error('Product runtime has already begun disposal or stopping.');
         await input.start({ backgroundTriggers });
       })();
       return startPromise;
     },
     subscribeRuntimeEvents: input.subscribeRuntimeEvents,
     subscribeSpeechOutputEvents: input.subscribeSpeechOutputEvents,
+    stop() {
+      stopPromise ??= input.stop();
+      return stopPromise;
+    },
     dispose() {
       disposePromise ??= input.dispose();
       return disposePromise;

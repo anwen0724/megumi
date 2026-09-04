@@ -38,6 +38,8 @@ export interface CaseEnvironment {
     readonly observability: string;
   };
   readonly details: Readonly<Record<string, unknown>>;
+  readonly now: () => string;
+  readonly advanceTime?: (durationMs: number, deadlineMs: number) => Promise<void>;
   /** Flushes accepted Trace writes and closes all Product-owned resources without deleting evidence. */
   stop(): Promise<void>;
   /** Stops the Product and removes the isolated temporary environment. */
@@ -140,19 +142,36 @@ export async function createCaseEnvironment(input: {
         timezone: 'UTC',
         sources: profile.sourceDescription,
       },
+      now: profile.now,
+      ...(controlled ? { advanceTime: (durationMs: number, deadlineMs: number) => controlled.timerDriver.advanceBy(durationMs, async () => {
+        if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
+        if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
+        // Only Preference Cases request a time jump, after feedback is submitted.
+        // Other Cases keep their clock fixed; automatic product triggers are disabled.
+        if (input.resolvedCase.case.type !== 'preference_learning') throw new Error('This Case has no controlled time-advance input.');
+        const recommendationId = initialStateIds.recommendations[input.resolvedCase.case.input.recommendationReferenceId];
+        if (!recommendationId) throw new Error('Missing Preference learning target.');
+        while ((await composedRuntime.host.discovery.getPreferenceLearningStatus({ recommendationId })).status === 'running') {
+          if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
+          await new Promise<void>((resolve) => setTimeout(resolve, 5));
+        }
+      }) } : {}),
       stop,
       async dispose() {
-        try {
-          await stop();
-        } finally {
-          await rm(root, { recursive: true, force: true });
-        }
+        await stop();
+        await composedRuntime.dispose();
+        await rm(root, { recursive: true, force: true });
       },
     };
   } catch (error) {
     approvalSubscription?.unsubscribe();
-    await runtime?.dispose().catch(() => undefined);
-    await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    try {
+      await runtime?.stop();
+      await runtime?.dispose();
+      await rm(root, { recursive: true, force: true });
+    } catch {
+      throw new AggregateError([error], `Case startup failed; unsafe cleanup was skipped. Retained environment: ${root}`);
+    }
     throw error;
   }
 }
@@ -179,12 +198,9 @@ async function stopRuntime(
   runtime: ProductRuntime,
   approvalSubscription: ReturnType<ProductRuntime['subscribeRuntimeEvents']> | undefined,
 ): Promise<void> {
-  try {
-    await runtime.host.observability.flush();
-  } finally {
-    approvalSubscription?.unsubscribe();
-    await runtime.dispose();
-  }
+  await runtime.stop();
+  approvalSubscription?.unsubscribe();
+  await runtime.host.observability.flush();
 }
 
 async function installWorkspaceFiles(input: {

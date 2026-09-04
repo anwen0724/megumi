@@ -258,6 +258,7 @@ export {
   createPreferenceLearningRuntime,
   type CreatePreferenceLearningRuntimeOptions,
   type PreferenceLearningRuntime,
+  type PreferenceLearningStatus,
 } from './preferences/preference-learning-runtime';
 export type {
   PreferenceLearningRepository,

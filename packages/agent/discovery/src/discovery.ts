@@ -3,6 +3,7 @@
  * execution-lifecycle owner and repositories behind public business methods.
  */
 import { candidatePoolSettings } from './candidate-supply/candidate-pool';
+import type { PreferenceLearningStatus } from './preferences/preference-learning-runtime';
 import {
   createCandidateSupplyRuntime,
   type CreateCandidateSupplyRuntimeOptions,
@@ -108,6 +109,7 @@ export interface Discovery {
   /** Supplies Context with this process's current work snapshot, never durable execution history. */
   getActivePreferenceLearningFacts(batchId: string): PreferenceLearningFacts | undefined;
   getPreferenceLearningCompletion(recommendationId: string): PreferenceLearningCompletion | undefined;
+  getPreferenceLearningStatus(recommendationId: string): PreferenceLearningStatus;
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
   searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
   updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<UpdateRecommendationStateResult>;
@@ -229,6 +231,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     },
     getActivePreferenceLearningFacts: (id) => preferenceLearning?.getActivePreferenceLearningFacts(id),
     getPreferenceLearningCompletion: (id) => options.preferenceLearning?.repository.getPreferenceLearningCompletion(id),
+    getPreferenceLearningStatus: (id) => preferenceLearning?.getPreferenceLearningStatus(id) ?? { status: 'idle' },
     async getDiscoveryHome(rawRequest) {
       if (!recommendationRepository) throw new Error('Recommendation is not configured.');
       const request = GetDiscoveryHomeRequestSchema.parse(rawRequest);

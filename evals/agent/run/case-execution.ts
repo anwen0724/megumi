@@ -20,7 +20,7 @@ export interface CaseTraceTarget {
 
 export interface CaseExecutionResult {
   readonly caseType: EvaluationCase['type'];
-  readonly terminalState: 'settled' | 'interrupted';
+  readonly terminalState: 'settled' | 'pending' | 'interrupted';
   readonly productResult: unknown;
   readonly ownerFacts: unknown;
   readonly businessIds: Readonly<Record<string, string | string[]>>;
@@ -34,6 +34,7 @@ interface CaseExecutionInput {
   readonly initialStateIds: InstalledInitialStateIds;
   readonly candidateModel: { readonly providerId: string; readonly modelId: string };
   readonly now: () => string;
+  readonly advanceTime?: (durationMs: number, deadlineMs: number) => Promise<void>;
   readonly safetyWallClockLimitMs: number;
   readonly safetyDeadlineMs: number;
 }
@@ -49,7 +50,9 @@ type CaseExecutionRuntime = {
       | 'waitRecommendation'
       | 'getRecommendationCollection'
       | 'updateRecommendationState'
-      | 'waitPreferenceLearning'>;
+      | 'waitPreferenceLearning'
+      | 'getPreferenceLearning'
+      | 'getPreferenceLearningStatus'>;
     readonly observability: Pick<ProductRuntime['host']['observability'],
       'flush' | 'listTraces' | 'getTrace' | 'getContent'>;
   };
@@ -61,13 +64,18 @@ export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlin
     ...input,
     safetyDeadlineMs: Date.now() + input.safetyWallClockLimitMs,
   };
-  switch (executionInput.evaluationCase.type) {
-    case 'conversation': return executeConversation(executionInput);
-    case 'interest_understanding': return executeInterestUnderstanding(executionInput);
-    case 'candidate_supply': return executeCandidateSupply(executionInput);
-    case 'recommendation': return executeRecommendation(executionInput);
-    case 'preference_learning': return executePreferenceLearning(executionInput);
-  }
+  const drivers = {
+    conversation: executeConversation,
+    interest_understanding: executeInterestUnderstanding,
+    candidate_supply: executeCandidateSupply,
+    recommendation: executeRecommendation,
+    preference_learning: executePreferenceLearning,
+  };
+  const result = await waitForProductResult(drivers[executionInput.evaluationCase.type](executionInput), executionInput.safetyDeadlineMs);
+  return result.status === 'completed' ? result.value : {
+    caseType: input.evaluationCase.type, terminalState: 'interrupted', productResult: {}, ownerFacts: {},
+    businessIds: {}, traceTargets: [], interruption: safetyInterruption(executionInput),
+  };
 }
 
 async function executeConversation(input: CaseExecutionInput): Promise<CaseExecutionResult> {
@@ -121,7 +129,7 @@ async function executeConversation(input: CaseExecutionInput): Promise<CaseExecu
         interruption: safetyInterruption(input),
       });
     }
-    if (settled.status === 'failed') break;
+    if (settled.status === 'failed' || settled.status === 'cancelled') break;
   }
   return execution({
     caseType: 'conversation', terminalState: 'settled',
@@ -270,7 +278,7 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
   });
   if (accepted.status !== 'started' && accepted.status !== 'in_progress') {
     return execution({
-      caseType: 'recommendation', terminalState: 'settled',
+      caseType: 'recommendation', terminalState: accepted.status === 'waiting_for_candidates' ? 'pending' : 'settled',
       productResult: { accepted },
       ownerFacts: accepted.status === 'already_published' ? accepted.collection : {},
       businessIds: accepted.status === 'already_published'
@@ -279,13 +287,16 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
       traceTargets: [],
     });
   }
-  const completion = await waitForProductResult(
-    input.runtime.host.discovery.waitRecommendation({
+  let completion;
+  do {
+    completion = await waitForProductResult(input.runtime.host.discovery.waitRecommendation({
       requestId: accepted.requestId,
       timeoutMs: Math.min(300_000, Math.max(1, input.safetyDeadlineMs - Date.now())),
     }),
-    input.safetyDeadlineMs,
-  );
+      input.safetyDeadlineMs,
+    );
+    if (completion.status === 'completed' && completion.value.status === 'timed_out') await waitForNextPoll(input.safetyDeadlineMs);
+  } while (completion.status === 'completed' && completion.value.status === 'timed_out' && Date.now() < input.safetyDeadlineMs);
   const traceTargets = recommendationTraceTargets(accepted.requestId);
   const baseBusinessIds = {
     requestId: accepted.requestId,
@@ -342,43 +353,43 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
       traceTargets: [],
     });
   }
-  const completion = await waitForProductResult(
-    input.runtime.host.discovery.waitPreferenceLearning({
-      recommendationId,
-      timeoutMs: Math.min(300_000, Math.max(1, input.safetyDeadlineMs - Date.now())),
-    }),
-    input.safetyDeadlineMs,
-  );
-  if (completion.status === 'interrupted' || completion.value.status === 'timed_out') {
-    return execution({
-      caseType: 'preference_learning', terminalState: 'interrupted',
-      productResult: { updated },
-      ownerFacts: {},
-      businessIds: { recommendationId },
-      traceTargets: [],
-      interruption: safetyInterruption(input),
-    });
-  }
-  const learned = completion.value.value;
-  return execution({
-    caseType: 'preference_learning', terminalState: 'settled',
-    productResult: { updated, completion: learned },
-    ownerFacts: learned,
-    businessIds: {
-      recommendationId,
-      preferenceSetIds: learned.preferences.map(({ preferenceSet }) => preferenceSet.id),
-    },
-    traceTargets: [{
-      traceKind: 'preference_learning',
-      correlation: { recommendationIds: [recommendationId] },
-      expectation: 'required',
-    }],
+  const traceTargets: CaseTraceTarget[] = [];
+  const finish = (terminalState: CaseExecutionResult['terminalState'], completion: unknown, ownerFacts: unknown, preferenceSetIds: string[] = []): CaseExecutionResult => execution({
+    caseType: 'preference_learning', terminalState, productResult: { updated, completion }, ownerFacts,
+    businessIds: { recommendationId, preferenceSetIds }, traceTargets,
+    ...(terminalState === 'interrupted' ? { interruption: safetyInterruption(input) } : {}),
   });
+  const advanceMs = input.evaluationCase.input.advanceTimeMs;
+  if (advanceMs !== undefined) {
+    if (!input.advanceTime) throw new Error('This environment does not support controlled time advance.');
+    try {
+      await input.advanceTime(advanceMs, input.safetyDeadlineMs);
+    } catch (error) {
+      if (Date.now() >= input.safetyDeadlineMs) return finish('interrupted', { status: 'safety_interrupted' }, {});
+      throw error;
+    }
+  }
+  while (Date.now() <= input.safetyDeadlineMs) {
+    const facts = await input.runtime.host.discovery.getPreferenceLearning({ recommendationId });
+    if (facts?.status === 'learned') {
+      if (updated.status === 'updated') traceTargets.push({ traceKind: 'preference_learning', correlation: { recommendationIds: [recommendationId] }, expectation: 'required' });
+      return finish('settled', facts, facts, facts.preferences.map(({ preferenceSet }) => preferenceSet.id));
+    }
+    const status = await input.runtime.host.discovery.getPreferenceLearningStatus({ recommendationId });
+    if (status.status === 'failed' && !status.retryAt) {
+      traceTargets.push({ traceKind: 'preference_learning', correlation: { recommendationIds: [recommendationId] }, expectation: 'required' });
+      return finish('settled', status, facts);
+    }
+    // A frozen Controlled clock cannot reach an undeclared future timer. Preserve pending honestly.
+    if (input.advanceTime && status.status !== 'running') return finish('pending', status, facts);
+    await waitForNextPoll(input.safetyDeadlineMs);
+  }
+  return finish('interrupted', { status: 'safety_interrupted' }, await input.runtime.host.discovery.getPreferenceLearning({ recommendationId }));
 }
 
 type CommittedRunResult = Awaited<ReturnType<ProductRuntime['host']['session']['readCommittedRun']>>;
 type ConversationSettlement =
-  | { readonly status: 'completed' | 'failed'; readonly result: CommittedRunResult }
+  | { readonly status: 'completed' | 'failed' | 'cancelled'; readonly result: CommittedRunResult }
   | { readonly status: 'interrupted'; readonly result: Readonly<Record<string, string>> };
 
 async function waitForCommittedConversation(input: {
@@ -400,6 +411,7 @@ async function waitForCommittedConversation(input: {
       if (reply?.type === 'message' && reply.message.kind === 'assistantReply') {
         if (reply.message.status === 'completed') return { status: 'completed', result };
         if (reply.message.status === 'failed') return { status: 'failed', result };
+        if (reply.message.status === 'cancelled') return { status: 'cancelled', result };
       }
     }
     await waitForNextPoll(input.deadlineMs);

@@ -5,6 +5,17 @@ import { createApplicationRuntime } from '../../../packages/agent/composition/sr
 import { composeTestApplication } from './compose-test-application';
 
 describe('Application lifecycle', () => {
+  it('stops business work while keeping database and Trace queries open for final capture', async () => {
+    const application = composeTestApplication();
+    try {
+      await application.runtime.start({ backgroundTriggers: 'manual' });
+      const first = application.runtime.stop();
+      expect(application.runtime.stop()).toBe(first);
+      await first;
+      expect(await application.runtime.host.discovery.getCandidatePool()).toBeDefined();
+      expect((await application.runtime.host.observability.listTraces({ limit: 1 })).status).not.toBe('failed');
+    } finally { await application.cleanup(); }
+  });
   it('does not start business after disposal while settings validation is pending', async () => {
     const application = composeTestApplication();
     const loaded = await application.runtime.host.settings.get();
@@ -17,6 +28,7 @@ describe('Application lifecycle', () => {
       host: application.runtime.host, logger: application.runtime.logger, start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
       subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
+      stop: async () => undefined,
       dispose: async () => undefined,
     });
     try {
@@ -37,6 +49,7 @@ describe('Application lifecycle', () => {
       host: application.runtime.host, logger: application.runtime.logger, start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
       subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
+      stop: async () => undefined,
       dispose: async () => undefined,
     });
     try {
@@ -65,6 +78,7 @@ describe('Application lifecycle', () => {
       start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
       subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
+      stop: async () => undefined,
       dispose: async () => undefined,
     });
 

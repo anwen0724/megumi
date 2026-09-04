@@ -6,6 +6,11 @@ import type { EventSubscription } from '@megumi/events';
 import type { Voice } from '@megumi/voice';
 
 export interface ApplicationResourceManager {
+  stop(input: {
+    readonly discovery: Pick<import('@megumi/discovery').Discovery, 'shutdown'>;
+    readonly executions: Pick<import('@megumi/execution').AgentExecutions, 'shutdown'>;
+    readonly conversation: Pick<import('@megumi/execution').ConversationSubmission, 'shutdown'>;
+  }): Promise<void>;
   registerDatabase(database: Pick<import('@megumi/database').DatabaseConnection, 'close'>): void;
   registerEventSubscription(subscription: EventSubscription): void;
   rollbackStartup(): void;
@@ -38,8 +43,30 @@ export function createApplicationResourceManager(input: {
 }): ApplicationResourceManager {
   let database: Pick<import('@megumi/database').DatabaseConnection, 'close'> | undefined;
   const eventSubscriptions: EventSubscription[] = [];
+  let stopPromise: Promise<void> | undefined;
+  const stop: ApplicationResourceManager['stop'] = (owners) => {
+    stopPromise ??= (async () => {
+      const discovery = owners.discovery.shutdown();
+      const executions = owners.executions.shutdown({ timeoutMs: input.shutdownTimeoutMs });
+      const conversation = owners.conversation.shutdown();
+      const work = Promise.allSettled([discovery, executions, conversation]).then((results) => {
+        const failures: unknown[] = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : []);
+        const execution = results[1];
+        if (execution?.status === 'fulfilled' && execution.value?.status === 'timed_out') failures.push(new Error('Agent Execution shutdown timed out.'));
+        if (failures.length) throw new AggregateError(failures, 'Product business shutdown failed.');
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([work, new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Product business shutdown timed out.')), input.shutdownTimeoutMs);
+        })]);
+      } finally { if (timer) clearTimeout(timer); }
+    })();
+    return stopPromise;
+  };
 
   return {
+    stop,
     registerDatabase(resource) {
       database = resource;
     },
@@ -68,30 +95,11 @@ export function createApplicationResourceManager(input: {
     /** Attempts every shutdown step and reports all failures only after cleanup. */
     async dispose({ discovery, executions, conversation, voice, speechOutput, observability }) {
       const failures: ProductDisposeFailure[] = [];
-      const discoveryShutdown = (async () => {
-        try {
-          await discovery.shutdown();
-        } catch (error) {
-          failures.push({ resource: 'discovery', error });
-        }
-      })();
       try {
-        const result = await executions.shutdown({ timeoutMs: input.shutdownTimeoutMs });
-        if (result.status === 'timed_out') {
-          failures.push({
-            resource: 'execution',
-            error: new Error(`Agent Execution shutdown timed out with ${result.activeExecutions.length} active execution(s).`),
-          });
-        }
+        await stop({ discovery, executions, conversation });
       } catch (error) {
         failures.push({ resource: 'execution', error });
       }
-      try {
-        await conversation.shutdown();
-      } catch (error) {
-        failures.push({ resource: 'conversation', error });
-      }
-      await discoveryShutdown;
 
       try {
         await voice.dispose();

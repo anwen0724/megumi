@@ -101,7 +101,7 @@ export const CaseRunResultSchema = z.object({
   recordStatus: z.enum(['recorded', 'infrastructure_failed']),
   startedAt: TimestampSchema,
   endedAt: TimestampSchema,
-  terminalState: z.enum(['settled', 'interrupted']).optional(),
+  terminalState: z.enum(['settled', 'pending', 'interrupted']).optional(),
   candidateModel: CandidateModelRecordSchema,
   environment: z.record(z.string(), JsonValueSchema),
   businessIds: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),

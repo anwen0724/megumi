@@ -231,6 +231,7 @@ export const PreferenceLearningCaseSchema = z.object({
   input: z.object({
     recommendationReferenceId: ReferenceIdSchema,
     reaction: z.enum(['liked', 'disliked', 'none']),
+    advanceTimeMs: z.number().int().nonnegative().max(86_400_000).optional(),
   }).strict(),
   expected: z.object({
     createdDirections: z.array(z.string().min(1)).optional(),

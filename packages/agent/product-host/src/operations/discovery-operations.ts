@@ -35,6 +35,7 @@ export function createDiscoveryOperations(
     | 'requestCandidateSupply'
     | 'getCandidatePool'
     | 'getPreferenceLearningCompletion'
+    | 'getPreferenceLearningStatus'
   >,
   facts: DiscoveryFactsReader,
 ): DiscoveryHost {
@@ -80,6 +81,9 @@ export function createDiscoveryOperations(
     getPreferenceLearning(request) {
       const parsed = DiscoveryPreferenceLearningQuerySchema.parse(request);
       return Promise.resolve(agent.getPreferenceLearningCompletion(parsed.recommendationId) ?? null);
+    },
+    getPreferenceLearningStatus(request) {
+      return Promise.resolve(agent.getPreferenceLearningStatus(DiscoveryPreferenceLearningQuerySchema.parse(request).recommendationId));
     },
     waitPreferenceLearning: (request) => waitForBusinessFact({
       timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
