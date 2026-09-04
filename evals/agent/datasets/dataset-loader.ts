@@ -121,9 +121,15 @@ async function loadCaseCatalog(
       if (
         environmentKind === 'controlled'
         && evaluationCase.type === 'candidate_supply'
+        && evaluationCase.initialState.interests.some(({ status }) => status === 'active')
         && evaluationCase.initialState.controlledSources.length === 0
       ) {
         throw new Error(`Controlled Candidate Supply Case requires at least one controlled source: ${evaluationCase.caseId}.`);
+      }
+      const sources = evaluationCase.type === 'candidate_supply' ? evaluationCase.initialState.controlledSources
+        : evaluationCase.type === 'conversation' ? evaluationCase.initialState.controlledWeb : [];
+      if (environmentKind === 'controlled' && sources.some(({ sourceId }) => sourceId !== 'open_web')) {
+        throw new Error(`Unsupported Controlled source in ${evaluationCase.caseId}; only open_web is implemented.`);
       }
       if (catalog.has(evaluationCase.caseId)) throw new Error(`Duplicate Case ID in ${environmentKind}: ${evaluationCase.caseId}.`);
       if (typeDirectory !== evaluationCase.type.replaceAll('_', '-')) {

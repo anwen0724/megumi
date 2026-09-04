@@ -1,6 +1,7 @@
 /*
  * Composes Discovery persistence owners into the stable package-level repository contract.
  */
+import { randomUUID } from 'node:crypto';
 import type { DatabaseConnection } from '@megumi/database';
 import {
   createCandidateSupplyRepository,
@@ -36,13 +37,14 @@ export function createDiscoveryRepository(options: {
   };
 }): DiscoveryRepository {
   const interests = createInterestRepository(options.database);
-  const candidateSupply = options.clock && options.candidateIds
-    ? createCandidateSupplyRepository({
-        database: options.database,
-        clock: options.clock,
-        ids: options.candidateIds,
-      })
-    : createCandidateSupplyRepository(options.database);
+  const candidateSupply = createCandidateSupplyRepository({
+    database: options.database,
+    clock: options.clock ?? { now: () => new Date().toISOString() },
+    ids: options.candidateIds ?? {
+      createCandidateId: () => `candidate:${randomUUID()}`,
+      createInterestMatchId: () => `candidate-interest-match:${randomUUID()}`,
+    },
+  });
   const recommendations = createRecommendationRepository({
     database: options.database,
     ...(options.clock ? { clock: options.clock } : {}),

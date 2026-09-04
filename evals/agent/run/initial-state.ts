@@ -3,7 +3,8 @@
  */
 import path from 'node:path';
 import { createDatabase, migrateDatabase } from '@megumi/database';
-import { createDiscoveryRepository, type DiscoveryRepository } from '@megumi/discovery';
+import { initializeDiscoveryState } from '@megumi/discovery';
+import { resolveInitialDiscoveryState } from './initial-discovery-state';
 import { createSessionCatalog, createSessionHistory } from '@megumi/session';
 import { createSessionStore } from '@megumi/session/store';
 import { createWorkspaceCatalog } from '@megumi/workspace';
@@ -19,6 +20,7 @@ type PreferenceLearningCase = Extract<EvaluationCase, { readonly type: 'preferen
 
 export interface CaseInitialState {
   readonly clock: string;
+  readonly interestEvidence?: InterestUnderstandingCase['initialState']['existingEvidence'];
   readonly recommendationTargetCount: number;
   readonly recommendationWorkingSetCount: number;
   readonly candidatePoolMinimumCount: number;
@@ -59,6 +61,7 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
         candidatePoolMaximumCount: 200,
         workspaceFiles: [],
         sessions: [evaluationCase.initialState.sourceSession],
+        ...(evaluationCase.initialState.existingEvidence ? { interestEvidence: evaluationCase.initialState.existingEvidence } : {}),
         interests: evaluationCase.initialState.existingInterests,
         candidates: [], recommendations: [], preferences: [], existingReactions: [], controlledSources: [],
         approvalDecisions: [],
@@ -110,29 +113,6 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
   }
 }
 
-export interface EvaluationInitialStateOwner {
-  installWorkspace(input: { readonly rootPath: string }): Promise<{ readonly workspaceId: string }>;
-  installSession(input: CaseInitialState['sessions'][number] & { readonly workspaceId: string }): Promise<{ readonly sessionId: string }>;
-  installInterest(input: CaseInitialState['interests'][number]): Promise<{ readonly interestId: string }>;
-  installCandidate(input: CaseInitialState['candidates'][number] & {
-    readonly interestIds: readonly string[];
-  }): Promise<{ readonly candidateId: string }>;
-  installRecommendation(input: CaseInitialState['recommendations'][number] & {
-    readonly candidateId: string;
-  }): Promise<{ readonly recommendationId: string }>;
-  installReaction(input: CaseInitialState['existingReactions'][number] & {
-    readonly recommendationId: string;
-  }): Promise<void>;
-  installPreference(input: CaseInitialState['preferences'][number] & {
-    readonly interestId: string;
-    readonly recommendationIds: readonly string[];
-  }): Promise<{ readonly revisionId: string }>;
-  verifyInstalled(input: {
-    readonly initialState: CaseInitialState;
-    readonly ids: InstalledInitialStateIds;
-  }): Promise<void>;
-}
-
 export interface InstalledInitialStateIds {
   readonly workspaceId: string;
   readonly sessions: Readonly<Record<string, string>>;
@@ -142,7 +122,13 @@ export interface InstalledInitialStateIds {
   readonly preferenceRevisions: readonly string[];
 }
 
-/** Installs one validated initial state and returns references used by the real product invocation. */
+interface EvaluationInitialStateOwner {
+  installWorkspace(input: { readonly rootPath: string }): Promise<{ readonly workspaceId: string }>;
+  installSession(input: CaseInitialState['sessions'][number] & { readonly workspaceId: string }): Promise<{ readonly sessionId: string }>;
+  installDiscovery(initial: CaseInitialState, ids: InstalledInitialStateIds): void;
+}
+
+/** Installs pre-existing facts, without invoking any tested business operation. */
 export async function installInitialState(input: {
   readonly initialState: CaseInitialState;
   readonly workspaceRoot: string;
@@ -153,62 +139,27 @@ export async function installInitialState(input: {
   for (const entry of input.initialState.sessions) {
     sessions[entry.referenceId] = (await input.owner.installSession({ ...entry, workspaceId: workspace.workspaceId })).sessionId;
   }
-  const interests: Record<string, string> = {};
-  for (const entry of input.initialState.interests) {
-    interests[entry.referenceId] = (await input.owner.installInterest(entry)).interestId;
-  }
-  const candidates: Record<string, string> = {};
-  for (const entry of input.initialState.candidates) {
-    const interestIds = entry.matchedInterestReferenceIds.map((id) => requireMapped(interests, id, 'Interest'));
-    candidates[entry.referenceId] = (await input.owner.installCandidate({ ...entry, interestIds })).candidateId;
-  }
-  const recommendations: Record<string, string> = {};
-  for (const entry of input.initialState.recommendations) {
-    const candidateId = requireMapped(candidates, entry.candidateReferenceId, 'Candidate');
-    recommendations[entry.referenceId] = (await input.owner.installRecommendation({ ...entry, candidateId })).recommendationId;
-  }
-  for (const entry of input.initialState.existingReactions) {
-    const recommendationId = requireMapped(recommendations, entry.recommendationReferenceId, 'Recommendation');
-    await input.owner.installReaction({ ...entry, recommendationId });
-  }
-  const preferenceRevisions = [];
-  for (const entry of input.initialState.preferences) {
-    const recommendationIds = entry.supportingRecommendationReferenceIds
-      .map((id) => requireMapped(recommendations, id, 'Recommendation'));
-    preferenceRevisions.push((await input.owner.installPreference({ ...entry, recommendationIds, interestId: requireMapped(interests, entry.interestReferenceId, 'Interest') })).revisionId);
-  }
-  const installed: InstalledInitialStateIds = {
-    workspaceId: workspace.workspaceId,
-    sessions,
-    interests,
-    candidates,
-    recommendations,
-    preferenceRevisions,
+  const references = (kind: string, entries: readonly { readonly referenceId: string }[]): Record<string, string> =>
+    Object.fromEntries(entries.map(({ referenceId }) => [referenceId, `evaluation:${kind}:${referenceId}`]));
+  const ids: InstalledInitialStateIds = {
+    workspaceId: workspace.workspaceId, sessions,
+    interests: references('interest', input.initialState.interests),
+    candidates: references('candidate', input.initialState.candidates),
+    recommendations: references('recommendation', input.initialState.recommendations),
+    preferenceRevisions: [...new Set(input.initialState.preferences.map(({ interestReferenceId }) => `evaluation:preference-set:${interestReferenceId}:1`))],
   };
-  await input.owner.verifyInstalled({ initialState: input.initialState, ids: installed });
-  return installed;
+  input.owner.installDiscovery(input.initialState, ids);
+  return ids;
 }
 
-function requireMapped(values: Readonly<Record<string, string>>, referenceId: string, kind: string): string {
-  const value = values[referenceId];
-  if (!value) throw new Error(`${kind} initial-state reference was not installed: ${referenceId}.`);
-  return value;
-}
-
-export interface DatabaseInitialStateOwner {
-  readonly owner: EvaluationInitialStateOwner;
-  close(): void;
-}
-
-/** Creates the narrow initial-state owner over real repositories in an isolated database. */
+/** Owns isolated database lifetime for initialization before application startup. */
 export function createDatabaseInitialStateOwner(input: {
   readonly homePath: string;
   readonly migrationsFolder: string;
   readonly now: string;
-}): DatabaseInitialStateOwner {
+}): { readonly owner: EvaluationInitialStateOwner; close(): void } {
   const database = createDatabase({ filename: path.join(input.homePath, 'sqlite', 'megumi.sqlite') });
   migrateDatabase({ database, migrationsFolder: input.migrationsFolder });
-  const discovery = createDiscoveryRepository({ database, clock: { now: () => input.now } });
   const sessionStore = createSessionStore({ database });
   const sessions = createSessionCatalog({ store: sessionStore, now: () => input.now });
   const history = createSessionHistory({ store: sessionStore });
@@ -217,9 +168,6 @@ export function createDatabaseInitialStateOwner(input: {
     file_system: createNodeWorkspaceFileSystem(),
     now: () => input.now,
   });
-  let recommendationIndex = 0;
-  let preferenceIndex = 0;
-
   const owner: EvaluationInitialStateOwner = {
     async installWorkspace(workspace) {
       const result = await workspaces.openWorkspace({ root_path: workspace.rootPath });
@@ -258,159 +206,10 @@ export function createDatabaseInitialStateOwner(input: {
       }
       return { sessionId: created.session.session_id };
     },
-    async installInterest(entry) {
-      const interest = discovery.applyInterestChange({
-        action: 'create',
-        interestId: `evaluation:interest:${entry.referenceId}`,
-        description: entry.description,
-        now: input.now,
-      });
-      if (entry.status === 'paused') {
-        discovery.applyInterestChange({ action: 'pause', interestId: interest.id, now: input.now });
-      }
-      return { interestId: interest.id };
-    },
-    async installCandidate(entry) {
-      const result = discovery.submitCandidate({
-        content: {
-          sourceId: entry.sourceId,
-          sourceName: entry.sourceName,
-          canonicalUrl: entry.canonicalUrl,
-          contentType: 'article',
-          title: entry.title,
-          ...(entry.description ? { description: entry.description } : {}),
-        },
-        contentSummary: entry.description ?? entry.title,
-        matches: entry.interestIds.map((interestId) => ({
-          interestId,
-          relevance: entry.relevance,
-          matchReason: 'Installed by the isolated Evaluation initial-state owner.',
-        })),
-        settings: {
-          minimumCount: 100,
-          targetCount: 160,
-          maximumCount: 200,
-          candidateValidityDays: 30,
-          candidateContentExcerptMaxCharacters: 8_000,
-        },
-      });
-      if (result.status === 'ignored') {
-        throw new Error(`Initial Candidate installation failed: ${entry.referenceId} (${result.reason}).`);
-      }
-      return { candidateId: result.candidate.id };
-    },
-    async installRecommendation(entry) {
-      recommendationIndex += 1;
-      const localDate = `2025-01-${String(recommendationIndex).padStart(2, '0')}`;
-      const candidate = discovery.findCandidateById(entry.candidateId);
-      const primaryInterestId = candidate?.interestMatches[0]?.interestId;
-      if (!candidate || !primaryInterestId) {
-        throw new Error(`Initial-state Recommendation Candidate has no Interest: ${entry.candidateId}.`);
-      }
-      const result = discovery.publish({
-        localDate,
-        snapshotAt: input.now,
-        publishedAt: input.now,
-        items: [{
-          candidateId: entry.candidateId,
-          sourceName: candidate.candidate.sourceId,
-          recommendationReason: entry.reason,
-          selectionBasis: {
-            primaryInterestId,
-            matchedInterestIds: candidate.interestMatches.map(({ interestId }) => interestId),
-            interestRevisions: candidate.interestMatches.map(({ interestId }) => ({
-              interestId,
-              revision: 0,
-            })),
-            preferenceRevisions: [],
-          },
-        }],
-      });
-      if (result.status !== 'published') {
-        throw new Error(`Initial Recommendation publication failed: ${entry.referenceId}.`);
-      }
-      const recommendation = result.collection.items[0];
-      if (!recommendation) throw new Error('Initial-state Recommendation publication returned no result.');
-      if (entry.reaction !== 'none') {
-        discovery.updateState({
-          recommendationId: recommendation.id,
-          action: 'set_reaction',
-          reaction: entry.reaction,
-        });
-      }
-      return { recommendationId: recommendation.id };
-    },
-    async installReaction(entry) {
-      discovery.updateState({
-        recommendationId: entry.recommendationId,
-        action: 'set_reaction',
-        reaction: entry.reaction === 'none' ? null : entry.reaction,
-      });
-    },
-    async installPreference(entry) {
-      preferenceIndex += 1;
-      for (const recommendationId of entry.recommendationIds) {
-        discovery.updateState({
-          recommendationId,
-          action: 'set_reaction',
-          reaction: entry.polarity === 'positive' ? 'liked' : 'disliked',
-        });
-      }
-      const batchId = `evaluation:preference-batch:${preferenceIndex}`;
-      const facts = discovery.preparePreferenceLearning({ batchId, startedAt: input.now, limit: 20 });
-      if (!facts) throw new Error(`Initial-state Preference had no pending Reaction: ${batchId}.`);
-      const target = facts.currentPreferences.find(({ preferenceSet }) => preferenceSet.interestId === entry.interestId);
-      if (!target) throw new Error(`Initial-state Preference Interest has no matching feedback: ${entry.interestId}.`);
-      const result = discovery.commitPreferenceLearning({
-        facts, committedAt: input.now,
-        scopes: facts.currentPreferences.map(({ preferenceSet, preferences }) => ({
-          preferenceSetId: preferenceSet.id, baseRevision: preferenceSet.revision,
-          preferences: [
-            ...preferences.filter(({ preference }) => preference.id !== entry.id).map(({ preference, evidence }) => ({
-              id: preference.id, polarity: preference.polarity, dimension: preference.dimension,
-              statement: preference.statement, supportingRecommendationIds: evidence.map(({ recommendationId }) => recommendationId),
-            })),
-            ...(preferenceSet.id === target.preferenceSet.id ? [{
-              id: entry.id, polarity: entry.polarity, dimension: entry.dimension,
-              statement: entry.statement, supportingRecommendationIds: [...entry.recommendationIds],
-            }] : []),
-          ],
-        })),
-      });
-      if (result.status !== 'committed') throw new Error(`Initial-state Preference commit was rejected: ${result.reason}.`);
-      const revision = result.revisions.find(({ preferenceSetId }) => preferenceSetId === target.preferenceSet.id);
-      if (!revision) throw new Error('Initial-state Preference revision is missing.');
-      return { revisionId: `${revision.preferenceSetId}:${revision.revision}` };
-    },
-    async verifyInstalled(entry) {
-      verifyInitialState(discovery, sessionStore, entry.ids);
+
+    installDiscovery(initial, ids) {
+      initializeDiscoveryState(database, resolveInitialDiscoveryState(initial, ids));
     },
   };
   return { owner, close: () => database.close() };
-}
-
-function verifyInitialState(
-  discovery: DiscoveryRepository,
-  sessionStore: ReturnType<typeof createSessionStore>,
-  ids: InstalledInitialStateIds,
-): void {
-  for (const sessionId of Object.values(ids.sessions)) {
-    if (!sessionStore.findSessionById(sessionId)) {
-      throw new Error(`Installed Session could not be read: ${sessionId}.`);
-    }
-  }
-  const interestIds = new Set(discovery.listNonDeletedInterests().map((interest) => interest.id));
-  for (const interestId of Object.values(ids.interests)) {
-    if (!interestIds.has(interestId)) throw new Error(`Installed Interest could not be read: ${interestId}.`);
-  }
-  for (const candidateId of Object.values(ids.candidates)) {
-    if (!discovery.findCandidateById(candidateId)) {
-      throw new Error(`Installed Candidate could not be read: ${candidateId}.`);
-    }
-  }
-  for (const recommendationId of Object.values(ids.recommendations)) {
-    if (!discovery.getRecommendationReference(recommendationId)) {
-      throw new Error(`Installed Recommendation could not be read: ${recommendationId}.`);
-    }
-  }
 }

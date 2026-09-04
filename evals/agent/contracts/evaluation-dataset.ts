@@ -2,6 +2,7 @@
  * Defines the author-facing Dataset and five fixed Case contracts used by Evaluation.
  */
 import { z } from 'zod';
+import { DiscoveryContentTypeSchema } from '@megumi/discovery';
 
 export const StableEvaluationIdSchema = z.string().regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u);
 export const EvaluationEnvironmentKindSchema = z.enum(['controlled', 'live']);
@@ -39,11 +40,18 @@ const SessionDataSchema = z.object({
   referenceId: ReferenceIdSchema,
   title: z.string().trim().min(1),
   turns: z.array(ConversationTurnSchema).default([]),
+  participation: z.enum(['included', 'excluded']).optional(),
+  effectiveFrom: TimestampSchema.optional(),
 }).strict();
 const InterestDataSchema = z.object({
   referenceId: ReferenceIdSchema,
   description: z.string().trim().min(1).max(1_000),
-  status: z.enum(['active', 'paused']).default('active'),
+  status: z.enum(['active', 'paused', 'deleted']).default('active'),
+  createdFrom: z.enum(['manual', 'conversation']).optional(),
+  revision: z.number().int().nonnegative().optional(),
+  createdAt: TimestampSchema.optional(),
+  updatedAt: TimestampSchema.optional(),
+  userManagedAt: TimestampSchema.optional(),
 }).strict();
 const CandidateDataSchema = z.object({
   referenceId: ReferenceIdSchema,
@@ -53,6 +61,16 @@ const CandidateDataSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().optional(),
   contentText: z.string().optional(),
+  contentType: DiscoveryContentTypeSchema.optional(),
+  sourceContentId: z.string().min(1).optional(),
+  author: z.string().min(1).optional(),
+  publishedAt: TimestampSchema.optional(),
+  contentSummary: z.string().trim().min(1).max(1000).optional(),
+  contentTruncated: z.boolean().optional(),
+  coverUrl: z.string().url().optional(),
+  status: z.enum(['available', 'consumed', 'expired']).optional(),
+  createdAt: TimestampSchema.optional(),
+  expiresAt: TimestampSchema.optional(),
   matchedInterestReferenceIds: z.array(ReferenceIdSchema),
   relevance: z.enum(['direct', 'adjacent', 'exploration']),
 }).strict();
@@ -61,6 +79,12 @@ const RecommendationDataSchema = z.object({
   candidateReferenceId: ReferenceIdSchema,
   reason: z.string().trim().min(1),
   reaction: z.enum(['liked', 'disliked', 'none']).default('none'),
+  localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u).optional(),
+  publishedAt: TimestampSchema.optional(),
+  reactionRevision: z.number().int().nonnegative().optional(),
+  reactionChangedAt: TimestampSchema.optional(),
+  learnedReaction: z.enum(['liked', 'disliked', 'none']).optional(),
+  learnedReactionRevision: z.number().int().nonnegative().optional(),
 }).strict();
 const PreferenceDataSchema = z.object({
   interestReferenceId: ReferenceIdSchema,
@@ -69,6 +93,16 @@ const PreferenceDataSchema = z.object({
   dimension: z.enum(['topic', 'source', 'author', 'content_type', 'recency', 'expression_quality']),
   statement: z.string().trim().min(1),
   supportingRecommendationReferenceIds: z.array(ReferenceIdSchema).min(1),
+}).strict();
+const InterestEvidenceDataSchema = z.object({
+  referenceId: ReferenceIdSchema,
+  interestReferenceId: ReferenceIdSchema.optional(),
+  userTurnIndex: z.number().int().nonnegative(),
+  description: z.string().trim().min(1).max(1000),
+  effect: z.enum(['support', 'reject']),
+  confidence: z.enum(['high', 'medium']),
+  status: z.enum(['pending', 'applied', 'retracted']),
+  createdAt: TimestampSchema.optional(),
 }).strict();
 const ControlledWebResultSchema = z.object({
   url: z.string().url(),
@@ -126,6 +160,7 @@ export const InterestUnderstandingCaseSchema = z.object({
     clock: TimestampSchema,
     sourceSession: SessionDataSchema,
     existingInterests: z.array(InterestDataSchema).default([]),
+    existingEvidence: z.array(InterestEvidenceDataSchema).optional(),
   }).strict(),
   input: z.object({ text: z.string().min(1) }).strict(),
   expected: z.object({
@@ -143,7 +178,7 @@ export const CandidateSupplyCaseSchema = z.object({
     clock: TimestampSchema,
     minimumCount: z.number().int().positive(),
     maximumCount: z.number().int().min(2),
-    interests: z.array(InterestDataSchema).min(1),
+    interests: z.array(InterestDataSchema),
     existingCandidates: z.array(CandidateDataSchema).default([]),
     controlledSources: z.array(ControlledWebDataSchema).default([]),
   }).strict(),
@@ -163,8 +198,8 @@ export const RecommendationCaseSchema = z.object({
     clock: TimestampSchema,
     recommendationTargetCount: z.number().int().min(1).max(100),
     recommendationWorkingSetCount: z.number().int().min(1).max(200),
-    interests: z.array(InterestDataSchema).min(1),
-    candidates: z.array(CandidateDataSchema).min(1),
+    interests: z.array(InterestDataSchema),
+    candidates: z.array(CandidateDataSchema),
     previousRecommendations: z.array(RecommendationDataSchema).default([]),
     preferences: z.array(PreferenceDataSchema).default([]),
   }).strict(),
@@ -241,6 +276,12 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
   }
   if (evaluationCase.type === 'interest_understanding') {
     addDuplicateIssues(evaluationCase.initialState.existingInterests.map((interest) => interest.referenceId), ['initialState', 'existingInterests'], 'Interest reference', context);
+    const evidence = evaluationCase.initialState.existingEvidence ?? [];
+    addDuplicateIssues(evidence.map(({ referenceId }) => referenceId), ['initialState', 'existingEvidence'], 'Evidence reference', context);
+    for (const [index, entry] of evidence.entries()) {
+      if (entry.interestReferenceId) addMissingReference(new Set(evaluationCase.initialState.existingInterests.map(({ referenceId }) => referenceId)), entry.interestReferenceId, ['initialState', 'existingEvidence', index], 'Interest', context);
+      if (!evaluationCase.initialState.sourceSession.turns[entry.userTurnIndex]) context.addIssue({ code: 'custom', path: ['initialState', 'existingEvidence', index, 'userTurnIndex'], message: 'Evidence must reference an existing user turn.' });
+    }
     return;
   }
   const interestReferences = evaluationCase.initialState.interests.map((interest) => interest.referenceId);
@@ -255,6 +296,7 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
   const candidateIds = new Set(candidates.map((candidate) => candidate.referenceId));
   addDuplicateIssues(candidates.map((candidate) => candidate.referenceId), ['initialState', candidatePath], 'Candidate reference', context);
   for (const [candidateIndex, candidate] of candidates.entries()) {
+    addDuplicateIssues(candidate.matchedInterestReferenceIds, ['initialState', candidatePath, candidateIndex, 'matchedInterestReferenceIds'], 'Interest match', context);
     for (const [referenceIndex, referenceId] of candidate.matchedInterestReferenceIds.entries()) {
       addMissingReference(interests, referenceId, ['initialState', candidatePath, candidateIndex, 'matchedInterestReferenceIds', referenceIndex], 'Interest', context);
     }
@@ -286,6 +328,9 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
     ? evaluationCase.initialState.previousRecommendations
     : evaluationCase.initialState.recommendations;
   const recommendationIds = new Set(recommendations.map((recommendation) => recommendation.referenceId));
+  addDuplicateIssues(recommendations.map(({ referenceId }) => referenceId), ['initialState', recommendationPath], 'Recommendation reference', context);
+  addDuplicateIssues(recommendations.map(({ candidateReferenceId }) => candidateReferenceId), ['initialState', recommendationPath], 'Recommended Candidate', context);
+  addDuplicateIssues(evaluationCase.initialState.preferences.map(({ id }) => id), ['initialState', 'preferences'], 'Preference ID', context);
   for (const [index, recommendation] of recommendations.entries()) {
     addMissingReference(candidateIds, recommendation.candidateReferenceId, ['initialState', recommendationPath, index, 'candidateReferenceId'], 'Candidate', context);
   }
@@ -297,6 +342,7 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
     }
   }
   if (evaluationCase.type === 'preference_learning') {
+    addDuplicateIssues(evaluationCase.initialState.existingReactions.map(({ recommendationReferenceId }) => recommendationReferenceId), ['initialState', 'existingReactions'], 'Reaction target', context);
     addMissingReference(recommendationIds, evaluationCase.input.recommendationReferenceId, ['input', 'recommendationReferenceId'], 'Recommendation', context);
     for (const [index, reaction] of evaluationCase.initialState.existingReactions.entries()) {
       addMissingReference(recommendationIds, reaction.recommendationReferenceId, ['initialState', 'existingReactions', index, 'recommendationReferenceId'], 'Recommendation', context);

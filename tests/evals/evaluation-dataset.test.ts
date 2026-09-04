@@ -9,6 +9,17 @@ import { loadCase, loadDataset, validateDatasets } from '../../evals/agent/datas
 const DATASET_ROOT = path.resolve('evals', 'agent', 'datasets');
 
 describe('Evaluation Dataset', () => {
+  it('allows the no-Interest/no-source scenario but rejects unsupported Controlled sources before startup', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'megumi-dataset-source-boundary-'));
+    const directory = path.join(root, 'controlled/cases/candidate-supply');
+    await mkdir(directory, { recursive: true });
+    const file = path.join(directory, 'source.json');
+    const candidateCase = candidateSupplyCase();
+    await writeJson(file, { ...candidateCase, initialState: { ...candidateCase.initialState, interests: [] } });
+    await expect(loadCase({ rootDirectory: root, identity: 'controlled/candidate-supply.source' })).resolves.toBeDefined();
+    await writeJson(file, { ...candidateCase, initialState: { ...candidateCase.initialState, controlledSources: [{ sourceId: 'douyin', queryIncludes: '', results: [] }] } });
+    await expect(loadCase({ rootDirectory: root, identity: 'controlled/candidate-supply.source' })).rejects.toThrow(/unsupported controlled source/iu);
+  });
   it('loads one controlled Dataset and fixed Case shape for every supported business', async () => {
     const validated = await validateDatasets({ rootDirectory: DATASET_ROOT });
 

@@ -6,6 +6,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadCase } from '../../evals/agent/datasets/dataset-loader';
 import { createCaseEnvironment } from '../../evals/agent/run/case-environment';
+import { createDatabase } from '@megumi/database';
+import { getDiscoveryState } from '@megumi/discovery';
 
 let temporaryRoot: string | undefined;
 
@@ -15,6 +17,63 @@ afterEach(() => {
 });
 
 describe('Case Environment', () => {
+  it('installs two existing Preferences supported by the same explicitly learned feedback', async () => {
+    const resolved = await loadCase({ rootDirectory: path.join(process.cwd(), 'evals/agent/datasets'), identity: 'controlled/preference-learning.learn-source-preference' });
+    if (resolved.case.type !== 'preference_learning') throw new Error('Expected Preference Case');
+    const recommendation = resolved.case.initialState.recommendations[0]!;
+    const interest = resolved.case.initialState.interests[0]!;
+    const environment = await createCaseEnvironment({ repositoryRoot: process.cwd(), candidateModel: resolvedModel(), resolvedCase: { ...resolved, case: {
+      ...resolved.case, initialState: { ...resolved.case.initialState,
+        recommendations: [{ ...recommendation, reaction: 'liked', reactionRevision: 1, learnedReaction: 'liked', learnedReactionRevision: 1 }],
+        preferences: ['first', 'second'].map((id) => ({ id, interestReferenceId: interest.referenceId, polarity: 'positive', dimension: 'source', statement: id,
+          supportingRecommendationReferenceIds: [recommendation.referenceId],
+        })),
+      },
+    } } });
+    try {
+      const database = createDatabase({ filename: environment.paths.database });
+      try {
+        const facts = getDiscoveryState(database);
+        expect(facts.preferences).toHaveLength(2);
+        expect(facts.preferenceEvidence).toHaveLength(2);
+        expect(facts.recommendationStates[0]).toMatchObject({ reactionRevision: 1, learnedReactionRevision: 1, reaction: 'liked' });
+        expect(facts.recommendations[0]?.localDate).toBe('2026-01-14');
+      } finally { database.close(); }
+    } finally { await environment.dispose(); }
+  });
+  it('installs 180 existing Candidates without changing the production replenishment target', async () => {
+    const resolvedCase = await loadCase({ rootDirectory: path.join(process.cwd(), 'evals/agent/datasets'), identity: 'controlled/recommendation.select-relevant-candidate' });
+    if (resolvedCase.case.type !== 'recommendation') throw new Error('Expected Recommendation');
+    const candidate = resolvedCase.case.initialState.candidates[0]!;
+    const expanded = {
+      ...resolvedCase,
+      case: {
+        ...resolvedCase.case,
+        initialState: { ...resolvedCase.case.initialState, candidates: Array.from({ length: 180 }, (_, index) => ({
+          ...candidate, referenceId: `candidate-${index}`, canonicalUrl: `https://example.test/content/${index}`,
+        })) },
+      },
+    };
+    const environment = await createCaseEnvironment({ repositoryRoot: process.cwd(), resolvedCase: expanded, candidateModel: resolvedModel() });
+    try {
+      expect(await environment.runtime.host.discovery.getCandidatePool()).toMatchObject({ availableCount: 180, targetCount: 160, maximumCount: 200 });
+    } finally { await environment.dispose(); }
+  });
+  it('installs the authored Candidate body and clock rather than description and wall time', async () => {
+    const resolvedCase = await loadCase({
+      rootDirectory: path.join(process.cwd(), 'evals', 'agent', 'datasets'),
+      identity: 'controlled/recommendation.select-relevant-candidate',
+    });
+    const environment = await createCaseEnvironment({ repositoryRoot: process.cwd(), resolvedCase, candidateModel: resolvedModel() });
+    try {
+      const pool = await environment.runtime.host.discovery.getCandidatePool();
+      expect(pool?.candidates.find(({ candidate }) => candidate.canonicalUrl === 'https://example.test/evaluation-design')?.candidate).toMatchObject({
+        contentExcerpt: 'A guide to Agent evaluation datasets, execution traces, and graders.',
+        createdAt: '2026-01-15T08:00:00.000Z',
+        expiresAt: '2026-02-14T08:00:00.000Z',
+      });
+    } finally { await environment.dispose(); }
+  });
   it('creates physically isolated Home, Workspace, database, and Trace roots per Case Run', async () => {
     temporaryRoot = mkdtempSync(path.join(tmpdir(), 'megumi-case-environment-test-'));
     const resolvedCase = await loadCase({

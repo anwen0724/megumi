@@ -207,6 +207,8 @@ export {
   TodayDiscoveryViewSchema,
 } from './discovery-view';
 export { createDiscoveryRepository } from './persistence/discovery-repository';
+export { DiscoveryStateSchema, getDiscoveryState, initializeDiscoveryState } from './persistence/discovery-state';
+export type { DiscoveryState } from './persistence/discovery-state';
 export { createCandidateSupplyRepository } from './persistence/candidate-supply-repository';
 export type { CreateCandidateSupplyRepositoryOptions } from './persistence/candidate-supply-repository';
 export {
