@@ -1,7 +1,7 @@
 /*
  * Runs validated Case selections sequentially and seals raw Product facts without evaluating quality.
  */
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Api, ProviderStreams } from '@megumi/ai';
 import { z } from 'zod';
@@ -24,7 +24,8 @@ import {
 } from '../datasets/dataset-loader';
 import { collectTraceIntegrity, type TraceIntegrity } from './case-record';
 import { createCaseEnvironment, type CaseEnvironment } from './case-environment';
-import { executeCase } from './case-execution';
+import { CaseExecutionFailure, executeCase, type CaseExecutionResult } from './case-execution';
+import { getCaseBusinessState } from './business-state';
 import { createRunStorage, type EvaluationRunStorage } from './run-storage';
 
 interface EvaluationRunnerDependencies {
@@ -88,9 +89,9 @@ export async function runEvaluation(input: {
   }
 
   const record = EvaluationRunRecordSchema.parse({
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId,
-    status: caseResults.some((result) => result.recordStatus === 'infrastructure_failed')
+    status: caseResults.some((result) => result.recordStatus === 'infrastructure_failed' || result.terminalState === 'interrupted')
       ? 'completed_with_failures'
       : 'completed',
     startedAt,
@@ -131,91 +132,94 @@ async function runOneCase(input: {
 }): Promise<{ readonly result: CaseRunResult; readonly resultPath: string }> {
   const startedAt = input.now().toISOString();
   let environment: CaseEnvironment | undefined;
+  let execution: CaseExecutionResult | undefined;
+  let partial: CaseExecutionFailure['partial'] | undefined;
   let traceIntegrity = emptyTraceIntegrity('Case Environment did not start.');
-  let resultInput: Omit<CaseRunResult, 'artifacts' | 'traceIntegrity'>;
+  let finalState: CaseRunResult['finalState'] = { status: 'unavailable', message: 'Case Environment did not start.' };
+  const issues: CaseRunResult['issues'] = [];
+  let stopped = false;
+  let initialError: ReturnType<typeof errorRecord> | undefined;
   try {
     environment = await createCaseEnvironment({
-      repositoryRoot: input.repositoryRoot,
-      datasetRoot: input.datasetRoot,
-      resolvedCase: input.resolvedCase,
-      candidateModel: input.candidateModel,
+      repositoryRoot: input.repositoryRoot, datasetRoot: input.datasetRoot,
+      resolvedCase: input.resolvedCase, candidateModel: input.candidateModel,
       ...(input.modelStreams ? { modelStreams: input.modelStreams } : {}),
     });
-    const execution = await executeCase({
-      evaluationCase: input.resolvedCase.case,
-      runtime: environment.runtime,
-      initialStateIds: environment.initialStateIds,
-      candidateModel: {
-        providerId: input.candidateModel.config.providerId,
-        modelId: input.candidateModel.config.modelId,
-      },
-      now: environment.now,
-      ...(environment.advanceTime ? { advanceTime: environment.advanceTime } : {}),
+    execution = await executeCase({
+      evaluationCase: input.resolvedCase.case, runtime: environment.runtime, initialStateIds: environment.initialStateIds,
+      candidateModel: { providerId: input.candidateModel.config.providerId, modelId: input.candidateModel.config.modelId },
+      now: environment.now, ...(environment.advanceTime ? { advanceTime: environment.advanceTime } : {}),
       safetyWallClockLimitMs: input.safetyWallClockLimitMs,
     });
-    traceIntegrity = await collectTraceIntegrity({
-      runtime: environment.runtime,
-      targets: execution.traceTargets,
-    });
-    await environment.stop();
-    resultInput = {
-      schemaVersion: 1,
-      caseRunId: input.caseRunId,
-      caseIdentity: input.resolvedCase.identity,
-      caseType: execution.caseType,
-      recordStatus: 'recorded',
-      startedAt,
-      endedAt: input.now().toISOString(),
-      terminalState: execution.terminalState,
-      candidateModel: input.candidateRecord,
-      environment: environment.details,
-      businessIds: execution.businessIds,
-      productResult: execution.productResult,
-      ownerFacts: execution.ownerFacts,
-    };
   } catch (error) {
-    if (environment) {
-      traceIntegrity = await collectTraceIntegrity({ runtime: environment.runtime, targets: [] })
-        .catch((traceError: unknown) => emptyTraceIntegrity(`Trace collection failed: ${errorMessage(traceError)}`));
-      await environment.stop().catch((stopError: unknown) => {
-        traceIntegrity = withTraceIssue(traceIntegrity, `Case Environment stop failed: ${errorMessage(stopError)}`);
-      });
-    }
-    resultInput = {
-      schemaVersion: 1,
-      caseRunId: input.caseRunId,
-      caseIdentity: input.resolvedCase.identity,
-      caseType: input.resolvedCase.case.type,
-      recordStatus: 'infrastructure_failed',
-      startedAt,
-      endedAt: input.now().toISOString(),
-      candidateModel: input.candidateRecord,
-      environment: environment?.details ?? {
-        environmentKind: input.resolvedCase.environmentKind,
-        candidateModel: `${input.candidateModel.config.providerId}/${input.candidateModel.config.modelId}`,
-      },
-      businessIds: {},
-      error: errorRecord(error),
-    };
+    if (error instanceof CaseExecutionFailure) partial = error.partial;
+    initialError = errorRecord(error);
+    issues.push({ phase: 'execution', message: initialError.message });
   }
 
-  try {
-    return await input.storage.writeCaseRecord({
-      snapshot: toCaseSnapshot(input.resolvedCase),
-      result: { ...resultInput, traceIntegrity },
-      evidence: {
-        traceIntegrity,
-        ...(environment ? {
-          observabilityRoot: environment.paths.observability,
-          workspaceRoot: environment.paths.workspace,
-          initialWorkspaceFiles: environment.initialWorkspaceFiles,
-        } : {}),
-      },
-      ...(environment ? { beforeSeal: environment.dispose } : {}),
-    });
-  } finally {
-    await environment?.dispose().catch(() => undefined);
+  if (environment) {
+    // A stop failure must not erase an already returned business result or permit cleanup.
+    try { await environment.stop(); stopped = true; }
+    catch (error) { issues.push({ phase: 'shutdown', message: errorMessage(error) }); }
+    if (stopped) {
+      try {
+        finalState = { status: 'captured', facts: getCaseBusinessState(environment.paths.database, environment.initialStateIds.workspaceId) };
+      } catch (error) {
+        finalState = { status: 'unavailable', message: errorMessage(error) };
+        issues.push({ phase: 'business_facts', message: errorMessage(error) });
+      }
+      try { traceIntegrity = await collectTraceIntegrity({ runtime: environment.runtime, targets: execution?.traceTargets ?? partial?.traceTargets ?? [] }); }
+      catch (error) { traceIntegrity = emptyTraceIntegrity(errorMessage(error)); }
+      try { await environment.runtime.dispose(); }
+      catch (error) { stopped = false; issues.push({ phase: 'shutdown', message: errorMessage(error) }); }
+    } else {
+      finalState = { status: 'unavailable', message: 'Business shutdown was not confirmed; a final snapshot would be misleading.' };
+      traceIntegrity = emptyTraceIntegrity('Shutdown was not confirmed; the live evidence directory is retained.');
+    }
   }
+  for (const message of traceIntegrity.issues) issues.push({ phase: 'trace', message });
+  const resultInput: Omit<CaseRunResult, 'artifacts'> = {
+    schemaVersion: 2, caseRunId: input.caseRunId, caseIdentity: input.resolvedCase.identity,
+    caseType: input.resolvedCase.case.type, recordStatus: issues.length ? 'infrastructure_failed' : 'recorded',
+    startedAt, endedAt: input.now().toISOString(), candidateModel: input.candidateRecord,
+    environment: environment ? { ...environment.details, temporaryRoot: environment.paths.root } : { environmentKind: input.resolvedCase.environmentKind },
+    businessIds: execution?.businessIds ?? partial?.businessIds ?? {}, finalState, issues, traceIntegrity,
+    ...(partial ? { productResult: partial.productResult, ownerFacts: partial.ownerFacts } : {}),
+    ...(execution ? { terminalState: execution.terminalState, productResult: execution.productResult, ownerFacts: execution.ownerFacts,
+      ...(execution.interruption ? { interruption: execution.interruption } : {}),
+    } : {}),
+    ...(initialError ? { error: initialError } : {}),
+  };
+  // If writing or sealing fails, leave the source environment untouched for recovery.
+  const stored = await input.storage.writeCaseRecord({
+    snapshot: toCaseSnapshot(input.resolvedCase), result: resultInput,
+    initialState: environment ? { status: 'captured', clock: input.resolvedCase.case.initialState.clock,
+      references: environment.initialStateIds, facts: environment.initialState, workspaceFiles: environment.initialWorkspaceFiles,
+      businessSettings: environment.details.businessSettings,
+    } : { status: 'unavailable', message: initialError?.message ?? 'Initialization did not complete.' },
+    evidence: {
+      traceIntegrity,
+      ...(environment && stopped ? { observabilityRoot: environment.paths.observability,
+        workspaceRoot: environment.paths.workspace, initialWorkspaceRoot: environment.paths.initialWorkspace,
+        initialWorkspaceFiles: environment.initialWorkspaceFiles,
+      } : {}),
+    },
+  }).catch((error: unknown) => {
+    const recovery = environment ? ` Retained environment: ${environment.paths.root}.` : '';
+    throw new Error(`Case ${input.caseRunId} could not be sealed.${recovery} ${errorMessage(error)}`, { cause: error });
+  });
+  if (environment) {
+    let cleanup: { status: string; path?: string; message?: string };
+    if (stopped && stored.result.recordStatus === 'recorded') {
+      try { await environment.dispose(); cleanup = { status: 'removed' }; }
+      catch (error) { cleanup = { status: 'retained', path: environment.paths.root, message: errorMessage(error) }; }
+    } else {
+      cleanup = { status: 'retained', path: environment.paths.root, message: 'Incomplete capture or shutdown; kept for diagnosis.' };
+    }
+    // Cleanup is a separate append-only receipt: a deletion failure cannot rewrite business facts.
+    await writeFile(path.join(input.storage.runDirectory, 'cases', input.caseRunId, 'cleanup.json'), JSON.stringify(cleanup, null, 2), { encoding: 'utf8', flag: 'wx' });
+  }
+  return stored;
 }
 
 async function resolveSelection(
@@ -288,10 +292,6 @@ function emptyTraceIntegrity(issue: string): TraceIntegrity {
   return {
     status: 'incomplete', traceCount: 0, health: { unavailable: issue }, targets: [], issues: [issue],
   };
-}
-
-function withTraceIssue(integrity: TraceIntegrity, issue: string): TraceIntegrity {
-  return { ...integrity, status: 'incomplete', issues: [...integrity.issues, issue] };
 }
 
 function errorRecord(error: unknown): { readonly name: string; readonly message: string } {

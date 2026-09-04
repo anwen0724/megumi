@@ -700,6 +700,7 @@ function composeCapabilitiesWithDatabase(
       },
     },
     recommendation: {
+      observability: observability.observability,
       repository: discoveryRepository,
       attempts: recommendationAttempts,
       sourceRegistry: discoverySources,

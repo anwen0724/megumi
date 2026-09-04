@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "recommendation.select-relevant-candidate",
-  "revision": 1,
+  "revision": 2,
   "name": "选择相关且未推荐的候选",
   "description": "验证 Megumi 从固定候选池中发布与兴趣相关且未重复的推荐。",
   "metadata": {

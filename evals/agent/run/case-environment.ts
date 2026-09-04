@@ -2,7 +2,7 @@
  * Owns one physically isolated Evaluation Case environment and the real Product Runtime inside it.
  */
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Api, ProviderStreams } from '@megumi/ai';
@@ -17,6 +17,7 @@ import { createEvaluationHomeOptions } from '../adapters/evaluation-home';
 import { createLiveProfile } from '../adapters/live/profile';
 import type { ResolvedCandidateModel } from '../adapters/candidate-model';
 import type { ResolvedEvaluationCase } from '../datasets/dataset-loader';
+import { getCaseBusinessState } from './business-state';
 import {
   caseInitialState,
   createDatabaseInitialStateOwner,
@@ -30,17 +31,19 @@ export interface CaseEnvironment {
   readonly resolvedCase: ResolvedEvaluationCase;
   readonly initialStateIds: InstalledInitialStateIds;
   readonly initialWorkspaceFiles: Readonly<Record<string, string>>;
+  readonly initialState: ReturnType<typeof getCaseBusinessState>;
   readonly paths: {
     readonly root: string;
     readonly home: string;
     readonly workspace: string;
     readonly database: string;
     readonly observability: string;
+    readonly initialWorkspace: string;
   };
   readonly details: Readonly<Record<string, unknown>>;
   readonly now: () => string;
   readonly advanceTime?: (durationMs: number, deadlineMs: number) => Promise<void>;
-  /** Flushes accepted Trace writes and closes all Product-owned resources without deleting evidence. */
+  /** Stops business work and flushes Trace, keeping query resources available. */
   stop(): Promise<void>;
   /** Stops the Product and removes the isolated temporary environment. */
   dispose(): Promise<void>;
@@ -60,6 +63,7 @@ export async function createCaseEnvironment(input: {
   const root = await mkdtemp(path.join(temporaryParent, 'megumi-evaluation-case-'));
   const home = path.join(root, 'home');
   const workspace = path.join(root, 'workspace');
+  const initialWorkspace = path.join(root, 'initial-workspace');
   const database = path.join(home, 'sqlite', 'megumi.sqlite');
   const observability = path.join(home, 'logs', 'observability');
   let runtime: ProductRuntime | undefined;
@@ -76,6 +80,7 @@ export async function createCaseEnvironment(input: {
       files: initialState.workspaceFiles,
     });
     const initialWorkspaceFiles = await workspaceDigests(workspace);
+    await cp(workspace, initialWorkspace, { recursive: true, errorOnExist: true, force: false });
 
     const migrationsFolder = path.join(input.repositoryRoot, 'packages', 'agent', 'database', 'migrations');
     const owner = createDatabaseInitialStateOwner({ homePath: home, migrationsFolder, now: initialState.clock });
@@ -85,6 +90,7 @@ export async function createCaseEnvironment(input: {
     } finally {
       owner.close();
     }
+    const installedState = getCaseBusinessState(database, initialStateIds.workspaceId);
 
     const productPackage = z.object({ version: z.string().min(1) }).passthrough().parse(
       JSON.parse(await readFile(path.join(input.repositoryRoot, 'package.json'), 'utf8')),
@@ -134,17 +140,18 @@ export async function createCaseEnvironment(input: {
       resolvedCase: input.resolvedCase,
       initialStateIds,
       initialWorkspaceFiles,
-      paths: { root, home, workspace, database, observability },
+      initialState: installedState,
+      paths: { root, home, workspace, database, observability, initialWorkspace },
       details: {
         environmentKind: input.resolvedCase.environmentKind,
         candidateModel: `${input.candidateModel.config.providerId}/${input.candidateModel.config.modelId}`,
         candidateModelSource: input.candidateModel.source,
         timezone: 'UTC',
         sources: profile.sourceDescription,
+        businessSettings: z.object({ discovery: z.record(z.unknown()) }).parse(settingsStorage.read()).discovery,
       },
       now: profile.now,
       ...(controlled ? { advanceTime: (durationMs: number, deadlineMs: number) => controlled.timerDriver.advanceBy(durationMs, async () => {
-        if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
         if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
         // Only Preference Cases request a time jump, after feedback is submitted.
         // Other Cases keep their clock fixed; automatic product triggers are disabled.

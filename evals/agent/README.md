@@ -66,7 +66,11 @@ npm run eval:agent -- run --candidate .\candidate-model.json --dataset controlle
 
 ## 隔离与结果
 
-每个 Case 执行时会临时创建一套 Home、Workspace、业务 SQLite、Observability 存储和 Product Runtime。这是为了隔离不同 Case 以及正常产品数据；Case 结束后临时环境会被删除，下一 Case 不复用任何运行状态。
+每个 Case 执行时会临时创建一套 Home、Workspace、业务 SQLite、Observability 存储和 Product Runtime。这是为了隔离不同 Case 以及正常产品数据。初始化直接安装已声明业务事实，不重放候选提交或偏好学习，不修改正式容量配置。下一 Case 不复用任何运行状态。
+
+先停止业务、读取最终状态、关闭资源并封存证据，成功后才删除临时环境；收尾或留档不完整则保留现场，在 `cleanup.json` 记录路径。运行记录封存失败会抛出错误，临时环境不删除。
+
+Controlled 当前仅支持 `open_web` 来源。真实产品自动后台触发关闭，只执行 Case 动作。Preference Case 可在 input 声明 `advanceTimeMs` 驱动真实学习定时器；当前示例推进 600000 毫秒，遵守少量反馈十分钟规则，不需要实际等待。未推进到触发时刻则保留 pending。
 
 结果保存在 `evals/agent/records/<runId>/`：
 
@@ -74,21 +78,29 @@ npm run eval:agent -- run --candidate .\candidate-model.json --dataset controlle
 run.json
 cases/<caseRunId>/
   case.json
+  initial-state.json
   result.json
+  cleanup.json
   traces/
     manifest.json
     journal/
     content/
+    runtime/
   artifacts/
+    initial-workspace/
     workspace/
 ```
 
 - `case.json` 固化本次实际运行的 Case、revision、digest、资源摘要和 Dataset 归属。
-- `result.json` 保存 Product Owner 返回的最终业务结果、业务关联 ID、Trace 完整性和环境说明。
-- `traces/` 保存该隔离 Case 的原生 Trace Journal、Content 与关联查询结果。
-- `artifacts/workspace/` 只保存相对 Initial State 新增或修改的 Workspace 文件。
+- `initial-state.json` 保存实际安装后的业务事实、引用 ID 映射、起始时间、业务配置和初始文件摘要，不保存密钥。
+- `result.json` 保存 Product Owner 返回结果、停止后的数据库事实、业务关联 ID、Trace 完整性、独立采集问题和文件清单。
+- `traces/` 保存该隔离 Case 的原生 Trace Journal、Content、Runtime Log（存在时）与关联查询结果；查询分页收集，不截断为前 200 条。
+- `artifacts/initial-workspace/` 保存初始 Case 文件；`artifacts/workspace/` 保存新增或修改文件，删除路径记录在 `result.json` 的 `artifacts.deletedFiles`。
+- `cleanup.json` 单独说明临时环境已删除或保留，不改写已封存的业务结果。
 
-结果不会复制整个代码仓库、Home、Workspace 初始文件或 SQLite。Trace 是派生观测；最终业务状态以 Product Owner 返回值及其数据库事实为准。单个 Case 的基础设施失败会单独记录，后续 Case 继续执行。
+结果不会复制整个代码仓库、Home 或 SQLite。Trace 记录过程证据，最终业务状态同时保留真实数据库事实；两者互补。单个 Case 的可记录基础设施失败会单独记录，后续 Case 继续执行。
+
+`terminalState` 区分 settled（业务已返回终态，包括失败/取消）、pending（业务等待）和 interrupted（真实安全时限中断）。`recordStatus` 只说明证据留存是否成功，不是质量分数。达到 `--timeout-ms` 会请求停止并保存中断来源、限额、已取得结果及最终状态，不能把一次 Host 等待超时冒充业务失败。CLI 逐 Case 输出状态；基础设施失败或安全中断时退出码为 1。
 
 ## 目录职责
 

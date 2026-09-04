@@ -18,13 +18,14 @@ export interface EvaluationRunStorage {
   writeCaseRecord(input: {
     readonly snapshot: CaseSnapshot;
     readonly result: Omit<CaseRunResult, 'artifacts'>;
+    readonly initialState: unknown;
     readonly evidence: {
       readonly traceIntegrity: TraceIntegrity;
       readonly observabilityRoot?: string;
       readonly workspaceRoot?: string;
       readonly initialWorkspaceFiles?: Readonly<Record<string, string>>;
+      readonly initialWorkspaceRoot?: string;
     };
-    readonly beforeSeal?: () => Promise<void>;
   }): Promise<{ readonly result: CaseRunResult; readonly resultPath: string }>;
   writeRunRecord(record: EvaluationRunRecord): Promise<void>;
 }
@@ -53,25 +54,27 @@ export async function createRunStorage(input: {
       }
       await mkdir(draftDirectory);
       await writeJson(path.join(draftDirectory, 'case.json'), snapshot);
-      const artifacts = await archiveCaseEvidence({
-        destination: draftDirectory,
-        traceIntegrity: recordInput.evidence.traceIntegrity,
-        ...(recordInput.evidence.observabilityRoot
-          ? { observabilityRoot: recordInput.evidence.observabilityRoot }
-          : {}),
-        ...(recordInput.evidence.workspaceRoot ? { workspaceRoot: recordInput.evidence.workspaceRoot } : {}),
-        ...(recordInput.evidence.initialWorkspaceFiles
-          ? { initialWorkspaceFiles: recordInput.evidence.initialWorkspaceFiles }
-          : {}),
-      });
+      await writeJson(path.join(draftDirectory, 'initial-state.json'), toJsonSafe(recordInput.initialState));
       let resultInput: Omit<CaseRunResult, 'artifacts'> = recordInput.result;
+      let artifacts: CaseRunResult['artifacts'] = { files: [], initialFiles: [], deletedFiles: [] };
       try {
-        await recordInput.beforeSeal?.();
+        artifacts = await archiveCaseEvidence({
+          destination: draftDirectory,
+          traceIntegrity: recordInput.evidence.traceIntegrity,
+          ...(recordInput.evidence.observabilityRoot
+            ? { observabilityRoot: recordInput.evidence.observabilityRoot }
+            : {}),
+          ...(recordInput.evidence.workspaceRoot ? { workspaceRoot: recordInput.evidence.workspaceRoot } : {}),
+          ...(recordInput.evidence.initialWorkspaceFiles
+            ? { initialWorkspaceFiles: recordInput.evidence.initialWorkspaceFiles }
+            : {}),
+          ...(recordInput.evidence.initialWorkspaceRoot ? { initialWorkspaceRoot: recordInput.evidence.initialWorkspaceRoot } : {}),
+        });
       } catch (error) {
         resultInput = {
           ...recordInput.result,
           recordStatus: 'infrastructure_failed',
-          error: errorRecord(error),
+          issues: [...recordInput.result.issues, { phase: 'archive', message: errorRecord(error).message }],
         };
       }
       const result = CaseRunResultSchema.parse(toJsonSafe({ ...resultInput, artifacts }));

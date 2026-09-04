@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "environmentKind": "controlled",
   "datasetId": "interest-understanding",
-  "revision": 1,
+  "revision": 2,
   "name": "Interest Understanding",
   "description": "验证 Megumi 从授权会话理解长期兴趣。",
   "caseIds": ["interest-understanding.recognize-explicit-interest"]

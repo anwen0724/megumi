@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Api, Model } from '@megumi/ai';
 import type { ExecutionOutcome } from '@megumi/execution';
+import type { Observability, OperationCompletion } from '@megumi/observability';
 import { candidatePoolSettings } from '../candidate-supply/candidate-pool';
 import type { CandidateSupplyRepository } from '../candidate-supply/candidate-supply';
 import type { InterestRepository } from '../persistence/interest-repository';
@@ -78,6 +79,7 @@ export type StartRecommendationExecutionResult<TRejected = unknown> =
   | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string; readonly retryable: boolean } };
 
 export interface CreateRecommendationRuntimeOptions {
+  readonly observability?: Observability;
   readonly repository: RecommendationDataRepository;
   readonly attempts: RecommendationAttempts;
   readonly sourceRegistry: {
@@ -136,6 +138,17 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
   let lastCheck: TodayRecommendationResult | undefined;
   let candidateWait: { readonly localDate: string; readonly trigger: RecommendationTrigger } | undefined;
   let candidateWaitTimer: unknown;
+  const traceTasks = new Set<Promise<unknown>>();
+  const executionCompletions = new Map<string, Promise<ExecutionOutcome>[]>();
+  const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = async (request) => {
+    const result = await options.startExecution(request);
+    if (options.observability && (result.status === 'started' || result.status === 'already_started')) {
+      const completions = executionCompletions.get(request.requestId) ?? [];
+      completions.push(result.completion);
+      executionCompletions.set(request.requestId, completions);
+    }
+    return result;
+  };
 
   /** Discards only input waiting; it never cancels an Agent Core execution. */
   function clearCandidateWait(): void {
@@ -185,6 +198,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
   const startRecommendation = async (
     request: { readonly trigger: RecommendationTrigger },
     expectedLocalDate?: string,
+    observedRequestId?: string,
   ): Promise<RequestRecommendationResult> => {
     const snapshotAt = options.clock.now();
     const localDate = localDateAt(snapshotAt, options.timezone.get());
@@ -230,9 +244,11 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     if (model.status === 'unavailable') return { status: 'model_unavailable', localDate };
     clearCandidateWait();
 
-    const requestId = ids.createRequestId();
+    const requestId = observedRequestId ?? ids.createRequestId();
+    try { options.observability?.recordContent({ kind: 'discovery.candidates', value: prepared, correlation: { requestId } }); }
+    catch { /* Observation cannot affect snapshot admission. */ }
     active = createActiveRequest(requestId, localDate, request.trigger);
-    const started = await options.startExecution({
+    const started = await startExecution({
       kind: 'recommendation',
       requestId,
       localDate,
@@ -305,7 +321,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
         false,
       );
     }
-    const operation = startRecommendation(request, expectedLocalDate);
+    const operation = observeRecommendation(request, expectedLocalDate);
     starting = operation;
     try {
       const result = await operation;
@@ -322,6 +338,36 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       if (starting === operation) starting = undefined;
     }
   };
+
+  /** Acknowledges startup promptly but keeps the business Trace open through settlement and Agent shutdown. */
+  function observeRecommendation(request: { readonly trigger: RecommendationTrigger }, expectedLocalDate?: string): Promise<RequestRecommendationResult> {
+    if (!options.observability || active) return startRecommendation(request, expectedLocalDate);
+    const requestId = ids.createRequestId();
+    let resolveAccepted!: (result: RequestRecommendationResult) => void;
+    let rejectAccepted!: (error: unknown) => void;
+    const accepted = new Promise<RequestRecommendationResult>((resolve, reject) => { resolveAccepted = resolve; rejectAccepted = reject; });
+    let work: Promise<RequestRecommendationResult | WaitRecommendationResult> | undefined;
+    const runOnce = () => (work ??= (async () => {
+      try {
+        const result = await startRecommendation(request, expectedLocalDate, requestId);
+        resolveAccepted(result);
+        const completion = active?.requestId === requestId ? active.completion : undefined;
+        const final = completion ? await completion : latest?.requestId === requestId ? latest.result : result;
+        await Promise.allSettled(executionCompletions.get(requestId) ?? []);
+        return final;
+      } catch (error) { rejectAccepted(error); throw error; }
+    })());
+    const traced = (async () => {
+      try {
+        await options.observability!.withTrace({ kind: 'recommendation', correlation: { requestId }, classifyResult: classifyRecommendation }, runOnce);
+      } catch { await runOnce(); }
+    })().catch((error: unknown) => { rejectAccepted(error); }).finally(() => {
+      traceTasks.delete(traced);
+      executionCompletions.delete(requestId);
+    });
+    traceTasks.add(traced);
+    return accepted;
+  }
 
   async function handleSettlement(
     requestId: string,
@@ -408,7 +454,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       complete(current, { status: 'waiting_for_candidates', localDate: current.localDate });
       return;
     }
-    const started = await options.startExecution({
+    const started = await startExecution({
       kind: 'recommendation',
       requestId: current.requestId,
       localDate: current.localDate,
@@ -517,8 +563,15 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
         latest = { requestId: active.requestId, result };
         active = undefined;
       }
+      await Promise.allSettled([...traceTasks]);
     },
   };
+}
+
+function classifyRecommendation(result: RequestRecommendationResult | WaitRecommendationResult): OperationCompletion {
+  if (result.status === 'failed') return { outcome: { status: 'error', code: result.failure.code, message: result.failure.message } };
+  if (result.status === 'cancelled') return { outcome: { status: 'cancelled' } };
+  return { outcome: { status: 'ok', code: result.status } };
 }
 
 function prepareSnapshot(

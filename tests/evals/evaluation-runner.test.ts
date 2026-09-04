@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CaseRunResultSchema, EvaluationRunRequestSchema } from '../../evals/agent/contracts/evaluation-run';
 import { runEvaluation } from '../../evals/agent/run/evaluation-runner';
 import { createScriptedStreams } from '../packages/composition/compose-test-application';
+import type { AssistantMessage, ProviderStreams } from '@megumi/ai';
+import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
 
 let temporaryRoot: string | undefined;
 const now = '2026-09-03T00:00:00.000Z';
@@ -18,6 +20,34 @@ afterEach(() => {
 });
 
 describe('Evaluation Run', () => {
+  it('seals a safety interruption with accepted IDs and the final cancelled database reply', async () => {
+    const roots = await createDatasetRoot();
+    const stream: ProviderStreams['stream'] = (model, _context, options) => {
+      const events = new AssistantMessageEventStream();
+      const abort = () => {
+        const message: AssistantMessage = { role: 'assistant', content: [], api: model.api, provider: model.provider, model: model.id,
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'aborted', timestamp: Date.now(), errorMessage: 'Test stream cancelled',
+        };
+        events.push({ type: 'error', reason: 'aborted', error: message });
+        events.end(message);
+      };
+      if (options?.signal?.aborted) abort();
+      else options?.signal?.addEventListener('abort', abort, { once: true });
+      return events;
+    };
+    const result = await runEvaluation({ repositoryRoot: process.cwd(), ...roots,
+      request: EvaluationRunRequestSchema.parse({ caseIds: ['controlled/conversation.record-facts'], candidateModel: candidateConfig(), safetyWallClockLimitMs: 500 }),
+      environment: { TEST_EVALUATION_API_KEY: 'test-key' },
+      dependencies: { createRunId: () => 'run.interrupted', modelStreams: { 'openai-completions': { stream, streamSimple: stream } } },
+    });
+    expect(result.record.status).toBe('completed_with_failures');
+    expect(result.caseResults[0]).toMatchObject({ terminalState: 'interrupted',
+      interruption: { source: 'evaluation_safety_guard', limitMs: 500 },
+      businessIds: { sessionId: expect.any(String), executionIds: [expect.any(String)] },
+      finalState: { status: 'captured', facts: { sessions: [{ messages: expect.arrayContaining([expect.objectContaining({ message_kind: 'assistant_reply', status: 'cancelled' })]) }] } },
+    });
+  });
   it('deduplicates Dataset and direct Case selection, then seals facts without evaluating them', async () => {
     const roots = await createDatasetRoot();
     const scripted = createScriptedStreams(['The task is complete.']);
@@ -61,6 +91,7 @@ describe('Evaluation Run', () => {
     const caseDirectory = path.join(result.runDirectory, 'cases', 'controlled.conversation.record-facts.r1');
     expect(existsSync(path.join(caseDirectory, 'case.json'))).toBe(true);
     expect(existsSync(path.join(caseDirectory, 'result.json'))).toBe(true);
+    expect(existsSync(path.join(caseDirectory, 'initial-state.json'))).toBe(true);
     expect(existsSync(path.join(caseDirectory, 'traces', 'manifest.json'))).toBe(true);
     expect(existsSync(path.join(caseDirectory, 'traces', 'journal'))).toBe(true);
     expect(existsSync(path.join(caseDirectory, 'artifacts'))).toBe(true);
@@ -80,6 +111,7 @@ describe('Evaluation Run', () => {
       businessIds: { sessionId: expect.any(String), executionIds: [expect.any(String)] },
       productResult: { steps: [{ status: 'ok' }] },
       traceIntegrity: { status: 'complete' },
+      finalState: { status: 'captured', facts: { sessions: [{ session: { session_id: expect.any(String) }, messages: expect.any(Array) }] } },
       artifacts: { files: [] },
     });
     expect(caseResult.traceIntegrity.traceCount).toBeGreaterThanOrEqual(1);
@@ -103,7 +135,7 @@ describe('Evaluation Run', () => {
   });
 
   it('records one Case infrastructure failure and still runs the remaining Case', async () => {
-    const roots = await createDatasetRoot({ includeUnsupportedSourceCase: true });
+    const roots = await createDatasetRoot({ includeInvalidInitialStateCase: true });
     const scripted = createScriptedStreams(['The task is complete.']);
     const request = EvaluationRunRequestSchema.parse({
       datasetIds: ['controlled/mixed'],
@@ -133,7 +165,7 @@ describe('Evaluation Run', () => {
   });
 });
 
-async function createDatasetRoot(options: { readonly includeUnsupportedSourceCase?: boolean } = {}) {
+async function createDatasetRoot(options: { readonly includeInvalidInitialStateCase?: boolean } = {}) {
   temporaryRoot = mkdtempSync(path.join(tmpdir(), 'megumi-evaluation-runner-test-'));
   const datasetRoot = path.join(temporaryRoot, 'datasets');
   const evaluationRoot = path.join(temporaryRoot, 'evaluation');
@@ -146,11 +178,11 @@ async function createDatasetRoot(options: { readonly includeUnsupportedSourceCas
   await writeJson(path.join(caseRoot, 'conversation', 'record-facts.json'), conversationCase());
   await writeJson(path.join(manifestRoot, 'conversation-a.json'), manifest('conversation-a', ['conversation.record-facts']));
   await writeJson(path.join(manifestRoot, 'conversation-b.json'), manifest('conversation-b', ['conversation.record-facts']));
-  if (options.includeUnsupportedSourceCase) {
+  if (options.includeInvalidInitialStateCase) {
     await mkdir(path.join(caseRoot, 'candidate-supply'), { recursive: true });
-    await writeJson(path.join(caseRoot, 'candidate-supply', 'unsupported-source.json'), unsupportedSourceCase());
+    await writeJson(path.join(caseRoot, 'candidate-supply', 'invalid-initial-state.json'), invalidInitialStateCase());
     await writeJson(path.join(manifestRoot, 'mixed.json'), manifest('mixed', [
-      'candidate-supply.unsupported-source', 'conversation.record-facts',
+      'candidate-supply.invalid-initial-state', 'conversation.record-facts',
     ]));
   }
   return { datasetRoot, evaluationRoot };
@@ -167,16 +199,16 @@ function conversationCase() {
   };
 }
 
-function unsupportedSourceCase() {
+function invalidInitialStateCase() {
   return {
-    schemaVersion: 2, caseId: 'candidate-supply.unsupported-source', revision: 1,
-    name: 'Unsupported source', description: 'Fails only while composing its Controlled Adapter.',
+    schemaVersion: 2, caseId: 'candidate-supply.invalid-initial-state', revision: 1,
+    name: 'Invalid initial state', description: 'Fails Owner validation: truncated content has no excerpt.',
     type: 'candidate_supply',
     initialState: {
       clock: now, minimumCount: 1, maximumCount: 3,
       interests: [{ referenceId: 'interest', description: 'TypeScript', status: 'active' }],
-      existingCandidates: [],
-      controlledSources: [{ sourceId: 'unsupported', queryIncludes: 'TypeScript', results: [] }],
+      existingCandidates: [{ referenceId: 'invalid', sourceId: 'open_web', sourceName: 'Web', canonicalUrl: 'https://example.test/invalid', title: 'Invalid excerpt', contentTruncated: true, matchedInterestReferenceIds: ['interest'], relevance: 'direct' }],
+      controlledSources: [{ sourceId: 'open_web', queryIncludes: 'TypeScript', results: [] }],
     },
     input: { trigger: 'supply_conditions_changed' },
   };

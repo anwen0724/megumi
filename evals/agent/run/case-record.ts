@@ -20,12 +20,8 @@ export async function collectTraceIntegrity(input: {
   await input.runtime.host.observability.flush();
   const [healthResult, allTraces, ...targetResults] = await Promise.all([
     input.runtime.host.observability.getHealth({}),
-    input.runtime.host.observability.listTraces({ limit: 200 }),
-    ...input.targets.map((target) => input.runtime.host.observability.listTraces({
-      traceKind: target.traceKind,
-      correlation: target.correlation,
-      limit: 200,
-    })),
+    listAllTraces(input.runtime, {}),
+    ...input.targets.map((target) => listAllTraces(input.runtime, { traceKind: target.traceKind, correlation: target.correlation })),
   ]);
 
   const health = healthResult.status === 'ok'
@@ -37,7 +33,7 @@ export async function collectTraceIntegrity(input: {
   }
   if (allTraces.status === 'failed') issues.push(`Trace list failed: ${allTraces.message}`);
   const summaries = allTraces.status === 'ok' ? allTraces.traces : [];
-  if (summaries.some((trace) => trace.diagnostics === 'incomplete')) {
+  if (summaries.some((trace) => trace.diagnostics === 'incomplete' || trace.status === 'incomplete')) {
     issues.push('At least one stored Trace reports incomplete diagnostics.');
   }
 
@@ -64,6 +60,7 @@ export async function archiveCaseEvidence(input: {
   readonly observabilityRoot?: string;
   readonly workspaceRoot?: string;
   readonly initialWorkspaceFiles?: Readonly<Record<string, string>>;
+  readonly initialWorkspaceRoot?: string;
   readonly destination: string;
   readonly traceIntegrity: TraceIntegrity;
 }): Promise<ArtifactManifest> {
@@ -80,6 +77,7 @@ export async function archiveCaseEvidence(input: {
       path.join(input.observabilityRoot, 'content'),
       path.join(tracesDestination, 'content'),
     );
+    await copyDirectoryIfPresent(path.join(input.observabilityRoot, 'runtime'), path.join(tracesDestination, 'runtime'));
   }
   await writeJson(path.join(tracesDestination, 'manifest.json'), input.traceIntegrity);
 
@@ -90,7 +88,22 @@ export async function archiveCaseEvidence(input: {
         destination: path.join(artifactsDestination, 'workspace'),
       })
     : [];
-  return { files };
+  const finalPaths = input.workspaceRoot ? new Set((await listFiles(input.workspaceRoot)).map(({ relativePath }) => relativePath)) : new Set<string>();
+  const deletedFiles = Object.keys(input.initialWorkspaceFiles ?? {}).filter((file) => !finalPaths.has(file)).sort();
+  const initialFiles = input.initialWorkspaceRoot ? await archiveChangedWorkspaceFiles({ workspaceRoot: input.initialWorkspaceRoot, initialFiles: {}, destination: path.join(artifactsDestination, 'initial-workspace') }) : [];
+  return { files, deletedFiles, initialFiles: initialFiles.map((file) => ({ ...file, path: file.path.replace(/^workspace\//u, 'initial-workspace/') })) };
+}
+
+async function listAllTraces(runtime: ProductRuntime, query: Parameters<ProductRuntime['host']['observability']['listTraces']>[0]) {
+  const traces: Extract<Awaited<ReturnType<ProductRuntime['host']['observability']['listTraces']>>, { status: 'ok' }>['traces'] = [];
+  const seen = new Set<string>();
+  for (let offset = 0; ; offset += 200) {
+    const result = await runtime.host.observability.listTraces({ ...query, limit: 200, offset });
+    if (result.status === 'failed') return result;
+    if (result.traces.some(({ traceId }) => seen.has(traceId))) return { status: 'failed' as const, message: 'Trace pagination repeated a page; capture is not stable.' };
+    for (const trace of result.traces) { seen.add(trace.traceId); traces.push(trace); }
+    if (result.traces.length < 200) return { status: 'ok' as const, traces };
+  }
 }
 
 async function archiveChangedWorkspaceFiles(input: {

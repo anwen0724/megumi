@@ -18,6 +18,8 @@ export interface TraceListQuery {
   readonly contentKind?: ContentKind;
   readonly correlation?: TraceCorrelation;
   readonly limit?: number;
+  /** Offset within the stable startedAt/traceId order; callers should paginate a stopped capture. */
+  readonly offset?: number;
 }
 
 export interface TraceSummaryProjection {

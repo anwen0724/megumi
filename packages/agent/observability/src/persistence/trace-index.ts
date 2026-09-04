@@ -353,13 +353,13 @@ function queryTraceSummaries(
   }
   if (query.correlation) appendCorrelationConditions(conditions, parameters, query.correlation);
   const limit = Math.max(1, Math.min(query.limit ?? 200, 200));
-  parameters.push(limit);
+  parameters.push(limit, Math.max(0, Math.floor(query.offset ?? 0)));
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   const rows = database.prepare<TraceSummaryRow>({
     sql: `SELECT t.trace_id, t.trace_kind, t.status, t.diagnostics,
       t.started_at, t.ended_at, t.span_count, t.event_count, t.content_count, t.issue_count
       FROM traces t ${where}
-      ORDER BY t.started_at DESC, t.trace_id ASC LIMIT ?`,
+      ORDER BY t.started_at DESC, t.trace_id ASC LIMIT ? OFFSET ?`,
   }).all(parameters);
   const correlations = loadCorrelations(database, rows.map((row) => row.trace_id));
   return rows.map((row) => ({

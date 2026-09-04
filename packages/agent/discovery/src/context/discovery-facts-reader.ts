@@ -68,7 +68,7 @@ export function createDiscoveryFactsReader(options: {
           description: interest.description,
           status: interest.status,
           interestRevision: interest.revision,
-          preference: preferences.get(interest.id),
+          ...(preferences.has(interest.id) ? { preference: preferences.get(interest.id)! } : {}),
         }));
       const facts: RecommendationFacts = {
         asOf: attempt.snapshotAt,

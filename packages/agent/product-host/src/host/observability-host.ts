@@ -48,6 +48,7 @@ export const ObservabilityListPayloadSchema = z.object({
   status: TraceStatusSchema.optional(),
   correlation: ObservabilityCorrelationSchema.optional(),
   limit: z.number().int().min(1).max(200).optional(),
+  offset: z.number().int().nonnegative().optional(),
 }).strict();
 export const ObservabilityTracePayloadSchema = z.object({ traceId: z.string().min(1) }).strict();
 export const ObservabilityContentPayloadSchema = z.object({

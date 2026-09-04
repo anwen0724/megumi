@@ -17,19 +17,25 @@ afterEach(() => {
 });
 
 describe('Case Environment', () => {
-  it('installs two existing Preferences supported by the same explicitly learned feedback', async () => {
+  it.each([false, true])('validates shared Preference feedback scope (unrelated Interest: %s)', async (unrelated) => {
     const resolved = await loadCase({ rootDirectory: path.join(process.cwd(), 'evals/agent/datasets'), identity: 'controlled/preference-learning.learn-source-preference' });
     if (resolved.case.type !== 'preference_learning') throw new Error('Expected Preference Case');
     const recommendation = resolved.case.initialState.recommendations[0]!;
     const interest = resolved.case.initialState.interests[0]!;
-    const environment = await createCaseEnvironment({ repositoryRoot: process.cwd(), candidateModel: resolvedModel(), resolvedCase: { ...resolved, case: {
+    const creation = createCaseEnvironment({ repositoryRoot: process.cwd(), candidateModel: resolvedModel(), resolvedCase: { ...resolved, case: {
       ...resolved.case, initialState: { ...resolved.case.initialState,
+        interests: [...resolved.case.initialState.interests, ...(unrelated ? [{ referenceId: 'unrelated', description: 'Gardening', status: 'active' as const }] : [])],
         recommendations: [{ ...recommendation, reaction: 'liked', reactionRevision: 1, learnedReaction: 'liked', learnedReactionRevision: 1 }],
-        preferences: ['first', 'second'].map((id) => ({ id, interestReferenceId: interest.referenceId, polarity: 'positive', dimension: 'source', statement: id,
+        preferences: ['first', 'second'].map((id) => ({ id, interestReferenceId: unrelated ? 'unrelated' : interest.referenceId, polarity: 'positive', dimension: 'source', statement: id,
           supportingRecommendationReferenceIds: [recommendation.referenceId],
         })),
       },
     } } });
+    if (unrelated) {
+      await expect(creation.then(async (unexpected) => { await unexpected.dispose(); })).rejects.toThrow(/Interest scope/u);
+      return;
+    }
+    const environment = await creation;
     try {
       const database = createDatabase({ filename: environment.paths.database });
       try {

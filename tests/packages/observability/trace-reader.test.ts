@@ -3,6 +3,8 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createDatabase } from '@megumi/database';
+import { createTraceIndex } from '../../../packages/agent/observability/src/persistence/trace-index';
 import { encodeTraceJournalRecord, type TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 import type {
   JournalCheckpoint,
@@ -14,6 +16,20 @@ import { summarizeTrace, type TraceProjection } from '../../../packages/agent/ob
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Trace Reader', () => {
+  it.each([false, true])('paginates traces sharing a timestamp without loss (SQLite index: %s)', async (indexed) => {
+    const database = createDatabase({ filename: ':memory:' });
+    try {
+    const storage = new ObservabilityMemoryStorage();
+    const ids = Array.from({ length: 205 }, (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`);
+    seedSegment(storage, '2026-08-26', 1, ids.flatMap((id) => [started(id, 1), ended(id, 2)]));
+    const reader = createTraceReader({ rootDirectory: 'observability', storage, ...(indexed ? { index: createTraceIndex({ database }) } : {}) });
+    const first = await reader.listTraces({ limit: 200 });
+    const second = await reader.listTraces({ limit: 200, offset: 200 });
+    expect(first).toHaveLength(200);
+    expect(second).toHaveLength(5);
+    expect([...first, ...second].map(({ traceId }) => traceId)).toEqual(ids);
+    } finally { database.close(); }
+  });
   it('uses the Derived Index for repeated queries without rescanning Journal or reading Content bodies', async () => {
     const storage = new CountingObservabilityStorage();
     const firstTraceId = '00000000-0000-4000-8000-000000000001';

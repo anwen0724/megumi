@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "environmentKind": "controlled",
   "datasetId": "conversation",
-  "revision": 1,
+  "revision": 2,
   "name": "Conversation",
   "description": "验证 Megumi 通用任务执行与 Workspace 交付。",
   "caseIds": ["conversation.create-workspace-note"]

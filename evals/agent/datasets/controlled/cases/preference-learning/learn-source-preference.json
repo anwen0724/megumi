@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "preference-learning.learn-source-preference",
-  "revision": 1,
+  "revision": 2,
   "name": "从喜欢反馈学习来源偏好",
   "description": "验证 Megumi 从一次明确推荐反馈中形成可供后续推荐使用的偏好方向。",
   "metadata": {
@@ -45,7 +45,8 @@
   },
   "input": {
     "recommendationReferenceId": "evaluation-recommendation",
-    "reaction": "liked"
+    "reaction": "liked",
+    "advanceTimeMs": 600000
   },
   "expected": {
     "createdDirections": ["偏好结构清晰、讨论 Agent 评估设计的内容"]

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "conversation.create-workspace-note",
-  "revision": 1,
+  "revision": 2,
   "name": "根据材料创建工作区笔记",
   "description": "验证 Megumi 能读取给定材料并在隔离 Workspace 中创建准确的结果文件。",
   "metadata": {

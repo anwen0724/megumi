@@ -89,7 +89,7 @@ describe('Case execution', () => {
     });
   });
 
-  it('waits for Candidate Supply and reads the final Candidate Pool from its Owner', async () => {
+  it.each([false, true])('preserves Candidate Supply results across the final query (query fails: %s)', async (queryFails) => {
     const runtime = testRuntime({ discovery: {
       async requestCandidateSupply() {
         return {
@@ -106,11 +106,19 @@ describe('Case execution', () => {
         };
       },
       async getCandidatePool() {
+        if (queryFails) throw new Error('Final Pool query failed');
         return { availableCount: 2, targetCount: 2 };
       },
     } });
 
-    const result = await executeCase(executionInput(candidateCase(), runtime));
+    const execution = executeCase(executionInput(candidateCase(), runtime));
+    if (queryFails) {
+      await expect(execution).rejects.toMatchObject({ message: 'Final Pool query failed', partial: {
+        productResult: { status: 'fulfilled', addedCandidateCount: 1 }, businessIds: { requestId: 'request:supply', executionId: 'execution:supply' },
+      } });
+      return;
+    }
+    const result = await execution;
 
     expect(result.businessIds).toEqual({ requestId: 'request:supply', executionId: 'execution:supply' });
     expect(result.ownerFacts).toEqual({ availableCount: 2, targetCount: 2 });

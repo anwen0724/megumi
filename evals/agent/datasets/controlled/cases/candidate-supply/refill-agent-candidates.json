@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "candidate-supply.refill-agent-candidates",
-  "revision": 1,
+  "revision": 2,
   "name": "补充 Agent 评估候选内容",
   "description": "验证 Megumi 在固定兴趣和受控来源下补充相关 Candidate。",
   "metadata": {

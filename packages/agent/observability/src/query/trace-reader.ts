@@ -118,7 +118,7 @@ export function createTraceReader(options: CreateTraceReaderOptions): TraceReade
       return traces
         .filter((trace) => matchesQuery(trace, query))
         .map(summarizeTrace)
-        .slice(0, query.limit ?? 200);
+        .slice(query.offset ?? 0, (query.offset ?? 0) + Math.max(1, Math.min(query.limit ?? 200, 200)));
     },
 
     getTrace,

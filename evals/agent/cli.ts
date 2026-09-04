@@ -47,6 +47,10 @@ async function main(arguments_: readonly string[]): Promise<void> {
       request,
     });
     process.stdout.write(`Evaluation ${result.record.status}: ${result.runDirectory}\n`);
+    for (const record of result.caseResults) {
+      process.stdout.write(`${record.caseIdentity}: ${record.terminalState ?? 'not_started'}; evidence=${record.recordStatus}\n`);
+    }
+    if (result.record.status === 'completed_with_failures') process.exitCode = 1;
     return;
   }
   throw new Error(usage());

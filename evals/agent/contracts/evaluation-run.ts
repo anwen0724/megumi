@@ -91,7 +91,7 @@ const TraceTargetResultSchema = z.object({
 }).strict();
 
 export const CaseRunResultSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   caseRunId: StableEvaluationIdSchema,
   caseIdentity: EvaluationIdentitySchema,
   caseType: z.enum([
@@ -107,6 +107,12 @@ export const CaseRunResultSchema = z.object({
   businessIds: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),
   productResult: JsonValueSchema.optional(),
   ownerFacts: JsonValueSchema.optional(),
+  finalState: z.discriminatedUnion('status', [
+    z.object({ status: z.literal('captured'), facts: JsonValueSchema }).strict(),
+    z.object({ status: z.literal('unavailable'), message: z.string() }).strict(),
+  ]),
+  interruption: z.object({ source: z.literal('evaluation_safety_guard'), limitMs: z.number().positive() }).strict().optional(),
+  issues: z.array(z.object({ phase: z.enum(['execution', 'shutdown', 'business_facts', 'trace', 'archive']), message: z.string() }).strict()).default([]),
   traceIntegrity: z.object({
     status: z.enum(['complete', 'incomplete']),
     traceCount: z.number().int().nonnegative(),
@@ -118,13 +124,15 @@ export const CaseRunResultSchema = z.object({
     files: z.array(z.object({
       path: z.string().min(1), sha256: Sha256Schema, byteLength: z.number().int().nonnegative(),
     }).strict()),
+    deletedFiles: z.array(z.string()).default([]),
+    initialFiles: z.array(z.object({ path: z.string(), sha256: Sha256Schema, byteLength: z.number().int().nonnegative() }).strict()).default([]),
   }).strict(),
   error: z.object({ name: z.string().min(1), message: z.string() }).strict().optional(),
 }).strict();
 export type CaseRunResult = z.infer<typeof CaseRunResultSchema>;
 
 export const EvaluationRunRecordSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   runId: StableEvaluationIdSchema,
   status: z.enum(['completed', 'completed_with_failures']),
   startedAt: TimestampSchema,

@@ -28,6 +28,19 @@ export interface CaseExecutionResult {
   readonly interruption?: EvaluationSafetyInterruption;
 }
 
+type CaseExecutionProgress = Pick<CaseExecutionResult, 'productResult' | 'ownerFacts' | 'businessIds' | 'traceTargets'>;
+
+/** Retains already returned business facts if a later driver query fails. */
+export class CaseExecutionFailure extends Error {
+  readonly partial: CaseExecutionProgress;
+
+  constructor(cause: unknown, partial: CaseExecutionProgress) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'CaseExecutionFailure';
+    this.partial = structuredClone(partial);
+  }
+}
+
 interface CaseExecutionInput {
   readonly evaluationCase: EvaluationCase;
   readonly runtime: CaseExecutionRuntime;
@@ -37,6 +50,7 @@ interface CaseExecutionInput {
   readonly advanceTime?: (durationMs: number, deadlineMs: number) => Promise<void>;
   readonly safetyWallClockLimitMs: number;
   readonly safetyDeadlineMs: number;
+  readonly progress: { current: CaseExecutionProgress };
 }
 
 type CaseExecutionRuntime = {
@@ -59,10 +73,11 @@ type CaseExecutionRuntime = {
 };
 
 /** Calls the same public Product Host operation used by a normal Host. */
-export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlineMs'>): Promise<CaseExecutionResult> {
+export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlineMs' | 'progress'>): Promise<CaseExecutionResult> {
   const executionInput: CaseExecutionInput = {
     ...input,
     safetyDeadlineMs: Date.now() + input.safetyWallClockLimitMs,
+    progress: { current: { productResult: {}, ownerFacts: {}, businessIds: {}, traceTargets: [] } },
   };
   const drivers = {
     conversation: executeConversation,
@@ -71,10 +86,15 @@ export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlin
     recommendation: executeRecommendation,
     preference_learning: executePreferenceLearning,
   };
-  const result = await waitForProductResult(drivers[executionInput.evaluationCase.type](executionInput), executionInput.safetyDeadlineMs);
+  let result;
+  try {
+    result = await waitForProductResult(drivers[executionInput.evaluationCase.type](executionInput), executionInput.safetyDeadlineMs);
+  } catch (error) {
+    throw new CaseExecutionFailure(error, executionInput.progress.current);
+  }
   return result.status === 'completed' ? result.value : {
-    caseType: input.evaluationCase.type, terminalState: 'interrupted', productResult: {}, ownerFacts: {},
-    businessIds: {}, traceTargets: [], interruption: safetyInterruption(executionInput),
+    ...structuredClone(executionInput.progress.current),
+    caseType: input.evaluationCase.type, terminalState: 'interrupted', interruption: safetyInterruption(executionInput),
   };
 }
 
@@ -85,6 +105,9 @@ async function executeConversation(input: CaseExecutionInput): Promise<CaseExecu
   const steps: unknown[] = [];
   const traceTargets: CaseTraceTarget[] = [];
   for (const step of input.evaluationCase.input.steps) {
+    if (Date.now() >= input.safetyDeadlineMs) return {
+      ...structuredClone(input.progress.current), caseType: 'conversation', terminalState: 'interrupted', interruption: safetyInterruption(input),
+    };
     const accepted = await input.runtime.host.session.sendUserInput({
       ...(sessionId ? { sessionId } : {}),
       projectId: input.initialStateIds.workspaceId,
@@ -112,6 +135,7 @@ async function executeConversation(input: CaseExecutionInput): Promise<CaseExecu
       sessionId,
       messageId: accepted.payload.userMessageId,
     }));
+    input.progress.current = { productResult: { steps, acceptance: accepted }, ownerFacts: { committedSteps: steps }, businessIds: { sessionId, executionIds }, traceTargets };
     const settled = await waitForCommittedConversation({
       runtime: input.runtime,
       sessionId,
@@ -170,6 +194,7 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
     sessionId,
     messageId: accepted.payload.userMessageId,
   })];
+  input.progress.current = { productResult: { acceptance: accepted }, ownerFacts: {}, businessIds: { sessionId, executionId }, traceTargets };
   const conversation = await waitForCommittedConversation({
     runtime: input.runtime,
     sessionId,
@@ -208,6 +233,7 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
     expectation: 'required',
   });
   const outcome = understanding.value.outcome;
+  input.progress.current = { ...input.progress.current, productResult: { sourceConversation: conversation.result, understandingTrace: understanding.value.trace, ...(outcome ? { outcome } : {}) } };
   const ownerFacts = outcome
     ? await input.runtime.host.discovery.getInterestFacts({
         interestIds: outcome.changedInterestIds,
@@ -254,6 +280,10 @@ async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseEx
   }
   const result = completion.value;
   const executionId = 'executionId' in result ? result.executionId : undefined;
+  input.progress.current = { productResult: result, ownerFacts: {},
+    businessIds: { requestId: result.requestId, ...(executionId ? { executionId } : {}) },
+    traceTargets: [{ traceKind: 'candidate_supply', correlation: { requestId: result.requestId }, expectation: 'required' }],
+  };
   const pool = await input.runtime.host.discovery.getCandidatePool();
   return execution({
     caseType: 'candidate_supply', terminalState: 'settled',
@@ -287,6 +317,9 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
       traceTargets: [],
     });
   }
+  input.progress.current = { productResult: { accepted }, ownerFacts: {},
+    businessIds: { requestId: accepted.requestId, executionIds: [accepted.executionId] }, traceTargets: recommendationTraceTargets(accepted.requestId),
+  };
   let completion;
   do {
     completion = await waitForProductResult(input.runtime.host.discovery.waitRecommendation({
@@ -312,6 +345,7 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
       interruption: safetyInterruption(input),
     });
   }
+  input.progress.current = { ...input.progress.current, productResult: { accepted, completion: completion.value } };
   const facts = completion.value.status === 'published'
     ? await input.runtime.host.discovery.getRecommendationCollection({
         localDate: accepted.localDate,
@@ -359,6 +393,7 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
     businessIds: { recommendationId, preferenceSetIds }, traceTargets,
     ...(terminalState === 'interrupted' ? { interruption: safetyInterruption(input) } : {}),
   });
+  input.progress.current = { productResult: { updated }, ownerFacts: {}, businessIds: { recommendationId }, traceTargets };
   const advanceMs = input.evaluationCase.input.advanceTimeMs;
   if (advanceMs !== undefined) {
     if (!input.advanceTime) throw new Error('This environment does not support controlled time advance.');

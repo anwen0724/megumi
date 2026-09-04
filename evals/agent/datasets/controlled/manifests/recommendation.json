@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "environmentKind": "controlled",
   "datasetId": "recommendation",
-  "revision": 1,
+  "revision": 2,
   "name": "Recommendation",
   "description": "验证 Megumi 从候选池形成推荐。",
   "caseIds": ["recommendation.select-relevant-candidate"]
