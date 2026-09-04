@@ -33,6 +33,10 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
   const voiceManifestPath = path.resolve(cwd, 'packages/agent/voice/resources/model-manifest.json');
   const vadResourcePath = path.resolve(cwd, 'packages/agent/voice/resources/vad');
   return [
+    {
+      source: path.resolve(cwd, 'apps/desktop/assets/app-icon.ico'),
+      target: 'desktop/app-icon.ico',
+    },
     ...(fs.existsSync(systemSkillsPath) ? [{
       source: systemSkillsPath,
       target: PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH,

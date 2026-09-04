@@ -49,9 +49,14 @@ export function createApplicationRuntime(input: {
     host: input.host,
     logger: input.logger,
     start(options = {}) {
-      startPromise ??= input.start({
-        backgroundTriggers: options.backgroundTriggers ?? 'automatic',
-      });
+      const backgroundTriggers = options.backgroundTriggers ?? 'automatic';
+      // The Host remains available for recovery, but no automatic business may use fallback settings.
+      startPromise ??= (async () => {
+        const settings = await input.host.settings.get();
+        if (settings.status === 'failed') throw new Error('Settings are invalid; product background startup was blocked.');
+        if (disposePromise) throw new Error('Product runtime has already begun disposal.');
+        await input.start({ backgroundTriggers });
+      })();
       return startPromise;
     },
     subscribeRuntimeEvents: input.subscribeRuntimeEvents,

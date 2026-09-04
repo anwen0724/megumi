@@ -33,6 +33,7 @@ export function createSourceRegistry(
   options: {
     readonly observability?: Observability;
     readonly onCheckError?: (error: unknown, sourceId: string) => void;
+    readonly onCheckResult?: (sourceId: string, availability: SourceAvailability) => void;
   } = {},
 ): SourceRegistry {
   const entries = new Map<DiscoverySourceId, { source: DiscoverySource; descriptor: SourceDescriptor }>();
@@ -57,10 +58,15 @@ export function createSourceRegistry(
       const targets = [...entries.values()].filter((entry) => selected.has(entry.descriptor.id));
       await Promise.all(targets.map(async (entry) => {
         try {
-          await observeAvailability(observability ?? options.observability, entry.descriptor.id, async () => {
+          const availability = await observeAvailability(observability ?? options.observability, entry.descriptor.id, async () => {
             await entry.source.checkAvailability?.();
             return entry.source.getAvailability();
           });
+          try {
+            options.onCheckResult?.(entry.descriptor.id, availability);
+          } catch {
+            // A successful check with an unavailable state is still a diagnostic fact, not a thrown operation.
+          }
         } catch (error) {
           reportCheckError(options.onCheckError, error, entry.descriptor.id);
         }

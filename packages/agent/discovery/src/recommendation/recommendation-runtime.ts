@@ -48,6 +48,7 @@ export type TodayRecommendationResult =
   | WaitRecommendationResult;
 
 interface RecommendationSettings {
+  readonly recommendationCandidateCheckIntervalSeconds: number;
   readonly recommendationGenerationTime: string;
   readonly recommendationTargetCount: number;
   readonly recommendationWorkingSetCount: number;
@@ -113,6 +114,7 @@ export interface RecommendationRuntime {
 }
 
 interface ActiveRequest {
+  readonly trigger: RecommendationTrigger;
   readonly requestId: string;
   readonly localDate: string;
   executionId?: string;
@@ -131,9 +133,58 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
   let latest: { readonly requestId: string; readonly result: WaitRecommendationResult } | undefined;
   let starting: Promise<RequestRecommendationResult> | undefined;
   let shuttingDown = false;
+  let lastCheck: TodayRecommendationResult | undefined;
+  let candidateWait: { readonly localDate: string; readonly trigger: RecommendationTrigger } | undefined;
+  let candidateWaitTimer: unknown;
+
+  /** Discards only input waiting; it never cancels an Agent Core execution. */
+  function clearCandidateWait(): void {
+    if (candidateWaitTimer !== undefined) runtimeTimers(options).clearTimeout(candidateWaitTimer);
+    candidateWaitTimer = undefined;
+    candidateWait = undefined;
+  }
+
+  /** Arms one local-only recheck after the previous request has fully settled. */
+  function scheduleCandidateWait(localDate: string, trigger: RecommendationTrigger): void {
+    if (shuttingDown || localDateAt(options.clock.now(), options.timezone.get()) !== localDate) {
+      clearCandidateWait();
+      return;
+    }
+    if (candidateWaitTimer !== undefined && candidateWait?.localDate === localDate) return;
+    clearCandidateWait();
+    const seconds = options.settings.resolve().recommendationCandidateCheckIntervalSeconds;
+    if (!Number.isInteger(seconds) || seconds <= 0) throw new Error('Invalid candidate check interval.');
+    const waiting = { localDate, trigger };
+    candidateWait = waiting;
+    candidateWaitTimer = runtimeTimers(options).setTimeout(() => {
+      candidateWaitTimer = undefined;
+      void recheckCandidates(waiting);
+    }, Math.min(seconds * 1_000, 2_147_483_647));
+  }
+
+  /** Reuses request serialization without promoting a previous day's waiting into new work. */
+  async function recheckCandidates(waiting: NonNullable<typeof candidateWait>): Promise<void> {
+    try {
+      if (shuttingDown || candidateWait !== waiting) return;
+      if (localDateAt(options.clock.now(), options.timezone.get()) !== waiting.localDate) {
+        clearCandidateWait();
+        return;
+      }
+      await requestRecommendation({ trigger: waiting.trigger }, waiting.localDate);
+    } catch (error) {
+      clearCandidateWait();
+      lastCheck = failureResult(waiting.localDate, 'snapshot_unavailable', 'Recommendation input could not be checked.', false);
+      try {
+        options.onBackgroundError?.(error, { operation: 'scheduled_request' });
+      } catch {
+        // A diagnostic observer cannot turn a stopped recheck into an unhandled background failure.
+      }
+    }
+  }
 
   const startRecommendation = async (
     request: { readonly trigger: RecommendationTrigger },
+    expectedLocalDate?: string,
   ): Promise<RequestRecommendationResult> => {
     const snapshotAt = options.clock.now();
     const localDate = localDateAt(snapshotAt, options.timezone.get());
@@ -163,9 +214,6 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     } catch {
       return failureResult(localDate, 'settings_invalid', 'Recommendation settings are invalid.', false);
     }
-    const model = await options.resolveModel();
-    if (model.status === 'unavailable') return { status: 'model_unavailable', localDate };
-
     let prepared: ReturnType<typeof prepareSnapshot>;
     try {
       prepared = prepareSnapshot(options, snapshotAt, localDate, settings);
@@ -174,8 +222,16 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     }
     if (prepared.ranking.actualTargetCount === 0) return { status: 'waiting_for_candidates', localDate };
 
+    const model = await options.resolveModel();
+    if (shuttingDown) return failureResult(localDate, 'agent_execution_failed', 'Recommendation is shutting down.', false);
+    if (expectedLocalDate && localDateAt(options.clock.now(), options.timezone.get()) !== expectedLocalDate) {
+      return { status: 'waiting_for_candidates', localDate: expectedLocalDate };
+    }
+    if (model.status === 'unavailable') return { status: 'model_unavailable', localDate };
+    clearCandidateWait();
+
     const requestId = ids.createRequestId();
-    active = createActiveRequest(requestId, localDate);
+    active = createActiveRequest(requestId, localDate, request.trigger);
     const started = await options.startExecution({
       kind: 'recommendation',
       requestId,
@@ -227,6 +283,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
 
   const requestRecommendation = async (
     request: { readonly trigger: RecommendationTrigger },
+    expectedLocalDate?: string,
   ): Promise<RequestRecommendationResult> => {
     if (starting) {
       const result = await starting;
@@ -248,10 +305,19 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
         false,
       );
     }
-    const operation = startRecommendation(request);
+    const operation = startRecommendation(request, expectedLocalDate);
     starting = operation;
     try {
-      return await operation;
+      const result = await operation;
+      if (result.status === 'waiting_for_candidates') {
+        lastCheck = result;
+        scheduleCandidateWait(result.localDate, request.trigger);
+      } else {
+        clearCandidateWait();
+        if (result.status === 'failed' || result.status === 'model_unavailable') lastCheck = result;
+        else lastCheck = undefined;
+      }
+      return result;
     } finally {
       if (starting === operation) starting = undefined;
     }
@@ -403,6 +469,8 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     current.settle(result);
     latest = { requestId: current.requestId, result };
     active = undefined;
+    lastCheck = result;
+    if (result.status === 'waiting_for_candidates') scheduleCandidateWait(result.localDate, current.trigger);
   }
 
   const scheduler = createRecommendationScheduler({
@@ -433,12 +501,14 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       if (active && active.localDate === localDate && active.executionId) {
         return { status: 'running', localDate, requestId: active.requestId, executionId: active.executionId };
       }
+      if (lastCheck && 'localDate' in lastCheck && lastCheck.localDate === localDate) return lastCheck;
       if (latest && 'localDate' in latest.result && latest.result.localDate === localDate) return latest.result;
       return { status: 'not_generated', localDate };
     },
     getNextScheduledAt: () => scheduler.getNextScheduledAt(),
     async shutdown() {
       shuttingDown = true;
+      clearCandidateWait();
       await scheduler.shutdown();
       if (active) {
         if (active.retryTimer !== undefined) runtimeTimers(options).clearTimeout(active.retryTimer);
@@ -499,6 +569,7 @@ function prepareSnapshot(
 function validateSettings(settings: RecommendationSettings): RecommendationSettings {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.recommendationGenerationTime)) throw new Error('time');
   const values = [
+    settings.recommendationCandidateCheckIntervalSeconds,
     settings.recommendationTargetCount,
     settings.recommendationWorkingSetCount,
     settings.candidatePoolMinimumCount,
@@ -516,7 +587,7 @@ function validateSettings(settings: RecommendationSettings): RecommendationSetti
   return settings;
 }
 
-function createActiveRequest(requestId: string, localDate: string): ActiveRequest {
+function createActiveRequest(requestId: string, localDate: string, trigger: RecommendationTrigger): ActiveRequest {
   let resolve!: (result: WaitRecommendationResult) => void;
   const completion = new Promise<WaitRecommendationResult>((settle) => { resolve = settle; });
   let resolveExecution!: (executionId: string | undefined) => void;
@@ -525,6 +596,7 @@ function createActiveRequest(requestId: string, localDate: string): ActiveReques
   let settled = false;
   return {
     requestId,
+    trigger,
     localDate,
     executionReady,
     retryCount: 0,

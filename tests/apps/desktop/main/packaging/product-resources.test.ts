@@ -28,6 +28,7 @@ describe('Product packaging resources', () => {
       expect.objectContaining({ target: 'voice/model-manifest.json' }),
       expect.objectContaining({ target: 'voice/vad' }),
       expect.objectContaining({ target: 'product/instructions' }),
+      { source: path.join(root, 'apps/desktop/assets/app-icon.ico'), target: 'desktop/app-icon.ico' },
     ]));
     const resources = getProductPackagingResources(root);
     expect(resources.some((resource) => resource.target.includes('sidecar'))).toBe(false);

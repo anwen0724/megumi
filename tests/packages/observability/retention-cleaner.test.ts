@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Verifies age, capacity, active-segment, complete-Trace, Content GC, and cleanup health rules. */
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createObservabilityHealth } from '../../../packages/agent/observability/src/runtime/observability-health';
 import { encodeRuntimeLogEntry } from '../../../packages/agent/observability/src/runtime/runtime-log-entry';
@@ -16,6 +16,131 @@ import {
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Retention cleaner', () => {
+  it('checks bytes without reading or deleting expired history when the write fits', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const path = tracePath('2026-07-01', 1);
+    seedTraceSegment(storage, path, completeTrace(
+      '00000000-0000-4000-8000-000000000010', '2026-07-01T00:00:00.000Z',
+    ));
+    const readText = vi.spyOn(storage, 'readText');
+    const cleaner = createRetentionCleaner({
+      rootDirectory: 'observability', storage,
+      now: () => new Date('2026-09-04T00:00:00.000Z'),
+    });
+
+    expect(await cleaner.ensureCapacity(100)).toBe(true);
+    expect(readText).not.toHaveBeenCalled();
+    expect(storage.filePaths()).toContain(path);
+    await cleaner.maintain();
+    expect(storage.filePaths()).not.toContain(path);
+  });
+
+  it('cleans complete cross-file historical Trace kinds without validating business values', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const firstPath = tracePath('2026-07-01', 1);
+    const secondPath = tracePath('2026-07-01', 2);
+    const traceId = '00000000-0000-4000-8000-000000000010';
+    storage.seedText(firstPath, JSON.stringify({
+      ...traceStarted(traceId, 1, '2026-07-01T00:00:00.000Z'),
+      traceKind: 'daily_recommendation', historicalAttribute: true,
+    }));
+    seedTraceSegment(storage, secondPath, [traceEnded(traceId, 2, '2026-07-01T00:00:01.000Z')]);
+    const health = createObservabilityHealth();
+    const write = vi.fn();
+    const active = new Set([secondPath]);
+    const cleaner = createRetentionCleaner({
+      rootDirectory: 'observability', storage, health, runtimeLogger: { write },
+      activeFilePaths: () => active,
+      now: () => new Date('2026-09-04T00:00:00.000Z'),
+    });
+
+    expect((await cleaner.maintain()).deletedFiles).toEqual([]);
+    active.clear();
+    expect((await cleaner.maintain()).deletedFiles).toEqual([firstPath, secondPath]);
+    expect(health.snapshot().retentionCleanupFailures).toBe(0);
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('preserves stored Content referenced by historical business checkpoints during GC', async () => {
+    const storage = new ObservabilityMemoryStorage();
+    const bytes = new TextEncoder().encode('historical body');
+    const contentId = sha256(bytes);
+    seedBlob(storage, contentId, bytes);
+    const orphanId = sha256(new TextEncoder().encode('orphan'));
+    seedBlob(storage, orphanId, new TextEncoder().encode('orphan'));
+    const traceId = '00000000-0000-4000-8000-000000000010';
+    const path = tracePath('2026-09-01', 1);
+    const original = [
+      { ...traceStarted(traceId, 1, '2026-09-01T00:00:00.000Z'), traceKind: 'daily_recommendation' },
+      { ...storedContent(traceId, 2, contentId, bytes.length, '2026-09-01T00:00:01.000Z'), kind: 'old.checkpoint' },
+      traceEnded(traceId, 3, '2026-09-01T00:00:02.000Z'),
+    ].map((record) => JSON.stringify(record)).join('\n');
+    storage.seedText(path, original);
+    const cleaner = createRetentionCleaner({
+      rootDirectory: 'observability', storage,
+      now: () => new Date('2026-09-04T00:00:00.000Z'),
+    });
+    try {
+      await cleaner.startup();
+      expect(storage.filePaths()).toContain(blobPath(contentId));
+      expect(storage.filePaths()).not.toContain(blobPath(orphanId));
+      expect(await storage.readText(path)).toBe(original);
+    } finally {
+      await cleaner.shutdown();
+    }
+  });
+
+  it.each([
+    ['broken JSON', '{"secret":"do-not-log",', 1],
+    ['unknown version', JSON.stringify({ schemaVersion: 2 }), 2],
+    ['unknown version in v1 file', JSON.stringify({
+      ...traceEnded('00000000-0000-4000-8000-000000000010', 2, '2026-07-01T00:00:00.000Z'),
+      schemaVersion: 2,
+    }), 1],
+    ['missing identity', JSON.stringify({ schemaVersion: 1, type: 'trace.ended' }), 1],
+    ['unknown record type', JSON.stringify({ schemaVersion: 1, type: 'future.event' }), 1],
+    ['invalid content reference', JSON.stringify({
+      ...traceStarted('00000000-0000-4000-8000-000000000010', 1, '2026-07-01T00:00:00.000Z'),
+      type: 'content.recorded', content: { mode: 'stored', contentId: 'invalid' },
+    }), 1],
+    ['unknown content storage mode', JSON.stringify({
+      ...traceStarted('00000000-0000-4000-8000-000000000010', 1, '2026-07-01T00:00:00.000Z'),
+      type: 'content.recorded', content: { mode: 'future_storage' },
+    }), 1],
+  ])('retains uncertain history and blobs, with safe location diagnostics: %s', async (_name, invalidLine, version) => {
+    const storage = new ObservabilityMemoryStorage();
+    const path = tracePath('2026-07-01', 1).replace('trace-v1-', `trace-v${version}-`);
+    storage.seedText(path, `\n${invalidLine}\n`);
+    const completePath = tracePath('2026-07-01', 2);
+    seedTraceSegment(storage, completePath, completeTrace(
+      '00000000-0000-4000-8000-000000000010', '2026-07-01T00:00:00.000Z',
+    ));
+    const bytes = new TextEncoder().encode('possibly referenced');
+    const contentId = sha256(bytes);
+    seedBlob(storage, contentId, bytes);
+    const write = vi.fn();
+    const cleaner = createRetentionCleaner({
+      rootDirectory: 'observability', storage, runtimeLogger: { write },
+      now: () => new Date('2026-09-04T00:00:00.000Z'),
+      maxTotalBytes: 1,
+    });
+    try {
+      await cleaner.startup();
+      expect(storage.filePaths()).toEqual(expect.arrayContaining([path, completePath, blobPath(contentId)]));
+      expect(write).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          path: relative('observability', path), lineNumber: 2, reason: expect.any(String),
+        }),
+      }));
+      expect(JSON.stringify(write.mock.calls)).not.toContain('do-not-log');
+      write.mockClear();
+      expect(await cleaner.ensureCapacity(10)).toBe(false);
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      await cleaner.shutdown();
+    }
+  });
+
   it('deletes only old complete inactive segments and GCs only unreferenced Content', async () => {
     const storage = new ObservabilityMemoryStorage();
     const oldOnlyBytes = new TextEncoder().encode('old-only');

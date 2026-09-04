@@ -4,6 +4,16 @@ import type { errors as source } from '../en-US/errors';
 
 export const errors = {
   generic: '出现了问题，请重试。',
+  recommendation_failed: '未能完成推荐生成，请查看日志了解详情。',
+  candidate_supply_failed: '准备推荐内容时出现问题，请检查模型和内容来源设置，或查看日志了解详情。',
+  model_payment_required: '模型服务账户余额不足，请充值或在设置中更换模型服务后重试。',
+  model_authentication_failed: '模型服务认证失败，请检查设置中的 API Key。',
+  model_rate_limited: '模型服务请求受限，请稍后重试。',
+  model_service_unavailable: '模型服务暂时不可用，请稍后重试。',
+  model_unavailable: '没有可用的模型，请检查设置中的模型和 API Key。',
+  source_unavailable: '暂时无法访问内容来源。',
+  settings_invalid: '推荐设置无效，请检查设置后重试。',
+  agent_limit_reached: '推荐生成已达到执行上限，尚未完成，请查看日志了解详情。',
   settings_update_failed: '无法保存设置。',
   settings_load_failed: '无法加载设置。',
   setup_incomplete: '无法保存设置完成状态。',

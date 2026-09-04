@@ -219,6 +219,8 @@ async function createEvaluationSettingsStore(input: {
   let document: Readonly<Record<string, unknown>> = {
     setup: { completed: true, completed_at: input.initialState.clock },
     discovery: {
+      // Evaluation explicitly authorizes the selected Case; preparation must not start an Agent.
+      candidate_supply_confirmed: true,
       conversation_recognition_enabled: true,
       recommendation_generation_time: '08:00',
       recommendation_target_count: input.initialState.recommendationTargetCount,

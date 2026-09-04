@@ -70,6 +70,11 @@ describe('Case Environment', () => {
         temporaryParent: temporaryRoot,
       });
       try {
+        expect((await environment.runtime.host.settings.get()).status, identity).toBe('ok');
+        expect(await environment.runtime.host.discovery.getHome({ mode: 'timeline' })).toMatchObject({
+          candidateSupplyConfirmed: true,
+          candidateSupplyStatus: { status: 'idle' },
+        });
         expect(existsSync(environment.paths.database), identity).toBe(true);
         expect(environment.resolvedCase.identity).toBe(identity);
       } finally {

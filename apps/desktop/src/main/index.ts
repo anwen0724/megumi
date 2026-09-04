@@ -1,12 +1,13 @@
 /*
  * Boots the Electron Desktop Host and stops before Product startup when composition is unsafe.
  */
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, dialog, shell } from 'electron';
 import path from 'node:path';
 import { loadEnvFile } from './config/env';
 import { registerAllHandlers } from './ipc/register-ipc-handlers';
 import { IPC_CHANNELS } from './ipc/channels';
 import { createMainWindow } from './app/create-window';
+import { getAppIconPath } from './app/app-icon';
 import { createCharacterWindow } from './app/create-character-window';
 import { createCharacterWindowController } from './app/character-window-controller';
 import { createMegumiTray, type MegumiTray } from './app/create-tray';
@@ -21,6 +22,9 @@ import { composeApplicationUpdate } from './application-update/application-updat
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
+
+// Match Squirrel's installed shortcut identity instead of grouping development windows as Electron.
+if (process.platform === 'win32') app.setAppUserModelId('com.squirrel.Megumi.megumi');
 
 if (shouldQuitForSquirrelStartup()) {
   app.quit();
@@ -105,6 +109,19 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
         },
         skill: desktopMain.skill,
         settings: desktopMain.settings,
+        settingsRecovery: {
+          settingsPath: path.join(desktopMain.homePath, 'settings.json'),
+          async openDirectory() {
+            const error = await shell.openPath(desktopMain.homePath);
+            if (error) throw new Error('The configuration directory could not be opened.');
+          },
+          async restart() {
+            // Do not schedule a relaunch until all fallible shutdown work has completed.
+            await lifecycle.prepareToQuit();
+            app.relaunch();
+            await lifecycle.quit();
+          },
+        },
         approval: desktopMain.approval,
         discovery: desktopMain.discovery,
         voice: desktopMain.voice,
@@ -113,7 +130,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
         observability: desktopMain.observability,
       });
       tray ??= createMegumiTray({
-        iconPath: path.resolve(app.getAppPath?.() ?? process.cwd(), 'apps/desktop/assets/app-icon.ico'),
+        iconPath: getAppIconPath(),
         showCharacter: () => { void character.show(); },
         hideCharacter: () => { void character.hide(); },
         showMainWindow: () => {

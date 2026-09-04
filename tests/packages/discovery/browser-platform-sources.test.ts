@@ -9,6 +9,37 @@ import {
 } from '@megumi/discovery';
 
 describe('embedded-browser platform sources', () => {
+  it('recognizes the captured Douyin verification interstitial with an empty body', async () => {
+    const source = createDouyinSource({ browser: browser(async () => successSnapshot({
+      finalUrl: 'https://www.douyin.com/search/java?type=general', title: '验证码中间页', bodyText: '    ',
+    })) });
+    await expect(source.search({ query: 'java', mode: 'relevance', limit: 10, signal: new AbortController().signal }))
+      .resolves.toMatchObject({ status: 'failed', failure: { code: 'risk_control' } });
+  });
+
+  it('recognizes the captured Xiaohongshu search login requirement', async () => {
+    const source = createXiaohongshuSource({ browser: browser(async () => successSnapshot({
+      finalUrl: 'https://www.xiaohongshu.com/search_result?keyword=java',
+      title: 'java - 小红书搜索', bodyText: '登录后查看搜索结果 可用 小红书 或 微信 扫码 新用户可直接登录',
+    })) });
+    await expect(source.search({ query: 'java', mode: 'relevance', limit: 10, signal: new AbortController().signal }))
+      .resolves.toMatchObject({ status: 'failed', failure: { code: 'login_required' } });
+  });
+
+  it('does not mark the captured Xiaohongshu login homepage as search-ready', async () => {
+    const source = createXiaohongshuSource({ browser: browser(async () => successSnapshot({
+      finalUrl: 'https://www.xiaohongshu.com/explore',
+      bodyText: '登录后推荐更懂你的笔记 可用 小红书 或 微信 扫码 小红书如何扫码 新用户可直接登录',
+    })) });
+    await expect(source.checkAvailability!()).resolves.toMatchObject({ state: 'login_required' });
+  });
+
+  it.each([createDouyinSource, createXiaohongshuSource])('never treats an unrecognized page as a successful empty search', async (createSource) => {
+    const source = createSource({ browser: browser(async () => successSnapshot({ bodyText: '页面加载中' })) });
+    await expect(source.search({ query: 'java', mode: 'relevance', limit: 10, signal: new AbortController().signal }))
+      .resolves.toMatchObject({ status: 'failed', failure: { code: 'invalid_response' } });
+    expect(source.getAvailability()).toMatchObject({ state: 'unknown' });
+  });
   it.each([
     {
       sourceId: 'xiaohongshu',

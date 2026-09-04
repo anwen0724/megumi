@@ -154,7 +154,7 @@ export interface CandidateSupplyResultBase {
 export type CandidateSupplyResult =
   | CandidateSupplyResultBase & {
       readonly status: 'not_needed';
-      readonly reason: 'no_gap' | 'no_active_interest' | 'supply_in_progress';
+      readonly reason: 'no_gap' | 'no_active_interest' | 'supply_in_progress' | 'confirmation_required';
     }
   | CandidateSupplyResultBase & {
       readonly status: 'fulfilled';
@@ -215,7 +215,7 @@ const CandidateSupplyProgressSchema = z.object({
 export const CandidateSupplyResultSchema: z.ZodType<CandidateSupplyResult> = z.discriminatedUnion('status', [
   CandidateSupplyResultBaseSchema.extend({
     status: z.literal('not_needed'),
-    reason: z.enum(['no_gap', 'no_active_interest', 'supply_in_progress']),
+    reason: z.enum(['no_gap', 'no_active_interest', 'supply_in_progress', 'confirmation_required']),
   }).strict(),
   CandidateSupplyResultBaseSchema.merge(CandidateSupplyProgressSchema).extend({
     status: z.literal('fulfilled'),

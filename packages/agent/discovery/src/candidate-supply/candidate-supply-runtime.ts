@@ -19,10 +19,18 @@ import {
 import { candidatePoolSettings } from './candidate-pool';
 
 export interface CandidateSupplyRuntime {
+  /** Persists first-use consent before asynchronously checking supply conditions. */
+  confirm(): Promise<{ readonly status: 'confirmed' | 'already_confirmed' }>;
+  /** Returns process-local progress without starting work. */
+  getStatus(): CandidateSupplyStatus;
   start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   requestCheck(trigger: CandidateSupplyTrigger): Promise<CandidateSupplyResult>;
   shutdown(): Promise<void>;
 }
+
+export type CandidateSupplyStatus =
+  | { readonly status: 'idle' | 'running' }
+  | { readonly status: 'failed'; readonly failure: Extract<CandidateSupplyResult, { status: 'failed' }>['failure'] };
 
 export interface CreateCandidateSupplyRuntimeOptions {
   readonly repository: DiscoveryRepository;
@@ -55,8 +63,11 @@ export function createCandidateSupplyRuntime(
   let stopped = false;
   let automaticTriggers = false;
   let timer: unknown;
+  let confirmation: Promise<{ readonly status: 'confirmed' | 'already_confirmed' }> | undefined;
+  let lastResult: CandidateSupplyResult | undefined;
 
   function requestCheck(trigger: CandidateSupplyTrigger): Promise<CandidateSupplyResult> {
+    if (stopped) return Promise.reject(new Error('Candidate Supply is shutting down.'));
     const requestId = options.ids.createRequestId();
     const requestedAt = parseTimestamp(options.now());
     if (activeCompletion) {
@@ -69,7 +80,10 @@ export function createCandidateSupplyRuntime(
       ));
     }
     let completion: Promise<CandidateSupplyResult>;
-    completion = executeSupply(options, requestId, trigger, requestedAt).finally(() => {
+    completion = executeSupply(options, requestId, trigger, requestedAt).then((result) => {
+      lastResult = result;
+      return result;
+    }).finally(() => {
       if (activeCompletion === completion) activeCompletion = undefined;
       schedule();
     });
@@ -97,6 +111,30 @@ export function createCandidateSupplyRuntime(
   }
 
   return {
+    confirm() {
+      if (stopped) return Promise.reject(new Error('Candidate Supply is shutting down.'));
+      if (confirmation) return confirmation;
+      confirmation = (async () => {
+        const settings = options.settings.read();
+        if (settings.candidateSupplyConfirmed) return { status: 'already_confirmed' as const };
+        const pendingBeforeConfirmation = activeCompletion;
+        await options.settings.write({ ...settings, candidateSupplyConfirmed: true });
+        if (stopped) throw new Error('Candidate Supply is shutting down.');
+        // Consent and business completion are distinct: never keep the UI waiting for the Agent.
+        // A pre-consent check may still be settling, so join it before requesting the confirmed check.
+        void (async () => {
+          if (pendingBeforeConfirmation) await pendingBeforeConfirmation;
+          if (!stopped) await requestCheck('supply_conditions_changed');
+        })().catch((error) => reportBackgroundError(options, error));
+        return { status: 'confirmed' as const };
+      })().finally(() => { confirmation = undefined; });
+      return confirmation;
+    },
+    getStatus() {
+      if (activeCompletion) return { status: 'running' };
+      if (lastResult?.status === 'failed') return { status: 'failed', failure: lastResult.failure };
+      return { status: 'idle' };
+    },
     async start(startOptions = {}) {
       stopped = false;
       automaticTriggers = startOptions.automaticTriggers ?? true;
@@ -159,11 +197,14 @@ async function runCheck(
   if (activeInterests.length === 0) {
     return notNeeded(requestId, trigger, requestedAt, options.now(), 'no_active_interest');
   }
+  if (!configuration.candidateSupplyConfirmed) {
+    return notNeeded(requestId, trigger, requestedAt, options.now(), 'confirmation_required');
+  }
   const before = options.repository.getCandidatePoolSnapshot(poolSettings);
   if (before.minimumShortfall === 0) {
     return notNeeded(requestId, trigger, requestedAt, options.now(), 'no_gap');
   }
-  const readySourceIds = readySources(options.sourceRegistry, configuration.enabledSources);
+  const readySourceIds = readySources(options.sourceRegistry, configuration.enabledSources, options.observability);
   if (readySourceIds.length === 0) {
     return {
       ...baseResult(requestId, trigger, requestedAt, options.now(), 0, 0),
@@ -306,18 +347,29 @@ async function runCheck(
   };
 }
 
-function readySources(registry: SourceRegistry, enabledSourceIds: readonly string[]): readonly string[] {
+/** Captures why each registered Source enters or is excluded from this execution's context. */
+function readySources(
+  registry: SourceRegistry,
+  enabledSourceIds: readonly string[],
+  observability: Observability | undefined,
+): readonly string[] {
   const enabled = new Set(enabledSourceIds);
-  return registry.listDescriptors().flatMap((descriptor) => {
-    if (!enabled.has(descriptor.id)) return [];
+  const selection = registry.listDescriptors().map(({ id }) => {
+    const base = { sourceId: id, enabled: enabled.has(id) };
+    if (!base.enabled) return { ...base, selected: false, reason: 'disabled' };
     try {
-      return registry.get(descriptor.id)?.getAvailability().state === 'ready'
-        ? [descriptor.id]
-        : [];
+      const availability = registry.get(id)?.getAvailability();
+      return { ...base, selected: availability?.state === 'ready', reason: availability?.state ?? 'unregistered', availability };
     } catch {
-      return [];
+      return { ...base, selected: false, reason: 'availability_read_failed' };
     }
   });
+  try {
+    observability?.recordContent({ kind: 'source.selection', value: selection });
+  } catch {
+    // Source eligibility is independent of whether its evidence can be persisted.
+  }
+  return selection.filter(({ selected }) => selected).map(({ sourceId }) => sourceId);
 }
 
 function countAdditions(
@@ -375,7 +427,7 @@ function notNeeded(
   trigger: CandidateSupplyTrigger,
   requestedAt: string,
   completedAt: string,
-  reason: 'no_gap' | 'no_active_interest' | 'supply_in_progress',
+  reason: Extract<CandidateSupplyResult, { status: 'not_needed' }>['reason'],
 ): CandidateSupplyResult {
   return {
     ...baseResult(requestId, trigger, requestedAt, completedAt, 0, 0),

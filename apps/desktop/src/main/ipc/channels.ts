@@ -2,6 +2,11 @@
  * Electron IPC channel names owned by the desktop shell.
  */
 export const IPC_CHANNELS = {
+  settingsRecovery: {
+    get: 'settings-recovery:get',
+    openDirectory: 'settings-recovery:open-directory',
+    restart: 'settings-recovery:restart',
+  },
   window: {
     minimize: 'window:minimize',
     toggleMaximize: 'window:toggle-maximize',
@@ -67,6 +72,7 @@ export const IPC_CHANNELS = {
     resolve: 'approval:resolve',
   },
   discovery: {
+    candidateSupplyConfirm: 'discovery:candidate-supply:confirm',
     configurationGet: 'discovery:configuration:get',
     configurationUpdate: 'discovery:configuration:update',
     sourceConnect: 'discovery:source:connect',
@@ -139,6 +145,9 @@ type NestedValueOf<T> = T extends string
 export type IpcChannel = NestedValueOf<typeof IPC_CHANNELS>;
 
 const ALL_IPC_CHANNELS = [
+  IPC_CHANNELS.settingsRecovery.get,
+  IPC_CHANNELS.settingsRecovery.openDirectory,
+  IPC_CHANNELS.settingsRecovery.restart,
   IPC_CHANNELS.window.minimize,
   IPC_CHANNELS.window.toggleMaximize,
   IPC_CHANNELS.window.close,

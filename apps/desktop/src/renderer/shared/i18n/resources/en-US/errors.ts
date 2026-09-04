@@ -1,6 +1,16 @@
 /* Defines source-language user summaries for stable Renderer error codes. */
 export const errors = {
   generic: 'Something went wrong. Please try again.',
+  recommendation_failed: 'Recommendation generation could not be completed. Check the logs for details.',
+  candidate_supply_failed: 'Could not prepare content. Check model and content source settings, or see the logs for details.',
+  model_payment_required: 'The model service account has insufficient balance. Add credit or change the model service in Settings before retrying.',
+  model_authentication_failed: 'Model service authentication failed. Check the API key in Settings.',
+  model_rate_limited: 'Model service requests are limited. Please try again later.',
+  model_service_unavailable: 'The model service is temporarily unavailable. Please try again later.',
+  model_unavailable: 'No model is available. Check the model and API key in Settings.',
+  source_unavailable: 'Content sources are temporarily unavailable.',
+  settings_invalid: 'Recommendation settings are invalid. Check Settings before retrying.',
+  agent_limit_reached: 'Recommendation generation reached its execution limit without completing. Check the logs for details.',
   settings_update_failed: 'Settings could not be saved.',
   settings_load_failed: 'Settings could not be loaded.',
   setup_incomplete: 'Setup completion could not be saved.',

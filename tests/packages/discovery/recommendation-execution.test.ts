@@ -33,6 +33,38 @@ describe('Recommendation runtime', () => {
       status: 'waiting_for_candidates', localDate: '2026-09-03',
     });
     expect(startExecution).not.toHaveBeenCalled();
+    expect(runtime.getToday()).toEqual({ status: 'waiting_for_candidates', localDate: '2026-09-03' });
+    await runtime.shutdown();
+  });
+
+  it('rechecks locally and starts once when candidates arrive without a Supply notification', async () => {
+    vi.useFakeTimers();
+    const attempts = createRecommendationAttempts();
+    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
+      const accepted = await request.accept({ executionId: 'execution:wait' });
+      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
+      return { status: 'started', execution: { kind: 'recommendation', executionId: 'execution:wait' },
+        completion: new Promise<never>(() => undefined) };
+    });
+    const options = runtimeOptions(database, startExecution, attempts);
+    const resolveModel = vi.fn(options.resolveModel);
+    const runtime = createRecommendationRuntime({ ...options, resolveModel });
+    try {
+      await runtime.request({ trigger: 'manual' });
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(resolveModel).not.toHaveBeenCalled();
+      expect(startExecution).not.toHaveBeenCalled();
+      seedCandidate(database, 1);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(startExecution).toHaveBeenCalledOnce();
+      expect(attempts.getSnapshot('execution:wait')).toMatchObject({ actualTarget: 1 });
+      expect(runtime.getToday()).toMatchObject({ status: 'running' });
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(startExecution).toHaveBeenCalledOnce();
+    } finally {
+      await runtime.shutdown();
+      vi.useRealTimers();
+    }
   });
 
   it('joins concurrent requests while model resolution is still starting one execution', async () => {
@@ -69,6 +101,97 @@ describe('Recommendation runtime', () => {
     });
     expect(startExecution).toHaveBeenCalledTimes(1);
     await runtime.shutdown();
+  });
+
+  it.each(['shutdown', 'next_day'] as const)('discards input waiting on %s', async (boundary) => {
+    vi.useFakeTimers();
+    let currentTime = now;
+    const startExecution = vi.fn();
+    const runtime = createRecommendationRuntime({
+      ...runtimeOptions(database, startExecution), clock: { now: () => currentTime },
+    });
+    try {
+      await runtime.request({ trigger: 'manual' });
+      await runtime.request({ trigger: 'manual' });
+      expect(vi.getTimerCount()).toBe(1);
+      if (boundary === 'shutdown') await runtime.shutdown();
+      else currentTime = '2026-09-04T00:00:00.000Z';
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(startExecution).not.toHaveBeenCalled();
+    } finally {
+      await runtime.shutdown();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not restore a manual wait before the scheduled time after restart', async () => {
+    vi.useFakeTimers();
+    const startExecution = vi.fn();
+    const options = runtimeOptions(database, startExecution);
+    const first = createRecommendationRuntime(options);
+    const restarted = createRecommendationRuntime(options);
+    try {
+      await first.request({ trigger: 'manual' });
+      await first.shutdown();
+      await restarted.start();
+      expect(restarted.getToday()).toMatchObject({ status: 'not_generated' });
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(startExecution).not.toHaveBeenCalled();
+    } finally {
+      await restarted.shutdown();
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not launch a deferred recheck execution after shutdown', async () => {
+    vi.useFakeTimers();
+    let releaseModel!: () => void;
+    const modelReady = new Promise<void>((resolve) => { releaseModel = resolve; });
+    const startExecution = vi.fn();
+    const runtime = createRecommendationRuntime({
+      ...runtimeOptions(database, startExecution),
+      resolveModel: async () => { await modelReady; return { status: 'ok', model }; },
+    });
+    try {
+      await runtime.request({ trigger: 'manual' });
+      seedCandidate(database, 1);
+      await vi.advanceTimersByTimeAsync(60_000);
+      await runtime.shutdown();
+      releaseModel();
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(startExecution).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      releaseModel();
+      await runtime.shutdown();
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops local rechecks on an execution failure and shows a later wait instead of the stale error', async () => {
+    vi.useFakeTimers();
+    const startExecution = vi.fn(async () => ({ status: 'failed' as const, failure: {
+      code: 'provider_unavailable', message: '402: insufficient balance', retryable: false,
+    } }));
+    const runtime = createRecommendationRuntime(runtimeOptions(database, startExecution));
+    try {
+      await runtime.request({ trigger: 'manual' });
+      seedCandidate(database, 1);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(runtime.getToday()).toMatchObject({ status: 'failed' });
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(startExecution).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+      database.prepare({ sql: "UPDATE discovery_interests SET status = 'paused'" }).run();
+      await runtime.request({ trigger: 'manual' });
+      expect(runtime.getToday()).toMatchObject({ status: 'waiting_for_candidates' });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(startExecution).toHaveBeenCalledOnce();
+    } finally {
+      await runtime.shutdown();
+      vi.useRealTimers();
+    }
   });
 
   it('publishes the configured target through Agent Core and exposes all ranked facts to the attempt', async () => {
@@ -200,6 +323,7 @@ function runtimeOptions(
     settings: {
       resolve: () => ({
         recommendationGenerationTime: '08:00',
+        recommendationCandidateCheckIntervalSeconds: 60,
         recommendationTargetCount: 2,
         recommendationWorkingSetCount: 2,
         candidatePoolMinimumCount: 1,

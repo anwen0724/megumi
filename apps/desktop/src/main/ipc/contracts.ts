@@ -7,6 +7,9 @@ import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './errors';
 export type { RuntimeIpcError } from './errors';
 
 export const BUSINESS_IPC_CHANNELS = [
+  IPC_CHANNELS.settingsRecovery.get,
+  IPC_CHANNELS.settingsRecovery.openDirectory,
+  IPC_CHANNELS.settingsRecovery.restart,
   IPC_CHANNELS.settings.get,
   IPC_CHANNELS.settings.update,
   IPC_CHANNELS.settings.completeSetup,
@@ -48,6 +51,7 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.skill.refresh,
   IPC_CHANNELS.approval.resolve,
   IPC_CHANNELS.discovery.interestChange,
+  IPC_CHANNELS.discovery.candidateSupplyConfirm,
   IPC_CHANNELS.discovery.configurationGet,
   IPC_CHANNELS.discovery.configurationUpdate,
   IPC_CHANNELS.discovery.sourceConnect,

@@ -16,9 +16,10 @@ describe('registerDiscoveryHandlers', () => {
       requestId: 'request:discovery:1',
       executionId: 'execution:1',
     }));
+    const confirmCandidateSupply = vi.fn(async () => ({ status: 'confirmed' as const }));
 
     registerDiscoveryHandlers(
-      { host: { discovery: { requestRecommendation } } as never },
+      { host: { discovery: { requestRecommendation, confirmCandidateSupply } } as never },
       { ipcMain: { handle } as never },
     );
 
@@ -44,6 +45,13 @@ describe('registerDiscoveryHandlers', () => {
         executionId: 'execution:1',
       },
     });
+    const confirmationHandler = handlers.get(IPC_CHANNELS.discovery.candidateSupplyConfirm);
+    expect(await confirmationHandler?.({}, request(IPC_CHANNELS.discovery.candidateSupplyConfirm, { unexpected: true })))
+      .toMatchObject({ ok: false, data: { code: 'ipc_invalid_request' } });
+    expect(confirmCandidateSupply).not.toHaveBeenCalled();
+    expect(await confirmationHandler?.({}, request(IPC_CHANNELS.discovery.candidateSupplyConfirm, {})))
+      .toMatchObject({ ok: true, data: { status: 'confirmed' } });
+    expect(confirmCandidateSupply).toHaveBeenCalledOnce();
   });
 
   it('rejects unknown payload fields before calling the Product Host', async () => {
@@ -118,6 +126,7 @@ describe('registerDiscoveryHandlers', () => {
   it('refreshes every source through one configuration projection', async () => {
     const handlers = new Map<string, (...args: unknown[]) => unknown>();
     const refreshSources = vi.fn(async () => ({
+      recommendationCandidateCheckIntervalSeconds: 60,
       conversationRecognitionEnabled: true,
       recommendationGenerationTime: '08:00',
       recommendationTargetCount: 20,

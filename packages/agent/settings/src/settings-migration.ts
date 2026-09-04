@@ -13,7 +13,21 @@ export function normalizeSettingsFile(value: unknown): NormalizeSettingsFileResu
   const withTheme = normalizeRetiredTheme(withoutCompaction);
   const withModels = normalizeLegacyProviderModels(withTheme);
   const withApis = normalizeLegacyProviderApis(withModels);
-  return { value: withApis, changed: !structurallyEqual(withApis, value) };
+  const withRecommendation = normalizeLegacyRecommendationSettings(withApis);
+  return { value: withRecommendation, changed: !structurallyEqual(withRecommendation, value) };
+}
+
+/** Preserves renamed values; an explicitly supplied new value always wins, even if invalid. */
+function normalizeLegacyRecommendationSettings(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.discovery)) return value;
+  const { daily_generation_time, daily_target_count, ...discovery } = value.discovery;
+  if (!Object.hasOwn(discovery, 'recommendation_generation_time') && daily_generation_time !== undefined) {
+    discovery.recommendation_generation_time = daily_generation_time;
+  }
+  if (!Object.hasOwn(discovery, 'recommendation_target_count') && daily_target_count !== undefined) {
+    discovery.recommendation_target_count = daily_target_count;
+  }
+  return { ...value, discovery };
 }
 
 /** Converts a legacy AppSettings file into the current settings.json file model. */

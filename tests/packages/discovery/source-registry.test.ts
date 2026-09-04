@@ -22,6 +22,16 @@ function source(id: string, modes: readonly SourceSearchMode[] = ['relevance']):
 }
 
 describe('SourceRegistry', () => {
+  it('reports unavailable checks even when the adapter returns normally and diagnostics throw', async () => {
+    const onCheckResult = vi.fn(() => { throw new Error('logger unavailable'); });
+    const registry = createSourceRegistry([{
+      ...source('xiaohongshu'), getAvailability: () => ({ state: 'login_required' }),
+    }], { onCheckResult });
+    await expect(registry.checkSources(['xiaohongshu'])).resolves.toEqual([
+      expect.objectContaining({ availability: { state: 'login_required' } }),
+    ]);
+    expect(onCheckResult).toHaveBeenCalledWith('xiaohongshu', { state: 'login_required' });
+  });
   it('rechecks only requested sources before returning their current states', async () => {
     let state: 'unknown' | 'ready' = 'unknown';
     const checkAvailability = vi.fn(async () => {

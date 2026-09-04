@@ -2,8 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { createSettings, type SettingsStore } from '@megumi/settings';
 import { createSettingsOperations } from '../../../../packages/agent/product-host/src/operations/settings-operations';
+import { SettingsGetUiResultSchema } from '@megumi/product-host/host';
 
 describe('SettingsHost semantics', () => {
+  it('preserves safe field diagnostics through the validated Host boundary', async () => {
+    const host = createSettingsOperations(createSettings({ store: memoryStore({ language: 'PRIVATE_VALUE' }) }));
+    const result = SettingsGetUiResultSchema.parse(await host.get());
+    expect(result).toMatchObject({ status: 'failed', issues: [{ path: 'language', message: expect.any(String) }] });
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_VALUE');
+  });
   it('returns locally stored discovery credentials through the dedicated credential operation', async () => {
     const store = memoryStore({});
     const host = createSettingsOperations(createSettings({ store }));

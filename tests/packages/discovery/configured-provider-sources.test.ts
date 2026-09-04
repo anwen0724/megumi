@@ -2,18 +2,21 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { createTwitterSource, createZhihuSource } from '@megumi/discovery';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 
 describe('configured provider discovery sources', () => {
   it('uses the official Zhihu search API and clamps its one-call result limit to ten', async () => {
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => new Response(JSON.stringify({
-      data: [{
-        title: 'RAG 评测方法综述',
-        url: 'https://www.zhihu.com/question/1/answer/2',
-        content_type: 'Answer',
-        content: '一份完整的评测方法说明。',
-        author_name: '张三',
-        edit_time: '2026-08-23T12:30:00+08:00',
-      }],
+      // Shape captured from the real provider; content and identity are sanitized.
+      Code: 0, Message: 'success', Data: { HasMore: false, Items: [{
+        Title: 'RAG 评测方法综述',
+        Url: 'https://www.zhihu.com/question/1/answer/2',
+        ContentType: 'Answer',
+        ContentText: '一份完整的评测方法说明。',
+        AuthorName: '张三',
+        EditTime: '2026-08-23T12:30:00+08:00',
+      }] },
     }), { status: 200, headers: { 'content-type': 'application/json' } }));
     const source = createZhihuSource({
       accessSecret: () => 'zhihu-secret',
@@ -59,6 +62,63 @@ describe('configured provider discovery sources', () => {
       query: 'Agent', mode: 'relevance', limit: 5, signal: new AbortController().signal,
     })).resolves.toMatchObject({ status: 'failed', failure: { code: 'not_configured' } });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { Code: 0, Data: {} },
+    { Code: 123, Message: 'provider rejected request', Data: { Items: [] } },
+    { unexpected: [] },
+    '<html>upstream error</html>',
+    { Code: 0, Data: { Items: [{ Title: 'Missing URL' }] } },
+  ])('does not report malformed Zhihu evidence as an empty successful search: %j', async (payload) => {
+    const source = createZhihuSource({
+      accessSecret: () => 'key',
+      fetch: async () => new Response(typeof payload === 'string' ? payload : JSON.stringify(payload)),
+    });
+    await expect(source.search({ query: 'test', mode: 'relevance', limit: 10, signal: new AbortController().signal }))
+      .resolves.toMatchObject({ status: 'failed', failure: { code: 'invalid_response', retryable: false } });
+  });
+
+  it('accepts an explicit empty Zhihu Items array', async () => {
+    const source = createZhihuSource({
+      accessSecret: () => 'key',
+      fetch: async () => new Response(JSON.stringify({ Code: 0, Data: { Items: [] } })),
+    });
+    await expect(source.search({ query: 'test', mode: 'relevance', limit: 10, signal: new AbortController().signal }))
+      .resolves.toEqual({ status: 'success', items: [] });
+  });
+
+  it('retains the raw HTTP error response while reporting rate limiting', async () => {
+    const responses: unknown[] = [];
+    const source = createZhihuSource({ accessSecret: () => 'key', fetch: async () => new Response('rate limit response', { status: 429 }) });
+    await expect(source.search({
+      query: 'test', mode: 'relevance', limit: 10, signal: new AbortController().signal,
+      onProviderResponse: response => { responses.push(response); throw new Error('diagnostics unavailable'); },
+    })).resolves.toMatchObject({ status: 'failed', failure: { code: 'rate_limited', retryable: true } });
+    expect(responses).toEqual(['rate limit response']);
+    expect(source.getAvailability()).toMatchObject({ state: 'rate_limited' });
+  });
+
+  it.each([1788490000, '2026-09-04T05:26:40.000Z'])('preserves valid Zhihu entries without treating edit time %s as publication time', async (editTime) => {
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: record => { records.push(record); } });
+    const source = createZhihuSource({ accessSecret: () => 'key', observability, fetch: async () => new Response(JSON.stringify({
+      Code: 0, Data: { Items: [
+        { Title: 'Valid article', Url: 'https://zhuanlan.zhihu.com/p/123', ContentText: 'Body', EditTime: editTime },
+        { Title: 'No URL' },
+        { Title: 'Invalid URL', Url: 'not a url' },
+      ] },
+    })) });
+    const result = await observability.withTrace({ kind: 'candidate_supply' }, () => source.search({
+      query: 'test', mode: 'relevance', limit: 10, signal: new AbortController().signal,
+    }));
+    expect(result).toMatchObject({ status: 'success', items: [{ title: 'Valid article' }] });
+    if (result.status === 'success') expect(result.items[0]?.publishedAt).toBeUndefined();
+    expect(records).toContainEqual(expect.objectContaining({ kind: 'source.normalization', content: expect.objectContaining({
+      value: { inputCount: 3, acceptedCount: 1, rejected: [
+        { index: 1, reason: 'missing_url_or_title' }, { index: 2, reason: 'invalid_content_fields' },
+      ] },
+    }) }));
   });
 
   it.each([

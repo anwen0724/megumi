@@ -1,5 +1,6 @@
 /* Implements isolated persistent browser profiles and fixed document snapshots for Discovery Sources. */
 import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
+import { getAppIconPath } from '../../app/app-icon';
 import type {
   EmbeddedBrowser,
   EmbeddedBrowserProfileId,
@@ -12,7 +13,8 @@ const DEFAULT_SETTLE_DELAY_MS = 1_500;
 const SNAPSHOT_SCRIPT = `(() => {
   const clean = (value, max) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
   const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 300).map((anchor) => {
-    const container = anchor.closest('article, li, section, [role="listitem"], div');
+    // Prefer the complete semantic card over an inner footer that may contain only an avatar.
+    const container = anchor.closest('article, li, section, [role="listitem"]') || anchor.closest('div');
     const image = anchor.querySelector('img') || container?.querySelector('img');
     return {
       href: anchor.href,
@@ -21,11 +23,34 @@ const SNAPSHOT_SCRIPT = `(() => {
       imageUrl: image?.currentSrc || image?.src || undefined,
     };
   });
+  const cards = [];
+  // Douyin's rendered cards carry content data in React, not in anchor elements.
+  // Read only whitelisted public content fields, never serialize component state.
+  if (location.hostname === 'www.douyin.com') {
+    for (const card of Array.from(document.querySelectorAll('.search-result-card')).slice(0, 300)) {
+      const id = card.closest('[id^="waterfall_item_"]')?.id.replace('waterfall_item_', '');
+      if (!id || !/^\\d+$/.test(id)) continue;
+      const fiberKey = Object.keys(card).find((key) => key.startsWith('__reactFiber$'));
+      let fiber = fiberKey ? card[fiberKey] : undefined;
+      for (let depth = 0; fiber && depth < 12; depth++, fiber = fiber.return) {
+        const content = fiber.memoizedProps?.data?.awemeInfo;
+        if (content?.awemeId !== id || typeof content.desc !== 'string' || !content.desc.trim()) continue;
+        const image = card.querySelector('img');
+        cards.push({
+          id, title: clean(content.desc, 500),
+          contextText: clean(card.innerText || card.textContent, 2000),
+          imageUrl: image?.currentSrc || image?.src || undefined,
+        });
+        break;
+      }
+    }
+  }
   return {
     finalUrl: location.href,
     title: clean(document.title, 500) || undefined,
     bodyText: clean(document.body?.innerText, 20000),
     links,
+    ...(cards.length ? { cards } : {}),
   };
 })()`;
 
@@ -147,6 +172,7 @@ export function embeddedBrowserWindowOptions(
 ): BrowserWindowConstructorOptions {
   return {
     width: 1180,
+    icon: getAppIconPath(),
     height: 820,
     show: visible,
     backgroundColor: '#111827',
@@ -198,6 +224,15 @@ function normalizeSnapshot(value: unknown): EmbeddedBrowserSnapshot {
     finalUrl,
     ...(typeof value.title === 'string' && value.title.trim() ? { title: value.title.trim() } : {}),
     bodyText: value.bodyText.slice(0, 20_000),
+    ...(Array.isArray(value.cards) ? { cards: value.cards.slice(0, 300).flatMap((card) => {
+      if (!isRecord(card) || typeof card.id !== 'string' || typeof card.title !== 'string') return [];
+      if (!card.id.trim() || !card.title.trim()) return [];
+      return [{
+        id: card.id.slice(0, 200), title: card.title.slice(0, 500),
+        ...(typeof card.contextText === 'string' ? { contextText: card.contextText.slice(0, 2_000) } : {}),
+        ...(typeof card.imageUrl === 'string' ? { imageUrl: card.imageUrl } : {}),
+      }];
+    }) } : {}),
     links: value.links.slice(0, 300).flatMap((entry) => {
       if (!isRecord(entry) || typeof entry.href !== 'string' || typeof entry.text !== 'string') return [];
       try {

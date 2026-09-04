@@ -21,6 +21,7 @@ import {
   registerApplicationUpdateHandlers,
 } from './handlers/application-update.handler';
 import type { ApplicationUpdateController } from '../application-update/application-update-controller';
+import { registerSettingsRecoveryHandlers, type SettingsRecoveryService } from './handlers/settings-recovery.handler';
 
 export interface RegisterAllHandlersOptions {
   logger?: ProductRuntimeLogger;
@@ -30,6 +31,7 @@ export interface RegisterAllHandlersOptions {
   publishSessionMessageEvent?(event: SessionMessagePresentationEvent): void;
   skill?: SkillHandlersService;
   settings?: SettingsHandlersService;
+  settingsRecovery?: SettingsRecoveryService;
   approval?: ApprovalHandlersService;
   discovery?: DiscoveryHandlersService;
   observability?: { host: Pick<import('@megumi/product-host/host').ProductHostInterface, 'observability'> };
@@ -43,6 +45,7 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
   registerWindowHandlers({ ipcMain });
+  if (options.settingsRecovery) registerSettingsRecoveryHandlers(options.settingsRecovery, { ipcMain });
 
   if (options.applicationUpdate) {
     registerApplicationUpdateHandlers({ controller: options.applicationUpdate, ipcMain });

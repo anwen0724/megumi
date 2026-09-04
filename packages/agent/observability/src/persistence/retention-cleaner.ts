@@ -1,12 +1,12 @@
 /*
  * Enforces age and total-size retention without deleting active or diagnostically incomplete data.
  */
-import { join } from 'node:path';
+import { basename, join, relative } from 'node:path';
+import { z } from 'zod';
 import type { ObservabilityHealth } from '../runtime/observability-health';
 import { createObservabilityHealth } from '../runtime/observability-health';
 import { decodeRuntimeLogLine } from '../runtime/runtime-log-entry';
 import type { RuntimeLogger } from '../runtime/runtime-logger';
-import { decodeTraceJournalLine, type TraceJournalRecord } from './trace-journal-record';
 import type { ObservabilityStorage } from './observability-storage';
 
 export const OBSERVABILITY_RETENTION_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -29,7 +29,7 @@ export interface RetentionCleaner {
   startup(): Promise<RetentionResult>;
   /** Applies age retention and the configured hard size ceiling. */
   maintain(): Promise<RetentionResult>;
-  /** Cleans before a proposed write and reports whether the exact increment fits. */
+  /** Checks bytes first; attempts safe cleanup only when the proposed write exceeds capacity. */
   ensureCapacity(additionalBytes: number): Promise<boolean>;
   /** Stops periodic maintenance after all accepted cleanup work settles. */
   shutdown(): Promise<void>;
@@ -54,10 +54,39 @@ interface SegmentCandidate {
   readonly endAtMs: number;
 }
 
+// Retention understands storage structure, not the current product's business vocabulary.
+const RetentionRecordBaseSchema = z.object({
+  schemaVersion: z.literal(1),
+  traceId: z.string().uuid(),
+  timestamp: z.string().datetime({ offset: true }),
+});
+const RetentionRecordSchema = z.discriminatedUnion('type', [
+  RetentionRecordBaseSchema.extend({
+    type: z.enum(['trace.started', 'trace.linked', 'span.started', 'span.event', 'span.ended', 'trace.ended']),
+  }),
+  RetentionRecordBaseSchema.extend({
+    type: z.literal('content.recorded'),
+    content: z.discriminatedUnion('mode', [
+      z.object({ mode: z.literal('stored'), contentId: z.string().regex(/^[a-f0-9]{64}$/) }),
+      z.object({ mode: z.literal('inline') }),
+      z.object({ mode: z.literal('redacted') }),
+      z.object({ mode: z.literal('unavailable') }),
+    ]),
+  }),
+]);
+type RetentionRecord = z.infer<typeof RetentionRecordSchema>;
+
+interface RetentionFailure {
+  readonly path?: string;
+  readonly lineNumber?: number;
+  readonly reason: string;
+}
+type ReportRetentionFailure = (failure?: RetentionFailure) => void;
+
 interface TraceSegment {
   readonly path: string;
   readonly order: string;
-  readonly records: readonly TraceJournalRecord[];
+  readonly records: readonly RetentionRecord[];
   readonly traceIds: ReadonlySet<string>;
   readonly safe: boolean;
 }
@@ -75,42 +104,58 @@ export function createRetentionCleaner(
   let maintenanceTail = Promise.resolve();
   let timer: ReturnType<typeof setInterval> | undefined;
 
-  const reportCleanupFailure = (): void => {
+  const reportCleanupFailure: ReportRetentionFailure = (failure): void => {
     health.recordRetentionCleanupFailure();
     try {
       options.runtimeLogger?.write({
         level: 'warn',
         module: 'observability',
         code: 'retention_cleanup_failed',
-        message: 'Observability retention cleanup could not remove an exact file.',
+        message: 'Observability retention maintenance could not inspect or remove a file.',
+        ...(failure ? {
+          data: {
+            ...failure,
+            ...(failure.path ? { path: relative(options.rootDirectory, failure.path) } : {}),
+          },
+        } : {}),
       });
     } catch {
       // Runtime Log failure cannot recurse into retention or product work.
     }
   };
 
-  const run = async (additionalBytes: number): Promise<RetentionResult> => {
+  const run = async (
+    additionalBytes: number,
+    reportFailure: ReportRetentionFailure,
+    capacityOnly: boolean,
+  ): Promise<RetentionResult> => {
+    if (capacityOnly) {
+      const totalBytes = await measureDirectoryBytes(options.storage, options.rootDirectory);
+      if (totalBytes + additionalBytes <= maxTotalBytes) {
+        return { capacityAvailable: true, totalBytes, deletedFiles: [] };
+      }
+    }
     const deletedFiles: string[] = [];
     const activePaths = options.activeFilePaths?.() ?? new Set<string>();
     const cutoffMs = now().getTime() - maxAgeMs;
-    let candidates = await loadClosedCandidates(options, activePaths, reportCleanupFailure);
+    let candidates = await loadClosedCandidates(options, activePaths, reportFailure);
     const expired = candidates.filter((candidate) => candidate.endAtMs < cutoffMs);
     for (const candidate of expired) {
       if (isCurrentlyActive(options, candidate)) continue;
-      await deleteCandidate(options.storage, candidate, deletedFiles, reportCleanupFailure);
+      await deleteCandidate(options.storage, candidate, deletedFiles, reportFailure);
     }
     if (deletedFiles.length > 0) {
-      await collectContentAndPruneIndex(options, health, reportCleanupFailure);
+      await collectContentAndPruneIndex(options, health, reportFailure);
     }
 
     let totalBytes = await measureDirectoryBytes(options.storage, options.rootDirectory);
     if (totalBytes + additionalBytes > maxTotalBytes) {
-      candidates = await loadClosedCandidates(options, activePaths, reportCleanupFailure);
+      candidates = await loadClosedCandidates(options, activePaths, reportFailure);
       for (const candidate of candidates) {
         if (candidate.paths.every((path) => deletedFiles.includes(path))) continue;
         if (isCurrentlyActive(options, candidate)) continue;
-        await deleteCandidate(options.storage, candidate, deletedFiles, reportCleanupFailure);
-        await collectContentAndPruneIndex(options, health, reportCleanupFailure);
+        await deleteCandidate(options.storage, candidate, deletedFiles, reportFailure);
+        await collectContentAndPruneIndex(options, health, reportFailure);
         totalBytes = await measureDirectoryBytes(options.storage, options.rootDirectory);
         if (totalBytes + additionalBytes <= maxTotalBytes) break;
       }
@@ -124,14 +169,18 @@ export function createRetentionCleaner(
     };
   };
 
-  const runSafely = (additionalBytes: number): Promise<RetentionResult> => {
-    const operation = maintenanceTail.then(() => run(additionalBytes));
+  const runSafely = (
+    additionalBytes: number,
+    reportFailure: ReportRetentionFailure = reportCleanupFailure,
+    capacityOnly = false,
+  ): Promise<RetentionResult> => {
+    const operation = maintenanceTail.then(() => run(additionalBytes, reportFailure, capacityOnly));
     maintenanceTail = operation.then(
       () => undefined,
       () => undefined,
     );
     return operation.catch(() => {
-      reportCleanupFailure();
+      reportFailure();
       return {
         capacityAvailable: false,
         totalBytes: maxTotalBytes,
@@ -164,7 +213,9 @@ export function createRetentionCleaner(
     maintain: () => runSafely(0),
     async ensureCapacity(additionalBytes) {
       if (!Number.isSafeInteger(additionalBytes) || additionalBytes < 0) return false;
-      return (await runSafely(additionalBytes)).capacityAvailable;
+      // A write-time check must not enqueue another write into the same diagnostic queue.
+      // Keep health counters; startup and scheduled maintenance still emit the Runtime warning.
+      return (await runSafely(additionalBytes, () => health.recordRetentionCleanupFailure(), true)).capacityAvailable;
     },
     async shutdown() {
       if (timer) {
@@ -188,7 +239,7 @@ function isCurrentlyActive(
 async function loadClosedCandidates(
   options: CreateRetentionCleanerOptions,
   activePaths: ReadonlySet<string>,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<SegmentCandidate[]> {
   const traceSegments = await loadTraceSegments(options, reportFailure);
   const traceCandidates = groupClosedTraceSegments(traceSegments, activePaths);
@@ -197,31 +248,31 @@ async function loadClosedCandidates(
     .sort((left, right) => left.endAtMs - right.endAtMs);
 }
 
-/** Reads strict Journal segments; a corrupt segment remains retained because closure is unprovable. */
+/** Reads retention metadata; unknown or corrupt storage structure prevents unsafe deletion. */
 async function loadTraceSegments(
   options: CreateRetentionCleanerOptions,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<TraceSegment[]> {
   const directoryPath = join(options.rootDirectory, 'traces');
   const entries = await options.storage.listEntries(directoryPath);
   const names = entries
-    .filter((entry) => entry.kind === 'file' && /^trace-v1-\d{4}-\d{2}-\d{2}-\d{4}\.jsonl$/.test(entry.name))
+    .filter((entry) => entry.kind === 'file' && /^trace-v\d+-.*\.jsonl$/.test(entry.name))
     .map((entry) => entry.name)
     .sort();
   const segments: TraceSegment[] = [];
   for (const name of names) {
     const path = join(directoryPath, name);
     try {
-      const records = decodeTraceLines(await options.storage.readText(path));
+      const records = decodeRetentionRecords(await options.storage.readText(path), path, reportFailure);
       segments.push({
         path,
         order: name,
-        records,
-        traceIds: new Set(records.map((record) => record.traceId)),
-        safe: records.length > 0,
+        records: records ?? [],
+        traceIds: new Set(records?.map((record) => record.traceId)),
+        safe: records !== undefined && records.length > 0,
       });
     } catch {
-      reportFailure();
+      reportFailure({ path, reason: 'journal_read_failed' });
       segments.push({ path, order: name, records: [], traceIds: new Set(), safe: false });
     }
   }
@@ -280,7 +331,7 @@ function groupClosedTraceSegments(
 async function loadClosedRuntimeSegments(
   options: CreateRetentionCleanerOptions,
   activePaths: ReadonlySet<string>,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<SegmentCandidate[]> {
   const directoryPath = join(options.rootDirectory, 'runtime');
   const entries = await options.storage.listEntries(directoryPath);
@@ -311,14 +362,14 @@ async function deleteCandidate(
   storage: ObservabilityStorage,
   candidate: SegmentCandidate,
   deletedFiles: string[],
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<void> {
   for (const path of candidate.paths) {
     try {
       await storage.removeFile(path);
       deletedFiles.push(path);
     } catch {
-      reportFailure();
+      reportFailure({ path, reason: 'file_delete_failed' });
       return;
     }
   }
@@ -328,7 +379,7 @@ async function deleteCandidate(
 async function collectContentAndPruneIndex(
   options: CreateRetentionCleanerOptions,
   health: ObservabilityHealth,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<void> {
   const retained = await readRetainedJournalContentIds(options, reportFailure);
   if (retained) {
@@ -348,18 +399,20 @@ async function collectContentAndPruneIndex(
 /** Returns undefined when any retained Journal cannot prove the complete Content reference set. */
 async function readRetainedJournalContentIds(
   options: CreateRetentionCleanerOptions,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<ReadonlySet<string> | undefined> {
   const contentIds = new Set(options.protectedContentIds?.() ?? []);
   for (const path of await retainedJournalPaths(options.storage, options.rootDirectory)) {
     try {
-      for (const record of decodeTraceLines(await options.storage.readText(path))) {
+      const records = decodeRetentionRecords(await options.storage.readText(path), path, reportFailure);
+      if (!records) return undefined;
+      for (const record of records) {
         if (record.type === 'content.recorded' && record.content.mode === 'stored') {
           contentIds.add(record.content.contentId);
         }
       }
     } catch {
-      reportFailure();
+      reportFailure({ path, reason: 'journal_read_failed' });
       return undefined;
     }
   }
@@ -369,7 +422,7 @@ async function readRetainedJournalContentIds(
 async function removeUnreferencedContent(
   options: CreateRetentionCleanerOptions,
   retainedContentIds: ReadonlySet<string>,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<void> {
   const hashRoot = join(options.rootDirectory, 'content', 'sha256');
   const prefixes = await options.storage.listEntries(hashRoot);
@@ -382,7 +435,7 @@ async function removeUnreferencedContent(
       try {
         await options.storage.removeFile(join(directoryPath, entry.name));
       } catch {
-        reportFailure();
+        reportFailure({ path: join(directoryPath, entry.name), reason: 'file_delete_failed' });
       }
     }
   }
@@ -391,7 +444,7 @@ async function removeUnreferencedContent(
 /** Deletes untrusted temporary files one-by-one during startup maintenance. */
 async function removeStartupTemporaryFiles(
   options: CreateRetentionCleanerOptions,
-  reportFailure: () => void,
+  reportFailure: ReportRetentionFailure,
 ): Promise<void> {
   const hashRoot = join(options.rootDirectory, 'content', 'sha256');
   for (const prefix of await options.storage.listEntries(hashRoot)) {
@@ -402,7 +455,7 @@ async function removeStartupTemporaryFiles(
       try {
         await options.storage.removeFile(join(directoryPath, entry.name));
       } catch {
-        reportFailure();
+        reportFailure({ path: join(directoryPath, entry.name), reason: 'file_delete_failed' });
       }
     }
   }
@@ -432,13 +485,46 @@ async function retainedJournalPaths(
 ): Promise<string[]> {
   const directoryPath = join(rootDirectory, 'traces');
   return (await storage.listEntries(directoryPath))
-    .filter((entry) => entry.kind === 'file' && /^trace-v1-.*\.jsonl$/.test(entry.name))
+    .filter((entry) => entry.kind === 'file' && /^trace-v\d+-.*\.jsonl$/.test(entry.name))
     .map((entry) => join(directoryPath, entry.name))
     .sort();
 }
 
-function decodeTraceLines(content: string): TraceJournalRecord[] {
-  return nonEmptyLines(content).map((line) => decodeTraceJournalLine(line));
+/** Validates only deletion-relevant fields, retaining uncertain files without logging their contents. */
+function decodeRetentionRecords(
+  content: string,
+  path: string,
+  reportFailure: ReportRetentionFailure,
+): RetentionRecord[] | undefined {
+  const records: RetentionRecord[] = [];
+  const lines = content.split(/\r?\n/);
+  for (const [index, line] of lines.entries()) {
+    if (line.trim().length === 0) continue;
+    if (!basename(path).startsWith('trace-v1-')) {
+      reportFailure({ path, lineNumber: index + 1, reason: 'unsupported_journal_version' });
+      return undefined;
+    }
+    let value: unknown;
+    try {
+      value = JSON.parse(line);
+    } catch {
+      reportFailure({ path, lineNumber: index + 1, reason: 'invalid_json' });
+      return undefined;
+    }
+    const parsed = RetentionRecordSchema.safeParse(value);
+    if (!parsed.success) {
+      // Zod messages and JSON errors can contain payload values; report only schema paths and codes.
+      const reason = parsed.error.issues.map((issue) => `${issue.path.join('.')}:${issue.code}`).join(', ');
+      reportFailure({ path, lineNumber: index + 1, reason });
+      return undefined;
+    }
+    records.push(parsed.data);
+  }
+  if (records.length === 0) {
+    reportFailure({ path, reason: 'empty_journal' });
+    return undefined;
+  }
+  return records;
 }
 
 function nonEmptyLines(content: string): string[] {

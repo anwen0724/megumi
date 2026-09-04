@@ -1,4 +1,5 @@
 /* Owns settings file model transformations: secret stripping, patch merging, and write materialization. */
+import { z } from 'zod';
 import {
   DEFAULT_SETTINGS,
   SettingsFileRawSchema,
@@ -188,7 +189,7 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
     ...(raw.theme ? { theme: raw.theme } : {}),
     ...(raw.setup ? { setup: { ...DEFAULT_SETTINGS.setup, ...definedObject(raw.setup) } } : {}),
     ...(raw.memory ? { memory: { ...DEFAULT_SETTINGS.memory, ...definedObject(raw.memory) } } : {}),
-    discovery: resolveDiscoverySettings(raw.discovery),
+    discovery: resolveFileDiscoverySettings(raw.discovery),
     ...(raw.voice ? { voice: { ...DEFAULT_SETTINGS.voice, ...voice } } : {}),
     ...(raw.context ? { context: { ...DEFAULT_SETTINGS.context, ...definedObject(raw.context) } } : {}),
     ...(raw.model_selection ? { model_selection: raw.model_selection } : {}),
@@ -198,6 +199,18 @@ export function resolvePublicSettings(raw: SettingsRaw): SettingsResolved {
       ? { permissions: { ...DEFAULT_SETTINGS.permissions, ...definedObject(raw.permissions) } }
       : {}),
   });
+}
+
+/** Restores the file-level location lost when validating the standalone discovery submodel. */
+function resolveFileDiscoverySettings(raw: SettingsRaw['discovery']) {
+  try {
+    return resolveDiscoverySettings(raw);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new z.ZodError(error.issues.map((issue) => ({ ...issue, path: ['discovery', ...issue.path] })));
+    }
+    throw error;
+  }
 }
 
 /** Lists unknown keys in a parsed file model so callers can surface them as diagnostics. */

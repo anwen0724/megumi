@@ -1,6 +1,8 @@
 /* Owns settings.json file IO and atomic local file replacement. */
 import fs from 'node:fs';
 import path from 'node:path';
+import { publicRawFromFile, resolvePublicSettings } from './settings-file-model';
+import { settingsLoadIssues, type SettingsLoadIssue } from './settings-failure-factory';
 import {
   SettingsFileRawSchema,
   type SettingsFileRaw,
@@ -23,11 +25,13 @@ export interface CreateSettingsStoreRequest {
 export class SettingsStoreParseError extends Error {
   readonly code = 'settings_store_parse_error';
   readonly settingsPath: string;
+  readonly issues: SettingsLoadIssue[];
 
-  constructor(settingsPath: string) {
+  constructor(settingsPath: string, issues: SettingsLoadIssue[] = settingsLoadIssues(undefined)) {
     super('Megumi settings could not be parsed.');
     this.name = 'SettingsStoreParseError';
     this.settingsPath = settingsPath;
+    this.issues = issues;
   }
 }
 
@@ -41,7 +45,7 @@ export function createSettingsStore(request: CreateSettingsStoreRequest): Settin
 
 function readSettingsFile(settingsPath: string): SettingsFileRaw {
   const text = readFileIfExists(settingsPath);
-  if (text === undefined || text.trim().length === 0) return {};
+  if (text === undefined) return {};
   try {
     const parsed = JSON.parse(text) as unknown;
     // Legacy AppSettings files keep the protocol field and camelCase keys:
@@ -53,12 +57,16 @@ function readSettingsFile(settingsPath: string): SettingsFileRaw {
     const current = SettingsFileRawSchema.safeParse(normalized.value);
     if (current.success) {
       // Migrated files are written back once so the disk format stays current.
-      if (normalized.changed) writeSettingsFile(settingsPath, current.data);
+      if (normalized.changed) {
+        // Never persist a conversion if the resulting runtime configuration is invalid.
+        resolvePublicSettings(publicRawFromFile(current.data));
+        writeSettingsFile(settingsPath, current.data);
+      }
       return current.data;
     }
     return SettingsFileRawSchema.parse(normalized.value);
-  } catch {
-    throw new SettingsStoreParseError(settingsPath);
+  } catch (error) {
+    throw new SettingsStoreParseError(settingsPath, settingsLoadIssues(error));
   }
 }
 

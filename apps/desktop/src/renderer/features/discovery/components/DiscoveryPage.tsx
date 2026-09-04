@@ -1,13 +1,17 @@
-/* Owns the renderer projection for today, discovery history, search, and feedback. */
+/*
+ * Owns Discovery presentation, first-use consent, progress, search, and feedback.
+ */
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Bookmark, ChevronDown, ChevronUp, Heart, LoaderCircle, Search, Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { DiscoveryHomeUiResult, DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
+import { localizeRendererError, rendererError } from '../../../shared/i18n';
 import { Button, cx } from '../../../shared/ui';
 import { InterestManager } from './InterestManager';
 import { RecommendationCard } from './RecommendationCard';
+import { FirstSupplyConfirmationDialog } from './FirstSupplyConfirmationDialog';
 
 type HomeMode = DiscoveryHomeUiResult['mode'];
 type RecommendationAction = Parameters<Parameters<typeof RecommendationCard>[0]['onAction']>[0];
@@ -28,6 +32,11 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
   const [error, setError] = useState<string | null>(null);
   const [managerOpen, setManagerOpen] = useState(false);
   const homeRequestSequence = useRef(0);
+  const [supplyPromptOpen, setSupplyPromptOpen] = useState(false);
+  const [supplyPromptShown, setSupplyPromptShown] = useState(false);
+  const [confirmingSupply, setConfirmingSupply] = useState(false);
+  const [confirmationError, setConfirmationError] = useState<string | null>(null);
+  const confirmationPending = useRef(false);
 
   const loadHome = useCallback(async (selectedMode: HomeMode) => {
     const requestSequence = ++homeRequestSequence.current;
@@ -54,15 +63,47 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
 
   useEffect(() => { void loadHome('timeline'); }, []);
   useEffect(() => {
+    if (home?.candidateSupplyConfirmed || !home?.interests.some(({ status }) => status === 'active')) {
+      setSupplyPromptOpen(false);
+      return;
+    }
+    if (!supplyPromptShown && !managerOpen) {
+      setSupplyPromptShown(true);
+      setSupplyPromptOpen(true);
+    }
+  }, [home, supplyPromptShown, managerOpen]);
+  useEffect(() => {
     const status = home?.today.status;
     if (
       status !== 'running'
       && status !== 'waiting_for_candidates'
+      && home?.candidateSupplyStatus.status !== 'running'
       && !(status === 'not_generated' && !home?.nextScheduledAt)
     ) return;
     const timer = window.setInterval(() => { void loadHome(mode); }, 3_000);
     return () => window.clearInterval(timer);
-  }, [home?.nextScheduledAt, home?.today.status, loadHome, mode]);
+  }, [home?.nextScheduledAt, home?.today.status, home?.candidateSupplyStatus.status, loadHome, mode]);
+
+  /** Confirms through the Host before refreshing authoritative progress; never starts Recommendation. */
+  async function confirmFirstSupply() {
+    if (confirmationPending.current) return;
+    confirmationPending.current = true;
+    setConfirmingSupply(true);
+    setConfirmationError(null);
+    try {
+      const result = await window.megumi.discovery.confirmCandidateSupply(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.discovery.candidateSupplyConfirm, {},
+      ));
+      if (!result.ok) { setConfirmationError(t('firstSupplyFailed')); return; }
+      setSupplyPromptOpen(false);
+      await loadHome(mode);
+    } catch {
+      setConfirmationError(t('firstSupplyFailed'));
+    } finally {
+      confirmationPending.current = false;
+      setConfirmingSupply(false);
+    }
+  }
 
   function selectMode(next: HomeMode) {
     if (next === mode && !activeQuery) return;
@@ -97,15 +138,27 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
 
   async function ensureToday() {
     setError(null);
-    const result = await window.megumi.discovery.requestRecommendation(createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.discovery.recommendationRequest,
-      { trigger: 'manual' },
-    ));
-    if (!result.ok || result.data.status === 'failed') {
-      setError(t('actionFailed'));
-      return;
+    try {
+      const result = await window.megumi.discovery.requestRecommendation(createRendererRuntimeIpcRequest(
+        IPC_CHANNELS.discovery.recommendationRequest,
+        { trigger: 'manual' },
+      ));
+      if (!result.ok) {
+        setError(recommendationFailureMessage());
+        return;
+      }
+      if (result.data.status === 'failed') {
+        setError(recommendationFailureMessage(result.data.failure));
+        return;
+      }
+      if (result.data.status === 'model_unavailable') {
+        setError(recommendationFailureMessage({ code: 'model_unavailable', message: '' }));
+        return;
+      }
+      await loadHome(mode);
+    } catch {
+      setError(recommendationFailureMessage());
     }
-    await loadHome(mode);
   }
 
   async function updateState(recommendationId: string, action: RecommendationAction) {
@@ -146,6 +199,9 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
   const recommendations = useMemo(() => activeQuery ? searchResults : [], [activeQuery, searchResults]);
   const hasActiveInterests = home?.interests.some((interest) => interest.status === 'active') ?? false;
   const modeHome = home?.mode === mode ? home : null;
+  const needsSupplyConfirmation = Boolean(home && hasActiveInterests && !home.candidateSupplyConfirmed);
+  const supplyRunning = home?.candidateSupplyStatus.status === 'running';
+  const showRecommendationStatus = hasActiveInterests && !needsSupplyConfirmation && mode === 'timeline' && !activeQuery;
 
   return (
     <div className="relative h-full w-full overflow-y-auto [scrollbar-gutter:stable] bg-[radial-gradient(circle_at_10%_0%,var(--color-accent-soft),transparent_26rem),var(--color-app-bg)]">
@@ -194,20 +250,32 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           />
         ) : null}
 
-        {home && hasActiveInterests && home.today.status === 'not_generated' && mode === 'timeline' && !activeQuery ? (
+        {needsSupplyConfirmation && mode === 'timeline' && !activeQuery ? (
+          <StatusPanel title={t('firstSupplyTitle')} action={<Button variant="primary" onClick={() => {
+            setConfirmationError(null); setSupplyPromptOpen(true);
+          }}>{t('startFirstSupply')}</Button>} />
+        ) : null}
+        {showRecommendationStatus && home?.candidateSupplyStatus.status === 'failed' ? (
+          <div role="alert" className="mb-6 rounded-2xl bg-[var(--color-danger-soft)] p-5 text-sm text-[var(--color-danger)]">
+            {localizeRendererError(rendererError(home.candidateSupplyStatus.failure.code,
+              home.candidateSupplyStatus.failure.message, undefined, 'candidate_supply_failed'))}
+          </div>
+        ) : null}
+        {showRecommendationStatus && home?.today.status === 'not_generated' && !supplyRunning ? (
           <StatusPanel title={t('notGenerated')} action={<Button variant="primary" onClick={() => void ensureToday()}>{t('generateNow')}</Button>} />
         ) : null}
-        {home?.today.status === 'running' && mode === 'timeline' && !activeQuery ? <StatusPanel icon={<LoaderCircle className="animate-spin" size={22} />} title={t('running')} /> : null}
-        {home?.today.status === 'waiting_for_candidates' && mode === 'timeline' && !activeQuery ? (
+        {showRecommendationStatus && home?.today.status === 'running' ? <StatusPanel icon={<LoaderCircle className="animate-spin" size={22} />} title={t('running')} /> : null}
+        {showRecommendationStatus && (home?.today.status === 'waiting_for_candidates' || (home?.today.status === 'not_generated' && supplyRunning)) ? (
           <StatusPanel
             icon={<LoaderCircle className="animate-spin" size={22} />}
             title={t('waitingForCandidates')}
-            description={t('waitingForCandidatesDescription')}
-            action={onOpenContentSources ? <Button variant="secondary" onClick={onOpenContentSources}>{t('manageSources')}</Button> : undefined}
           />
         ) : null}
-        {home?.today.status === 'failed' && mode === 'timeline' && !activeQuery ? (
-          <StatusPanel title={t('failed')} description={home.today.failure?.message} action={<Button variant="primary" onClick={() => void ensureToday()}>{t('retry')}</Button>} />
+        {showRecommendationStatus && home?.today.status === 'failed' ? (
+          <StatusPanel title={t('failed')} description={recommendationFailureMessage(home.today.failure)} action={<Button variant="primary" onClick={() => void ensureToday()}>{t('retry')}</Button>} />
+        ) : null}
+        {showRecommendationStatus && home?.today.status === 'model_unavailable' ? (
+          <StatusPanel title={t('failed')} description={localizeRendererError(rendererError('model_unavailable'))} action={<Button variant="primary" onClick={() => void ensureToday()}>{t('retry')}</Button>} />
         ) : null}
 
         {activeQuery ? (
@@ -241,7 +309,7 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
           </section>
         ))}
 
-        {!activeQuery && modeHome && modeHome.days.length === 0 && hasActiveInterests && !['not_generated', 'waiting_for_candidates', 'running', 'failed'].includes(modeHome.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
+        {!activeQuery && modeHome && modeHome.days.length === 0 && hasActiveInterests && !['not_generated', 'waiting_for_candidates', 'running', 'failed', 'model_unavailable'].includes(modeHome.today.status) ? <StatusPanel title={t('emptyMode')} /> : null}
       </div>
 
       <InterestManager
@@ -251,8 +319,29 @@ export function DiscoveryPage({ onStartConversation, onOpenContentSources }: Dis
         onChanged={async () => loadHome(mode)}
         onOpenContentSources={onOpenContentSources}
       />
+      {supplyPromptOpen && needsSupplyConfirmation ? <FirstSupplyConfirmationDialog
+        busy={confirmingSupply} error={confirmationError}
+        onDefer={() => setSupplyPromptOpen(false)} onConfirm={() => void confirmFirstSupply()}
+      /> : null}
     </div>
   );
+}
+
+/** Localizes known failures without rendering provider bodies or changing diagnostic facts. */
+function recommendationFailureMessage(
+  failure?: Pick<NonNullable<DiscoveryHomeUiResult['today']['failure']>, 'code' | 'message'>,
+): string {
+  let code = failure?.code ?? 'recommendation_failed';
+  // Execution failures currently carry provider HTTP status in the message, not a separate field.
+  // Recognize only the leading status; arbitrary numbers in an error body are not HTTP status codes.
+  if (code === 'agent_execution_failed') {
+    const status = /^\s*(\d{3})\b/.exec(failure?.message ?? '')?.[1];
+    if (status === '402') code = 'model_payment_required';
+    else if (status === '401') code = 'model_authentication_failed';
+    else if (status === '429') code = 'model_rate_limited';
+    else if (status?.startsWith('5')) code = 'model_service_unavailable';
+  }
+  return localizeRendererError(rendererError(code, failure?.message, undefined, 'recommendation_failed'));
 }
 
 function RecommendationGrid({ recommendations, collapsedRows, onAction, onChat }: {

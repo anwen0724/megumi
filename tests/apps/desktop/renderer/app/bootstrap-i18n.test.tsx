@@ -96,13 +96,13 @@ describe('renderer bootstrap localization', () => {
     expect(rendererI18n.resolvedLanguage).toBe('en-US');
     expect(useThemeStore.getState().theme).toBe('midnight-blue');
     expect(useSetupWizardStore.getState()).toMatchObject({
-      status: 'error',
-      setupCompleted: false,
+      status: 'load-error',
+      setupCompleted: null,
       error: {
         code: 'settings_load_failed',
-        technicalMessage: 'private transport detail',
       },
     });
+    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('private transport detail');
     expect(render).toHaveBeenCalledOnce();
   });
 });

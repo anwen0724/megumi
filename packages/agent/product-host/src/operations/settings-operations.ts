@@ -47,7 +47,7 @@ export function createSettingsOperations(
     async get() {
       const resolved = settings.resolve();
       if (resolved.status === 'failed') {
-        return { status: 'failed', failure: toHostFailure(resolved.failure) };
+        return { status: 'failed', failure: toHostFailure(resolved.failure), issues: resolved.failure.issues };
       }
       const diagnostics = settings.getFileDiagnostics();
       const webSearch = settings.resolveWebSearch();

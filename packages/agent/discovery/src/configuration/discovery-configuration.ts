@@ -9,6 +9,8 @@ import { candidatePoolSettings } from '../candidate-supply/candidate-pool';
 const LocalTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u);
 
 export interface DiscoveryConfigurationSettings {
+  readonly candidateSupplyConfirmed: boolean;
+  readonly recommendationCandidateCheckIntervalSeconds: number;
   readonly conversationRecognitionEnabled: boolean;
   readonly recommendationGenerationTime: string;
   readonly recommendationTargetCount: number;
@@ -29,6 +31,7 @@ export interface DiscoveryConfigurationStore {
 }
 
 export const UpdateDiscoveryConfigurationRequestSchema = z.object({
+  recommendationCandidateCheckIntervalSeconds: z.number().int().positive().optional(),
   conversationRecognitionEnabled: z.boolean().optional(),
   recommendationGenerationTime: LocalTimeSchema.optional(),
   recommendationTargetCount: z.number().int().min(1).max(100).optional(),
@@ -59,6 +62,7 @@ export const DiscoverySourceViewSchema = z.object({
 }).strict();
 
 export const DiscoveryConfigurationViewSchema = z.object({
+  recommendationCandidateCheckIntervalSeconds: z.number().int().positive(),
   conversationRecognitionEnabled: z.boolean(),
   recommendationGenerationTime: LocalTimeSchema,
   recommendationTargetCount: z.number().int().min(1).max(100),
@@ -100,6 +104,7 @@ export function createDiscoveryConfiguration(input: {
     const settings = input.settings.read();
     const enabled = new Set(settings.enabledSources);
     return {
+      recommendationCandidateCheckIntervalSeconds: settings.recommendationCandidateCheckIntervalSeconds,
       conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
       recommendationGenerationTime: settings.recommendationGenerationTime,
       recommendationTargetCount: settings.recommendationTargetCount,
@@ -128,6 +133,9 @@ export function createDiscoveryConfiguration(input: {
         throw new Error('Discovery configuration contains an unregistered source.');
       }
       const next = {
+        candidateSupplyConfirmed: current.candidateSupplyConfirmed,
+        recommendationCandidateCheckIntervalSeconds: patch.recommendationCandidateCheckIntervalSeconds
+          ?? current.recommendationCandidateCheckIntervalSeconds,
         conversationRecognitionEnabled: patch.conversationRecognitionEnabled ?? current.conversationRecognitionEnabled,
         recommendationGenerationTime: patch.recommendationGenerationTime ?? current.recommendationGenerationTime,
         recommendationTargetCount: patch.recommendationTargetCount ?? current.recommendationTargetCount,

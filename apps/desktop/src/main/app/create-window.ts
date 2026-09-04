@@ -1,5 +1,7 @@
+/* Creates the branded main Desktop window and restricts external navigation. */
 import { BrowserWindow, shell } from 'electron';
 import path from 'path';
+import { getAppIconPath } from './app-icon';
 
 export interface CreateMainWindowOptions {
   devServerUrl?: string;
@@ -7,6 +9,7 @@ export interface CreateMainWindowOptions {
   dirname: string;
 }
 
+/** Creates the main surface with the native Megumi window and taskbar icon. */
 export function createMainWindow({
   devServerUrl,
   rendererName,
@@ -14,6 +17,7 @@ export function createMainWindow({
 }: CreateMainWindowOptions): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1400,
+    icon: getAppIconPath(),
     height: 1000,
     minWidth: 1024,
     minHeight: 680,

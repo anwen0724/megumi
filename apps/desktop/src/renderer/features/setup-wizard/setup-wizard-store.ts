@@ -1,13 +1,14 @@
 // Coordinates the renderer first-run setup flow through existing settings and provider IPC APIs.
 import { create } from 'zustand';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
-import type { AppLanguage, AppThemeName } from '@megumi/product-host/host';
+import type { AppLanguage, AppThemeName, SettingsGetUiResult } from '@megumi/product-host/host';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { rendererError, type RendererErrorDescriptor } from '../../shared/i18n';
 import { useProviderStore } from '../../entities/provider';
 import { useModelSelectionStore } from '../../entities/model-selection';
 
-export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
+export type SetupWizardStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error' | 'load-error';
+type LoadIssues = NonNullable<Extract<SettingsGetUiResult, { status: 'failed' }>['issues']>;
 
 export interface CompleteSetupInput {
   language: AppLanguage;
@@ -24,8 +25,9 @@ interface SetupWizardState {
   language: AppLanguage;
   setupCompleted: boolean | null;
   error: RendererErrorDescriptor | null;
+  loadIssues: LoadIssues;
   applyBootstrapSettings: (settings: { language: AppLanguage; setupCompleted: boolean }) => void;
-  applyBootstrapFailure: (error: RendererErrorDescriptor) => void;
+  applyBootstrapFailure: (error: RendererErrorDescriptor, issues?: LoadIssues) => void;
   completeSetup: (input: CompleteSetupInput) => Promise<void>;
 }
 
@@ -34,13 +36,15 @@ export const useSetupWizardStore = create<SetupWizardState>((set) => ({
   language: 'en-US',
   setupCompleted: null,
   error: null,
+  loadIssues: [],
   applyBootstrapSettings: ({ language, setupCompleted }) => set({
     status: 'ready',
     language,
     setupCompleted,
     error: null,
+    loadIssues: [],
   }),
-  applyBootstrapFailure: (error) => set({ status: 'error', setupCompleted: false, error }),
+  applyBootstrapFailure: (error, issues = []) => set({ status: 'load-error', setupCompleted: null, error, loadIssues: issues }),
   completeSetup: async (input) => {
     set({ status: 'saving', error: null });
 

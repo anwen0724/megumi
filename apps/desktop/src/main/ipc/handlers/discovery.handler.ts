@@ -1,6 +1,7 @@
 /* Desktop IPC handlers for Discovery interests, Recommendation, and configuration. */
 import {
   DiscoveryRecommendationRequestResultSchema,
+  DiscoveryCandidateSupplyConfirmResultSchema,
   DiscoveryConfigurationUiDtoSchema,
   DiscoveryHomeUiResultSchema,
   DiscoveryInterestUiDtoSchema,
@@ -17,6 +18,7 @@ import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
   DiscoveryRecommendationRequestSchema,
+  DiscoveryCandidateSupplyConfirmRequestSchema,
   DiscoveryConfigurationGetRequestSchema,
   DiscoveryConfigurationUpdateRequestSchema,
   DiscoveryHomeRequestSchema,
@@ -43,6 +45,15 @@ export function registerDiscoveryHandlers(
   options: RegisterDiscoveryHandlersOptions = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
+
+  ipcMain.handle(IPC_CHANNELS.discovery.candidateSupplyConfirm, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.candidateSupplyConfirm,
+    requestSchema: DiscoveryCandidateSupplyConfirmRequestSchema,
+    responseSchema: DiscoveryCandidateSupplyConfirmResultSchema,
+    logger: options.logger,
+    handle: () => service.host.discovery.confirmCandidateSupply(),
+    mapError: mapDiscoveryIpcError,
+  }));
 
   ipcMain.handle(IPC_CHANNELS.discovery.configurationGet, createIpcRequestHandler({
     channel: IPC_CHANNELS.discovery.configurationGet,

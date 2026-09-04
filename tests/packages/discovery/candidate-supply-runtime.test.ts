@@ -2,6 +2,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Api, Model } from '@megumi/ai';
+import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
 import {
   createCandidateSupplyAttempts,
@@ -32,9 +34,38 @@ describe('Candidate Supply Runtime', () => {
 
   afterEach(() => database.close());
 
-  it('does not start without an active Interest', async () => {
+  it('records enabled, unavailable and disabled Sources without changing their selection', async () => {
+    createInterest();
+    const records: TraceJournalRecord[] = [];
+    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const registry = createSourceRegistry([
+      source(),
+      { ...source(), descriptor: { ...source().descriptor, id: 'disabled' } },
+      { ...source(), descriptor: { ...source().descriptor, id: 'xiaohongshu' }, getAvailability: () => ({ state: 'login_required' }) },
+    ]);
+    const options = runtimeOptions({ sourceRegistry: registry, startExecution: async () => ({
+      status: 'failed', failure: { code: 'test_stop', message: 'No model call in this test.', retryable: false },
+    }) });
+    const runtime = createCandidateSupplyRuntime({ ...options, observability, settings: {
+      ...options.settings, read: () => ({ ...options.settings.read(), enabledSources: ['source:1', 'xiaohongshu'] }),
+    } });
+    await runtime.requestCheck('startup');
+    expect(records).toContainEqual(expect.objectContaining({
+      type: 'content.recorded', kind: 'source.selection',
+      content: expect.objectContaining({ mode: 'inline', value: [
+        expect.objectContaining({ sourceId: 'source:1', enabled: true, selected: true, reason: 'ready' }),
+        expect.objectContaining({ sourceId: 'disabled', enabled: false, selected: false, reason: 'disabled' }),
+        expect.objectContaining({ sourceId: 'xiaohongshu', enabled: true, selected: false, reason: 'login_required' }),
+      ] }),
+    }));
+  });
+
+  it.each([false, true])('does not start without an active Interest (confirmed=%s)', async (confirmed) => {
     const startExecution = vi.fn();
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({ startExecution }));
+    const options = runtimeOptions({ startExecution });
+    const runtime = createCandidateSupplyRuntime({ ...options, settings: {
+      ...options.settings, read: () => ({ ...options.settings.read(), candidateSupplyConfirmed: confirmed }),
+    } });
 
     await expect(runtime.requestCheck('startup')).resolves.toMatchObject({
       status: 'not_needed',
@@ -63,6 +94,74 @@ describe('Candidate Supply Runtime', () => {
       reason: 'no_gap',
     });
     expect(startExecution).not.toHaveBeenCalled();
+  });
+
+  it.each(['startup', 'scheduled', 'interest_changed', 'supply_conditions_changed'] as const)(
+    'blocks %s until first supply is confirmed', async (trigger) => {
+      createInterest();
+      const startExecution = vi.fn();
+      const options = runtimeOptions({ startExecution });
+      const settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
+      const runtime = createCandidateSupplyRuntime({ ...options,
+        settings: { read: () => settings, write: () => undefined },
+      });
+      await expect(runtime.requestCheck(trigger)).resolves.toMatchObject({
+        status: 'not_needed', reason: 'confirmation_required',
+      });
+      expect(startExecution).not.toHaveBeenCalled();
+      await runtime.shutdown();
+    },
+  );
+
+  it('persists confirmation before starting and returns without waiting for execution', async () => {
+    createInterest();
+    const pending = new Promise<{ status: 'completed' }>(() => undefined);
+    const startExecution = vi.fn(async () => ({
+      status: 'started' as const, execution: executionSnapshot('execution:1'), completion: pending,
+    }));
+    const options = runtimeOptions({ startExecution });
+    let settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
+    const write = vi.fn(async (next: typeof settings) => { settings = next; });
+    const runtime = createCandidateSupplyRuntime({ ...options, settings: { read: () => settings, write } });
+    await Promise.all([runtime.confirm(), runtime.confirm()]);
+    expect(settings.candidateSupplyConfirmed).toBe(true);
+    expect(write).toHaveBeenCalledOnce();
+    expect(startExecution).toHaveBeenCalledOnce();
+    expect(runtime.getStatus()).toEqual({ status: 'running' });
+    await expect(runtime.confirm()).resolves.toEqual({ status: 'already_confirmed' });
+    expect(startExecution).toHaveBeenCalledOnce();
+  });
+
+  it('does not start or confirm after a failed settings write', async () => {
+    createInterest();
+    const startExecution = vi.fn();
+    const options = runtimeOptions({ startExecution });
+    const settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
+    const runtime = createCandidateSupplyRuntime({ ...options, settings: {
+      read: () => settings, write: () => { throw new Error('Settings write failed'); },
+    } });
+    await expect(runtime.confirm()).rejects.toThrow('Settings write failed');
+    expect(settings.candidateSupplyConfirmed).toBe(false);
+    expect(startExecution).not.toHaveBeenCalled();
+  });
+
+  it('does not launch after shutdown interrupts confirmation persistence', async () => {
+    createInterest();
+    const startExecution = vi.fn();
+    const options = runtimeOptions({ startExecution });
+    let settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
+    let releaseWrite!: () => void;
+    const pendingWrite = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    const runtime = createCandidateSupplyRuntime({ ...options, settings: {
+      read: () => settings,
+      write: async (next) => { await pendingWrite; settings = next; },
+    } });
+    const confirmation = runtime.confirm();
+    await runtime.shutdown();
+    releaseWrite();
+    await expect(confirmation).rejects.toThrow('shutting down');
+    expect(startExecution).not.toHaveBeenCalled();
+    expect(settings.candidateSupplyConfirmed).toBe(true);
   });
 
   it('settles fulfillment from final Candidate database facts', async () => {
@@ -230,6 +329,8 @@ describe('Candidate Supply Runtime', () => {
       settings: {
         read: () => ({
           conversationRecognitionEnabled: true,
+          candidateSupplyConfirmed: true,
+          recommendationCandidateCheckIntervalSeconds: 60,
           recommendationGenerationTime: '08:00',
           recommendationTargetCount: 20,
           recommendationWorkingSetCount: 80,

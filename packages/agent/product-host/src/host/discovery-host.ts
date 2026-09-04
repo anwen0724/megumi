@@ -26,6 +26,11 @@ import {
 } from '@megumi/discovery';
 
 const LocalDateSchema = z.string().date();
+export const DiscoveryCandidateSupplyConfirmPayloadSchema = z.object({}).strict();
+export const DiscoveryCandidateSupplyConfirmResultSchema = z.object({
+  status: z.enum(['confirmed', 'already_confirmed']),
+}).strict();
+export type DiscoveryCandidateSupplyConfirmResult = z.infer<typeof DiscoveryCandidateSupplyConfirmResultSchema>;
 const FailureSchema = z.object({
   code: z.string().min(1), message: z.string(), retryable: z.boolean(),
 }).strict();
@@ -180,6 +185,8 @@ export type DiscoveryBackgroundWaitResult<T> =
   | { readonly status: 'timed_out' };
 
 export interface DiscoveryHost {
+  /** Records explicit first-use consent and checks supply in the background. */
+  confirmCandidateSupply(): Promise<DiscoveryCandidateSupplyConfirmResult>;
   getConfiguration(request?: DiscoveryConfigurationGetPayload): Promise<DiscoveryConfigurationUiDto>;
   updateConfiguration(request: DiscoveryConfigurationUpdatePayload): Promise<DiscoveryConfigurationUiDto>;
   connectSource(request: DiscoverySourceConnectPayload): Promise<DiscoverySourceUiDto>;

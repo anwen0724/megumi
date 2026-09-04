@@ -4,6 +4,7 @@
  */
 import { BrowserWindow } from 'electron';
 import path from 'node:path';
+import { getAppIconPath } from './app-icon';
 
 export interface CreateCharacterWindowOptions {
   readonly devServerUrl?: string;
@@ -14,6 +15,7 @@ export interface CreateCharacterWindowOptions {
 export function createCharacterWindow(options: CreateCharacterWindowOptions): BrowserWindow {
   const characterWindow = new BrowserWindow({
     width: 720,
+    icon: getAppIconPath(),
     height: 680,
     minWidth: 540,
     minHeight: 460,

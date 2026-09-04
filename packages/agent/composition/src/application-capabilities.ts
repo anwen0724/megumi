@@ -498,6 +498,15 @@ function composeCapabilitiesWithDatabase(
     zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
     twitterApiKey: () => discoveryCredential(settings, 'twitter'),
     observability: observability.observability,
+    onCheckResult(sourceId, availability) {
+      observability.runtimeLogger.write({
+        level: availability.state === 'ready' ? 'info' : 'warn',
+        module: 'discovery', code: 'discovery_source_checked',
+        message: 'Discovery Source availability was checked.',
+        correlation: { sourceId },
+        data: { ...availability },
+      });
+    },
     onCheckError(error, sourceId) {
       observability.runtimeLogger.write({
         level: 'warn', module: 'discovery', code: 'discovery_source_check_failed',
@@ -577,6 +586,8 @@ function composeCapabilitiesWithDatabase(
       return resolved.status === 'ok'
         ? {
             conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
+            candidateSupplyConfirmed: resolved.settings.discovery.candidate_supply_confirmed,
+            recommendationCandidateCheckIntervalSeconds: resolved.settings.discovery.recommendation_candidate_check_interval_seconds,
             recommendationGenerationTime: resolved.settings.discovery.recommendation_generation_time,
             recommendationTargetCount: resolved.settings.discovery.recommendation_target_count,
             recommendationWorkingSetCount: resolved.settings.discovery.recommendation_working_set_count,
@@ -591,6 +602,8 @@ function composeCapabilitiesWithDatabase(
           }
         : {
             conversationRecognitionEnabled: false,
+            candidateSupplyConfirmed: false,
+            recommendationCandidateCheckIntervalSeconds: 60,
             recommendationGenerationTime: '08:00',
             recommendationTargetCount: 20,
             recommendationWorkingSetCount: 80,
@@ -607,6 +620,8 @@ function composeCapabilitiesWithDatabase(
         patch: {
           discovery: {
             conversation_recognition_enabled: next.conversationRecognitionEnabled,
+            candidate_supply_confirmed: next.candidateSupplyConfirmed,
+            recommendation_candidate_check_interval_seconds: next.recommendationCandidateCheckIntervalSeconds,
             recommendation_generation_time: next.recommendationGenerationTime,
             recommendation_target_count: next.recommendationTargetCount,
             recommendation_working_set_count: next.recommendationWorkingSetCount,
@@ -693,6 +708,7 @@ function composeCapabilitiesWithDatabase(
           return resolved.status === 'ok'
             ? {
                 recommendationGenerationTime: resolved.settings.discovery.recommendation_generation_time,
+                recommendationCandidateCheckIntervalSeconds: resolved.settings.discovery.recommendation_candidate_check_interval_seconds,
                 recommendationTargetCount: resolved.settings.discovery.recommendation_target_count,
                 recommendationWorkingSetCount: resolved.settings.discovery.recommendation_working_set_count,
                 candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
@@ -702,6 +718,7 @@ function composeCapabilitiesWithDatabase(
               }
             : {
                 recommendationGenerationTime: '08:00',
+                recommendationCandidateCheckIntervalSeconds: 60,
                 recommendationTargetCount: 20,
                 recommendationWorkingSetCount: 80,
                 candidatePoolMinimumCount: 100,

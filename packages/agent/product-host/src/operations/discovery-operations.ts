@@ -17,6 +17,7 @@ export function createDiscoveryOperations(
   agent: Pick<
     Discovery,
     | 'changeInterest'
+    | 'confirmCandidateSupply'
     | 'setSessionParticipation'
     | 'requestRecommendation'
     | 'waitRecommendation'
@@ -40,6 +41,7 @@ export function createDiscoveryOperations(
   facts: DiscoveryFactsReader,
 ): DiscoveryHost {
   return {
+    confirmCandidateSupply: () => agent.confirmCandidateSupply(),
     getConfiguration: () => agent.getDiscoveryConfiguration(),
     updateConfiguration: (request) => agent.updateDiscoveryConfiguration(request),
     connectSource: (request) => agent.connectDiscoverySource(request),

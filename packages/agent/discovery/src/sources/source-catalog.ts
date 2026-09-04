@@ -16,6 +16,7 @@ import { createSourceRegistry } from './source-registry';
 import { createXiaohongshuSource } from './xiaohongshu-source';
 import { createZhihuSource } from './zhihu-source';
 import { createTwitterSource } from './twitter-source';
+import type { SourceAvailability } from './discovery-source';
 
 export const DISCOVERY_SOURCE_IDS = [
   'bilibili', 'open_web', 'xiaohongshu', 'douyin', 'zhihu', 'twitter',
@@ -30,6 +31,7 @@ export function createDiscoverySourceRegistry(input: {
   readonly twitterApiKey?: () => string | undefined;
   readonly observability?: Observability;
   readonly onCheckError?: (error: unknown, sourceId: string) => void;
+  readonly onCheckResult?: (sourceId: string, availability: SourceAvailability) => void;
 }) {
   const configuredWebSearch = deferredWebSearch(input.webSearch);
   const bingWebSearch = createBingRssWebSearch();
@@ -42,11 +44,12 @@ export function createDiscoverySourceRegistry(input: {
     }),
     createXiaohongshuSource({ browser: input.embeddedBrowser }),
     createDouyinSource({ browser: input.embeddedBrowser }),
-    createZhihuSource({ accessSecret: input.zhihuAccessSecret ?? (() => undefined) }),
+    createZhihuSource({ accessSecret: input.zhihuAccessSecret ?? (() => undefined), observability: input.observability }),
     createTwitterSource({ apiKey: input.twitterApiKey ?? (() => undefined) }),
   ], {
     observability: input.observability,
     ...(input.onCheckError ? { onCheckError: input.onCheckError } : {}),
+    ...(input.onCheckResult ? { onCheckResult: input.onCheckResult } : {}),
   });
 }
 

@@ -29,6 +29,75 @@ describe('settings.json store', () => {
     return { settings, settingsPath, store };
   }
 
+  it('preserves renamed recommendation values and completed setup', async () => {
+    const { settings, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({ language: 'zh-CN', setup: { completed: true },
+      discovery: { daily_generation_time: '09:30', daily_target_count: 12, future_option: true } }));
+    expect(settings.resolve()).toMatchObject({ status: 'ok', settings: {
+      language: 'zh-CN', setup: { completed: true }, discovery: {
+        recommendation_generation_time: '09:30', recommendation_target_count: 12,
+      },
+    } });
+    const saved = JSON.parse(await readFile(settingsPath, 'utf8'));
+    expect(saved.discovery).toEqual({ recommendation_generation_time: '09:30', recommendation_target_count: 12, future_option: true });
+    const resolved = settings.resolve();
+    if (resolved.status === 'ok') expect(resolved.settings.discovery).not.toHaveProperty('future_option');
+  });
+
+  it('defaults first supply to unconfirmed and persists confirmation and the waiting interval', async () => {
+    const { settings, settingsPath } = await createFixture();
+    expect(settings.resolve()).toMatchObject({ status: 'ok', settings: { discovery: {
+      candidate_supply_confirmed: false, recommendation_candidate_check_interval_seconds: 60,
+    } } });
+    expect(settings.update({ patch: { discovery: {
+      candidate_supply_confirmed: true, recommendation_candidate_check_interval_seconds: 90,
+    } } })).toMatchObject({ status: 'updated' });
+    settings.update({ patch: { language: 'zh-CN' } });
+    const reopened = createSettings({ store: createSettingsStore({ settingsPath }) });
+    expect(reopened.resolve()).toMatchObject({ status: 'ok', settings: { discovery: {
+      candidate_supply_confirmed: true, recommendation_candidate_check_interval_seconds: 90,
+    } } });
+    expect(reopened.update({ patch: { discovery: { recommendation_candidate_check_interval_seconds: 0 } } }))
+      .toMatchObject({ status: 'failed' });
+  });
+
+  it('prefers new fields without hiding invalid new values or changing invalid files', async () => {
+    const { settings, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({ discovery: { daily_target_count: 12, recommendation_target_count: 15 } }));
+    expect(settings.resolve()).toMatchObject({ status: 'ok', settings: { discovery: { recommendation_target_count: 15 } } });
+    const invalid = JSON.stringify({ discovery: { daily_target_count: 12, recommendation_target_count: null } });
+    await writeFile(settingsPath, invalid);
+    expect(settings.resolve()).toMatchObject({ status: 'failed', failure: { issues: [
+      { path: 'discovery.recommendation_target_count', message: expect.any(String) },
+    ] } });
+    expect(await readFile(settingsPath, 'utf8')).toBe(invalid);
+  });
+
+  it('does not treat an existing empty file as first installation', async () => {
+    const { settings, settingsPath } = await createFixture();
+    await writeFile(settingsPath, '  ');
+    expect(settings.resolve()).toMatchObject({ status: 'failed' });
+    expect(await readFile(settingsPath, 'utf8')).toBe('  ');
+  });
+
+  it('does not write normalized fields when resolved count constraints fail', async () => {
+    const { settings, settingsPath } = await createFixture();
+    const invalid = JSON.stringify({ discovery: { daily_target_count: 90 } });
+    await writeFile(settingsPath, invalid);
+    expect(settings.resolve()).toMatchObject({ status: 'failed', failure: { issues: [
+      { path: 'discovery.recommendation_target_count', message: expect.any(String) },
+    ] } });
+    expect(await readFile(settingsPath, 'utf8')).toBe(invalid);
+  });
+
+  it('never includes invalid configuration values in load diagnostics', async () => {
+    const { settings, settingsPath } = await createFixture();
+    await writeFile(settingsPath, JSON.stringify({ language: 'SECRET_VALUE' }));
+    const result = settings.resolve();
+    expect(result).toMatchObject({ status: 'failed', failure: { issues: [{ path: 'language', message: expect.any(String) }] } });
+    expect(JSON.stringify(result)).not.toContain('SECRET_VALUE');
+  });
+
   it('returns defaults when settings.json is missing', async () => {
     const { settings } = await createFixture();
     const resolved = settings.resolve();

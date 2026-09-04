@@ -57,6 +57,7 @@ describe('Discovery owner contracts', () => {
       recommendationId: 'recommendation:1', action: 'set_reaction', reaction: null,
     })).toEqual({ recommendationId: 'recommendation:1', action: 'set_reaction', reaction: null });
     expect(DiscoveryHomeViewSchema.parse({
+      candidateSupplyConfirmed: false, candidateSupplyStatus: { status: 'idle' },
       mode: 'timeline', today: { localDate: '2026-08-22', status: 'not_generated', resultCount: 0 },
       days: [], interests: [], favoriteCount: 0, watchLaterCount: 0,
     })).toMatchObject({ mode: 'timeline', days: [] });

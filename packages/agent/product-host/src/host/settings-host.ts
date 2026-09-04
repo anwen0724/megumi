@@ -282,7 +282,9 @@ export const SettingsGetUiResultSchema = z.discriminatedUnion('status', [
     settings: SettingsUiResolvedSchema,
     unknownKeys: z.array(z.string().min(1)),
   }).strict(),
-  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema,
+    issues: z.array(z.object({ path: z.string(), message: z.string() }).strict()).optional(),
+  }).strict(),
 ]);
 export const SettingsUpdateUiResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('updated'), settings: SettingsUiResolvedSchema }).strict(),
@@ -503,7 +505,7 @@ export type SettingsCompleteSetupUiRequest = {
 export interface SettingsGetUiRequest {}
 export type SettingsGetUiResult =
   | { status: 'ok'; settings: SettingsUiResolved; unknownKeys: string[] }
-  | { status: 'failed'; failure: HostFailure };
+  | { status: 'failed'; failure: HostFailure; issues?: { path: string; message: string }[] };
 
 export type SettingsUpdateUiRequest = SettingsUiRaw;
 export type SettingsUpdateUiResult =

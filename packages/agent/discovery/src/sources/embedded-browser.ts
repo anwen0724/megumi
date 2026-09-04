@@ -15,6 +15,13 @@ export interface EmbeddedBrowserSnapshot {
   readonly title?: string;
   readonly bodyText: string;
   readonly links: readonly EmbeddedBrowserLink[];
+  /** Rendered content cards whose navigation is implemented without an anchor. */
+  readonly cards?: readonly {
+    readonly id: string;
+    readonly title: string;
+    readonly contextText?: string;
+    readonly imageUrl?: string;
+  }[];
 }
 
 export type EmbeddedBrowserFailure = {

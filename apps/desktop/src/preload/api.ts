@@ -58,6 +58,7 @@ import type {
   DiscoveryInterestUiDto,
   DiscoverySessionParticipationUiDto,
   DiscoveryRecommendationRequestResult,
+  DiscoveryCandidateSupplyConfirmResult,
   DiscoveryHomeUiResult,
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
@@ -247,6 +248,17 @@ export const api = {
     ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerDeleteApiKey>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settings.providerDeleteApiKey, request),
   },
+  settingsRecovery: {
+    get: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.get>)
+      : Promise<RuntimeIpcResult<{ settingsPath: string }, typeof IPC_CHANNELS.settingsRecovery.get>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.get, request),
+    openDirectory: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.openDirectory>)
+      : Promise<RuntimeIpcResult<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.openDirectory>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.openDirectory, request),
+    restart: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.restart>)
+      : Promise<RuntimeIpcResult<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.restart>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.restart, request),
+  },
   settings: {
     get: (
       request: BusinessRequest<SettingsGetPayload, typeof IPC_CHANNELS.settings.get>,
@@ -412,6 +424,10 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   discovery: {
+    confirmCandidateSupply: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>,
+    ): Promise<RuntimeIpcResult<DiscoveryCandidateSupplyConfirmResult, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.candidateSupplyConfirm, request),
     getConfiguration: (
       request: BusinessRequest<DiscoveryConfigurationGetPayload, typeof IPC_CHANNELS.discovery.configurationGet>,
     ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationGet>> =>

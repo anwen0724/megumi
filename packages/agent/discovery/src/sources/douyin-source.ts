@@ -14,6 +14,8 @@ const ALLOWED_ORIGINS = [
   'https://www.douyin.com',
   'https://sso.douyin.com',
   'https://passport.douyin.com',
+  // Douyin search embeds its human verification UI from this exact HTTPS origin.
+  'https://rmc.bytedance.com',
 ] as const;
 const HOME_URL = 'https://www.douyin.com/';
 
@@ -68,8 +70,8 @@ export function createDouyinSource(input: { readonly browser: EmbeddedBrowser })
           : { state: 'risk_controlled', checkedAt: new Date().toISOString() };
         return failed(pageFailure.code, pageFailure.message, false);
       }
-      availability = { state: 'ready', checkedAt: new Date().toISOString() };
-      return { status: 'success', items };
+      availability = { state: 'unknown', checkedAt: new Date().toISOString() };
+      return failed('invalid_response', 'Douyin search returned no recognizable result evidence.', false);
     },
     async read(request) {
       const result = await input.browser.snapshot({
@@ -93,7 +95,12 @@ export function createDouyinSource(input: { readonly browser: EmbeddedBrowser })
 
 function searchItems(snapshot: EmbeddedBrowserSnapshot, limit: number) {
   const seen = new Set<string>();
-  return snapshot.links.flatMap((link) => {
+  // The Source owns permalink construction; the Host only captures rendered card facts.
+  const cardLinks = (snapshot.cards ?? []).filter((card) => /^\d+$/u.test(card.id)).map((card) => ({
+    href: `https://www.douyin.com/video/${card.id}`, text: card.title,
+    contextText: card.contextText, imageUrl: card.imageUrl,
+  }));
+  return [...cardLinks, ...snapshot.links].flatMap((link) => {
     try {
       const canonicalUrl = new URL(link.href, snapshot.finalUrl).toString();
       const id = videoId(canonicalUrl);
@@ -121,6 +128,9 @@ function availabilityFromPage(snapshot: EmbeddedBrowserSnapshot, checkedAt: stri
 }
 
 function blockingPageState(snapshot: EmbeddedBrowserSnapshot): { code: 'login_required' | 'risk_control'; message: string } | undefined {
+  if (/验证码中间页/u.test(snapshot.title ?? '')) {
+    return { code: 'risk_control', message: 'Douyin requires verification.' };
+  }
   const url = new URL(snapshot.finalUrl);
   if (url.hostname === 'passport.douyin.com' || url.hostname === 'sso.douyin.com' || /^\/login(?:\/|$)/u.test(url.pathname)) {
     return { code: 'login_required', message: 'Douyin login is required.' };

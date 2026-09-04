@@ -85,6 +85,8 @@ export interface RecommendationReferenceContent {
 }
 
 export interface Discovery {
+  /** Confirms first Candidate Supply use without waiting for the background execution. */
+  confirmCandidateSupply(): Promise<{ readonly status: 'confirmed' | 'already_confirmed' }>;
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
   setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
@@ -153,6 +155,10 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
 
   const recommendationRepository = options.recommendation?.repository;
   return {
+    async confirmCandidateSupply() {
+      if (!candidateSupply) throw new Error('Candidate Supply is not configured.');
+      return candidateSupply.confirm();
+    },
     async changeInterest(request) {
       const interest = await interests.changeInterest(request);
       requestCandidateSupply(candidateSupply, 'interest_changed', options);
@@ -239,11 +245,23 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         days.set(item.localDate, values);
       }
       return DiscoveryHomeViewSchema.parse({
+        candidateSupplyConfirmed: options.candidateSupply?.settings.read().candidateSupplyConfirmed ?? false,
+        candidateSupplyStatus: candidateSupply?.getStatus() ?? { status: 'idle' },
         mode: request.mode,
         today: todayView(recommendation?.getToday()),
         days: [...days].map(([localDate, recommendations]) => ({ localDate, recommendations })),
+        // Project the home response explicitly; durable revision and lifecycle fields stay on the entity.
         interests: options.interests?.repository.listNonDeletedInterests()
-          .filter(({ status }) => status !== 'deleted') ?? [],
+          .filter(({ status }) => status !== 'deleted')
+          .map((interest) => ({
+            interestId: interest.interestId,
+            description: interest.description,
+            status: interest.status,
+            createdFrom: interest.createdFrom,
+            ...(interest.userManagedAt ? { userManagedAt: interest.userManagedAt } : {}),
+            createdAt: interest.createdAt,
+            updatedAt: interest.updatedAt,
+          })) ?? [],
         favoriteCount: recommendationRepository.countRecommendations('favorites'),
         watchLaterCount: recommendationRepository.countRecommendations('watch_later'),
         ...(recommendation?.getNextScheduledAt() ? { nextScheduledAt: recommendation.getNextScheduledAt() } : {}),

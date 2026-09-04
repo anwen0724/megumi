@@ -23,6 +23,8 @@ function source(
 describe('Discovery configuration', () => {
   it('projects registered source facts and persists only validated configuration', async () => {
     let settings = {
+      candidateSupplyConfirmed: true,
+      recommendationCandidateCheckIntervalSeconds: 60,
       conversationRecognitionEnabled: false,
       recommendationGenerationTime: '08:00',
       recommendationTargetCount: 20,
@@ -45,6 +47,7 @@ describe('Discovery configuration', () => {
     });
 
     expect(await configuration.get()).toEqual({
+      recommendationCandidateCheckIntervalSeconds: 60,
       conversationRecognitionEnabled: false,
       recommendationGenerationTime: '08:00',
       recommendationTargetCount: 20,
@@ -66,6 +69,9 @@ describe('Discovery configuration', () => {
       ...settings,
       enabledSources: ['xiaohongshu', 'open_web'],
     });
+    await configuration.update({ recommendationCandidateCheckIntervalSeconds: 90 });
+    expect(settings.candidateSupplyConfirmed).toBe(true);
+    expect((await configuration.get()).recommendationCandidateCheckIntervalSeconds).toBe(90);
   });
 
   it('opens login only through a browser-session source and returns its refreshed public state', async () => {
@@ -87,6 +93,8 @@ describe('Discovery configuration', () => {
       ]),
       settings: {
         read: () => ({
+          candidateSupplyConfirmed: true,
+          recommendationCandidateCheckIntervalSeconds: 60,
           conversationRecognitionEnabled: false,
           recommendationGenerationTime: '08:00',
           recommendationTargetCount: 20,
@@ -123,6 +131,8 @@ describe('Discovery configuration', () => {
         sourceRegistry,
         settings: {
           read: () => ({
+            candidateSupplyConfirmed: true,
+            recommendationCandidateCheckIntervalSeconds: 60,
             conversationRecognitionEnabled: false,
             recommendationGenerationTime: '08:00',
             recommendationTargetCount: 20,
@@ -153,6 +163,7 @@ describe('Discovery configuration', () => {
     { enabledSources: ['missing'] },
     { recommendationGenerationTime: '8:00' },
     { recommendationTargetCount: 0 },
+    { recommendationCandidateCheckIntervalSeconds: 0 },
     { recommendationTargetCount: 101 },
     { recommendationTargetCount: 81, recommendationWorkingSetCount: 80 },
   ])('rejects invalid updates without writing: %j', async (patch) => {
@@ -161,6 +172,8 @@ describe('Discovery configuration', () => {
       sourceRegistry: createSourceRegistry([source('open_web', 'configured_provider')]),
       settings: {
         read: () => ({
+          candidateSupplyConfirmed: true,
+          recommendationCandidateCheckIntervalSeconds: 60,
           conversationRecognitionEnabled: false,
           recommendationGenerationTime: '08:00',
           recommendationTargetCount: 20,

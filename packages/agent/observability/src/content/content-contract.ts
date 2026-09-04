@@ -23,6 +23,8 @@ export const CONTENT_KINDS = [
   'source.request',
   'source.provider_response',
   'source.result',
+  'source.normalization',
+  'source.selection',
   'discovery.material',
   'discovery.candidates',
   'discovery.selection',

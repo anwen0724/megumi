@@ -66,8 +66,9 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
     case 'candidate_supply':
       return {
         clock: evaluationCase.initialState.clock,
-        recommendationTargetCount: 3,
-        recommendationWorkingSetCount: 20,
+        // Supply Cases author their own pool capacity; unrelated recommendation defaults must fit it.
+        recommendationTargetCount: Math.min(3, evaluationCase.initialState.maximumCount),
+        recommendationWorkingSetCount: Math.min(20, evaluationCase.initialState.maximumCount),
         candidatePoolMinimumCount: evaluationCase.initialState.minimumCount,
         candidatePoolMaximumCount: evaluationCase.initialState.maximumCount,
         workspaceFiles: [], sessions: [],

@@ -9,6 +9,7 @@ import { WindowTitleBar } from '../shell/WindowTitleBar';
 import { SetupWizard, useSetupWizardStore } from '../features/setup-wizard';
 import { ToastViewport } from '../shared/ui';
 import { useSessionStore } from '../entities/session';
+import { SettingsLoadError } from './SettingsLoadError';
 import {
   disposeApplicationUpdateStore,
   initializeApplicationUpdateStore,
@@ -17,9 +18,11 @@ import {
 export default function App() {
   const status = useSetupWizardStore((state) => state.status);
   const setupCompleted = useSetupWizardStore((state) => state.setupCompleted);
+  const settingsLoaded = setupCompleted !== null && status !== 'load-error';
   const { t } = useTranslation('common');
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     const publishSelection = (activeSessionId: string | null) => {
       void window.megumi.character.selectSession(activeSessionId);
     };
@@ -27,12 +30,13 @@ export default function App() {
     return useSessionStore.subscribe((state, previous) => {
       if (state.activeSessionId !== previous.activeSessionId) publishSelection(state.activeSessionId);
     });
-  }, []);
+  }, [settingsLoaded]);
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     void initializeApplicationUpdateStore();
     return () => disposeApplicationUpdateStore();
-  }, []);
+  }, [settingsLoaded]);
 
   const setupPending = status === 'idle' || status === 'loading';
   const showSetupWizard = !setupPending && setupCompleted !== true;
@@ -52,6 +56,8 @@ export default function App() {
           <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-[var(--color-text-muted)]">
             {t('loading.megumi')}
           </div>
+        ) : status === 'load-error' ? (
+          <SettingsLoadError />
         ) : showSetupWizard ? (
           <SetupWizard />
         ) : (

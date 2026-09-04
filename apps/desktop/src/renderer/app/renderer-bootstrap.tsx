@@ -27,9 +27,9 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
     );
 
     if (!result.ok) {
-      await applyBootstrapFailure(result.data.message);
+      await applyBootstrapFailure();
     } else if (result.data.status === 'failed') {
-      await applyBootstrapFailure(result.data.failure.message);
+      await applyBootstrapFailure(result.data.issues);
     } else {
       const { language, theme, setup, permissions, modelSelection } = result.data.settings;
       await initializeLocaleWithFallback(language);
@@ -41,11 +41,13 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
         setupCompleted: setup.completed,
       });
     }
-  } catch (error) {
-    await applyBootstrapFailure(error instanceof Error ? error.message : undefined);
+  } catch {
+    await applyBootstrapFailure();
   }
 
-  const Surface = (await surfacePromise).default;
+  // Character controls must not bypass a failed configuration bootstrap either.
+  const Surface = useSetupWizardStore.getState().status === 'load-error'
+    ? (await import('./App')).default : (await surfacePromise).default;
   root.render(
     <ErrorBoundary>
       <Surface />
@@ -62,9 +64,9 @@ async function initializeLocaleWithFallback(language: 'zh-CN' | 'en-US'): Promis
   }
 }
 
-async function applyBootstrapFailure(technicalMessage?: string): Promise<void> {
-  await initializeLocaleWithFallback('en-US');
+async function applyBootstrapFailure(issues?: { path: string; message: string }[]): Promise<void> {
+  await initializeLocaleWithFallback(navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US');
   useSetupWizardStore.getState().applyBootstrapFailure(
-    rendererError('settings_load_failed', technicalMessage),
+    rendererError('settings_load_failed'), issues,
   );
 }

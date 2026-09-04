@@ -1,5 +1,15 @@
 /* Defines source-language copy shared across Desktop Renderer features. */
 export const common = {
+  settingsRecovery: {
+    title: 'Settings could not be loaded',
+    description: 'Megumi has not started automatic tasks. Correct the configuration file, then restart. Your settings have not been reset.',
+    genericReason: 'Check the file format and access permissions. If this persists, check the application logs.',
+    location: 'Configuration file',
+    locationUnavailable: 'Configuration location is unavailable.',
+    openDirectory: 'Open configuration folder',
+    restart: 'Restart Megumi',
+    operationFailed: 'The operation could not be completed. Open the file location manually or exit and restart Megumi.',
+  },
   actions: {
     back: 'Back',
     cancel: 'Cancel',

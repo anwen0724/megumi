@@ -71,6 +71,14 @@ export const DiscoveryDayViewSchema = z.object({
 }).strict();
 
 export const DiscoveryHomeViewSchema = z.object({
+  candidateSupplyConfirmed: z.boolean(),
+  candidateSupplyStatus: z.discriminatedUnion('status', [
+    z.object({ status: z.literal('idle') }).strict(),
+    z.object({ status: z.literal('running') }).strict(),
+    z.object({ status: z.literal('failed'), failure: z.object({
+      code: z.string().min(1), message: z.string(), retryable: z.boolean(),
+    }).strict() }).strict(),
+  ]),
   mode: DiscoveryHomeModeSchema,
   today: TodayDiscoveryViewSchema,
   days: z.array(DiscoveryDayViewSchema),

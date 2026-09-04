@@ -26,7 +26,8 @@ import {
   publicRawFromFile,
   resolvePublicSettings,
 } from './settings-file-model';
-import type { SettingsStore } from './settings-store';
+import { SettingsStoreParseError, type SettingsStore } from './settings-store';
+import { settingsLoadIssues } from './settings-failure-factory';
 import {
   DeleteProviderApiKeyRequestSchema,
   DeleteProviderSettingsRequestSchema,
@@ -171,16 +172,20 @@ class DefaultSettings implements Settings {
   read(): { status: 'ok'; settings: SettingsRaw } | SettingsFailureResult {
     try {
       return { status: 'ok', settings: publicRawFromFile(this.readFile()) };
-    } catch {
-      return failure('settings_read_failed', 'Settings could not be read.');
+    } catch (error) {
+      return createSettingsFailure('settings_read_failed', 'Settings could not be read.', {
+        issues: error instanceof SettingsStoreParseError ? error.issues : settingsLoadIssues(error),
+      });
     }
   }
 
   resolve(): { status: 'ok'; settings: SettingsResolved } | SettingsFailureResult {
     try {
       return { status: 'ok', settings: resolvePublicSettings(publicRawFromFile(this.readFile())) };
-    } catch {
-      return failure('settings_resolution_failed', 'Settings could not be resolved.');
+    } catch (error) {
+      return createSettingsFailure('settings_resolution_failed', 'Settings could not be resolved.', {
+        issues: error instanceof SettingsStoreParseError ? error.issues : settingsLoadIssues(error),
+      });
     }
   }
 

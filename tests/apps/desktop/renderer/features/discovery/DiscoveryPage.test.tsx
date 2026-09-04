@@ -11,11 +11,13 @@ describe('DiscoveryPage', () => {
   const updateRecommendationState = vi.fn();
   const changeInterest = vi.fn();
   const requestRecommendation = vi.fn();
+  const confirmCandidateSupply = vi.fn();
   const configurationGet = vi.fn();
   const configurationUpdate = vi.fn();
 
   beforeEach(async () => {
     await initializeRendererI18n('zh-CN');
+    confirmCandidateSupply.mockReset().mockResolvedValue(ok({ status: 'confirmed' }));
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
     getHome.mockReset().mockResolvedValue(ok(homeView()));
     searchRecommendations.mockReset().mockResolvedValue(ok({
@@ -47,6 +49,7 @@ describe('DiscoveryPage', () => {
         discovery: {
           getHome, searchRecommendations, updateRecommendationState, changeInterest,
           requestRecommendation,
+          confirmCandidateSupply,
           getConfiguration: configurationGet, updateConfiguration: configurationUpdate,
         },
       },
@@ -66,6 +69,39 @@ describe('DiscoveryPage', () => {
     expect(within(card).getByText('因为它直接讨论你关心的工程实现。')).toBeInTheDocument();
     expect(within(card).queryByText('Agent 工程化')).not.toBeInTheDocument();
     expect(screen.queryByText(/桌面通知/)).not.toBeInTheDocument();
+  });
+
+  it('offers to add the first interest without starting recommendation when interests are empty', async () => {
+    getHome.mockResolvedValue(ok({
+      ...homeView(),
+      candidateSupplyConfirmed: false,
+      interests: [],
+      days: [],
+      today: { localDate: '2026-08-22', status: 'not_generated', resultCount: 0 },
+    }));
+
+    render(<DiscoveryPage />);
+
+    expect(await screen.findByRole('button', { name: '添加第一项兴趣' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '首次加载' })).not.toBeInTheDocument();
+    expect(confirmCandidateSupply).not.toHaveBeenCalled();
+    expect(requestRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('asks for first supply consent and defers without repeatedly opening the prompt', async () => {
+    getHome.mockResolvedValue(ok({ ...homeView(), candidateSupplyConfirmed: false }));
+    const user = userEvent.setup();
+    render(<DiscoveryPage />);
+    const prompt = await screen.findByRole('dialog', { name: '首次加载' });
+    expect(within(prompt).getByText('首次加载比较耗时，推荐可能会调用多次模型，过程会产生费用，请确认是否开始')).toBeInTheDocument();
+    await user.click(within(prompt).getByRole('button', { name: '暂不开始' }));
+    expect(screen.queryByRole('dialog', { name: '首次加载' })).not.toBeInTheDocument();
+    expect(confirmCandidateSupply).not.toHaveBeenCalled();
+    expect(requestRecommendation).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '开始' }));
+    await user.click(within(await screen.findByRole('dialog', { name: '首次加载' })).getByRole('button', { name: '开始' }));
+    expect(confirmCandidateSupply).toHaveBeenCalledOnce();
+    expect(requestRecommendation).not.toHaveBeenCalled();
   });
 
   it('does not fabricate cover, author, or publish time when source facts are absent', async () => {
@@ -317,7 +353,140 @@ describe('DiscoveryPage', () => {
     expect(requestRecommendation).toHaveBeenCalledOnce();
   });
 
-  it('shows Candidate replenishment and refreshes until Daily Recommendation advances', async () => {
+  it('defers by Escape without saving confirmation', async () => {
+    getHome.mockResolvedValue(ok({ ...homeView(), candidateSupplyConfirmed: false }));
+    const user = userEvent.setup();
+    render(<DiscoveryPage />);
+    await screen.findByRole('dialog', { name: '首次加载' });
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(confirmCandidateSupply).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: '开始' })).toBeInTheDocument();
+  });
+
+  it('keeps failed confirmation open and does not render raw failure details', async () => {
+    getHome.mockResolvedValue(ok({ ...homeView(), candidateSupplyConfirmed: false }));
+    confirmCandidateSupply.mockResolvedValue({ ok: false, data: { message: 'raw settings stack' } });
+    const user = userEvent.setup();
+    render(<DiscoveryPage />);
+    const dialog = await screen.findByRole('dialog', { name: '首次加载' });
+    await user.click(within(dialog).getByRole('button', { name: '开始' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('未能确认开始，请重试。');
+    expect(dialog).not.toHaveTextContent('raw settings stack');
+    expect(requestRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('disables repeated confirmation and displays actual supply progress after acceptance', async () => {
+    getHome.mockResolvedValue(ok({ ...homeView(), candidateSupplyConfirmed: false }));
+    let releaseConfirmation!: () => void;
+    const pending = new Promise<void>((resolve) => { releaseConfirmation = resolve; });
+    confirmCandidateSupply.mockImplementation(async () => {
+      await pending;
+      getHome.mockResolvedValue(ok({ ...homeView(), days: [],
+        today: { localDate: '2026-08-22', status: 'not_generated', resultCount: 0 },
+        candidateSupplyStatus: { status: 'running' },
+      }));
+      return ok({ status: 'confirmed' });
+    });
+    const user = userEvent.setup();
+    render(<DiscoveryPage />);
+    const dialog = await screen.findByRole('dialog', { name: '首次加载' });
+    const start = within(dialog).getByRole('button', { name: '开始' });
+    await user.dblClick(start);
+    expect(start).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '暂不开始' })).toBeDisabled();
+    expect(confirmCandidateSupply).toHaveBeenCalledOnce();
+    await act(async () => { releaseConfirmation(); });
+    expect(await screen.findByText('正在为你准备推荐…')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(requestRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('shows a model configuration failure returned by the background input check', async () => {
+    getHome.mockResolvedValue(ok({ ...homeView(), days: [],
+      today: { localDate: '2026-08-22', status: 'model_unavailable', resultCount: 0 },
+    }));
+    render(<DiscoveryPage />);
+    expect(await screen.findByText('没有可用的模型，请检查设置中的模型和 API Key。')).toBeInTheDocument();
+    expect(screen.queryByText('正在为你准备推荐…')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['402: {"message":"Insufficient Balance","type":"unknown_error","param":null,"code":"invalid_request_error"}', '模型服务账户余额不足，请充值或在设置中更换模型服务后重试。'],
+    ['401: {"message":"Invalid API key"}', '模型服务认证失败，请检查设置中的 API Key。'],
+    ['429: {"message":"Rate limit exceeded"}', '模型服务请求受限，请稍后重试。'],
+    ['500: {"message":"Internal server error"}', '模型服务暂时不可用，请稍后重试。'],
+    ['{"message":"unrecognized technical detail"}', '未能完成推荐生成，请查看日志了解详情。'],
+    ['Task 402 failed: {"message":"unrecognized technical detail"}', '未能完成推荐生成，请查看日志了解详情。'],
+  ])('shows a localized summary instead of provider payload: %s', async (message, summary) => {
+    getHome.mockResolvedValue(ok({
+      ...homeView(),
+      today: {
+        localDate: '2026-08-22', status: 'failed', resultCount: 0,
+        failure: { code: 'agent_execution_failed', message, retryable: false },
+      },
+      days: [],
+    }));
+
+    render(<DiscoveryPage />);
+    await screen.findByText('今天的发现生成失败。');
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+    expect(screen.getByText(summary)).toBeInTheDocument();
+    expect(requestRecommendation).not.toHaveBeenCalled();
+  });
+
+  it('localizes the provider failure in English as well', async () => {
+    await initializeRendererI18n('en-US');
+    getHome.mockResolvedValue(ok({
+      ...homeView(),
+      today: {
+        localDate: '2026-08-22', status: 'failed', resultCount: 0,
+        failure: { code: 'agent_execution_failed', message: '402: {"message":"Insufficient Balance"}', retryable: false },
+      },
+      days: [],
+    }));
+
+    render(<DiscoveryPage />);
+    expect(await screen.findByText('The model service account has insufficient balance. Add credit or change the model service in Settings before retrying.')).toBeInTheDocument();
+    expect(screen.queryByText(/\{"message"/)).not.toBeInTheDocument();
+  });
+
+  it.each(['provider', 'ipc', 'rejected', 'model_unavailable'])(
+    'shows a generation error rather than a save error when retry fails: %s', async (scenario) => {
+      getHome.mockResolvedValue(ok({
+        ...homeView(),
+        today: { localDate: '2026-08-22', status: 'failed', resultCount: 0 },
+        days: [],
+      }));
+      if (scenario === 'rejected') {
+        requestRecommendation.mockRejectedValue(new Error('internal IPC detail'));
+      } else if (scenario === 'ipc') {
+        requestRecommendation.mockResolvedValue({ ok: false, data: { message: 'internal IPC detail' } });
+      } else if (scenario === 'model_unavailable') {
+        requestRecommendation.mockResolvedValue(ok({ status: 'model_unavailable', localDate: '2026-08-22' }));
+      } else {
+        requestRecommendation.mockResolvedValue(ok({
+          status: 'failed', localDate: '2026-08-22',
+          failure: { code: 'agent_execution_failed', message: '402: {"message":"Insufficient Balance"}', retryable: false },
+        }));
+      }
+      const user = userEvent.setup();
+      render(<DiscoveryPage />);
+      await user.click(await screen.findByRole('button', { name: '重试' }));
+
+      const alert = await screen.findByRole('alert');
+      const expected = scenario === 'provider'
+        ? '模型服务账户余额不足，请充值或在设置中更换模型服务后重试。'
+        : scenario === 'model_unavailable'
+          ? '没有可用的模型，请检查设置中的模型和 API Key。'
+          : '未能完成推荐生成，请查看日志了解详情。';
+      expect(alert).toHaveTextContent(expected);
+      expect(alert).not.toHaveTextContent(/Insufficient Balance|internal IPC detail|未能保存/);
+      expect(requestRecommendation).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('shows recommendation preparation and polls without mentioning the candidate pool', async () => {
     getHome.mockResolvedValue(ok({
       ...homeView(),
       today: {
@@ -330,8 +499,8 @@ describe('DiscoveryPage', () => {
       render(<DiscoveryPage onOpenContentSources={vi.fn()} />);
       await act(async () => { await Promise.resolve(); });
 
-      expect(screen.getByText('正在补充候选内容。')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '管理内容来源' })).toBeInTheDocument();
+      expect(screen.getByText('正在为你准备推荐…')).toBeInTheDocument();
+      expect(screen.queryByText(/候选/)).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: '立即生成' })).not.toBeInTheDocument();
 
       act(() => vi.advanceTimersByTime(3_000));
@@ -349,6 +518,8 @@ function homeView(options: {
 } = {}) {
   return {
     mode: options.mode ?? 'timeline',
+    candidateSupplyConfirmed: true,
+    candidateSupplyStatus: { status: 'idle' as const },
     today: {
       localDate: '2026-08-22', status: 'published' as const,
       requestId: 'request:1', executionId: 'execution:1', resultCount: 1,

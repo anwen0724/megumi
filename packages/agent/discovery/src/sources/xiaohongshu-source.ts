@@ -69,8 +69,8 @@ export function createXiaohongshuSource(input: { readonly browser: EmbeddedBrows
           : { state: 'risk_controlled', checkedAt: new Date().toISOString() };
         return failed(pageFailure.code, pageFailure.message, false);
       }
-      availability = { state: 'ready', checkedAt: new Date().toISOString() };
-      return { status: 'success', items };
+      availability = { state: 'unknown', checkedAt: new Date().toISOString() };
+      return failed('invalid_response', 'Xiaohongshu search returned no recognizable result evidence.', false);
     },
     async read(request) {
       const result = await input.browser.snapshot({
@@ -129,7 +129,7 @@ function blockingPageState(snapshot: EmbeddedBrowserSnapshot): { code: 'login_re
   if (snapshot.links.some((link) => isLoginLink(link.href, snapshot.finalUrl, ['passport.xiaohongshu.com']))) {
     return { code: 'login_required', message: 'Xiaohongshu login is required.' };
   }
-  if (/扫码登录|请先登录|请登录后继续/iu.test(snapshot.bodyText)) {
+  if (/扫码登录|请先登录|请登录后继续|登录后查看搜索结果|登录后推荐更懂你的笔记/iu.test(snapshot.bodyText)) {
     return { code: 'login_required', message: 'Xiaohongshu login is required.' };
   }
   if (/访问过于频繁|安全验证|完成验证|验证码|risk|captcha/iu.test(snapshot.bodyText)) return { code: 'risk_control', message: 'Xiaohongshu requires verification.' };

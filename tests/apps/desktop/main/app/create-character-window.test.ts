@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
+import path from 'node:path';
 
 const { loadURL, loadFile, browserWindowConstructor } = vi.hoisted(() => {
   const loadURL = vi.fn();
@@ -12,7 +13,10 @@ const { loadURL, loadFile, browserWindowConstructor } = vi.hoisted(() => {
   return { loadURL, loadFile, browserWindowConstructor };
 });
 
-vi.mock('electron', () => ({ BrowserWindow: browserWindowConstructor }));
+vi.mock('electron', () => ({
+  app: { isPackaged: false, getAppPath: () => process.cwd() },
+  BrowserWindow: browserWindowConstructor,
+}));
 
 describe('createCharacterWindow', () => {
   it('creates a hidden transparent always-on-top character window with an explicit renderer role', async () => {
@@ -26,6 +30,7 @@ describe('createCharacterWindow', () => {
 
     expect(browserWindowConstructor).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Megumi Character',
+      icon: path.resolve('apps/desktop/assets/app-icon.ico'),
       width: 720,
       minWidth: 540,
       show: false,
