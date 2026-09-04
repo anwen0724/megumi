@@ -37,7 +37,7 @@ describe('Discovery Product Host operations', () => {
       action: 'create', description: 'TypeScript architecture',
     });
     await expect(application.runtime.host.discovery.getInterestFacts({
-      interestIds: [interest.interestId, 'interest:missing'],
+      interestIds: [interest.id, 'interest:missing'],
       evidenceIds: [],
     })).resolves.toEqual({ interests: [interest], evidence: [] });
   });

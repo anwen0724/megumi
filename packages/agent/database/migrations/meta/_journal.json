@@ -169,6 +169,20 @@
       "when": 1788438000000,
       "tag": "0023_recommendation_redesign",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1788505200000,
+      "tag": "0024_interest_entity_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1788505201000,
+      "tag": "0025_preference_entities",
+      "breakpoints": true
     }
   ]
 }

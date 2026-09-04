@@ -341,7 +341,7 @@ function runtimeOptions(
 function seedInterest(database: DatabaseConnection): void {
   database.prepare({ sql: `
     INSERT INTO discovery_interests (
-      interest_id, revision, description, status, created_from, user_managed_at, created_at, updated_at
+      id, revision, description, status, created_from, user_managed_at, created_at, updated_at
     ) VALUES ('interest:1', 1, 'Agent architecture', 'active', 'manual', ?, ?, ?)
   ` }).run([now, now, now]);
 }

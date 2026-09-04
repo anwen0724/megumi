@@ -6,7 +6,6 @@ import {
   DiscoveryBackgroundWaitOptionsSchema,
   DiscoveryCandidateSupplyRequestSchema,
   DiscoveryRecommendationFactsQuerySchema,
-  DiscoveryPreferenceLearningFactsQuerySchema,
   DiscoveryFactsResultSchema,
   DiscoveryInterestFactsPayloadSchema,
   DiscoveryInterestFactsResultSchema,
@@ -18,7 +17,7 @@ export function createDiscoveryOperations(
     Discovery,
     | 'changeInterest'
     | 'confirmCandidateSupply'
-    | 'setSessionParticipation'
+    | 'setInterestSessionSetting'
     | 'requestRecommendation'
     | 'waitRecommendation'
     | 'getTodayRecommendation'
@@ -35,7 +34,6 @@ export function createDiscoveryOperations(
     | 'getInterestFacts'
     | 'requestCandidateSupply'
     | 'getCandidatePool'
-    | 'getPreferenceLearningBatch'
     | 'getPreferenceLearningCompletion'
   >,
   facts: DiscoveryFactsReader,
@@ -48,7 +46,7 @@ export function createDiscoveryOperations(
     refreshSource: (request) => agent.refreshDiscoverySource(request),
     refreshSources: () => agent.refreshDiscoverySources(),
     changeInterest: (request) => agent.changeInterest(request),
-    setSessionParticipation: (request) => agent.setSessionParticipation(request),
+    setInterestSessionSetting: (request) => agent.setInterestSessionSetting(request),
     requestRecommendation: (request) => agent.requestRecommendation(request),
     waitRecommendation: (request) => agent.waitRecommendation(request),
     getTodayRecommendation: () => Promise.resolve(agent.getTodayRecommendation()),
@@ -79,19 +77,9 @@ export function createDiscoveryOperations(
       DiscoveryFactsResultSchema.parse(result);
       return result;
     },
-    getPreferenceLearningBatch: (batchId) => Promise.resolve(
-      agent.getPreferenceLearningBatch(batchId) ?? null,
-    ),
     getPreferenceLearning(request) {
       const parsed = DiscoveryPreferenceLearningQuerySchema.parse(request);
       return Promise.resolve(agent.getPreferenceLearningCompletion(parsed.recommendationId) ?? null);
-    },
-    async getPreferenceLearningFacts(request) {
-      const result = await facts.readPreferenceLearningFacts(
-        DiscoveryPreferenceLearningFactsQuerySchema.parse(request),
-      );
-      DiscoveryFactsResultSchema.parse(result);
-      return result;
     },
     waitPreferenceLearning: (request) => waitForBusinessFact({
       timeoutMs: DiscoveryBackgroundWaitOptionsSchema.parse({ timeoutMs: request.timeoutMs }).timeoutMs,
@@ -100,7 +88,7 @@ export function createDiscoveryOperations(
           recommendationId: request.recommendationId,
         }).recommendationId,
       ),
-      terminal: (value) => value.status === 'learned' || value.status === 'failed',
+      terminal: (value) => value.status === 'learned',
     }),
   };
 }

@@ -534,7 +534,7 @@ function prepareSnapshot(
     candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
   }));
   const interests = options.repository.listNonDeletedInterests().filter(({ status }) => status === 'active');
-  const preferences = options.repository.listPreferenceSnapshots();
+  const preferences = options.repository.listPreferenceSetDetails({ effectiveOnly: true });
   const history = options.repository.listRecommendationHistory('1970-01-01T00:00:00.000Z');
   const rankingHistory: RecommendationHistoryItem[] = history.map((item) => ({
     recommendationId: item.id,
@@ -561,8 +561,8 @@ function prepareSnapshot(
     preferences,
     history,
     ranking,
-    interestRevisions: interests.map(({ interestId, revision }) => ({ interestId, revision })),
-    preferenceRevisions: preferences.map(({ scopeKey, revision }) => ({ scopeKey, revision })),
+    interestRevisions: interests.map(({ id, revision }) => ({ interestId: id, revision })),
+    preferenceRevisions: preferences.map(({ preferenceSet }) => ({ preferenceSetId: preferenceSet.id, revision: preferenceSet.revision })),
   };
 }
 

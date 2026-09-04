@@ -14,7 +14,7 @@ export const RecommendationSelectionBasisSchema = z.object({
     revision: z.number().int().nonnegative(),
   }).strict()),
   preferenceRevisions: z.array(z.object({
-    scopeKey: z.string().min(1),
+    preferenceSetId: z.string().min(1),
     revision: z.number().int().nonnegative(),
   }).strict()),
 }).strict();

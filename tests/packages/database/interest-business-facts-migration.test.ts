@@ -46,19 +46,19 @@ describe('Interest business facts migration', () => {
       migrateDatabase({ database, migrationsFolder: migrationsRoot });
 
       const participation = database.prepare<{
-        session_participation_id: string;
+        id: string;
         session_id: string;
         participation: string;
-      }>({ sql: 'SELECT * FROM discovery_session_policies WHERE session_id = ?' }).get(['session:1']);
+      }>({ sql: 'SELECT * FROM discovery_interest_session_settings WHERE session_id = ?' }).get(['session:1']);
       expect(participation).toMatchObject({ session_id: 'session:1', participation: 'included' });
-      expect(participation?.session_participation_id).toMatch(/^session-participation:[a-f0-9]{32}$/u);
+      expect(participation?.id).toMatch(/^session-participation:[a-f0-9]{32}$/u);
       expect(database.prepare<{ name: string }>({ sql: `
         SELECT name FROM sqlite_master
         WHERE type = 'table' AND name = 'discovery_interest_understandings'
       ` }).get()).toBeUndefined();
       expect(() => database.prepare({ sql: `
-        INSERT INTO discovery_session_policies (
-          session_participation_id, session_id, participation, effective_from, updated_at
+        INSERT INTO discovery_interest_session_settings (
+          id, session_id, participation, effective_from, updated_at
         ) VALUES ('session-participation:duplicate', 'session:1', 'excluded', ?, ?)
       ` }).run(['2026-09-03T00:01:00.000Z', '2026-09-03T00:01:00.000Z'])).toThrow();
     } finally {

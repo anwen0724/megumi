@@ -14,7 +14,7 @@ export {
   InterestExtractionResultSchema,
   InterestSchema,
   InterestStatusSchema,
-  SessionParticipationSchema,
+  InterestSessionSettingSchema,
 } from './interests/interest';
 export { createInterestExtractor } from './interests/interest-extraction';
 export type {
@@ -31,8 +31,8 @@ export type {
   Interest,
   InterestEvidence,
   InterestExtractionResult,
-  SessionParticipation,
-  SetSessionParticipationRequest,
+  InterestSessionSetting,
+  SetInterestSessionSettingRequest,
 } from './interests/interest';
 export {
   DiscoveryContentTypeSchema,
@@ -220,29 +220,33 @@ export type {
 } from './persistence/discovery-repository';
 export {
   FeedbackReactionSchema,
-  LearnedDirectionInputSchema,
+  LearnedPreferenceInputSchema,
   LearnedScopeInputSchema,
   PreferenceDimensionSchema,
-  PreferenceDirectionSchema,
-  PreferenceLearningBatchSchema,
+  PreferenceSchema,
+  PreferenceSetSchema,
+  PreferenceEvidenceSchema,
+  PreferenceDetailSchema,
   PreferenceLearningCompletionSchema,
   PreferencePolaritySchema,
   PreferenceScopeSchema,
-  PreferenceSnapshotSchema,
+  PreferenceSetDetailSchema,
   RecommendationContentEvidenceSchema,
 } from './preferences/preference';
 export type {
-  CommitPreferenceLearningBatchResult,
+  CommitPreferenceLearningResult,
   FeedbackReaction,
   LearnedScopeInput,
-  PreferenceDirection,
-  PreferenceLearningAffectedScope,
-  PreferenceLearningBatch,
+  Preference,
+  PreferenceSet,
+  PreferenceEvidence,
+  PreferenceDetail,
   PreferenceLearningFacts,
   PreferenceLearningCompletion,
   PreferenceLearningReactionChange,
   PreferenceLearningTrigger,
-  PreferenceSnapshot,
+  PreferenceSetDetail,
+  PreferenceLearningSupport,
   RecommendationContentEvidence,
 } from './preferences/preference';
 export {

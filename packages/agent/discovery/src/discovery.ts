@@ -36,8 +36,8 @@ import type {
   ChangeInterestRequest,
   Interest,
   InterestEvidence,
-  SessionParticipation,
-  SetSessionParticipationRequest,
+  InterestSessionSetting,
+  SetInterestSessionSettingRequest,
 } from './interests/interest';
 import {
   createDisabledInterestRuntime,
@@ -50,7 +50,7 @@ import {
   createPreferenceLearningRuntime,
   type CreatePreferenceLearningRuntimeOptions,
 } from './preferences/preference-learning-runtime';
-import type { PreferenceLearningBatch, PreferenceLearningCompletion } from './preferences/preference';
+import type { PreferenceLearningFacts, PreferenceLearningCompletion } from './preferences/preference';
 import type {
   Recommendation,
   RecommendationCollection,
@@ -88,7 +88,8 @@ export interface Discovery {
   /** Confirms first Candidate Supply use without waiting for the background execution. */
   confirmCandidateSupply(): Promise<{ readonly status: 'confirmed' | 'already_confirmed' }>;
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
-  setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
+  /** Updates a Session's participation setting and retracts its Evidence when excluded. */
+  setInterestSessionSetting(request: SetInterestSessionSettingRequest): Promise<InterestSessionSetting>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   getInterestFacts(request: {
     readonly interestIds: readonly string[];
@@ -104,7 +105,8 @@ export interface Discovery {
   getRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
   requestCandidateSupply(trigger?: CandidateSupplyTrigger): Promise<CandidateSupplyResult> | undefined;
   getCandidatePool(): CandidatePoolSnapshot | undefined;
-  getPreferenceLearningBatch(batchId: string): PreferenceLearningBatch | undefined;
+  /** Supplies Context with this process's current work snapshot, never durable execution history. */
+  getActivePreferenceLearningFacts(batchId: string): PreferenceLearningFacts | undefined;
   getPreferenceLearningCompletion(recommendationId: string): PreferenceLearningCompletion | undefined;
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
   searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
@@ -164,7 +166,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       requestCandidateSupply(candidateSupply, 'interest_changed', options);
       return interest;
     },
-    setSessionParticipation: (request) => interests.setSessionParticipation(request),
+    setInterestSessionSetting: (request) => interests.setInterestSessionSetting(request),
     observeConversationTurn: (request) => interests.observeConversationTurn(request),
     getInterestFacts: (request) => interests.getInterestFacts(request),
     retractSessionEvidence: (sessionId) => interests.retractSessionEvidence(sessionId),
@@ -225,7 +227,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
       }));
     },
-    getPreferenceLearningBatch: (id) => options.preferenceLearning?.repository.getPreferenceLearningBatch(id),
+    getActivePreferenceLearningFacts: (id) => preferenceLearning?.getActivePreferenceLearningFacts(id),
     getPreferenceLearningCompletion: (id) => options.preferenceLearning?.repository.getPreferenceLearningCompletion(id),
     async getDiscoveryHome(rawRequest) {
       if (!recommendationRepository) throw new Error('Recommendation is not configured.');
@@ -254,7 +256,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         interests: options.interests?.repository.listNonDeletedInterests()
           .filter(({ status }) => status !== 'deleted')
           .map((interest) => ({
-            interestId: interest.interestId,
+            interestId: interest.id,
             description: interest.description,
             status: interest.status,
             createdFrom: interest.createdFrom,

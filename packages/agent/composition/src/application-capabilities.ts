@@ -4,6 +4,7 @@
  * composes the shared Execution, conversation, and Discovery operation owners.
  */
 import path from 'node:path';
+import crypto from 'node:crypto';
 import type { Api, Model, ProviderStreams } from '@megumi/ai';
 import {
   createCommands,
@@ -576,6 +577,7 @@ function composeCapabilitiesWithDatabase(
     repository: discoveryRepository,
     candidateSupplyAttempts,
     recommendationAttempts,
+    getActivePreferenceLearningFacts: (batchId) => discovery.getActivePreferenceLearningFacts(batchId),
   });
   discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
     sourceRegistry: discoverySources,
@@ -677,8 +679,8 @@ function composeCapabilitiesWithDatabase(
       },
       extractor: (input) => interestExtractor.extract(input),
       ids: {
-        createInterestId: () => createId('interest'),
-        createEvidenceId: () => createId('evidence'),
+        createInterestId: () => crypto.randomUUID(),
+        createEvidenceId: () => crypto.randomUUID(),
       },
       clock,
       observability: observability.observability,
@@ -780,7 +782,6 @@ function composeCapabilitiesWithDatabase(
       ids: {
         createBatchId: () => createId('preference-batch'),
         createModelCallId: ids.createModelCallId,
-        createDirectionId: () => createId('preference-direction'),
       },
       ...(options.timers ? {
         timers: {

@@ -124,6 +124,7 @@ export interface EvaluationInitialStateOwner {
     readonly recommendationId: string;
   }): Promise<void>;
   installPreference(input: CaseInitialState['preferences'][number] & {
+    readonly interestId: string;
     readonly recommendationIds: readonly string[];
   }): Promise<{ readonly revisionId: string }>;
   verifyInstalled(input: {
@@ -174,7 +175,7 @@ export async function installInitialState(input: {
   for (const entry of input.initialState.preferences) {
     const recommendationIds = entry.supportingRecommendationReferenceIds
       .map((id) => requireMapped(recommendations, id, 'Recommendation'));
-    preferenceRevisions.push((await input.owner.installPreference({ ...entry, recommendationIds })).revisionId);
+    preferenceRevisions.push((await input.owner.installPreference({ ...entry, recommendationIds, interestId: requireMapped(interests, entry.interestReferenceId, 'Interest') })).revisionId);
   }
   const installed: InstalledInitialStateIds = {
     workspaceId: workspace.workspaceId,
@@ -265,9 +266,9 @@ export function createDatabaseInitialStateOwner(input: {
         now: input.now,
       });
       if (entry.status === 'paused') {
-        discovery.applyInterestChange({ action: 'pause', interestId: interest.interestId, now: input.now });
+        discovery.applyInterestChange({ action: 'pause', interestId: interest.id, now: input.now });
       }
-      return { interestId: interest.interestId };
+      return { interestId: interest.id };
     },
     async installCandidate(entry) {
       const result = discovery.submitCandidate({
@@ -356,34 +357,30 @@ export function createDatabaseInitialStateOwner(input: {
         });
       }
       const batchId = `evaluation:preference-batch:${preferenceIndex}`;
-      const batch = discovery.claimPreferenceLearningBatch({
-        batchId,
-        reason: 'threshold',
-        now: input.now,
-        limit: 20,
+      const facts = discovery.preparePreferenceLearning({ batchId, startedAt: input.now, limit: 20 });
+      if (!facts) throw new Error(`Initial-state Preference had no pending Reaction: ${batchId}.`);
+      const target = facts.currentPreferences.find(({ preferenceSet }) => preferenceSet.interestId === entry.interestId);
+      if (!target) throw new Error(`Initial-state Preference Interest has no matching feedback: ${entry.interestId}.`);
+      const result = discovery.commitPreferenceLearning({
+        facts, committedAt: input.now,
+        scopes: facts.currentPreferences.map(({ preferenceSet, preferences }) => ({
+          preferenceSetId: preferenceSet.id, baseRevision: preferenceSet.revision,
+          preferences: [
+            ...preferences.filter(({ preference }) => preference.id !== entry.id).map(({ preference, evidence }) => ({
+              id: preference.id, polarity: preference.polarity, dimension: preference.dimension,
+              statement: preference.statement, supportingRecommendationIds: evidence.map(({ recommendationId }) => recommendationId),
+            })),
+            ...(preferenceSet.id === target.preferenceSet.id ? [{
+              id: entry.id, polarity: entry.polarity, dimension: entry.dimension,
+              statement: entry.statement, supportingRecommendationIds: [...entry.recommendationIds],
+            }] : []),
+          ],
+        })),
       });
-      if (!batch) throw new Error(`Initial-state Preference Batch had no pending Reaction: ${batchId}.`);
-      const facts = discovery.getPreferenceLearningFacts(batchId);
-      if (!facts) throw new Error(`Initial-state Preference facts were unavailable: ${batchId}.`);
-      const result = discovery.commitPreferenceLearningBatch({
-        batchId,
-        committedAt: input.now,
-        scopes: [{
-          scopeKey: entry.scopeKey,
-          baseRevision: 0,
-          directions: [{
-            directionId: entry.directionId,
-            polarity: entry.polarity,
-            dimension: entry.dimension,
-            statement: entry.statement,
-            supportingRecommendationIds: [...entry.recommendationIds],
-          }],
-        }],
-      });
-      if (result.status !== 'committed') {
-        throw new Error(`Initial-state Preference commit was rejected: ${result.reason}.`);
-      }
-      return { revisionId: `${entry.scopeKey}:${result.revisions[0]?.revision ?? 0}` };
+      if (result.status !== 'committed') throw new Error(`Initial-state Preference commit was rejected: ${result.reason}.`);
+      const revision = result.revisions.find(({ preferenceSetId }) => preferenceSetId === target.preferenceSet.id);
+      if (!revision) throw new Error('Initial-state Preference revision is missing.');
+      return { revisionId: `${revision.preferenceSetId}:${revision.revision}` };
     },
     async verifyInstalled(entry) {
       verifyInitialState(discovery, sessionStore, entry.ids);
@@ -402,7 +399,7 @@ function verifyInitialState(
       throw new Error(`Installed Session could not be read: ${sessionId}.`);
     }
   }
-  const interestIds = new Set(discovery.listNonDeletedInterests().map((interest) => interest.interestId));
+  const interestIds = new Set(discovery.listNonDeletedInterests().map((interest) => interest.id));
   for (const interestId of Object.values(ids.interests)) {
     if (!interestIds.has(interestId)) throw new Error(`Installed Interest could not be read: ${interestId}.`);
   }

@@ -56,7 +56,7 @@ import type {
   VoiceTtsApiKeyUiRequest,
   VoiceTtsKeyUiResult,
   DiscoveryInterestUiDto,
-  DiscoverySessionParticipationUiDto,
+  DiscoveryInterestSessionSettingUiDto,
   DiscoveryRecommendationRequestResult,
   DiscoveryCandidateSupplyConfirmResult,
   DiscoveryHomeUiResult,
@@ -110,7 +110,7 @@ import type {
   VoiceSessionStartPayload,
   VoiceModelCapabilityPayload,
   DiscoveryInterestChangePayload,
-  DiscoverySessionParticipationPayload,
+  DiscoveryInterestSessionSettingPayload,
   DiscoveryRecommendationRequestPayload,
   DiscoveryHomePayload,
   DiscoveryRecommendationSearchPayload,
@@ -452,9 +452,9 @@ export const api = {
       request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
     ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
-    setSessionParticipation: (
-      request: BusinessRequest<DiscoverySessionParticipationPayload, typeof IPC_CHANNELS.discovery.sessionParticipationSet>,
-    ): Promise<RuntimeIpcResult<DiscoverySessionParticipationUiDto, typeof IPC_CHANNELS.discovery.sessionParticipationSet>> =>
+    setInterestSessionSetting: (
+      request: BusinessRequest<DiscoveryInterestSessionSettingPayload, typeof IPC_CHANNELS.discovery.sessionParticipationSet>,
+    ): Promise<RuntimeIpcResult<DiscoveryInterestSessionSettingUiDto, typeof IPC_CHANNELS.discovery.sessionParticipationSet>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.sessionParticipationSet, request),
     requestRecommendation: (
       request: BusinessRequest<DiscoveryRecommendationRequestPayload, typeof IPC_CHANNELS.discovery.recommendationRequest>,

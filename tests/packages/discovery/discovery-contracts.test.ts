@@ -27,11 +27,11 @@ describe('Discovery owner contracts', () => {
 
   it('parses durable Interest facts strictly', () => {
     expect(InterestSchema.parse({
-      interestId: 'interest:1', revision: 1, description: '关注 Agent 工程实践',
+      id: 'interest:1', revision: 1, description: '关注 Agent 工程实践',
       status: 'active', createdFrom: 'manual', userManagedAt: now, createdAt: now, updatedAt: now,
-    })).toMatchObject({ interestId: 'interest:1', status: 'active' });
+    })).toMatchObject({ id: 'interest:1', status: 'active' });
     expect(InterestSchema.safeParse({
-      interestId: 'interest:1', revision: 1, description: 'valid', status: 'active',
+      id: 'interest:1', revision: 1, description: 'valid', status: 'active',
       createdFrom: 'manual', createdAt: now, updatedAt: now, extra: true,
     }).success).toBe(false);
   });

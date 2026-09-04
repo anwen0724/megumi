@@ -16,15 +16,15 @@ describe('Discovery background operation migration', () => {
     expect(tables).not.toContain('discovery_candidate_supply_checks');
     expect(tables).toContain('discovery_candidates');
     expect(tables).toContain('discovery_candidate_interest_matches');
-    const columns = database.prepare<{ name: string }>({
-      sql: 'PRAGMA table_info(discovery_preference_learning_batches)',
-    }).all().map((entry) => entry.name);
-    expect(columns).toContain('result_revisions_json');
+    expect(tables).not.toContain('discovery_preference_learning_batches');
+    expect(tables).toContain('discovery_preference_sets');
+    expect(tables).toContain('discovery_preferences');
+    expect(tables).toContain('discovery_preference_evidence');
     const participationColumns = database.prepare<{ name: string; pk: number }>({
-      sql: 'PRAGMA table_info(discovery_session_policies)',
+      sql: 'PRAGMA table_info(discovery_interest_session_settings)',
     }).all();
     expect(participationColumns).toContainEqual(expect.objectContaining({
-      name: 'session_participation_id',
+      name: 'id',
       pk: 1,
     }));
   });

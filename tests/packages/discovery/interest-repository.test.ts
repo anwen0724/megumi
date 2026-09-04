@@ -48,12 +48,14 @@ describe('InterestRepository', () => {
       now: '2026-09-03T08:02:00.000Z',
     });
 
-    expect(repository.findInterestById(first.interestId)).toEqual(first);
+    expect(first).toHaveProperty('id', 'interest:first');
+    expect(first).not.toHaveProperty('interestId');
+    expect(repository.findInterestById(first.id)).toEqual(first);
     expect(repository.findInterestById('interest:missing')).toBeUndefined();
     expect(repository.listInterestsByIds([
-      deleted.interestId,
+      deleted.id,
       'interest:missing',
-      first.interestId,
+      first.id,
     ])).toEqual([first, deleted]);
     expect(repository.listInterestsByIds([])).toEqual([]);
     expect(repository.listNonDeletedInterests()).toEqual([first]);
@@ -86,12 +88,12 @@ describe('InterestRepository', () => {
     const applied = repository.findInterestEvidenceById('evidence:applied');
     const pending = repository.findInterestEvidenceById('evidence:pending');
     expect(applied).toMatchObject({
-      evidenceId: 'evidence:applied',
+      id: 'evidence:applied',
       interestId: 'interest:created',
       status: 'applied',
     });
     expect(pending).toMatchObject({
-      evidenceId: 'evidence:pending',
+      id: 'evidence:pending',
       status: 'pending',
     });
     expect(repository.findInterestEvidenceById('evidence:missing')).toBeUndefined();
@@ -119,7 +121,7 @@ describe('InterestRepository', () => {
       }],
     });
 
-    const included = repository.applySessionParticipationChange({
+    const included = repository.applyInterestSessionSettingChange({
       sessionId: 'session:interest',
       participation: 'included',
       effectiveFrom: '2026-09-03T09:01:00.000Z',
@@ -127,16 +129,17 @@ describe('InterestRepository', () => {
     });
     expect(included).toEqual({
       participation: {
-        sessionParticipationId: expect.stringMatching(/^session-participation:/),
+        id: expect.any(String),
         sessionId: 'session:interest',
         participation: 'included',
         effectiveFrom: '2026-09-03T09:01:00.000Z',
+        createdAt: '2026-09-03T09:01:00.000Z',
         updatedAt: '2026-09-03T09:01:00.000Z',
       },
       affectedInterestIds: [],
     });
 
-    const excluded = repository.applySessionParticipationChange({
+    const excluded = repository.applyInterestSessionSettingChange({
       sessionId: 'session:interest',
       participation: 'excluded',
       effectiveFrom: '2026-09-03T09:02:00.000Z',
@@ -149,10 +152,10 @@ describe('InterestRepository', () => {
       updatedAt: '2026-09-03T09:02:00.000Z',
     });
     expect(excluded.affectedInterestIds).toEqual(['interest:session']);
-    expect(repository.findSessionParticipationById(
-      included.participation.sessionParticipationId,
+    expect(repository.findInterestSessionSettingById(
+      included.participation.id,
     )).toEqual(excluded.participation);
-    expect(repository.findSessionParticipationBySessionId(
+    expect(repository.findInterestSessionSettingBySessionId(
       'session:interest',
     )).toEqual(excluded.participation);
     expect(repository.findInterestEvidenceById('evidence:session')?.status).toBe(

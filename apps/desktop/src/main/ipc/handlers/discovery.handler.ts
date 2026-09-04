@@ -7,7 +7,7 @@ import {
   DiscoveryInterestUiDtoSchema,
   DiscoveryRecommendationSearchUiResultSchema,
   DiscoveryRecommendationStateResultSchema,
-  DiscoverySessionParticipationUiDtoSchema,
+  DiscoveryInterestSessionSettingUiDtoSchema,
   DiscoverySourceUiDtoSchema,
   type ProductHostInterface,
 } from '@megumi/product-host/host';
@@ -25,7 +25,7 @@ import {
   DiscoveryInterestChangeRequestSchema,
   DiscoveryRecommendationSearchRequestSchema,
   DiscoveryRecommendationStateRequestSchema,
-  DiscoverySessionParticipationRequestSchema,
+  DiscoveryInterestSessionSettingRequestSchema,
   DiscoverySourceConnectRequestSchema,
   DiscoverySourceRefreshRequestSchema,
   DiscoverySourcesRefreshRequestSchema,
@@ -111,11 +111,11 @@ export function registerDiscoveryHandlers(
   }));
   ipcMain.handle(IPC_CHANNELS.discovery.sessionParticipationSet, createIpcRequestHandler({
     channel: IPC_CHANNELS.discovery.sessionParticipationSet,
-    requestSchema: DiscoverySessionParticipationRequestSchema,
-    responseSchema: DiscoverySessionParticipationUiDtoSchema,
+    requestSchema: DiscoveryInterestSessionSettingRequestSchema,
+    responseSchema: DiscoveryInterestSessionSettingUiDtoSchema,
     responseValidation: 'dev-only',
     logger: options.logger,
-    handle: (request) => service.host.discovery.setSessionParticipation(request.payload),
+    handle: (request) => service.host.discovery.setInterestSessionSetting(request.payload),
     mapError: mapDiscoveryIpcError,
   }));
   ipcMain.handle(IPC_CHANNELS.discovery.recommendationRequest, createIpcRequestHandler({

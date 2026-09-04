@@ -78,13 +78,13 @@ function buildPreferenceLearningPrompt(
     prompt: {
       systemPrompt: buildSystemPrompt({
         systemInstructions: context.systemInstructions,
-        preferenceLearningMaterial: {
-          startedAt: context.startedAt,
-          material: context.material,
-        },
         tools: [],
       }),
-      messages: [...context.currentMessages],
+      messages: [{
+        role: 'user',
+        content: JSON.stringify(context.material),
+        timestamp: Date.parse(context.startedAt),
+      }, ...context.currentMessages],
       tools: [],
     },
   };

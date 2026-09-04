@@ -13,8 +13,8 @@ export type PreferenceDimension =
   | 'recency'
   | 'expression_quality';
 
-export interface ContextPreferenceDirection {
-  readonly directionId: string;
+export interface ContextPreference {
+  readonly id: string;
   readonly polarity: PreferencePolarity;
   readonly dimension: PreferenceDimension;
   readonly statement: string;
@@ -22,12 +22,12 @@ export interface ContextPreferenceDirection {
   readonly updatedAt: string;
 }
 
-export interface ContextPreferenceSnapshot {
-  readonly scopeKey: string;
+export interface ContextPreferenceSet {
+  readonly preferenceSetId: string;
   readonly scope: 'interest' | 'exploration';
   readonly interestId?: string;
   readonly revision: number;
-  readonly directions: readonly ContextPreferenceDirection[];
+  readonly preferences: readonly ContextPreference[];
 }
 
 export interface DiscoveryInterestFact {
@@ -35,7 +35,7 @@ export interface DiscoveryInterestFact {
   readonly description: string;
   readonly status?: 'active' | 'paused' | 'deleted';
   readonly interestRevision: number;
-  readonly preference: ContextPreferenceSnapshot;
+  readonly preference?: ContextPreferenceSet;
 }
 
 export interface CandidatePoolFact {
@@ -127,7 +127,7 @@ export interface RecommendationFacts {
     readonly workingSetCount: number;
   };
   readonly interests: readonly DiscoveryInterestFact[];
-  readonly preferences: readonly ContextPreferenceSnapshot[];
+  readonly preferences: readonly ContextPreferenceSet[];
   readonly candidates: readonly RecommendationCandidateFact[];
   readonly recentRecommendations: readonly RecommendationHistoryFact[];
   readonly ranking: readonly {
@@ -150,7 +150,7 @@ export interface RecommendationFacts {
 export interface RecommendationContextMaterial {
   readonly execution: RecommendationFacts['execution'];
   readonly interests: readonly DiscoveryInterestFact[];
-  readonly preferences: readonly ContextPreferenceSnapshot[];
+  readonly preferences: readonly ContextPreferenceSet[];
   readonly candidates: readonly RecommendationCandidateFact[];
   readonly recentRecommendations: readonly RecommendationHistoryFact[];
 }
@@ -177,10 +177,11 @@ export interface PreferenceLearningReactionFact {
       readonly title: string;
       readonly description?: string;
       readonly contentText?: string;
+      readonly contentSummary: string;
       readonly completeness: 'full' | 'partial' | 'metadata_only';
     };
   };
-  readonly previouslySupportedDirectionIds: readonly string[];
+  readonly previouslySupportedPreferenceIds: readonly string[];
 }
 
 export interface PreferenceLearningFacts {
@@ -196,15 +197,22 @@ export interface PreferenceLearningFacts {
     readonly status: 'active' | 'paused' | 'deleted';
     readonly revision: number;
   }[];
-  readonly currentPreferences: readonly ContextPreferenceSnapshot[];
+  readonly currentPreferences: readonly ContextPreferenceSet[];
   readonly reactionChanges: readonly PreferenceLearningReactionFact[];
+  readonly supportingReactions: readonly {
+    readonly recommendationId: string;
+    readonly reactionRevision: number;
+    readonly reaction: 'liked' | 'disliked';
+    readonly matchedInterestIds: readonly string[];
+  }[];
 }
 
 export interface PreferenceLearningContextMaterial {
   readonly batch: PreferenceLearningFacts['batch'];
   readonly interests: PreferenceLearningFacts['interests'];
-  readonly currentPreferences: readonly ContextPreferenceSnapshot[];
+  readonly currentPreferences: readonly ContextPreferenceSet[];
   readonly reactionChanges: readonly PreferenceLearningReactionFact[];
+  readonly supportingReactions: PreferenceLearningFacts['supportingReactions'];
 }
 
 export type ReadDiscoveryFactsResult<T> =

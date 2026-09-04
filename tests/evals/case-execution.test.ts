@@ -148,12 +148,9 @@ describe('Case execution', () => {
       },
       async waitPreferenceLearning() {
         return { status: 'completed', value: {
-          recommendationId: 'recommendation:1', status: 'learned', batchId: 'preference-batch:1',
-          resultRevisions: [{ scopeKey: 'interest:1', revision: 1 }], changedAt: now, completedAt: now,
+          recommendationId: 'recommendation:1', status: 'learned',
+          currentReactionRevision: 1, learnedReactionRevision: 1, changedAt: now, preferences: [],
         } };
-      },
-      async getPreferenceLearningFacts() {
-        return { status: 'failed', failure: { code: 'test_fact', message: 'Recorded Owner response.' } };
       },
     } });
 
@@ -163,9 +160,10 @@ describe('Case execution', () => {
 
     expect(result.businessIds).toMatchObject({
       recommendationId: 'recommendation:1',
-      preferenceLearningBatchId: 'preference-batch:1',
+      preferenceSetIds: [],
     });
-    expect(result.ownerFacts).toMatchObject({ status: 'failed' });
+    expect(result.ownerFacts).toMatchObject({ status: 'learned', currentReactionRevision: 1, learnedReactionRevision: 1 });
+    expect(result.traceTargets).toEqual([{ traceKind: 'preference_learning', correlation: { recommendationIds: ['recommendation:1'] }, expectation: 'required' }]);
   });
 });
 
@@ -190,7 +188,6 @@ function testRuntime(overrides: {
         getRecommendationCollection: unexpected,
         updateRecommendationState: unexpected,
         waitPreferenceLearning: unexpected,
-        getPreferenceLearningFacts: unexpected,
         ...overrides.discovery,
       },
       observability: {

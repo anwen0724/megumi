@@ -63,8 +63,8 @@ const RecommendationDataSchema = z.object({
   reaction: z.enum(['liked', 'disliked', 'none']).default('none'),
 }).strict();
 const PreferenceDataSchema = z.object({
-  scopeKey: z.string().trim().min(1),
-  directionId: z.string().trim().min(1),
+  interestReferenceId: ReferenceIdSchema,
+  id: z.string().trim().min(1),
   polarity: z.enum(['positive', 'negative']),
   dimension: z.enum(['topic', 'source', 'author', 'content_type', 'recency', 'expression_quality']),
   statement: z.string().trim().min(1),
@@ -290,6 +290,8 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
     addMissingReference(candidateIds, recommendation.candidateReferenceId, ['initialState', recommendationPath, index, 'candidateReferenceId'], 'Candidate', context);
   }
   for (const [preferenceIndex, preference] of evaluationCase.initialState.preferences.entries()) {
+    addMissingReference(new Set(evaluationCase.initialState.interests.map((interest) => interest.referenceId)), preference.interestReferenceId,
+      ['initialState', 'preferences', preferenceIndex, 'interestReferenceId'], 'Interest', context);
     for (const [referenceIndex, referenceId] of preference.supportingRecommendationReferenceIds.entries()) {
       addMissingReference(recommendationIds, referenceId, ['initialState', 'preferences', preferenceIndex, 'supportingRecommendationReferenceIds', referenceIndex], 'Recommendation', context);
     }

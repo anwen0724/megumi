@@ -201,15 +201,15 @@ function getCandidatePoolSnapshot(
   const asOf = parseTimestamp(at);
   expireAvailableCandidates(database, asOf);
   const activeInterests = database.prepare<{ interest_id: string }>({ sql: `
-    SELECT interest_id FROM discovery_interests
+    SELECT id AS interest_id FROM discovery_interests
     WHERE status = 'active'
-    ORDER BY created_at, interest_id
+    ORDER BY created_at, id
   ` }).all().map(({ interest_id }) => interest_id);
   const rows = database.prepare<CandidateRow>({ sql: `
     SELECT DISTINCT c.*
     FROM discovery_candidates c
     JOIN discovery_candidate_interest_matches m ON m.candidate_id = c.id
-    JOIN discovery_interests i ON i.interest_id = m.interest_id AND i.status = 'active'
+    JOIN discovery_interests i ON i.id = m.interest_id AND i.status = 'active'
     WHERE c.status = 'available' AND c.expires_at > ?
     ORDER BY c.created_at, c.id
   ` }).all([asOf]);
@@ -254,8 +254,8 @@ function findActiveMatches(
   if (matches.length === 0) return [];
   const placeholders = matches.map(() => '?').join(', ');
   const active = new Set(database.prepare<{ interest_id: string }>({ sql: `
-    SELECT interest_id FROM discovery_interests
-    WHERE status = 'active' AND interest_id IN (${placeholders})
+    SELECT id AS interest_id FROM discovery_interests
+    WHERE status = 'active' AND id IN (${placeholders})
   ` }).all(matches.map(({ interestId }) => interestId)).map(({ interest_id }) => interest_id));
   return matches
     .filter(({ interestId }) => active.has(interestId))
@@ -355,7 +355,7 @@ function candidatePoolCount(database: DatabaseConnection, at: string): number {
     SELECT COUNT(DISTINCT c.id) AS count
     FROM discovery_candidates c
     JOIN discovery_candidate_interest_matches m ON m.candidate_id = c.id
-    JOIN discovery_interests i ON i.interest_id = m.interest_id AND i.status = 'active'
+    JOIN discovery_interests i ON i.id = m.interest_id AND i.status = 'active'
     WHERE c.status = 'available' AND c.expires_at > ?
   ` }).get([at])?.count ?? 0;
 }

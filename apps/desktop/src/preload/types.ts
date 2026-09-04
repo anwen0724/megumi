@@ -18,7 +18,7 @@ import type {
   DiscoveryRecommendationSearchUiResult,
   DiscoveryRecommendationUiDto,
   DiscoveryRecommendationStateResult,
-  DiscoverySessionParticipationUiDto,
+  DiscoveryInterestSessionSettingUiDto,
   DiscoveryConfigurationUiDto,
   DiscoverySourceCredentialStatusUiResult,
   DiscoverySourceUiDto,
@@ -42,7 +42,7 @@ import type {
   DiscoveryInterestChangePayload,
   DiscoveryRecommendationSearchPayload,
   DiscoveryRecommendationStatePayload,
-  DiscoverySessionParticipationPayload,
+  DiscoveryInterestSessionSettingPayload,
   DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
   DiscoveryCredentialStatusPayload,
@@ -92,8 +92,8 @@ export type DiscoverySourceConnectPreloadData = DiscoverySourceUiDto;
 export type DiscoverySourceRefreshPreloadPayload = DiscoverySourceRefreshPayload;
 export type DiscoverySourceRefreshPreloadData = DiscoverySourceUiDto;
 export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
-export type DiscoverySessionParticipationPreloadPayload = DiscoverySessionParticipationPayload;
-export type DiscoverySessionParticipationPreloadData = DiscoverySessionParticipationUiDto;
+export type DiscoveryInterestSessionSettingPreloadPayload = DiscoveryInterestSessionSettingPayload;
+export type DiscoveryInterestSessionSettingPreloadData = DiscoveryInterestSessionSettingUiDto;
 export type DiscoveryRecommendationRequestPreloadPayload = DiscoveryRecommendationRequestPayload;
 export type DiscoveryRecommendationRequestPreloadData = DiscoveryRecommendationRequestResult;
 export type DiscoveryHomePreloadPayload = DiscoveryHomePayload;

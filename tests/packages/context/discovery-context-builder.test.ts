@@ -15,14 +15,14 @@ function options() {
       interests: [{
         interestId: 'interest:1', description: 'Agent architecture', interestRevision: 1,
         preference: {
-          scopeKey: 'interest:interest:1', scope: 'interest' as const,
-          interestId: 'interest:1', revision: 0, directions: [],
+          preferenceSetId: 'interest:interest:1', scope: 'interest' as const,
+          interestId: 'interest:1', revision: 0, preferences: [],
         },
       }],
       preferences: [{
-        scopeKey: 'exploration', scope: 'exploration' as const, revision: 1,
-        directions: [{
-          directionId: 'direction:exploration', polarity: 'positive' as const,
+        preferenceSetId: 'exploration', scope: 'exploration' as const, revision: 1,
+        preferences: [{
+          id: 'direction:exploration', polarity: 'positive' as const,
           dimension: 'topic' as const, statement: 'Prefer local-first system design.',
           supportingRecommendationIds: ['recommendation:exploration'], updatedAt: '2026-08-27T07:00:00.000Z',
         }],
@@ -67,6 +67,36 @@ function options() {
 }
 
 describe('Discovery Context ownership', () => {
+  it('keeps Preference instructions in System and immutable business evidence in a user task message', async () => {
+    const dependencies = options();
+    dependencies.instructionReader.getSystemInstructions.mockResolvedValue([
+      { instructionId: 'megumi.common', sourcePath: '/common.md', content: 'common' },
+      { instructionId: 'megumi.preference-learning', sourcePath: '/preference-learning.md', content: 'learn preferences' },
+    ]);
+    dependencies.discoveryFactsReader.readPreferenceLearningFacts.mockResolvedValue({
+      status: 'ok', facts: {
+        asOf: '2026-08-27T08:00:00.000Z',
+        batch: { batchId: 'work:1', startedAt: '2026-08-27T08:00:00.000Z', changeCount: 1 },
+        interests: [], currentPreferences: [], reactionChanges: [],
+        supportingReactions: [{ recommendationId: 'recommendation:1', reaction: 'liked', reactionRevision: 1, matchedInterestIds: [] }],
+      },
+    });
+    const result = await createContext(dependencies).build({
+      modelCallContext: { modelCallId: 'call:1', run: {
+        kind: 'preference_learning', batchId: 'work:1', startedAt: '2026-08-27T08:00:00.000Z', model,
+      }, tools: [] }, currentMessages: [],
+    });
+    expect(result.status).toBe('ready');
+    if (result.status !== 'ready') throw new Error('Expected a Preference prompt.');
+    expect(result.prompt.systemPrompt).toBe('common\n\nlearn preferences');
+    expect(result.prompt.systemPrompt).not.toContain('recommendation:1');
+    expect(result.prompt.tools).toEqual([]);
+    expect(result.prompt.messages).toHaveLength(1);
+    expect(result.prompt.messages[0]).toMatchObject({ role: 'user' });
+    expect(result.prompt.messages[0].content).toContain('"recommendationId":"recommendation:1"');
+    expect(result.prompt.messages[0].content).toContain('"reactionRevision":1');
+  });
+
   it('reads Recommendation facts inside Context instead of accepting Runtime material', async () => {
     const dependencies = options();
     dependencies.instructionReader.getSystemInstructions.mockResolvedValue([

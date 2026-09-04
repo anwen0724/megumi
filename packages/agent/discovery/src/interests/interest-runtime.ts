@@ -14,8 +14,8 @@ import {
   type ChangeInterestRequest,
   type Interest,
   type InterestEvidence,
-  type SessionParticipation,
-  type SetSessionParticipationRequest,
+  type InterestSessionSetting,
+  type SetInterestSessionSettingRequest,
 } from './interest';
 import {
   createInterestExtractionQueue,
@@ -67,7 +67,7 @@ export interface InterestRuntime {
   /** Applies one explicit user Interest command. */
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
   /** Changes whether one Session contributes future Interest Evidence. */
-  setSessionParticipation(request: SetSessionParticipationRequest): Promise<SessionParticipation>;
+  setInterestSessionSetting(request: SetInterestSessionSettingRequest): Promise<InterestSessionSetting>;
   /** Enqueues one eligible completed turn without blocking conversation completion. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   /** Reads the exact Interest and Evidence business facts requested by their identities. */
@@ -108,11 +108,11 @@ export function createInterestRuntime(options: CreateInterestRuntimeOptions): In
           : { ...request, now });
     },
 
-    async setSessionParticipation(request) {
+    async setInterestSessionSetting(request) {
       const session = options.sessions.getSession({ session_id: request.sessionId });
       if (session.status !== 'found') throw new Error('Session was not found.');
       const now = options.clock.now();
-      const result = options.repository.applySessionParticipationChange({
+      const result = options.repository.applyInterestSessionSettingChange({
         sessionId: request.sessionId,
         participation: request.participation,
         effectiveFrom: now,
@@ -161,7 +161,7 @@ export function createDisabledInterestRuntime(): InterestRuntime {
   };
   return {
     changeInterest: unavailable,
-    setSessionParticipation: unavailable,
+    setInterestSessionSetting: unavailable,
     observeConversationTurn: () => ({ status: 'skipped', reason: 'recognition_disabled' }),
     getInterestFacts: () => ({ interests: [], evidence: [] }),
     retractSessionEvidence: async () => undefined,
@@ -177,7 +177,7 @@ function canProcess(
   if (!options.settings.getDiscoverySettings().conversationRecognitionEnabled) {
     return 'recognition_disabled';
   }
-  const policy = options.repository.findSessionParticipationBySessionId(sessionId);
+  const policy = options.repository.findInterestSessionSettingBySessionId(sessionId);
   if (policy?.participation === 'excluded') return 'session_excluded';
   if (policy?.participation === 'included' && completedAt < policy.effectiveFrom) {
     return 'before_effective_from';
@@ -230,8 +230,8 @@ async function processJob(
 
   const durable = await observeInterestSpan(options, 'interest.result.validate', job, async () => {
     const validated = InterestExtractionResultSchema.parse(extracted);
-    const availableInterestIds = new Set(interests.map((interest) => interest.interestId));
-    const availableEvidenceIds = new Set(pendingEvidence.map((evidence) => evidence.evidenceId));
+    const availableInterestIds = new Set(interests.map((interest) => interest.id));
+    const availableEvidenceIds = new Set(pendingEvidence.map((evidence) => evidence.id));
     for (const evidence of validated.evidence) {
       if (evidence.matchedInterestId && !availableInterestIds.has(evidence.matchedInterestId)) {
         throw new Error('Interest extraction returned an unknown Interest ID.');
@@ -265,12 +265,12 @@ async function processJob(
   ));
   safeRecordInterestContent(options, 'interest.committed', {
     evidence,
-    changedInterestIds: changed.map(({ interestId }) => interestId),
+    changedInterestIds: changed.map(({ id }) => id),
   }, job);
-  if (changed.length > 0) options.onInterestsChanged?.(changed.map(({ interestId }) => interestId));
+  if (changed.length > 0) options.onInterestsChanged?.(changed.map(({ id }) => id));
   return {
     outcome: 'evidence_committed',
-    changedInterestIds: changed.map(({ interestId }) => interestId),
+    changedInterestIds: changed.map(({ id }) => id),
     evidenceIds: evidence.map(({ evidenceId }) => evidenceId),
   };
 }

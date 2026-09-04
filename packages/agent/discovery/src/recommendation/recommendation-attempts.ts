@@ -8,7 +8,7 @@ import type {
   RecommendationExclusionReason,
 } from './recommendation';
 import type { Interest } from '../interests/interest';
-import type { PreferenceSnapshot } from '../preferences/preference';
+import type { PreferenceSetDetail } from '../preferences/preference';
 import type { Recommendation } from './recommendation';
 import type { RecommendationRepository } from '../persistence/recommendation-repository';
 
@@ -32,9 +32,9 @@ interface Attempt {
   readonly candidatesById: ReadonlyMap<string, RecommendationCandidate>;
   readonly exposedCandidateIds: Set<string>;
   readonly interestRevisions: readonly { readonly interestId: string; readonly revision: number }[];
-  readonly preferenceRevisions: readonly { readonly scopeKey: string; readonly revision: number }[];
+  readonly preferenceRevisions: readonly { readonly preferenceSetId: string; readonly revision: number }[];
   readonly interests: readonly Interest[];
-  readonly preferences: readonly PreferenceSnapshot[];
+  readonly preferences: readonly PreferenceSetDetail[];
   readonly history: readonly Recommendation[];
   readonly repository: RecommendationRepository;
   readonly now: () => string;
@@ -52,9 +52,9 @@ export interface StartRecommendationAttemptRequest {
   readonly rankedCandidates: readonly RankedRecommendationCandidate[];
   readonly exclusions: readonly { readonly candidateId: string; readonly reason: RecommendationExclusionReason }[];
   readonly interestRevisions: readonly { readonly interestId: string; readonly revision: number }[];
-  readonly preferenceRevisions: readonly { readonly scopeKey: string; readonly revision: number }[];
+  readonly preferenceRevisions: readonly { readonly preferenceSetId: string; readonly revision: number }[];
   readonly interests: readonly Interest[];
-  readonly preferences: readonly PreferenceSnapshot[];
+  readonly preferences: readonly PreferenceSetDetail[];
   readonly history: readonly Recommendation[];
   readonly repository: RecommendationRepository;
   readonly now: () => string;

@@ -1,289 +1,183 @@
 /*
- * Owns exact Preference Learning wakeups, single-flight batch execution, one
- * Context-built ordinary model Completion, and deterministic commit/failure
- * recovery. It never creates an Agent Execution or exposes Tools.
+ * Owns one ephemeral Preference learning snapshot and bounded in-process retries.
+ * Restart recovery uses durable feedback versions, never execution history.
  */
+import { randomUUID } from 'node:crypto';
 import type { Api, Model, Models } from '@megumi/ai';
 import type { ContextBuilder } from '@megumi/context';
 import type { Observability, OperationCompletion, TraceCorrelation } from '@megumi/observability';
 import { z } from 'zod';
 import type { PreferenceLearningRepository } from '../persistence/preference-learning-repository';
+import { LearnedPreferenceInputSchema, type PreferenceLearningFacts } from './preference';
 
-const ModelDirectionSchema = z.object({
-  directionId: z.string(),
-  polarity: z.enum(['positive', 'negative']),
-  dimension: z.enum([
-    'topic', 'source', 'author', 'content_type', 'recency', 'expression_quality',
-  ]),
-  statement: z.string().trim().min(1).max(1000),
-  supportingRecommendationIds: z.array(z.string().min(1)).min(1),
-}).strict();
 const ModelResultSchema = z.object({
   scopes: z.array(z.object({
-    scopeKey: z.string().min(1),
-    baseRevision: z.number().int().nonnegative(),
-    directions: z.array(ModelDirectionSchema),
+    preferenceSetId: z.string().min(1), baseRevision: z.number().int().nonnegative(),
+    preferences: z.array(LearnedPreferenceInputSchema.extend({ id: z.string() }).strict()),
   }).strict()),
 }).strict();
 
 export interface PreferenceLearningRuntime {
+  /** Starts local recovery from unlearned feedback; automatic work can be disabled by Evaluation. */
   start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
+  /** Rechecks learning eligibility after an actual feedback change. */
   notifyReactionChanged(): void;
+  /** Supplies only the active immutable work snapshot to Context. */
+  getActivePreferenceLearningFacts(batchId: string): PreferenceLearningFacts | undefined;
+  /** Cancels pending work and waits until no result can commit. */
   shutdown(): Promise<void>;
 }
-
 export interface CreatePreferenceLearningRuntimeOptions {
   readonly repository: PreferenceLearningRepository;
   readonly context: Pick<ContextBuilder, 'build'>;
   readonly models: Pick<Models, 'completeSimple'>;
   readonly resolveModel: () => Promise<Model<Api> | undefined>;
-  readonly ids: {
-    createBatchId(): string;
-    createModelCallId(): string;
-    createDirectionId(): string;
-  };
+  readonly ids: { createBatchId(): string; createModelCallId(): string };
   readonly now: () => string;
   readonly observability?: Observability;
-  readonly timers?: {
-    set(delayMs: number, callback: () => void): unknown;
-    clear(handle: unknown): void;
-  };
+  readonly timers?: { set(delayMs: number, callback: () => void): unknown; clear(handle: unknown): void };
   readonly onPreferencesCommitted?: (interestIds: readonly string[]) => void;
   readonly onBackgroundError?: (error: unknown) => void;
 }
 
-/** Creates the single background owner for durable Reaction-to-Preference learning. */
-export function createPreferenceLearningRuntime(
-  options: CreatePreferenceLearningRuntimeOptions,
-): PreferenceLearningRuntime {
+/** Serializes feedback learning without persisting a parallel execution state machine. */
+export function createPreferenceLearningRuntime(options: CreatePreferenceLearningRuntimeOptions): PreferenceLearningRuntime {
   const timers = options.timers ?? nodeTimers();
   let accepting = true;
   let timer: unknown;
   let running: Promise<void> | undefined;
+  let active: PreferenceLearningFacts | undefined;
+  let controller: AbortController | undefined;
   let rerunRequested = false;
-  let activeController: AbortController | undefined;
-
-  function clearTimer(): void {
-    if (timer === undefined) return;
-    timers.clear(timer);
+  let failures = 0;
+  const clearTimer = () => {
+    if (timer !== undefined) timers.clear(timer);
     timer = undefined;
-  }
-
-  function schedule(dueAt: string): void {
+  };
+  const schedule = (delayMs: number) => {
+    clearTimer();
+    timer = timers.set(Math.max(0, delayMs), () => { timer = undefined; wake(); });
+  };
+  const wake = () => {
     if (!accepting) return;
     clearTimer();
-    const delay = Math.max(0, Date.parse(dueAt) - Date.parse(options.now()));
-    timer = timers.set(delay, () => {
-      timer = undefined;
-      wake();
-    });
-  }
-
-  function wake(): void {
-    if (!accepting) return;
-    clearTimer();
-    if (running) {
-      rerunRequested = true;
-      return;
-    }
-    running = drain().catch((error) => {
-      safeReport(options, error);
-    }).finally(() => {
+    if (running) { rerunRequested = true; return; }
+    running = drain().catch((error: unknown) => safeReport(options, error)).finally(() => {
       running = undefined;
-      if (rerunRequested && accepting) {
-        rerunRequested = false;
-        wake();
-      }
+      if (rerunRequested && accepting) { rerunRequested = false; wake(); }
     });
-  }
-
+  };
   async function drain(): Promise<void> {
     while (accepting) {
       const trigger = options.repository.getPreferenceLearningTrigger({ now: options.now() });
       if (trigger.status === 'idle') return;
-      if (trigger.status === 'scheduled') {
-        schedule(trigger.dueAt);
+      if (trigger.status === 'scheduled') { schedule(Date.parse(trigger.dueAt) - Date.parse(options.now())); return; }
+      const batchId = options.ids.createBatchId();
+      controller = new AbortController();
+      const signal = controller.signal;
+      const facts = options.repository.preparePreferenceLearning({ batchId, startedAt: options.now(), limit: 20 });
+      if (!facts) return;
+      active = facts;
+      let result: LearningBatchResult;
+      try {
+        result = await observeLearningTrace(options.observability, facts, () => processBatch(options, facts, signal));
+      } finally {
+        active = undefined;
+        controller = undefined;
+      }
+      if (!accepting || signal.aborted) return;
+      if (result.status === 'failed') {
+        failures += 1;
+        // A new feedback revision or restart can retry again; old failures do not poll forever.
+        if (result.retryable && failures < 3) schedule(60_000);
         return;
       }
-      const batchId = options.ids.createBatchId();
-      const controller = new AbortController();
-      activeController = controller;
-      const result = await observeLearningTrace(options.observability, batchId, async () => {
-        const batch = await observeSpan(
-          options.observability,
-          'preference.batch.claim',
-          { preferenceLearningBatchId: batchId },
-          () => Promise.resolve(options.repository.claimPreferenceLearningBatch({
-            batchId,
-            reason: trigger.reason,
-            now: options.now(),
-            limit: 20,
-          })),
-        );
-        if (!batch) return { status: 'idle' as const };
-        return processBatch(options, batch.batchId, batch.startedAt, controller.signal);
-      }).finally(() => {
-        if (activeController === controller) activeController = undefined;
-      });
-      if (result.status === 'idle') return;
+      failures = 0;
     }
   }
-
   return {
-    async start(startOptions = {}) {
-      accepting = true;
-      options.repository.interruptPreferenceLearningBatches({ now: options.now() });
-      if (startOptions.automaticTriggers ?? true) wake();
-    },
-    notifyReactionChanged: wake,
+    async start(startOptions = {}) { accepting = true; failures = 0; if (startOptions.automaticTriggers ?? true) wake(); },
+    notifyReactionChanged() { failures = 0; wake(); },
+    getActivePreferenceLearningFacts: (id) => active?.batch.batchId === id ? active : undefined,
     async shutdown() {
       accepting = false;
       clearTimer();
-      activeController?.abort();
+      controller?.abort();
       await running;
+      active = undefined;
     },
   };
 }
 
+/** Calls the model once, then lets the Repository atomically validate and publish the result. */
 async function processBatch(
-  options: CreatePreferenceLearningRuntimeOptions,
-  batchId: string,
-  startedAt: string,
-  signal: AbortSignal,
+  options: CreatePreferenceLearningRuntimeOptions, facts: PreferenceLearningFacts, signal: AbortSignal,
 ): Promise<LearningBatchResult> {
+  const { batchId, startedAt } = facts.batch;
   try {
     const model = await options.resolveModel();
-    if (!model) throw new LearningFailure('model_unavailable', 'Preference Learning model is unavailable.');
+    if (!model) throw new LearningFailure('model_unavailable', 'Preference Learning model is unavailable.', false);
+    if (signal.aborted) throw new LearningFailure('cancelled', 'Preference Learning was cancelled.', false);
     const modelCallId = options.ids.createModelCallId();
     const built = await options.context.build({
-      modelCallContext: {
-        modelCallId,
-        run: { kind: 'preference_learning', batchId, startedAt, model },
-        tools: [],
-      },
-      currentMessages: [],
-      signal,
+      modelCallContext: { modelCallId, run: { kind: 'preference_learning', batchId, startedAt, model }, tools: [] },
+      currentMessages: [], signal,
     });
-    if (built.status === 'failed') {
-      throw new LearningFailure(built.failure.code, built.failure.message);
-    }
-    const modelCorrelation = { preferenceLearningBatchId: batchId, modelCallId };
-    const modelRequest = {
-      model: {
-        providerId: model.provider,
-        modelId: model.id,
-      },
-      prompt: built.prompt,
-    };
-    safeRecordContent(options.observability, 'model.request', modelRequest, modelCorrelation);
-    const response = await observeSpan(
-      options.observability,
-      'model.call',
-      modelCorrelation,
-      () => options.models.completeSimple(model, {
-        systemPrompt: built.prompt.systemPrompt,
-        messages: [...built.prompt.messages],
-      }, { sessionId: `preference-learning:${batchId}`, signal }),
-    );
-    safeRecordContent(options.observability, 'model.response', response, modelCorrelation);
-    if (response.stopReason === 'error' || response.stopReason === 'aborted') {
-      throw new LearningFailure('model_completion_failed', response.errorMessage ?? 'Preference Learning model failed.');
-    }
-    const text = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('')
-      .trim();
+    if (built.status === 'failed') throw new LearningFailure(built.failure.code, built.failure.message, false);
+    const correlation = { preferenceLearningBatchId: batchId, modelCallId };
+    safeRecordContent(options.observability, 'model.request', {
+      model: { providerId: model.provider, modelId: model.id }, prompt: built.prompt,
+    }, correlation);
+    const response = await observeSpan(options.observability, 'model.call', correlation, () => (
+      options.models.completeSimple(model, { systemPrompt: built.prompt.systemPrompt, messages: [...built.prompt.messages] },
+        { sessionId: `preference-learning:${batchId}`, signal })
+    ));
+    safeRecordContent(options.observability, 'model.response', response, correlation);
+    if (signal.aborted || response.stopReason === 'aborted') throw new LearningFailure('cancelled', 'Preference Learning was cancelled.', false);
+    if (response.stopReason === 'error') throw new LearningFailure('model_completion_failed', response.errorMessage ?? 'Model failed.', true);
+    const text = response.content.filter((block) => block.type === 'text').map((block) => block.text).join('').trim();
     const learned = ModelResultSchema.parse(JSON.parse(stripCodeFence(text)));
-    safeRecordContent(options.observability, 'preference.learning.result', learned, modelCorrelation);
+    safeRecordContent(options.observability, 'preference.learning.result', learned, correlation);
+    const existingIds = new Set(facts.currentPreferences.flatMap(({ preferences }) => preferences.map(({ preference }) => preference.id)));
+    if (learned.scopes.some((scope) => scope.preferences.some(({ id }) => id !== '' && !existingIds.has(id)))) {
+      throw new LearningFailure('invalid_preference_reference', 'Model returned an unknown Preference ID.', false);
+    }
     const scopes = learned.scopes.map((scope) => ({
-      scopeKey: scope.scopeKey,
-      baseRevision: scope.baseRevision,
-      directions: scope.directions.map((direction) => ({
-        ...direction,
-        directionId: direction.directionId || options.ids.createDirectionId(),
-      })),
+      ...scope, preferences: scope.preferences.map((preference) => ({ ...preference, id: preference.id || randomUUID() })),
     }));
-    const committed = await observeSpan(
-      options.observability,
-      'preference.commit',
-      { preferenceLearningBatchId: batchId },
-      () => Promise.resolve(options.repository.commitPreferenceLearningBatch({
-        batchId,
-        committedAt: options.now(),
-        scopes,
-      })),
-    );
+    const committed = await observeSpan(options.observability, 'preference.commit', { preferenceLearningBatchId: batchId }, () => (
+      Promise.resolve(options.repository.commitPreferenceLearning({ facts, scopes, committedAt: options.now() }))
+    ));
     if (committed.status === 'rejected') {
-      throw new LearningFailure(committed.reason, 'Preference Learning commit was rejected.');
+      throw new LearningFailure(committed.reason, 'Preference Learning commit was rejected.',
+        committed.reason === 'revision_conflict' || committed.reason === 'invalid_interest_reference');
     }
     safeRecordContent(options.observability, 'preference.committed', {
-      batchId,
-      scopes,
-      affectedInterestIds: committed.affectedInterestIds,
+      batchId, scopes, affectedInterestIds: committed.affectedInterestIds,
+      recommendationIds: facts.reactionChanges.map(({ recommendationId }) => recommendationId),
     }, { preferenceLearningBatchId: batchId });
-    safeNotifyCommitted(options, committed.affectedInterestIds);
+    try { options.onPreferencesCommitted?.(committed.affectedInterestIds); }
+    catch (error) { safeReport(options, error); }
     return { status: 'committed' };
   } catch (error) {
-    const failure = error instanceof LearningFailure
-      ? error
-      : new LearningFailure('preference_learning_failed', messageOf(error));
-    const failedAt = options.now();
-    await observeSpan(
-      options.observability,
-      'preference.batch.settle',
-      { preferenceLearningBatchId: batchId },
-      () => Promise.resolve(options.repository.failPreferenceLearningBatch({
-        batchId,
-        failedAt,
-        retryAt: new Date(Date.parse(failedAt) + 60_000).toISOString(),
-        failureCode: failure.code,
-        failureMessage: failure.message,
-      })),
-    );
+    const failure = error instanceof LearningFailure ? error : new LearningFailure('preference_learning_failed', messageOf(error), false);
     safeReport(options, error);
-    return { status: 'failed', failure };
+    return { status: 'failed', failure, retryable: failure.retryable };
   }
 }
-
-type LearningBatchResult =
-  | { readonly status: 'idle' | 'committed' }
-  | { readonly status: 'failed'; readonly failure: LearningFailure };
-
+type LearningBatchResult = { readonly status: 'committed' } | { readonly status: 'failed'; readonly failure: LearningFailure; readonly retryable: boolean };
 class LearningFailure extends Error {
-  constructor(readonly code: string, message: string) {
-    super(message);
-    this.name = 'LearningFailure';
-  }
+  constructor(readonly code: string, message: string, readonly retryable: boolean) { super(message); }
 }
-
-function stripCodeFence(value: string): string {
-  const match = value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/iu);
-  return match?.[1] ?? value;
-}
-
-function safeNotifyCommitted(
-  options: CreatePreferenceLearningRuntimeOptions,
-  interestIds: readonly string[],
-): void {
-  try {
-    options.onPreferencesCommitted?.(interestIds);
-  } catch {
-    // Downstream invalidation is retried from durable revision facts.
-  }
-}
-
+function stripCodeFence(value: string): string { return value.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/iu)?.[1] ?? value; }
 function safeReport(options: CreatePreferenceLearningRuntimeOptions, error: unknown): void {
-  try {
-    options.onBackgroundError?.(error);
-  } catch {
-    // Error reporting cannot create a second background failure.
-  }
+  try { options.onBackgroundError?.(error); } catch { /* Error reporting cannot mutate committed business data. */ }
 }
 
+/** Isolates diagnostic failures while ensuring business work executes at most once. */
 async function observeLearningTrace(
   observability: Observability | undefined,
-  batchId: string,
+  facts: PreferenceLearningFacts,
   operation: () => Promise<LearningBatchResult>,
 ): Promise<LearningBatchResult> {
   let promise: Promise<LearningBatchResult> | undefined;
@@ -295,7 +189,7 @@ async function observeLearningTrace(
   try {
     return await observability.withTrace({
       kind: 'preference_learning',
-      correlation: { preferenceLearningBatchId: batchId },
+      correlation: { preferenceLearningBatchId: facts.batch.batchId, recommendationIds: facts.reactionChanges.map(({ recommendationId }) => recommendationId) },
       classifyResult: classifyLearningResult,
     }, runOnce);
   } catch {
@@ -310,11 +204,12 @@ function classifyLearningResult(result: LearningBatchResult): OperationCompletio
       status: 'error',
       code: result.failure.code,
       message: result.failure.message,
-      retryable: true,
+      retryable: result.retryable,
     },
   };
 }
 
+/** Observes one operation without replaying it when diagnostic infrastructure fails. */
 async function observeSpan<T>(
   observability: Observability | undefined,
   name: Parameters<Observability['withSpan']>[0]['name'],

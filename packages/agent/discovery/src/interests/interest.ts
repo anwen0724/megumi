@@ -9,7 +9,7 @@ export const InterestStatusSchema = z.enum(['active', 'paused', 'deleted']);
 export const InterestCreatedFromSchema = z.enum(['manual', 'conversation']);
 
 export const InterestSchema = z.object({
-  interestId: z.string().min(1),
+  id: z.string().min(1),
   description: InterestDescriptionSchema,
   status: InterestStatusSchema,
   createdFrom: InterestCreatedFromSchema,
@@ -22,7 +22,7 @@ export const InterestSchema = z.object({
 }).strict();
 
 export const InterestEvidenceSchema = z.object({
-  evidenceId: z.string().min(1),
+  id: z.string().min(1),
   interestId: z.string().min(1).optional(),
   sessionId: z.string().min(1),
   messageId: z.string().min(1),
@@ -35,11 +35,12 @@ export const InterestEvidenceSchema = z.object({
   retractedAt: TimestampSchema.optional(),
 }).strict();
 
-export const SessionParticipationSchema = z.object({
-  sessionParticipationId: z.string().min(1),
+export const InterestSessionSettingSchema = z.object({
+  id: z.string().min(1),
   sessionId: z.string().min(1),
   participation: z.enum(['included', 'excluded']),
   effectiveFrom: TimestampSchema,
+  createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).strict();
 
@@ -55,7 +56,7 @@ export const InterestExtractionResultSchema = z.object({
 
 export type Interest = z.infer<typeof InterestSchema>;
 export type InterestEvidence = z.infer<typeof InterestEvidenceSchema>;
-export type SessionParticipation = z.infer<typeof SessionParticipationSchema>;
+export type InterestSessionSetting = z.infer<typeof InterestSessionSettingSchema>;
 export type InterestExtractionResult = z.infer<typeof InterestExtractionResultSchema>;
 
 export type ChangeInterestRequest =
@@ -65,7 +66,7 @@ export type ChangeInterestRequest =
   | { readonly action: 'resume'; readonly interestId: string }
   | { readonly action: 'delete'; readonly interestId: string };
 
-export interface SetSessionParticipationRequest {
+export interface SetInterestSessionSettingRequest {
   readonly sessionId: string;
   readonly participation: 'included' | 'excluded';
 }

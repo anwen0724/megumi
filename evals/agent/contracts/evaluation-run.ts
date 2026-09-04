@@ -86,7 +86,7 @@ const TraceTargetResultSchema = z.object({
     'conversation', 'interest_understanding', 'candidate_supply',
     'recommendation', 'preference_learning',
   ]),
-  correlation: z.record(z.string(), z.string()),
+  correlation: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
   matchedTraceIds: z.array(z.string().min(1)),
 }).strict();
 

@@ -14,7 +14,7 @@ export interface EvaluationSafetyInterruption {
 
 export interface CaseTraceTarget {
   readonly traceKind: EvaluationCase['type'];
-  readonly correlation: Readonly<Record<string, string>>;
+  readonly correlation: Readonly<Record<string, string | string[]>>;
   readonly expectation: 'required';
 }
 
@@ -49,8 +49,7 @@ type CaseExecutionRuntime = {
       | 'waitRecommendation'
       | 'getRecommendationCollection'
       | 'updateRecommendationState'
-      | 'waitPreferenceLearning'
-      | 'getPreferenceLearningFacts'>;
+      | 'waitPreferenceLearning'>;
     readonly observability: Pick<ProductRuntime['host']['observability'],
       'flush' | 'listTraces' | 'getTrace' | 'getContent'>;
   };
@@ -361,22 +360,19 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
     });
   }
   const learned = completion.value.value;
-  const facts = learned.batchId
-    ? await input.runtime.host.discovery.getPreferenceLearningFacts({ batchId: learned.batchId })
-    : undefined;
   return execution({
     caseType: 'preference_learning', terminalState: 'settled',
     productResult: { updated, completion: learned },
-    ownerFacts: facts ?? {},
+    ownerFacts: learned,
     businessIds: {
       recommendationId,
-      ...(learned.batchId ? { preferenceLearningBatchId: learned.batchId } : {}),
+      preferenceSetIds: learned.preferences.map(({ preferenceSet }) => preferenceSet.id),
     },
-    traceTargets: learned.batchId ? [{
+    traceTargets: [{
       traceKind: 'preference_learning',
-      correlation: { preferenceLearningBatchId: learned.batchId },
+      correlation: { recommendationIds: [recommendationId] },
       expectation: 'required',
-    }] : [],
+    }],
   });
 }
 

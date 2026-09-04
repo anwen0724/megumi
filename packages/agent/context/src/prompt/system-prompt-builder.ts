@@ -11,7 +11,6 @@ import type { EffectiveInstructions } from '@megumi/instructions';
 import type { SkillView } from '@megumi/skills';
 import type { ToolDefinition } from '@megumi/tools';
 import type { ExecutionEnvironment } from '../context';
-import type { PreferenceLearningContextMaterial } from '../discovery-context';
 import { escapeXmlAttribute, escapeXmlText } from './prompt-markup-formatter';
 
 export interface SystemPromptSources {
@@ -21,22 +20,12 @@ export interface SystemPromptSources {
   readonly executionEnvironment?: ExecutionEnvironment;
   readonly tools: readonly ToolDefinition[];
   readonly includeAvailableTools?: boolean;
-  readonly preferenceLearningMaterial?: {
-    readonly startedAt: string;
-    readonly material: PreferenceLearningContextMaterial;
-  };
 }
 
 export function buildSystemPrompt(sources: SystemPromptSources): string {
   const sections: string[] = [];
   for (const document of sources.systemInstructions) {
     sections.push(document.content);
-  }
-  if (sources.preferenceLearningMaterial) {
-    sections.push(renderPreferenceLearningMaterial(
-      sources.preferenceLearningMaterial.startedAt,
-      sources.preferenceLearningMaterial.material,
-    ));
   }
   const guidance = renderToolGuidelines(sources.tools);
   if (guidance) sections.push(guidance);
@@ -52,21 +41,6 @@ export function buildSystemPrompt(sources: SystemPromptSources): string {
     sections.push(renderExecutionEnvironment(sources.executionEnvironment));
   }
   return sections.join('\n\n');
-}
-
-function renderPreferenceLearningMaterial(
-  startedAt: string,
-  material: PreferenceLearningContextMaterial,
-): string {
-  return [
-    '<preference_learning_material>',
-    `  <started_at>${escapeXmlText(startedAt)}</started_at>`,
-    `  <batch>${escapeXmlText(JSON.stringify(material.batch))}</batch>`,
-    `  <interests>${escapeXmlText(JSON.stringify(material.interests))}</interests>`,
-    `  <current_preferences>${escapeXmlText(JSON.stringify(material.currentPreferences))}</current_preferences>`,
-    `  <reaction_changes>${escapeXmlText(JSON.stringify(material.reactionChanges))}</reaction_changes>`,
-    '</preference_learning_material>',
-  ].join('\n');
 }
 
 /** Tool-specific prompt guidance follows the profile documents. */

@@ -6,7 +6,7 @@
 import type {
   CandidateSupplyFacts,
   ContextDiscoverySourceRegistry,
-  ContextPreferenceSnapshot,
+  ContextPreferenceSet,
   RecommendationFacts,
   DiscoveryFactsReader,
   PreferenceLearningFacts as ContextPreferenceLearningFacts,
@@ -15,12 +15,14 @@ import type { CandidateSupplyAttempts } from '../candidate-supply/candidate-supp
 import type { RecommendationAttempts } from '../recommendation/recommendation-attempts';
 import type { DiscoveryRepository } from '../persistence/discovery-repository';
 import type { SourceRegistry } from '../sources/source-registry';
+import type { PreferenceLearningFacts } from '../preferences/preference';
 
 /** Creates the production read adapter used by all three Discovery Context resolvers. */
 export function createDiscoveryFactsReader(options: {
   readonly repository: DiscoveryRepository;
   readonly candidateSupplyAttempts: CandidateSupplyAttempts;
   readonly recommendationAttempts: RecommendationAttempts;
+  readonly getActivePreferenceLearningFacts?: (batchId: string) => PreferenceLearningFacts | undefined;
 }): DiscoveryFactsReader {
   return {
     async readCandidateSupplyFacts(request) {
@@ -45,7 +47,7 @@ export function createDiscoveryFactsReader(options: {
         interests: options.repository.listNonDeletedInterests()
           .filter(({ status }) => status === 'active')
           .map((interest) => ({
-            interestId: interest.interestId,
+            interestId: interest.id,
             description: interest.description,
             interestRevision: interest.revision,
           })),
@@ -62,11 +64,11 @@ export function createDiscoveryFactsReader(options: {
       const preferenceSnapshots = attempt.preferences;
       const preferences = preferenceByInterest(preferenceSnapshots);
       const interests = attempt.interests.map((interest) => ({
-          interestId: interest.interestId,
+          interestId: interest.id,
           description: interest.description,
           status: interest.status,
           interestRevision: interest.revision,
-          preference: preferences.get(interest.interestId) ?? emptyPreference(interest.interestId),
+          preference: preferences.get(interest.id),
         }));
       const facts: RecommendationFacts = {
         asOf: attempt.snapshotAt,
@@ -119,7 +121,7 @@ export function createDiscoveryFactsReader(options: {
 
     async readPreferenceLearningFacts(request) {
       if (request.signal?.aborted) return { status: 'cancelled' };
-      const facts = options.repository.getPreferenceLearningFacts(request.batchId);
+      const facts = options.getActivePreferenceLearningFacts?.(request.batchId);
       if (!facts) return missing('preference_learning_batch_not_found');
       const interests = options.repository.listNonDeletedInterests();
       const contextFacts: ContextPreferenceLearningFacts = {
@@ -130,12 +132,13 @@ export function createDiscoveryFactsReader(options: {
           changeCount: facts.batch.changeCount,
         },
         interests: interests.map((interest) => ({
-          interestId: interest.interestId,
+          interestId: interest.id,
           description: interest.description,
           status: interest.status,
           revision: interest.revision,
         })),
         currentPreferences: facts.currentPreferences.map(contextPreference),
+        supportingReactions: facts.supportingReactions,
         reactionChanges: facts.reactionChanges.map((change) => ({
           recommendationId: change.recommendationId,
           ...(change.learnedReaction ? { learnedReaction: change.learnedReaction } : {}),
@@ -154,7 +157,7 @@ export function createDiscoveryFactsReader(options: {
             matchedInterestIds: change.recommendation.matchedInterestIds,
             contentEvidence: { ...change.recommendation.contentEvidence },
           },
-          previouslySupportedDirectionIds: change.previouslySupportedDirectionIds,
+          previouslySupportedPreferenceIds: change.previouslySupportedPreferenceIds,
         })),
       };
       return { status: 'ok', facts: contextFacts };
@@ -187,32 +190,25 @@ export function createContextDiscoverySourceRegistry(options: {
 }
 
 function preferenceByInterest(
-  snapshots: ReturnType<DiscoveryRepository['listPreferenceSnapshots']>,
-): ReadonlyMap<string, ContextPreferenceSnapshot> {
-  return new Map(snapshots.flatMap((snapshot) => snapshot.interestId
-    ? [[snapshot.interestId, contextPreference(snapshot)] as const]
-    : []));
+  snapshots: ReturnType<DiscoveryRepository['listPreferenceSetDetails']>,
+): ReadonlyMap<string, ContextPreferenceSet> {
+  return new Map(snapshots.flatMap((snapshot) => snapshot.preferenceSet.interestId
+    ? [[snapshot.preferenceSet.interestId, contextPreference(snapshot)] as const] : []));
 }
 
 function contextPreference(
-  snapshot: ReturnType<DiscoveryRepository['listPreferenceSnapshots']>[number],
-): ContextPreferenceSnapshot {
+  snapshot: ReturnType<DiscoveryRepository['listPreferenceSetDetails']>[number],
+): ContextPreferenceSet {
   return {
-    scopeKey: snapshot.scopeKey,
-    scope: snapshot.scope,
-    ...(snapshot.interestId ? { interestId: snapshot.interestId } : {}),
-    revision: snapshot.revision,
-    directions: snapshot.directions.map((direction) => ({ ...direction })),
-  };
-}
-
-function emptyPreference(interestId: string): ContextPreferenceSnapshot {
-  return {
-    scopeKey: `interest:${interestId}`,
-    scope: 'interest',
-    interestId,
-    revision: 0,
-    directions: [],
+    preferenceSetId: snapshot.preferenceSet.id,
+    scope: snapshot.preferenceSet.scope,
+    interestId: snapshot.preferenceSet.interestId,
+    revision: snapshot.preferenceSet.revision,
+    preferences: snapshot.preferences.map(({ preference, evidence }) => ({
+      id: preference.id, polarity: preference.polarity, dimension: preference.dimension,
+      statement: preference.statement, updatedAt: preference.updatedAt,
+      supportingRecommendationIds: evidence.map(({ recommendationId }) => recommendationId),
+    })),
   };
 }
 

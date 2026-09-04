@@ -156,7 +156,7 @@ export const skillAvailability = sqliteTable('skill_availability', {
 ]);
 
 export const discoveryInterests = sqliteTable('discovery_interests', {
-  interestId: text('interest_id').primaryKey(),
+  id: text('id').primaryKey(),
   description: text('description').notNull(),
   status: text('status').notNull(),
   createdFrom: text('created_from').notNull(),
@@ -174,8 +174,8 @@ export const discoveryInterests = sqliteTable('discovery_interests', {
 ]);
 
 export const discoveryInterestEvidence = sqliteTable('discovery_interest_evidence', {
-  evidenceId: text('evidence_id').primaryKey(),
-  interestId: text('interest_id').references(() => discoveryInterests.interestId),
+  id: text('id').primaryKey(),
+  interestId: text('interest_id').references(() => discoveryInterests.id),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   messageId: text('message_id').notNull().references(() => sessionMessages.messageId, { onDelete: 'cascade' }),
   description: text('description').notNull(),
@@ -195,15 +195,16 @@ export const discoveryInterestEvidence = sqliteTable('discovery_interest_evidenc
   index('idx_discovery_interest_evidence_message').on(table.messageId),
 ]);
 
-export const discoverySessionPolicies = sqliteTable('discovery_session_policies', {
-  sessionParticipationId: text('session_participation_id').primaryKey(),
+export const discoveryInterestSessionSettings = sqliteTable('discovery_interest_session_settings', {
+  id: text('id').primaryKey(),
   sessionId: text('session_id').notNull().references(() => sessions.sessionId, { onDelete: 'cascade' }),
   participation: text('participation').notNull(),
   effectiveFrom: text('effective_from').notNull(),
+  createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
-  check('check_discovery_session_policies_participation', sql`${table.participation} IN ('included', 'excluded')`),
-  uniqueIndex('idx_discovery_session_policies_session').on(table.sessionId),
+  check('check_discovery_interest_session_settings_participation', sql`${table.participation} IN ('included', 'excluded')`),
+  uniqueIndex('idx_discovery_interest_session_settings_session').on(table.sessionId),
 ]);
 
 export const discoveryRecommendations = sqliteTable('discovery_recommendations', {
@@ -324,7 +325,7 @@ export const discoveryCandidateInterestMatches = sqliteTable('discovery_candidat
   id: text('id').primaryKey(),
   candidateId: text('candidate_id').notNull()
     .references(() => discoveryCandidates.id, { onDelete: 'cascade' }),
-  interestId: text('interest_id').notNull().references(() => discoveryInterests.interestId),
+  interestId: text('interest_id').notNull().references(() => discoveryInterests.id),
   relevance: text('relevance').notNull(),
   matchReason: text('match_reason').notNull(),
 }, (table) => [
@@ -334,62 +335,44 @@ export const discoveryCandidateInterestMatches = sqliteTable('discovery_candidat
   check('check_discovery_candidate_interest_matches_reason', sql`length(trim(${table.matchReason})) BETWEEN 1 AND 1000`),
 ]);
 
-export const discoveryPreferenceLearningBatches = sqliteTable('discovery_preference_learning_batches', {
-  batchId: text('batch_id').primaryKey(),
-  status: text('status').notNull(),
-  triggerReason: text('trigger_reason').notNull(),
-  changeCount: integer('change_count').notNull(),
-  retryCount: integer('retry_count').notNull().default(0),
-  retryAt: text('retry_at'),
-  createdAt: text('created_at').notNull(),
-  startedAt: text('started_at').notNull(),
-  completedAt: text('completed_at'),
-  failureCode: text('failure_code'),
-  failureMessage: text('failure_message'),
-  reactionSnapshotsJson: text('reaction_snapshots_json').notNull().default('[]'),
-  resultRevisionsJson: text('result_revisions_json').notNull().default('[]'),
-}, (table) => [
-  check('check_discovery_preference_learning_batches_status', sql`${table.status} IN ('running', 'succeeded', 'failed')`),
-  check('check_discovery_preference_learning_batches_trigger', sql`${table.triggerReason} IN ('threshold', 'deadline', 'correction', 'retry')`),
-  check('check_discovery_preference_learning_batches_change_count', sql`${table.changeCount} BETWEEN 1 AND 20`),
-  index('idx_discovery_preference_learning_batches_status_retry').on(table.status, table.retryAt, table.createdAt),
-]);
-
-export const discoveryPreferenceScopes = sqliteTable('discovery_preference_scopes', {
-  scopeKey: text('scope_key').primaryKey(),
+export const discoveryPreferenceSets = sqliteTable('discovery_preference_sets', {
+  id: text('id').primaryKey(),
   scope: text('scope').notNull(),
-  interestId: text('interest_id').references(() => discoveryInterests.interestId),
+  interestId: text('interest_id').references(() => discoveryInterests.id),
   revision: integer('revision').notNull().default(0),
+  createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
-  check('check_discovery_preference_scopes_scope', sql`${table.scope} IN ('interest', 'exploration')`),
-  check('check_discovery_preference_scopes_shape', sql`(${table.scope} = 'interest' AND ${table.interestId} IS NOT NULL) OR (${table.scope} = 'exploration' AND ${table.interestId} IS NULL)`),
-  uniqueIndex('idx_discovery_preference_scopes_interest').on(table.interestId).where(sql`${table.interestId} IS NOT NULL`),
+  check('check_preference_sets_scope', sql`${table.scope} IN ('interest','exploration')`),
+  check('check_preference_sets_shape', sql`(${table.scope}='interest' AND ${table.interestId} IS NOT NULL) OR (${table.scope}='exploration' AND ${table.interestId} IS NULL)`),
+  check('check_preference_sets_revision', sql`${table.revision} >= 0`),
+  uniqueIndex('idx_preference_sets_interest').on(table.interestId).where(sql`${table.interestId} IS NOT NULL`),
+  uniqueIndex('idx_preference_sets_exploration').on(table.scope).where(sql`${table.scope}='exploration'`),
 ]);
-
-export const discoveryPreferenceDirections = sqliteTable('discovery_preference_directions', {
-  directionId: text('direction_id').primaryKey(),
-  scopeKey: text('scope_key').notNull()
-    .references(() => discoveryPreferenceScopes.scopeKey, { onDelete: 'cascade' }),
+export const discoveryPreferences = sqliteTable('discovery_preferences', {
+  id: text('id').primaryKey(),
+  preferenceSetId: text('preference_set_id').notNull().references(() => discoveryPreferenceSets.id, { onDelete: 'cascade' }),
   polarity: text('polarity').notNull(),
   dimension: text('dimension').notNull(),
   statement: text('statement').notNull(),
+  createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => [
-  check('check_discovery_preference_directions_polarity', sql`${table.polarity} IN ('positive', 'negative')`),
-  check('check_discovery_preference_directions_dimension', sql`${table.dimension} IN ('topic', 'source', 'author', 'content_type', 'recency', 'expression_quality')`),
-  check('check_discovery_preference_directions_statement', sql`length(trim(${table.statement})) BETWEEN 1 AND 1000`),
-  index('idx_discovery_preference_directions_scope').on(table.scopeKey),
+  check('check_preferences_polarity', sql`${table.polarity} IN ('positive','negative')`),
+  check('check_preferences_dimension', sql`${table.dimension} IN ('topic','source','author','content_type','recency','expression_quality')`),
+  check('check_preferences_statement', sql`length(trim(${table.statement})) BETWEEN 1 AND 1000`),
+  index('idx_preferences_set').on(table.preferenceSetId),
 ]);
-
-export const discoveryPreferenceDirectionRecommendations = sqliteTable('discovery_preference_direction_recommendations', {
+export const discoveryPreferenceEvidence = sqliteTable('discovery_preference_evidence', {
   id: text('id').primaryKey(),
-  directionId: text('direction_id').notNull()
-    .references(() => discoveryPreferenceDirections.directionId, { onDelete: 'cascade' }),
-  recommendationId: text('recommendation_id').notNull()
-    .references(() => discoveryRecommendations.id, { onDelete: 'cascade' }),
+  preferenceId: text('preference_id').notNull().references(() => discoveryPreferences.id, { onDelete: 'cascade' }),
+  recommendationId: text('recommendation_id').notNull().references(() => discoveryRecommendations.id, { onDelete: 'cascade' }),
+  reactionRevision: integer('reaction_revision').notNull(),
+  reaction: text('reaction').notNull(),
+  createdAt: text('created_at').notNull(),
 }, (table) => [
-  uniqueIndex('idx_discovery_preference_direction_recommendations_pair')
-    .on(table.directionId, table.recommendationId),
-  index('idx_discovery_preference_direction_recommendations_recommendation').on(table.recommendationId),
+  check('check_preference_evidence_revision', sql`${table.reactionRevision} > 0`),
+  check('check_preference_evidence_reaction', sql`${table.reaction} IN ('liked','disliked')`),
+  uniqueIndex('idx_preference_evidence_pair').on(table.preferenceId, table.recommendationId),
+  index('idx_preference_evidence_recommendation').on(table.recommendationId),
 ]);

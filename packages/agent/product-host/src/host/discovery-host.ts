@@ -1,6 +1,6 @@
 /* Defines renderer-safe Discovery DTOs and strict Product Host request/response schemas. */
 import { z } from 'zod';
-import type { PreferenceLearningFacts, ReadDiscoveryFactsResult, RecommendationFacts } from '@megumi/context';
+import type { ReadDiscoveryFactsResult, RecommendationFacts } from '@megumi/context';
 import {
   CandidatePoolSnapshotSchema,
   CandidateSupplyResultSchema,
@@ -11,7 +11,6 @@ import {
   GetDiscoveryHomeRequestSchema,
   InterestEvidenceSchema,
   InterestSchema,
-  PreferenceLearningBatchSchema,
   PreferenceLearningCompletionSchema,
   RecommendationSchema,
   RecommendationCollectionSchema,
@@ -21,7 +20,7 @@ import {
   RefreshDiscoverySourceRequestSchema,
   SearchRecommendationsRequestSchema,
   SearchRecommendationsResultSchema,
-  SessionParticipationSchema,
+  InterestSessionSettingSchema,
   UpdateDiscoveryConfigurationRequestSchema,
 } from '@megumi/discovery';
 
@@ -52,7 +51,7 @@ export const DiscoveryInterestChangePayloadSchema = z.discriminatedUnion('action
   z.object({ action: z.literal('resume'), interestId: z.string().min(1) }).strict(),
   z.object({ action: z.literal('delete'), interestId: z.string().min(1) }).strict(),
 ]);
-export const DiscoverySessionParticipationPayloadSchema = z.object({
+export const DiscoveryInterestSessionSettingPayloadSchema = z.object({
   sessionId: z.string().min(1), participation: z.enum(['included', 'excluded']),
 }).strict();
 export const DiscoveryRecommendationRequestPayloadSchema = z.object({
@@ -99,7 +98,6 @@ export const DiscoveryPreferenceLearningQuerySchema = z.object({ recommendationI
 export const DiscoveryRecommendationFactsQuerySchema = z.object({
   executionId: z.string().min(1), requestId: z.string().min(1), localDate: LocalDateSchema,
 }).strict();
-export const DiscoveryPreferenceLearningFactsQuerySchema = z.object({ batchId: z.string().min(1) }).strict();
 const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
   z.string(), z.number(), z.boolean(), z.null(), z.array(JsonValueSchema),
   z.record(z.string(), JsonValueSchema),
@@ -123,7 +121,7 @@ export const DiscoverySourceRefreshPayloadSchema = RefreshDiscoverySourceRequest
 export const DiscoveryConfigurationUiDtoSchema = DiscoveryConfigurationViewSchema;
 export const DiscoverySourceUiDtoSchema = DiscoverySourceViewSchema;
 export const DiscoveryInterestUiDtoSchema = InterestSchema;
-export const DiscoverySessionParticipationUiDtoSchema = SessionParticipationSchema;
+export const DiscoveryInterestSessionSettingUiDtoSchema = InterestSessionSettingSchema;
 export const DiscoveryHomeUiResultSchema = DiscoveryHomeViewSchema;
 export const DiscoveryRecommendationSearchUiResultSchema = SearchRecommendationsResultSchema;
 export const DiscoveryRecommendationUiDtoSchema = RecommendationViewSchema;
@@ -139,10 +137,9 @@ export const DiscoveryCandidatePoolResultSchema = CandidatePoolSnapshotSchema.nu
 export const DiscoveryRecommendationCollectionResultSchema = RecommendationCollectionSchema.nullable();
 export const DiscoveryRecommendationResultSchema = RecommendationSchema.nullable();
 export const DiscoveryPreferenceLearningResultSchema = PreferenceLearningCompletionSchema.nullable();
-export const DiscoveryPreferenceLearningBatchResultSchema = PreferenceLearningBatchSchema.nullable();
 
 export type DiscoveryInterestChangePayload = z.infer<typeof DiscoveryInterestChangePayloadSchema>;
-export type DiscoverySessionParticipationPayload = z.infer<typeof DiscoverySessionParticipationPayloadSchema>;
+export type DiscoveryInterestSessionSettingPayload = z.infer<typeof DiscoveryInterestSessionSettingPayloadSchema>;
 export type DiscoveryRecommendationRequestPayload = z.infer<typeof DiscoveryRecommendationRequestPayloadSchema>;
 export type DiscoveryRecommendationWait = z.infer<typeof DiscoveryRecommendationWaitSchema>;
 export type DiscoveryRecommendationRequestResult = z.infer<typeof DiscoveryRecommendationRequestResultSchema>;
@@ -165,7 +162,7 @@ export type DiscoverySourceRefreshPayload = z.infer<typeof DiscoverySourceRefres
 export type DiscoveryConfigurationUiDto = z.infer<typeof DiscoveryConfigurationUiDtoSchema>;
 export type DiscoverySourceUiDto = z.infer<typeof DiscoverySourceUiDtoSchema>;
 export type DiscoveryInterestUiDto = z.infer<typeof DiscoveryInterestUiDtoSchema>;
-export type DiscoverySessionParticipationUiDto = z.infer<typeof DiscoverySessionParticipationUiDtoSchema>;
+export type DiscoveryInterestSessionSettingUiDto = z.infer<typeof DiscoveryInterestSessionSettingUiDtoSchema>;
 export type DiscoveryHomeUiResult = z.infer<typeof DiscoveryHomeUiResultSchema>;
 export type DiscoveryRecommendationSearchUiResult = z.infer<typeof DiscoveryRecommendationSearchUiResultSchema>;
 export type DiscoveryRecommendationUiDto = z.infer<typeof DiscoveryRecommendationUiDtoSchema>;
@@ -176,9 +173,7 @@ export type DiscoveryCandidatePoolResult = z.infer<typeof DiscoveryCandidatePool
 export type DiscoveryRecommendationCollectionResult = z.infer<typeof DiscoveryRecommendationCollectionResultSchema>;
 export type DiscoveryRecommendationResult = z.infer<typeof DiscoveryRecommendationResultSchema>;
 export type DiscoveryPreferenceLearningResult = z.infer<typeof DiscoveryPreferenceLearningResultSchema>;
-export type DiscoveryPreferenceLearningBatchResult = z.infer<typeof DiscoveryPreferenceLearningBatchResultSchema>;
 export type DiscoveryRecommendationFactsResult = ReadDiscoveryFactsResult<RecommendationFacts>;
-export type DiscoveryPreferenceLearningFactsResult = ReadDiscoveryFactsResult<PreferenceLearningFacts>;
 
 export type DiscoveryBackgroundWaitResult<T> =
   | { readonly status: 'completed'; readonly value: T }
@@ -193,7 +188,8 @@ export interface DiscoveryHost {
   refreshSource(request: DiscoverySourceRefreshPayload): Promise<DiscoverySourceUiDto>;
   refreshSources(request?: DiscoverySourcesRefreshPayload): Promise<DiscoveryConfigurationUiDto>;
   changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestUiDto>;
-  setSessionParticipation(request: DiscoverySessionParticipationPayload): Promise<DiscoverySessionParticipationUiDto>;
+  /** Updates a Session's Interest participation setting and returns its durable identity. */
+  setInterestSessionSetting(request: DiscoveryInterestSessionSettingPayload): Promise<DiscoveryInterestSessionSettingUiDto>;
   requestRecommendation(request: DiscoveryRecommendationRequestPayload): Promise<DiscoveryRecommendationRequestResult>;
   waitRecommendation(request: DiscoveryRecommendationWait): Promise<DiscoveryRecommendationWaitResult>;
   getTodayRecommendation(): Promise<DiscoveryTodayRecommendationResult>;
@@ -206,9 +202,9 @@ export interface DiscoveryHost {
   requestCandidateSupply(request?: DiscoveryCandidateSupplyRequest): Promise<DiscoveryCandidateSupplyResult>;
   getCandidatePool(): Promise<DiscoveryCandidatePoolResult>;
   getRecommendationFacts(request: z.infer<typeof DiscoveryRecommendationFactsQuerySchema>): Promise<DiscoveryRecommendationFactsResult>;
-  getPreferenceLearningBatch(batchId: string): Promise<DiscoveryPreferenceLearningBatchResult>;
+  /** Returns current/learned feedback versions and persisted Preference details, not a run record. */
   getPreferenceLearning(request: DiscoveryPreferenceLearningQuery): Promise<DiscoveryPreferenceLearningResult>;
-  getPreferenceLearningFacts(request: z.infer<typeof DiscoveryPreferenceLearningFactsQuerySchema>): Promise<DiscoveryPreferenceLearningFactsResult>;
+  /** Waits for the current feedback revision to be learned, or returns a bounded timeout. */
   waitPreferenceLearning(
     request: DiscoveryPreferenceLearningQuery & DiscoveryBackgroundWaitOptions,
   ): Promise<DiscoveryBackgroundWaitResult<NonNullable<DiscoveryPreferenceLearningResult>>>;
