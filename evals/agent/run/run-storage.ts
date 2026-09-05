@@ -3,6 +3,7 @@
  */
 import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   CaseRunResultSchema,
   CaseSnapshotSchema,
@@ -79,7 +80,7 @@ export async function createRunStorage(input: {
       }
       const result = CaseRunResultSchema.parse(toJsonSafe({ ...resultInput, artifacts }));
       await writeJson(path.join(draftDirectory, 'result.json'), result);
-      await rename(draftDirectory, finalDirectory);
+      await sealByRename(draftDirectory, finalDirectory);
       return {
         result,
         resultPath: path.posix.join('cases', caseRunId, 'result.json'),
@@ -93,9 +94,25 @@ export async function createRunStorage(input: {
         throw new Error(`Evaluation Run record already exists: ${input.runId}.`);
       }
       await writeJson(temporaryPath, parsed);
-      await rename(temporaryPath, finalPath);
+      await sealByRename(temporaryPath, finalPath);
     },
   };
+}
+
+/** Retries short-lived filesystem locks without rebuilding evidence or replacing a published record. */
+async function sealByRename(draft: string, destination: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    if (await pathExists(destination)) throw new Error(`Evaluation record already exists: ${destination}.`);
+    try {
+      await rename(draft, destination);
+      return;
+    } catch (error) {
+      const transient = error instanceof Error && 'code' in error && (error.code === 'EPERM' || error.code === 'EBUSY');
+      if (!transient || attempt >= 5) throw error;
+      // Windows scanners can briefly hold a freshly written archive; the original draft stays intact.
+      await delay(50 * (attempt + 1));
+    }
+  }
 }
 
 function errorRecord(error: unknown): { readonly name: string; readonly message: string } {
