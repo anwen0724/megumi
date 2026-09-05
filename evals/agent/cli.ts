@@ -6,12 +6,22 @@ import { EvaluationRunRequestSchema } from './contracts/evaluation-run';
 import { loadDataset, validateDatasets } from './datasets/dataset-loader';
 import { listMetricDefinitions } from './metrics/metric-catalog';
 import { runEvaluation } from './run/evaluation-runner';
+import { scoreEvaluationRun } from './grading/score-run';
 
 const evaluationRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(evaluationRoot, '..', '..');
 
 async function main(arguments_: readonly string[]): Promise<void> {
   const [command, action, ...rest] = arguments_;
+  if (command === 'score') {
+    const options = parseFileOptions(arguments_.slice(1), ['--run', '--profile', '--out'], ['--review']);
+    const profile: unknown = JSON.parse(await readFile(options['--profile'], 'utf8'));
+    const review: unknown = options['--review'] ? JSON.parse(await readFile(options['--review'], 'utf8')) : undefined;
+    const result = await scoreEvaluationRun({ runDirectory: options['--run'], outputDirectory: options['--out'], profile, review });
+    process.stdout.write(`Evaluation score ${result.status}: ${options['--out']}\n`);
+    if (result.status !== 'passed') process.exitCode = 1;
+    return;
+  }
   if (command === 'datasets' && action === 'validate') {
     const result = await validateDatasets({ rootDirectory: path.join(evaluationRoot, 'datasets') });
     process.stdout.write(`Datasets valid: ${result.datasetCount} Datasets, ${result.caseCount} Cases.\n`);
@@ -89,7 +99,23 @@ function parseRunOptions(arguments_: readonly string[]): RunOptions {
 function usage(): string {
   return 'Usage: datasets validate | datasets show <environment/dataset-id> | metrics list | '
     + 'run --candidate <model.json> [--dataset <environment/dataset-id>] '
-    + '[--case <environment/case-id>] [--timeout-ms <milliseconds>]';
+    + '[--case <environment/case-id>] [--timeout-ms <milliseconds>] | '
+    + 'score --run <directory> --profile <json> --out <new-directory> [--review <json>]';
+}
+
+/** Parses nonrepeatable offline file options and rejects unknown or missing arguments. */
+function parseFileOptions(arguments_: readonly string[], required: readonly string[], optional: readonly string[] = []): Record<string, string> {
+  const options: Record<string, string> = {};
+  for (let index = 0; index < arguments_.length; index += 2) {
+    const option = arguments_[index];
+    const value = arguments_[index + 1];
+    if (!option || !value || value.startsWith('--') || ![...required, ...optional].includes(option) || options[option]) {
+      throw new Error('Invalid or duplicate offline option. ' + usage());
+    }
+    options[option] = path.resolve(value);
+  }
+  for (const key of required) if (!options[key]) throw new Error(key + ' is required.');
+  return options;
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
