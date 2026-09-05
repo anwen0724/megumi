@@ -50,7 +50,6 @@ export function automaticMetric(policy: MetricPolicy, evidence: CaseEvidence): M
         && state.reaction === support.reaction && state.reactionRevision === support.reactionRevision)));
   return ratio(metricId, valid.length, ids.length, 'Declared retained Preferences must retain at least one current supporting reaction.');
 }
-
 /** Excludes absent denominators rather than producing a misleading perfect score. */
 function ratio(metricId: string, numerator: number, denominator: number, reason: string): MetricResult {
   return denominator > 0
@@ -84,4 +83,3 @@ function measurement(policy: MetricPolicy, evidence: CaseEvidence): MetricResult
   }
   return { metricId, status: 'scored', value, reason: 'Derived from all archived business Trace records; no model execution.' };
 }
-

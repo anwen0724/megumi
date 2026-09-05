@@ -7,12 +7,20 @@ import { loadDataset, validateDatasets } from './datasets/dataset-loader';
 import { listMetricDefinitions } from './metrics/metric-catalog';
 import { runEvaluation } from './run/evaluation-runner';
 import { scoreEvaluationRun } from './grading/score-run';
+import { compareEvaluationFiles } from './grading/compare-scores';
 
 const evaluationRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(evaluationRoot, '..', '..');
 
 async function main(arguments_: readonly string[]): Promise<void> {
   const [command, action, ...rest] = arguments_;
+  if (command === 'compare') {
+    const options = parseFileOptions(arguments_.slice(1), ['--baseline', '--candidate', '--out']);
+    const result = await compareEvaluationFiles({ baselineFile: options['--baseline'], candidateFile: options['--candidate'], outputDirectory: options['--out'] });
+    process.stdout.write(`Evaluation comparison ${result.status}: ${options['--out']}\n`);
+    if (result.status !== 'no_observed_regression') process.exitCode = 1;
+    return;
+  }
   if (command === 'score') {
     const options = parseFileOptions(arguments_.slice(1), ['--run', '--profile', '--out'], ['--review']);
     const profile: unknown = JSON.parse(await readFile(options['--profile'], 'utf8'));
@@ -100,7 +108,8 @@ function usage(): string {
   return 'Usage: datasets validate | datasets show <environment/dataset-id> | metrics list | '
     + 'run --candidate <model.json> [--dataset <environment/dataset-id>] '
     + '[--case <environment/case-id>] [--timeout-ms <milliseconds>] | '
-    + 'score --run <directory> --profile <json> --out <new-directory> [--review <json>]';
+    + 'score --run <directory> --profile <json> --out <new-directory> [--review <json>] | '
+    + 'compare --baseline <score.json> --candidate <score.json> --out <new-directory>';
 }
 
 /** Parses nonrepeatable offline file options and rejects unknown or missing arguments. */
