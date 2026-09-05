@@ -1,4 +1,6 @@
-/* Verifies paired baseline comparisons cannot hide regressions or coverage changes. */
+/*
+ * Verifies paired baseline comparisons cannot hide regressions or coverage changes.
+ */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { compareScoreReports } from '../../evals/agent/grading/compare-scores';

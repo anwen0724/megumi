@@ -38,6 +38,10 @@ export function automaticMetric(policy: MetricPolicy, evidence: CaseEvidence): M
   }
   if (evidence.snapshot.case.type !== 'preference_learning') return unavailable('Expected a Preference Case.');
   const expected = evidence.snapshot.case.expected;
+  const declaredIds = [...(expected?.retractedDirectionIds ?? []), ...(expected?.retainedDirectionIds ?? [])];
+  if (new Set(declaredIds).size !== declaredIds.length || declaredIds.some((id) => !before.preferences.some((entry) => entry.id === id))) {
+    return unavailable('Declared Preference IDs must be distinct and present in initial facts.');
+  }
   if (metricId === 'preference.retraction_correctness') {
     const ids = expected?.retractedDirectionIds ?? [];
     return ratio(metricId, ids.filter((id) => !after.preferences.some((entry) => entry.id === id)).length, ids.length,

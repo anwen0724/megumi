@@ -1,6 +1,6 @@
 # Megumi Agent Evaluation
 
-这里是开发期的 Agent 评估平台。目前只实现三个阶段：建立 Dataset、定义 Metric、执行选定 Case 并保存原始结果。第四阶段的评估器与报告尚未实现。
+这里是开发期的 Agent 评估平台，支持建立 Dataset、定义 Metric、执行选定 Case、封存原始证据，以及离线评分、人工评审和逐 Case 基线比较。
 
 Evaluation 不实现第二套业务流程。每个 Case 都由独立 Evaluation Host Root 调用正式的 `composeApplication`，再通过 `ProductRuntime.host` 进入真实业务 Owner。Agent Core 仍然拥有单次执行的生命周期；Evaluation 只负责准备隔离环境、发起业务动作、等待公开完成事实和保存证据。
 
@@ -9,7 +9,8 @@ Evaluation 不实现第二套业务流程。每个 Case 都由独立 Evaluation 
 - Dataset：`datasets/controlled/` 与 `datasets/live/` 分别保存可重复的受控 Case 和使用真实外部依赖的 Case；Manifest 可按业务或测试目的组织 Case 子集。
 - Metric Catalog：只定义指标的名称、适用业务、含义和量化口径，不在这里计算分数。
 - Evaluation Run：一次选择一个或多个 Dataset/Case，逐个建立全新的隔离环境并顺序执行，保存 Trace、最终业务事实和 Workspace 变更产物。
-- Evaluator / Report：暂未实现。现有代码不会判断 Case 好坏，不生成评分或报告。
+- Evaluator / Report：独立读取封存 Run，自动计算 Trace 用量和确定性业务约束，生成 JSON/Markdown 报告及人工评审模板；不重新执行 Agent。
+- Comparison：仅配对输入 digest、类型、环境和评分 Profile 相同的 Case，显示改善、退化及覆盖缺口。
 
 ## Dataset
 
@@ -21,7 +22,9 @@ Evaluation 不实现第二套业务流程。每个 Case 都由独立 Evaluation 
 - `controlled/recommendation`
 - `controlled/preference-learning`
 
-Case 的 `initialState` 是对应业务执行前必须存在的产品状态，`input` 是要通过真实 Product Host 发起的动作，`expected` 留给未来评估器使用。`expected` 会保存在 Case 快照中，但绝不会进入候选 Agent 的上下文。
+另有 `controlled/recommendation-quality`、`controlled/preference-quality`，各含四条合成质量场景；当前合计 7 Dataset、13 Case。覆盖内容深度、负向偏好、历史去重、工作集扩展，以及单反馈、撤回、剩余支持和反馈反转。原五条基础 Case 保持不变；合成场景未经真实用户标注。
+
+Case 的 `initialState` 是对应业务执行前必须存在的产品状态，`input` 是要通过真实 Product Host 发起的动作，`expected` 供评估器和评审者使用。`expected` 会保存在 Case 快照中，但绝不会进入候选 Agent 的上下文。
 
 校验或查看 Dataset：
 
@@ -38,7 +41,7 @@ npm run eval:agent -- datasets show controlled/conversation
 npm run eval:agent -- metrics list
 ```
 
-Metric Catalog 不包含规则、Prompt、阈值、评分器或汇总逻辑。后续新增评估器时再决定如何依据这些定义判断结果。
+Metric Catalog 不包含规则、Prompt、阈值、评分器或汇总逻辑。`grading/profiles/` 独立选择指标、评分方式、方向、阈值与人工 rubric。
 
 ## 运行 Case
 
@@ -110,3 +113,21 @@ cases/<caseRunId>/
 - `adapters/`：候选模型解析以及 Controlled/Live 外部环境差异。
 - `run/`：Case 环境、Initial State 安装、真实业务驱动、Trace/产物归档和 Run 编排。
 - `records/`：本地生成且不提交 Git 的不可变运行记录。
+- `grading/`：评分 Contract、只读证据适配、确定性指标、人工评审绑定、比较与报告。
+
+## 离线评分与比较
+
+```powershell
+npm run eval:agent -- score --run .\evals\agent\records\<runId> --profile .\evals\agent\grading\profiles\preference-quality.json --out .\evals\agent\records\score-before
+npm run eval:agent -- compare --baseline .\evals\agent\records\score-before\score.json --candidate .\evals\agent\records\score-after\score.json --out .\evals\agent\records\comparison
+```
+
+输出父目录必须存在，输出目录必须是新目录且与输入目录互不包含。评分生成 `score.json`、`report.md`、`review-template.json`；比较生成 `comparison.json` 和 `report.md`。原始 Run 不变。
+
+自动部分包含业务 Trace 耗时、模型/工具/来源调用、重试、输入输出 Token，以及新推荐身份去重、发布事实完整性、指定偏好撤回和剩余有效支持。输入 Token 沿用 Observability 的 `usage.inputTokens`，不含独立统计的缓存读写 Token，不能拿来代表整个提示词长度。Token 缺失、Trace 不完整或存在无法核验用量的重试时返回 `unavailable`，不以零代替。只统计对应 Case 业务 Trace，排除前置会话等其它业务；后台学习重试由多个 Trace/模型调用体现，不等同于模型内部的 retry 计数。
+
+人工部分核对相关性、偏好范围与依据、推荐理由等语义。复制模板，在评审后把相应 `decision` 改为 `scored`，填写 `numerator`、`denominator`、`reason` 和 `reviewer`；不适用则使用 `not_applicable` 并说明原因。身份字段保持不变，再以 `score ... --review <review.json> --out <another-new-directory>` 生成新报告。修改 Case、证据或 rubric 后，旧标注不能直接套用；人工判断不能覆盖自动结果。
+
+`passed` 只表示选中指标已完成且没有阈值失败；`failed` 表示业务失败或阈值失败；`incomplete` 表示待评审、未结束或证据不足。除 passed 外 score 均退出 1。首组 Profile 对硬约束设阈值 1；语义指标逐项呈现，不设置未经验证的总质量分数。
+
+compare 将任何已配对指标的反向变化标为 `regressed`，包括用量或耗时上升；有缺口则不能宣称无退化。没有统计容忍区间，单次变化可能含模型和网络噪声。`no_observed_regression` 只覆盖本次相同样本/标准，不能证明真实用户长期体验。regressed/inconclusive 均退出 1，报告仍正常生成。

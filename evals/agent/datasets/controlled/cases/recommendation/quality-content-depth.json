@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "caseId": "recommendation-quality.content-depth",
+  "revision": 1,
+  "name": "同主题内容深度取舍",
+  "description": "所有候选主题相关，检验是否依据用户已有偏好选择可实践的内容。",
+  "metadata": {
+    "tags": [
+      "quality",
+      "regression"
+    ],
+    "difficulty": "medium",
+    "source": "合成质量场景；未经真实用户标注"
+  },
+  "type": "recommendation",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "recommendationTargetCount": 1,
+    "recommendationWorkingSetCount": 3,
+    "interests": [
+      {
+        "referenceId": "photo",
+        "description": "摄影教程",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "photo-history",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/photo-history",
+        "title": "摄影教程：曝光对照",
+        "description": "用同一场景不同曝光参数的对照图解释曝光，列出操作步骤与适用条件。",
+        "contentText": "用同一场景不同曝光参数的对照图解释曝光，列出操作步骤与适用条件。",
+        "matchedInterestReferenceIds": [
+          "photo"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "photo-headline",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/photo-headline",
+        "title": "一分钟掌握摄影",
+        "description": "介绍摄影很有趣，展示三张成片，没有拍摄参数、过程或对照。",
+        "contentText": "介绍摄影很有趣，展示三张成片，没有拍摄参数、过程或对照。",
+        "matchedInterestReferenceIds": [
+          "photo"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "photo-practical",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/photo-practical",
+        "title": "逆光人像实操",
+        "description": "固定背景拍摄三组照片，比较测光与曝光补偿；逐步说明反光板位置、参数选择及常见失败现象。",
+        "contentText": "固定背景拍摄三组照片，比较测光与曝光补偿；逐步说明反光板位置、参数选择及常见失败现象。",
+        "matchedInterestReferenceIds": [
+          "photo"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "previousRecommendations": [
+      {
+        "referenceId": "photo-liked",
+        "candidateReferenceId": "photo-history",
+        "reason": "内容与用户兴趣相关。",
+        "reaction": "liked",
+        "reactionRevision": 1,
+        "learnedReaction": "liked",
+        "learnedReactionRevision": 1
+      }
+    ],
+    "preferences": [
+      {
+        "id": "photo-depth",
+        "interestReferenceId": "photo",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好包含操作步骤、参数解释和对照示例的摄影教程",
+        "supportingRecommendationReferenceIds": [
+          "photo-liked"
+        ]
+      }
+    ]
+  },
+  "input": {
+    "trigger": "manual"
+  },
+  "expected": {
+    "allowedOutcomes": [
+      "published"
+    ]
+  }
+}

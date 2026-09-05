@@ -23,7 +23,7 @@ describe('Evaluation Dataset', () => {
   it('loads one controlled Dataset and fixed Case shape for every supported business', async () => {
     const validated = await validateDatasets({ rootDirectory: DATASET_ROOT });
 
-    expect(validated).toEqual({ datasetCount: 5, caseCount: 5, warnings: [] });
+    expect(validated).toEqual({ datasetCount: 7, caseCount: 13, warnings: [] });
 
     const identities = [
       'controlled/conversation',

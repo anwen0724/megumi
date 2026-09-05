@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "environmentKind": "controlled",
+  "datasetId": "preference-quality",
+  "revision": 1,
+  "name": "偏好学习质量回归",
+  "description": "用于真实模型运行、离线评分和人工评审；固定模型响应测试不代表质量结论。",
+  "caseIds": [
+    "preference-quality.single-feedback",
+    "preference-quality.retract-last-support",
+    "preference-quality.retain-other-support",
+    "preference-quality.reverse-feedback"
+  ]
+}

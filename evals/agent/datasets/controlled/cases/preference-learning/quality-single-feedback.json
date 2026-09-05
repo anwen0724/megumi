@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "caseId": "preference-quality.single-feedback",
+  "revision": 1,
+  "name": "单次反馈避免宽泛泛化",
+  "description": "只喜欢一篇有明确步骤的摄影教程，不能据此推断喜欢整个网站的所有内容。",
+  "metadata": {
+    "tags": [
+      "quality",
+      "regression"
+    ],
+    "difficulty": "medium",
+    "source": "合成质量场景；未经真实用户标注"
+  },
+  "type": "preference_learning",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "interests": [
+      {
+        "referenceId": "photo",
+        "description": "摄影教程",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "photo-history",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/photo-history",
+        "title": "摄影教程：曝光对照",
+        "description": "用同一场景不同曝光参数的对照图解释曝光，列出操作步骤与适用条件。",
+        "contentText": "用同一场景不同曝光参数的对照图解释曝光，列出操作步骤与适用条件。",
+        "matchedInterestReferenceIds": [
+          "photo"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "recommendations": [
+      {
+        "referenceId": "photo-liked",
+        "candidateReferenceId": "photo-history",
+        "reason": "内容与用户兴趣相关。",
+        "reaction": "none"
+      }
+    ],
+    "existingReactions": [],
+    "preferences": []
+  },
+  "input": {
+    "recommendationReferenceId": "photo-liked",
+    "reaction": "liked",
+    "advanceTimeMs": 600000
+  },
+  "expected": {}
+}

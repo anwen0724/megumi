@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "profileId": "preference-quality",
+  "revision": 1,
+  "metrics": [
+    {
+      "metricId": "common.goal_completion",
+      "method": "human",
+      "direction": "higher",
+      "threshold": 1,
+      "rubric": "依据 case.json 的业务目标与 expected，对照 result.json 最终事实和 Trace 逐项判断；分子为完成项数，分母为目标项数。执行成功本身不代表目标完成，理由须引用具体事实。"
+    },
+    {
+      "metricId": "efficiency.duration_ms",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.input_tokens",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.output_tokens",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.model_calls",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.tool_calls",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.source_calls",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.retries",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "preference.retraction_correctness",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "preference.evidence_preservation",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "preference.scope_assignment",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "逐条最终偏好核对证据支持的范围，范围恰当数/偏好总数。单次教程点赞不能推出偏好整个网站或所有摄影内容；不得把内容缺陷提升为主题排斥。无最终偏好时结合任务目标判断，不自动视为满分。"
+    },
+    {
+      "metricId": "preference.evidence_sufficiency",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "逐条最终偏好对照最新 reaction/reactionRevision 及正文，证据支持结论的条数/偏好总数。失效反馈不得支持旧结论；单次反馈可以形成窄范围判断，无需强制最小次数。"
+    },
+    {
+      "metricId": "preference.revision_correctness",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "对照 Case 中每次反馈变化和最终偏好语义，正确修订项数/应修订项数。撤回最后支持须移除旧方向，撤回部分支持保留仍有效方向，反向反馈不得留下无依据的旧正向结论；允许语义正确的重写，不要求特定措辞。"
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CaseRunResultSchema, EvaluationRunRequestSchema } from '../../evals/agent/contracts/evaluation-run';
 import { runEvaluation } from '../../evals/agent/run/evaluation-runner';
+import { scoreEvaluationRun } from '../../evals/agent/grading/score-run';
 import { createScriptedStreams } from '../packages/composition/compose-test-application';
 import type { AssistantMessage, ProviderStreams } from '@megumi/ai';
 import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
@@ -117,6 +118,12 @@ describe('Evaluation Run', () => {
     expect(caseResult.traceIntegrity.traceCount).toBeGreaterThanOrEqual(1);
     expect(JSON.stringify(scripted.contexts)).not.toContain('EXPECTED MUST NOT ENTER CANDIDATE CONTEXT');
     expect(JSON.stringify(caseResult)).not.toMatch(/score|judgement|evaluator|grader|report/iu);
+    const scored = await scoreEvaluationRun({ runDirectory: result.runDirectory,
+      outputDirectory: path.join(roots.evaluationRoot, 'scored'),
+      profile: { schemaVersion: 1, profileId: 'trace-integration', revision: 1,
+        metrics: [{ metricId: 'efficiency.model_calls', method: 'measurement', direction: 'lower' }] } });
+    expect(scored.status).toBe('passed');
+    expect(scored.cases[0].metrics).toEqual([expect.objectContaining({ metricId: 'efficiency.model_calls', status: 'scored', value: 1 })]);
   });
 
   it('validates every selection before creating a Run directory or starting a Case', async () => {

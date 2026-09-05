@@ -1,4 +1,6 @@
-/* Verifies offline grading, evidence binding, and preservation of sealed execution records. */
+/*
+ * Verifies offline grading, evidence binding, and preservation of sealed execution records.
+ */
 // @vitest-environment node
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

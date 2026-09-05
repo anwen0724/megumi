@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 2,
+  "caseId": "preference-quality.retain-other-support",
+  "revision": 1,
+  "name": "撤回后保留其它支持",
+  "description": "两篇详细教程共同支持同一偏好；撤回一条后保留另一条有效依据。",
+  "metadata": {
+    "tags": [
+      "quality",
+      "regression"
+    ],
+    "difficulty": "medium",
+    "source": "合成质量场景；未经真实用户标注"
+  },
+  "type": "preference_learning",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "interests": [
+      {
+        "referenceId": "photo",
+        "description": "摄影教程",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "photo-history",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/photo-history",
+        "title": "摄影教程：曝光对照",
+        "description": "用同一场景不同曝光参数的对照图解释曝光，列出操作步骤与适用条件。",
+        "contentText": "用同一场景不同曝光参数的对照图解释曝光，列出操作步骤与适用条件。",
+        "matchedInterestReferenceIds": [
+          "photo"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "photo-second",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/photo-second",
+        "title": "微距实操对照",
+        "description": "列出固定相机和补光步骤，比较不同光圈下景深变化，解释参数与结果。",
+        "contentText": "列出固定相机和补光步骤，比较不同光圈下景深变化，解释参数与结果。",
+        "matchedInterestReferenceIds": [
+          "photo"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "recommendations": [
+      {
+        "referenceId": "photo-liked",
+        "candidateReferenceId": "photo-history",
+        "reason": "内容与用户兴趣相关。",
+        "reaction": "liked",
+        "reactionRevision": 1,
+        "learnedReaction": "liked",
+        "learnedReactionRevision": 1
+      },
+      {
+        "referenceId": "photo-second-liked",
+        "candidateReferenceId": "photo-second",
+        "reason": "内容与用户兴趣相关。",
+        "reaction": "liked",
+        "reactionRevision": 1,
+        "learnedReaction": "liked",
+        "learnedReactionRevision": 1
+      }
+    ],
+    "existingReactions": [],
+    "preferences": [
+      {
+        "id": "photo-depth",
+        "interestReferenceId": "photo",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好包含操作步骤、参数解释和对照示例的摄影教程",
+        "supportingRecommendationReferenceIds": [
+          "photo-liked",
+          "photo-second-liked"
+        ]
+      }
+    ]
+  },
+  "input": {
+    "recommendationReferenceId": "photo-liked",
+    "reaction": "none",
+    "advanceTimeMs": 600000
+  },
+  "expected": {
+    "retainedDirectionIds": [
+      "photo-depth"
+    ]
+  }
+}

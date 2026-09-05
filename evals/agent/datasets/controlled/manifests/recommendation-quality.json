@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "environmentKind": "controlled",
+  "datasetId": "recommendation-quality",
+  "revision": 1,
+  "name": "推荐质量回归",
+  "description": "用于真实模型运行、离线评分和人工评审；固定模型响应测试不代表质量结论。",
+  "caseIds": [
+    "recommendation-quality.content-depth",
+    "recommendation-quality.negative-preference",
+    "recommendation-quality.history-dedup",
+    "recommendation-quality.working-set-expansion"
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "profileId": "recommendation-quality",
+  "revision": 1,
+  "metrics": [
+    {
+      "metricId": "common.goal_completion",
+      "method": "human",
+      "direction": "higher",
+      "threshold": 1,
+      "rubric": "依据 case.json 的业务目标与 expected，对照 result.json 最终事实和 Trace 逐项判断；分子为完成项数，分母为目标项数。执行成功本身不代表目标完成，理由须引用具体事实。"
+    },
+    {
+      "metricId": "efficiency.duration_ms",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.input_tokens",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.output_tokens",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.model_calls",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.tool_calls",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.source_calls",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "efficiency.retries",
+      "method": "measurement",
+      "direction": "lower"
+    },
+    {
+      "metricId": "recommendation.novelty",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "recommendation.publication_integrity",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "recommendation.preference_alignment",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "逐条新增推荐核对当前有效偏好与正文，符合项数/适用项数。photo-depth 要求具体操作与解释；工作集外有更合适内容时需结合候选池评价。无适用偏好时标记不适用并说明。"
+    },
+    {
+      "metricId": "recommendation.negative_preference_compliance",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "逐条新增推荐核对负向偏好的具体排斥原因，未违反数/适用数。bread-detail 排斥无配方步骤的展示，不排斥面包主题本身。无负向偏好时标记不适用。"
+    },
+    {
+      "metricId": "recommendation.reason_consistency",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "逐条核对推荐理由与留档正文、有效兴趣和偏好，有证据且无编造的理由数/理由总数；不能依据标题代替正文。"
+    }
+  ]
+}

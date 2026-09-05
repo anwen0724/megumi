@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 2,
+  "caseId": "recommendation-quality.history-dedup",
+  "revision": 1,
+  "name": "历史内容去重",
+  "description": "候选包含已推荐内容和同兴趣新内容，检验是否维持历史去重。",
+  "metadata": {
+    "tags": [
+      "quality",
+      "regression"
+    ],
+    "difficulty": "medium",
+    "source": "合成质量场景；未经真实用户标注"
+  },
+  "type": "recommendation",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "recommendationTargetCount": 1,
+    "recommendationWorkingSetCount": 2,
+    "interests": [
+      {
+        "referenceId": "garden",
+        "description": "阳台园艺",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "garden-old",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/garden-old",
+        "title": "阳台盆栽排水记录",
+        "description": "介绍盆底孔、介质与接水托盘，并记录浇水后排水时间。",
+        "contentText": "介绍盆底孔、介质与接水托盘，并记录浇水后排水时间。",
+        "matchedInterestReferenceIds": [
+          "garden"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "garden-new",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/garden-new",
+        "title": "小阳台植物采光观察",
+        "description": "记录一周内不同时间的直射光时长，按盆栽位置绘制采光表并调整位置。",
+        "contentText": "记录一周内不同时间的直射光时长，按盆栽位置绘制采光表并调整位置。",
+        "matchedInterestReferenceIds": [
+          "garden"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "previousRecommendations": [
+      {
+        "referenceId": "garden-read",
+        "candidateReferenceId": "garden-old",
+        "reason": "内容与用户兴趣相关。",
+        "reaction": "none"
+      }
+    ],
+    "preferences": []
+  },
+  "input": {
+    "trigger": "manual"
+  },
+  "expected": {
+    "allowedOutcomes": [
+      "published"
+    ]
+  }
+}

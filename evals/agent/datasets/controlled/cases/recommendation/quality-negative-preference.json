@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "caseId": "recommendation-quality.negative-preference",
+  "revision": 1,
+  "name": "负向偏好下的内容取舍",
+  "description": "主题均为面包制作，检验是否遵循用户对空泛展示内容的负向偏好。",
+  "metadata": {
+    "tags": [
+      "quality",
+      "regression"
+    ],
+    "difficulty": "medium",
+    "source": "合成质量场景；未经真实用户标注"
+  },
+  "type": "recommendation",
+  "initialState": {
+    "clock": "2026-01-15T08:00:00.000Z",
+    "recommendationTargetCount": 1,
+    "recommendationWorkingSetCount": 3,
+    "interests": [
+      {
+        "referenceId": "bread",
+        "description": "家庭面包制作",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "bread-history",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/bread-history",
+        "title": "面包效果展示",
+        "description": "展示成品和器材广告，没有用量、温度和制作步骤。",
+        "contentText": "展示成品和器材广告，没有用量、温度和制作步骤。",
+        "matchedInterestReferenceIds": [
+          "bread"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "bread-ad",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/bread-ad",
+        "title": "面包制作精选",
+        "description": "列举工具品牌，展示漂亮成品，没有配方与制作步骤。",
+        "contentText": "列举工具品牌，展示漂亮成品，没有配方与制作步骤。",
+        "matchedInterestReferenceIds": [
+          "bread"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "bread-recipe",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/quality/bread-recipe",
+        "title": "小批量面包操作记录",
+        "description": "按克列出面粉、水和酵母；逐步记录揉面、发酵观察和烘烤温度，说明不同室温下应观察的变化。",
+        "contentText": "按克列出面粉、水和酵母；逐步记录揉面、发酵观察和烘烤温度，说明不同室温下应观察的变化。",
+        "matchedInterestReferenceIds": [
+          "bread"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "previousRecommendations": [
+      {
+        "referenceId": "bread-disliked",
+        "candidateReferenceId": "bread-history",
+        "reason": "内容与用户兴趣相关。",
+        "reaction": "disliked",
+        "reactionRevision": 1,
+        "learnedReaction": "disliked",
+        "learnedReactionRevision": 1
+      }
+    ],
+    "preferences": [
+      {
+        "id": "bread-detail",
+        "interestReferenceId": "bread",
+        "polarity": "negative",
+        "dimension": "expression_quality",
+        "statement": "不喜欢没有配方、用量和制作步骤的面包成品展示",
+        "supportingRecommendationReferenceIds": [
+          "bread-disliked"
+        ]
+      }
+    ]
+  },
+  "input": {
+    "trigger": "manual"
+  },
+  "expected": {
+    "allowedOutcomes": [
+      "published"
+    ]
+  }
+}
