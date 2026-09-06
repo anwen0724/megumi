@@ -15,6 +15,16 @@ export type PreferenceDimension =
 
 export interface ContextPreference {
   readonly id: string;
+  readonly origin: 'learned' | 'user';
+  readonly status: 'active' | 'needs_review' | 'retired' | 'deleted';
+  readonly revision: number;
+  readonly userEditedAt?: string;
+  readonly deletedFeedbackSequence?: number;
+  readonly evidence: readonly {
+    readonly recommendationId: string; readonly reactionRevision: number;
+    readonly reaction: 'liked' | 'disliked'; readonly relation: 'support' | 'counter';
+    readonly explanation?: string; readonly contentQuote?: string;
+  }[];
   readonly polarity?: PreferencePolarity;
   readonly dimension?: PreferenceDimension;
   readonly statement: string;
@@ -33,6 +43,7 @@ export interface ContextPreferenceSet {
 export interface DiscoveryInterestFact {
   readonly interestId: string;
   readonly description: string;
+  readonly descriptionUserEditedAt?: string;
   readonly status?: 'active' | 'paused' | 'deleted';
   readonly interestRevision: number;
   readonly preference?: ContextPreferenceSet;
@@ -196,15 +207,19 @@ export interface PreferenceLearningFacts {
     readonly description: string;
     readonly status: 'active' | 'paused' | 'deleted';
     readonly revision: number;
+    readonly descriptionUserEditedAt?: string;
   }[];
   readonly currentPreferences: readonly ContextPreferenceSet[];
   readonly reactionChanges: readonly PreferenceLearningReactionFact[];
   readonly supportingReactions: readonly {
     readonly recommendationId: string;
     readonly reactionRevision: number;
+    readonly reactionSequence: number;
     readonly reaction: 'liked' | 'disliked';
     readonly matchedInterestIds: readonly string[];
   }[];
+  readonly reviewedPreferenceIds: readonly string[];
+  readonly allowAdd?: boolean;
 }
 
 export interface PreferenceLearningContextMaterial {
@@ -213,6 +228,8 @@ export interface PreferenceLearningContextMaterial {
   readonly currentPreferences: readonly ContextPreferenceSet[];
   readonly reactionChanges: readonly PreferenceLearningReactionFact[];
   readonly supportingReactions: PreferenceLearningFacts['supportingReactions'];
+  readonly reviewedPreferenceIds: readonly string[];
+  readonly allowAdd?: boolean;
 }
 
 export type ReadDiscoveryFactsResult<T> =

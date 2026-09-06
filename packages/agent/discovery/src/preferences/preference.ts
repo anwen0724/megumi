@@ -72,17 +72,21 @@ export const PreferenceSetDetailSchema = z.object({
   preferenceSet: PreferenceSetSchema,
   preferences: z.array(PreferenceDetailSchema),
 }).strict();
-export const LearnedPreferenceInputSchema = z.object({
-  id: z.string().min(1),
-  polarity: PreferencePolaritySchema,
-  dimension: PreferenceDimensionSchema,
-  statement: z.string().trim().min(1).max(1000),
-  supportingRecommendationIds: z.array(z.string().min(1)).min(1),
-}).strict();
 export const LearnedScopeInputSchema = z.object({
   preferenceSetId: z.string().min(1),
   baseRevision: z.number().int().nonnegative(),
-  preferences: z.array(LearnedPreferenceInputSchema),
+  changes: z.array(z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('add'), statement: z.string().trim().min(1).max(1000), polarity: PreferencePolaritySchema, dimension: PreferenceDimensionSchema,
+      evidence: z.array(z.object({ recommendationId: z.string().min(1), relation: z.enum(['support','counter']), explanation: z.string().trim().min(1).max(1000), contentQuote: z.string().min(1).max(2000).optional() }).strict()).min(1),
+      deletedPreferenceId: z.string().min(1).optional(),
+    }).strict(),
+    z.object({ kind: z.literal('update'), preferenceId: z.string().min(1), expectedRevision: z.number().int().positive(), statement: z.string().trim().min(1).max(1000), polarity: PreferencePolaritySchema, dimension: PreferenceDimensionSchema,
+      evidence: z.array(z.object({ recommendationId: z.string().min(1), relation: z.enum(['support','counter']), explanation: z.string().trim().min(1).max(1000), contentQuote: z.string().min(1).max(2000).optional() }).strict()).min(1),
+    }).strict(),
+    z.object({ kind: z.literal('retire'), preferenceId: z.string().min(1), expectedRevision: z.number().int().positive(), reason: z.string().trim().min(1).max(1000) }).strict(),
+  ])),
+  reviewedPreferenceIds: z.array(z.string().min(1)),
+  outcome: z.enum(['changed','unchanged','insufficient']),
 }).strict();
 export const RecommendationContentEvidenceSchema = z.object({
   sourceId: z.string().min(1), canonicalUrl: z.string().url(),
@@ -152,6 +156,7 @@ export interface PreferenceLearningReactionChange {
 export interface PreferenceLearningSupport {
   readonly recommendationId: string;
   readonly reactionRevision: number;
+  readonly reactionSequence: number;
   readonly reaction: FeedbackReaction;
   readonly matchedInterestIds: readonly string[];
 }
@@ -161,11 +166,10 @@ export interface PreferenceLearningFacts {
   readonly currentPreferences: readonly PreferenceSetDetail[];
   readonly reactionChanges: readonly PreferenceLearningReactionChange[];
   readonly supportingReactions: readonly PreferenceLearningSupport[];
+  readonly interests: readonly import('../interests/interest').Interest[];
+  readonly reviewedPreferenceIds: readonly string[];
+  readonly allowAdd?: boolean;
 }
-export type PreferenceLearningTrigger =
-  | { readonly status: 'idle' }
-  | { readonly status: 'scheduled'; readonly pendingReactionCount: number; readonly dueAt: string }
-  | { readonly status: 'ready'; readonly reason: 'threshold' | 'deadline' | 'correction'; readonly pendingReactionCount: number };
 export type CommitPreferenceLearningResult =
   | { readonly status: 'committed'; readonly revisions: readonly { readonly preferenceSetId: string; readonly revision: number }[]; readonly affectedInterestIds: readonly string[] }
   | { readonly status: 'rejected'; readonly reason: 'scope_mismatch' | 'revision_conflict' | 'invalid_interest_reference' | 'invalid_preference_reference' | 'invalid_recommendation_reference' };

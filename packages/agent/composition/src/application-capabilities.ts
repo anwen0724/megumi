@@ -784,12 +784,6 @@ function composeCapabilitiesWithDatabase(
         createBatchId: () => createId('preference-batch'),
         createModelCallId: ids.createModelCallId,
       },
-      ...(options.timers ? {
-        timers: {
-          set: (delayMs: number, callback: () => void) => options.timers!.setTimeout(callback, delayMs),
-          clear: (handle: unknown) => options.timers!.clearTimeout(handle),
-        },
-      } : {}),
       onBackgroundError(error) {
         observability.runtimeLogger.write({
           level: 'warn', module: 'discovery', code: 'preference_learning_background_failed',

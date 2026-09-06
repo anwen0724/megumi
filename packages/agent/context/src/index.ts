@@ -48,5 +48,6 @@ export {
   type ContextUsageEstimate,
   type DerivedContextUsage,
   deriveContextUsage,
+  calculatePromptUsage,
 } from './context-usage-calculator';
 export { materializeRecommendationReference } from './prompt/recommendation-reference-content';

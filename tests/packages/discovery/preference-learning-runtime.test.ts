@@ -1,134 +1,82 @@
 /*
- * Exercises Preference learning with real SQLite business facts and fake model I/O.
+ * Verifies lazy learning failure, cancellation and diagnostics using real persisted inputs.
  */
 // @vitest-environment node
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createPreferenceLearningRuntime, type PreferenceLearningFacts, type PreferenceLearningRuntime } from '@megumi/discovery';
 import type { DatabaseConnection } from '@megumi/database';
-import type { Observability } from '@megumi/observability';
 import { completedMessage, model } from '../context/context-test-fixtures';
-import { createLearningFixture, now, seedRecommendation, setReaction } from './preference-learning-fixtures';
+import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
 const resources: Array<{ database: DatabaseConnection; runtime: PreferenceLearningRuntime }> = [];
-afterEach(async () => { for (const resource of resources.splice(0)) { await resource.runtime.shutdown(); resource.database.close(); } });
+afterEach(async () => { for (const { database, runtime } of resources.splice(0)) { await runtime.shutdown(); database.close(); } });
 
 function setup() {
   const { database, repository } = createLearningFixture();
-  seedRecommendation(database, 1); setReaction(database, 1, 'liked');
-  let material: PreferenceLearningFacts | undefined;
-  const timers: Array<{ delay: number; callback: () => void }> = [];
-  const errors: unknown[] = [];
-  const context = { build: vi.fn(async () => {
-    material = runtime.getActivePreferenceLearningFacts('work:1');
-    if (!material) throw new Error('Context must receive the active snapshot.');
-    return { status: 'ready' as const, prompt: { systemPrompt: 'learn', messages: [], tools: [] } };
-  }) };
+  seedRecommendation(database, 1);
+  repository.updateState({ recommendationId: 'recommendation:1', action: 'set_reaction', reaction: 'liked' });
+  let facts: PreferenceLearningFacts | undefined;
   const models = { completeSimple: vi.fn(async () => {
-    if (!material) throw new Error('Expected Context material.');
-    return completedMessage(JSON.stringify({ scopes: material.currentPreferences.map(({ preferenceSet }) => ({
-      preferenceSetId: preferenceSet.id, baseRevision: preferenceSet.revision,
-      preferences: [{ id: '', polarity: 'positive', dimension: 'topic', statement: 'Agent implementation',
-        supportingRecommendationIds: ['recommendation:1'] }],
+    if (!facts) throw new Error('Missing facts');
+    return completedMessage(JSON.stringify({ scopes: facts.currentPreferences.map(({ preferenceSet }) => ({
+      preferenceSetId: preferenceSet.id, baseRevision: preferenceSet.revision, reviewedPreferenceIds: facts?.reviewedPreferenceIds,
+      outcome: 'changed', changes: [{ kind: 'add', statement: '实测对比', polarity: 'positive', dimension: 'content_type',
+        evidence: [{ recommendationId: 'recommendation:1', relation: 'support', explanation: 'The liked item compares measured results.' }] }],
     })) }));
   }) };
-  const observability: Observability = {
-    withTrace: vi.fn(async (_options, operation) => operation()),
-    withSpan: vi.fn(async (_options, operation) => operation()),
-    recordContent: vi.fn(), recordEvent: vi.fn(), linkTrace: vi.fn(),
-  };
-  const runtime = createPreferenceLearningRuntime({
-    repository, context, models, observability, resolveModel: async () => model,
-    ids: { createBatchId: () => 'work:1', createModelCallId: () => 'model:1' },
-    now: () => '2026-08-27T08:11:00.000Z', onBackgroundError: (error) => errors.push(error),
-    timers: {
-      set(delay, callback) { const entry = { delay, callback }; timers.push(entry); return entry; },
-      clear(handle) { const index = timers.indexOf(handle as typeof timers[number]); if (index >= 0) timers.splice(index, 1); },
-    },
-  });
+  const resolveModel = vi.fn(async () => model);
+  const context = { build: vi.fn(async () => {
+    facts = runtime.getActivePreferenceLearningFacts('batch');
+    return { status: 'ready' as const, prompt: { systemPrompt: 'Learn from feedback.', messages: [], tools: [] } };
+  }) };
+  const runtime = createPreferenceLearningRuntime({ repository, models, context, resolveModel,
+    ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' }, now: () => now });
   resources.push({ database, runtime });
-  return { database, repository, runtime, context, models, observability, timers, errors };
+  return { database, repository, runtime, models, context, resolveModel };
 }
 
-describe('Preference Learning Runtime', () => {
-  it('runs one completion, creates UUID preferences and releases the active snapshot', async () => {
-    const { repository, runtime, context, models, observability } = setup();
-    await runtime.start({ automaticTriggers: false });
-    expect(context.build).not.toHaveBeenCalled();
-    runtime.notifyReactionChanged();
-    await vi.waitFor(() => expect(repository.getPreferenceLearningCompletion('recommendation:1')?.status).toBe('learned'));
-    await runtime.shutdown();
-    expect(runtime.getActivePreferenceLearningFacts('work:1')).toBeUndefined();
-    expect(models.completeSimple).toHaveBeenCalledTimes(1);
-    expect(repository.listPreferenceSetDetails()[0].preferences[0].preference.id).toMatch(/^[a-f0-9-]{36}$/u);
-    expect(context.build).toHaveBeenCalledWith(expect.objectContaining({
-      modelCallContext: expect.objectContaining({ run: expect.objectContaining({ kind: 'preference_learning', batchId: 'work:1' }), tools: [] }),
-    }));
-    expect(observability.withTrace).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'preference_learning', correlation: { preferenceLearningBatchId: 'work:1', recommendationIds: ['recommendation:1'] },
-    }), expect.any(Function));
-    expect(observability.recordContent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'preference.committed' }));
-  });
+it('commits generated identities and releases the active snapshot', async () => {
+  const { repository, runtime } = setup();
+  expect((await runtime.preparePreferencesForRecommendation({ requestId: 'r' })).status).toBe('updated');
+  expect(repository.listPreferenceSetDetails({ effectiveOnly: true })[0].preferences[0].preference.id).toMatch(/^[a-f0-9-]{36}$/u);
+  expect(runtime.getActivePreferenceLearningFacts('batch')).toBeUndefined();
+});
 
-  it('retries transient completion failures finitely without acknowledging feedback', async () => {
-    const { repository, runtime, models, timers } = setup();
-    models.completeSimple.mockImplementation(async () => ({ ...completedMessage(), stopReason: 'error', errorMessage: 'temporary failure' }));
-    await runtime.start();
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      await vi.waitFor(() => expect(timers).toHaveLength(1));
-      expect(timers[0].delay).toBe(60_000);
-      timers.shift()?.callback();
-    }
-    await vi.waitFor(() => expect(models.completeSimple).toHaveBeenCalledTimes(3));
-    await vi.waitFor(() => expect(runtime.getActivePreferenceLearningFacts('work:1')).toBeUndefined());
-    expect(timers).toHaveLength(0);
-    expect(repository.getPreferenceLearningCompletion('recommendation:1')?.status).toBe('pending');
-    expect(repository.listPreferenceSetDetails()[0].preferences).toEqual([]);
-  });
+it('leaves malformed model output pending without automatically repeating it', async () => {
+  const { repository, runtime, models } = setup();
+  models.completeSimple.mockImplementation(async () => completedMessage('not JSON'));
+  expect((await runtime.preparePreferencesForRecommendation({ requestId: 'r' })).status).toBe('degraded');
+  expect(models.completeSimple).toHaveBeenCalledTimes(1);
+  expect(repository.getPreferenceLearningCompletion('recommendation:1')?.status).toBe('pending');
+});
 
-  it('rejects invented nonempty preference IDs instead of treating them as database identities', async () => {
-    const { repository, runtime, models, errors } = setup();
-    models.completeSimple.mockImplementation(async () => {
-      const facts = runtime.getActivePreferenceLearningFacts('work:1');
-      if (!facts) throw new Error('Expected active facts.');
-      return completedMessage(JSON.stringify({ scopes: facts.currentPreferences.map(({ preferenceSet }) => ({
-        preferenceSetId: preferenceSet.id, baseRevision: preferenceSet.revision,
-        preferences: [{ id: 'model-invented-id', polarity: 'positive', dimension: 'topic',
-          statement: 'Agent implementation', supportingRecommendationIds: ['recommendation:1'] }],
-      })) }));
-    });
-    await runtime.start();
-    await vi.waitFor(() => expect(errors).toHaveLength(1));
-    expect(repository.findPreferenceById('model-invented-id')).toBeUndefined();
-    expect(repository.getPreferenceLearningCompletion('recommendation:1')?.status).toBe('pending');
-  });
+it('bounds transient failures to three attempts within one demand', async () => {
+  const { runtime, models } = setup();
+  models.completeSimple.mockImplementation(async () => ({ ...completedMessage(), stopReason: 'error', errorMessage: 'temporary' }));
+  expect((await runtime.preparePreferencesForRecommendation({ requestId: 'r' })).status).toBe('degraded');
+  expect(models.completeSimple).toHaveBeenCalledTimes(3);
+  await runtime.start();
+  runtime.notifyReactionChanged();
+  expect(models.completeSimple).toHaveBeenCalledTimes(3);
+});
 
-  it('does not repeat invalid model output automatically', async () => {
-    const { repository, runtime, models, timers, errors } = setup();
-    models.completeSimple.mockImplementation(async () => completedMessage('not json'));
-    await runtime.start();
-    await vi.waitFor(() => expect(errors).toHaveLength(1));
-    expect(timers).toHaveLength(0);
-    expect(repository.getPreferenceLearningCompletion('recommendation:1')?.status).toBe('pending');
-  });
+it('cancels a non-cooperative model and prevents a late response from committing', async () => {
+  const { runtime, repository, models } = setup();
+  let release: ((value: ReturnType<typeof completedMessage>) => void) | undefined;
+  models.completeSimple.mockImplementation(() => new Promise((resolve) => { release = resolve; }));
+  const controller = new AbortController();
+  const operation = runtime.preparePreferencesForRecommendation({ requestId: 'r', signal: controller.signal });
+  await vi.waitFor(() => expect(models.completeSimple).toHaveBeenCalledOnce());
+  controller.abort();
+  expect((await operation).status).toBe('cancelled');
+  release?.(completedMessage('{"scopes":[]}'));
+  expect(repository.listPreferenceSetDetails()[0].preferences).toEqual([]);
+});
 
-  it('cancels without committing and recovers unlearned feedback after restart', async () => {
-    const { repository, runtime, models, timers } = setup();
-    let release: (() => void) | undefined;
-    models.completeSimple.mockImplementationOnce(async () => {
-      await new Promise<void>((resolve) => { release = resolve; });
-      return completedMessage('{"scopes":[]}');
-    });
-    await runtime.start();
-    await vi.waitFor(() => expect(models.completeSimple).toHaveBeenCalledTimes(1));
-    runtime.notifyReactionChanged(); runtime.notifyReactionChanged();
-    expect(models.completeSimple).toHaveBeenCalledTimes(1);
-    const stopping = runtime.shutdown();
-    release?.();
-    await stopping;
-    expect(repository.getPreferenceLearningCompletion('recommendation:1')?.learnedReactionRevision).toBe(0);
-    expect(timers).toHaveLength(0);
-    await runtime.start();
-    await vi.waitFor(() => expect(repository.getPreferenceLearningCompletion('recommendation:1')?.status).toBe('learned'));
-    expect(models.completeSimple).toHaveBeenCalledTimes(2);
-  });
+it('rejects required context that exceeds its budget before paying for a model call', async () => {
+  const { runtime, models, context } = setup();
+  context.build.mockImplementation(async () => ({ status: 'ready', prompt: { systemPrompt: '证据'.repeat(100000), messages: [], tools: [] } }));
+  const result = await runtime.preparePreferencesForRecommendation({ requestId: 'r' });
+  expect(result).toMatchObject({ status: 'degraded', failures: [{ code: 'input_too_large' }] });
+  expect(models.completeSimple).not.toHaveBeenCalled();
 });

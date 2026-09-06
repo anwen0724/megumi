@@ -222,7 +222,6 @@ export type {
 } from './persistence/discovery-repository';
 export {
   FeedbackReactionSchema,
-  LearnedPreferenceInputSchema,
   LearnedScopeInputSchema,
   PreferenceDimensionSchema,
   PreferenceSchema,
@@ -246,7 +245,6 @@ export type {
   PreferenceLearningFacts,
   PreferenceLearningCompletion,
   PreferenceLearningReactionChange,
-  PreferenceLearningTrigger,
   PreferenceSetDetail,
   PreferenceLearningSupport,
   RecommendationContentEvidence,
