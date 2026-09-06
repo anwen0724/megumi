@@ -1,24 +1,25 @@
 /*
  * Scores only declared deterministic business checks and complete Trace measurements.
  */
-import { z } from 'zod';
-import { DiscoveryStateSchema } from '@megumi/discovery';
+import { preferenceSequenceMetric } from './preference-sequence-metrics';
+import { readDiscoveryRecordState } from './discovery-record-state';
 import type { CaseEvidence } from './record-evidence';
 import type { MetricPolicy, MetricResult } from './grading-contract';
 
-const StateEnvelopeSchema = z.object({ facts: z.object({ discovery: DiscoveryStateSchema }) });
+
 
 /** Computes one metric without interpreting natural-language recommendation quality. */
 export function automaticMetric(policy: MetricPolicy, evidence: CaseEvidence): MetricResult {
   const metricId = policy.metricId;
+  if (metricId.startsWith('personalization.')) return preferenceSequenceMetric(metricId, evidence);
   const unavailable = (reason: string): MetricResult => ({ metricId, status: 'unavailable', reason });
   if (policy.method === 'measurement') return measurement(policy, evidence);
   if (evidence.result.finalState.status !== 'captured') return unavailable('Final business facts were not captured.');
-  const initial = StateEnvelopeSchema.safeParse(evidence.initialState);
-  const final = StateEnvelopeSchema.safeParse(evidence.result.finalState);
+  const initial = readDiscoveryRecordState(evidence.initialState, evidence.result.schemaVersion);
+  const final = readDiscoveryRecordState(evidence.result.finalState, evidence.result.schemaVersion);
   if (!initial.success || !final.success) return unavailable('Discovery state is missing or invalid.');
-  const before = initial.data.facts.discovery;
-  const after = final.data.facts.discovery;
+  const before = initial.data;
+  const after = final.data;
   if (metricId.startsWith('recommendation.')) {
     const previousIds = new Set(before.recommendations.map(({ id }) => id));
     const added = after.recommendations.filter(({ id }) => !previousIds.has(id));
@@ -42,7 +43,13 @@ export function automaticMetric(policy: MetricPolicy, evidence: CaseEvidence): M
   if (new Set(declaredIds).size !== declaredIds.length || declaredIds.some((id) => !before.preferences.some((entry) => entry.id === id))) {
     return unavailable('Declared Preference IDs must be distinct and present in initial facts.');
   }
+  if (metricId === 'preference.retraction_effectiveness') {
+    if (evidence.result.schemaVersion !== 3) return unavailable('Effective-read semantics require record version 3.');
+    const ids = expected?.retractedDirectionIds ?? [];
+    return ratio(metricId, ids.filter((id) => !after.preferences.some((p) => p.id === id && p.status === 'active')).length, ids.length, 'Retracted judgments must be inactive; the original record may remain.');
+  }
   if (metricId === 'preference.retraction_correctness') {
+    if (evidence.result.schemaVersion !== 2) return unavailable('Physical deletion semantics apply only to legacy version 2 records.');
     const ids = expected?.retractedDirectionIds ?? [];
     return ratio(metricId, ids.filter((id) => !after.preferences.some((entry) => entry.id === id)).length, ids.length,
       'Declared retracted Preference IDs must be absent from final facts.');

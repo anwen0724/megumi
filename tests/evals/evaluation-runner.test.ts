@@ -21,6 +21,23 @@ afterEach(() => {
 });
 
 describe('Evaluation Run', () => {
+  it('seals continuous read-only operations in v3 without calling a model', async () => {
+    const roots = await createDatasetRoot();
+    await mkdir(path.join(roots.datasetRoot, 'controlled', 'cases', 'preference-sequence'));
+    await writeFile(path.join(roots.datasetRoot, 'controlled', 'cases', 'preference-sequence', 'sequence.json'), JSON.stringify({
+      schemaVersion: 2, caseId: 'sequence.read-only', revision: 1, name: 'Inspect', description: 'No model on reads', type: 'preference_sequence',
+      initialState: { clock: now, interests: [], candidates: [], recommendationTargetCount: 1, recommendationWorkingSetCount: 10 },
+      input: { steps: [{ stepId: 'inspect', kind: 'inspect', scope: { scope: 'exploration' } }, { stepId: 'time', kind: 'advance_clock', milliseconds: 1000 }] },
+    }));
+    const scripted = createScriptedStreams(['SHOULD NOT BE USED']);
+    const result = await runEvaluation({ repositoryRoot: process.cwd(), ...roots,
+      request: EvaluationRunRequestSchema.parse({ caseIds: ['controlled/sequence.read-only'], candidateModel: candidateConfig() }),
+      environment: { TEST_EVALUATION_API_KEY: 'test-key' }, dependencies: { modelStreams: { 'openai-completions': scripted.streams } },
+    });
+    expect(result.record.schemaVersion).toBe(3);
+    expect(result.caseResults[0]).toMatchObject({ schemaVersion: 3, recordStatus: 'recorded', ownerFacts: { steps: [{ stepId: 'inspect', traces: [], issues: [] }, { stepId: 'time', traces: [], issues: [] }] } });
+    expect(scripted.contexts).toEqual([]);
+  });
   it('seals a safety interruption with accepted IDs and the final cancelled database reply', async () => {
     const roots = await createDatasetRoot();
     const stream: ProviderStreams['stream'] = (model, _context, options) => {

@@ -86,7 +86,7 @@ function recommendation() {
       title: 'Item', contentSummary: 'Item summary', contentTruncated: false,
     },
     state: {
-      id: 'recommendation-state:1', recommendationId: 'recommendation:1', reactionRevision: 0,
+      id: 'recommendation-state:1', recommendationId: 'recommendation:1', reactionRevision: 0, reactionSequence: 0,
       learnedReactionRevision: 0, updatedAt: now,
     },
   } as const;

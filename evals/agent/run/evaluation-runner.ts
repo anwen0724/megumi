@@ -1,6 +1,8 @@
 /*
  * Runs validated Case selections sequentially and seals raw Product facts without evaluating quality.
  */
+import { executePreferenceSequence } from './preference-sequence';
+import { digest } from '../evidence-digest';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Api, ProviderStreams } from '@megumi/ai';
@@ -89,7 +91,7 @@ export async function runEvaluation(input: {
   }
 
   const record = EvaluationRunRecordSchema.parse({
-    schemaVersion: 2,
+    schemaVersion: selection.cases.some((entry) => (entry.case.type === 'preference_sequence' || entry.case.type === 'preference_learning')) ? 3 : 2,
     runId,
     status: caseResults.some((result) => result.recordStatus === 'infrastructure_failed' || result.terminalState === 'interrupted')
       ? 'completed_with_failures'
@@ -145,7 +147,15 @@ async function runOneCase(input: {
       resolvedCase: input.resolvedCase, candidateModel: input.candidateModel,
       ...(input.modelStreams ? { modelStreams: input.modelStreams } : {}),
     });
-    execution = await executeCase({
+    execution = input.resolvedCase.case.type === 'preference_sequence'
+      ? await executePreferenceSequence({ evaluationCase: input.resolvedCase.case, environment,
+        modelConfigDigest: digest(input.candidateRecord), timeoutMs: input.safetyWallClockLimitMs,
+        createOmitted: (discoveryState, clock, preferenceSource) => createCaseEnvironment({
+          repositoryRoot: input.repositoryRoot, datasetRoot: input.datasetRoot, resolvedCase: input.resolvedCase,
+          candidateModel: input.candidateModel, discoveryState, clock, preferenceSource,
+          ...(input.modelStreams ? { modelStreams: input.modelStreams } : {}),
+        }),
+      }) : await executeCase({
       evaluationCase: input.resolvedCase.case, runtime: environment.runtime, initialStateIds: environment.initialStateIds,
       candidateModel: { providerId: input.candidateModel.config.providerId, modelId: input.candidateModel.config.modelId },
       now: environment.now, ...(environment.advanceTime ? { advanceTime: environment.advanceTime } : {}),
@@ -179,7 +189,7 @@ async function runOneCase(input: {
   }
   for (const message of traceIntegrity.issues) issues.push({ phase: 'trace', message });
   const resultInput: Omit<CaseRunResult, 'artifacts'> = {
-    schemaVersion: 2, caseRunId: input.caseRunId, caseIdentity: input.resolvedCase.identity,
+    schemaVersion: (input.resolvedCase.case.type === 'preference_sequence' || input.resolvedCase.case.type === 'preference_learning') ? 3 : 2, caseRunId: input.caseRunId, caseIdentity: input.resolvedCase.identity,
     caseType: input.resolvedCase.case.type, recordStatus: issues.length ? 'infrastructure_failed' : 'recorded',
     startedAt, endedAt: input.now().toISOString(), candidateModel: input.candidateRecord,
     environment: environment ? { ...environment.details, temporaryRoot: environment.paths.root } : { environmentKind: input.resolvedCase.environmentKind },
@@ -201,7 +211,7 @@ async function runOneCase(input: {
       traceIntegrity,
       ...(environment && stopped ? { observabilityRoot: environment.paths.observability,
         workspaceRoot: environment.paths.workspace, initialWorkspaceRoot: environment.paths.initialWorkspace,
-        initialWorkspaceFiles: environment.initialWorkspaceFiles,
+        initialWorkspaceFiles: environment.initialWorkspaceFiles, sequenceRoot: environment.paths.sequence,
       } : {}),
     },
   }).catch((error: unknown) => {

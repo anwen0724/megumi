@@ -2,6 +2,7 @@
  * Owns Recommendation trigger admission, immutable snapshot construction,
  * Agent Core delegation, runtime-only status, and bounded waiting.
  */
+import type { PreferenceSetDetail } from '../preferences/preference';
 import { randomUUID } from 'node:crypto';
 import type { Api, Model } from '@megumi/ai';
 import type { ExecutionOutcome } from '@megumi/execution';
@@ -80,6 +81,8 @@ export type StartRecommendationExecutionResult<TRejected = unknown> =
   | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string; readonly retryable: boolean } };
 
 export interface CreateRecommendationRuntimeOptions {
+  /** Read-only projection of already validated preferences; production defaults to the complete source. */
+  readonly preferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
   /** Prepares pending preference inputs after recommendation admission, before freezing its snapshot. */
   readonly preparePreferences?: (request: { requestId: string; signal: AbortSignal }) => Promise<void>;
   readonly observability?: Observability;
@@ -611,7 +614,8 @@ function prepareSnapshot(
     candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
   }));
   const interests = options.repository.listNonDeletedInterests().filter(({ status }) => status === 'active');
-  const preferences = options.repository.listPreferenceSetDetails({ effectiveOnly: true });
+  const effectivePreferences = options.repository.listPreferenceSetDetails({ effectiveOnly: true });
+  const preferences = options.preferenceSource?.(structuredClone(effectivePreferences)) ?? effectivePreferences;
   const history = options.repository.listRecommendationHistory('1970-01-01T00:00:00.000Z');
   const rankingHistory: RecommendationHistoryItem[] = history.map((item) => ({
     recommendationId: item.id,

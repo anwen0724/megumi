@@ -103,9 +103,9 @@ function validateReferences(state: DiscoveryState): void {
     requireReference(!!set && !!recommendation && (set.scope === 'exploration'
       || recommendation.selectionBasis.matchedInterestIds.includes(set.interestId!)), `Preference evidence ${evidence.id} contradicts its Interest scope`);
     const reaction = state.recommendationStates.find(({ recommendationId }) => recommendationId === evidence.recommendationId);
-    requireReference(!!reaction && evidence.reactionRevision <= reaction.learnedReactionRevision, `Preference evidence ${evidence.id} references an unlearned revision`);
-    if (reaction && evidence.reactionRevision === reaction.learnedReactionRevision) {
-      requireReference(evidence.reaction === reaction.learnedReaction, `Preference evidence ${evidence.id} contradicts the learned reaction`);
+    requireReference(!!reaction && evidence.reactionRevision <= reaction.reactionRevision, `Preference evidence ${evidence.id} references a future reaction revision`);
+    if (reaction && evidence.reactionRevision === reaction.reactionRevision) {
+      requireReference(evidence.reaction === reaction.reaction, `Preference evidence ${evidence.id} contradicts the current reaction`);
     }
   }
 }

@@ -13,7 +13,7 @@ export interface EvaluationSafetyInterruption {
 }
 
 export interface CaseTraceTarget {
-  readonly traceKind: EvaluationCase['type'];
+  readonly traceKind: Exclude<EvaluationCase['type'], 'preference_sequence'>;
   readonly correlation: Readonly<Record<string, string | string[]>>;
   readonly expectation: 'required';
 }
@@ -66,7 +66,7 @@ type CaseExecutionRuntime = {
       | 'updateRecommendationState'
       | 'waitPreferenceLearning'
       | 'getPreferenceLearning'
-      | 'getPreferenceLearningStatus'>;
+      | 'getPreferenceLearningStatus' | 'preparePreferencesForRecommendation'>;
     readonly observability: Pick<ProductRuntime['host']['observability'],
       'flush' | 'listTraces' | 'getTrace' | 'getContent'>;
   };
@@ -79,6 +79,7 @@ export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlin
     safetyDeadlineMs: Date.now() + input.safetyWallClockLimitMs,
     progress: { current: { productResult: {}, ownerFacts: {}, businessIds: {}, traceTargets: [] } },
   };
+  if (input.evaluationCase.type === 'preference_sequence') throw new Error('Continuous Cases require the isolated sequence driver.');
   const drivers = {
     conversation: executeConversation,
     interest_understanding: executeInterestUnderstanding,
@@ -88,7 +89,7 @@ export async function executeCase(input: Omit<CaseExecutionInput, 'safetyDeadlin
   };
   let result;
   try {
-    result = await waitForProductResult(drivers[executionInput.evaluationCase.type](executionInput), executionInput.safetyDeadlineMs);
+    result = await waitForProductResult(drivers[input.evaluationCase.type](executionInput), executionInput.safetyDeadlineMs);
   } catch (error) {
     throw new CaseExecutionFailure(error, executionInput.progress.current);
   }
@@ -318,7 +319,7 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
     });
   }
   input.progress.current = { productResult: { accepted }, ownerFacts: {},
-    businessIds: { requestId: accepted.requestId, executionIds: [accepted.executionId] }, traceTargets: recommendationTraceTargets(accepted.requestId),
+    businessIds: { requestId: accepted.requestId, executionIds: accepted.executionId ? [accepted.executionId] : [] }, traceTargets: recommendationTraceTargets(accepted.requestId),
   };
   let completion;
   do {
@@ -333,7 +334,7 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
   const traceTargets = recommendationTraceTargets(accepted.requestId);
   const baseBusinessIds = {
     requestId: accepted.requestId,
-    executionIds: [accepted.executionId],
+    executionIds: accepted.executionId ? [accepted.executionId] : [],
   };
   if (completion.status === 'interrupted' || completion.value.status === 'timed_out') {
     return execution({
@@ -404,22 +405,11 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
       throw error;
     }
   }
-  while (Date.now() <= input.safetyDeadlineMs) {
-    const facts = await input.runtime.host.discovery.getPreferenceLearning({ recommendationId });
-    if (facts?.status === 'learned') {
-      if (updated.status === 'updated') traceTargets.push({ traceKind: 'preference_learning', correlation: { recommendationIds: [recommendationId] }, expectation: 'required' });
-      return finish('settled', facts, facts, facts.preferences.map(({ preferenceSet }) => preferenceSet.id));
-    }
-    const status = await input.runtime.host.discovery.getPreferenceLearningStatus({ recommendationId });
-    if (status.status === 'failed' && !status.retryAt) {
-      traceTargets.push({ traceKind: 'preference_learning', correlation: { recommendationIds: [recommendationId] }, expectation: 'required' });
-      return finish('settled', status, facts);
-    }
-    // A frozen Controlled clock cannot reach an undeclared future timer. Preserve pending honestly.
-    if (input.advanceTime && status.status !== 'running') return finish('pending', status, facts);
-    await waitForNextPoll(input.safetyDeadlineMs);
-  }
-  return finish('interrupted', { status: 'safety_interrupted' }, await input.runtime.host.discovery.getPreferenceLearning({ recommendationId }));
+  const prepared = await waitForProductResult(input.runtime.host.discovery.preparePreferencesForRecommendation({ requestId: `evaluation:${input.evaluationCase.caseId}` }), input.safetyDeadlineMs);
+  if (prepared.status === 'interrupted') return finish('interrupted', { status: 'safety_interrupted' }, {});
+  const facts = await input.runtime.host.discovery.getPreferenceLearning({ recommendationId });
+  if (prepared.value.status !== 'unchanged') traceTargets.push({ traceKind: 'preference_learning', correlation: { recommendationIds: [recommendationId] }, expectation: 'required' });
+  return finish('settled', prepared.value, facts, facts?.preferences.map(({ preferenceSet }) => preferenceSet.id) ?? []);
 }
 
 type CommittedRunResult = Awaited<ReturnType<ProductRuntime['host']['session']['readCommittedRun']>>;

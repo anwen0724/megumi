@@ -2,6 +2,7 @@
 import { canonicalContentIdentity, normalizeContentUrl, type DiscoveryState } from '@megumi/discovery';
 import type { CaseInitialState, InstalledInitialStateIds } from './initial-state';
 
+/** Resolves stable authored IDs and installs only declared business facts. */
 export function resolveInitialDiscoveryState(initial: CaseInitialState, ids: InstalledInitialStateIds): DiscoveryState {
   const now = initial.clock;
   const previousDay = new Date(Date.parse(now) - 86_400_000).toISOString();
@@ -15,6 +16,7 @@ export function resolveInitialDiscoveryState(initial: CaseInitialState, ids: Ins
     state.interests.push({
       id: mapped(ids.interests, entry.referenceId), description: entry.description, status: entry.status,
       createdFrom: entry.createdFrom ?? 'manual', revision: entry.revision ?? 0, createdAt, updatedAt,
+      ...(entry.descriptionUserEditedAt ? { descriptionUserEditedAt: entry.descriptionUserEditedAt } : {}),
       ...(entry.userManagedAt ? { userManagedAt: entry.userManagedAt } : {}),
       ...(entry.status === 'paused' ? { pausedAt: updatedAt } : {}),
       ...(entry.status === 'deleted' ? { deletedAt: updatedAt } : {}),
@@ -66,6 +68,7 @@ export function resolveInitialDiscoveryState(initial: CaseInitialState, ids: Ins
     }
   }
   const positions = new Map<string, number>();
+  let reactionSequence = 0;
   for (const entry of initial.recommendations) {
     const id = mapped(ids.recommendations, entry.referenceId);
     const candidate = state.candidates.find(({ id: candidateId }) => candidateId === mapped(ids.candidates, entry.candidateReferenceId));
@@ -93,19 +96,21 @@ export function resolveInitialDiscoveryState(initial: CaseInitialState, ids: Ins
     const reaction = override?.reaction ?? entry.reaction;
     const reactionRevision = entry.reactionRevision ?? (reaction === 'none' ? 0 : 1);
     state.recommendationStates.push({ id: `${id}:state`, recommendationId: id,
-      ...(reaction !== 'none' ? { reaction } : {}), reactionRevision,
+      ...(reaction !== 'none' ? { reaction } : {}), reactionRevision, reactionSequence: entry.reactionSequence ?? (reactionRevision > 0 ? ++reactionSequence : 0),
       ...(reactionRevision > 0 ? { reactionChangedAt: entry.reactionChangedAt ?? now } : {}),
       ...(entry.learnedReaction && entry.learnedReaction !== 'none' ? { learnedReaction: entry.learnedReaction } : {}),
       learnedReactionRevision: entry.learnedReactionRevision ?? 0, updatedAt: now,
     });
   }
   for (const entry of initial.preferences) {
-    const interestId = mapped(ids.interests, entry.interestReferenceId);
-    const preferenceSetId = `evaluation:preference-set:${entry.interestReferenceId}`;
+    const interestId = entry.interestReferenceId ? mapped(ids.interests, entry.interestReferenceId) : undefined;
+    const preferenceSetId = `evaluation:preference-set:${entry.interestReferenceId ?? 'exploration'}`;
     if (!state.preferenceSets.some(({ id }) => id === preferenceSetId)) {
-      state.preferenceSets.push({ id: preferenceSetId, scope: 'interest', interestId, revision: 1, createdAt: now, updatedAt: now });
+      state.preferenceSets.push({ id: preferenceSetId, ...(interestId ? { scope: 'interest', interestId } : { scope: 'exploration' }), revision: 1, processedRevision: 1, policyRevision: 0, createdAt: now, updatedAt: now });
     }
-    state.preferences.push({ id: entry.id, preferenceSetId, polarity: entry.polarity, dimension: entry.dimension, statement: entry.statement, createdAt: now, updatedAt: now });
+    state.preferences.push({ id: entry.id, preferenceSetId, origin: entry.origin ?? 'learned', status: entry.status ?? 'active', revision: entry.revision ?? 1,
+      ...(entry.origin !== 'user' ? { polarity: entry.polarity, dimension: entry.dimension } : { userEditedAt: entry.userEditedAt ?? now }),
+      ...(entry.deletedAt ? { deletedAt: entry.deletedAt } : {}), ...(entry.deletedFeedbackSequence !== undefined ? { deletedFeedbackSequence: entry.deletedFeedbackSequence } : {}), statement: entry.statement, createdAt: now, updatedAt: now });
     for (const referenceId of entry.supportingRecommendationReferenceIds) {
       const recommendationId = mapped(ids.recommendations, referenceId);
       const reaction = state.recommendationStates.find((value) => value.recommendationId === recommendationId);
@@ -113,9 +118,17 @@ export function resolveInitialDiscoveryState(initial: CaseInitialState, ids: Ins
         throw new Error(`Existing Preference requires an explicitly learned feedback revision: ${entry.id}/${referenceId}.`);
       }
       state.preferenceEvidence.push({ id: `${entry.id}:evidence:${referenceId}`, preferenceId: entry.id, recommendationId,
-        reaction: reaction.learnedReaction, reactionRevision: reaction.learnedReactionRevision, createdAt: now,
+        reaction: reaction.learnedReaction, reactionRevision: reaction.learnedReactionRevision, relation: 'support', createdAt: now, updatedAt: now,
       });
     }
+  }
+  for (const entry of initial.preferenceSets ?? []) {
+    const id = `evaluation:preference-set:${entry.interestReferenceId ?? 'exploration'}`;
+    const existing = state.preferenceSets.find((set) => set.id === id);
+    const scope = entry.interestReferenceId ? { scope: 'interest' as const, interestId: mapped(ids.interests, entry.interestReferenceId) } : { scope: 'exploration' as const };
+    const set = { id, ...scope, revision: entry.revision, policyRevision: entry.policyRevision, ...(entry.processedRevision !== undefined ? { processedRevision: entry.processedRevision } : {}), createdAt: now, updatedAt: now };
+    if (existing) state.preferenceSets[state.preferenceSets.indexOf(existing)] = set;
+    else state.preferenceSets.push(set);
   }
   return state;
 }

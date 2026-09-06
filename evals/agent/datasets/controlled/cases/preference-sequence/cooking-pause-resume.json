@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 2,
+  "caseId": "preference-sequence.cooking-pause-resume",
+  "revision": 1,
+  "name": "家常烹饪：pause-resume",
+  "description": "连续反馈及用户更正后，通过同状态推荐对照检查偏好有效性与实际输入。语义质量需要人工逐检查点评审。",
+  "metadata": {
+    "tags": [
+      "continuous",
+      "controlled"
+    ],
+    "source": "合成场景；并发挂起与故障由受控模型测试另行覆盖"
+  },
+  "type": "preference_sequence",
+  "initialState": {
+    "clock": "2026-09-06T08:00:00.000Z",
+    "interests": [
+      {
+        "referenceId": "cooking",
+        "description": "家常烹饪",
+        "status": "active"
+      }
+    ],
+    "candidates": [
+      {
+        "referenceId": "cooking-1",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/sequence/cooking/1",
+        "title": "家常烹饪：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentText": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "matchedInterestReferenceIds": [
+          "cooking"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "cooking-2",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/sequence/cooking/2",
+        "title": "家常烹饪：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentText": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "matchedInterestReferenceIds": [
+          "cooking"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "cooking-3",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/sequence/cooking/3",
+        "title": "家常烹饪：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentText": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "matchedInterestReferenceIds": [
+          "cooking"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "cooking-4",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/sequence/cooking/4",
+        "title": "家常烹饪：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentText": "用常见工具完成练习，给出步骤和失败排查。",
+        "matchedInterestReferenceIds": [
+          "cooking"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "cooking-5",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/sequence/cooking/5",
+        "title": "家常烹饪：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentText": "分享热门清单，只有结论没有步骤。",
+        "matchedInterestReferenceIds": [
+          "cooking"
+        ],
+        "relevance": "direct"
+      },
+      {
+        "referenceId": "cooking-6",
+        "sourceId": "open_web",
+        "sourceName": "Controlled Web",
+        "canonicalUrl": "https://example.test/sequence/cooking/6",
+        "title": "家常烹饪：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentText": "解释不同条件下调整方法，给出对照示例。",
+        "matchedInterestReferenceIds": [
+          "cooking"
+        ],
+        "relevance": "direct"
+      }
+    ],
+    "recommendations": [
+      {
+        "referenceId": "r1",
+        "candidateReferenceId": "cooking-1",
+        "reason": "与当前兴趣相关",
+        "reaction": "liked",
+        "reactionRevision": 1,
+        "learnedReaction": "liked",
+        "learnedReactionRevision": 1
+      },
+      {
+        "referenceId": "r2",
+        "candidateReferenceId": "cooking-2",
+        "reason": "与当前兴趣相关",
+        "reaction": "liked",
+        "reactionRevision": 1,
+        "learnedReaction": "liked",
+        "learnedReactionRevision": 1
+      },
+      {
+        "referenceId": "r3",
+        "candidateReferenceId": "cooking-3",
+        "reason": "与当前兴趣相关",
+        "reaction": "none",
+        "reactionRevision": 0,
+        "learnedReaction": "none",
+        "learnedReactionRevision": 0
+      }
+    ],
+    "preferences": [
+      {
+        "id": "cooking-depth",
+        "interestReferenceId": "cooking",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "recommendationTargetCount": 1,
+    "recommendationWorkingSetCount": 10
+  },
+  "input": {
+    "steps": [
+      {
+        "kind": "update_interest",
+        "interestReferenceId": "cooking",
+        "action": "pause",
+        "stepId": "step-1"
+      },
+      {
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "cooking"
+        },
+        "stepId": "step-2"
+      },
+      {
+        "kind": "update_interest",
+        "interestReferenceId": "cooking",
+        "action": "resume",
+        "stepId": "step-3"
+      },
+      {
+        "kind": "recommend",
+        "paired": true,
+        "stepId": "step-4"
+      }
+    ]
+  },
+  "expected": {
+    "checkpoints": {
+      "step-4": {
+        "publicationIntegrityRequired": true
+      }
+    }
+  }
+}

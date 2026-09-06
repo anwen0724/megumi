@@ -64,11 +64,11 @@ describe('Interest and Preference entity upgrade', () => {
     const database = createDatabase({ filename: ':memory:' });
     try {
       migrateDatabase({ database });
-      const add = (id: string) => database.prepare({ sql: "INSERT INTO discovery_preference_sets VALUES (?, 'exploration', NULL, 0, ?, ?)" }).run([id, now, now]);
+      const add = (id: string) => database.prepare({ sql: "INSERT INTO discovery_preference_sets (id,scope,interest_id,revision,created_at,updated_at) VALUES (?, 'exploration', NULL, 0, ?, ?)" }).run([id, now, now]);
       add('set:1');
       expect(() => add('set:2')).toThrow();
       expect(() => database.prepare({ sql: "UPDATE discovery_preference_sets SET revision=-1" }).run()).toThrow();
-      expect(() => database.prepare({ sql: "INSERT INTO discovery_preferences VALUES ('preference:1', 'missing', 'positive', 'topic', 'A preference', ?, ?)" }).run([now, now])).toThrow();
+      expect(() => database.prepare({ sql: "INSERT INTO discovery_preferences (id,preference_set_id,polarity,dimension,statement,created_at,updated_at) VALUES ('preference:1', 'missing', 'positive', 'topic', 'A preference', ?, ?)" }).run([now, now])).toThrow();
     } finally { database.close(); }
   });
 });

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "preference-quality.retract-last-support",
-  "revision": 1,
+  "revision": 2,
   "name": "撤回最后支持依据",
   "description": "撤回唯一喜欢后，不再成立的偏好应删除。",
   "metadata": {

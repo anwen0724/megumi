@@ -23,6 +23,8 @@ const IdSchema = z.string().min(1);
 
 export interface PreferenceLearningRepository {
   /** Captures current publication guard versions without invoking learning. */
+  /** Reads effective scoped preferences and their publication guard in one transaction. */
+  getEffectivePreferences(scopes?: readonly PreferenceScopeRequest[]): { readonly preferences: readonly PreferenceSetDetail[]; readonly guard: import('../preferences/preference').PreferenceGuard };
   getPreferenceGuard(): import('../preferences/preference').PreferenceGuard;
   /** Reads current visible preferences without creating scopes or invoking a model. */
   getPreferenceDetails(scope: PreferenceScopeRequest): PreferenceManagementDetails | undefined;
@@ -58,6 +60,13 @@ export type PreferenceDeleteResult = { readonly status: 'deleted' | 'already_del
 export function createPreferenceLearningRepository(database: DatabaseConnection): PreferenceLearningRepository {
   const recommendations = createRecommendationRepository(database);
   return {
+    getEffectivePreferences(scopes) {
+      const parsed = scopes ? z.array(PreferenceScopeRequestSchema).parse(scopes) : undefined;
+      return database.transaction({ operation: () => ({
+        preferences: listDetails(database, recommendations, true).filter(({ preferenceSet }) => !parsed || parsed.some((scope) => scope.scope === preferenceSet.scope && (scope.scope === 'exploration' || scope.interestId === preferenceSet.interestId))),
+        guard: readPreferenceGuard(database),
+      }) });
+    },
     getPreferenceGuard: () => readPreferenceGuard(database),
     getPreferenceDetails(rawScope) {
       const scope = PreferenceScopeRequestSchema.parse(rawScope);
@@ -84,8 +93,8 @@ export function createPreferenceLearningRepository(database: DatabaseConnection)
           currentReaction: item.state.reaction, currentReactionRevision: item.state.reactionRevision,
           current: evidenceIsCurrent(reference, item),
           content: { sourceId: item.content.sourceId, canonicalUrl: item.content.canonicalUrl, title: item.content.title,
-            contentSummary: item.content.contentSummary, description: item.content.description, contentText: item.content.contentExcerpt ? [...item.content.contentExcerpt].slice(0, 2000).join('') : undefined,
-            completeness: item.content.contentExcerpt ? item.content.contentTruncated ? 'partial' : 'full' : 'metadata_only' },
+            contentSummary: item.content.contentSummary, ...(item.content.description ? { description: item.content.description } : {}), ...(item.content.contentExcerpt ? { contentText: [...item.content.contentExcerpt].slice(0, 2000).join('') } : {}),
+            completeness: item.content.contentExcerpt ? (item.content.contentTruncated || [...item.content.contentExcerpt].length > 2000) ? 'partial' : 'full' : 'metadata_only' },
         };
       }) };
     },
@@ -213,8 +222,8 @@ function prepare(
         contentEvidence: {
           sourceId: item.content.sourceId, canonicalUrl: item.content.canonicalUrl,
           title: item.content.title, contentSummary: item.content.contentSummary,
-          description: item.content.description, contentText: item.content.contentExcerpt ? [...item.content.contentExcerpt].slice(0, 2000).join('') : undefined,
-          completeness: item.content.contentExcerpt ? item.content.contentTruncated ? 'partial' : 'full' : 'metadata_only',
+          ...(item.content.description ? { description: item.content.description } : {}), ...(item.content.contentExcerpt ? { contentText: [...item.content.contentExcerpt].slice(0, 2000).join('') } : {}),
+          completeness: item.content.contentExcerpt ? (item.content.contentTruncated || [...item.content.contentExcerpt].length > 2000) ? 'partial' : 'full' : 'metadata_only',
         },
       },
     })),
@@ -309,20 +318,20 @@ function updateSet(database: DatabaseConnection, scope: LearnedScopeInput, suppo
 function findSet(database: DatabaseConnection, id: string): PreferenceSet | undefined {
   const row = database.prepare<DatabaseRow>({ sql: 'SELECT * FROM discovery_preference_sets WHERE id = ?' }).get([id]);
   return row ? PreferenceSetSchema.parse({
-    id: row.id, scope: row.scope, interestId: row.interest_id ?? undefined,
-    revision: row.revision, processedRevision: row.processed_revision ?? undefined,
-    policyRevision: row.policy_revision, lastOutcome: row.last_outcome ?? undefined,
+    id: row.id, scope: row.scope, ...(row.interest_id !== null ? { interestId: row.interest_id } : {}),
+    revision: row.revision, ...(row.processed_revision !== null ? { processedRevision: row.processed_revision } : {}),
+    policyRevision: row.policy_revision, ...(row.last_outcome !== null ? { lastOutcome: row.last_outcome } : {}),
     createdAt: row.created_at, updatedAt: row.updated_at,
   }) : undefined;
 }
 function findPreference(database: DatabaseConnection, id: string): Preference | undefined {
   const row = database.prepare<DatabaseRow>({ sql: 'SELECT * FROM discovery_preferences WHERE id = ?' }).get([id]);
   return row ? PreferenceSchema.parse({
-    id: row.id, preferenceSetId: row.preference_set_id, polarity: row.polarity ?? undefined,
-    dimension: row.dimension ?? undefined, statement: row.statement, createdAt: row.created_at, updatedAt: row.updated_at,
+    id: row.id, preferenceSetId: row.preference_set_id, ...(row.polarity !== null ? { polarity: row.polarity } : {}),
+    ...(row.dimension !== null ? { dimension: row.dimension } : {}), statement: row.statement, createdAt: row.created_at, updatedAt: row.updated_at,
     origin: row.origin, revision: row.revision, status: row.status,
-    userEditedAt: row.user_edited_at ?? undefined, deletedAt: row.deleted_at ?? undefined,
-    deletedFeedbackSequence: row.deleted_feedback_sequence ?? undefined,
+    ...(row.user_edited_at !== null ? { userEditedAt: row.user_edited_at } : {}), ...(row.deleted_at !== null ? { deletedAt: row.deleted_at } : {}),
+    ...(row.deleted_feedback_sequence !== null ? { deletedFeedbackSequence: row.deleted_feedback_sequence } : {}),
   }) : undefined;
 }
 function findEvidence(database: DatabaseConnection, id: string): PreferenceEvidence | undefined {
@@ -330,8 +339,8 @@ function findEvidence(database: DatabaseConnection, id: string): PreferenceEvide
   return row ? PreferenceEvidenceSchema.parse({
     id: row.id, preferenceId: row.preference_id, recommendationId: row.recommendation_id,
     reactionRevision: row.reaction_revision, reaction: row.reaction, createdAt: row.created_at,
-    relation: row.relation, explanation: row.explanation ?? undefined,
-    contentQuote: row.content_quote ?? undefined, updatedAt: row.updated_at,
+    relation: row.relation, ...(row.explanation !== null ? { explanation: row.explanation } : {}),
+    ...(row.content_quote !== null ? { contentQuote: row.content_quote } : {}), updatedAt: row.updated_at,
   }) : undefined;
 }
 function evidenceFor(database: DatabaseConnection, id: string): PreferenceEvidence[] {

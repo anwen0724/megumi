@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "recommendation-quality.negative-preference",
-  "revision": 1,
+  "revision": 2,
   "name": "负向偏好下的内容取舍",
   "description": "主题均为面包制作，检验是否遵循用户对空泛展示内容的负向偏好。",
   "metadata": {

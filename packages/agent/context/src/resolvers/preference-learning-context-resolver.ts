@@ -83,7 +83,7 @@ export function createPreferenceLearningContextResolver(dependencies: {
               reactionChanges: factsResult.facts.reactionChanges,
               supportingReactions: factsResult.facts.supportingReactions,
               reviewedPreferenceIds: factsResult.facts.reviewedPreferenceIds,
-              allowAdd: factsResult.facts.allowAdd,
+              ...(factsResult.facts.allowAdd !== undefined ? { allowAdd: factsResult.facts.allowAdd } : {}),
             },
             currentMessages: [...request.currentMessages],
             systemInstructions,

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "environmentKind": "controlled",
+  "datasetId": "preference-sequence",
+  "revision": 1,
+  "name": "偏好连续学习",
+  "description": "摄影、烹饪两领域的连续操作与同状态推荐对照。",
+  "caseIds": [
+    "preference-sequence.photo-accumulation",
+    "preference-sequence.photo-last-support",
+    "preference-sequence.photo-partial-support",
+    "preference-sequence.photo-user-edit",
+    "preference-sequence.photo-delete-old-evidence",
+    "preference-sequence.cooking-opposing-feedback",
+    "preference-sequence.cooking-feedback-reversal",
+    "preference-sequence.cooking-delete-new-evidence",
+    "preference-sequence.cooking-pause-resume",
+    "preference-sequence.cooking-description-change"
+  ]
+}

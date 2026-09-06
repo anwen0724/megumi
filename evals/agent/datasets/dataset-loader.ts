@@ -118,6 +118,7 @@ async function loadCaseCatalog(
       const rawCase = await readJson(file);
       assertSafeCaseContent(rawCase, file);
       const evaluationCase = EvaluationCaseSchema.parse(rawCase);
+      if (environmentKind === 'live' && evaluationCase.type === 'preference_sequence') throw new Error('Preference sequences require a controlled environment.');
       if (environmentKind === 'live' && evaluationCase.type === 'preference_learning' && evaluationCase.input.advanceTimeMs !== undefined) {
         throw new Error('advanceTimeMs is only available in Controlled Cases.');
       }

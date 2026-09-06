@@ -262,3 +262,5 @@ export {
   CredentialValueUiResultSchema,
 } from './settings-host';
 export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './approval-host';
+
+export { ObservabilityTraceMeasurementsSchema } from './observability-host';

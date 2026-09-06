@@ -11,6 +11,7 @@ export const MetricScopeSchema = z.enum([
   'candidate_supply',
   'recommendation',
   'preference_learning',
+  'preference_sequence',
 ]);
 export type MetricScope = z.infer<typeof MetricScopeSchema>;
 

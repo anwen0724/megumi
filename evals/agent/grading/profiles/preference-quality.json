@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "profileId": "preference-quality",
-  "revision": 1,
+  "revision": 2,
   "metrics": [
     {
       "metricId": "common.goal_completion",
@@ -46,7 +46,7 @@
       "direction": "lower"
     },
     {
-      "metricId": "preference.retraction_correctness",
+      "metricId": "preference.retraction_effectiveness",
       "method": "rule",
       "direction": "higher",
       "threshold": 1

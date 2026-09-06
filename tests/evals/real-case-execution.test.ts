@@ -30,8 +30,8 @@ describe('Real evaluation execution', () => {
       });
       await environment.stop();
       if (scenario === 'waiting-feedback') {
-        expect(scripted.contexts).toHaveLength(0);
-        expect(result).toMatchObject({ terminalState: 'pending', productResult: { completion: { status: 'scheduled' } } });
+        expect(scripted.contexts).toHaveLength(1);
+        expect(result).toMatchObject({ terminalState: 'settled', productResult: { completion: { status: 'degraded' } } });
       } else {
         expect(result).toMatchObject({ terminalState: 'settled', productResult: { completion: { status: 'failed' } } });
         expect(await collectTraceIntegrity({ runtime: environment.runtime, targets: result.traceTargets })).toMatchObject({ status: 'complete' });
@@ -77,7 +77,7 @@ describe('Real evaluation execution', () => {
       }
     } finally { await environment.dispose(); }
   });
-  it('drives the ten-minute feedback timer and records a model failure instead of a timeout', async () => {
+  it('prepares explicitly after a controlled time advance and records malformed model output', async () => {
     const resolved = await loadCase({ rootDirectory: path.resolve('evals/agent/datasets'), identity: 'controlled/preference-learning.learn-source-preference' });
     if (resolved.case.type !== 'preference_learning') throw new Error('Expected Preference Case');
     const resolvedCase = { ...resolved, case: { ...resolved.case, input: { ...resolved.case.input, advanceTimeMs: 600_000 } } };
@@ -89,7 +89,7 @@ describe('Real evaluation execution', () => {
         candidateModel: model.config, now: environment.now, advanceTime: environment.advanceTime!, safetyWallClockLimitMs: 5_000,
       });
       expect(scripted.contexts).toHaveLength(1);
-      expect(result).toMatchObject({ terminalState: 'settled', productResult: { completion: { status: 'failed', code: 'preference_learning_failed' } }, ownerFacts: { status: 'pending' } });
+      expect(result).toMatchObject({ terminalState: 'settled', productResult: { completion: { status: 'degraded', failures: [expect.objectContaining({ code: 'preference_learning_failed' })] } }, ownerFacts: { status: 'pending' } });
       expect(environment.now()).toBe('2026-01-15T08:10:00.000Z');
     } finally { await environment.dispose(); }
   });
@@ -121,7 +121,8 @@ function scriptedBusinessModel(kind: string): ProviderStreams {
       if (material?.role !== 'user' || typeof material.content !== 'string') throw new Error('Missing Preference context');
       const facts = z.object({ currentPreferences: z.array(z.object({ preferenceSetId: z.string(), scope: z.string(), revision: z.number() }).passthrough()), reactionChanges: z.array(z.object({ recommendationId: z.string() }).passthrough()) }).passthrough().parse(JSON.parse(material.content));
       return text(JSON.stringify({ scopes: facts.currentPreferences.map((set) => ({ preferenceSetId: set.preferenceSetId, baseRevision: set.revision,
-        preferences: set.scope === 'interest' ? [{ id: '', polarity: 'positive', dimension: 'source', statement: '偏好结构清晰的 Agent 评估内容', supportingRecommendationIds: facts.reactionChanges.map(({ recommendationId }) => recommendationId) }] : [],
+        outcome: set.scope === 'interest' ? 'changed' : 'insufficient', reviewedPreferenceIds: [],
+        changes: set.scope === 'interest' ? [{ kind: 'add', polarity: 'positive', dimension: 'source', statement: '偏好结构清晰的 Agent 评估内容', evidence: facts.reactionChanges.map(({ recommendationId }) => ({ recommendationId, relation: 'support', explanation: 'The user liked this structured article.' })) }] : [],
       })) }));
     }
     if (!context.tools?.length) return text('Done.');

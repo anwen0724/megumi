@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "preference-quality.single-feedback",
-  "revision": 1,
+  "revision": 2,
   "name": "单次反馈避免宽泛泛化",
   "description": "只喜欢一篇有明确步骤的摄影教程，不能据此推断喜欢整个网站的所有内容。",
   "metadata": {

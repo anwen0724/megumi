@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "recommendation-quality.content-depth",
-  "revision": 1,
+  "revision": 2,
   "name": "同主题内容深度取舍",
   "description": "所有候选主题相关，检验是否依据用户已有偏好选择可实践的内容。",
   "metadata": {

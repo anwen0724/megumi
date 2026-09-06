@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "preference-quality.retain-other-support",
-  "revision": 1,
+  "revision": 2,
   "name": "撤回后保留其它支持",
   "description": "两篇详细教程共同支持同一偏好；撤回一条后保留另一条有效依据。",
   "metadata": {

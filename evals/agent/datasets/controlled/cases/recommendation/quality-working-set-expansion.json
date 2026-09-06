@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "recommendation-quality.working-set-expansion",
-  "revision": 1,
+  "revision": 2,
   "name": "有限工作集下的按需扩展",
   "description": "初始工作集较小，检验 Agent 是否查找符合已知深度偏好的后续候选。",
   "metadata": {

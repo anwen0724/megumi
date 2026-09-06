@@ -160,7 +160,7 @@ describe('Case execution', () => {
     }]);
   });
 
-  it('submits Reaction, waits for Preference Learning, and preserves final Owner facts', async () => {
+  it('submits Reaction, explicitly prepares Preference Learning, and preserves final Owner facts', async () => {
     const runtime = testRuntime({ discovery: {
       async updateRecommendationState() {
         return {
@@ -168,6 +168,7 @@ describe('Case execution', () => {
           state: recommendationState({ reaction: 'liked', reactionRevision: 1, reactionChangedAt: now }),
         };
       },
+      async preparePreferencesForRecommendation() { return { status: 'updated' as const, preferences: [], failures: [] }; },
       async getPreferenceLearning() {
         return {
           recommendationId: 'recommendation:1', status: 'learned',
@@ -212,6 +213,7 @@ function testRuntime(overrides: {
         waitPreferenceLearning: unexpected,
         getPreferenceLearning: unexpected,
         getPreferenceLearningStatus: unexpected,
+        preparePreferencesForRecommendation: unexpected,
         ...overrides.discovery,
       },
       observability: {

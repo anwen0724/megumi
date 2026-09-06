@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "recommendation-quality.history-dedup",
-  "revision": 1,
+  "revision": 2,
   "name": "历史内容去重",
   "description": "候选包含已推荐内容和同兴趣新内容，检验是否维持历史去重。",
   "metadata": {

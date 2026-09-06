@@ -3,7 +3,7 @@
  */
 import path from 'node:path';
 import { createDatabase, migrateDatabase } from '@megumi/database';
-import { initializeDiscoveryState } from '@megumi/discovery';
+import { initializeDiscoveryState, type DiscoveryState } from '@megumi/discovery';
 import { resolveInitialDiscoveryState } from './initial-discovery-state';
 import { createSessionCatalog, createSessionHistory } from '@megumi/session';
 import { createSessionStore } from '@megumi/session/store';
@@ -19,6 +19,7 @@ type RecommendationCase = Extract<EvaluationCase, { readonly type: 'recommendati
 type PreferenceLearningCase = Extract<EvaluationCase, { readonly type: 'preference_learning' }>;
 
 export interface CaseInitialState {
+  readonly preferenceSets?: Extract<EvaluationCase, { type: 'preference_sequence' }>['initialState']['preferenceSets'];
   readonly clock: string;
   readonly interestEvidence?: InterestUnderstandingCase['initialState']['existingEvidence'];
   readonly recommendationTargetCount: number;
@@ -95,6 +96,9 @@ export function caseInitialState(evaluationCase: EvaluationCase): CaseInitialSta
         preferences: evaluationCase.initialState.preferences,
         existingReactions: [], controlledSources: [], approvalDecisions: [],
       };
+    case 'preference_sequence':
+      return { ...evaluationCase.initialState, preferenceSets: evaluationCase.initialState.preferenceSets,
+        candidatePoolMinimumCount: 100, candidatePoolMaximumCount: 200, workspaceFiles: [], sessions: [], approvalDecisions: [] };
     case 'preference_learning':
       return {
         clock: evaluationCase.initialState.clock,
@@ -157,6 +161,7 @@ export function createDatabaseInitialStateOwner(input: {
   readonly homePath: string;
   readonly migrationsFolder: string;
   readonly now: string;
+  readonly discoveryState?: DiscoveryState;
 }): { readonly owner: EvaluationInitialStateOwner; close(): void } {
   const database = createDatabase({ filename: path.join(input.homePath, 'sqlite', 'megumi.sqlite') });
   migrateDatabase({ database, migrationsFolder: input.migrationsFolder });
@@ -208,7 +213,7 @@ export function createDatabaseInitialStateOwner(input: {
     },
 
     installDiscovery(initial, ids) {
-      initializeDiscoveryState(database, resolveInitialDiscoveryState(initial, ids));
+      initializeDiscoveryState(database, input.discoveryState ?? resolveInitialDiscoveryState(initial, ids));
     },
   };
   return { owner, close: () => database.close() };

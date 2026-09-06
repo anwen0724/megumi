@@ -1,6 +1,8 @@
 /*
  * Loads sealed Run evidence and maps its archive layout to the existing read-only Trace reader.
  */
+import { digest } from '../evidence-digest';
+export { digest } from '../evidence-digest';
 import { createHash } from 'node:crypto';
 import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -17,11 +19,6 @@ export interface CaseEvidence {
   readonly traceMetrics: readonly TraceMeasurements[];
   readonly traces: readonly TraceProjection[];
   readonly traceError?: string;
-}
-
-/** Produces the same canonical JSON digest used by Case authoring. */
-export function digest(value: unknown): string {
-  return hash(Buffer.from(canonicalJson(value)));
 }
 
 /** Rejects overlapping output so reporting cannot modify any input record. */
@@ -80,7 +77,7 @@ export async function loadRunEvidence(runDirectory: string) {
           allIds.add(summary.traceId);
           const trace = await reader.getTrace(summary.traceId);
           // A Case may contain prerequisite Conversation work; do not charge it to Preference/Interest quality metrics.
-          if (!trace || trace.traceKind !== snapshot.case.type) continue;
+          if (!trace || (snapshot.case.type === 'preference_sequence' ? trace.traceKind !== 'preference_learning' && trace.traceKind !== 'recommendation' : trace.traceKind !== snapshot.case.type)) continue;
           const measurement = await reader.getTraceMeasurements(summary.traceId);
           if (!measurement) throw new Error('Trace measurements unavailable.');
           traces.push(trace);
@@ -151,12 +148,3 @@ function inside(root: string, target: string): boolean {
 }
 function hash(bytes: Uint8Array): string { return createHash('sha256').update(bytes).digest('hex'); }
 function missing(error: unknown): boolean { return error instanceof Error && 'code' in error && error.code === 'ENOENT'; }
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return '[' + value.map(canonicalJson).join(',') + ']';
-  if (value !== null && typeof value === 'object') {
-    return '{' + Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => JSON.stringify(key) + ':' + canonicalJson(item)).join(',') + '}';
-  }
-  const serialized = JSON.stringify(value);
-  if (serialized === undefined) throw new Error('Digest input must be JSON.');
-  return serialized;
-}

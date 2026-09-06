@@ -7,20 +7,21 @@ import { calculatePromptUsage, type ContextBuilder } from '@megumi/context';
 import type { Observability, OperationCompletion, TraceCorrelation } from '@megumi/observability';
 import { z } from 'zod';
 import type { PreferenceLearningRepository } from '../persistence/preference-learning-repository';
-import { LearnedScopeInputSchema, type PreferenceLearningFacts, type PreferenceScopeRequest, type PreferenceSetDetail, type LearnedScopeInput } from './preference';
+import { LearnedScopeInputSchema, PreferenceScopeRequestSchema, PreferenceSetDetailSchema, PreferenceGuardSchema, type PreferenceLearningFacts, type LearnedScopeInput } from './preference';
 
 const ModelResultSchema = z.object({ scopes: z.array(LearnedScopeInputSchema) }).strict();
 
-export interface PreparePreferencesRequest {
-  readonly requestId: string;
-  readonly scopes?: readonly PreferenceScopeRequest[];
-  readonly signal?: AbortSignal;
-}
-export interface PreparePreferencesResult {
-  readonly status: 'unchanged' | 'updated' | 'degraded' | 'cancelled';
-  readonly preferences: readonly PreferenceSetDetail[];
-  readonly failures: readonly { readonly code: string; readonly message: string }[];
-}
+export const PreparePreferencesRequestSchema = z.object({
+  requestId: z.string().min(1), scopes: z.array(PreferenceScopeRequestSchema).optional(), signal: z.instanceof(AbortSignal).optional(),
+}).strict();
+export const PreparePreferencesResultSchema = z.object({
+  status: z.enum(['unchanged', 'updated', 'degraded', 'cancelled']), preferences: z.array(PreferenceSetDetailSchema),
+  guard: PreferenceGuardSchema,
+  scopeResults: z.array(z.object({ preferenceSetId: z.string(), status: z.enum(['processed', 'pending']), revision: z.number().int().nonnegative(), outcome: z.enum(['changed', 'unchanged', 'insufficient']).optional() }).strict()),
+  failures: z.array(z.object({ code: z.string(), message: z.string() }).strict()),
+}).strict();
+export type PreparePreferencesRequest = z.infer<typeof PreparePreferencesRequestSchema>;
+export type PreparePreferencesResult = z.infer<typeof PreparePreferencesResultSchema>;
 
 export interface PreferenceLearningRuntime {
   /** Learns pending inputs only when a recommendation or controlled evaluation requests them. */
@@ -61,13 +62,13 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
   let controller: AbortController | undefined;
   let lastFailure: { code: string; message: string; batchId: string } | undefined;
 
-  async function prepare(request: PreparePreferencesRequest): Promise<PreparePreferencesResult> {
+  async function prepare(request: PreparePreferencesRequest, remainingMs: number): Promise<PreparePreferencesResult> {
     const cancellation = new AbortController();
     controller = cancellation;
     const cancel = () => cancellation.abort();
     request.signal?.addEventListener('abort', cancel, { once: true });
     if (request.signal?.aborted || !accepting) cancellation.abort();
-    const deadline = setTimeout(cancel, 60_000);
+    const deadline = setTimeout(cancel, remainingMs);
     const failures: Array<{ code: string; message: string }> = [];
     let updated = false;
     try {
@@ -88,13 +89,13 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
           } finally { active = undefined; }
           if (result.status === 'committed') { updated = true; lastFailure = undefined; break; }
           lastFailure = { code: result.failure.code, message: result.failure.message, batchId: facts.batch.batchId };
-          if (!result.retryable || attempt === 2 || cancellation.signal.aborted) { failures.push(result.failure); break; }
+          if (!result.retryable || attempt === 2 || cancellation.signal.aborted) { failures.push({ code: result.failure.code, message: result.failure.message }); break; }
           await retryDelay(cancellation.signal);
         }
       }
       const cancelled = !accepting || request.signal?.aborted;
       if (cancellation.signal.aborted && !cancelled) failures.push({ code: 'timed_out', message: 'Preference preparation exceeded its time budget.' });
-      return { status: cancelled ? 'cancelled' : failures.length ? 'degraded' : updated ? 'updated' : 'unchanged', preferences: options.repository.listPreferenceSetDetails({ effectiveOnly: true }), failures };
+      return prepareResult(cancelled ? 'cancelled' : failures.length ? 'degraded' : updated ? 'updated' : 'unchanged', request, failures);
     } finally {
       clearTimeout(deadline);
       request.signal?.removeEventListener('abort', cancel);
@@ -102,13 +103,30 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
       controller = undefined;
     }
   }
+  function prepareResult(status: PreparePreferencesResult['status'], request: PreparePreferencesRequest, failures: PreparePreferencesResult['failures']): PreparePreferencesResult {
+    const effective = options.repository.getEffectivePreferences(request.scopes);
+    return PreparePreferencesResultSchema.parse({ status, ...effective, failures,
+      scopeResults: effective.preferences.map(({ preferenceSet }) => ({ preferenceSetId: preferenceSet.id,
+        status: preferenceSet.processedRevision === preferenceSet.revision ? 'processed' : 'pending', revision: preferenceSet.revision,
+        ...(preferenceSet.processedRevision === preferenceSet.revision && preferenceSet.lastOutcome ? { outcome: preferenceSet.lastOutcome } : {}),
+      })),
+    });
+  }
   return {
     async start() { accepting = true; },
     notifyReactionChanged() { lastFailure = undefined; },
     async preparePreferencesForRecommendation(request) {
       // Serial callers receive their own cancellation and scope semantics.
-      while (running) await running;
-      const operation = prepare(request);
+      const parsed = PreparePreferencesRequestSchema.parse(request);
+      const started = Date.now();
+      const queueSignal = AbortSignal.any([AbortSignal.timeout(60_000), ...(parsed.signal ? [parsed.signal] : [])]);
+      try { while (running) await abortable(running, queueSignal); }
+      catch (error) {
+        if (!queueSignal.aborted) throw error;
+        return prepareResult(parsed.signal?.aborted ? 'cancelled' : 'degraded', parsed, parsed.signal?.aborted ? [] : [{ code: 'timed_out', message: 'Preference preparation exceeded its time budget.' }]);
+      }
+      if (parsed.signal?.aborted || !accepting) return prepareResult('cancelled', parsed, []);
+      const operation = prepare(parsed, Math.max(1, 60_000 - (Date.now() - started)));
       running = operation;
       try { return await operation; } finally { if (running === operation) running = undefined; }
     },
@@ -201,7 +219,7 @@ async function proposeGroup(
   const learned = ModelResultSchema.parse(JSON.parse(stripCodeFence(text)));
   const proposal = learned.scopes[0];
   const expectedSet = facts.currentPreferences[0]?.preferenceSet;
-  if (learned.scopes.length !== 1 || !proposal || !expectedSet || proposal.preferenceSetId !== expectedSet.id || proposal.baseRevision !== expectedSet.revision
+  if (learned.scopes.length !== 1 || !proposal || !expectedSet || (proposal.changes.length > 0) !== (proposal.outcome === 'changed') || proposal.preferenceSetId !== expectedSet.id || proposal.baseRevision !== expectedSet.revision
     || JSON.stringify([...proposal.reviewedPreferenceIds].sort()) !== JSON.stringify([...facts.reviewedPreferenceIds].sort())
     || proposal.changes.some((change) => change.kind === 'add' ? !allowAdd : !facts.reviewedPreferenceIds.includes(change.preferenceId))) {
     throw new LearningFailure('invalid_output', 'Model changed a read-only preference or returned the wrong review group.', false);
@@ -226,7 +244,7 @@ async function abortable<T>(operation: Promise<T>, signal: AbortSignal): Promise
     const abort = () => reject(new LearningFailure('cancelled', 'Preference Learning was cancelled.', false));
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) abort();
-    void operation.then(resolve, reject).finally(() => signal.removeEventListener('abort', abort));
+    void operation.then((value) => { signal.removeEventListener('abort', abort); resolve(value); }, (error: unknown) => { signal.removeEventListener('abort', abort); reject(error); });
   });
 }
 

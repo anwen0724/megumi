@@ -23,6 +23,7 @@ export interface EvaluationRunStorage {
     readonly evidence: {
       readonly traceIntegrity: TraceIntegrity;
       readonly observabilityRoot?: string;
+      readonly sequenceRoot?: string;
       readonly workspaceRoot?: string;
       readonly initialWorkspaceFiles?: Readonly<Record<string, string>>;
       readonly initialWorkspaceRoot?: string;
@@ -61,6 +62,7 @@ export async function createRunStorage(input: {
       try {
         artifacts = await archiveCaseEvidence({
           destination: draftDirectory,
+          ...(recordInput.evidence.sequenceRoot ? { sequenceRoot: recordInput.evidence.sequenceRoot } : {}),
           traceIntegrity: recordInput.evidence.traceIntegrity,
           ...(recordInput.evidence.observabilityRoot
             ? { observabilityRoot: recordInput.evidence.observabilityRoot }

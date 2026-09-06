@@ -1,11 +1,14 @@
 {
   "schemaVersion": 2,
   "caseId": "recommendation.select-relevant-candidate",
-  "revision": 2,
+  "revision": 3,
   "name": "选择相关且未推荐的候选",
   "description": "验证 Megumi 从固定候选池中发布与兴趣相关且未重复的推荐。",
   "metadata": {
-    "tags": ["core", "selection"],
+    "tags": [
+      "core",
+      "selection"
+    ],
     "difficulty": "simple",
     "source": "product-requirement"
   },
@@ -30,7 +33,9 @@
         "title": "Agent Evaluation Design",
         "description": "如何分离数据、运行记录和评估器。",
         "contentText": "A guide to Agent evaluation datasets, execution traces, and graders.",
-        "matchedInterestReferenceIds": ["agent-evaluation"],
+        "matchedInterestReferenceIds": [
+          "agent-evaluation"
+        ],
         "relevance": "direct"
       },
       {
@@ -41,7 +46,9 @@
         "title": "AI 助手产品探索",
         "description": "与 Agent 评估存在较弱关联的产品观察。",
         "contentText": "A broad product note about AI assistants.",
-        "matchedInterestReferenceIds": ["agent-evaluation"],
+        "matchedInterestReferenceIds": [
+          "agent-evaluation"
+        ],
         "relevance": "exploration"
       }
     ],
@@ -52,8 +59,14 @@
     "trigger": "manual"
   },
   "expected": {
-    "recommendableCandidateReferenceIds": ["evaluation-design"],
-    "excludedCandidateReferenceIds": ["ai-assistant-exploration"],
-    "allowedOutcomes": ["published"]
+    "recommendableCandidateReferenceIds": [
+      "evaluation-design"
+    ],
+    "excludedCandidateReferenceIds": [
+      "ai-assistant-exploration"
+    ],
+    "allowedOutcomes": [
+      "published"
+    ]
   }
 }

@@ -91,12 +91,12 @@ const TraceTargetResultSchema = z.object({
 }).strict();
 
 export const CaseRunResultSchema = z.object({
-  schemaVersion: z.literal(2),
+  schemaVersion: z.union([z.literal(2), z.literal(3)]),
   caseRunId: StableEvaluationIdSchema,
   caseIdentity: EvaluationIdentitySchema,
   caseType: z.enum([
     'conversation', 'interest_understanding', 'candidate_supply',
-    'recommendation', 'preference_learning',
+    'recommendation', 'preference_learning', 'preference_sequence',
   ]),
   recordStatus: z.enum(['recorded', 'infrastructure_failed']),
   startedAt: TimestampSchema,
@@ -132,7 +132,7 @@ export const CaseRunResultSchema = z.object({
 export type CaseRunResult = z.infer<typeof CaseRunResultSchema>;
 
 export const EvaluationRunRecordSchema = z.object({
-  schemaVersion: z.literal(2),
+  schemaVersion: z.union([z.literal(2), z.literal(3)]),
   runId: StableEvaluationIdSchema,
   status: z.enum(['completed', 'completed_with_failures']),
   startedAt: TimestampSchema,

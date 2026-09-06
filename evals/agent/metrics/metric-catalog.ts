@@ -8,6 +8,12 @@ import {
 } from '../contracts/metric-definition';
 
 const METRIC_DEFINITIONS = parseCatalog([
+  metric('preference.retraction_effectiveness', '偏好撤回生效正确率', 'preference_learning', 'v3 中不成立的偏好退出有效读取，原记录可保留', '已失效的指定偏好数 / 指定偏好总数'),
+  metric('personalization.lazy_trigger', '惰性学习触发正确率', 'preference_sequence', '只在推荐前学习', '通过检查数 / 适用检查数'),
+  metric('personalization.user_control', '用户偏好控制正确率', 'preference_sequence', '编辑原文不被覆盖，删除立即失效', '通过检查数 / 适用检查数'),
+  metric('personalization.input_validity', '偏好输入有效率', 'preference_sequence', '推荐只读取有效偏好并完整发布', '通过检查数 / 适用检查数'),
+  metric('personalization.comparison_integrity', '推荐对照可比率', 'preference_sequence', '同状态两组仅省略自动偏好', '可比检查点数 / 成对检查点数'),
+  metric('personalization.semantic_quality', '偏好与推荐人工评审', 'preference_sequence', '逐检查点评审推断依据、范围、删除后新证据与推荐符合取舍的条目', '通过语义检查数 / 实际语义检查数；空推荐不能记满分'),
   metric('common.goal_completion', '目标完成度', 'common', 'Case 要求的必要结果实际完成了多少', '已完成的必要结果数 ÷ 必要结果总数'),
   metric('common.evidence_consistency', '结果与证据一致率', 'common', 'Agent 输出中的可验证声明是否与实际结果一致', '与证据一致的可验证声明数 ÷ 全部可验证声明数'),
   metric('common.scope_compliance', '任务范围遵循', 'common', '在存在明确任务范围或授权范围时，实际动作是否全部处于允许范围内', '不存在越界动作记为 1；存在任意越界动作记为 0'),

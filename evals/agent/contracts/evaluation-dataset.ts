@@ -1,5 +1,5 @@
 /*
- * Defines the author-facing Dataset and five fixed Case contracts used by Evaluation.
+ * Defines the author-facing Dataset and business Case contracts used by Evaluation.
  */
 import { z } from 'zod';
 import { DiscoveryContentTypeSchema } from '@megumi/discovery';
@@ -52,6 +52,7 @@ const InterestDataSchema = z.object({
   createdAt: TimestampSchema.optional(),
   updatedAt: TimestampSchema.optional(),
   userManagedAt: TimestampSchema.optional(),
+  descriptionUserEditedAt: TimestampSchema.optional(),
 }).strict();
 const CandidateDataSchema = z.object({
   referenceId: ReferenceIdSchema,
@@ -83,16 +84,23 @@ const RecommendationDataSchema = z.object({
   publishedAt: TimestampSchema.optional(),
   reactionRevision: z.number().int().nonnegative().optional(),
   reactionChangedAt: TimestampSchema.optional(),
+  reactionSequence: z.number().int().nonnegative().optional(),
   learnedReaction: z.enum(['liked', 'disliked', 'none']).optional(),
   learnedReactionRevision: z.number().int().nonnegative().optional(),
 }).strict();
 const PreferenceDataSchema = z.object({
-  interestReferenceId: ReferenceIdSchema,
+  interestReferenceId: ReferenceIdSchema.optional(),
+  origin: z.enum(['learned', 'user']).optional(),
+  status: z.enum(['active', 'needs_review', 'retired', 'deleted']).optional(),
+  revision: z.number().int().positive().optional(),
+  userEditedAt: TimestampSchema.optional(),
+  deletedAt: TimestampSchema.optional(),
+  deletedFeedbackSequence: z.number().int().nonnegative().optional(),
   id: z.string().trim().min(1),
   polarity: z.enum(['positive', 'negative']),
   dimension: z.enum(['topic', 'source', 'author', 'content_type', 'recency', 'expression_quality']),
   statement: z.string().trim().min(1),
-  supportingRecommendationReferenceIds: z.array(ReferenceIdSchema).min(1),
+  supportingRecommendationReferenceIds: z.array(ReferenceIdSchema),
 }).strict();
 const InterestEvidenceDataSchema = z.object({
   referenceId: ReferenceIdSchema,
@@ -241,12 +249,41 @@ export const PreferenceLearningCaseSchema = z.object({
   }).strict().optional(),
 }).strict();
 
+export const PreferenceSequenceStepSchema = z.discriminatedUnion('kind', [
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('feedback'), recommendationReferenceId: ReferenceIdSchema, reaction: z.enum(['liked', 'disliked', 'none']) }).strict(),
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('edit_preference'), preferenceReferenceId: z.string().min(1), statement: z.string().trim().min(1).max(1000) }).strict(),
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('delete_preference'), preferenceReferenceId: z.string().min(1) }).strict(),
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('update_interest'), interestReferenceId: ReferenceIdSchema, action: z.enum(['update', 'pause', 'resume', 'delete']), description: z.string().trim().min(1).max(1000).optional() }).strict(),
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('advance_clock'), milliseconds: z.number().int().nonnegative() }).strict(),
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('inspect'), scope: z.discriminatedUnion('scope', [z.object({ scope: z.literal('interest'), interestReferenceId: ReferenceIdSchema }).strict(), z.object({ scope: z.literal('exploration') }).strict()]) }).strict(),
+  z.object({ stepId: StableEvaluationIdSchema, kind: z.literal('recommend'), paired: z.boolean() }).strict(),
+]);
+export const PreferenceSequenceCaseSchema = z.object({
+  ...CaseBaseShape, type: z.literal('preference_sequence'),
+  initialState: z.object({
+    clock: TimestampSchema, interests: z.array(InterestDataSchema), candidates: z.array(CandidateDataSchema),
+    recommendations: z.array(RecommendationDataSchema).default([]), preferences: z.array(PreferenceDataSchema).default([]),
+    existingReactions: z.array(ReactionDataSchema).default([]), controlledSources: z.array(ControlledWebDataSchema).default([]),
+    preferenceSets: z.array(z.object({ interestReferenceId: ReferenceIdSchema.optional(), revision: z.number().int().nonnegative(), processedRevision: z.number().int().nonnegative().optional(), policyRevision: z.number().int().nonnegative() }).strict()).default([]),
+    recommendationTargetCount: z.number().int().min(1).max(100), recommendationWorkingSetCount: z.number().int().min(1).max(200),
+  }).strict(),
+  input: z.object({ steps: z.array(PreferenceSequenceStepSchema).min(1) }).strict(),
+  expected: z.object({ checkpoints: z.record(StableEvaluationIdSchema, z.object({
+    allowedOutcome: z.array(z.string().min(1)).min(1).optional(),
+    retainedPreferenceReferences: z.array(z.string().min(1)).default([]), inactivePreferenceReferences: z.array(z.string().min(1)).default([]),
+    protectedUserStatements: z.record(z.string(), z.string()).default({}),
+    maxLearningCallsBeforeRecommendation: z.literal(0).optional(), publicationIntegrityRequired: z.boolean().optional(),
+  }).strict()) }).strict().optional(),
+}).strict();
+export type PreferenceSequenceCase = z.infer<typeof PreferenceSequenceCaseSchema>;
+
 const EvaluationCaseUnionSchema = z.discriminatedUnion('type', [
   ConversationCaseSchema,
   InterestUnderstandingCaseSchema,
   CandidateSupplyCaseSchema,
   RecommendationCaseSchema,
   PreferenceLearningCaseSchema,
+  PreferenceSequenceCaseSchema,
 ]);
 export type EvaluationCase = z.infer<typeof EvaluationCaseUnionSchema>;
 export const EvaluationCaseSchema = EvaluationCaseUnionSchema.superRefine(validateCaseReferences);
@@ -336,10 +373,27 @@ function validateCaseReferences(evaluationCase: EvaluationCase, context: z.Refin
     addMissingReference(candidateIds, recommendation.candidateReferenceId, ['initialState', recommendationPath, index, 'candidateReferenceId'], 'Candidate', context);
   }
   for (const [preferenceIndex, preference] of evaluationCase.initialState.preferences.entries()) {
-    addMissingReference(new Set(evaluationCase.initialState.interests.map((interest) => interest.referenceId)), preference.interestReferenceId,
+    if (preference.interestReferenceId) addMissingReference(new Set(evaluationCase.initialState.interests.map((interest) => interest.referenceId)), preference.interestReferenceId,
       ['initialState', 'preferences', preferenceIndex, 'interestReferenceId'], 'Interest', context);
     for (const [referenceIndex, referenceId] of preference.supportingRecommendationReferenceIds.entries()) {
       addMissingReference(recommendationIds, referenceId, ['initialState', 'preferences', preferenceIndex, 'supportingRecommendationReferenceIds', referenceIndex], 'Recommendation', context);
+    }
+  }
+  if (evaluationCase.type === 'preference_sequence') {
+    const steps = evaluationCase.input.steps;
+    addDuplicateIssues(steps.map(({ stepId }) => stepId), ['input', 'steps'], 'Step ID', context);
+    const preferences = new Set(evaluationCase.initialState.preferences.map(({ id }) => id));
+    for (const [index, step] of steps.entries()) {
+      const path = ['input', 'steps', index];
+      if ('recommendationReferenceId' in step) addMissingReference(recommendationIds, step.recommendationReferenceId, path, 'Recommendation', context);
+      if ('preferenceReferenceId' in step) addMissingReference(preferences, step.preferenceReferenceId, path, 'Preference', context);
+      if ('interestReferenceId' in step) addMissingReference(interests, step.interestReferenceId, path, 'Interest', context);
+      if (step.kind === 'inspect' && step.scope.scope === 'interest') addMissingReference(interests, step.scope.interestReferenceId, path, 'Interest', context);
+      if (step.kind === 'update_interest' && (step.action === 'update') !== (step.description !== undefined)) context.addIssue({ code: 'custom', path, message: 'Only update requires a description.' });
+    }
+    for (const [stepId, checkpoint] of Object.entries(evaluationCase.expected?.checkpoints ?? {})) {
+      addMissingReference(new Set(steps.map((step) => step.stepId)), stepId, ['expected', 'checkpoints', stepId], 'Step', context);
+      for (const id of [...checkpoint.retainedPreferenceReferences, ...checkpoint.inactivePreferenceReferences, ...Object.keys(checkpoint.protectedUserStatements)]) addMissingReference(preferences, id, ['expected', 'checkpoints', stepId], 'Preference', context);
     }
   }
   if (evaluationCase.type === 'preference_learning') {

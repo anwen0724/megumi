@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "preference-quality.reverse-feedback",
-  "revision": 1,
+  "revision": 2,
   "name": "喜欢反转为不喜欢",
   "description": "已学习反馈反转后，应修正不再受支持的正向偏好；不能保留旧依据或机械扩大为整个摄影兴趣的否定。",
   "metadata": {

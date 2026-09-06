@@ -7,8 +7,8 @@ import { getMetricDefinition } from '../metrics/metric-catalog';
 
 export const MEASUREMENT_IDS = ['efficiency.duration_ms', 'efficiency.input_tokens', 'efficiency.output_tokens',
   'efficiency.model_calls', 'efficiency.tool_calls', 'efficiency.source_calls', 'efficiency.retries'] as const;
-export const RULE_IDS = ['recommendation.novelty', 'recommendation.publication_integrity',
-  'preference.retraction_correctness', 'preference.evidence_preservation'] as const;
+export const RULE_IDS = ['personalization.lazy_trigger', 'personalization.user_control', 'personalization.input_validity', 'personalization.comparison_integrity', 'recommendation.novelty', 'recommendation.publication_integrity',
+  'preference.retraction_effectiveness', 'preference.retraction_correctness', 'preference.evidence_preservation'] as const;
 const DigestSchema = z.string().regex(/^[a-f0-9]{64}$/u);
 const IdentitySchema = z.string().min(1);
 const MetricPolicySchema = z.object({
@@ -54,7 +54,7 @@ export type MetricResult = z.infer<typeof MetricResultSchema>;
 export const GradedCaseSchema = z.object({
   caseIdentity: IdentitySchema, caseDigest: DigestSchema, evidenceDigest: DigestSchema,
   environmentKind: z.enum(['controlled', 'live']),
-  caseType: z.enum(['conversation', 'interest_understanding', 'candidate_supply', 'recommendation', 'preference_learning']),
+  caseType: z.enum(['conversation', 'interest_understanding', 'candidate_supply', 'recommendation', 'preference_learning', 'preference_sequence']),
   recordStatus: z.enum(['recorded', 'infrastructure_failed']),
   terminalState: z.enum(['settled', 'pending', 'interrupted']).optional(),
   status: z.enum(['passed', 'failed', 'incomplete']),

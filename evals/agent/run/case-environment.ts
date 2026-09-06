@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { cp, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import type { DiscoveryState, PreferenceSetDetail } from '@megumi/discovery';
 import type { Api, ProviderStreams } from '@megumi/ai';
 import { composeApplication, type ProductRuntime } from '@megumi/composition';
 import { nodeObservabilityStorage } from '@megumi/observability';
@@ -39,6 +40,7 @@ export interface CaseEnvironment {
     readonly database: string;
     readonly observability: string;
     readonly initialWorkspace: string;
+    readonly sequence: string;
   };
   readonly details: Readonly<Record<string, unknown>>;
   readonly now: () => string;
@@ -57,6 +59,9 @@ export async function createCaseEnvironment(input: {
   readonly datasetRoot?: string;
   readonly temporaryParent?: string;
   readonly modelStreams?: Partial<Record<Api, ProviderStreams>>;
+  readonly discoveryState?: DiscoveryState;
+  readonly clock?: string;
+  readonly preferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
 }): Promise<CaseEnvironment> {
   const temporaryParent = path.resolve(input.temporaryParent ?? tmpdir());
   await mkdir(temporaryParent, { recursive: true });
@@ -70,7 +75,8 @@ export async function createCaseEnvironment(input: {
   let approvalSubscription: ReturnType<ProductRuntime['subscribeRuntimeEvents']> | undefined;
 
   try {
-    const initialState = caseInitialState(input.resolvedCase.case);
+    const authoredState = caseInitialState(input.resolvedCase.case);
+    const initialState = { ...authoredState, clock: input.clock ?? authoredState.clock };
     await mkdir(path.dirname(database), { recursive: true });
     await mkdir(workspace, { recursive: true });
     await installWorkspaceFiles({
@@ -83,7 +89,7 @@ export async function createCaseEnvironment(input: {
     await cp(workspace, initialWorkspace, { recursive: true, errorOnExist: true, force: false });
 
     const migrationsFolder = path.join(input.repositoryRoot, 'packages', 'agent', 'database', 'migrations');
-    const owner = createDatabaseInitialStateOwner({ homePath: home, migrationsFolder, now: initialState.clock });
+    const owner = createDatabaseInitialStateOwner({ homePath: home, migrationsFolder, now: initialState.clock, ...(input.discoveryState ? { discoveryState: input.discoveryState } : {}) });
     let initialStateIds: InstalledInitialStateIds;
     try {
       initialStateIds = await installInitialState({ initialState, workspaceRoot: workspace, owner: owner.owner });
@@ -117,6 +123,7 @@ export async function createCaseEnvironment(input: {
       },
       instructionContentRoot: path.join(input.repositoryRoot, 'packages', 'agent', 'instructions', 'content'),
       clock: { now: profile.now },
+      ...(input.preferenceSource ? { recommendationPreferenceSource: input.preferenceSource } : {}),
       ...(input.modelStreams ? { modelStreams: input.modelStreams } : {}),
       ...(controlled ? {
         createApplicationId: controlled.createId,
@@ -141,7 +148,7 @@ export async function createCaseEnvironment(input: {
       initialStateIds,
       initialWorkspaceFiles,
       initialState: installedState,
-      paths: { root, home, workspace, database, observability, initialWorkspace },
+      paths: { root, home, workspace, database, observability, initialWorkspace, sequence: path.join(root, 'sequence') },
       details: {
         environmentKind: input.resolvedCase.environmentKind,
         candidateModel: `${input.candidateModel.config.providerId}/${input.candidateModel.config.modelId}`,
@@ -153,15 +160,7 @@ export async function createCaseEnvironment(input: {
       now: profile.now,
       ...(controlled ? { advanceTime: (durationMs: number, deadlineMs: number) => controlled.timerDriver.advanceBy(durationMs, async () => {
         if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
-        // Only Preference Cases request a time jump, after feedback is submitted.
-        // Other Cases keep their clock fixed; automatic product triggers are disabled.
-        if (input.resolvedCase.case.type !== 'preference_learning') throw new Error('This Case has no controlled time-advance input.');
-        const recommendationId = initialStateIds.recommendations[input.resolvedCase.case.input.recommendationReferenceId];
-        if (!recommendationId) throw new Error('Missing Preference learning target.');
-        while ((await composedRuntime.host.discovery.getPreferenceLearningStatus({ recommendationId })).status === 'running') {
-          if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
-          await new Promise<void>((resolve) => setTimeout(resolve, 5));
-        }
+
       }) } : {}),
       stop,
       async dispose() {

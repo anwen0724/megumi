@@ -67,7 +67,7 @@ export function createDiscoveryFactsReader(options: {
           interestId: interest.id,
           description: interest.description,
           status: interest.status,
-          descriptionUserEditedAt: interest.descriptionUserEditedAt,
+          ...(interest.descriptionUserEditedAt ? { descriptionUserEditedAt: interest.descriptionUserEditedAt } : {}),
           interestRevision: interest.revision,
           ...(preferences.has(interest.id) ? { preference: preferences.get(interest.id)! } : {}),
         }));
@@ -137,7 +137,7 @@ export function createDiscoveryFactsReader(options: {
           description: interest.description,
           status: interest.status,
           revision: interest.revision,
-          descriptionUserEditedAt: interest.descriptionUserEditedAt,
+          ...(interest.descriptionUserEditedAt ? { descriptionUserEditedAt: interest.descriptionUserEditedAt } : {}),
         })),
         currentPreferences: facts.currentPreferences.map(contextPreference),
         supportingReactions: facts.supportingReactions,
@@ -206,12 +206,12 @@ function contextPreference(
   return {
     preferenceSetId: snapshot.preferenceSet.id,
     scope: snapshot.preferenceSet.scope,
-    interestId: snapshot.preferenceSet.interestId,
+    ...(snapshot.preferenceSet.interestId ? { interestId: snapshot.preferenceSet.interestId } : {}),
     revision: snapshot.preferenceSet.revision,
     preferences: snapshot.preferences.map(({ preference, evidence }) => ({
-      id: preference.id, polarity: preference.polarity, dimension: preference.dimension,
+      id: preference.id, ...(preference.polarity ? { polarity: preference.polarity } : {}), ...(preference.dimension ? { dimension: preference.dimension } : {}),
       origin: preference.origin, status: preference.status, revision: preference.revision,
-      userEditedAt: preference.userEditedAt, deletedFeedbackSequence: preference.deletedFeedbackSequence,
+      ...(preference.userEditedAt ? { userEditedAt: preference.userEditedAt } : {}), ...(preference.deletedFeedbackSequence !== undefined ? { deletedFeedbackSequence: preference.deletedFeedbackSequence } : {}),
       evidence,
       statement: preference.statement, updatedAt: preference.updatedAt,
       supportingRecommendationIds: evidence.map(({ recommendationId }) => recommendationId),

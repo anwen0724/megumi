@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "profileId": "continuous-preference-v3",
+  "revision": 1,
+  "metrics": [
+    {
+      "metricId": "personalization.lazy_trigger",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "personalization.user_control",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "personalization.input_validity",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "personalization.comparison_integrity",
+      "method": "rule",
+      "direction": "higher",
+      "threshold": 1
+    },
+    {
+      "metricId": "personalization.semantic_quality",
+      "method": "human",
+      "direction": "higher",
+      "rubric": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。"
+    }
+  ]
+}

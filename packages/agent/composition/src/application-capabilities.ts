@@ -35,6 +35,7 @@ import {
   createDiscoveryFactsReader,
   createInterestExtractor,
   type Discovery,
+  type PreferenceSetDetail,
   type EmbeddedBrowser,
   type SourceRegistry,
 } from '@megumi/discovery';
@@ -112,6 +113,8 @@ import type { ProductWorkspaceFileSystem } from '@megumi/product-host/host';
 import type { ProductRuntimeLogger } from './application-runtime';
 
 export interface ProductCapabilitiesOptions {
+  /** Supplies a read-only projection at the recommendation input boundary. */
+  recommendationPreferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
@@ -700,6 +703,7 @@ function composeCapabilitiesWithDatabase(
       },
     },
     recommendation: {
+      ...(options.recommendationPreferenceSource ? { preferenceSource: options.recommendationPreferenceSource } : {}),
       observability: observability.observability,
       repository: discoveryRepository,
       attempts: recommendationAttempts,

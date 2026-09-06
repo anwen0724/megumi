@@ -58,6 +58,7 @@ export async function collectTraceIntegrity(input: {
 /** Copies the authoritative Trace Journal/Content and changed Workspace files into a draft record. */
 export async function archiveCaseEvidence(input: {
   readonly observabilityRoot?: string;
+  readonly sequenceRoot?: string;
   readonly workspaceRoot?: string;
   readonly initialWorkspaceFiles?: Readonly<Record<string, string>>;
   readonly initialWorkspaceRoot?: string;
@@ -91,6 +92,14 @@ export async function archiveCaseEvidence(input: {
   const finalPaths = input.workspaceRoot ? new Set((await listFiles(input.workspaceRoot)).map(({ relativePath }) => relativePath)) : new Set<string>();
   const deletedFiles = Object.keys(input.initialWorkspaceFiles ?? {}).filter((file) => !finalPaths.has(file)).sort();
   const initialFiles = input.initialWorkspaceRoot ? await archiveChangedWorkspaceFiles({ workspaceRoot: input.initialWorkspaceRoot, initialFiles: {}, destination: path.join(artifactsDestination, 'initial-workspace') }) : [];
+  if (input.sequenceRoot && await pathExists(input.sequenceRoot)) {
+    const sequenceDestination = path.join(artifactsDestination, 'sequence');
+    await copyDirectoryIfPresent(input.sequenceRoot, sequenceDestination);
+    for (const file of await listFiles(sequenceDestination)) {
+      const bytes = await readFile(file.absolutePath);
+      files.push({ path: `sequence/${file.relativePath}`, sha256: createHash('sha256').update(bytes).digest('hex'), byteLength: bytes.byteLength });
+    }
+  }
   return { files, deletedFiles, initialFiles: initialFiles.map((file) => ({ ...file, path: file.path.replace(/^workspace\//u, 'initial-workspace/') })) };
 }
 

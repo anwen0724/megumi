@@ -282,3 +282,5 @@ export type {
   SearchRecommendationsResult,
   TodayDiscoveryView,
 } from './discovery-view';
+
+export { PreparePreferencesRequestSchema, PreparePreferencesResultSchema } from './preferences/preference-learning-runtime';
