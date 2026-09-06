@@ -8,7 +8,7 @@ import type {
   RecommendationExclusionReason,
 } from './recommendation';
 import type { Interest } from '../interests/interest';
-import type { PreferenceSetDetail } from '../preferences/preference';
+import type { PreferenceSetDetail, PreferenceGuard } from '../preferences/preference';
 import type { Recommendation } from './recommendation';
 import type { RecommendationRepository } from '../persistence/recommendation-repository';
 
@@ -22,6 +22,8 @@ const PublishInputSchema = z.object({
 }).strict();
 
 interface Attempt {
+  readonly preferenceGuard?: PreferenceGuard;
+  inputChanged?: boolean;
   readonly requestId: string;
   readonly localDate: string;
   readonly snapshotAt: string;
@@ -43,6 +45,7 @@ interface Attempt {
 }
 
 export interface StartRecommendationAttemptRequest {
+  readonly preferenceGuard?: PreferenceGuard;
   readonly requestId: string;
   readonly executionId: string;
   readonly localDate: string;
@@ -61,6 +64,8 @@ export interface StartRecommendationAttemptRequest {
 }
 
 export interface RecommendationAttempts {
+  /** Reports a refused stale-input publication before disposing the execution snapshot. */
+  hasInputChanged(executionId: string): boolean;
   start(request: StartRecommendationAttemptRequest): void;
   getSnapshot(executionId: string): Omit<StartRecommendationAttemptRequest, 'repository' | 'now'> | undefined;
   dispose(executionId: string): void;
@@ -81,6 +86,7 @@ export function createRecommendationAttempts(options: {
 } = {}): RecommendationAttempts {
   const attempts = new Map<string, Attempt>();
   return {
+    hasInputChanged: (executionId) => attempts.get(executionId)?.inputChanged ?? false,
     start(request) {
       if (attempts.has(request.executionId)) throw new Error('Recommendation execution already has Tool state.');
       const exposedCount = Math.min(request.workingSetCount, request.rankedCandidates.length);
@@ -98,6 +104,7 @@ export function createRecommendationAttempts(options: {
       const attempt = attempts.get(executionId);
       if (!attempt) return undefined;
       return {
+        preferenceGuard: attempt.preferenceGuard,
         requestId: attempt.requestId,
         executionId,
         localDate: attempt.localDate,
@@ -179,6 +186,7 @@ export function createRecommendationAttempts(options: {
         });
       }
       const result = attempt.repository.publish({
+        preferenceGuard: attempt.preferenceGuard,
         localDate: attempt.localDate,
         snapshotAt: attempt.snapshotAt,
         publishedAt: attempt.now(),
@@ -190,6 +198,7 @@ export function createRecommendationAttempts(options: {
             ...item,
             sourceName: candidate.sourceName,
             selectionBasis: {
+              ...(attempt.preferenceGuard ? { preferencePolicyRevisions: attempt.preferenceGuard.scopes.map(({ id, policyRevision }) => ({ setId: id, policyRevision })) } : {}),
               primaryInterestId,
               matchedInterestIds: candidate.interestMatches.map(({ interestId }) => interestId),
               interestRevisions: attempt.interestRevisions.filter(({ interestId }) => (
@@ -204,6 +213,10 @@ export function createRecommendationAttempts(options: {
         return toolError('publication_conflict', 'Candidate state conflicts with the frozen publication.', {
           candidateIds: result.candidateIds,
         });
+      }
+      if (result.status === 'input_changed') {
+        attempt.inputChanged = true;
+        return toolError('input_changed', 'User requirements changed; this execution cannot publish its old selection.');
       }
       attempt.published = true;
       return toolSuccess({

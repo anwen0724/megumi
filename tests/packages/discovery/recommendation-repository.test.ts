@@ -2,7 +2,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createRecommendationRepository, type RecommendationRepository } from '@megumi/discovery';
+import { createRecommendationRepository, createDiscoveryRepository, type RecommendationRepository } from '@megumi/discovery';
 
 const snapshotAt = '2026-09-03T00:00:00.000Z';
 const publishedAt = '2026-09-03T00:10:00.000Z';
@@ -27,6 +27,16 @@ describe('Recommendation repository', () => {
   });
 
   afterEach(() => database.close());
+
+  it('rejects stale user requirements without publishing or consuming a candidate', () => {
+    const discovery = createDiscoveryRepository({ database });
+    const guard = discovery.getPreferenceGuard();
+    discovery.applyInterestChange({ action: 'update', interestId: 'interest:1', description: 'New explicit requirement', now: publishedAt });
+    expect(repository.publish({ localDate: '2026-09-03', snapshotAt, publishedAt, preferenceGuard: guard, items: [publication('candidate:2', 'Source')] })).toEqual({ status: 'input_changed' });
+    expect(repository.getCollection('2026-09-03')).toBeUndefined();
+    expect(candidateStatus(database, 'candidate:2')).toBe('available');
+    expect(repository.publish({ localDate: '2026-09-03', snapshotAt, publishedAt, preferenceGuard: discovery.getPreferenceGuard(), items: [publication('candidate:2', 'Source')] }).status).toBe('published');
+  });
 
   it('atomically publishes one immutable decision, content snapshot, and default state per Candidate', () => {
     const result = repository.publish({

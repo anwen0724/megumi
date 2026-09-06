@@ -128,6 +128,11 @@ export const PreferenceEvidenceViewSchema = z.object({
   }).strict()),
 }).strict();
 export type PreferenceEvidenceView = z.infer<typeof PreferenceEvidenceViewSchema>;
+export const PreferenceGuardSchema = z.object({
+  interests: z.array(z.object({ id: z.string().min(1), revision: z.number().int().nonnegative() }).strict()),
+  scopes: z.array(z.object({ id: z.string().min(1), policyRevision: z.number().int().nonnegative() }).strict()),
+}).strict();
+export type PreferenceGuard = z.infer<typeof PreferenceGuardSchema>;
 export type LearnedScopeInput = z.infer<typeof LearnedScopeInputSchema>;
 export type FeedbackReaction = z.infer<typeof FeedbackReactionSchema>;
 export type RecommendationContentEvidence = z.infer<typeof RecommendationContentEvidenceSchema>;

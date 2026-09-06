@@ -139,7 +139,9 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     ? createPreferenceLearningRuntime(options.preferenceLearning)
     : undefined;
   const recommendation = options.recommendation
-    ? createRecommendationRuntime(options.recommendation)
+    ? createRecommendationRuntime({ ...options.recommendation, ...(preferenceLearning ? {
+      preparePreferences: async (request) => { await preferenceLearning.preparePreferencesForRecommendation(request); },
+    } : {}) })
     : undefined;
   const candidateSupply = options.candidateSupply
     ? createCandidateSupplyRuntime(options.candidateSupply)

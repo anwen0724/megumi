@@ -7,6 +7,7 @@ export const LocalDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const ReactionSchema = z.enum(['liked', 'disliked']);
 
 export const RecommendationSelectionBasisSchema = z.object({
+  preferencePolicyRevisions: z.array(z.object({ setId: z.string().min(1), policyRevision: z.number().int().nonnegative() }).strict()).optional(),
   primaryInterestId: z.string().min(1),
   matchedInterestIds: z.array(z.string().min(1)).min(1),
   interestRevisions: z.array(z.object({

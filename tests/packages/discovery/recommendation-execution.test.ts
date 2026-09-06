@@ -25,6 +25,28 @@ describe('Recommendation runtime', () => {
 
   afterEach(() => database.close());
 
+  it('prepares preferences only after candidate admission and exposes a cancellable preparation phase', async () => {
+    let finish: (() => void) | undefined;
+    const preparePreferences = vi.fn(async () => { await new Promise<void>((resolve) => { finish = resolve; }); });
+    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
+      const accepted = await request.accept({ executionId: 'execution:lazy' });
+      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
+      return { status: 'started', execution: { kind: 'recommendation', executionId: 'execution:lazy' }, completion: new Promise<never>(() => undefined) };
+    });
+    const runtime = createRecommendationRuntime({ ...runtimeOptions(database, startExecution), preparePreferences });
+    try {
+      await runtime.request({ trigger: 'manual' });
+      expect(preparePreferences).not.toHaveBeenCalled();
+      seedCandidate(database, 1);
+      const result = await runtime.request({ trigger: 'manual' });
+      expect(result).toMatchObject({ status: 'started', phase: 'preparing_preferences' });
+      expect(startExecution).not.toHaveBeenCalled();
+      expect(runtime.getToday()).toMatchObject({ status: 'running', phase: 'preparing_preferences' });
+      finish?.();
+      await vi.waitFor(() => expect(startExecution).toHaveBeenCalledOnce());
+    } finally { finish?.(); await runtime.shutdown(); }
+  });
+
   it('returns waiting without starting Agent Core when no Candidate is eligible', async () => {
     const startExecution = vi.fn();
     const runtime = createRecommendationRuntime(runtimeOptions(database, startExecution));

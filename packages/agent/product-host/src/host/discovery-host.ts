@@ -63,10 +63,10 @@ export const DiscoveryRecommendationWaitSchema = z.object({
 }).strict();
 export const DiscoveryRecommendationRequestResultSchema = z.discriminatedUnion('status', [
   z.object({
-    status: z.literal('started'), localDate: LocalDateSchema, requestId: z.string().min(1), executionId: z.string().min(1),
+    status: z.literal('started'), localDate: LocalDateSchema, requestId: z.string().min(1), phase: z.enum(['preparing_preferences','executing']), executionId: z.string().min(1).optional(),
   }).strict(),
   z.object({
-    status: z.literal('in_progress'), localDate: LocalDateSchema, requestId: z.string().min(1), executionId: z.string().min(1),
+    status: z.literal('in_progress'), localDate: LocalDateSchema, requestId: z.string().min(1), phase: z.enum(['preparing_preferences','executing']), executionId: z.string().min(1).optional(),
   }).strict(),
   z.object({ status: z.literal('already_published'), collection: RecommendationCollectionSchema }).strict(),
   z.object({ status: z.literal('waiting_for_candidates'), localDate: LocalDateSchema }).strict(),
@@ -77,7 +77,7 @@ export const DiscoveryRecommendationWaitResultSchema = RecommendationTerminalSch
 export const DiscoveryTodayRecommendationResultSchema = z.union([
   z.object({ status: z.literal('not_generated'), localDate: LocalDateSchema }).strict(),
   z.object({
-    status: z.literal('running'), localDate: LocalDateSchema, requestId: z.string().min(1), executionId: z.string().min(1),
+    status: z.literal('running'), localDate: LocalDateSchema, requestId: z.string().min(1), phase: z.enum(['preparing_preferences','executing']), executionId: z.string().min(1).optional(),
   }).strict(),
   RecommendationTerminalSchema,
 ]);

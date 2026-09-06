@@ -5,7 +5,8 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import { z } from 'zod';
-import { recordPreferenceFeedbackChange } from './preference-input-state';
+import { recordPreferenceFeedbackChange, validatePreferenceGuard } from './preference-input-state';
+import { PreferenceGuardSchema, type PreferenceGuard } from '../preferences/preference';
 import {
   LocalDateSchema,
   RecommendationCollectionSchema,
@@ -24,6 +25,7 @@ import {
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const PublishRequestSchema = z.object({
+  preferenceGuard: PreferenceGuardSchema.optional(),
   localDate: LocalDateSchema,
   snapshotAt: TimestampSchema,
   publishedAt: TimestampSchema,
@@ -51,6 +53,7 @@ export interface PublishRecommendationItem {
 }
 
 export interface PublishRecommendationsRequest {
+  readonly preferenceGuard?: PreferenceGuard;
   readonly localDate: string;
   readonly snapshotAt: string;
   readonly publishedAt: string;
@@ -58,6 +61,7 @@ export interface PublishRecommendationsRequest {
 }
 
 export type PublishRecommendationsResult =
+  | { readonly status: 'input_changed' }
   | { readonly status: 'published'; readonly collection: RecommendationCollection }
   | { readonly status: 'already_published'; readonly collection: RecommendationCollection }
   | { readonly status: 'conflict'; readonly candidateIds: readonly string[] };
@@ -219,7 +223,8 @@ export function createRecommendationRepository(
       if (duplicateCandidateIds.length > 0) return { status: 'conflict', candidateIds: duplicateCandidateIds };
       try {
         return database.transaction({
-          operation: () => publish(database, ids, parsed),
+          operation: () => parsed.preferenceGuard && !validatePreferenceGuard(database, parsed.preferenceGuard)
+            ? { status: 'input_changed' as const } : publish(database, ids, parsed),
         });
       } catch (error) {
         if (error instanceof PublicationConflict) {

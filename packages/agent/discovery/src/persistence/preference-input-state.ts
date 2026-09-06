@@ -4,6 +4,23 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseConnection } from '@megumi/database';
 import { RecommendationSelectionBasisSchema } from '../recommendation/recommendation';
+import { PreferenceGuardSchema, type PreferenceGuard } from '../preferences/preference';
+
+/** Captures all active interests and their existing scope guards from authoritative rows. */
+export function readPreferenceGuard(database: DatabaseConnection): PreferenceGuard {
+  return PreferenceGuardSchema.parse({
+    interests: database.prepare<{ id: string; revision: number }>({ sql: "SELECT id,revision FROM discovery_interests WHERE status='active' ORDER BY id" }).all(),
+    scopes: database.prepare<{ id: string; policy_revision: number }>({ sql: "SELECT s.id,s.policy_revision FROM discovery_preference_sets s LEFT JOIN discovery_interests i ON i.id=s.interest_id WHERE s.scope='exploration' OR i.status='active' ORDER BY s.id" }).all().map((row) => ({ id: row.id, policyRevision: row.policy_revision })),
+  });
+}
+
+/** Must be invoked within the transaction that publishes and consumes candidates. */
+export function validatePreferenceGuard(database: DatabaseConnection, expected: PreferenceGuard): boolean {
+  const actual = readPreferenceGuard(database);
+  const byId = (a: { id: string }, b: { id: string }) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  return JSON.stringify(actual.interests) === JSON.stringify([...expected.interests].sort(byId))
+    && JSON.stringify(actual.scopes) === JSON.stringify([...expected.scopes].sort(byId));
+}
 
 /** Creates the durable scope boundary even when no preference has been inferred. */
 export function ensurePreferenceSet(database: DatabaseConnection, interestId: string | undefined, now: string): string {

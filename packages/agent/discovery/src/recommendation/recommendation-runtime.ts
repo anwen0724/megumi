@@ -23,7 +23,8 @@ export type RecommendationFailureCode =
   | 'agent_execution_failed'
   | 'agent_limit_reached'
   | 'publication_conflict'
-  | 'storage_failed';
+  | 'storage_failed'
+  | 'input_changed';
 
 export interface RecommendationFailure {
   readonly code: RecommendationFailureCode;
@@ -32,7 +33,7 @@ export interface RecommendationFailure {
 }
 
 export type RequestRecommendationResult =
-  | { readonly status: 'started' | 'in_progress'; readonly localDate: string; readonly requestId: string; readonly executionId: string }
+  | { readonly status: 'started' | 'in_progress'; readonly localDate: string; readonly requestId: string; readonly phase: 'preparing_preferences' | 'executing'; readonly executionId?: string }
   | { readonly status: 'already_published'; readonly collection: RecommendationCollection }
   | { readonly status: 'waiting_for_candidates' | 'model_unavailable'; readonly localDate: string }
   | { readonly status: 'failed'; readonly localDate: string; readonly failure: RecommendationFailure };
@@ -45,7 +46,7 @@ export type WaitRecommendationResult =
 
 export type TodayRecommendationResult =
   | { readonly status: 'not_generated'; readonly localDate: string }
-  | { readonly status: 'running'; readonly localDate: string; readonly requestId: string; readonly executionId: string }
+  | { readonly status: 'running'; readonly localDate: string; readonly requestId: string; readonly phase: 'preparing_preferences' | 'executing'; readonly executionId?: string }
   | WaitRecommendationResult;
 
 interface RecommendationSettings {
@@ -79,6 +80,8 @@ export type StartRecommendationExecutionResult<TRejected = unknown> =
   | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string; readonly retryable: boolean } };
 
 export interface CreateRecommendationRuntimeOptions {
+  /** Prepares pending preference inputs after recommendation admission, before freezing its snapshot. */
+  readonly preparePreferences?: (request: { requestId: string; signal: AbortSignal }) => Promise<void>;
   readonly observability?: Observability;
   readonly repository: RecommendationDataRepository;
   readonly attempts: RecommendationAttempts;
@@ -116,6 +119,8 @@ export interface RecommendationRuntime {
 }
 
 interface ActiveRequest {
+  readonly controller: AbortController;
+  inputRetryCount: number;
   readonly trigger: RecommendationTrigger;
   readonly requestId: string;
   readonly localDate: string;
@@ -138,6 +143,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
   let lastCheck: TodayRecommendationResult | undefined;
   let candidateWait: { readonly localDate: string; readonly trigger: RecommendationTrigger } | undefined;
   let candidateWaitTimer: unknown;
+  const preparationTasks = new Set<Promise<void>>();
   const traceTasks = new Set<Promise<unknown>>();
   const executionCompletions = new Map<string, Promise<ExecutionOutcome>[]>();
   const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = async (request) => {
@@ -206,19 +212,8 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     if (published) return { status: 'already_published', collection: published };
     if (active) {
       const current = active;
-      const executionId = current.executionId ?? await current.executionReady;
-      if (!executionId) {
-        return failureResult(
-          current.localDate,
-          'agent_execution_failed',
-          'Recommendation execution could not be started.',
-          false,
-        );
-      }
-      return {
-        status: 'in_progress', localDate: current.localDate,
-        requestId: current.requestId, executionId,
-      };
+      return { status: 'in_progress', localDate: current.localDate, requestId: current.requestId,
+        phase: current.executionId ? 'executing' : 'preparing_preferences', executionId: current.executionId };
     }
     if (shuttingDown) return failureResult(localDate, 'agent_execution_failed', 'Recommendation is shutting down.', false);
 
@@ -248,6 +243,14 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     try { options.observability?.recordContent({ kind: 'discovery.candidates', value: prepared, correlation: { requestId } }); }
     catch { /* Observation cannot affect snapshot admission. */ }
     active = createActiveRequest(requestId, localDate, request.trigger);
+    if (options.preparePreferences) {
+      const current = active;
+      const task = retry(current).catch((error: unknown) => {
+        complete(current, failureResult(current.localDate, 'snapshot_unavailable', error instanceof Error ? error.message : 'Preference preparation failed.', false));
+      }).finally(() => preparationTasks.delete(task));
+      preparationTasks.add(task);
+      return { status: 'started', localDate, requestId, phase: 'preparing_preferences' };
+    }
     const started = await startExecution({
       kind: 'recommendation',
       requestId,
@@ -267,6 +270,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
           exclusions: prepared.ranking.exclusions,
           interestRevisions: prepared.interestRevisions,
           preferenceRevisions: prepared.preferenceRevisions,
+          preferenceGuard: prepared.preferenceGuard,
           interests: prepared.interests,
           preferences: prepared.preferences,
           history: prepared.history,
@@ -276,7 +280,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
         return { status: 'accepted' };
       },
       onSettled: ({ executionId, outcome }) => {
-        void handleSettlement(requestId, executionId, outcome);
+        return handleSettlement(requestId, executionId, outcome);
       },
     });
     if (started.status === 'rejected') {
@@ -294,7 +298,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       return result;
     }
     if (active) active.markExecutionStarted(started.execution.executionId);
-    return { status: 'started', localDate, requestId, executionId: started.execution.executionId };
+    return { status: 'started', localDate, requestId, phase: 'executing', executionId: started.execution.executionId };
   };
 
   const requestRecommendation = async (
@@ -306,9 +310,10 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       if (result.status !== 'started' && result.status !== 'in_progress') return result;
       const collection = options.repository.getCollection(result.localDate, true);
       if (collection) return { status: 'already_published', collection };
-      if (active?.requestId === result.requestId && active.executionId) {
+      if (active?.requestId === result.requestId) {
         return {
           status: 'in_progress',
+          phase: active.executionId ? 'executing' : 'preparing_preferences',
           localDate: active.localDate,
           requestId: active.requestId,
           executionId: active.executionId,
@@ -374,12 +379,19 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     executionId: string,
     outcome: ExecutionOutcome,
   ): Promise<void> {
+    const inputChanged = options.attempts.hasInputChanged(executionId);
     options.attempts.dispose(executionId);
     const current = active;
     if (!current || current.requestId !== requestId || current.executionId !== executionId) return;
     const collection = options.repository.getCollection(current.localDate, true);
     if (collection) {
       complete(current, { status: 'published', collection });
+      return;
+    }
+    if (inputChanged) {
+      if (current.inputRetryCount >= 1) { complete(current, failureResult(current.localDate, 'input_changed', 'User requirements changed repeatedly.', false)); return; }
+      current.inputRetryCount += 1;
+      await retry(current);
       return;
     }
     if (outcome.status === 'failed' && outcome.failure.retryable && current.retryCount < 2) {
@@ -437,6 +449,16 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       complete(current, { status: 'model_unavailable', localDate: current.localDate });
       return;
     }
+    const admission = prepareSnapshot(options, options.clock.now(), current.localDate, settings);
+    if (admission.ranking.actualTargetCount === 0) { complete(current, { status: 'waiting_for_candidates', localDate: current.localDate }); return; }
+    current.executionId = undefined;
+    await options.preparePreferences?.({ requestId: current.requestId, signal: current.controller.signal });
+    if (shuttingDown || current.controller.signal.aborted || active !== current) return;
+    if (localDateAt(options.clock.now(), options.timezone.get()) !== current.localDate) {
+      complete(current, { status: 'cancelled', localDate: current.localDate });
+      await requestRecommendation({ trigger: current.trigger });
+      return;
+    }
     const snapshotAt = options.clock.now();
     let prepared: ReturnType<typeof prepareSnapshot>;
     try {
@@ -473,6 +495,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
           exclusions: prepared.ranking.exclusions,
           interestRevisions: prepared.interestRevisions,
           preferenceRevisions: prepared.preferenceRevisions,
+          preferenceGuard: prepared.preferenceGuard,
           interests: prepared.interests,
           preferences: prepared.preferences,
           history: prepared.history,
@@ -482,7 +505,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
         return { status: 'accepted' };
       },
       onSettled: ({ executionId, outcome }) => {
-        void handleSettlement(current.requestId, executionId, outcome);
+        return handleSettlement(current.requestId, executionId, outcome);
       },
     });
     if (started.status === 'started' || started.status === 'already_started') {
@@ -544,8 +567,8 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       const localDate = localDateAt(options.clock.now(), options.timezone.get());
       const collection = options.repository.getCollection(localDate, true);
       if (collection) return { status: 'published', collection };
-      if (active && active.localDate === localDate && active.executionId) {
-        return { status: 'running', localDate, requestId: active.requestId, executionId: active.executionId };
+      if (active && active.localDate === localDate) {
+        return { status: 'running', localDate, requestId: active.requestId, phase: active.executionId ? 'executing' : 'preparing_preferences', executionId: active.executionId };
       }
       if (lastCheck && 'localDate' in lastCheck && lastCheck.localDate === localDate) return lastCheck;
       if (latest && 'localDate' in latest.result && latest.result.localDate === localDate) return latest.result;
@@ -557,13 +580,14 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
       clearCandidateWait();
       await scheduler.shutdown();
       if (active) {
+        active.controller.abort();
         if (active.retryTimer !== undefined) runtimeTimers(options).clearTimeout(active.retryTimer);
         const result = { status: 'cancelled' as const, localDate: active.localDate };
         active.settle(result);
         latest = { requestId: active.requestId, result };
         active = undefined;
       }
-      await Promise.allSettled([...traceTasks]);
+      await Promise.allSettled([...preparationTasks, ...traceTasks]);
     },
   };
 }
@@ -615,6 +639,7 @@ function prepareSnapshot(
     history,
     ranking,
     interestRevisions: interests.map(({ id, revision }) => ({ interestId: id, revision })),
+    preferenceGuard: options.repository.getPreferenceGuard(),
     preferenceRevisions: preferences.map(({ preferenceSet }) => ({ preferenceSetId: preferenceSet.id, revision: preferenceSet.revision })),
   };
 }
@@ -652,6 +677,8 @@ function createActiveRequest(requestId: string, localDate: string, trigger: Reco
     trigger,
     localDate,
     executionReady,
+    controller: new AbortController(),
+    inputRetryCount: 0,
     retryCount: 0,
     completion,
     markExecutionStarted(executionId) {

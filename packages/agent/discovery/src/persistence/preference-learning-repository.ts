@@ -16,12 +16,14 @@ import {
 import { createRecommendationRepository, type RecommendationRepository } from './recommendation-repository';
 import { createInterestRepository } from './interest-repository';
 import type { Recommendation } from '../recommendation/recommendation';
-import { changePreferenceInputs, ensurePreferenceSet } from './preference-input-state';
+import { changePreferenceInputs, ensurePreferenceSet, readPreferenceGuard } from './preference-input-state';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const IdSchema = z.string().min(1);
 
 export interface PreferenceLearningRepository {
+  /** Captures current publication guard versions without invoking learning. */
+  getPreferenceGuard(): import('../preferences/preference').PreferenceGuard;
   /** Reads current visible preferences without creating scopes or invoking a model. */
   getPreferenceDetails(scope: PreferenceScopeRequest): PreferenceManagementDetails | undefined;
   /** Distinguishes current feedback from the original inferred relationship. */
@@ -56,6 +58,7 @@ export type PreferenceDeleteResult = { readonly status: 'deleted' | 'already_del
 export function createPreferenceLearningRepository(database: DatabaseConnection): PreferenceLearningRepository {
   const recommendations = createRecommendationRepository(database);
   return {
+    getPreferenceGuard: () => readPreferenceGuard(database),
     getPreferenceDetails(rawScope) {
       const scope = PreferenceScopeRequestSchema.parse(rawScope);
       const interest = scope.scope === 'interest'
