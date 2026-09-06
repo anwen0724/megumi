@@ -183,6 +183,13 @@
       "when": 1788505201000,
       "tag": "0025_preference_entities",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1788674400000,
+      "tag": "0026_preference_learning_control",
+      "breakpoints": true
     }
   ]
 }

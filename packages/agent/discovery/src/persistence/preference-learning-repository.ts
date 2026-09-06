@@ -265,14 +265,19 @@ function findSet(database: DatabaseConnection, id: string): PreferenceSet | unde
   const row = database.prepare<DatabaseRow>({ sql: 'SELECT * FROM discovery_preference_sets WHERE id = ?' }).get([id]);
   return row ? PreferenceSetSchema.parse({
     id: row.id, scope: row.scope, interestId: row.interest_id ?? undefined,
-    revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at,
+    revision: row.revision, processedRevision: row.processed_revision ?? undefined,
+    policyRevision: row.policy_revision, lastOutcome: row.last_outcome ?? undefined,
+    createdAt: row.created_at, updatedAt: row.updated_at,
   }) : undefined;
 }
 function findPreference(database: DatabaseConnection, id: string): Preference | undefined {
   const row = database.prepare<DatabaseRow>({ sql: 'SELECT * FROM discovery_preferences WHERE id = ?' }).get([id]);
   return row ? PreferenceSchema.parse({
-    id: row.id, preferenceSetId: row.preference_set_id, polarity: row.polarity,
-    dimension: row.dimension, statement: row.statement, createdAt: row.created_at, updatedAt: row.updated_at,
+    id: row.id, preferenceSetId: row.preference_set_id, polarity: row.polarity ?? undefined,
+    dimension: row.dimension ?? undefined, statement: row.statement, createdAt: row.created_at, updatedAt: row.updated_at,
+    origin: row.origin, revision: row.revision, status: row.status,
+    userEditedAt: row.user_edited_at ?? undefined, deletedAt: row.deleted_at ?? undefined,
+    deletedFeedbackSequence: row.deleted_feedback_sequence ?? undefined,
   }) : undefined;
 }
 function findEvidence(database: DatabaseConnection, id: string): PreferenceEvidence | undefined {
@@ -280,6 +285,8 @@ function findEvidence(database: DatabaseConnection, id: string): PreferenceEvide
   return row ? PreferenceEvidenceSchema.parse({
     id: row.id, preferenceId: row.preference_id, recommendationId: row.recommendation_id,
     reactionRevision: row.reaction_revision, reaction: row.reaction, createdAt: row.created_at,
+    relation: row.relation, explanation: row.explanation ?? undefined,
+    contentQuote: row.content_quote ?? undefined, updatedAt: row.updated_at,
   }) : undefined;
 }
 function evidenceFor(database: DatabaseConnection, id: string): PreferenceEvidence[] {

@@ -350,6 +350,7 @@ function interestFromRow(row: InterestRow): Interest {
     createdFrom: row.created_from,
     revision: row.revision,
     ...(row.user_managed_at ? { userManagedAt: row.user_managed_at } : {}),
+    ...(row.description_user_edited_at ? { descriptionUserEditedAt: row.description_user_edited_at } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     ...(row.paused_at ? { pausedAt: row.paused_at } : {}),
@@ -391,6 +392,7 @@ type InterestRow = DatabaseRow & {
   created_from: string;
   revision: number;
   user_managed_at: string | null;
+  description_user_edited_at: string | null;
   created_at: string;
   updated_at: string;
   paused_at: string | null;

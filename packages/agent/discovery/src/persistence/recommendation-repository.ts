@@ -487,7 +487,7 @@ function recommendationSelect(): string {
     c.id AS content_id, c.source_id, c.source_name, c.source_content_id,
     c.canonical_url, c.content_type, c.title, c.author, c.content_published_at,
     c.description, c.content_summary, c.content_excerpt, c.content_truncated, c.cover_url,
-    s.id AS state_id, s.reaction, s.reaction_revision, s.reaction_changed_at,
+    s.id AS state_id, s.reaction, s.reaction_revision, s.reaction_sequence, s.reaction_changed_at,
     s.learned_reaction, s.learned_reaction_revision, s.favorite_at, s.watch_later_at,
     s.hidden_at, s.first_opened_at, s.last_opened_at, s.updated_at
   FROM discovery_recommendations r
@@ -511,6 +511,7 @@ function recommendationFromRow(row: RecommendationRow): Recommendation {
       recommendation_id: row.recommendation_id,
       reaction: row.reaction,
       reaction_revision: row.reaction_revision,
+      reaction_sequence: row.reaction_sequence,
       reaction_changed_at: row.reaction_changed_at,
       learned_reaction: row.learned_reaction,
       learned_reaction_revision: row.learned_reaction_revision,
@@ -550,6 +551,7 @@ function stateFromRow(row: StateRow): RecommendationState {
     recommendationId: row.recommendation_id,
     ...(reaction(row.reaction) ? { reaction: reaction(row.reaction) } : {}),
     reactionRevision: row.reaction_revision,
+    reactionSequence: row.reaction_sequence,
     ...(row.reaction_changed_at ? { reactionChangedAt: row.reaction_changed_at } : {}),
     ...(reaction(row.learned_reaction) ? { learnedReaction: reaction(row.learned_reaction) } : {}),
     learnedReactionRevision: row.learned_reaction_revision,
@@ -629,6 +631,7 @@ interface StateRow extends DatabaseRow {
   readonly recommendation_id: string;
   readonly reaction: string | null;
   readonly reaction_revision: number;
+  readonly reaction_sequence: number;
   readonly reaction_changed_at: string | null;
   readonly learned_reaction: string | null;
   readonly learned_reaction_revision: number;

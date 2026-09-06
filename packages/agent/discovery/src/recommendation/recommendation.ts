@@ -54,6 +54,7 @@ export const RecommendationStateSchema = z.object({
   recommendationId: z.string().min(1),
   reaction: ReactionSchema.optional(),
   reactionRevision: z.number().int().nonnegative(),
+  reactionSequence: z.number().int().nonnegative(),
   reactionChangedAt: TimestampSchema.optional(),
   learnedReaction: ReactionSchema.optional(),
   learnedReactionRevision: z.number().int().nonnegative(),

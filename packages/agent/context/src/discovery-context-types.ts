@@ -15,8 +15,8 @@ export type PreferenceDimension =
 
 export interface ContextPreference {
   readonly id: string;
-  readonly polarity: PreferencePolarity;
-  readonly dimension: PreferenceDimension;
+  readonly polarity?: PreferencePolarity;
+  readonly dimension?: PreferenceDimension;
   readonly statement: string;
   readonly supportingRecommendationIds: readonly string[];
   readonly updatedAt: string;

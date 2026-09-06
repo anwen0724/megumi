@@ -15,29 +15,54 @@ export const PreferenceSetSchema = z.object({
   scope: PreferenceScopeSchema,
   interestId: z.string().min(1).optional(),
   revision: z.number().int().nonnegative(),
+  processedRevision: z.number().int().nonnegative().optional(),
+  policyRevision: z.number().int().nonnegative(),
+  lastOutcome: z.enum(['changed', 'unchanged', 'insufficient']).optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 }).strict().superRefine((value, context) => {
   if ((value.scope === 'interest') !== Boolean(value.interestId)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'Interest scope requires an Interest identity.' });
   }
+  if (value.processedRevision !== undefined && value.processedRevision > value.revision) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Processed revision cannot lead current inputs.' });
+  }
 });
 export const PreferenceSchema = z.object({
   id: z.string().min(1),
   preferenceSetId: z.string().min(1),
-  polarity: PreferencePolaritySchema,
-  dimension: PreferenceDimensionSchema,
-  statement: z.string().trim().min(1).max(1000),
+  origin: z.enum(['learned', 'user']),
+  polarity: PreferencePolaritySchema.optional(),
+  dimension: PreferenceDimensionSchema.optional(),
+  statement: z.string().trim().refine((value) => [...value].length >= 1 && [...value].length <= 1000),
+  revision: z.number().int().positive(),
+  status: z.enum(['active', 'needs_review', 'retired', 'deleted']),
+  userEditedAt: TimestampSchema.optional(),
+  deletedAt: TimestampSchema.optional(),
+  deletedFeedbackSequence: z.number().int().nonnegative().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
-}).strict();
+}).strict().superRefine((value, context) => {
+  const validOrigin = value.origin === 'learned'
+    ? value.polarity !== undefined && value.dimension !== undefined && value.userEditedAt === undefined
+    : value.polarity === undefined && value.dimension === undefined && value.userEditedAt !== undefined
+      && (value.status === 'active' || value.status === 'deleted');
+  const validDeletion = value.status === 'deleted'
+    ? value.deletedAt !== undefined && value.deletedFeedbackSequence !== undefined
+    : value.deletedAt === undefined && value.deletedFeedbackSequence === undefined;
+  if (!validOrigin || !validDeletion) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid preference ownership or deletion state.' });
+});
 export const PreferenceEvidenceSchema = z.object({
   id: z.string().min(1),
   preferenceId: z.string().min(1),
   recommendationId: z.string().min(1),
   reactionRevision: z.number().int().positive(),
   reaction: FeedbackReactionSchema,
+  relation: z.enum(['support', 'counter']),
+  explanation: z.string().trim().min(1).max(1000).optional(),
+  contentQuote: z.string().min(1).max(2000).optional(),
   createdAt: TimestampSchema,
+  updatedAt: TimestampSchema,
 }).strict();
 export const PreferenceDetailSchema = z.object({
   preference: PreferenceSchema,

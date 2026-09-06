@@ -15,6 +15,7 @@ export const InterestSchema = z.object({
   createdFrom: InterestCreatedFromSchema,
   revision: z.number().int().nonnegative(),
   userManagedAt: TimestampSchema.optional(),
+  descriptionUserEditedAt: TimestampSchema.optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
   pausedAt: TimestampSchema.optional(),
