@@ -11,14 +11,24 @@ import {
   type LearnedScopeInput, type PreferenceLearningFacts, type PreferenceLearningTrigger,
   type PreferenceLearningCompletion, type CommitPreferenceLearningResult,
   type PreferenceLearningSupport,
+  PreferenceScopeRequestSchema, type PreferenceScopeRequest, type PreferenceManagementDetails, type PreferenceEvidenceView,
 } from '../preferences/preference';
 import { createRecommendationRepository, type RecommendationRepository } from './recommendation-repository';
 import type { Recommendation } from '../recommendation/recommendation';
+import { changePreferenceInputs } from './preference-input-state';
 
 const TimestampSchema = z.string().datetime({ offset: true });
 const IdSchema = z.string().min(1);
 
 export interface PreferenceLearningRepository {
+  /** Reads current visible preferences without creating scopes or invoking a model. */
+  getPreferenceDetails(scope: PreferenceScopeRequest): PreferenceManagementDetails | undefined;
+  /** Distinguishes current feedback from the original inferred relationship. */
+  getPreferenceEvidence(preferenceId: string): PreferenceEvidenceView | undefined;
+  /** Promotes a learned statement to an explicit, user-owned requirement under CAS. */
+  editPreference(input: { readonly preferenceId: string; readonly expectedRevision: number; readonly statement: string; readonly now: string }): PreferenceEditResult;
+  /** Retains the deletion boundary while immediately removing the preference from effective reads. */
+  deletePreference(input: { readonly preferenceId: string; readonly expectedRevision: number; readonly now: string }): PreferenceDeleteResult;
   /** Finds durable entities by database identity; a missing row returns undefined. */
   findPreferenceSetById(id: string): PreferenceSet | undefined;
   findPreferenceById(id: string): Preference | undefined;
@@ -39,10 +49,73 @@ export interface PreferenceLearningRepository {
   }): CommitPreferenceLearningResult;
 }
 
+export type PreferenceEditResult = { readonly status: 'updated' | 'unchanged'; readonly preference: Preference }
+  | { readonly status: 'not_found' | 'revision_conflict' | 'invalid_input' };
+export type PreferenceDeleteResult = { readonly status: 'deleted' | 'already_deleted' | 'not_found' | 'revision_conflict' };
+
 /** Creates the persistence owner over the same connection used by Recommendation transactions. */
 export function createPreferenceLearningRepository(database: DatabaseConnection): PreferenceLearningRepository {
   const recommendations = createRecommendationRepository(database);
   return {
+    getPreferenceDetails(rawScope) {
+      const scope = PreferenceScopeRequestSchema.parse(rawScope);
+      const interest = scope.scope === 'interest'
+        ? database.prepare<{ status: string }>({ sql: "SELECT status FROM discovery_interests WHERE id=? AND status<>'deleted'" }).get([scope.interestId]) : undefined;
+      if (scope.scope === 'interest' && !interest) return undefined;
+      const group = listDetails(database, recommendations, false).find(({ preferenceSet }) => scope.scope === 'interest'
+        ? preferenceSet.interestId === scope.interestId : preferenceSet.scope === 'exploration');
+      return {
+        scope, hasPendingLearning: !!group && group.preferenceSet.processedRevision !== group.preferenceSet.revision,
+        preferences: group?.preferences.filter(({ preference }) => preference.status === 'active' || preference.status === 'needs_review').map(({ preference }) => ({
+          preference, validity: interest?.status === 'paused' ? 'interest_paused' : preference.status === 'needs_review' ? 'needs_review' : 'effective',
+        })) ?? [],
+      };
+    },
+    getPreferenceEvidence(preferenceId) {
+      const preference = findPreference(database, IdSchema.parse(preferenceId));
+      if (!preference || preference.status === 'deleted') return undefined;
+      return { preferenceId, historicalSourceOnly: preference.origin === 'user', evidence: evidenceFor(database, preferenceId).map((reference) => {
+        const item = recommendations.findRecommendationById(reference.recommendationId);
+        if (!item) throw new Error('Preference evidence has no Recommendation.');
+        return {
+          reference, title: item.content.title, sourceName: item.content.sourceName, canonicalUrl: item.content.canonicalUrl,
+          currentReaction: item.state.reaction, currentReactionRevision: item.state.reactionRevision,
+          current: evidenceIsCurrent(reference, item),
+          content: { sourceId: item.content.sourceId, canonicalUrl: item.content.canonicalUrl, title: item.content.title,
+            contentSummary: item.content.contentSummary, description: item.content.description, contentText: item.content.contentExcerpt,
+            completeness: item.content.contentExcerpt ? item.content.contentTruncated ? 'partial' : 'full' : 'metadata_only' },
+        };
+      }) };
+    },
+    editPreference(input) {
+      const statement = input.statement.trim();
+      if ([...statement].length < 1 || [...statement].length > 1000) return { status: 'invalid_input' };
+      const now = TimestampSchema.parse(input.now);
+      return database.transaction({ operation: (): PreferenceEditResult => {
+        const current = findPreference(database, input.preferenceId);
+        if (!current || current.status === 'deleted' || !editableSet(database, current.preferenceSetId)) return { status: 'not_found' };
+        if (current.revision !== input.expectedRevision) return { status: 'revision_conflict' };
+        if (current.origin === 'user' && current.statement === statement) return { status: 'unchanged', preference: current };
+        database.prepare({ sql: "UPDATE discovery_preferences SET origin='user',polarity=NULL,dimension=NULL,statement=?,status='active',user_edited_at=?,updated_at=?,revision=revision+1 WHERE id=?" }).run([statement, now, now, current.id]);
+        changePreferenceInputs(database, current.preferenceSetId, now, true, true);
+        const preference = findPreference(database, current.id);
+        if (!preference) throw new Error('Edited preference disappeared.');
+        return { status: 'updated', preference };
+      } });
+    },
+    deletePreference(input) {
+      const now = TimestampSchema.parse(input.now);
+      return database.transaction({ operation: (): PreferenceDeleteResult => {
+        const current = findPreference(database, input.preferenceId);
+        if (!current || !editableSet(database, current.preferenceSetId)) return { status: 'not_found' };
+        if (current.status === 'deleted') return { status: 'already_deleted' };
+        if (current.revision !== input.expectedRevision) return { status: 'revision_conflict' };
+        database.prepare({ sql: `UPDATE discovery_preferences SET status='deleted',deleted_at=?,updated_at=?,revision=revision+1,
+          deleted_feedback_sequence=(SELECT COALESCE(MAX(reaction_sequence),0) FROM discovery_recommendation_states) WHERE id=?` }).run([now, now, current.id]);
+        changePreferenceInputs(database, current.preferenceSetId, now, true, true);
+        return { status: 'deleted' };
+      } });
+    },
     findPreferenceSetById: (id) => findSet(database, IdSchema.parse(id)),
     findPreferenceById: (id) => findPreference(database, IdSchema.parse(id)),
     findPreferenceEvidenceById: (id) => findEvidence(database, IdSchema.parse(id)),
@@ -315,15 +388,17 @@ function listDetails(database: DatabaseConnection, recommendations: Recommendati
     const value = detail(database, id);
     if (!value) return [];
     if (!effectiveOnly) return [value];
-    if (value.preferenceSet.interestId && !validInterest(database, value.preferenceSet.interestId)) return [];
+    if (value.preferenceSet.interestId && !database.prepare({ sql: "SELECT id FROM discovery_interests WHERE id=? AND status='active'" }).get([value.preferenceSet.interestId])) return [];
     return [{
       preferenceSet: value.preferenceSet,
       preferences: value.preferences.flatMap((entry) => {
+        if (entry.preference.status !== 'active') return [];
+        if (entry.preference.origin === 'user') return [entry];
         const evidence = entry.evidence.filter((item) => {
           const recommendation = recommendations.findRecommendationById(item.recommendationId);
           return recommendation && evidenceIsCurrent(item, recommendation);
         });
-        return evidence.length ? [{ preference: entry.preference, evidence }] : [];
+        return evidence.length === entry.evidence.length && evidence.some((item) => item.relation === 'support') ? [{ preference: entry.preference, evidence }] : [];
       }),
     }];
   });
@@ -336,6 +411,11 @@ function belongsToSet(set: PreferenceSet, matchedInterestIds: readonly string[])
 }
 function validInterest(database: DatabaseConnection, id: string): boolean {
   return Boolean(database.prepare({ sql: "SELECT id FROM discovery_interests WHERE id=? AND status <> 'deleted'" }).get([id]));
+}
+/** Deleted interests cannot accept new user edits, while paused interests remain manageable. */
+function editableSet(database: DatabaseConnection, id: string): boolean {
+  const set = findSet(database, id);
+  return !!set && (!set.interestId || validInterest(database, set.interestId));
 }
 function support(item: Recommendation): PreferenceLearningSupport {
   if (!item.state.reaction) throw new Error('Support requires a current Reaction.');

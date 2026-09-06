@@ -98,6 +98,32 @@ export type Preference = z.infer<typeof PreferenceSchema>;
 export type PreferenceEvidence = z.infer<typeof PreferenceEvidenceSchema>;
 export type PreferenceDetail = z.infer<typeof PreferenceDetailSchema>;
 export type PreferenceSetDetail = z.infer<typeof PreferenceSetDetailSchema>;
+export const PreferenceScopeRequestSchema = z.discriminatedUnion('scope', [
+  z.object({ scope: z.literal('interest'), interestId: z.string().min(1) }).strict(),
+  z.object({ scope: z.literal('exploration') }).strict(),
+]);
+export type PreferenceScopeRequest = z.infer<typeof PreferenceScopeRequestSchema>;
+export const PreferenceManagementDetailsSchema = z.object({
+  scope: PreferenceScopeRequestSchema,
+  hasPendingLearning: z.boolean(),
+  preferences: z.array(z.object({
+    preference: PreferenceSchema,
+    validity: z.enum(['effective', 'needs_review', 'interest_paused']),
+  }).strict()),
+}).strict();
+export type PreferenceManagementDetails = z.infer<typeof PreferenceManagementDetailsSchema>;
+export const PreferenceEvidenceViewSchema = z.object({
+  preferenceId: z.string().min(1),
+  historicalSourceOnly: z.boolean(),
+  evidence: z.array(z.object({
+    reference: PreferenceEvidenceSchema,
+    title: z.string(), sourceName: z.string(), canonicalUrl: z.string().url(),
+    currentReaction: FeedbackReactionSchema.optional(),
+    currentReactionRevision: z.number().int().nonnegative(),
+    current: z.boolean(), content: RecommendationContentEvidenceSchema,
+  }).strict()),
+}).strict();
+export type PreferenceEvidenceView = z.infer<typeof PreferenceEvidenceViewSchema>;
 export type LearnedScopeInput = z.infer<typeof LearnedScopeInputSchema>;
 export type FeedbackReaction = z.infer<typeof FeedbackReactionSchema>;
 export type RecommendationContentEvidence = z.infer<typeof RecommendationContentEvidenceSchema>;

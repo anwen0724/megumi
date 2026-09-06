@@ -15,6 +15,7 @@ describe('Recommendation repository', () => {
   beforeEach(() => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
+    database.prepare({ sql: "INSERT INTO discovery_interests (id,description,status,created_from,created_at,updated_at) VALUES ('interest:1','Agent architecture','active','manual',?,?)" }).run([snapshotAt, snapshotAt]);
     nextId = 0;
     repository = createRecommendationRepository({
       database,

@@ -3,6 +3,7 @@
  */
 import crypto from 'node:crypto';
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
+import { changePreferenceInputs, ensurePreferenceSet } from './preference-input-state';
 import {
   InterestDescriptionSchema,
   InterestEvidenceSchema,
@@ -116,13 +117,13 @@ export function createInterestRepository(database: DatabaseConnection): Interest
     findInterestSessionSettingBySessionId: (sessionId) => (
       findInterestSessionSetting(database, 'session_id', sessionId)
     ),
-    applyInterestChange: (command) => database.transaction({
+    applyInterestChange: (command) => interestTransaction(database, {
       operation: () => applyInterestChange(database, command),
     }),
-    applyInterestExtraction: (command) => database.transaction({
+    applyInterestExtraction: (command) => interestTransaction(database, {
       operation: () => applyInterestExtraction(database, command),
     }),
-    applyInterestSessionSettingChange: (command) => database.transaction({
+    applyInterestSessionSettingChange: (command) => interestTransaction(database, {
       operation: () => {
         upsertInterestSessionSetting(database, command);
         const participation = findInterestSessionSetting(
@@ -139,10 +140,24 @@ export function createInterestRepository(database: DatabaseConnection): Interest
         return { participation, affectedInterestIds };
       },
     }),
-    retractSessionEvidence: (input) => database.transaction({
+    retractSessionEvidence: (input) => interestTransaction(database, {
       operation: () => retractSessionEvidence(database, input.sessionId, input.retractedAt),
     }),
   };
+}
+
+/** Invalidates preference inputs for every actual Interest change, including evidence retraction. */
+function interestTransaction<T>(database: DatabaseConnection, request: { operation(): T }): T {
+  return database.transaction({ operation: () => {
+    const before = new Map(database.prepare<{ id: string; revision: number }>({ sql: 'SELECT id,revision FROM discovery_interests' }).all().map((row) => [row.id, row.revision]));
+    const result = request.operation();
+    for (const row of database.prepare<{ id: string; revision: number; updated_at: string }>({ sql: 'SELECT id,revision,updated_at FROM discovery_interests' }).all()) {
+      if (before.get(row.id) === row.revision) continue;
+      const setId = ensurePreferenceSet(database, row.id, row.updated_at);
+      changePreferenceInputs(database, setId, row.updated_at, true, true);
+    }
+    return result;
+  } });
 }
 
 /** Applies one already-validated Interest state transition inside the caller transaction. */
@@ -152,9 +167,9 @@ function applyInterestChange(database: DatabaseConnection, command: ValidatedInt
     database.prepare({ sql: `
       INSERT INTO discovery_interests (
         id, description, status, created_from, user_managed_at,
-        created_at, updated_at, revision
-      ) VALUES (?, ?, 'active', 'manual', ?, ?, ?, 1)
-    ` }).run([command.interestId, description, command.now, command.now, command.now]);
+        created_at, updated_at, description_user_edited_at, revision
+      ) VALUES (?, ?, 'active', 'manual', ?, ?, ?, ?, 1)
+    ` }).run([command.interestId, description, command.now, command.now, command.now, command.now]);
     return readInterestRequired(database, command.interestId);
   }
 
@@ -164,9 +179,9 @@ function applyInterestChange(database: DatabaseConnection, command: ValidatedInt
     const description = InterestDescriptionSchema.parse(command.description);
     database.prepare({ sql: `
       UPDATE discovery_interests
-      SET description = ?, user_managed_at = ?, updated_at = ?, revision = revision + 1
+      SET description = ?, user_managed_at = ?, updated_at = ?, description_user_edited_at = ?, revision = revision + 1
       WHERE id = ?
-    ` }).run([description, command.now, command.now, command.interestId]);
+    ` }).run([description, command.now, command.now, command.now, command.interestId]);
   } else if (command.action === 'pause') {
     database.prepare({ sql: `
       UPDATE discovery_interests

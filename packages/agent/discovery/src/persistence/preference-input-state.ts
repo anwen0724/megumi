@@ -1,0 +1,39 @@
+/*
+ * Maintains preference input versions inside Discovery's feedback and interest transactions.
+ */
+import { randomUUID } from 'node:crypto';
+import type { DatabaseConnection } from '@megumi/database';
+import { RecommendationSelectionBasisSchema } from '../recommendation/recommendation';
+
+/** Creates the durable scope boundary even when no preference has been inferred. */
+export function ensurePreferenceSet(database: DatabaseConnection, interestId: string | undefined, now: string): string {
+  const existing = database.prepare<{ id: string }>({ sql: interestId
+    ? 'SELECT id FROM discovery_preference_sets WHERE interest_id=?'
+    : "SELECT id FROM discovery_preference_sets WHERE scope='exploration'",
+  }).get(interestId ? [interestId] : []);
+  if (existing) return existing.id;
+  const id = randomUUID();
+  database.prepare({ sql: 'INSERT INTO discovery_preference_sets (id,scope,interest_id,created_at,updated_at) VALUES (?,?,?,?,?)' })
+    .run([id, interestId ? 'interest' : 'exploration', interestId ?? null, now, now]);
+  return id;
+}
+
+/** Advances the learning watermark and, for corrections, the publication guard. */
+export function changePreferenceInputs(database: DatabaseConnection, setId: string, now: string, correction: boolean, invalidateAll = false): void {
+  database.prepare({ sql: 'UPDATE discovery_preference_sets SET revision=revision+1,policy_revision=policy_revision+?,updated_at=? WHERE id=?' })
+    .run([Number(correction), now, setId]);
+  if (invalidateAll) database.prepare({ sql: "UPDATE discovery_preferences SET status='needs_review',revision=revision+1,updated_at=? WHERE preference_set_id=? AND origin='learned' AND status='active'" }).run([now, setId]);
+}
+
+/** Records a feedback change without scheduling model work or relying on event delivery. */
+export function recordPreferenceFeedbackChange(database: DatabaseConnection, recommendationId: string, previousRevision: number, now: string): void {
+  const row = database.prepare<{ selection_basis_json: string }>({ sql: 'SELECT selection_basis_json FROM discovery_recommendations WHERE id=?' }).get([recommendationId]);
+  if (!row) throw new Error('Feedback has no Recommendation.');
+  const basis = RecommendationSelectionBasisSchema.parse(JSON.parse(row.selection_basis_json));
+  const scopes = new Set(basis.matchedInterestIds.map((id) => ensurePreferenceSet(database, id, now)));
+  if (!basis.matchedInterestIds.length) scopes.add(ensurePreferenceSet(database, undefined, now));
+  for (const entry of database.prepare<{ preference_set_id: string }>({ sql: 'SELECT DISTINCT p.preference_set_id FROM discovery_preferences p JOIN discovery_preference_evidence e ON e.preference_id=p.id WHERE e.recommendation_id=?' }).all([recommendationId])) scopes.add(entry.preference_set_id);
+  database.prepare({ sql: `UPDATE discovery_preferences SET status='needs_review',revision=revision+1,updated_at=?
+    WHERE origin='learned' AND status='active' AND id IN (SELECT preference_id FROM discovery_preference_evidence WHERE recommendation_id=?)` }).run([now, recommendationId]);
+  for (const id of scopes) changePreferenceInputs(database, id, now, previousRevision > 0);
+}

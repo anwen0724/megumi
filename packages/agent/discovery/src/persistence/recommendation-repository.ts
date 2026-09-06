@@ -5,6 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import { z } from 'zod';
+import { recordPreferenceFeedbackChange } from './preference-input-state';
 import {
   LocalDateSchema,
   RecommendationCollectionSchema,
@@ -230,7 +231,7 @@ export function createRecommendationRepository(
       }
     },
     updateState(request) {
-      return updateState(database, clock.now(), UpdateRecommendationStateRequestSchema.parse(request));
+      return database.transaction({ operation: () => updateState(database, clock.now(), UpdateRecommendationStateRequestSchema.parse(request)) });
     },
     listPendingReactionChanges(request) {
       const { limit } = PendingReactionRequestSchema.parse(request);
@@ -399,9 +400,11 @@ function applyStateUpdate(
     database.prepare({ sql: `
       UPDATE discovery_recommendation_states
       SET reaction = ?, reaction_revision = reaction_revision + 1,
+          reaction_sequence = (SELECT COALESCE(MAX(reaction_sequence),0)+1 FROM discovery_recommendation_states),
           reaction_changed_at = ?, updated_at = ?
       WHERE recommendation_id = ?
     ` }).run([request.reaction, now, now, request.recommendationId]);
+    recordPreferenceFeedbackChange(database, request.recommendationId, current.reactionRevision, now);
     return true;
   }
   if (request.action === 'opened') {
