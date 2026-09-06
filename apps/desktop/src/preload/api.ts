@@ -2,6 +2,7 @@
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */
 import { ipcRenderer } from 'electron';
+import type { DiscoveryPreferenceDetailsPayload, DiscoveryPreferenceDetailsResult, DiscoveryPreferenceEvidencePayload, DiscoveryPreferenceEvidenceResult, DiscoveryPreferenceEditPayload, DiscoveryPreferenceEditResult, DiscoveryPreferenceDeletePayload, DiscoveryPreferenceDeleteResult } from '@megumi/product-host/host';
 import type { AnyEvent } from '@megumi/product-host/host';
 import type {
   ApprovalHostResult,
@@ -424,6 +425,23 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   discovery: {
+    getPreferenceDetails: (
+      request: BusinessRequest<DiscoveryPreferenceDetailsPayload, typeof IPC_CHANNELS.discovery.preferenceDetails>,
+    ): Promise<RuntimeIpcResult<DiscoveryPreferenceDetailsResult, typeof IPC_CHANNELS.discovery.preferenceDetails>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDetails, request),
+    getPreferenceEvidence: (
+      request: BusinessRequest<DiscoveryPreferenceEvidencePayload, typeof IPC_CHANNELS.discovery.preferenceEvidence>,
+    ): Promise<RuntimeIpcResult<DiscoveryPreferenceEvidenceResult, typeof IPC_CHANNELS.discovery.preferenceEvidence>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEvidence, request),
+    editPreference: (
+      request: BusinessRequest<DiscoveryPreferenceEditPayload, typeof IPC_CHANNELS.discovery.preferenceEdit>,
+    ): Promise<RuntimeIpcResult<DiscoveryPreferenceEditResult, typeof IPC_CHANNELS.discovery.preferenceEdit>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEdit, request),
+    deletePreference: (
+      request: BusinessRequest<DiscoveryPreferenceDeletePayload, typeof IPC_CHANNELS.discovery.preferenceDelete>,
+    ): Promise<RuntimeIpcResult<DiscoveryPreferenceDeleteResult, typeof IPC_CHANNELS.discovery.preferenceDelete>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDelete, request),
+
     confirmCandidateSupply: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>,
     ): Promise<RuntimeIpcResult<DiscoveryCandidateSupplyConfirmResult, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>> =>

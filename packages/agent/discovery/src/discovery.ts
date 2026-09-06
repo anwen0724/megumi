@@ -66,6 +66,9 @@ import {
 } from './recommendation/recommendation-runtime';
 import type { UpdateRecommendationStateResult } from './persistence/recommendation-repository';
 import type { SourceRegistry } from './sources/source-registry';
+import type { PreferenceScopeRequest, PreferenceManagementDetails, PreferenceEvidenceView } from './preferences/preference';
+import type { PreferenceEditResult, PreferenceDeleteResult } from './persistence/preference-learning-repository';
+import type { PreparePreferencesRequest, PreparePreferencesResult } from './preferences/preference-learning-runtime';
 
 export interface InterestFacts {
   readonly interests: readonly Interest[];
@@ -86,6 +89,16 @@ export interface RecommendationReferenceContent {
 }
 
 export interface Discovery {
+  /** Reads preferences from the existing interest or exploration scope without learning. */
+  getPreferenceDetails(scope: PreferenceScopeRequest): PreferenceManagementDetails | undefined;
+  /** Reads current and historical evidence for a visible preference. */
+  getPreferenceEvidence(preferenceId: string): PreferenceEvidenceView | undefined;
+  /** Saves the user's exact requirement with optimistic concurrency protection. */
+  editPreference(request: { preferenceId: string; expectedRevision: number; statement: string }): PreferenceEditResult;
+  /** Removes a preference immediately and preserves its deletion boundary. */
+  deletePreference(request: { preferenceId: string; expectedRevision: number }): PreferenceDeleteResult;
+  /** Internal recommendation and controlled-evaluation entry; not exposed as a Desktop learning action. */
+  preparePreferencesForRecommendation(request: PreparePreferencesRequest): Promise<PreparePreferencesResult>;
   /** Confirms first Candidate Supply use without waiting for the background execution. */
   confirmCandidateSupply(): Promise<{ readonly status: 'confirmed' | 'already_confirmed' }>;
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
@@ -161,6 +174,20 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
 
   const recommendationRepository = options.recommendation?.repository;
   return {
+    getPreferenceDetails: (scope) => options.preferenceLearning?.repository.getPreferenceDetails(scope),
+    getPreferenceEvidence: (id) => options.preferenceLearning?.repository.getPreferenceEvidence(id),
+    editPreference(request) {
+      if (!options.preferenceLearning) throw new Error('Preference Learning is not configured.');
+      return options.preferenceLearning.repository.editPreference({ ...request, now: options.preferenceLearning.now() });
+    },
+    deletePreference(request) {
+      if (!options.preferenceLearning) throw new Error('Preference Learning is not configured.');
+      return options.preferenceLearning.repository.deletePreference({ ...request, now: options.preferenceLearning.now() });
+    },
+    preparePreferencesForRecommendation(request) {
+      if (!preferenceLearning) throw new Error('Preference Learning is not configured.');
+      return preferenceLearning.preparePreferencesForRecommendation(request);
+    },
     async confirmCandidateSupply() {
       if (!candidateSupply) throw new Error('Candidate Supply is not configured.');
       return candidateSupply.confirm();

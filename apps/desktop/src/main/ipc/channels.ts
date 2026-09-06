@@ -72,6 +72,11 @@ export const IPC_CHANNELS = {
     resolve: 'approval:resolve',
   },
   discovery: {
+    preferenceDetails: 'discovery:preference:details',
+    preferenceEvidence: 'discovery:preference:evidence',
+    preferenceEdit: 'discovery:preference:edit',
+    preferenceDelete: 'discovery:preference:delete',
+
     candidateSupplyConfirm: 'discovery:candidate-supply:confirm',
     configurationGet: 'discovery:configuration:get',
     configurationUpdate: 'discovery:configuration:update',

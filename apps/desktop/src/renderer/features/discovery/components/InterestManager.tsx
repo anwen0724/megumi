@@ -17,6 +17,7 @@ import type { DiscoveryConfigurationUiDto, DiscoveryHomeUiResult } from '@megumi
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';
+import { PreferencePanel } from './PreferencePanel';
 
 interface InterestManagerProps {
   open: boolean;
@@ -361,9 +362,11 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
                           })}
                         />
                       )}
+                      <PreferencePanel scope={{ scope: 'interest', interestId: interest.interestId }} />
                     </article>
                   );
                 })}
+                <PreferencePanel scope={{ scope: 'exploration' }} />
               </div>
             </section>
           ) : (

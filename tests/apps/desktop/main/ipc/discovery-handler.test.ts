@@ -12,6 +12,7 @@ describe('registerDiscoveryHandlers', () => {
     });
     const requestRecommendation = vi.fn(async () => ({
       status: 'started' as const,
+      phase: 'executing' as const,
       localDate: '2026-08-22',
       requestId: 'request:discovery:1',
       executionId: 'execution:1',

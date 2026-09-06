@@ -2,6 +2,7 @@
 import type { Discovery } from '@megumi/discovery';
 import type { DiscoveryFactsReader } from '@megumi/context';
 import type { DiscoveryHost } from '../host/discovery-host';
+import { DiscoveryPreferenceDetailsPayloadSchema, DiscoveryPreferenceEvidencePayloadSchema, DiscoveryPreferenceEditPayloadSchema, DiscoveryPreferenceDeletePayloadSchema } from '../host/discovery-host';
 import {
   DiscoveryBackgroundWaitOptionsSchema,
   DiscoveryCandidateSupplyRequestSchema,
@@ -15,6 +16,7 @@ import {
 export function createDiscoveryOperations(
   agent: Pick<
     Discovery,
+    | 'getPreferenceDetails' | 'getPreferenceEvidence' | 'editPreference' | 'deletePreference' | 'preparePreferencesForRecommendation'
     | 'changeInterest'
     | 'confirmCandidateSupply'
     | 'setInterestSessionSetting'
@@ -40,6 +42,11 @@ export function createDiscoveryOperations(
   facts: DiscoveryFactsReader,
 ): DiscoveryHost {
   return {
+    getPreferenceDetails: async (request) => ({ details: agent.getPreferenceDetails(DiscoveryPreferenceDetailsPayloadSchema.parse(request)) ?? null }),
+    getPreferenceEvidence: async (request) => ({ details: agent.getPreferenceEvidence(DiscoveryPreferenceEvidencePayloadSchema.parse(request).preferenceId) ?? null }),
+    editPreference: async (request) => agent.editPreference(DiscoveryPreferenceEditPayloadSchema.parse(request)),
+    deletePreference: async (request) => agent.deletePreference(DiscoveryPreferenceDeletePayloadSchema.parse(request)),
+    preparePreferencesForRecommendation: (request) => agent.preparePreferencesForRecommendation(request),
     confirmCandidateSupply: () => agent.confirmCandidateSupply(),
     getConfiguration: () => agent.getDiscoveryConfiguration(),
     updateConfiguration: (request) => agent.updateDiscoveryConfiguration(request),

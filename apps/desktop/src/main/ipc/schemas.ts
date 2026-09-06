@@ -149,3 +149,8 @@ export type ObservabilityListPayload = z.infer<typeof host.ObservabilityListPayl
 export type ObservabilityTracePayload = z.infer<typeof host.ObservabilityTracePayloadSchema>;
 export type ObservabilityContentPayload = z.infer<typeof host.ObservabilityContentPayloadSchema>;
 export type ObservabilityEmptyPayload = z.infer<typeof host.ObservabilityEmptyPayloadSchema>;
+
+export const DiscoveryPreferenceDetailsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceDetails, host.DiscoveryPreferenceDetailsPayloadSchema);
+export const DiscoveryPreferenceEvidenceRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceEvidence, host.DiscoveryPreferenceEvidencePayloadSchema);
+export const DiscoveryPreferenceEditRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceEdit, host.DiscoveryPreferenceEditPayloadSchema);
+export const DiscoveryPreferenceDeleteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceDelete, host.DiscoveryPreferenceDeletePayloadSchema);

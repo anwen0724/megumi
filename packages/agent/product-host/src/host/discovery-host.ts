@@ -1,6 +1,8 @@
 /* Defines renderer-safe Discovery DTOs and strict Product Host request/response schemas. */
 import { z } from 'zod';
 import type { PreferenceLearningStatus } from '@megumi/discovery';
+import { PreferenceScopeRequestSchema, PreferenceManagementDetailsSchema, PreferenceEvidenceViewSchema, PreferenceSchema } from '@megumi/discovery';
+import type { PreparePreferencesRequest, PreparePreferencesResult } from '@megumi/discovery';
 import type { ReadDiscoveryFactsResult, RecommendationFacts } from '@megumi/context';
 import {
   CandidatePoolSnapshotSchema,
@@ -26,6 +28,25 @@ import {
 } from '@megumi/discovery';
 
 const LocalDateSchema = z.string().date();
+export const DiscoveryPreferenceDetailsPayloadSchema = PreferenceScopeRequestSchema;
+export const DiscoveryPreferenceEvidencePayloadSchema = z.object({ preferenceId: z.string().min(1) }).strict();
+export const DiscoveryPreferenceDeletePayloadSchema = z.object({ preferenceId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict();
+export const DiscoveryPreferenceEditPayloadSchema = DiscoveryPreferenceDeletePayloadSchema.extend({ statement: z.string().trim().refine((value) => [...value].length >= 1 && [...value].length <= 1000) }).strict();
+export const DiscoveryPreferenceDetailsResultSchema = z.object({ details: PreferenceManagementDetailsSchema.nullable() }).strict();
+export const DiscoveryPreferenceEvidenceResultSchema = z.object({ details: PreferenceEvidenceViewSchema.nullable() }).strict();
+export const DiscoveryPreferenceEditResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.enum(['updated','unchanged']), preference: PreferenceSchema }).strict(),
+  z.object({ status: z.enum(['not_found','revision_conflict','invalid_input']) }).strict(),
+]);
+export const DiscoveryPreferenceDeleteResultSchema = z.object({ status: z.enum(['deleted','already_deleted','not_found','revision_conflict']) }).strict();
+export type DiscoveryPreferenceDetailsPayload = z.infer<typeof DiscoveryPreferenceDetailsPayloadSchema>;
+export type DiscoveryPreferenceEvidencePayload = z.infer<typeof DiscoveryPreferenceEvidencePayloadSchema>;
+export type DiscoveryPreferenceEditPayload = z.infer<typeof DiscoveryPreferenceEditPayloadSchema>;
+export type DiscoveryPreferenceDeletePayload = z.infer<typeof DiscoveryPreferenceDeletePayloadSchema>;
+export type DiscoveryPreferenceDetailsResult = z.infer<typeof DiscoveryPreferenceDetailsResultSchema>;
+export type DiscoveryPreferenceEvidenceResult = z.infer<typeof DiscoveryPreferenceEvidenceResultSchema>;
+export type DiscoveryPreferenceEditResult = z.infer<typeof DiscoveryPreferenceEditResultSchema>;
+export type DiscoveryPreferenceDeleteResult = z.infer<typeof DiscoveryPreferenceDeleteResultSchema>;
 export const DiscoveryCandidateSupplyConfirmPayloadSchema = z.object({}).strict();
 export const DiscoveryCandidateSupplyConfirmResultSchema = z.object({
   status: z.enum(['confirmed', 'already_confirmed']),
@@ -181,6 +202,16 @@ export type DiscoveryBackgroundWaitResult<T> =
   | { readonly status: 'timed_out' };
 
 export interface DiscoveryHost {
+  /** Reads the existing scope without model work. */
+  getPreferenceDetails(request: DiscoveryPreferenceDetailsPayload): Promise<DiscoveryPreferenceDetailsResult>;
+  /** Reads evidence and distinguishes current feedback from the original learning source. */
+  getPreferenceEvidence(request: DiscoveryPreferenceEvidencePayload): Promise<DiscoveryPreferenceEvidenceResult>;
+  /** Promotes a preference to the user's explicit requirement. */
+  editPreference(request: DiscoveryPreferenceEditPayload): Promise<DiscoveryPreferenceEditResult>;
+  /** Deletes a preference under revision protection. */
+  deletePreference(request: DiscoveryPreferenceDeletePayload): Promise<DiscoveryPreferenceDeleteResult>;
+  /** On-demand preparation for trusted Host workflows; no Desktop learning IPC. */
+  preparePreferencesForRecommendation(request: PreparePreferencesRequest): Promise<PreparePreferencesResult>;
   /** Records explicit first-use consent and checks supply in the background. */
   confirmCandidateSupply(): Promise<DiscoveryCandidateSupplyConfirmResult>;
   getConfiguration(request?: DiscoveryConfigurationGetPayload): Promise<DiscoveryConfigurationUiDto>;

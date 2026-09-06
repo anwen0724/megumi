@@ -3,6 +3,7 @@
  */
 // @vitest-environment node
 import { expect, it } from 'vitest';
+import { createDiscovery } from '@megumi/discovery';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
 it('protects an edited requirement after its original feedback is withdrawn', () => {
@@ -20,6 +21,21 @@ it('protects an edited requirement after its original feedback is withdrawn', ()
     expect(repository.getPreferenceDetails({ scope: 'interest', interestId: 'interest:agents' })).toMatchObject({ hasPendingLearning: true, preferences: [{ validity: 'effective', preference: { origin: 'user' } }] });
     expect(repository.getPreferenceEvidence('p')).toMatchObject({ historicalSourceOnly: true, evidence: [{ current: false, title: 'Recommendation 1' }] });
   } finally { database.close(); }
+});
+
+it('exposes read-only preference management through Discovery without starting learning', async () => {
+  const { database, repository } = createLearningFixture();
+  repository.applyInterestChange({ action: 'create', interestId: 'i', description: '摄影', now });
+  const discovery = createDiscovery({ preferenceLearning: {
+    repository, now: () => now, resolveModel: async () => undefined,
+    models: { completeSimple: async () => { throw new Error('Reading must not invoke learning'); } },
+    context: { build: async () => { throw new Error('Reading must not build model context'); } },
+    ids: { createBatchId: () => 'b', createModelCallId: () => 'm' },
+  } });
+  try {
+    expect(discovery.getPreferenceDetails({ scope: 'interest', interestId: 'i' })).toMatchObject({ preferences: [], hasPendingLearning: true });
+    expect(discovery.getPreferenceDetails({ scope: 'interest', interestId: 'missing' })).toBeUndefined();
+  } finally { await discovery.shutdown(); database.close(); }
 });
 
 it('keeps deletion boundaries stable and stops paused interests from supplying requirements', () => {

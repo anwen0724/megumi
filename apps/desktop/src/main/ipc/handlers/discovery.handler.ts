@@ -1,5 +1,9 @@
 /* Desktop IPC handlers for Discovery interests, Recommendation, and configuration. */
 import {
+  DiscoveryPreferenceDetailsResultSchema,
+  DiscoveryPreferenceEvidenceResultSchema,
+  DiscoveryPreferenceEditResultSchema,
+  DiscoveryPreferenceDeleteResultSchema,
   DiscoveryRecommendationRequestResultSchema,
   DiscoveryCandidateSupplyConfirmResultSchema,
   DiscoveryConfigurationUiDtoSchema,
@@ -17,6 +21,10 @@ import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
+  DiscoveryPreferenceDetailsRequestSchema,
+  DiscoveryPreferenceEvidenceRequestSchema,
+  DiscoveryPreferenceEditRequestSchema,
+  DiscoveryPreferenceDeleteRequestSchema,
   DiscoveryRecommendationRequestSchema,
   DiscoveryCandidateSupplyConfirmRequestSchema,
   DiscoveryConfigurationGetRequestSchema,
@@ -45,6 +53,31 @@ export function registerDiscoveryHandlers(
   options: RegisterDiscoveryHandlersOptions = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
+
+  ipcMain.handle(IPC_CHANNELS.discovery.preferenceDetails, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.preferenceDetails, requestSchema: DiscoveryPreferenceDetailsRequestSchema,
+    responseSchema: DiscoveryPreferenceDetailsResultSchema, logger: options.logger,
+    handle: (request) => service.host.discovery.getPreferenceDetails(request.payload), mapError: mapDiscoveryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.discovery.preferenceEvidence, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.preferenceEvidence, requestSchema: DiscoveryPreferenceEvidenceRequestSchema,
+    responseSchema: DiscoveryPreferenceEvidenceResultSchema, logger: options.logger,
+    handle: (request) => service.host.discovery.getPreferenceEvidence(request.payload), mapError: mapDiscoveryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.discovery.preferenceEdit, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.preferenceEdit, requestSchema: DiscoveryPreferenceEditRequestSchema,
+    responseSchema: DiscoveryPreferenceEditResultSchema, logger: options.logger,
+    handle: (request) => service.host.discovery.editPreference(request.payload), mapError: mapDiscoveryIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.discovery.preferenceDelete, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.preferenceDelete, requestSchema: DiscoveryPreferenceDeleteRequestSchema,
+    responseSchema: DiscoveryPreferenceDeleteResultSchema, logger: options.logger,
+    handle: (request) => service.host.discovery.deletePreference(request.payload), mapError: mapDiscoveryIpcError,
+  }));
+
 
   ipcMain.handle(IPC_CHANNELS.discovery.candidateSupplyConfirm, createIpcRequestHandler({
     channel: IPC_CHANNELS.discovery.candidateSupplyConfirm,

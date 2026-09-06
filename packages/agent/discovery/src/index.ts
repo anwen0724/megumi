@@ -225,6 +225,9 @@ export {
   LearnedScopeInputSchema,
   PreferenceDimensionSchema,
   PreferenceSchema,
+  PreferenceScopeRequestSchema,
+  PreferenceManagementDetailsSchema,
+  PreferenceEvidenceViewSchema,
   PreferenceSetSchema,
   PreferenceEvidenceSchema,
   PreferenceDetailSchema,
@@ -239,6 +242,9 @@ export type {
   FeedbackReaction,
   LearnedScopeInput,
   Preference,
+  PreferenceScopeRequest,
+  PreferenceManagementDetails,
+  PreferenceEvidenceView,
   PreferenceSet,
   PreferenceEvidence,
   PreferenceDetail,
@@ -257,9 +263,13 @@ export {
   type CreatePreferenceLearningRuntimeOptions,
   type PreferenceLearningRuntime,
   type PreferenceLearningStatus,
+  type PreparePreferencesRequest,
+  type PreparePreferencesResult,
 } from './preferences/preference-learning-runtime';
 export type {
   PreferenceLearningRepository,
+  PreferenceEditResult,
+  PreferenceDeleteResult,
 } from './persistence/preference-learning-repository';
 export type {
   DiscoveryDayView,
