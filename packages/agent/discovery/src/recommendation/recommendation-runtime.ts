@@ -2,6 +2,7 @@
  * Owns Recommendation trigger admission, immutable snapshot construction,
  * Agent Core delegation, runtime-only status, and bounded waiting.
  */
+import type { PreparePreferencesResult } from '../preferences/preference-learning-runtime';
 import type { PreferenceSetDetail } from '../preferences/preference';
 import { randomUUID } from 'node:crypto';
 import type { Api, Model } from '@megumi/ai';
@@ -84,7 +85,7 @@ export interface CreateRecommendationRuntimeOptions {
   /** Read-only projection of already validated preferences; production defaults to the complete source. */
   readonly preferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
   /** Prepares pending preference inputs after recommendation admission, before freezing its snapshot. */
-  readonly preparePreferences?: (request: { requestId: string; signal: AbortSignal }) => Promise<void>;
+  readonly preparePreferences?: (request: { requestId: string; signal: AbortSignal }) => Promise<PreparePreferencesResult | void>;
   readonly observability?: Observability;
   readonly repository: RecommendationDataRepository;
   readonly attempts: RecommendationAttempts;
@@ -455,7 +456,12 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
     const admission = prepareSnapshot(options, options.clock.now(), current.localDate, settings);
     if (admission.ranking.actualTargetCount === 0) { complete(current, { status: 'waiting_for_candidates', localDate: current.localDate }); return; }
     current.executionId = undefined;
-    await options.preparePreferences?.({ requestId: current.requestId, signal: current.controller.signal });
+    const preferencePreparation = await options.preparePreferences?.({ requestId: current.requestId, signal: current.controller.signal });
+    if (preferencePreparation) {
+      try { options.observability?.recordContent({ kind: 'preference.preparation', value: {
+        status: preferencePreparation.status, scopeResults: preferencePreparation.scopeResults, failures: preferencePreparation.failures,
+      }, correlation: { requestId: current.requestId } }); } catch { /* Diagnostics do not change preparation or publication. */ }
+    }
     if (shuttingDown || current.controller.signal.aborted || active !== current) return;
     if (localDateAt(options.clock.now(), options.timezone.get()) !== current.localDate) {
       complete(current, { status: 'cancelled', localDate: current.localDate });
@@ -489,6 +495,7 @@ export function createRecommendationRuntime(options: CreateRecommendationRuntime
         current.executionId = executionId;
         options.attempts.start({
           requestId: current.requestId,
+          ...(preferencePreparation ? { preferencePreparation: { status: preferencePreparation.status, scopeResults: preferencePreparation.scopeResults, failures: preferencePreparation.failures } } : {}),
           executionId,
           localDate: current.localDate,
           snapshotAt,

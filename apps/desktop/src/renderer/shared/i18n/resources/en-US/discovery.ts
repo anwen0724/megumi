@@ -4,6 +4,8 @@ export const discovery = {
   explorationPreferences: "Exploration preferences",
   preferencePending: "Will update before the next recommendation",
   preferenceEmpty: "No preferences learned yet",
+  preferenceLoading: "Loading preferences…",
+  preferenceInvalidLength: "Preference statements must contain 1–1000 characters.",
   preferenceLearned: "Learned from feedback",
   preferenceUser: "Edited by you",
   preferenceDescription: "Preference statement",

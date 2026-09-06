@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "caseId": "preference-sequence.photo-accumulation",
-  "revision": 1,
+  "revision": 2,
   "name": "摄影教程：accumulation",
   "description": "连续反馈及用户更正后，通过同状态推荐对照检查偏好有效性与实际输入。语义质量需要人工逐检查点评审。",
   "metadata": {
@@ -140,7 +140,7 @@
         "kind": "feedback",
         "recommendationReferenceId": "r1",
         "reaction": "liked",
-        "stepId": "step-1"
+        "stepId": "first-feedback"
       },
       {
         "kind": "inspect",
@@ -148,24 +148,40 @@
           "scope": "interest",
           "interestReferenceId": "photo"
         },
-        "stepId": "step-2"
+        "stepId": "inspect-first"
+      },
+      {
+        "kind": "recommend",
+        "paired": false,
+        "stepId": "first-recommendation"
+      },
+      {
+        "kind": "advance_clock",
+        "milliseconds": 86400000,
+        "stepId": "next-day"
       },
       {
         "kind": "feedback",
         "recommendationReferenceId": "r2",
         "reaction": "liked",
-        "stepId": "step-3"
+        "stepId": "second-feedback"
       },
       {
         "kind": "recommend",
         "paired": true,
-        "stepId": "step-4"
+        "stepId": "second-recommendation"
       }
     ]
   },
   "expected": {
     "checkpoints": {
-      "step-4": {
+      "first-recommendation": {
+        "allowedOutcome": [
+          "published"
+        ],
+        "publicationIntegrityRequired": true
+      },
+      "second-recommendation": {
         "publicationIntegrityRequired": true
       }
     }

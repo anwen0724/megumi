@@ -71,6 +71,7 @@ export type ScoreReport = z.infer<typeof ScoreReportSchema>;
 
 const ReviewIdentity = {
   caseIdentity: IdentitySchema, caseDigest: DigestSchema, evidenceDigest: DigestSchema, metricId: IdentitySchema,
+  checkpointId: IdentitySchema.optional(), arm: z.enum(['shared', 'learned', 'omitted']).optional(),
 };
 export const ReviewSchema = z.object({
   schemaVersion: z.literal(1), runId: IdentitySchema, profileDigest: DigestSchema,
@@ -84,7 +85,7 @@ export const ReviewSchema = z.object({
 }).strict().superRefine((review, context) => {
   const seen = new Set<string>();
   for (const [index, entry] of review.entries.entries()) {
-    const key = JSON.stringify([entry.caseIdentity, entry.metricId]);
+    const key = JSON.stringify([entry.caseIdentity, entry.metricId, entry.checkpointId, entry.arm]);
     if (seen.has(key)) context.addIssue({ code: 'custom', path: ['entries', index], message: 'Duplicate review entry.' });
     if (entry.decision === 'scored' && entry.numerator > entry.denominator) {
       context.addIssue({ code: 'custom', path: ['entries', index], message: 'Numerator cannot exceed denominator.' });
@@ -92,3 +93,4 @@ export const ReviewSchema = z.object({
     seen.add(key);
   }
 });
+export type Review = z.infer<typeof ReviewSchema>;

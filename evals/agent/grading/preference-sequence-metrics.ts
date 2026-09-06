@@ -29,6 +29,9 @@ export function preferenceSequenceMetric(metricId: string, evidence: CaseEvidenc
     if (metricId === 'personalization.user_control') {
       for (const [id, statement] of protectedStatements) add(`${label}: preserve user ${id}`, step.finalState.preferences.some((p) => p.id === id && p.origin === 'user' && p.statement === statement));
       for (const id of deleted) add(`${label}: deleted ${id} inactive`, !step.finalState.preferences.some((p) => p.id === id && p.status === 'active'));
+      for (const [id, statement] of Object.entries(evidence.snapshot.case.expected?.checkpoints[label]?.protectedUserStatements ?? {})) {
+        add(`${label}: explicit requirement ${id} preserved`, step.finalState.preferences.some((p) => p.id === id && p.origin === 'user' && p.status === 'active' && p.statement === statement));
+      }
     }
     const expected = evidence.snapshot.case.expected?.checkpoints[label];
     if (metricId === 'personalization.input_validity') {
@@ -69,7 +72,10 @@ export function preferenceSequenceMetric(metricId: string, evidence: CaseEvidenc
 
 /** Compares captured initial inputs; execution IDs are correlation fields, not decision inputs. */
 export function comparablePreferenceArms(learned: PreferenceExperiment, omitted: PreferenceExperiment): boolean {
+  if (StatusSchema.safeParse(learned.result).data?.status !== 'published'
+    || StatusSchema.safeParse(omitted.result).data?.status !== 'published') return false;
   if (learned.issues.length || omitted.issues.length || learned.configurationDifferences.length || omitted.configurationDifferences.length) return false;
+  if ([...learned.traces, ...omitted.traces].some((trace) => trace.kind === 'preference_learning')) return false;
   if (learned.sharedStateDigest !== omitted.sharedStateDigest || digest(learned.initialState) !== learned.sharedStateDigest || digest(omitted.initialState) !== omitted.sharedStateDigest
     || learned.modelConfigDigest !== omitted.modelConfigDigest || learned.clock !== omitted.clock || digest(learned.configuration) !== digest(omitted.configuration)) return false;
   const full = ContextSchema.safeParse(learned.inputSummary[0]);

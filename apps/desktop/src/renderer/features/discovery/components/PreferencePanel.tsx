@@ -20,21 +20,26 @@ export function PreferencePanel({ scope }: { scope: DiscoveryPreferenceDetailsPa
   const [confirmDelete, setConfirmDelete] = useState<string>();
   const [evidence, setEvidence] = useState<DiscoveryPreferenceEvidenceResult['details']>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string>();
   const generation = useRef(0);
   const interestId = scope.scope === 'interest' ? scope.interestId : undefined;
 
   const load = useCallback(async () => {
     const current = ++generation.current;
+    setLoading(true);
     try {
       const payload: DiscoveryPreferenceDetailsPayload = interestId ? { scope: 'interest', interestId } : { scope: 'exploration' };
       const result = await window.megumi.discovery.getPreferenceDetails(createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.preferenceDetails, payload));
       if (!result.ok) throw new Error(t('preferenceReadFailed'));
-      if (current === generation.current) setDetails(result.data.details);
+      if (current === generation.current) { setDetails(result.data.details); setLoaded(true); }
       return result.data.details;
     } catch {
       if (current === generation.current) setError(t('preferenceReadFailed'));
       return null;
+    } finally {
+      if (current === generation.current) setLoading(false);
     }
   }, [interestId, t]);
 
@@ -46,12 +51,16 @@ export function PreferencePanel({ scope }: { scope: DiscoveryPreferenceDetailsPa
   /** Saves the captured revision; a conflict refreshes the visible original without losing the draft. */
   async function save(): Promise<void> {
     if (!draft) return;
+    const length = [...draft.statement.trim()].length;
+    if (length < 1 || length > 1000) { setError(t('preferenceInvalidLength')); return; }
     setBusy(true); setError(undefined);
     try {
       const result = await window.megumi.discovery.editPreference(createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.preferenceEdit, {
         preferenceId: draft.id, expectedRevision: draft.revision, statement: draft.statement,
       }));
       if (!result.ok) throw new Error(t('preferenceSaveFailed'));
+      if (result.data.status === 'not_found') { await load(); setError(t('preferenceMissing')); return; }
+      if (result.data.status === 'invalid_input') { setError(t('preferenceInvalidLength')); return; }
       if (result.data.status === 'revision_conflict') {
         const latest = await load();
         const current = latest?.preferences.find(({ preference }) => preference.id === draft.id)?.preference;
@@ -61,7 +70,7 @@ export function PreferencePanel({ scope }: { scope: DiscoveryPreferenceDetailsPa
       }
       if (result.data.status !== 'updated' && result.data.status !== 'unchanged') throw new Error(t('preferenceSaveFailed'));
       setDraft(undefined); setEvidence(null); await load();
-    } catch (failure) { setError(failure instanceof Error ? failure.message : t('preferenceSaveFailed')); }
+    } catch { setError(t('preferenceSaveFailed')); }
     finally { setBusy(false); }
   }
 
@@ -95,8 +104,9 @@ export function PreferencePanel({ scope }: { scope: DiscoveryPreferenceDetailsPa
     </button>
     {expanded && <div className="mt-3 space-y-3">
       {details?.hasPendingLearning && <p className="text-xs text-[var(--color-text-muted)]">{t('preferencePending')}</p>}
-      <Button size="sm" variant="ghost" disabled={busy} onClick={() => { setError(undefined); void load(); }}>{t('preferenceRefresh')}</Button>
-      {details?.preferences.length === 0 && <p>{t('preferenceEmpty')}</p>}
+      <Button size="sm" variant="ghost" disabled={busy || loading} onClick={() => { setError(undefined); void load(); }}>{t('preferenceRefresh')}</Button>
+      {loading && <p role="status">{t('preferenceLoading')}</p>}
+      {loaded && !loading && !details?.preferences.length && <p>{t('preferenceEmpty')}</p>}
       {details?.preferences.map(({ preference, validity }) => <div key={preference.id} className="space-y-2 rounded-xl bg-[var(--color-app-bg)] p-3">
         <p className="whitespace-pre-wrap">{preference.statement}</p>
         <p className="text-xs text-[var(--color-text-muted)]">{t(preference.origin === 'user' ? 'preferenceUser' : 'preferenceLearned')}

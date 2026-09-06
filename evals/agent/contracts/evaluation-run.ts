@@ -2,6 +2,7 @@
  * Defines Evaluation Run inputs and immutable execution records without any grading concepts.
  */
 import { z } from 'zod';
+import { PreferenceSequenceRecordSchema } from './preference-sequence-record';
 import {
   EvaluationCaseSchema,
   EvaluationEnvironmentKindSchema,
@@ -128,7 +129,13 @@ export const CaseRunResultSchema = z.object({
     initialFiles: z.array(z.object({ path: z.string(), sha256: Sha256Schema, byteLength: z.number().int().nonnegative() }).strict()).default([]),
   }).strict(),
   error: z.object({ name: z.string().min(1), message: z.string() }).strict().optional(),
-}).strict();
+}).strict().superRefine((record, context) => {
+  if (record.caseType !== 'preference_sequence') return;
+  if (record.schemaVersion !== 3) context.addIssue({ code: 'custom', path: ['schemaVersion'], message: 'Continuous records require version 3.' });
+  if (record.recordStatus === 'recorded' && !PreferenceSequenceRecordSchema.safeParse(record.ownerFacts).success) {
+    context.addIssue({ code: 'custom', path: ['ownerFacts'], message: 'Recorded sequences require valid continuous evidence.' });
+  }
+});
 export type CaseRunResult = z.infer<typeof CaseRunResultSchema>;
 
 export const EvaluationRunRecordSchema = z.object({

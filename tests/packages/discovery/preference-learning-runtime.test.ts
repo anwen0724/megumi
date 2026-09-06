@@ -80,3 +80,40 @@ it('rejects required context that exceeds its budget before paying for a model c
   expect(result).toMatchObject({ status: 'degraded', failures: [{ code: 'input_too_large' }] });
   expect(models.completeSimple).not.toHaveBeenCalled();
 });
+
+it('keeps a user edit when an older model result arrives after the correction', async () => {
+  const { runtime, repository, database, models } = setup();
+  await runtime.preparePreferencesForRecommendation({ requestId: 'first' });
+  const preference = repository.listPreferenceSetDetails()[0].preferences[0].preference;
+  seedRecommendation(database, 2);
+  repository.updateState({ recommendationId: 'recommendation:2', action: 'set_reaction', reaction: 'liked' });
+  const original = models.completeSimple.getMockImplementation();
+  let release: (() => void) | undefined;
+  models.completeSimple.mockImplementationOnce(async () => {
+    if (!original) throw new Error('Missing scripted provider.');
+    const stale = await original();
+    await new Promise<void>((resolve) => { release = resolve; });
+    return stale;
+  }).mockImplementation(async () => completedMessage('invalid output on fresh retry'));
+  const pending = runtime.preparePreferencesForRecommendation({ requestId: 'second' });
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+  repository.editPreference({ preferenceId: preference.id, expectedRevision: preference.revision, statement: '也愿意看新手内容，避免纯推广', now });
+  release?.();
+  const result = await pending;
+  expect(result.status).toBe('degraded');
+  expect(result.preferences[0].preferences).toHaveLength(1);
+  expect(result.preferences[0].preferences[0].preference).toMatchObject({ id: preference.id, origin: 'user', statement: '也愿意看新手内容，避免纯推广' });
+  expect(result.guard.scopes[0].policyRevision).toBeGreaterThan(0);
+});
+
+it('excludes invalidated preferences when learning fails instead of reviving the previous inference', async () => {
+  const { runtime, repository, models } = setup();
+  await runtime.preparePreferencesForRecommendation({ requestId: 'first' });
+  repository.updateState({ recommendationId: 'recommendation:1', action: 'set_reaction', reaction: null });
+  models.completeSimple.mockImplementation(async () => completedMessage('invalid JSON'));
+  const result = await runtime.preparePreferencesForRecommendation({ requestId: 'after-withdrawal' });
+  expect(result.status).toBe('degraded');
+  expect(result.preferences[0].preferences).toEqual([]);
+  expect(result.scopeResults[0].status).toBe('pending');
+  expect(repository.listPreferenceSetDetails()[0].preferences[0].preference.status).toBe('needs_review');
+});

@@ -36,6 +36,7 @@ import {
   createInterestExtractor,
   type Discovery,
   type PreferenceSetDetail,
+  type PreparePreferencesResult,
   type EmbeddedBrowser,
   type SourceRegistry,
 } from '@megumi/discovery';
@@ -113,6 +114,8 @@ import type { ProductWorkspaceFileSystem } from '@megumi/product-host/host';
 import type { ProductRuntimeLogger } from './application-runtime';
 
 export interface ProductCapabilitiesOptions {
+  /** Supplies a previously prepared result; callers must bind it to unchanged business state. */
+  consumePreparedPreferences?: () => PreparePreferencesResult | undefined;
   /** Supplies a read-only projection at the recommendation input boundary. */
   recommendationPreferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
   home: InitializeMegumiHomeSyncOptions;
@@ -643,6 +646,7 @@ function composeCapabilitiesWithDatabase(
     },
   };
   discovery = createDiscovery({
+    ...(options.consumePreparedPreferences ? { consumePreparedPreferences: options.consumePreparedPreferences } : {}),
     onBackgroundError(error, context) {
       observability.runtimeLogger.write({
         level: 'warn', module: 'discovery', code: 'discovery_background_step_failed',

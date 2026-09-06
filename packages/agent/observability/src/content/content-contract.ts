@@ -32,6 +32,7 @@ export const CONTENT_KINDS = [
   'candidate.pool.snapshot',
   'recommendation.published',
   'preference.learning.result',
+  'preference.preparation',
   'preference.committed',
   'interest.understanding.input',
   'interest.understanding.result',

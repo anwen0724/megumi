@@ -7,6 +7,8 @@ export const discovery = {
   explorationPreferences: "探索内容偏好",
   preferencePending: "将在下次推荐时更新",
   preferenceEmpty: "尚未形成偏好",
+  preferenceLoading: "正在读取偏好…",
+  preferenceInvalidLength: "偏好描述应为 1–1000 个字符",
   preferenceLearned: "从反馈中学习",
   preferenceUser: "你已编辑",
   preferenceDescription: "偏好描述",

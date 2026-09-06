@@ -18,8 +18,10 @@ export function readPreferenceGuard(database: DatabaseConnection): PreferenceGua
 export function validatePreferenceGuard(database: DatabaseConnection, expected: PreferenceGuard): boolean {
   const actual = readPreferenceGuard(database);
   const byId = (a: { id: string }, b: { id: string }) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  // A newly created zero-policy scope contains no correction and must not interrupt selection.
+  const changedScopes = (scopes: PreferenceGuard['scopes']) => scopes.filter((scope) => scope.policyRevision > 0).sort(byId);
   return JSON.stringify(actual.interests) === JSON.stringify([...expected.interests].sort(byId))
-    && JSON.stringify(actual.scopes) === JSON.stringify([...expected.scopes].sort(byId));
+    && JSON.stringify(changedScopes(actual.scopes)) === JSON.stringify(changedScopes(expected.scopes));
 }
 
 /** Creates the durable scope boundary even when no preference has been inferred. */

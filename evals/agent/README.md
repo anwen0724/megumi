@@ -22,7 +22,7 @@ Evaluation 不实现第二套业务流程。每个 Case 都由独立 Evaluation 
 - `controlled/recommendation`
 - `controlled/preference-learning`
 
-另有 `controlled/recommendation-quality`、`controlled/preference-quality`，各含四条合成质量场景；当前合计 7 Dataset、13 Case。覆盖内容深度、负向偏好、历史去重、工作集扩展，以及单反馈、撤回、剩余支持和反馈反转。原五条基础 Case 保持不变；合成场景未经真实用户标注。
+另有 `controlled/recommendation-quality`、`controlled/preference-quality`，各含四条合成质量场景；另有 `controlled/preference-sequence` 十条连续场景，当前合计 8 Dataset、23 Case。覆盖内容深度、负向偏好、历史去重、工作集扩展，以及单反馈、撤回、剩余支持和反馈反转。受新偏好语义影响的活动 Case 已提升 revision；旧封存记录保持不变。合成场景未经真实用户标注。
 
 Case 的 `initialState` 是对应业务执行前必须存在的产品状态，`input` 是要通过真实 Product Host 发起的动作，`expected` 供评估器和评审者使用。`expected` 会保存在 Case 快照中，但绝不会进入候选 Agent 的上下文。
 
@@ -73,7 +73,7 @@ npm run eval:agent -- run --candidate .\candidate-model.json --dataset controlle
 
 先停止业务、读取最终状态、关闭资源并封存证据，成功后才删除临时环境；收尾或留档不完整则保留现场，在 `cleanup.json` 记录路径。运行记录封存失败会抛出错误，临时环境不删除。
 
-Controlled 当前仅支持 `open_web` 来源。真实产品自动后台触发关闭，只执行 Case 动作。Preference Case 可在 input 声明 `advanceTimeMs` 驱动真实学习定时器；当前示例推进 600000 毫秒，遵守少量反馈十分钟规则，不需要实际等待。未推进到触发时刻则保留 pending。
+Controlled 当前仅支持 `open_web` 来源。真实产品自动后台触发关闭，只执行 Case 动作。单步 Preference Case 写入反馈后显式调用正式准备能力，连续 Case 在推荐准入后准备。`advanceTimeMs` 和连续的 `advance_clock` 只推进业务时钟，不触发学习。
 
 结果保存在 `evals/agent/records/<runId>/`：
 
@@ -131,3 +131,21 @@ npm run eval:agent -- compare --baseline .\evals\agent\records\score-before\scor
 `passed` 只表示选中指标已完成且没有阈值失败；`failed` 表示业务失败或阈值失败；`incomplete` 表示待评审、未结束或证据不足。除 passed 外 score 均退出 1。首组 Profile 对硬约束设阈值 1；语义指标逐项呈现，不设置未经验证的总质量分数。
 
 compare 将任何已配对指标的反向变化标为 `regressed`，包括用量或耗时上升；有缺口则不能宣称无退化。没有统计容忍区间，单次变化可能含模型和网络噪声。`no_observed_regression` 只覆盖本次相同样本/标准，不能证明真实用户长期体验。regressed/inconclusive 均退出 1，报告仍正常生成。
+
+
+## 连续偏好评估
+
+```powershell
+npm run eval:agent -- run --candidate .\candidate-model.json --dataset controlled/preference-sequence --timeout-ms 240000
+npm run eval:agent -- score --run .\evals\agent\records\<runId> --profile .\evals\agent\grading\profiles\preference-sequence.json --out .\evals\agent\records\sequence-score
+```
+
+Case 顺序执行反馈、兴趣更改、偏好编辑/删除、时间推进和推荐；每步保留实际初始/最终状态。摄影与烹饪场景覆盖积累、相反反馈、撤回、反转、用户纠正和删除后的新旧证据；受控 Provider 测试另保护失败、并发与迟到输出，不能当作真实语义质量。
+
+配对检查点先完成一次真实学习，从同一状态执行 learned/omitted 两组。后者仅在推荐读取边界省略自动偏好，保留用户要求和原始反馈；同一准备结果（包括降级）按完整状态摘要验证后一次性复用，禁止重复学习。主路径继续使用 learned 组结果。连续及新单步偏好记录采用 schemaVersion=3，旧 v2 保持只读。
+
+连续 `result.json` 的 ownerFacts 包含逐步状态、两组配置/模型摘要、实际 Context、Trace 和结果。omitted 组 Trace 位于 `artifacts/sequence/<stepId>/omitted/`。缺失组、发布失败、额外学习或其它输入差异会使对照不可比。
+
+评分另生成 `preference-cost.json`：mainPath 包含共享学习和主组推荐一次，sharedLearning 单列准备成本，两组 recommendation 分别报告模型调用、Trace 内重试、缓存/非缓存 Token 和 Trace 时长。Trace 时长之和不是整个序列墙钟时间；用量不完整保留 null，不补零。unexpectedLearning 用于识别早期记录中的对照重复学习问题。
+
+人工评审模板使用 checkpointId/arm（shared、learned、omitted）绑定实际证据。shared 判断推断有据、范围和删除后重学依据；两组各记录符合取舍的推荐数/实际推荐数和理由。所有必要项评审完成前保持 needs_review，提交的原始判断保存在 review.json。不能仅凭自动规则通过或两组输出不同宣称学习收益。

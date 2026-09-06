@@ -24,7 +24,22 @@ export const PreferenceSequenceRecordSchema = z.object({
     initialState: DiscoveryStateSchema, finalState: DiscoveryStateSchema,
     traces: z.array(SequenceTraceSchema), experiments: z.array(PreferenceExperimentSchema), issues: z.array(z.string()),
   }).strict()),
-}).strict();
+}).strict().superRefine((record, context) => {
+  const seen = new Set<string>();
+  for (const [index, step] of record.steps.entries()) {
+    if (seen.has(step.stepId) || step.stepId !== step.input.stepId) {
+      context.addIssue({ code: 'custom', path: ['steps', index, 'stepId'], message: 'Step identity must be unique and match its input.' });
+    }
+    seen.add(step.stepId);
+    const arms = new Set<string>();
+    for (const arm of step.experiments) {
+      if (arms.has(arm.arm) || arm.checkpointId !== step.stepId || step.input.kind !== 'recommend') {
+        context.addIssue({ code: 'custom', path: ['steps', index, 'experiments'], message: 'Experiment must belong to its recommendation checkpoint and have a unique arm.' });
+      }
+      arms.add(arm.arm);
+    }
+  }
+});
 export type PreferenceSequenceRecord = z.infer<typeof PreferenceSequenceRecordSchema>;
 export type PreferenceExperiment = z.infer<typeof PreferenceExperimentSchema>;
 export type SequenceTrace = z.infer<typeof SequenceTraceSchema>;

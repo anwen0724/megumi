@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { cp, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { DiscoveryState, PreferenceSetDetail } from '@megumi/discovery';
+import type { DiscoveryState, PreferenceSetDetail, PreparePreferencesResult } from '@megumi/discovery';
 import type { Api, ProviderStreams } from '@megumi/ai';
 import { composeApplication, type ProductRuntime } from '@megumi/composition';
 import { nodeObservabilityStorage } from '@megumi/observability';
@@ -19,6 +19,7 @@ import { createLiveProfile } from '../adapters/live/profile';
 import type { ResolvedCandidateModel } from '../adapters/candidate-model';
 import type { ResolvedEvaluationCase } from '../datasets/dataset-loader';
 import { getCaseBusinessState } from './business-state';
+import { digest } from '../evidence-digest';
 import {
   caseInitialState,
   createDatabaseInitialStateOwner,
@@ -45,6 +46,8 @@ export interface CaseEnvironment {
   readonly details: Readonly<Record<string, unknown>>;
   readonly now: () => string;
   readonly advanceTime?: (durationMs: number, deadlineMs: number) => Promise<void>;
+  /** Reuses one real preparation only while this environment's captured state is unchanged. */
+  reusePreparedPreferences(result: PreparePreferencesResult): void;
   /** Stops business work and flushes Trace, keeping query resources available. */
   stop(): Promise<void>;
   /** Stops the Product and removes the isolated temporary environment. */
@@ -97,6 +100,7 @@ export async function createCaseEnvironment(input: {
       owner.close();
     }
     const installedState = getCaseBusinessState(database, initialStateIds.workspaceId);
+    let prepared: { result: PreparePreferencesResult; stateDigest: string } | undefined;
 
     const productPackage = z.object({ version: z.string().min(1) }).passthrough().parse(
       JSON.parse(await readFile(path.join(input.repositoryRoot, 'package.json'), 'utf8')),
@@ -123,6 +127,12 @@ export async function createCaseEnvironment(input: {
       },
       instructionContentRoot: path.join(input.repositoryRoot, 'packages', 'agent', 'instructions', 'content'),
       clock: { now: profile.now },
+      consumePreparedPreferences() {
+        const captured = prepared;
+        prepared = undefined;
+        return captured?.stateDigest === digest(getCaseBusinessState(database, initialStateIds.workspaceId).discovery)
+          ? captured.result : undefined;
+      },
       ...(input.preferenceSource ? { recommendationPreferenceSource: input.preferenceSource } : {}),
       ...(input.modelStreams ? { modelStreams: input.modelStreams } : {}),
       ...(controlled ? {
@@ -158,6 +168,9 @@ export async function createCaseEnvironment(input: {
         businessSettings: z.object({ discovery: z.record(z.unknown()) }).parse(settingsStorage.read()).discovery,
       },
       now: profile.now,
+      reusePreparedPreferences(result) {
+        prepared = { result, stateDigest: digest(getCaseBusinessState(database, initialStateIds.workspaceId).discovery) };
+      },
       ...(controlled ? { advanceTime: (durationMs: number, deadlineMs: number) => controlled.timerDriver.advanceBy(durationMs, async () => {
         if (Date.now() >= deadlineMs) throw new Error('Controlled time advance reached the real safety deadline.');
 

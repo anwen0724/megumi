@@ -2,12 +2,13 @@
  * Owns Preference entities and atomic feedback-version commits. Learning work is
  * a caller-owned snapshot; this repository never stores execution or retry history.
  */
+import { PREFERENCE_LEARNING_POLICY as policy } from '../preferences/preference-learning-policy';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseConnection, DatabaseRow } from '@megumi/database';
 import { z } from 'zod';
 import {
   LearnedScopeInputSchema, PreferenceSchema, PreferenceSetSchema, PreferenceEvidenceSchema,
-  type Preference, type PreferenceSet, type PreferenceEvidence, type PreferenceSetDetail,
+  type Preference, type PreferenceSet, type PreferenceEvidence, type PreferenceSetDetail, type PreferenceGuard,
   type LearnedScopeInput, type PreferenceLearningFacts,
   type PreferenceLearningCompletion, type CommitPreferenceLearningResult,
   type PreferenceLearningSupport,
@@ -22,10 +23,10 @@ const TimestampSchema = z.string().datetime({ offset: true });
 const IdSchema = z.string().min(1);
 
 export interface PreferenceLearningRepository {
-  /** Captures current publication guard versions without invoking learning. */
   /** Reads effective scoped preferences and their publication guard in one transaction. */
-  getEffectivePreferences(scopes?: readonly PreferenceScopeRequest[]): { readonly preferences: readonly PreferenceSetDetail[]; readonly guard: import('../preferences/preference').PreferenceGuard };
-  getPreferenceGuard(): import('../preferences/preference').PreferenceGuard;
+  getEffectivePreferences(scopes?: readonly PreferenceScopeRequest[]): { readonly preferences: readonly PreferenceSetDetail[]; readonly guard: PreferenceGuard };
+  /** Captures current publication guard versions without invoking learning. */
+  getPreferenceGuard(): PreferenceGuard;
   /** Reads current visible preferences without creating scopes or invoking a model. */
   getPreferenceDetails(scope: PreferenceScopeRequest): PreferenceManagementDetails | undefined;
   /** Distinguishes current feedback from the original inferred relationship. */
@@ -93,8 +94,8 @@ export function createPreferenceLearningRepository(database: DatabaseConnection)
           currentReaction: item.state.reaction, currentReactionRevision: item.state.reactionRevision,
           current: evidenceIsCurrent(reference, item),
           content: { sourceId: item.content.sourceId, canonicalUrl: item.content.canonicalUrl, title: item.content.title,
-            contentSummary: item.content.contentSummary, ...(item.content.description ? { description: item.content.description } : {}), ...(item.content.contentExcerpt ? { contentText: [...item.content.contentExcerpt].slice(0, 2000).join('') } : {}),
-            completeness: item.content.contentExcerpt ? (item.content.contentTruncated || [...item.content.contentExcerpt].length > 2000) ? 'partial' : 'full' : 'metadata_only' },
+            contentSummary: item.content.contentSummary, ...(item.content.description ? { description: item.content.description } : {}), ...(item.content.contentExcerpt ? { contentText: [...item.content.contentExcerpt].slice(0, policy.contentCodePoints).join('') } : {}),
+            completeness: item.content.contentExcerpt ? (item.content.contentTruncated || [...item.content.contentExcerpt].length > policy.contentCodePoints) ? 'partial' : 'full' : 'metadata_only' },
         };
       }) };
     },
@@ -182,7 +183,7 @@ function prepare(
   for (const group of currentPreferences) {
     const scoped = all.filter((item) => belongsToSet(group.preferenceSet, item.selectionBasis.matchedInterestIds));
     for (const item of scoped.filter((item) => item.state.reactionRevision > item.state.learnedReactionRevision)) itemsById.set(item.id, item);
-    for (const item of scoped.filter((item) => item.state.reaction).slice(0, 30)) itemsById.set(item.id, item);
+    for (const item of scoped.filter((item) => item.state.reaction).slice(0, policy.recentFeedbackCount)) itemsById.set(item.id, item);
     for (const entry of group.preferences) for (const evidence of entry.evidence) {
       const item = recommendations.findRecommendationById(evidence.recommendationId);
       if (!item) throw new Error('Preference evidence lost its Recommendation.');
@@ -222,8 +223,8 @@ function prepare(
         contentEvidence: {
           sourceId: item.content.sourceId, canonicalUrl: item.content.canonicalUrl,
           title: item.content.title, contentSummary: item.content.contentSummary,
-          ...(item.content.description ? { description: item.content.description } : {}), ...(item.content.contentExcerpt ? { contentText: [...item.content.contentExcerpt].slice(0, 2000).join('') } : {}),
-          completeness: item.content.contentExcerpt ? (item.content.contentTruncated || [...item.content.contentExcerpt].length > 2000) ? 'partial' : 'full' : 'metadata_only',
+          ...(item.content.description ? { description: item.content.description } : {}), ...(item.content.contentExcerpt ? { contentText: [...item.content.contentExcerpt].slice(0, policy.contentCodePoints).join('') } : {}),
+          completeness: item.content.contentExcerpt ? (item.content.contentTruncated || [...item.content.contentExcerpt].length > policy.contentCodePoints) ? 'partial' : 'full' : 'metadata_only',
         },
       },
     })),

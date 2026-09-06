@@ -135,6 +135,8 @@ export interface Discovery {
 }
 
 export interface CreateDiscoveryOptions {
+  /** Reuses an externally prepared result at the admitted recommendation boundary. */
+  readonly consumePreparedPreferences?: () => PreparePreferencesResult | undefined;
   readonly interests?: CreateInterestRuntimeOptions;
   readonly recommendation?: CreateRecommendationRuntimeOptions;
   readonly candidateSupply?: CreateCandidateSupplyRuntimeOptions;
@@ -153,7 +155,8 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     : undefined;
   const recommendation = options.recommendation
     ? createRecommendationRuntime({ ...options.recommendation, ...(preferenceLearning ? {
-      preparePreferences: async (request) => { await preferenceLearning.preparePreferencesForRecommendation(request); },
+      preparePreferences: async (request) => options.consumePreparedPreferences?.()
+        ?? preferenceLearning.preparePreferencesForRecommendation(request),
     } : {}) })
     : undefined;
   const candidateSupply = options.candidateSupply

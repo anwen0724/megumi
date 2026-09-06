@@ -9,6 +9,8 @@ import { z } from 'zod';
 import type { PreferenceLearningRepository } from '../persistence/preference-learning-repository';
 import { LearnedScopeInputSchema, PreferenceScopeRequestSchema, PreferenceSetDetailSchema, PreferenceGuardSchema, type PreferenceLearningFacts, type LearnedScopeInput } from './preference';
 
+import { PREFERENCE_LEARNING_POLICY as policy } from './preference-learning-policy';
+
 const ModelResultSchema = z.object({ scopes: z.array(LearnedScopeInputSchema) }).strict();
 
 export const PreparePreferencesRequestSchema = z.object({
@@ -73,11 +75,11 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
     let updated = false;
     try {
       // Capture the work set once: new feedback cannot keep one request draining forever.
-      const initial = options.repository.preparePreferenceLearning({ batchId: options.ids.createBatchId(), startedAt: options.now(), limit: 30 });
+      const initial = options.repository.preparePreferenceLearning({ batchId: options.ids.createBatchId(), startedAt: options.now(), limit: policy.recentFeedbackCount });
       const groups = initial?.currentPreferences.filter(({ preferenceSet }) => !request.scopes || request.scopes.some((scope) => scope.scope === preferenceSet.scope && (scope.scope === 'exploration' || scope.interestId === preferenceSet.interestId))) ?? [];
       for (const group of groups) {
-        for (let attempt = 0; attempt < 3 && !cancellation.signal.aborted; attempt++) {
-          const facts = options.repository.preparePreferenceLearning({ batchId: options.ids.createBatchId(), startedAt: options.now(), limit: 30, preferenceSetId: group.preferenceSet.id });
+        for (let attempt = 0; attempt < policy.maximumAttempts && !cancellation.signal.aborted; attempt++) {
+          const facts = options.repository.preparePreferenceLearning({ batchId: options.ids.createBatchId(), startedAt: options.now(), limit: policy.recentFeedbackCount, preferenceSetId: group.preferenceSet.id });
           if (!facts) break;
           active = facts;
           let result: LearningBatchResult;
@@ -89,7 +91,7 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
           } finally { active = undefined; }
           if (result.status === 'committed') { updated = true; lastFailure = undefined; break; }
           lastFailure = { code: result.failure.code, message: result.failure.message, batchId: facts.batch.batchId };
-          if (!result.retryable || attempt === 2 || cancellation.signal.aborted) { failures.push({ code: result.failure.code, message: result.failure.message }); break; }
+          if (!result.retryable || attempt === policy.maximumAttempts - 1 || cancellation.signal.aborted) { failures.push({ code: result.failure.code, message: result.failure.message }); break; }
           await retryDelay(cancellation.signal);
         }
       }
@@ -119,14 +121,14 @@ export function createPreferenceLearningRuntime(options: CreatePreferenceLearnin
       // Serial callers receive their own cancellation and scope semantics.
       const parsed = PreparePreferencesRequestSchema.parse(request);
       const started = Date.now();
-      const queueSignal = AbortSignal.any([AbortSignal.timeout(60_000), ...(parsed.signal ? [parsed.signal] : [])]);
+      const queueSignal = AbortSignal.any([AbortSignal.timeout(policy.totalTimeoutMs), ...(parsed.signal ? [parsed.signal] : [])]);
       try { while (running) await abortable(running, queueSignal); }
       catch (error) {
         if (!queueSignal.aborted) throw error;
         return prepareResult(parsed.signal?.aborted ? 'cancelled' : 'degraded', parsed, parsed.signal?.aborted ? [] : [{ code: 'timed_out', message: 'Preference preparation exceeded its time budget.' }]);
       }
       if (parsed.signal?.aborted || !accepting) return prepareResult('cancelled', parsed, []);
-      const operation = prepare(parsed, Math.max(1, 60_000 - (Date.now() - started)));
+      const operation = prepare(parsed, Math.max(1, policy.totalTimeoutMs - (Date.now() - started)));
       running = operation;
       try { return await operation; } finally { if (running === operation) running = undefined; }
     },
@@ -144,7 +146,7 @@ async function retryDelay(signal: AbortSignal): Promise<void> {
   if (signal.aborted) return;
   await new Promise<void>((resolve) => {
     const finish = () => { clearTimeout(timer); signal.removeEventListener('abort', finish); resolve(); };
-    const timer = setTimeout(finish, 1_000);
+    const timer = setTimeout(finish, policy.retryDelayMs);
     signal.addEventListener('abort', finish, { once: true });
   });
 }
@@ -198,8 +200,8 @@ async function proposeGroup(
     currentMessages: [], signal,
   }), signal);
   if (built.status === 'failed') throw new LearningFailure(built.failure.code, built.failure.message, false);
-  const outputTokens = Math.min(model.maxTokens, 4096);
-  const budget = Math.min(32768, Math.floor((model.contextWindow - outputTokens) * 0.8));
+  const outputTokens = Math.min(model.maxTokens, policy.maximumOutputTokens);
+  const budget = Math.min(policy.maximumInputTokens, Math.floor((model.contextWindow - outputTokens) * policy.contextBudgetRatio));
   if (calculatePromptUsage({ prompt: built.prompt }).tokens > budget) {
     if (facts.reviewedPreferenceIds.length < 2) throw new LearningFailure('input_too_large', 'Required preference evidence exceeds the input budget.', false);
     const middle = Math.ceil(facts.reviewedPreferenceIds.length / 2);
@@ -231,7 +233,7 @@ async function proposeGroup(
 /** Retains complete direct evidence for this group plus pending and recent historical feedback. */
 function reviewGroup(facts: PreferenceLearningFacts, ids: readonly string[]): PreferenceLearningFacts {
   const direct = new Set(facts.currentPreferences.flatMap(({ preferences }) => preferences.filter(({ preference }) => ids.includes(preference.id)).flatMap(({ evidence }) => evidence.map((item) => item.recommendationId))));
-  const recent = new Set(facts.supportingReactions.slice().sort((a, b) => b.reactionSequence - a.reactionSequence || a.recommendationId.localeCompare(b.recommendationId)).slice(0, 30).map((item) => item.recommendationId));
+  const recent = new Set(facts.supportingReactions.slice().sort((a, b) => b.reactionSequence - a.reactionSequence || a.recommendationId.localeCompare(b.recommendationId)).slice(0, policy.recentFeedbackCount).map((item) => item.recommendationId));
   const feedback = facts.reactionChanges.filter((item) => item.currentReactionRevision > item.learnedReactionRevision || direct.has(item.recommendationId) || recent.has(item.recommendationId));
   const included = new Set(feedback.map((item) => item.recommendationId));
   return { ...facts, reviewedPreferenceIds: ids, reactionChanges: feedback, supportingReactions: facts.supportingReactions.filter((item) => included.has(item.recommendationId)),

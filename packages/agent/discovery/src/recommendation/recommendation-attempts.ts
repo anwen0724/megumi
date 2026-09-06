@@ -1,4 +1,5 @@
 /* Holds one Agent Core execution's frozen Recommendation snapshot and Tool-visible working set. */
+import type { PreparePreferencesResult } from '../preferences/preference-learning-runtime';
 import { z } from 'zod';
 import type { RawToolResult } from '@megumi/tools';
 import type { Observability } from '@megumi/observability';
@@ -22,6 +23,7 @@ const PublishInputSchema = z.object({
 }).strict();
 
 interface Attempt {
+  readonly preferencePreparation?: Pick<PreparePreferencesResult, 'status' | 'scopeResults' | 'failures'>;
   readonly preferenceGuard?: PreferenceGuard;
   inputChanged?: boolean;
   readonly requestId: string;
@@ -45,6 +47,7 @@ interface Attempt {
 }
 
 export interface StartRecommendationAttemptRequest {
+  readonly preferencePreparation?: Pick<PreparePreferencesResult, 'status' | 'scopeResults' | 'failures'>;
   readonly preferenceGuard?: PreferenceGuard;
   readonly requestId: string;
   readonly executionId: string;
@@ -105,6 +108,7 @@ export function createRecommendationAttempts(options: {
       if (!attempt) return undefined;
       return {
         preferenceGuard: attempt.preferenceGuard,
+        ...(attempt.preferencePreparation ? { preferencePreparation: attempt.preferencePreparation } : {}),
         requestId: attempt.requestId,
         executionId,
         localDate: attempt.localDate,

@@ -98,6 +98,9 @@ async function executeOperation(input: SequenceInput, step: PreferenceSequenceCa
       if (preference.origin === 'user') return true;
       omittedIds.add(preference.id); return false;
     }) })));
+    // Failed preparation is also a final result for this checkpoint. Neither arm may re-learn it.
+    env.reusePreparedPreferences(learning);
+    omitted.reusePreparedPreferences(learning);
     entry.experiments.push(await runArm(input, env, shared, step.stepId, 'learned', [], deadline));
     entry.experiments.push(await runArm(input, omitted, shared, step.stepId, 'omitted', omittedIds, deadline));
   } finally {

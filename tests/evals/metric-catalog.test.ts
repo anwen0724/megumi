@@ -10,7 +10,7 @@ describe('Evaluation Metric Catalog', () => {
     const definitions = listMetricDefinitions();
 
     expect(definitions).toHaveLength(50);
-    expect(new Set(definitions.map((definition) => definition.metricId)).size).toBe(44);
+    expect(new Set(definitions.map((definition) => definition.metricId)).size).toBe(definitions.length);
     expect(definitions.map((definition) => definition.metricId)).toContain('common.goal_completion');
     expect(definitions.map((definition) => definition.metricId)).toContain('recommendation.relevance');
     expect(definitions.map((definition) => definition.metricId)).toContain('efficiency.retries');

@@ -130,7 +130,7 @@ async function loadCaseCatalog(
       ) {
         throw new Error(`Controlled Candidate Supply Case requires at least one controlled source: ${evaluationCase.caseId}.`);
       }
-      const sources = evaluationCase.type === 'candidate_supply' ? evaluationCase.initialState.controlledSources
+      const sources = evaluationCase.type === 'candidate_supply' || evaluationCase.type === 'preference_sequence' ? evaluationCase.initialState.controlledSources
         : evaluationCase.type === 'conversation' ? evaluationCase.initialState.controlledWeb : [];
       if (environmentKind === 'controlled' && sources.some(({ sourceId }) => sourceId !== 'open_web')) {
         throw new Error(`Unsupported Controlled source in ${evaluationCase.caseId}; only open_web is implemented.`);

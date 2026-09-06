@@ -46,3 +46,19 @@ it('loads only when expanded and preserves the edit draft after a version confli
   expect(await screen.findByRole('alert')).toHaveTextContent('内容已变化');
   expect(editor).toHaveValue('保留用户原话');
 });
+
+it('shows an empty scope and blocks an overlong user requirement without submitting it', async () => {
+  const user = userEvent.setup();
+  getPreferenceDetails.mockResolvedValueOnce({ ok: true, data: { details: null } });
+  render(<PreferencePanel scope={{ scope: 'interest', interestId: 'i' }} />);
+  await user.click(screen.getByRole('button', { name: '内容偏好' }));
+  expect(await screen.findByText('尚未形成偏好')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '刷新偏好' }));
+  await user.click(await screen.findByRole('button', { name: '编辑' }));
+  const editor = screen.getByRole('textbox', { name: '偏好描述' });
+  await user.clear(editor);
+  await user.paste('字'.repeat(1001));
+  await user.click(screen.getByRole('button', { name: '保存修改' }));
+  expect(editPreference).not.toHaveBeenCalled();
+  expect(await screen.findByRole('alert')).toHaveTextContent('1000');
+});

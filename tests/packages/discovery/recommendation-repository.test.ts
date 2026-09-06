@@ -38,6 +38,21 @@ describe('Recommendation repository', () => {
     expect(repository.publish({ localDate: '2026-09-03', snapshotAt, publishedAt, preferenceGuard: discovery.getPreferenceGuard(), items: [publication('candidate:2', 'Source')] }).status).toBe('published');
   });
 
+  it('admits the first feedback in a new scope but rejects its later correction', () => {
+    const discovery = createDiscoveryRepository({ database });
+    const first = repository.publish({ localDate: '2026-09-03', snapshotAt, publishedAt, items: [publication('candidate:1', 'Source')] });
+    if (first.status !== 'published') throw new Error('Initial publication failed.');
+    const recommendationId = first.collection.items[0].id;
+    const guard = discovery.getPreferenceGuard();
+    repository.updateState({ recommendationId, action: 'set_reaction', reaction: 'liked' });
+    expect(repository.publish({ localDate: '2026-09-04', snapshotAt, publishedAt, preferenceGuard: guard, items: [publication('candidate:2', 'Source')] }).status).toBe('published');
+    seedCandidate(database, 'candidate:3', 'identity:3', '2026-09-10T00:00:00.000Z');
+    const beforeCorrection = discovery.getPreferenceGuard();
+    repository.updateState({ recommendationId, action: 'set_reaction', reaction: 'disliked' });
+    expect(repository.publish({ localDate: '2026-09-05', snapshotAt, publishedAt, preferenceGuard: beforeCorrection, items: [publication('candidate:3', 'Source')] }).status).toBe('input_changed');
+    expect(candidateStatus(database, 'candidate:3')).toBe('available');
+  });
+
   it('atomically publishes one immutable decision, content snapshot, and default state per Candidate', () => {
     const result = repository.publish({
       localDate: '2026-09-03',
