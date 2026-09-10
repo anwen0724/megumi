@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**A personal information-discovery Agent that follows what you care about and brings back relevant content every day.**
+**A cross-platform content recommendation Agent that searches around your interests, learns from your feedback, and brings relevant content into one daily feed.**
 
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-5f6b7a)](#quick-start)
 [![Built with TypeScript](https://img.shields.io/badge/built_with-TypeScript-3178c6)](https://www.typescriptlang.org/)
@@ -16,49 +16,61 @@
 
 ## Why Megumi
 
-People rarely care about only one stable topic. You may be following Agent engineering, graduate recruitment, and local food at the same time, while each interest keeps changing as your work and life move forward.
+Your interests extend beyond a single platform. You might follow AI engineering, photography, and cooking, while useful content is scattered across videos, communities, and the open Web.
 
-The useful information is scattered across video platforms, blogs, communities, and the open Web. Search engines make you repeat queries, subscription tools make you maintain keywords and feeds, and platform recommenders understand only what you do inside one platform.
+Tell Megumi what you want to follow in natural language, or authorize it to understand ongoing interests from your conversations. It searches enabled sources in the background and selects content for **Today's Discoveries**, with recommendation reasons and links to the originals. Feedback helps refine later recommendations; you can also inspect and correct what it learns.
 
-Megumi turns this recurring search work into a daily product experience. Tell it what you want to follow in natural language—or allow it to understand durable interests from your conversations—and it will actively search across enabled sources, filter candidates, and assemble the results into **Today's Discoveries**.
-
-> **Megumi understands what you currently care about and finds relevant information for you every day.**
+Megumi is a Windows desktop application with local data storage and configurable model providers. Alongside recommendations, the same Agent supports general tasks, multimodal conversations, and tool execution.
 
 ## What You Can Do
 
-- **Describe any interest naturally.** An interest can be a word, a sentence, or a detailed description of what you want to follow.
-- **Receive a daily discovery feed.** Browse today's recommendations and earlier daily batches in chronological order.
-- **Discover content across sources.** The current release connects Bilibili and the open Web through an extensible source boundary.
-- **Let the Agent search and select.** Megumi plans queries, searches enabled sources, reads candidates, removes duplicates, and publishes only the items it explicitly selects.
-- **Control your discovery profile.** Review, edit, pause, resume, or delete the interests Megumi currently understands.
-- **Tune the daily run.** Choose the generation time, target recommendation count, content sources, and whether authorized conversations may contribute interest signals.
-- **Teach Megumi through feedback.** Like, dislike, hide, favorite, or save a recommendation for later.
-- **Continue from a recommendation.** Open a new conversation grounded in the selected recommendation and discuss it with Megumi.
-- **Work with Megumi as a general-purpose Agent.** Beyond content discovery, use multi-turn conversations to let Megumi understand tasks, call the tools available to the current execution, and complete work.
-- **Talk through the anime character window.** Open the floating character and speak naturally; local speech recognition sends what you say into the bound Megumi conversation.
+- **Follow your interests across platforms.** Search Bilibili, Xiaohongshu, Douyin, Zhihu, X (Twitter), and the open Web through configurable source adapters.
+- **Receive a personalized daily feed.** Set a schedule and target count, generate recommendations manually, and browse earlier batches, favorites, or items saved for later.
+- **Control what Megumi follows and learns.** Add, edit, pause, or delete interests. Use likes and dislikes to inform recommendations, review learned preferences and their evidence, and edit or delete those preferences.
+- **Continue from a recommendation.** Start a conversation with the selected content as context, then ask questions or develop the topic further.
+- **Work through a general-purpose Agent.** Send text, images, and documents; use task-specific tools for Web search, file operations, and commands, with visible execution and permission controls.
+- **Speak through the floating character window.** Local speech recognition turns your speech into input for the bound conversation.
 
-## The Daily Discovery Loop
+Favorites, watch-later, and hide actions organize your feed. Likes and dislikes are the explicit feedback used for preference learning.
+
+## From Interests to Recommendations
+
+Search and recommendation run independently. Background search maintains a persistent content pool; scheduled or manual recommendation runs select from that pool instead of searching every source again.
 
 ```mermaid
-flowchart LR
-    A["Add or understand interests"] --> B["Daily discovery trigger"]
-    B --> C["Agent plans search directions"]
-    C --> D["Search and read across sources"]
-    D --> E["Deduplicate, evaluate, and select"]
-    E --> F["Publish Today's Discoveries"]
-    F --> G["Feedback or conversation"]
-    G --> A
+flowchart TD
+    I["Your interests"] --> S["Background search across enabled sources"]
+    S --> P["Persistent content pool"]
+    T["Scheduled or manual recommendation"] --> L["Prepare preferences from changed feedback"]
+    F["Likes / dislikes"] --> L
+    L --> R["Deterministic ranking + Agent selection"]
+    P --> R
+    R --> D["Today's Discoveries"]
+    D --> F
 ```
 
-This is not a fixed keyword crawler. Each discovery execution receives the user's current interests, enabled sources, prior recommendations, and feedback. The Agent can adjust its search plan during the run, but only its final validated selection is persisted and shown in the product.
+- **Search ahead of time.** After the first-search confirmation, background checks replenish the pool when needed using active interests and enabled sources. Search results are deduplicated and saved for later selection.
+- **Select in stages.** Deterministic filtering and ranking narrow the available pool into a working set. The Agent makes the final selection and can request additional stored content when needed. Recommendations and their content snapshots are published together in a transaction.
+- **Learn when needed.** Changed feedback is processed before an eligible recommendation run. Learning accumulates evidence across rounds and revises preferences; user edits become explicit requirements. Version checks prevent outdated learning results from overwriting newer user changes.
+
+Search completion does not directly trigger recommendation generation. If a recommendation run has no eligible content, it waits and rechecks the pool.
+
+## Content Sources
+
+| Source | Access |
+| --- | --- |
+| Bilibili | Public content search and reading |
+| Xiaohongshu | Embedded browser session; login may be required |
+| Douyin | Embedded browser session; login may be required |
+| Zhihu | Zhihu Open Platform credential |
+| X (Twitter) | TwitterAPI.io API key |
+| Open Web | Configured Web search provider, with Bing RSS fallback; webpage reading |
+
+Enable sources and configure their access in Settings. Available content and reading capabilities depend on the source; search results do not always include the full original content.
 
 ## Product Experience
 
-Megumi brings three activities into one desktop product:
-
-1. **Today's Discoveries** — read the daily recommendation feed, search published recommendations, and revisit favorites or saved items.
-2. **Interest Management** — see what Megumi currently follows for you and adjust the daily discovery settings.
-3. **Recommendation Conversations** — start a new conversation from a recommendation without losing the content that motivated it.
+**Today's Discoveries** brings recommendations, feedback, and saved items together. **Interest Management** lets you adjust interests and learned preferences. **Conversations** support both recommendation-based discussion and general tasks.
 
 <table>
   <tr>
@@ -82,35 +94,59 @@ Megumi brings three activities into one desktop product:
   </tr>
 </table>
 
-## Current Status
+## Agent Harness
 
-Megumi is under active development. The current implementation includes:
+Megumi's execution infrastructure supports general conversation, background search, and personalized recommendation through task-specific instructions, context, and tools.
 
-- a Windows desktop application built with Electron and React;
-- local persistence for interests, daily batches, recommendations, feedback, sessions, and settings;
-- scheduled and manual daily discovery generation;
-- Bilibili and open-Web content sources;
-- recommendation search, favorites, watch-later state, and feedback;
-- conversation-driven interest extraction when explicitly enabled;
-- recommendation-grounded conversations;
-- provider-neutral Agent execution with tools, permissions, sandboxing, session history, and observability.
+| Layer | Responsibility |
+| --- | --- |
+| [AI](./packages/ai/) | Model protocols, provider adapters, authentication, and streaming responses |
+| [Agent Core](./packages/agent-core/) | Product-neutral Agent loop, execution state, model calls, tool-call progression, and cancellation |
+| [Harness modules](./packages/agent/) | Input processing, context, sessions, tool binding, permissions, sandboxing, business workflows, and observability |
 
-Application state is stored locally under `~/.megumi`. Model requests and content discovery still communicate with the external providers and sources configured by the user.
+The desktop application and evaluation host use the same application composition with their own platform adapters. These are internal code boundaries within one product.
+
+- **Model and input adaptation.** Support multiple model protocols, images, document inputs (PDF, DOCX, TXT, and Markdown), and local speech recognition. Image understanding depends on the selected model's capabilities.
+- **Task-driven tools.** Bind tools and Skills to the current task and workspace, with controlled concurrent execution, timeout handling, and cancellation.
+- **Long-task continuity.** Durable tree-shaped sessions preserve conversation branches. Layered context compaction retains goals and task state in rolling summaries, with recovery when a model reports context overflow.
+- **Permissions and sandboxing.** Approval controls and a Windows sandbox constrain file, process, and network access during tool execution.
+- **Trace and log diagnostics.** Follow context construction, model requests, tool calls, source access, and business submission through linked execution records and a desktop diagnostics view.
+
+## Evaluation
+
+The [Agent evaluation platform](./evals/agent/README.md) covers conversation, interest understanding, content supply, recommendation, and preference learning. The controlled suite contains **8 datasets and 23 cases**, including recommendation quality and preference changes across successive rounds.
+
+Each case runs through the product's business entry points in an isolated environment. It preserves initial and final state, Trace records, and file artifacts. Execution is separate from scoring, so saved evidence can be reviewed without another model run.
+
+- **Automatic scoring:** business constraints, model and tool usage, Token consumption, and execution time.
+- **Human semantic review:** relevance, preference evidence, and recommendation reasons, using explicit review criteria.
+- **Case-level comparison:** identify regressions and missing evidence between comparable runs.
+
+Validate datasets and inspect the metric catalog without making model calls:
+
+```bash
+npm run eval:agent -- datasets validate
+npm run eval:agent -- metrics list
+```
+
+Running Agent cases requires an explicit model configuration and credentials. See the [evaluation guide](./evals/agent/README.md) for execution, scoring, and comparison commands.
 
 ## Quick Start
 
-Megumi currently targets Windows 10 and Windows 11.
+Megumi currently supports Windows 10 and Windows 11. This README describes the source implementation; packaged releases may lag behind it.
 
-1. Download the installer from [GitHub Releases](https://github.com/anwen0724/megumi/releases).
-2. Open Settings and configure a supported model provider and credential.
-3. Configure the Web search credential used by the open-Web source when needed.
-4. Open **Manage Interests** and describe something you want to keep following.
-5. Choose the generation time, recommendation count, and enabled sources.
-6. Generate today's discoveries manually or wait for the scheduled run.
+1. Download an installer from [GitHub Releases](https://github.com/anwen0724/megumi/releases), or [run from source](#build-from-source).
+2. Open Settings and configure a supported model provider and its authentication.
+3. Enable content sources and supply any required credentials or browser login.
+4. Add an interest in Interest Management. Conversation-based interest understanding is optional and requires authorization.
+5. Choose the recommendation time and count, then confirm the first background search when prompted.
+6. Generate Today's Discoveries manually or wait for the scheduled run. Initial recommendations may wait for the content pool to become available.
+
+Application state is stored under `~/.megumi` by default; `MEGUMI_HOME` can override this location. Model requests and content searches use external services. Local speech recognition runs on the device.
 
 ## Model Support
 
-Megumi integrates model providers through these API protocols:
+Supported API protocols:
 
 - OpenAI Completions
 - OpenAI Responses
@@ -118,69 +154,38 @@ Megumi integrates model providers through these API protocols:
 - Anthropic Messages
 - Google Generative AI
 
-The application includes a provider and model catalog. A custom provider can be configured with a supported protocol, base URL, model ID, and credential.
-
-## How It Is Built
-
-The modules below are internal responsibility boundaries:
-
-```mermaid
-flowchart TD
-    UI["Desktop UI"] --> PH["Product Host & Composition"]
-    PH --> DA["Discovery Agent"]
-    DA --> CONV["Conversation Submission"]
-    DA --> INT["Interest Runtime"]
-    DA --> DAILY["Daily Discovery Runtime"]
-    DAILY --> SRC["Content Sources"]
-    DA --> CORE["Agent Core"]
-    CORE --> AI["AI Providers"]
-    CORE --> TOOLS["Execution-bound Tools"]
-    DA --> HARNESS["Context · Session · Permissions · Sandbox · Events"]
-    HARNESS --> DB["Local Database"]
-```
-
-- **Agent Core** owns the product-neutral Agent loop, explicit execution state, model calls, and tool-call progression.
-- **Discovery Agent** combines conversations, interests, content sources, daily execution, recommendation selection, and persistence into Megumi's product behavior.
-- **AI and Tools** expose provider-neutral model access and execution-bound tool routing.
-- **Harness modules** provide context construction, durable sessions, permissions, sandbox enforcement, runtime events, and diagnostics around the loop.
-- **Product Host** composes these capabilities and exposes renderer-safe operations to the desktop UI.
+Use the built-in provider catalog or configure a custom provider with a supported protocol, base URL, model ID, and authentication.
 
 ## Repository Structure
 
 ```text
-apps/desktop/              Electron main process, preload bridge, and React UI
-
+apps/desktop/                  Electron main process, preload bridge, and React UI
 packages/
-├── agent                  Product-neutral Agent loop and execution state
-├── discovery-agent        Megumi's conversation and daily-discovery behavior
-├── ai                     Provider-neutral models and provider adapters
-├── tools                  Tool definitions, bindings, routing, and execution
-├── context                Model-context construction and compaction
-├── session                Durable semantic conversation history
-├── product                Product composition and renderer-safe Host APIs
-├── permissions            Authorization and approval decisions
-├── sandbox                Enforced file, process, and network boundaries
-├── database               Schema, migrations, and transaction boundary
-├── settings               Product settings and provider credentials
-├── events                 Runtime event protocol and event bus
-├── observability          Traces, measurements, logs, and diagnostics
-├── workspace              Workspace access and durable change facts
-├── instructions           Base and effective instruction sources
-└── skills                 Skill discovery, loading, and selection
+├── ai/                        Model protocols and provider adapters
+├── agent-core/                Product-neutral Agent loop
+└── agent/                     Harness and product modules
+    ├── composition/           Application assembly for desktop and evaluation
+    ├── product-host/          Host operations and UI-facing contracts
+    ├── discovery/             Interests, content supply, recommendations, preferences
+    ├── execution/             Task lifecycle and business integration
+    ├── input/                 Text, images, documents, and command input
+    ├── context/               Context construction and compaction
+    ├── session/               Persistent sessions and branches
+    ├── tools/                 Tool definitions, binding, and scheduling
+    ├── permissions/           Authorization and approvals
+    ├── sandbox/               Windows execution boundaries
+    ├── observability/         Traces, logs, and diagnostic queries
+    ├── voice/                 Local speech recognition
+    └── …                      Storage, settings, Skills, workspace, and events
 
-tests/                     Automated tests and architecture guards
-assets/                    Public screenshots and README assets
+evals/agent/                   Datasets, isolated runs, scoring, and comparisons
+tests/                         Automated tests and architecture guards
+assets/                        Screenshots and public assets
 ```
 
 ## Build from Source
 
-Requirements:
-
-- Windows 10 or Windows 11
-- a current Node.js LTS release and npm
-- Git
-
-Install dependencies and start the desktop application:
+Requirements: Windows 10/11, Node.js 24 with npm (the release workflow uses 24.14.0), and Git.
 
 ```bash
 npm ci
@@ -192,6 +197,7 @@ Run the project checks:
 ```bash
 npm run typecheck:packages
 npm run typecheck:product
+npm run typecheck:evals
 npm test
 ```
 
