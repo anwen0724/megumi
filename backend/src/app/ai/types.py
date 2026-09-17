@@ -909,9 +909,16 @@ class ImagesOptions(ProviderRequestOptions[ImagesModel]):
 
 @dataclass(slots=True)
 class OpenAICompletionsOptions(StreamOptions):
-    """Stream options with the fields the OpenAI-compatible completions API accepts."""
+    """Stream options with the fields the OpenAI-compatible completions API accepts.
 
-    parallelToolCalls: bool | None = None
+    ``reasoningEffort`` is the level actually sent, after the model's thinking-level map
+    has been applied; it is absent when thinking is off. ``thinkingBudgets`` supplies
+    per-level token budgets for the servers that cap reasoning tokens separately.
+    """
+
+    toolChoice: ToolChoice | None = None
+    reasoningEffort: ThinkingLevel | None = None
+    thinkingBudgets: ThinkingBudgets | None = None
 
 
 @dataclass(slots=True)
