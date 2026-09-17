@@ -20,8 +20,13 @@ from app.ai.utils.text import contentText, getSystemMessageText, renderSystemMes
 from app.ai.utils.user_agent import getPiUserAgent
 from app.ai.utils.uuid import MAX_UUID_V7_TIMESTAMP, uuidv7
 
-# Captured by running the reference hash over these inputs. A sequence is used rather than
-# a mapping because two distinct unpaired surrogates would collide as mapping keys.
+# Expected values captured from the reference implementation of this hash. They are fixed
+# rather than computed here: the point of the test is that the port reproduces the
+# reference's digest exactly, and computing the expectation in the test would make it
+# circular.
+#
+# A sequence is used rather than a mapping because two distinct unpaired surrogates would
+# collide as mapping keys.
 REFERENCE_HASHES = [
     ("", "k4n83c7h0j2b"),
     ("a", "m8735310ae7sx"),
