@@ -1,4 +1,4 @@
-# Python virtual environment (created by `uv sync`)
+# Python virtual environment (uv writes its own .gitignore inside .venv as well)
 .venv/
 
 # Bytecode caches
@@ -12,13 +12,11 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Test scratch directories, used when the system temp directory is not writable
+# Test scratch directories
 .tmp-tests/
-.tmp-verify/
-.pytest-run/
 pytest-cache-files-*/
 
-# Local build output
+# Build output
 dist/
 build/
 *.egg-info/

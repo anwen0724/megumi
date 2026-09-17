@@ -1,54 +1,28 @@
 [project]
-name = "megumi"
+name = "app"
 version = "0.1.0"
-description = "Megumi Python backend: cross-platform content discovery agent"
+description = "Add your description here"
 readme = "README.md"
+authors = [
+    { name = "anwen", email = "anwen@megumi.dev" }
+]
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
-    "pydantic>=2.9",
-    "pydantic-settings>=2.6",
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "uvicorn[standard]>=0.53.0",
 ]
 
-[project.scripts]
-megumi = "megumi.cli:main"
-
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/megumi"]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "ruff>=0.7",
-    "mypy>=1.13",
-    "pytest>=8.3",
-    "pytest-asyncio>=0.24",
-    "httpx>=0.27",
+    "httpx>=0.28.1",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.8",
 ]
-
-# --- ruff: linter + formatter (Java: Checkstyle + formatter) ---
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-src = ["src", "tests"]
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-
-# --- mypy: static type checking ---
-[tool.mypy]
-python_version = "3.12"
-files = ["src", "tests"]
-strict = true
-warn_unreachable = true
-show_error_codes = true
-
-# --- pytest ---
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "strict"
-addopts = "-q"
