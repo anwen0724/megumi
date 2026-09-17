@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "environmentKind": "controlled",
+  "datasetId": "resume-recommendation",
+  "revision": 1,
+  "name": "Resume recommendation audit",
+  "description": "Controlled synthetic recommendation benchmark",
+  "caseIds": [
+    "resume-recommendation.photo-80",
+    "resume-recommendation.photo-120",
+    "resume-recommendation.photo-200",
+    "resume-recommendation.cooking-80",
+    "resume-recommendation.cooking-120",
+    "resume-recommendation.cooking-200",
+    "resume-recommendation.garden-80",
+    "resume-recommendation.garden-120",
+    "resume-recommendation.garden-200",
+    "resume-recommendation.java-80",
+    "resume-recommendation.java-120",
+    "resume-recommendation.java-200"
+  ]
+}

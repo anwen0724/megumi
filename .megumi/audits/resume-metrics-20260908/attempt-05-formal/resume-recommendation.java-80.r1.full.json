@@ -1,0 +1,1254 @@
+{
+  "key": "resume-recommendation.java-80.r1.full",
+  "phase": "formal",
+  "repetition": 1,
+  "arm": "full",
+  "identity": "controlled/resume-recommendation.java-80",
+  "modelParameters": {
+    "thinking": {
+      "type": "disabled"
+    },
+    "temperature": 0,
+    "max_tokens": 32768,
+    "max_completion_tokens": 32768
+  },
+  "domain": "java",
+  "poolSize": 80,
+  "targetCount": 20,
+  "runDirectory": "C:\\all\\work\\study\\megumi\\.megumi\\audits\\resume-metrics-20260908\\attempt-05-formal\\evaluation\\records\\run.20260908071029784.f7ecc826-4cad-4ade-9c46-138d97dd7e4c",
+  "recordStatus": "recorded",
+  "terminalState": "settled",
+  "productResult": {
+    "accepted": {
+      "status": "started",
+      "localDate": "2026-09-08",
+      "requestId": "evaluation:resume-recommendation.java-80:recommendation-request:1",
+      "phase": "preparing_preferences"
+    },
+    "completion": {
+      "status": "published",
+      "collection": {
+        "localDate": "2026-09-08",
+        "publishedAt": "2026-09-08T08:00:00.000Z",
+        "items": [
+          {
+            "id": "f01ba2f7-6fa6-4eb4-a2bf-47ca9cf9b752",
+            "candidateId": "evaluation:candidate:item-167782abe824",
+            "contentIdentity": "content:sha256:d02579a7fc6d5bfd42a983fe27e540ad21246212b34cfea7014687aa3ac60300",
+            "localDate": "2026-09-08",
+            "position": 0,
+            "recommendationReason": "讲解事务传播在内容管理接口中的成立条件与反例，直接对应你对数据库事务实现与原理的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-167782abe824",
+              "contentType": "article",
+              "title": "事务传播：内容管理接口中的条件与原理",
+              "description": "事务传播：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "事务传播：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "事务传播：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：事务传播首先区分现象与推断，保留内容管理接口中的限制条件。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。",
+              "contentTruncated": false,
+              "id": "6cf1e682-3879-42ae-99e4-d2b0361197f3",
+              "recommendationId": "f01ba2f7-6fa6-4eb4-a2bf-47ca9cf9b752",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "1999dcbd-cd55-4bb5-b66d-0df9b6f9fffb",
+              "recommendationId": "f01ba2f7-6fa6-4eb4-a2bf-47ca9cf9b752",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "da4ed70e-4fb6-4700-9980-cf50fa62325b",
+            "candidateId": "evaluation:candidate:item-356556f36ad8",
+            "contentIdentity": "content:sha256:f7cb39452a34baa512a747bfd89800e525577baadc9f3f775bc736b6bc1b100c",
+            "localDate": "2026-09-08",
+            "position": 1,
+            "recommendationReason": "以概念速览梳理后台处理任务中的事务传播常用概念，为深入理解事务边界提供问题目录。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-356556f36ad8",
+              "contentType": "article",
+              "title": "事务传播：后台处理任务中的概念速览",
+              "description": "事务传播：后台处理任务中的概念速览。列举事务传播的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "事务传播：后台处理任务中的概念速览。列举事务传播的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "事务传播：后台处理任务中的概念速览。列举事务传播的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：事务传播首先区分现象与推断，保留后台处理任务中的限制条件。列举事务传播的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "a30a584b-8683-4d13-a61d-0abc02fab9d5",
+              "recommendationId": "da4ed70e-4fb6-4700-9980-cf50fa62325b",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "df56db03-c0f3-44c2-8038-84b90dceb166",
+              "recommendationId": "da4ed70e-4fb6-4700-9980-cf50fa62325b",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "a3111379-ab55-4b7c-ab0b-d4efe413dffd",
+            "candidateId": "evaluation:candidate:item-042e55d675a0",
+            "contentIdentity": "content:sha256:d4c8958c133790936030ba347b09872f3b5b6a22236f40a0391f12739f970123",
+            "localDate": "2026-09-08",
+            "position": 2,
+            "recommendationReason": "通过最小复现与关键日志展示社区服务中缓存失效的定位与修复过程，贴合你对缓存与故障处理实践的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-042e55d675a0",
+              "contentType": "article",
+              "title": "缓存失效：社区服务中的操作记录",
+              "description": "缓存失效：社区服务中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "缓存失效：社区服务中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "缓存失效：社区服务中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：缓存失效首先区分现象与推断，保留社区服务中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "68266f29-ed2c-4faf-ae57-2cf9fbb39156",
+              "recommendationId": "a3111379-ab55-4b7c-ab0b-d4efe413dffd",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "651abbe3-195f-4896-b3e3-0c25f9dd6d1f",
+              "recommendationId": "a3111379-ab55-4b7c-ab0b-d4efe413dffd",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "51da4514-7a50-4d1e-bb1e-09b155bed21c",
+            "candidateId": "evaluation:candidate:item-43d0c40117a8",
+            "contentIdentity": "content:sha256:3938982196da82557dd85746ed55548eda5217b31361307ef005b6233d80ccdf",
+            "localDate": "2026-09-08",
+            "position": 3,
+            "recommendationReason": "列举消息消费者场景下缓存失效的常用概念，帮助你建立缓存一致性问题的排查框架。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-43d0c40117a8",
+              "contentType": "article",
+              "title": "缓存失效：消息消费者中的概念速览",
+              "description": "缓存失效：消息消费者中的概念速览。列举缓存失效的常用概念，简要说明消息消费者中可能遇到的现象，为进一步阅读提供问题目录。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "缓存失效：消息消费者中的概念速览。列举缓存失效的常用概念，简要说明消息消费者中可能遇到的现象，为进一步阅读提供问题目录。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "缓存失效：消息消费者中的概念速览。列举缓存失效的常用概念，简要说明消息消费者中可能遇到的现象，为进一步阅读提供问题目录。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：缓存失效首先区分现象与推断，保留消息消费者中的限制条件。列举缓存失效的常用概念，简要说明消息消费者中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "8aa8c2cc-33df-4458-a2c4-6b8e1b60d65d",
+              "recommendationId": "51da4514-7a50-4d1e-bb1e-09b155bed21c",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "71c69767-0ec7-427b-9f9a-6a540188859e",
+              "recommendationId": "51da4514-7a50-4d1e-bb1e-09b155bed21c",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "9cf34240-74e3-4c80-8f79-2cf7923846e5",
+            "candidateId": "evaluation:candidate:item-07ad7c7c66a5",
+            "contentIdentity": "content:sha256:b3957a69b3bd5932638a0e6e32bb0afa1017a437041541ef417b4edb7c943499",
+            "localDate": "2026-09-08",
+            "position": 4,
+            "recommendationReason": "分析内容管理接口中任务取消的状态变化与并发顺序，并用反例说明机制边界，契合你对并发与服务故障处理的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-07ad7c7c66a5",
+              "contentType": "article",
+              "title": "任务取消：内容管理接口中的条件与原理",
+              "description": "任务取消：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "任务取消：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "任务取消：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：任务取消首先区分现象与推断，保留内容管理接口中的限制条件。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。",
+              "contentTruncated": false,
+              "id": "815e884a-827e-4d5b-82f8-3aee18cf58d5",
+              "recommendationId": "9cf34240-74e3-4c80-8f79-2cf7923846e5",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "938b340b-20c7-4b05-98ef-4d79b639540d",
+              "recommendationId": "9cf34240-74e3-4c80-8f79-2cf7923846e5",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "b8ec49a4-df79-48d9-9d94-9c49260e9740",
+            "candidateId": "evaluation:candidate:item-52cdcfdacb13",
+            "contentIdentity": "content:sha256:07a33485a7133065fd5ff48f289ac11657360a11fdb40c81632f44744eb1c1e2",
+            "localDate": "2026-09-08",
+            "position": 5,
+            "recommendationReason": "以操作记录形式给出消息消费者中任务取消的复现与验证步骤，提供可落地的并发故障排查参考。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-52cdcfdacb13",
+              "contentType": "article",
+              "title": "任务取消：消息消费者中的操作记录",
+              "description": "任务取消：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "任务取消：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "任务取消：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：任务取消首先区分现象与推断，保留消息消费者中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "fbc0e2eb-1f11-4365-b362-8da1505d7731",
+              "recommendationId": "b8ec49a4-df79-48d9-9d94-9c49260e9740",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "6d08bbeb-55b8-4d46-92cc-04efbab3e1e9",
+              "recommendationId": "b8ec49a4-df79-48d9-9d94-9c49260e9740",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "dda57989-a7f5-4168-bc42-8b4dbfc503ef",
+            "candidateId": "evaluation:candidate:item-0b384ee33ac6",
+            "contentIdentity": "content:sha256:30ec8f909ab058cc002c3024993a69651721f98098f9631bff51be8253aee232",
+            "localDate": "2026-09-08",
+            "position": 6,
+            "recommendationReason": "概念速览梳理内容管理接口中线程池排队的现象与问题目录，直接服务你对并发实现原理的学习。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-0b384ee33ac6",
+              "contentType": "article",
+              "title": "线程池排队：内容管理接口中的概念速览",
+              "description": "线程池排队：内容管理接口中的概念速览。列举线程池排队的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "线程池排队：内容管理接口中的概念速览。列举线程池排队的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "线程池排队：内容管理接口中的概念速览。列举线程池排队的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：线程池排队首先区分现象与推断，保留内容管理接口中的限制条件。列举线程池排队的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "d623f612-7336-4f88-81b7-eab2d5ecd3a1",
+              "recommendationId": "dda57989-a7f5-4168-bc42-8b4dbfc503ef",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "b046c227-f0bc-4c6d-a582-daea5928f3a4",
+              "recommendationId": "dda57989-a7f5-4168-bc42-8b4dbfc503ef",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "f833de32-1eef-43ef-8b6a-0b6d21758709",
+            "candidateId": "evaluation:candidate:item-5ccc33f5cce3",
+            "contentIdentity": "content:sha256:6abda86c8a1f71676728de49d5802ec95643a871d88d66fcf7485ebd786ff043",
+            "localDate": "2026-09-08",
+            "position": 7,
+            "recommendationReason": "解释消息消费者中线程池排队的成立条件与反例，帮助你理解并发排队机制不能覆盖的边界。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-5ccc33f5cce3",
+              "contentType": "article",
+              "title": "线程池排队：消息消费者中的条件与原理",
+              "description": "线程池排队：消息消费者中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "线程池排队：消息消费者中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "线程池排队：消息消费者中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：线程池排队首先区分现象与推断，保留消息消费者中的限制条件。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。",
+              "contentTruncated": false,
+              "id": "0b4e0ad8-5aba-42a0-93c9-a1095115fba9",
+              "recommendationId": "f833de32-1eef-43ef-8b6a-0b6d21758709",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "6a9a4a32-15eb-480a-880d-f4ec0370ddcc",
+              "recommendationId": "f833de32-1eef-43ef-8b6a-0b6d21758709",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "29017f28-cfa5-4a00-8ff4-711cd9b857bc",
+            "candidateId": "evaluation:candidate:item-098771075993",
+            "contentIdentity": "content:sha256:ca673a3c0acb6d616ef2c4eeada21166465ca7e52912eb750dce74d371d32172",
+            "localDate": "2026-09-08",
+            "position": 8,
+            "recommendationReason": "通过关键日志展示内容管理接口中连接池等待的定位与修复，贴合你对数据库连接与故障处理实践的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-098771075993",
+              "contentType": "article",
+              "title": "连接池等待：内容管理接口中的操作记录",
+              "description": "连接池等待：内容管理接口中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "连接池等待：内容管理接口中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "连接池等待：内容管理接口中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：连接池等待首先区分现象与推断，保留内容管理接口中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "689aeafd-3836-4032-9fec-65c5c624301e",
+              "recommendationId": "29017f28-cfa5-4a00-8ff4-711cd9b857bc",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "8059943a-2be8-4d94-9e40-34cd75dcaa8a",
+              "recommendationId": "29017f28-cfa5-4a00-8ff4-711cd9b857bc",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "940a134f-94fd-44b5-ae93-876ded4a24b3",
+            "candidateId": "evaluation:candidate:item-63e2cdd7c63f",
+            "contentIdentity": "content:sha256:1ea4ad5967a54e201836924f567fb19e25e863eff4c3841c5520f3c5c8dc9aba",
+            "localDate": "2026-09-08",
+            "position": 9,
+            "recommendationReason": "概念速览梳理后台处理任务中连接池等待的常用概念，为排查数据库连接瓶颈提供问题清单。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-63e2cdd7c63f",
+              "contentType": "article",
+              "title": "连接池等待：后台处理任务中的概念速览",
+              "description": "连接池等待：后台处理任务中的概念速览。列举连接池等待的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "连接池等待：后台处理任务中的概念速览。列举连接池等待的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "连接池等待：后台处理任务中的概念速览。列举连接池等待的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：连接池等待首先区分现象与推断，保留后台处理任务中的限制条件。列举连接池等待的常用概念，简要说明后台处理任务中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "ea11bacb-3028-498f-b588-749ca6938c20",
+              "recommendationId": "940a134f-94fd-44b5-ae93-876ded4a24b3",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "bd91586a-e6ca-4d46-88a8-15936469d8c2",
+              "recommendationId": "940a134f-94fd-44b5-ae93-876ded4a24b3",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "cefbbacb-cc76-4ade-bd13-80e7222d9f22",
+            "candidateId": "evaluation:candidate:item-0cf0da59e8f8",
+            "contentIdentity": "content:sha256:bbfb52a6656a2e3a3c089135d3dcc265f54f5dbaeb2dcf3ad571ddb5b34bb6df",
+            "localDate": "2026-09-08",
+            "position": 10,
+            "recommendationReason": "以操作记录形式给出内容管理接口中接口幂等的复现与验证步骤，契合你对服务故障处理与幂等实现的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-0cf0da59e8f8",
+              "contentType": "article",
+              "title": "接口幂等：内容管理接口中的操作记录",
+              "description": "接口幂等：内容管理接口中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "接口幂等：内容管理接口中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "接口幂等：内容管理接口中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：接口幂等首先区分现象与推断，保留内容管理接口中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "4a0c9899-cf34-4100-9ac7-3b218c92b361",
+              "recommendationId": "cefbbacb-cc76-4ade-bd13-80e7222d9f22",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "54d79997-2ec7-4d12-bc22-da5fa565ca9f",
+              "recommendationId": "cefbbacb-cc76-4ade-bd13-80e7222d9f22",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "cc130815-d5b1-4462-854a-88ba11cb5dc1",
+            "candidateId": "evaluation:candidate:item-3494031e73f0",
+            "contentIdentity": "content:sha256:1850f0ae29b0ba8009a7c7a1842b261cdf42e51808207bbd194e8e0f742d33db",
+            "localDate": "2026-09-08",
+            "position": 11,
+            "recommendationReason": "分析后台处理任务中接口幂等的成立条件与反例，帮助你理解幂等机制在并发下的适用边界。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-3494031e73f0",
+              "contentType": "article",
+              "title": "接口幂等：后台处理任务中的条件与原理",
+              "description": "接口幂等：后台处理任务中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "接口幂等：后台处理任务中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "接口幂等：后台处理任务中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以后台处理任务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：接口幂等首先区分现象与推断，保留后台处理任务中的限制条件。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。",
+              "contentTruncated": false,
+              "id": "f30e517b-8627-4c58-b076-29bb7b0f3378",
+              "recommendationId": "cc130815-d5b1-4462-854a-88ba11cb5dc1",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "2e840ea1-7df2-49eb-b538-8547cf5dadd6",
+              "recommendationId": "cc130815-d5b1-4462-854a-88ba11cb5dc1",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "b1bf2d5e-ab87-485d-a18a-6f620433d9f8",
+            "candidateId": "evaluation:candidate:item-1682f42295f8",
+            "contentIdentity": "content:sha256:469d224e58ee4677f32f2d6808afce9bebe828a1340d9d65134f072916d04467",
+            "localDate": "2026-09-08",
+            "position": 12,
+            "recommendationReason": "概念速览梳理内容管理接口中并发更新的常用概念，直接对应你对并发实现与原理的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-1682f42295f8",
+              "contentType": "article",
+              "title": "并发更新：内容管理接口中的概念速览",
+              "description": "并发更新：内容管理接口中的概念速览。列举并发更新的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "并发更新：内容管理接口中的概念速览。列举并发更新的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "并发更新：内容管理接口中的概念速览。列举并发更新的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：并发更新首先区分现象与推断，保留内容管理接口中的限制条件。列举并发更新的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "6f6730d3-1ef5-4c16-bee8-5e4c188fd511",
+              "recommendationId": "b1bf2d5e-ab87-485d-a18a-6f620433d9f8",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "4a57e70e-0403-4833-903e-53e6a396ef20",
+              "recommendationId": "b1bf2d5e-ab87-485d-a18a-6f620433d9f8",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "9898b944-8965-497f-9be8-a2f5d1abf596",
+            "candidateId": "evaluation:candidate:item-5160144d6193",
+            "contentIdentity": "content:sha256:e66e763afe63d3bfc6b82f68f3871610064f676de9ffdd201e1fb4b1f01e362f",
+            "localDate": "2026-09-08",
+            "position": 13,
+            "recommendationReason": "通过最小复现与日志展示社区服务中并发更新的定位与修复，提供并发数据一致性问题的实践参考。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-5160144d6193",
+              "contentType": "article",
+              "title": "并发更新：社区服务中的操作记录",
+              "description": "并发更新：社区服务中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "并发更新：社区服务中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "并发更新：社区服务中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：并发更新首先区分现象与推断，保留社区服务中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "c3998769-2281-4f26-8711-5366e14ebca7",
+              "recommendationId": "9898b944-8965-497f-9be8-a2f5d1abf596",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "16c16641-8f52-465a-9318-b84b8a321fd6",
+              "recommendationId": "9898b944-8965-497f-9be8-a2f5d1abf596",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "d9a13f5b-194a-42e2-896d-0f72125a5baf",
+            "candidateId": "evaluation:candidate:item-32e7f1169374",
+            "contentIdentity": "content:sha256:bb228a38901b3226702fa0e0d788d1404dae5aad5c036fb6e7c542d07351be64",
+            "localDate": "2026-09-08",
+            "position": 14,
+            "recommendationReason": "概念速览梳理内容管理接口中慢查询的常用概念，贴合你对数据库性能与查询优化的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-32e7f1169374",
+              "contentType": "article",
+              "title": "慢查询：内容管理接口中的概念速览",
+              "description": "慢查询：内容管理接口中的概念速览。列举慢查询的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "慢查询：内容管理接口中的概念速览。列举慢查询的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "慢查询：内容管理接口中的概念速览。列举慢查询的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：慢查询首先区分现象与推断，保留内容管理接口中的限制条件。列举慢查询的常用概念，简要说明内容管理接口中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "181faa05-ef70-48f6-bf0c-e826615c6584",
+              "recommendationId": "d9a13f5b-194a-42e2-896d-0f72125a5baf",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "760815d5-4749-45f3-bbdc-bdf874b5001e",
+              "recommendationId": "d9a13f5b-194a-42e2-896d-0f72125a5baf",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "0b6b5a02-d757-4dd0-8c4a-f8bf878412ad",
+            "candidateId": "evaluation:candidate:item-37ef339921da",
+            "contentIdentity": "content:sha256:5eed804c59119c9e58e5e406014136df50f80c819b42b5a7a40d53ce26c9693c",
+            "localDate": "2026-09-08",
+            "position": 15,
+            "recommendationReason": "以操作记录形式给出消息消费者中慢查询的复现与验证步骤，提供数据库慢查询排查的可操作参考。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-37ef339921da",
+              "contentType": "article",
+              "title": "慢查询：消息消费者中的操作记录",
+              "description": "慢查询：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "慢查询：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "慢查询：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：慢查询首先区分现象与推断，保留消息消费者中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "561709f6-319e-495b-9728-3275087af787",
+              "recommendationId": "0b6b5a02-d757-4dd0-8c4a-f8bf878412ad",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "1e627f65-8317-40bd-bd98-ea842ec42e5c",
+              "recommendationId": "0b6b5a02-d757-4dd0-8c4a-f8bf878412ad",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "947afff2-3f90-420e-b0e8-ec27cda6bf36",
+            "candidateId": "evaluation:candidate:item-499e6590050c",
+            "contentIdentity": "content:sha256:dbea6c717502caface6301ee2c0a76a37a4771ed4c959ca13fcac84f4a5b724a",
+            "localDate": "2026-09-08",
+            "position": 16,
+            "recommendationReason": "分析内容管理接口中组合索引的成立条件与反例，帮助你理解索引设计与数据库原理。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-499e6590050c",
+              "contentType": "article",
+              "title": "组合索引：内容管理接口中的条件与原理",
+              "description": "组合索引：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "组合索引：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "组合索引：内容管理接口中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以内容管理接口为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：组合索引首先区分现象与推断，保留内容管理接口中的限制条件。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。",
+              "contentTruncated": false,
+              "id": "55b4aed8-9a60-4e72-a4b5-935256013618",
+              "recommendationId": "947afff2-3f90-420e-b0e8-ec27cda6bf36",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "5ced5537-dce9-4331-a5d7-a300a0407c52",
+              "recommendationId": "947afff2-3f90-420e-b0e8-ec27cda6bf36",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "a9ae3472-9f12-4550-9a83-b378cc3e6b66",
+            "candidateId": "evaluation:candidate:item-37b1c2d06752",
+            "contentIdentity": "content:sha256:79e283e60e0d00790845d9bad7ec06da5298687a8b493efd43620404bd5af00c",
+            "localDate": "2026-09-08",
+            "position": 17,
+            "recommendationReason": "概念速览梳理社区服务中组合索引的常用概念，为数据库索引优化提供问题目录。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-37b1c2d06752",
+              "contentType": "article",
+              "title": "组合索引：社区服务中的概念速览",
+              "description": "组合索引：社区服务中的概念速览。列举组合索引的常用概念，简要说明社区服务中可能遇到的现象，为进一步阅读提供问题目录。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "组合索引：社区服务中的概念速览。列举组合索引的常用概念，简要说明社区服务中可能遇到的现象，为进一步阅读提供问题目录。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "组合索引：社区服务中的概念速览。列举组合索引的常用概念，简要说明社区服务中可能遇到的现象，为进一步阅读提供问题目录。 本文以社区服务为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：组合索引首先区分现象与推断，保留社区服务中的限制条件。列举组合索引的常用概念，简要说明社区服务中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "3cf65602-b6ec-4dcd-ab88-dd2ca26c0c09",
+              "recommendationId": "a9ae3472-9f12-4550-9a83-b378cc3e6b66",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "11ae30f8-368e-4c8e-98ad-8ddb518a6058",
+              "recommendationId": "a9ae3472-9f12-4550-9a83-b378cc3e6b66",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "adaf508d-1f73-4741-8482-0c5e54a4231f",
+            "candidateId": "evaluation:candidate:item-1d6434c1a27f",
+            "contentIdentity": "content:sha256:adf51208e1845e367b43493656c757366fc53d681f343f1b5d0c89050a8e7312",
+            "localDate": "2026-09-08",
+            "position": 18,
+            "recommendationReason": "通过关键日志展示消息消费者中消息重复的定位与修复，契合你对服务故障处理与消息可靠性的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-1d6434c1a27f",
+              "contentType": "article",
+              "title": "消息重复：消息消费者中的操作记录",
+              "description": "消息重复：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "消息重复：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "消息重复：消息消费者中的操作记录。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：消息重复首先区分现象与推断，保留消息消费者中的限制条件。给出最小复现场景与关键日志，逐步定位等待和数据变化，展示修改前后的执行过程，并列出验证步骤与未覆盖的故障边界。",
+              "contentTruncated": false,
+              "id": "c4dcba93-07c9-46fa-8e70-7767678fbe04",
+              "recommendationId": "adaf508d-1f73-4741-8482-0c5e54a4231f",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "62a32d04-8fbf-4b9b-8ce1-3ebd30ee2db8",
+              "recommendationId": "adaf508d-1f73-4741-8482-0c5e54a4231f",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "2b98e36c-ce55-441a-af46-82ccd96d759b",
+            "candidateId": "evaluation:candidate:item-3a036e513cc4",
+            "contentIdentity": "content:sha256:56c5d5886fc18bd48d6c98ea17675b661ea2f69ebada7c9662244eac94f3aafa",
+            "localDate": "2026-09-08",
+            "position": 19,
+            "recommendationReason": "分析消息消费者中消息重复的成立条件与反例，帮助你理解去重机制在并发下的适用边界。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:java",
+              "matchedInterestIds": [
+                "evaluation:interest:java"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:java",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "f1563717-2580-4893-9d3e-3efafc64a0c5",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/java/item-3a036e513cc4",
+              "contentType": "article",
+              "title": "消息重复：消息消费者中的条件与原理",
+              "description": "消息重复：消息消费者中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "消息重复：消息消费者中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "消息重复：消息消费者中的条件与原理。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。 本文以消息消费者为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：消息重复首先区分现象与推断，保留消息消费者中的限制条件。解释状态变化、并发顺序和资源边界之间的关系，分析常见方案的成立条件，以反例说明机制不能覆盖的情况。",
+              "contentTruncated": false,
+              "id": "c542043e-c60d-412a-80f6-7c906abac621",
+              "recommendationId": "2b98e36c-ce55-441a-af46-82ccd96d759b",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "f540e65d-51b7-4976-ae96-500041bf73d8",
+              "recommendationId": "2b98e36c-ce55-441a-af46-82ccd96d759b",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publishedCount": 20,
+  "relatedCount": 20,
+  "relatedRate": 1,
+  "effectiveDeliveryRate": 1,
+  "ndcg": 0.7696997909961849,
+  "inputNoncached": 27821,
+  "inputCachedRead": 35456,
+  "inputCachedWrite": 0,
+  "inputTotal": 63277,
+  "outputTokens": 5916,
+  "modelCalls": 2,
+  "toolCalls": 1,
+  "durationMs": 32930,
+  "issues": [],
+  "rows": [
+    {
+      "id": "item-167782abe824",
+      "grade": 2,
+      "position": 0,
+      "reason": "讲解事务传播在内容管理接口中的成立条件与反例，直接对应你对数据库事务实现与原理的关注。"
+    },
+    {
+      "id": "item-356556f36ad8",
+      "grade": 1,
+      "position": 1,
+      "reason": "以概念速览梳理后台处理任务中的事务传播常用概念，为深入理解事务边界提供问题目录。"
+    },
+    {
+      "id": "item-042e55d675a0",
+      "grade": 2,
+      "position": 2,
+      "reason": "通过最小复现与关键日志展示社区服务中缓存失效的定位与修复过程，贴合你对缓存与故障处理实践的兴趣。"
+    },
+    {
+      "id": "item-43d0c40117a8",
+      "grade": 1,
+      "position": 3,
+      "reason": "列举消息消费者场景下缓存失效的常用概念，帮助你建立缓存一致性问题的排查框架。"
+    },
+    {
+      "id": "item-07ad7c7c66a5",
+      "grade": 2,
+      "position": 4,
+      "reason": "分析内容管理接口中任务取消的状态变化与并发顺序，并用反例说明机制边界，契合你对并发与服务故障处理的关注。"
+    },
+    {
+      "id": "item-52cdcfdacb13",
+      "grade": 2,
+      "position": 5,
+      "reason": "以操作记录形式给出消息消费者中任务取消的复现与验证步骤，提供可落地的并发故障排查参考。"
+    },
+    {
+      "id": "item-0b384ee33ac6",
+      "grade": 1,
+      "position": 6,
+      "reason": "概念速览梳理内容管理接口中线程池排队的现象与问题目录，直接服务你对并发实现原理的学习。"
+    },
+    {
+      "id": "item-5ccc33f5cce3",
+      "grade": 2,
+      "position": 7,
+      "reason": "解释消息消费者中线程池排队的成立条件与反例，帮助你理解并发排队机制不能覆盖的边界。"
+    },
+    {
+      "id": "item-098771075993",
+      "grade": 2,
+      "position": 8,
+      "reason": "通过关键日志展示内容管理接口中连接池等待的定位与修复，贴合你对数据库连接与故障处理实践的兴趣。"
+    },
+    {
+      "id": "item-63e2cdd7c63f",
+      "grade": 1,
+      "position": 9,
+      "reason": "概念速览梳理后台处理任务中连接池等待的常用概念，为排查数据库连接瓶颈提供问题清单。"
+    },
+    {
+      "id": "item-0cf0da59e8f8",
+      "grade": 2,
+      "position": 10,
+      "reason": "以操作记录形式给出内容管理接口中接口幂等的复现与验证步骤，契合你对服务故障处理与幂等实现的关注。"
+    },
+    {
+      "id": "item-3494031e73f0",
+      "grade": 2,
+      "position": 11,
+      "reason": "分析后台处理任务中接口幂等的成立条件与反例，帮助你理解幂等机制在并发下的适用边界。"
+    },
+    {
+      "id": "item-1682f42295f8",
+      "grade": 1,
+      "position": 12,
+      "reason": "概念速览梳理内容管理接口中并发更新的常用概念，直接对应你对并发实现与原理的关注。"
+    },
+    {
+      "id": "item-5160144d6193",
+      "grade": 2,
+      "position": 13,
+      "reason": "通过最小复现与日志展示社区服务中并发更新的定位与修复，提供并发数据一致性问题的实践参考。"
+    },
+    {
+      "id": "item-32e7f1169374",
+      "grade": 1,
+      "position": 14,
+      "reason": "概念速览梳理内容管理接口中慢查询的常用概念，贴合你对数据库性能与查询优化的关注。"
+    },
+    {
+      "id": "item-37ef339921da",
+      "grade": 2,
+      "position": 15,
+      "reason": "以操作记录形式给出消息消费者中慢查询的复现与验证步骤，提供数据库慢查询排查的可操作参考。"
+    },
+    {
+      "id": "item-499e6590050c",
+      "grade": 2,
+      "position": 16,
+      "reason": "分析内容管理接口中组合索引的成立条件与反例，帮助你理解索引设计与数据库原理。"
+    },
+    {
+      "id": "item-37b1c2d06752",
+      "grade": 1,
+      "position": 17,
+      "reason": "概念速览梳理社区服务中组合索引的常用概念，为数据库索引优化提供问题目录。"
+    },
+    {
+      "id": "item-1d6434c1a27f",
+      "grade": 2,
+      "position": 18,
+      "reason": "通过关键日志展示消息消费者中消息重复的定位与修复，契合你对服务故障处理与消息可靠性的关注。"
+    },
+    {
+      "id": "item-3a036e513cc4",
+      "grade": 2,
+      "position": 19,
+      "reason": "分析消息消费者中消息重复的成立条件与反例，帮助你理解去重机制在并发下的适用边界。"
+    }
+  ]
+}

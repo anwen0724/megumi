@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "environmentKind": "controlled",
+  "datasetId": "resume-preference",
+  "revision": 1,
+  "name": "Resume preference audit",
+  "description": "Held-out synthetic preference contribution cases",
+  "caseIds": [
+    "resume-preference.photo-u1",
+    "resume-preference.photo-u2",
+    "resume-preference.cooking-u1",
+    "resume-preference.cooking-u2",
+    "resume-preference.java-u1",
+    "resume-preference.java-u2"
+  ]
+}

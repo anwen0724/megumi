@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "runId": "run.20260908070954764.5a9ee91c-18ae-4278-bc75-ba0208018224",
+  "status": "completed",
+  "startedAt": "2026-09-08T07:09:54.764Z",
+  "endedAt": "2026-09-08T07:10:29.627Z",
+  "selection": {
+    "datasets": [],
+    "directCaseIds": [
+      "controlled/resume-recommendation.java-80"
+    ]
+  },
+  "candidateModel": {
+    "source": "explicit",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 32768
+  },
+  "runtime": {
+    "productVersion": "0.2.0",
+    "nodeVersion": "v24.14.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "safetyWallClockLimitMs": 240000
+  },
+  "caseRuns": [
+    {
+      "caseRunId": "controlled.resume-recommendation.java-80.r1",
+      "caseIdentity": "controlled/resume-recommendation.java-80",
+      "datasetMemberships": [],
+      "recordStatus": "recorded",
+      "resultPath": "cases/controlled.resume-recommendation.java-80.r1/result.json"
+    }
+  ]
+}

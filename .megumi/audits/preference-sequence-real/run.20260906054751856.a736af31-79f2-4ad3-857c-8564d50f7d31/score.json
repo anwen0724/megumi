@@ -1,0 +1,525 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-06T05:56:26.414Z",
+  "runId": "run.20260906054751856.a736af31-79f2-4ad3-857c-8564d50f7d31",
+  "runDigest": "2db6ec358a54499a3c5c0984e218a650cf78c0b0bce625cb2a7f3d73de34cc1c",
+  "candidateModel": {
+    "source": "explicit",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 8192
+  },
+  "profile": {
+    "schemaVersion": 1,
+    "profileId": "continuous-preference-v3",
+    "revision": 1,
+    "metrics": [
+      {
+        "metricId": "personalization.lazy_trigger",
+        "method": "rule",
+        "direction": "higher",
+        "threshold": 1
+      },
+      {
+        "metricId": "personalization.user_control",
+        "method": "rule",
+        "direction": "higher",
+        "threshold": 1
+      },
+      {
+        "metricId": "personalization.input_validity",
+        "method": "rule",
+        "direction": "higher",
+        "threshold": 1
+      },
+      {
+        "metricId": "personalization.comparison_integrity",
+        "method": "rule",
+        "direction": "higher",
+        "threshold": 1
+      },
+      {
+        "metricId": "personalization.semantic_quality",
+        "method": "human",
+        "direction": "higher",
+        "rubric": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。"
+      }
+    ]
+  },
+  "profileDigest": "a850cba58d2c95e817d620fa526cdcc5bfe0b4f84615f00d9723cfd295a75fdf",
+  "status": "failed",
+  "cases": [
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-delete-new-evidence",
+      "caseDigest": "ec19fca9317bc0e3444bfbd4c2aee00b1fc59a0fb1a26c8011aeea02323cec4e",
+      "evidenceDigest": "b494985f06944434d18d595cbf518d9d9a1a65a050bf095c65a54de3796e201c",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-2: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 2,
+          "denominator": 2
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "[{\"check\":\"step-1: deleted cooking-depth inactive\",\"passed\":true},{\"check\":\"step-2: deleted cooking-depth inactive\",\"passed\":true},{\"check\":\"step-3: deleted cooking-depth inactive\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 3,
+          "denominator": 3
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-3: inactive cooking-depth\",\"passed\":true},{\"check\":\"step-3: publication 0c7e5c3a-aaa0-4e76-9252-4ad675ad1178\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 2,
+          "denominator": 2
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-3: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-description-change",
+      "caseDigest": "18b875c95002631f013526d30b315580c40c1575db520b7151f8686153d29ad7",
+      "evidenceDigest": "04284de409ebb15bf87519fa1a6606f2653489e3868a5df104c9713a6cfd3d2b",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-2: effective input cooking-depth\",\"passed\":true},{\"check\":\"step-2: effective input cooking-depth\",\"passed\":true},{\"check\":\"step-2: effective input cooking-depth\",\"passed\":true},{\"check\":\"step-2: publication 2b942333-7ea6-4ec7-98d8-e4e1516bca92\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-feedback-reversal",
+      "caseDigest": "ae8cd44a0c8bf5ede3a63ea89b241bd495fcbe25484331ff66e9e3a888bf5181",
+      "evidenceDigest": "39c6c32b0cb9feaebcc0bc26680c0f95d3f9229619e7bb43068691e374744a34",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "failed",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-2: publication eaa744b0-52ec-4bcb-b6cf-8cb5f9883d0b\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]",
+          "status": "scored",
+          "value": 0,
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-opposing-feedback",
+      "caseDigest": "5b09b5fe18515cfc9f61995da1ab56b4a9fda248c60c84bd34713906c0d6086e",
+      "evidenceDigest": "bd4f95f114b3c85f0622d454e47999c81655fb5dffc27a7ae95ceeca63a8a319",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-2: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 2,
+          "denominator": 2
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-3: effective input 5ba91637-62e1-4808-84ba-01d45b24cc42\",\"passed\":true},{\"check\":\"step-3: effective input 5ba91637-62e1-4808-84ba-01d45b24cc42\",\"passed\":true},{\"check\":\"step-3: effective input 5ba91637-62e1-4808-84ba-01d45b24cc42\",\"passed\":true},{\"check\":\"step-3: publication 0dc2379a-96d6-4a78-9746-0d2ff1a35c64\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-3: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-pause-resume",
+      "caseDigest": "08fbf3bbfece843a02931f51ec89d8bf4fd449d32547e51545ec7a78efefe54a",
+      "evidenceDigest": "9220f6f44019d77d7495d0551b5b9e1342d079e452ab929d07f599350629c131",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "failed",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-2: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-3: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 3,
+          "denominator": 3
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-4: effective input cooking-depth\",\"passed\":true},{\"check\":\"step-4: effective input cooking-depth\",\"passed\":true},{\"check\":\"step-4: effective input cooking-depth\",\"passed\":true},{\"check\":\"step-4: publication e7b3a6e7-c1f7-40e7-a9fd-3bea457ba1eb\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-4: complete paired evidence\",\"passed\":false}]",
+          "status": "scored",
+          "value": 0,
+          "numerator": 0,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "5396f90b469a4d807328b89fb2e75068a5c14860a86169e9d30bcb9e2e8b89af",
+      "evidenceDigest": "c6b1c35b829de71f2af4e70aff80efb6b1a6281264ce6512e0c679b09536e6bf",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-2: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-3: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 3,
+          "denominator": 3
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-4: publication a56d9325-d906-4b64-8884-a47e8df8dec2\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-4: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-delete-old-evidence",
+      "caseDigest": "0b23aac0038e9017e652655752599648327436b01a6ee1362f5aafaef8ace0ff",
+      "evidenceDigest": "ae46a0a7686e8216858d5ddc9cb2109ebadf6cb1ad04956693ff0191814267f4",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "[{\"check\":\"step-1: deleted photo-depth inactive\",\"passed\":true},{\"check\":\"step-2: deleted photo-depth inactive\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 2,
+          "denominator": 2
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-2: inactive photo-depth\",\"passed\":true},{\"check\":\"step-2: publication 66c06d52-fa4f-4c9d-b195-dca8fe283960\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 2,
+          "denominator": 2
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-last-support",
+      "caseDigest": "eaf01d2e4c033612d909e48c72c3b530a0e135aaede8588f7433bbfa07c541fb",
+      "evidenceDigest": "f937b0e14f1c3c4891f2f3bfd20750f9d623488f6d25f2023c2b593db0e739e5",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-2: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 2,
+          "denominator": 2
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-3: publication 9e8c00f8-b96a-40b9-b57f-26e08ec81c16\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-3: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-partial-support",
+      "caseDigest": "557e0f5282243bfbe8082c5bff2cf89a58340af0cd87e658eb657040d438a4dd",
+      "evidenceDigest": "63452264156284f2c2ffb9e2b6f78682db292974af9fca4c81a41ee0a3ee73fe",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-2: publication 4978c165-3b98-4001-abcb-56ede48ffeef\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-user-edit",
+      "caseDigest": "98f38c7d4f08b06659c79764cdea88d0a9293a4b95aab13a0fad0da1eabaf40d",
+      "evidenceDigest": "bd97f49fd1cac8997706fda5b46977fd90b0aab0fd25b4a0bef4b6892d3b24c8",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"step-1: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-2: learning calls outside recommendation\",\"passed\":true},{\"check\":\"step-3: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 3,
+          "denominator": 3
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "[{\"check\":\"step-1: preserve user photo-depth\",\"passed\":true},{\"check\":\"step-2: preserve user photo-depth\",\"passed\":true},{\"check\":\"step-3: preserve user photo-depth\",\"passed\":true},{\"check\":\"step-4: preserve user photo-depth\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"step-4: effective input photo-depth\",\"passed\":true},{\"check\":\"step-4: effective input photo-depth\",\"passed\":true},{\"check\":\"step-4: publication 141ece93-0a8b-4e08-bf7d-ea9f25c2d3db\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 3,
+          "denominator": 3
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"step-4: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    }
+  ]
+}

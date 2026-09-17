@@ -1,0 +1,1254 @@
+{
+  "key": "resume-recommendation.garden-200.r1.layered",
+  "phase": "formal",
+  "repetition": 1,
+  "arm": "layered",
+  "identity": "controlled/resume-recommendation.garden-200",
+  "modelParameters": {
+    "thinking": {
+      "type": "disabled"
+    },
+    "temperature": 0,
+    "max_tokens": 32768,
+    "max_completion_tokens": 32768
+  },
+  "domain": "garden",
+  "poolSize": 200,
+  "targetCount": 20,
+  "runDirectory": "C:\\all\\work\\study\\megumi\\.megumi\\audits\\resume-metrics-20260908\\attempt-05-formal\\evaluation\\records\\run.20260908070406225.ec0ff42b-b834-4518-a30a-f8439f9e64d9",
+  "recordStatus": "recorded",
+  "terminalState": "settled",
+  "productResult": {
+    "accepted": {
+      "status": "started",
+      "localDate": "2026-09-08",
+      "requestId": "evaluation:resume-recommendation.garden-200:recommendation-request:1",
+      "phase": "preparing_preferences"
+    },
+    "completion": {
+      "status": "published",
+      "collection": {
+        "localDate": "2026-09-08",
+        "publishedAt": "2026-09-08T08:00:00.000Z",
+        "items": [
+          {
+            "id": "3b056b54-a819-4ba5-83ba-b52d5d165b83",
+            "candidateId": "evaluation:candidate:item-002280b87be1",
+            "contentIdentity": "content:sha256:de7de860cd563820d7883bbac80b37c2c252bb6422cb2fca6c3875458ccc883c",
+            "localDate": "2026-09-08",
+            "position": 0,
+            "recommendationReason": "针对半阴窗台的草莓授粉操作记录，直接对应阳台园艺中家庭植物养护的实际操作需求，并说明积水、萎蔫等补救方法。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-002280b87be1",
+              "contentType": "article",
+              "title": "草莓授粉：半阴窗台中的操作记录",
+              "description": "草莓授粉：半阴窗台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "草莓授粉：半阴窗台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "草莓授粉：半阴窗台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：草莓授粉首先区分现象与推断，保留半阴窗台中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "37a02489-0957-42d1-9523-69051e84b910",
+              "recommendationId": "3b056b54-a819-4ba5-83ba-b52d5d165b83",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "87aea37d-24f3-49bf-8560-f9322a15e869",
+              "recommendationId": "3b056b54-a819-4ba5-83ba-b52d5d165b83",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "9d6292a6-72df-47b4-a270-0bbbde13deea",
+            "candidateId": "evaluation:candidate:item-00c0cea6b0c6",
+            "contentIdentity": "content:sha256:4e971c900872c68cd9adbb4d67b7df160e161b2011c7817b1d629923defb961c",
+            "localDate": "2026-09-08",
+            "position": 1,
+            "recommendationReason": "盆土透气是家庭盆栽养护的基础概念，本文以夏季室内为背景梳理常见现象，契合阳台园艺对种植方法与生长原理的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-00c0cea6b0c6",
+              "contentType": "article",
+              "title": "盆土透气：夏季室内中的概念速览",
+              "description": "盆土透气：夏季室内中的概念速览。列举盆土透气的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "盆土透气：夏季室内中的概念速览。列举盆土透气的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "盆土透气：夏季室内中的概念速览。列举盆土透气的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：盆土透气首先区分现象与推断，保留夏季室内中的限制条件。列举盆土透气的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "61893369-ef8a-4c82-856e-da070004cd3c",
+              "recommendationId": "9d6292a6-72df-47b4-a270-0bbbde13deea",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "693b7166-c6f0-40b8-aa56-1629537d16b1",
+              "recommendationId": "9d6292a6-72df-47b4-a270-0bbbde13deea",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "618477f1-5d73-4107-89d0-cca63a176702",
+            "candidateId": "evaluation:candidate:item-013fccf40557",
+            "contentIdentity": "content:sha256:662a8e6064b3d8c82e1adca96c729da6323e18d60fedff4f362fe94b68825c85",
+            "localDate": "2026-09-08",
+            "position": 2,
+            "recommendationReason": "香草扦插属于家庭阳台常见的繁殖方法，本文以朝南阳台为背景提供概念目录，贴合用户对种植方法的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-013fccf40557",
+              "contentType": "article",
+              "title": "香草扦插：朝南阳台中的概念速览",
+              "description": "香草扦插：朝南阳台中的概念速览。列举香草扦插的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "香草扦插：朝南阳台中的概念速览。列举香草扦插的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "香草扦插：朝南阳台中的概念速览。列举香草扦插的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：香草扦插首先区分现象与推断，保留朝南阳台中的限制条件。列举香草扦插的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "96237fb5-8edb-487e-8874-9464e794dead",
+              "recommendationId": "618477f1-5d73-4107-89d0-cca63a176702",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "56c266e4-679c-4d5b-814b-a3570b327550",
+              "recommendationId": "618477f1-5d73-4107-89d0-cca63a176702",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "84e70b6c-a462-49a3-a8d4-b82741cb4d98",
+            "candidateId": "evaluation:candidate:item-015275c63e27",
+            "contentIdentity": "content:sha256:e19d2e43445d84079f8e14e946feab6ca90db8d08dace5d9466d0145a116367b",
+            "localDate": "2026-09-08",
+            "position": 3,
+            "recommendationReason": "蓝莓基质配比是家庭盆栽种植的关键环节，本文以通风露台为背景介绍常用概念，符合阳台园艺对基质与生长原理的关切。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-015275c63e27",
+              "contentType": "article",
+              "title": "蓝莓基质：通风露台中的概念速览",
+              "description": "蓝莓基质：通风露台中的概念速览。列举蓝莓基质的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蓝莓基质：通风露台中的概念速览。列举蓝莓基质的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蓝莓基质：通风露台中的概念速览。列举蓝莓基质的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蓝莓基质首先区分现象与推断，保留通风露台中的限制条件。列举蓝莓基质的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "a5ef274f-7875-480a-aa9f-f7cd54077625",
+              "recommendationId": "84e70b6c-a462-49a3-a8d4-b82741cb4d98",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "58a5a65a-f974-4b52-8472-0fe45593d864",
+              "recommendationId": "84e70b6c-a462-49a3-a8d4-b82741cb4d98",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "e8f17d38-6aff-4de6-aa0f-1b60aa3bc23c",
+            "candidateId": "evaluation:candidate:item-0203081e5c85",
+            "contentIdentity": "content:sha256:104af16d82337d3e9affa05c5a8254313209351d83a445b37f1a6fe6af266eea",
+            "localDate": "2026-09-08",
+            "position": 4,
+            "recommendationReason": "薄荷修剪的操作记录给出处理顺序与复查时间，并说明过度修剪的补救，直接服务于家庭植物养护的实操需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-0203081e5c85",
+              "contentType": "article",
+              "title": "薄荷修剪：通风露台中的操作记录",
+              "description": "薄荷修剪：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "薄荷修剪：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "薄荷修剪：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：薄荷修剪首先区分现象与推断，保留通风露台中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "7ed7e917-22c6-407b-aa49-7f129a521128",
+              "recommendationId": "e8f17d38-6aff-4de6-aa0f-1b60aa3bc23c",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "dbb1f04d-a990-4eb9-9e65-4578f05e30bc",
+              "recommendationId": "e8f17d38-6aff-4de6-aa0f-1b60aa3bc23c",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "e87c4713-cb7e-4e54-99e2-09ac827db8d5",
+            "candidateId": "evaluation:candidate:item-02270edcb008",
+            "contentIdentity": "content:sha256:ef6dae458b644aa9008a7f8578f5f02f788dd388d522609ba9769bc304b18e19",
+            "localDate": "2026-09-08",
+            "position": 5,
+            "recommendationReason": "通风露台中的香草扦插操作记录，从观察叶片与基质状态入手，契合阳台园艺对繁殖方法与养护步骤的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-02270edcb008",
+              "contentType": "article",
+              "title": "香草扦插：通风露台中的操作记录",
+              "description": "香草扦插：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "香草扦插：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "香草扦插：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：香草扦插首先区分现象与推断，保留通风露台中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "ec2df7cb-74d8-4697-b85c-0f23a93281cf",
+              "recommendationId": "e87c4713-cb7e-4e54-99e2-09ac827db8d5",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "f0436598-efa1-481e-b7fd-e2be5824a3f0",
+              "recommendationId": "e87c4713-cb7e-4e54-99e2-09ac827db8d5",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "b0a293b0-a124-462e-beaf-379f7aaa02f0",
+            "candidateId": "evaluation:candidate:item-025b955e2312",
+            "contentIdentity": "content:sha256:4a0af709427c43048668b2339c783ca2c6e283729430e151293557b867f852af",
+            "localDate": "2026-09-08",
+            "position": 6,
+            "recommendationReason": "盆栽越冬是家庭阳台植物养护的季节性课题，本文以通风露台为背景提供概念速览，贴合用户对养护方法的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-025b955e2312",
+              "contentType": "article",
+              "title": "盆栽越冬：通风露台中的概念速览",
+              "description": "盆栽越冬：通风露台中的概念速览。列举盆栽越冬的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "盆栽越冬：通风露台中的概念速览。列举盆栽越冬的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "盆栽越冬：通风露台中的概念速览。列举盆栽越冬的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：盆栽越冬首先区分现象与推断，保留通风露台中的限制条件。列举盆栽越冬的常用概念，简要说明通风露台中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "99c36b87-f2ff-4efc-a832-cccaa6a0dd98",
+              "recommendationId": "b0a293b0-a124-462e-beaf-379f7aaa02f0",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "87824742-0f1a-4985-98ff-294f79235b1d",
+              "recommendationId": "b0a293b0-a124-462e-beaf-379f7aaa02f0",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "e6c85cdf-2afc-4ae6-94f8-9575e4c253bc",
+            "candidateId": "evaluation:candidate:item-02afa433233c",
+            "contentIdentity": "content:sha256:f1db8431fdc77cc2b591ca797ac84362ab55bf7478e855d785718cf2aff2ea54",
+            "localDate": "2026-09-08",
+            "position": 7,
+            "recommendationReason": "朝南阳台中的蓝莓基质操作记录，结合光照条件说明基质处理顺序，直接对应家庭种植方法与生长原理的需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-02afa433233c",
+              "contentType": "article",
+              "title": "蓝莓基质：朝南阳台中的操作记录",
+              "description": "蓝莓基质：朝南阳台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蓝莓基质：朝南阳台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蓝莓基质：朝南阳台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蓝莓基质首先区分现象与推断，保留朝南阳台中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "fbc1ca5e-7079-4f83-9276-cf8c6d2f602e",
+              "recommendationId": "e6c85cdf-2afc-4ae6-94f8-9575e4c253bc",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "39dac24f-1076-46b8-8778-3cd19222d6ef",
+              "recommendationId": "e6c85cdf-2afc-4ae6-94f8-9575e4c253bc",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "2d3d671f-c697-44b4-8880-1d562a57782a",
+            "candidateId": "evaluation:candidate:item-04bde6ad0003",
+            "contentIdentity": "content:sha256:cd8cfd562454c6469954fca9efeddace8e71dd14d1932781a50db63f1a5a1a90",
+            "localDate": "2026-09-08",
+            "position": 8,
+            "recommendationReason": "本文解释光照、水分与根系状态对盆土透气的影响并区分相似表象成因，深入生长原理，契合阳台园艺的核心关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-04bde6ad0003",
+              "contentType": "article",
+              "title": "盆土透气：夏季室内中的条件与原理",
+              "description": "盆土透气：夏季室内中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "盆土透气：夏季室内中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "盆土透气：夏季室内中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：盆土透气首先区分现象与推断，保留夏季室内中的限制条件。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。",
+              "contentTruncated": false,
+              "id": "271e7c5c-ae29-4bd1-97a1-84c90a0da1ce",
+              "recommendationId": "2d3d671f-c697-44b4-8880-1d562a57782a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "06a148c8-373f-4388-9adc-88360be7f5d3",
+              "recommendationId": "2d3d671f-c697-44b4-8880-1d562a57782a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "e07d0247-2805-40fe-8a1a-d55d73474065",
+            "candidateId": "evaluation:candidate:item-04c217827669",
+            "contentIdentity": "content:sha256:1012247015d945e9340cb2e367f3f6d5869f65345c687939ab840be198b69f27",
+            "localDate": "2026-09-08",
+            "position": 9,
+            "recommendationReason": "番茄育苗是家庭阳台常见的种植活动，本文以朝南阳台为背景提供概念速览，贴合用户对种植方法的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-04c217827669",
+              "contentType": "article",
+              "title": "番茄育苗：朝南阳台中的概念速览",
+              "description": "番茄育苗：朝南阳台中的概念速览。列举番茄育苗的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "番茄育苗：朝南阳台中的概念速览。列举番茄育苗的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "番茄育苗：朝南阳台中的概念速览。列举番茄育苗的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。 本文以朝南阳台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：番茄育苗首先区分现象与推断，保留朝南阳台中的限制条件。列举番茄育苗的常用概念，简要说明朝南阳台中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "c73698ce-3e0e-45ea-8359-497a8d950c12",
+              "recommendationId": "e07d0247-2805-40fe-8a1a-d55d73474065",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "a8d576ff-1a5e-4270-80a3-fd9483b873db",
+              "recommendationId": "e07d0247-2805-40fe-8a1a-d55d73474065",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "104618bc-7966-4961-8b3e-841651ab498a",
+            "candidateId": "evaluation:candidate:item-055c41141fa3",
+            "contentIdentity": "content:sha256:c335e665bc67b3b9383c9dc8d95b82887dc5d1e7ca924326804b91ba45ab7e34",
+            "localDate": "2026-09-08",
+            "position": 10,
+            "recommendationReason": "通风露台中的盆土透气操作记录，给出处理顺序与复查时间并说明补救方法，直接服务家庭植物养护实操。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-055c41141fa3",
+              "contentType": "article",
+              "title": "盆土透气：通风露台中的操作记录",
+              "description": "盆土透气：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "盆土透气：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "盆土透气：通风露台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：盆土透气首先区分现象与推断，保留通风露台中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "520b2a87-dd31-4e0b-87f7-5370678c9035",
+              "recommendationId": "104618bc-7966-4961-8b3e-841651ab498a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "7d5c84b9-9d8d-4144-90dc-e5fea27f3f3c",
+              "recommendationId": "104618bc-7966-4961-8b3e-841651ab498a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "795a4ff2-3997-4592-a5d7-da0901eead98",
+            "candidateId": "evaluation:candidate:item-096aa2f3c184",
+            "contentIdentity": "content:sha256:e31fdcf21cad2373387848e9ab80c9b029703da1088a7d1049825bdecd4e3b76",
+            "localDate": "2026-09-08",
+            "position": 11,
+            "recommendationReason": "多肉浇水是家庭阳台养护的高频问题，本文以夏季室内为背景记录操作步骤与补救，契合用户对浇水方法与生长原理的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-096aa2f3c184",
+              "contentType": "article",
+              "title": "多肉浇水：夏季室内中的操作记录",
+              "description": "多肉浇水：夏季室内中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "多肉浇水：夏季室内中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "多肉浇水：夏季室内中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：多肉浇水首先区分现象与推断，保留夏季室内中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "727c48a2-53e2-4731-b205-9ef8d083d096",
+              "recommendationId": "795a4ff2-3997-4592-a5d7-da0901eead98",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "79208387-17a2-483f-880e-b59773403f43",
+              "recommendationId": "795a4ff2-3997-4592-a5d7-da0901eead98",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "82b9e408-84d6-42db-b0ca-86f6c4be1a3e",
+            "candidateId": "evaluation:candidate:item-0b2671963ef3",
+            "contentIdentity": "content:sha256:d454729c202c6fdf823d8e154d1a3cf4f2a6ec4258a862a8d3514f4a3573f688",
+            "localDate": "2026-09-08",
+            "position": 12,
+            "recommendationReason": "半阴窗台中的蓝莓基质概念速览，帮助理解基质选择与配比，贴合阳台园艺对种植方法与基质原理的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-0b2671963ef3",
+              "contentType": "article",
+              "title": "蓝莓基质：半阴窗台中的概念速览",
+              "description": "蓝莓基质：半阴窗台中的概念速览。列举蓝莓基质的常用概念，简要说明半阴窗台中可能遇到的现象，为进一步阅读提供问题目录。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蓝莓基质：半阴窗台中的概念速览。列举蓝莓基质的常用概念，简要说明半阴窗台中可能遇到的现象，为进一步阅读提供问题目录。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蓝莓基质：半阴窗台中的概念速览。列举蓝莓基质的常用概念，简要说明半阴窗台中可能遇到的现象，为进一步阅读提供问题目录。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蓝莓基质首先区分现象与推断，保留半阴窗台中的限制条件。列举蓝莓基质的常用概念，简要说明半阴窗台中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "cf245531-e235-4ddc-b400-64dd93c95dcc",
+              "recommendationId": "82b9e408-84d6-42db-b0ca-86f6c4be1a3e",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "8ae0ce6a-983a-4c4c-ac71-605e8ad8493c",
+              "recommendationId": "82b9e408-84d6-42db-b0ca-86f6c4be1a3e",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "b469fe66-9e4d-423a-8b80-8e2640ca8a1e",
+            "candidateId": "evaluation:candidate:item-0ee4229d4c27",
+            "contentIdentity": "content:sha256:8a75cfaa4ba6ca340f1c49da0593d9930c4ea5b423d282ff4573028401f5d058",
+            "localDate": "2026-09-08",
+            "position": 13,
+            "recommendationReason": "夏季室内中的香草扦插概念速览，为家庭阳台繁殖提供问题目录，符合用户对种植方法的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-0ee4229d4c27",
+              "contentType": "article",
+              "title": "香草扦插：夏季室内中的概念速览",
+              "description": "香草扦插：夏季室内中的概念速览。列举香草扦插的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "香草扦插：夏季室内中的概念速览。列举香草扦插的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "香草扦插：夏季室内中的概念速览。列举香草扦插的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：香草扦插首先区分现象与推断，保留夏季室内中的限制条件。列举香草扦插的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "d00fa6ba-8e2d-4531-bd7b-f19bd175d098",
+              "recommendationId": "b469fe66-9e4d-423a-8b80-8e2640ca8a1e",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "6019cce6-2d4a-48b4-8c85-551270e2ae91",
+              "recommendationId": "b469fe66-9e4d-423a-8b80-8e2640ca8a1e",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "2cfa83d8-09a8-4386-b040-5ffffc65083b",
+            "candidateId": "evaluation:candidate:item-0ee7c59bda70",
+            "contentIdentity": "content:sha256:3852d19cf24c67c66538bef9c89255baf96df1f653338fe460ac38480d42dcb7",
+            "localDate": "2026-09-08",
+            "position": 14,
+            "recommendationReason": "本文解释半阴窗台中多肉浇水受光照、水分与根系状态的影响并区分表象成因，深入生长原理，契合阳台园艺需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-0ee7c59bda70",
+              "contentType": "article",
+              "title": "多肉浇水：半阴窗台中的条件与原理",
+              "description": "多肉浇水：半阴窗台中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "多肉浇水：半阴窗台中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "多肉浇水：半阴窗台中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：多肉浇水首先区分现象与推断，保留半阴窗台中的限制条件。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。",
+              "contentTruncated": false,
+              "id": "77cf5eac-cd53-4d01-ae5b-ca295e470145",
+              "recommendationId": "2cfa83d8-09a8-4386-b040-5ffffc65083b",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "bcf69011-da12-4849-9d45-413ac7c75abb",
+              "recommendationId": "2cfa83d8-09a8-4386-b040-5ffffc65083b",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "55dfdb8c-60ac-438c-9651-77a734d67b24",
+            "candidateId": "evaluation:candidate:item-103a7d29702e",
+            "contentIdentity": "content:sha256:b06b0ceceff61dedaad2a4173300b0589c1a7cfe33fb145f8a1c2820e778d7e9",
+            "localDate": "2026-09-08",
+            "position": 15,
+            "recommendationReason": "夏季室内中的番茄育苗概念速览，梳理育苗常见概念，贴合家庭阳台种植方法的学习需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-103a7d29702e",
+              "contentType": "article",
+              "title": "番茄育苗：夏季室内中的概念速览",
+              "description": "番茄育苗：夏季室内中的概念速览。列举番茄育苗的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "番茄育苗：夏季室内中的概念速览。列举番茄育苗的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "番茄育苗：夏季室内中的概念速览。列举番茄育苗的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：番茄育苗首先区分现象与推断，保留夏季室内中的限制条件。列举番茄育苗的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "02cb4a41-888f-4f45-aeb1-5723c121dc8e",
+              "recommendationId": "55dfdb8c-60ac-438c-9651-77a734d67b24",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "61266f65-83e8-4a7e-8a0b-6691848b8109",
+              "recommendationId": "55dfdb8c-60ac-438c-9651-77a734d67b24",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "8572ca50-4700-47ad-b41c-2d5ac988ba6d",
+            "candidateId": "evaluation:candidate:item-12ade2b2e5e1",
+            "contentIdentity": "content:sha256:9a1df8ecb81da175a1bfe17e44002e4f82abdacae13bf906faa87503883c77d6",
+            "localDate": "2026-09-08",
+            "position": 16,
+            "recommendationReason": "本文解释通风露台中月季光照对生长的影响并说明通风改变后的适用范围，深入生长原理，契合阳台园艺对光照管理的关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-12ade2b2e5e1",
+              "contentType": "article",
+              "title": "月季光照：通风露台中的条件与原理",
+              "description": "月季光照：通风露台中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "月季光照：通风露台中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "月季光照：通风露台中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以通风露台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：月季光照首先区分现象与推断，保留通风露台中的限制条件。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。",
+              "contentTruncated": false,
+              "id": "0c4da6b9-5723-4e49-a362-7496e07165df",
+              "recommendationId": "8572ca50-4700-47ad-b41c-2d5ac988ba6d",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "eb6112cb-85b6-4b49-b95f-74120e6a9816",
+              "recommendationId": "8572ca50-4700-47ad-b41c-2d5ac988ba6d",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "842d16c5-fffe-49c3-a2d2-6ace66d7ff24",
+            "candidateId": "evaluation:candidate:item-1325bfab77b8",
+            "contentIdentity": "content:sha256:d9884dd1603772f5527cf38c121567d42da9446b3d20f21d6ee5137acfee7e02",
+            "localDate": "2026-09-08",
+            "position": 17,
+            "recommendationReason": "夏季室内中的草莓授粉概念速览，为家庭阳台结果类植物养护提供概念基础，符合用户对种植方法的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-1325bfab77b8",
+              "contentType": "article",
+              "title": "草莓授粉：夏季室内中的概念速览",
+              "description": "草莓授粉：夏季室内中的概念速览。列举草莓授粉的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "草莓授粉：夏季室内中的概念速览。列举草莓授粉的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "草莓授粉：夏季室内中的概念速览。列举草莓授粉的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：草莓授粉首先区分现象与推断，保留夏季室内中的限制条件。列举草莓授粉的常用概念，简要说明夏季室内中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "a6138a84-adf5-4de2-92e3-d0aad3ae1c6d",
+              "recommendationId": "842d16c5-fffe-49c3-a2d2-6ace66d7ff24",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "1a82cc4a-81db-4212-afa5-31158542801a",
+              "recommendationId": "842d16c5-fffe-49c3-a2d2-6ace66d7ff24",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "5bd9db90-a86d-45ea-a711-236b9880d8ca",
+            "candidateId": "evaluation:candidate:item-13c3e3ea6eff",
+            "contentIdentity": "content:sha256:6a40ff6f28abd591814e4effc18db34357b8ca373064271092e537da00c8ad0f",
+            "localDate": "2026-09-08",
+            "position": 18,
+            "recommendationReason": "半阴窗台中的月季光照操作记录，从观察叶片与基质状态入手并说明补救，直接服务家庭植物养护实操。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-13c3e3ea6eff",
+              "contentType": "article",
+              "title": "月季光照：半阴窗台中的操作记录",
+              "description": "月季光照：半阴窗台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "月季光照：半阴窗台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "月季光照：半阴窗台中的操作记录。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。 本文以半阴窗台为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：月季光照首先区分现象与推断，保留半阴窗台中的限制条件。从观察叶片与基质状态开始，给出处理顺序和复查时间，比较处理前后变化，并说明积水、萎蔫或过度修剪时的补救。",
+              "contentTruncated": false,
+              "id": "58820114-1133-464a-af47-34f747cbd701",
+              "recommendationId": "5bd9db90-a86d-45ea-a711-236b9880d8ca",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "665ac36a-f02c-4a2d-bfd2-ab5e917c5129",
+              "recommendationId": "5bd9db90-a86d-45ea-a711-236b9880d8ca",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "e47c04ca-396e-4432-afb4-f238c344e2f7",
+            "candidateId": "evaluation:candidate:item-1413b31a8254",
+            "contentIdentity": "content:sha256:24905c4a316115e832b0ffed9ff59d791622c901376c01c6176c3f0d4417a1ba",
+            "localDate": "2026-09-08",
+            "position": 19,
+            "recommendationReason": "本文解释夏季室内多肉浇水受光照、水分与根系状态影响并区分相似表象成因，深入生长原理，契合阳台园艺的核心关注。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:garden",
+              "matchedInterestIds": [
+                "evaluation:interest:garden"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:garden",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "1042ed5c-00a7-4039-82f6-6597d846be3c",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/garden/item-1413b31a8254",
+              "contentType": "article",
+              "title": "多肉浇水：夏季室内中的条件与原理",
+              "description": "多肉浇水：夏季室内中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "多肉浇水：夏季室内中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "多肉浇水：夏季室内中的条件与原理。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。 本文以夏季室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：多肉浇水首先区分现象与推断，保留夏季室内中的限制条件。解释光照、水分和根系状态对生长的影响，区分相似表象的成因，说明温度和通风改变后养护结论的适用范围。",
+              "contentTruncated": false,
+              "id": "01826ee9-b45f-425f-9f68-61bab03cad59",
+              "recommendationId": "e47c04ca-396e-4432-afb4-f238c344e2f7",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "1a4789ca-31f3-43f8-b54e-e00e1708ff1f",
+              "recommendationId": "e47c04ca-396e-4432-afb4-f238c344e2f7",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publishedCount": 20,
+  "relatedCount": 20,
+  "relatedRate": 1,
+  "effectiveDeliveryRate": 1,
+  "ndcg": 0.6986221439323038,
+  "inputNoncached": 28545,
+  "inputCachedRead": 33152,
+  "inputCachedWrite": 0,
+  "inputTotal": 61697,
+  "outputTokens": 2810,
+  "modelCalls": 2,
+  "toolCalls": 1,
+  "durationMs": 21732,
+  "issues": [],
+  "rows": [
+    {
+      "id": "item-002280b87be1",
+      "grade": 2,
+      "position": 0,
+      "reason": "针对半阴窗台的草莓授粉操作记录，直接对应阳台园艺中家庭植物养护的实际操作需求，并说明积水、萎蔫等补救方法。"
+    },
+    {
+      "id": "item-00c0cea6b0c6",
+      "grade": 1,
+      "position": 1,
+      "reason": "盆土透气是家庭盆栽养护的基础概念，本文以夏季室内为背景梳理常见现象，契合阳台园艺对种植方法与生长原理的关注。"
+    },
+    {
+      "id": "item-013fccf40557",
+      "grade": 1,
+      "position": 2,
+      "reason": "香草扦插属于家庭阳台常见的繁殖方法，本文以朝南阳台为背景提供概念目录，贴合用户对种植方法的兴趣。"
+    },
+    {
+      "id": "item-015275c63e27",
+      "grade": 1,
+      "position": 3,
+      "reason": "蓝莓基质配比是家庭盆栽种植的关键环节，本文以通风露台为背景介绍常用概念，符合阳台园艺对基质与生长原理的关切。"
+    },
+    {
+      "id": "item-0203081e5c85",
+      "grade": 2,
+      "position": 4,
+      "reason": "薄荷修剪的操作记录给出处理顺序与复查时间，并说明过度修剪的补救，直接服务于家庭植物养护的实操需求。"
+    },
+    {
+      "id": "item-02270edcb008",
+      "grade": 2,
+      "position": 5,
+      "reason": "通风露台中的香草扦插操作记录，从观察叶片与基质状态入手，契合阳台园艺对繁殖方法与养护步骤的兴趣。"
+    },
+    {
+      "id": "item-025b955e2312",
+      "grade": 1,
+      "position": 6,
+      "reason": "盆栽越冬是家庭阳台植物养护的季节性课题，本文以通风露台为背景提供概念速览，贴合用户对养护方法的关注。"
+    },
+    {
+      "id": "item-02afa433233c",
+      "grade": 2,
+      "position": 7,
+      "reason": "朝南阳台中的蓝莓基质操作记录，结合光照条件说明基质处理顺序，直接对应家庭种植方法与生长原理的需求。"
+    },
+    {
+      "id": "item-04bde6ad0003",
+      "grade": 2,
+      "position": 8,
+      "reason": "本文解释光照、水分与根系状态对盆土透气的影响并区分相似表象成因，深入生长原理，契合阳台园艺的核心关注。"
+    },
+    {
+      "id": "item-04c217827669",
+      "grade": 1,
+      "position": 9,
+      "reason": "番茄育苗是家庭阳台常见的种植活动，本文以朝南阳台为背景提供概念速览，贴合用户对种植方法的兴趣。"
+    },
+    {
+      "id": "item-055c41141fa3",
+      "grade": 2,
+      "position": 10,
+      "reason": "通风露台中的盆土透气操作记录，给出处理顺序与复查时间并说明补救方法，直接服务家庭植物养护实操。"
+    },
+    {
+      "id": "item-096aa2f3c184",
+      "grade": 2,
+      "position": 11,
+      "reason": "多肉浇水是家庭阳台养护的高频问题，本文以夏季室内为背景记录操作步骤与补救，契合用户对浇水方法与生长原理的关注。"
+    },
+    {
+      "id": "item-0b2671963ef3",
+      "grade": 1,
+      "position": 12,
+      "reason": "半阴窗台中的蓝莓基质概念速览，帮助理解基质选择与配比，贴合阳台园艺对种植方法与基质原理的兴趣。"
+    },
+    {
+      "id": "item-0ee4229d4c27",
+      "grade": 1,
+      "position": 13,
+      "reason": "夏季室内中的香草扦插概念速览，为家庭阳台繁殖提供问题目录，符合用户对种植方法的关注。"
+    },
+    {
+      "id": "item-0ee7c59bda70",
+      "grade": 2,
+      "position": 14,
+      "reason": "本文解释半阴窗台中多肉浇水受光照、水分与根系状态的影响并区分表象成因，深入生长原理，契合阳台园艺需求。"
+    },
+    {
+      "id": "item-103a7d29702e",
+      "grade": 1,
+      "position": 15,
+      "reason": "夏季室内中的番茄育苗概念速览，梳理育苗常见概念，贴合家庭阳台种植方法的学习需求。"
+    },
+    {
+      "id": "item-12ade2b2e5e1",
+      "grade": 2,
+      "position": 16,
+      "reason": "本文解释通风露台中月季光照对生长的影响并说明通风改变后的适用范围，深入生长原理，契合阳台园艺对光照管理的关注。"
+    },
+    {
+      "id": "item-1325bfab77b8",
+      "grade": 1,
+      "position": 17,
+      "reason": "夏季室内中的草莓授粉概念速览，为家庭阳台结果类植物养护提供概念基础，符合用户对种植方法的兴趣。"
+    },
+    {
+      "id": "item-13c3e3ea6eff",
+      "grade": 2,
+      "position": 18,
+      "reason": "半阴窗台中的月季光照操作记录，从观察叶片与基质状态入手并说明补救，直接服务家庭植物养护实操。"
+    },
+    {
+      "id": "item-1413b31a8254",
+      "grade": 2,
+      "position": 19,
+      "reason": "本文解释夏季室内多肉浇水受光照、水分与根系状态影响并区分相似表象成因，深入生长原理，契合阳台园艺的核心关注。"
+    }
+  ]
+}

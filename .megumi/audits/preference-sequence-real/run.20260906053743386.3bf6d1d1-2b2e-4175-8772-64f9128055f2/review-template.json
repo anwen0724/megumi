@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "runId": "run.20260906053743386.3bf6d1d1-2b2e-4175-8772-64f9128055f2",
+  "profileDigest": "a850cba58d2c95e817d620fa526cdcc5bfe0b4f84615f00d9723cfd295a75fdf",
+  "entries": [
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-delete-new-evidence",
+      "caseDigest": "ec19fca9317bc0e3444bfbd4c2aee00b1fc59a0fb1a26c8011aeea02323cec4e",
+      "evidenceDigest": "8984d493c85e48fde9771d03874ff1c5d4ed1ef17de115f4a51cc2f28ed4227f",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-description-change",
+      "caseDigest": "18b875c95002631f013526d30b315580c40c1575db520b7151f8686153d29ad7",
+      "evidenceDigest": "39f9c2ac250b397c282c3f31c3a409ca22ee7158578c744d8d28f086bc9b05cd",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-feedback-reversal",
+      "caseDigest": "ae8cd44a0c8bf5ede3a63ea89b241bd495fcbe25484331ff66e9e3a888bf5181",
+      "evidenceDigest": "cd1d5f7c31cf90955dbc276024649216812ef342fda294456747d0fba67b422e",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-opposing-feedback",
+      "caseDigest": "5b09b5fe18515cfc9f61995da1ab56b4a9fda248c60c84bd34713906c0d6086e",
+      "evidenceDigest": "ecabc8349b53aafa764a7d07982befee523abf4a81e5e340449e8d90db2437ba",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-pause-resume",
+      "caseDigest": "08fbf3bbfece843a02931f51ec89d8bf4fd449d32547e51545ec7a78efefe54a",
+      "evidenceDigest": "e2663ffe23105662f3ec8d0ed3aafc642dbfb15b14fdcac3c6609760d8fedb8c",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "5396f90b469a4d807328b89fb2e75068a5c14860a86169e9d30bcb9e2e8b89af",
+      "evidenceDigest": "afd96075c65460a207d8216d1f879c3bc889d8639eb343b6a6391933a233e033",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-delete-old-evidence",
+      "caseDigest": "0b23aac0038e9017e652655752599648327436b01a6ee1362f5aafaef8ace0ff",
+      "evidenceDigest": "6a3c9a4a6762283ed9823f9f977e47b9923379d5d93e7c612ce47279ba3551c2",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-last-support",
+      "caseDigest": "eaf01d2e4c033612d909e48c72c3b530a0e135aaede8588f7433bbfa07c541fb",
+      "evidenceDigest": "d5e5f3e2915a0ed05de5bf887925ddbbb91bc54e222a393a077c6591f31b52ce",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-partial-support",
+      "caseDigest": "557e0f5282243bfbe8082c5bff2cf89a58340af0cd87e658eb657040d438a4dd",
+      "evidenceDigest": "effaa764c2716a6af20622ed3d269e8c1035d29aaa46aa26c09787b31fc3883f",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-user-edit",
+      "caseDigest": "98f38c7d4f08b06659c79764cdea88d0a9293a4b95aab13a0fad0da1eabaf40d",
+      "evidenceDigest": "39a93e138f62ee0a14a2b05af998623ed1c1e6f29dc3f03b12449b572d903147",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending"
+    }
+  ]
+}

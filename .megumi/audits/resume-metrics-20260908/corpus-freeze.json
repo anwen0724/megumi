@@ -1,0 +1,24 @@
+{
+  "createdAt": "2026-09-08T06:44:15.959Z",
+  "labelDigest": "10447b7204d35181d1fb5058725de436d38fe228009ba9eb398b0709b2b6a1f4",
+  "cases": [
+    "resume-recommendation.photo-80",
+    "resume-recommendation.photo-120",
+    "resume-recommendation.photo-200",
+    "resume-recommendation.cooking-80",
+    "resume-recommendation.cooking-120",
+    "resume-recommendation.cooking-200",
+    "resume-recommendation.garden-80",
+    "resume-recommendation.garden-120",
+    "resume-recommendation.garden-200",
+    "resume-recommendation.java-80",
+    "resume-recommendation.java-120",
+    "resume-recommendation.java-200"
+  ],
+  "arms": [
+    "layered",
+    "full"
+  ],
+  "seed": "sha256(domain:topic:scene:style)",
+  "productModified": false
+}

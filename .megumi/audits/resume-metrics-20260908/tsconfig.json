@@ -1,0 +1,5 @@
+{
+  "extends": "../../../evals/agent/tsconfig.json",
+  "compilerOptions": { "allowImportingTsExtensions": true },
+  "include": ["./*.mts", "../../../packages/agent/voice/src/sherpa-onnx-node.d.ts"]
+}

@@ -1,0 +1,52 @@
+{
+  "key": "resume-recommendation.photo-120.r0.layered",
+  "phase": "pilot-fast",
+  "repetition": 0,
+  "arm": "layered",
+  "identity": "controlled/resume-recommendation.photo-120",
+  "modelParameters": {
+    "thinking": {
+      "type": "disabled"
+    },
+    "temperature": 0,
+    "max_tokens": 8192
+  },
+  "domain": "photo",
+  "poolSize": 120,
+  "targetCount": 20,
+  "runDirectory": "C:\\all\\work\\study\\megumi\\.megumi\\audits\\resume-metrics-20260908\\attempt-03-pilot-explicit-model\\evaluation\\records\\run.20260908065341736.8fe7bcef-a021-4efb-b226-90d51bbe6271",
+  "recordStatus": "recorded",
+  "terminalState": "settled",
+  "productResult": {
+    "accepted": {
+      "status": "started",
+      "localDate": "2026-09-08",
+      "requestId": "evaluation:resume-recommendation.photo-120:recommendation-request:1",
+      "phase": "preparing_preferences"
+    },
+    "completion": {
+      "status": "failed",
+      "localDate": "2026-09-08",
+      "failure": {
+        "code": "agent_execution_failed",
+        "message": "Model output was truncated before completion.",
+        "retryable": false
+      }
+    }
+  },
+  "publishedCount": 0,
+  "relatedCount": 0,
+  "relatedRate": null,
+  "effectiveDeliveryRate": 0,
+  "ndcg": 0,
+  "inputNoncached": 29052,
+  "inputCachedRead": 256,
+  "inputCachedWrite": 0,
+  "inputTotal": 29308,
+  "outputTokens": 8192,
+  "modelCalls": 1,
+  "toolCalls": 0,
+  "durationMs": 46600,
+  "issues": [],
+  "rows": []
+}

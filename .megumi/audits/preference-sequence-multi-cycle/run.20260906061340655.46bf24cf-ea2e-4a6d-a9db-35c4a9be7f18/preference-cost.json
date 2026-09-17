@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "runId": "run.20260906061340655.46bf24cf-ea2e-4a6d-a9db-35c4a9be7f18",
+  "cases": [
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "first-recommendation",
+          "mainPath": {
+            "traceIds": [
+              "e4dc891f-c8a7-4657-a65f-d5107e4ccadf",
+              "d6b9839c-a12c-4105-b90d-b2157e37fe9d"
+            ],
+            "modelCalls": 3,
+            "retries": 0,
+            "traceDurationMs": 8928,
+            "usage": {
+              "inputTokens": 1824,
+              "outputTokens": 1025,
+              "cacheReadTokens": 5760,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "e4dc891f-c8a7-4657-a65f-d5107e4ccadf"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 784,
+            "usage": {
+              "inputTokens": 515,
+              "outputTokens": 63,
+              "cacheReadTokens": 1024,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": []
+        },
+        {
+          "checkpointId": "second-recommendation",
+          "mainPath": {
+            "traceIds": [
+              "5c749b29-e63e-4276-97b9-399a9e09b1e2",
+              "da9767b3-1a0f-4efc-b76a-36b01704d2c1"
+            ],
+            "modelCalls": 3,
+            "retries": 0,
+            "traceDurationMs": 14885,
+            "usage": {
+              "inputTokens": 2134,
+              "outputTokens": 1847,
+              "cacheReadTokens": 6528,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "da9767b3-1a0f-4efc-b76a-36b01704d2c1"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 634,
+            "usage": {
+              "inputTokens": 793,
+              "outputTokens": 63,
+              "cacheReadTokens": 1024,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "5c749b29-e63e-4276-97b9-399a9e09b1e2"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 14251,
+                "usage": {
+                  "inputTokens": 1341,
+                  "outputTokens": 1784,
+                  "cacheReadTokens": 5504,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "9abbfba1-99a9-49cd-893b-7161a8cb710b"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 14801,
+                "usage": {
+                  "inputTokens": 1343,
+                  "outputTokens": 1895,
+                  "cacheReadTokens": 5632,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,822 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Megumi settings",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "language": {
+      "enum": [
+        "zh-CN",
+        "en-US"
+      ]
+    },
+    "theme": {
+      "enum": [
+        "megumi-warm",
+        "neutral-light",
+        "sunlit-sky",
+        "rose-moon",
+        "verdant-cloud",
+        "cangming-blue",
+        "frost-cyan",
+        "cyan-tide",
+        "midnight-blue"
+      ]
+    },
+    "setup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "input_device_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output_device_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recognition_language": {
+          "enum": [
+            "auto",
+            "zh",
+            "en"
+          ]
+        },
+        "read_aloud_enabled": {
+          "type": "boolean"
+        },
+        "tts": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "provider": {
+              "enum": [
+                "minimax"
+              ]
+            },
+            "voice_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "api_key_env": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "api_key": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compaction_threshold_ratio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        }
+      }
+    },
+    "model_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "ask",
+            "auto",
+            "full_access"
+          ]
+        },
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": [
+                  "user",
+                  "workspace",
+                  "session"
+                ]
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "operation"
+                      },
+                      "action": {
+                        "enum": [
+                          "workspace.read",
+                          "workspace.write",
+                          "process.execute",
+                          "network.search",
+                          "network.fetch",
+                          "agent.context.activate",
+                          "external.invoke"
+                        ]
+                      },
+                      "resource": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "enum": [
+                              "workspace.path",
+                              "process.command",
+                              "network.public_web",
+                              "network.url",
+                              "tool.identity"
+                            ]
+                          },
+                          "matcher": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "any"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "exact"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "prefix"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "glob"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "hostname"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "tool"
+                      },
+                      "tool_identity": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "source_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_tool_name": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "ask": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": [
+                  "user",
+                  "workspace",
+                  "session"
+                ]
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "operation"
+                      },
+                      "action": {
+                        "enum": [
+                          "workspace.read",
+                          "workspace.write",
+                          "process.execute",
+                          "network.search",
+                          "network.fetch",
+                          "agent.context.activate",
+                          "external.invoke"
+                        ]
+                      },
+                      "resource": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "enum": [
+                              "workspace.path",
+                              "process.command",
+                              "network.public_web",
+                              "network.url",
+                              "tool.identity"
+                            ]
+                          },
+                          "matcher": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "any"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "exact"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "prefix"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "glob"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "hostname"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "tool"
+                      },
+                      "tool_identity": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "source_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_tool_name": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": [
+                  "user",
+                  "workspace",
+                  "session"
+                ]
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "operation"
+                      },
+                      "action": {
+                        "enum": [
+                          "workspace.read",
+                          "workspace.write",
+                          "process.execute",
+                          "network.search",
+                          "network.fetch",
+                          "agent.context.activate",
+                          "external.invoke"
+                        ]
+                      },
+                      "resource": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "type": {
+                            "enum": [
+                              "workspace.path",
+                              "process.command",
+                              "network.public_web",
+                              "network.url",
+                              "tool.identity"
+                            ]
+                          },
+                          "matcher": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "any"
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "exact"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "prefix"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "glob"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              },
+                              {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                  "operator": {
+                                    "const": "hostname"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "const": "tool"
+                      },
+                      "tool_identity": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "source_id": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "source_tool_name": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "conversation_recognition_enabled": {
+          "type": "boolean"
+        },
+        "daily_generation_time": {
+          "type": "string",
+          "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+        },
+        "daily_target_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "enabled_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "twitter_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_search_calls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "max_results_per_search": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "max_results_per_attempt": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "zhihu": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "credential": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "twitter": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "credential": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "web": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "search": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "provider": {
+              "enum": [
+                "brave",
+                "tavily",
+                "exa",
+                "custom"
+              ]
+            },
+            "api_key_env": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "base_url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "uri"
+            },
+            "api_key": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "api": {
+            "enum": [
+              "openai-completions",
+              "openai-responses",
+              "openai-codex-responses",
+              "anthropic-messages",
+              "google-generative-ai"
+            ]
+          },
+          "display_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "base_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "models": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "display_name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "context_window_tokens": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "max_output_tokens": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                "capabilities": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "streaming": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "const": "unknown"
+                        }
+                      ]
+                    },
+                    "toolCalls": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "const": "unknown"
+                        }
+                      ]
+                    },
+                    "thinking": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "const": "unknown"
+                        }
+                      ]
+                    },
+                    "imageInput": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "const": "unknown"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "api_key_env": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "api_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

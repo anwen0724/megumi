@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "runId": "run.20260906055626429.5c42d9c9-ce24-4da9-9472-c6638a1b3ffc",
+  "profileDigest": "a850cba58d2c95e817d620fa526cdcc5bfe0b4f84615f00d9723cfd295a75fdf",
+  "entries": [
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-delete-new-evidence",
+      "caseDigest": "ec19fca9317bc0e3444bfbd4c2aee00b1fc59a0fb1a26c8011aeea02323cec4e",
+      "evidenceDigest": "4bf36dac7ac97d109a2cf95f5cafdd2c2a768ec9dd0a3d730a88b90062b9a40d",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-delete-new-evidence",
+      "caseDigest": "ec19fca9317bc0e3444bfbd4c2aee00b1fc59a0fb1a26c8011aeea02323cec4e",
+      "evidenceDigest": "4bf36dac7ac97d109a2cf95f5cafdd2c2a768ec9dd0a3d730a88b90062b9a40d",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-delete-new-evidence",
+      "caseDigest": "ec19fca9317bc0e3444bfbd4c2aee00b1fc59a0fb1a26c8011aeea02323cec4e",
+      "evidenceDigest": "4bf36dac7ac97d109a2cf95f5cafdd2c2a768ec9dd0a3d730a88b90062b9a40d",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-description-change",
+      "caseDigest": "18b875c95002631f013526d30b315580c40c1575db520b7151f8686153d29ad7",
+      "evidenceDigest": "726356a0b946302c86ec9468b124ba5182df74e453edc3e061cf9336ca177030",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-description-change",
+      "caseDigest": "18b875c95002631f013526d30b315580c40c1575db520b7151f8686153d29ad7",
+      "evidenceDigest": "726356a0b946302c86ec9468b124ba5182df74e453edc3e061cf9336ca177030",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-description-change",
+      "caseDigest": "18b875c95002631f013526d30b315580c40c1575db520b7151f8686153d29ad7",
+      "evidenceDigest": "726356a0b946302c86ec9468b124ba5182df74e453edc3e061cf9336ca177030",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-feedback-reversal",
+      "caseDigest": "ae8cd44a0c8bf5ede3a63ea89b241bd495fcbe25484331ff66e9e3a888bf5181",
+      "evidenceDigest": "babac2a82d136649c172ab587d85a3c78aab459c8cf25b826d75e94842dc7be4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-feedback-reversal",
+      "caseDigest": "ae8cd44a0c8bf5ede3a63ea89b241bd495fcbe25484331ff66e9e3a888bf5181",
+      "evidenceDigest": "babac2a82d136649c172ab587d85a3c78aab459c8cf25b826d75e94842dc7be4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-feedback-reversal",
+      "caseDigest": "ae8cd44a0c8bf5ede3a63ea89b241bd495fcbe25484331ff66e9e3a888bf5181",
+      "evidenceDigest": "babac2a82d136649c172ab587d85a3c78aab459c8cf25b826d75e94842dc7be4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-opposing-feedback",
+      "caseDigest": "5b09b5fe18515cfc9f61995da1ab56b4a9fda248c60c84bd34713906c0d6086e",
+      "evidenceDigest": "e8b68b67edc1dd6c940caa3c3422c5f8b70ad4e618b15cc663de0a5295606181",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-opposing-feedback",
+      "caseDigest": "5b09b5fe18515cfc9f61995da1ab56b4a9fda248c60c84bd34713906c0d6086e",
+      "evidenceDigest": "e8b68b67edc1dd6c940caa3c3422c5f8b70ad4e618b15cc663de0a5295606181",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-opposing-feedback",
+      "caseDigest": "5b09b5fe18515cfc9f61995da1ab56b4a9fda248c60c84bd34713906c0d6086e",
+      "evidenceDigest": "e8b68b67edc1dd6c940caa3c3422c5f8b70ad4e618b15cc663de0a5295606181",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-pause-resume",
+      "caseDigest": "08fbf3bbfece843a02931f51ec89d8bf4fd449d32547e51545ec7a78efefe54a",
+      "evidenceDigest": "474070c49a4730cabd3cf45cef716fb0566c10e36a636899545938d8b911ea83",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-pause-resume",
+      "caseDigest": "08fbf3bbfece843a02931f51ec89d8bf4fd449d32547e51545ec7a78efefe54a",
+      "evidenceDigest": "474070c49a4730cabd3cf45cef716fb0566c10e36a636899545938d8b911ea83",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-pause-resume",
+      "caseDigest": "08fbf3bbfece843a02931f51ec89d8bf4fd449d32547e51545ec7a78efefe54a",
+      "evidenceDigest": "474070c49a4730cabd3cf45cef716fb0566c10e36a636899545938d8b911ea83",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "5396f90b469a4d807328b89fb2e75068a5c14860a86169e9d30bcb9e2e8b89af",
+      "evidenceDigest": "0fe263d5ecd6b65dbc804b97dc81cf11725819158c3ea1f0931ce11cc7249a84",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "5396f90b469a4d807328b89fb2e75068a5c14860a86169e9d30bcb9e2e8b89af",
+      "evidenceDigest": "0fe263d5ecd6b65dbc804b97dc81cf11725819158c3ea1f0931ce11cc7249a84",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "5396f90b469a4d807328b89fb2e75068a5c14860a86169e9d30bcb9e2e8b89af",
+      "evidenceDigest": "0fe263d5ecd6b65dbc804b97dc81cf11725819158c3ea1f0931ce11cc7249a84",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-delete-old-evidence",
+      "caseDigest": "0b23aac0038e9017e652655752599648327436b01a6ee1362f5aafaef8ace0ff",
+      "evidenceDigest": "f1c4580301538638b98d9d8149df8a3e9db7c4c369dff5bdcfeafa2aa92b2cb8",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-delete-old-evidence",
+      "caseDigest": "0b23aac0038e9017e652655752599648327436b01a6ee1362f5aafaef8ace0ff",
+      "evidenceDigest": "f1c4580301538638b98d9d8149df8a3e9db7c4c369dff5bdcfeafa2aa92b2cb8",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-delete-old-evidence",
+      "caseDigest": "0b23aac0038e9017e652655752599648327436b01a6ee1362f5aafaef8ace0ff",
+      "evidenceDigest": "f1c4580301538638b98d9d8149df8a3e9db7c4c369dff5bdcfeafa2aa92b2cb8",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-last-support",
+      "caseDigest": "eaf01d2e4c033612d909e48c72c3b530a0e135aaede8588f7433bbfa07c541fb",
+      "evidenceDigest": "77ff297a40a20d8886a19ca3ddb6c173d55cbadebdb86b0e308643ee794b383b",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-last-support",
+      "caseDigest": "eaf01d2e4c033612d909e48c72c3b530a0e135aaede8588f7433bbfa07c541fb",
+      "evidenceDigest": "77ff297a40a20d8886a19ca3ddb6c173d55cbadebdb86b0e308643ee794b383b",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-last-support",
+      "caseDigest": "eaf01d2e4c033612d909e48c72c3b530a0e135aaede8588f7433bbfa07c541fb",
+      "evidenceDigest": "77ff297a40a20d8886a19ca3ddb6c173d55cbadebdb86b0e308643ee794b383b",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-3",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-partial-support",
+      "caseDigest": "557e0f5282243bfbe8082c5bff2cf89a58340af0cd87e658eb657040d438a4dd",
+      "evidenceDigest": "375869cbc5479eaaf9d02cb03b415ccd7d6bf13b0a748233948122645c3db636",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-partial-support",
+      "caseDigest": "557e0f5282243bfbe8082c5bff2cf89a58340af0cd87e658eb657040d438a4dd",
+      "evidenceDigest": "375869cbc5479eaaf9d02cb03b415ccd7d6bf13b0a748233948122645c3db636",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-partial-support",
+      "caseDigest": "557e0f5282243bfbe8082c5bff2cf89a58340af0cd87e658eb657040d438a4dd",
+      "evidenceDigest": "375869cbc5479eaaf9d02cb03b415ccd7d6bf13b0a748233948122645c3db636",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-2",
+      "arm": "omitted"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-user-edit",
+      "caseDigest": "98f38c7d4f08b06659c79764cdea88d0a9293a4b95aab13a0fad0da1eabaf40d",
+      "evidenceDigest": "9e7391ec34a4015be973bca5c3f760b385cf6dfb2c158537b4b079ca8cf6739a",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-user-edit",
+      "caseDigest": "98f38c7d4f08b06659c79764cdea88d0a9293a4b95aab13a0fad0da1eabaf40d",
+      "evidenceDigest": "9e7391ec34a4015be973bca5c3f760b385cf6dfb2c158537b4b079ca8cf6739a",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-user-edit",
+      "caseDigest": "98f38c7d4f08b06659c79764cdea88d0a9293a4b95aab13a0fad0da1eabaf40d",
+      "evidenceDigest": "9e7391ec34a4015be973bca5c3f760b385cf6dfb2c158537b4b079ca8cf6739a",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "step-4",
+      "arm": "omitted"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 3,
+  "runId": "run.20260908070500436.e20b6538-634d-4592-b044-eb843063cb35",
+  "status": "completed",
+  "startedAt": "2026-09-08T07:05:00.436Z",
+  "endedAt": "2026-09-08T07:05:36.919Z",
+  "selection": {
+    "datasets": [],
+    "directCaseIds": [
+      "controlled/resume-preference.java-u2"
+    ]
+  },
+  "candidateModel": {
+    "source": "explicit",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 32768
+  },
+  "runtime": {
+    "productVersion": "0.2.0",
+    "nodeVersion": "v24.14.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "safetyWallClockLimitMs": 480000
+  },
+  "caseRuns": [
+    {
+      "caseRunId": "controlled.resume-preference.java-u2.r1",
+      "caseIdentity": "controlled/resume-preference.java-u2",
+      "datasetMemberships": [],
+      "recordStatus": "recorded",
+      "resultPath": "cases/controlled.resume-preference.java-u2.r1/result.json"
+    }
+  ]
+}

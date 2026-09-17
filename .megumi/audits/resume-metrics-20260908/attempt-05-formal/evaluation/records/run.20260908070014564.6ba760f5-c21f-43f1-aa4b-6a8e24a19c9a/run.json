@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 2,
+  "runId": "run.20260908070014564.6ba760f5-c21f-43f1-aa4b-6a8e24a19c9a",
+  "status": "completed",
+  "startedAt": "2026-09-08T07:00:14.564Z",
+  "endedAt": "2026-09-08T07:01:03.170Z",
+  "selection": {
+    "datasets": [],
+    "directCaseIds": [
+      "controlled/resume-recommendation.cooking-200"
+    ]
+  },
+  "candidateModel": {
+    "source": "explicit",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "contextWindowTokens": 1000000,
+    "maxOutputTokens": 32768
+  },
+  "runtime": {
+    "productVersion": "0.2.0",
+    "nodeVersion": "v24.14.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "safetyWallClockLimitMs": 240000
+  },
+  "caseRuns": [
+    {
+      "caseRunId": "controlled.resume-recommendation.cooking-200.r1",
+      "caseIdentity": "controlled/resume-recommendation.cooking-200",
+      "datasetMemberships": [],
+      "recordStatus": "recorded",
+      "resultPath": "cases/controlled.resume-recommendation.cooking-200.r1/result.json"
+    }
+  ]
+}

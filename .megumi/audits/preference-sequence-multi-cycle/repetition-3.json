@@ -1,0 +1,54 @@
+{
+  "repetition": 3,
+  "runId": "run.20260906061340655.129dc433-c8ac-4a33-8019-337c0b2a67c7",
+  "runDirectory": "C:\\all\\work\\study\\megumi\\evals\\agent\\records\\run.20260906061340655.129dc433-c8ac-4a33-8019-337c0b2a67c7",
+  "status": "incomplete",
+  "cases": [
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "68d621cb0419d8c6e6e3af322ea42b925f25c27e5edac6f35ff03483c44c46c4",
+      "evidenceDigest": "7a958bb01add1ff8d0ca98d438171af25182da3ae84005539834b95009d6ea9a",
+      "environmentKind": "controlled",
+      "caseType": "preference_sequence",
+      "recordStatus": "recorded",
+      "terminalState": "settled",
+      "status": "incomplete",
+      "metrics": [
+        {
+          "metricId": "personalization.lazy_trigger",
+          "reason": "[{\"check\":\"first-feedback: learning calls outside recommendation\",\"passed\":true},{\"check\":\"inspect-first: learning calls outside recommendation\",\"passed\":true},{\"check\":\"next-day: learning calls outside recommendation\",\"passed\":true},{\"check\":\"second-feedback: learning calls outside recommendation\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 4,
+          "denominator": 4
+        },
+        {
+          "metricId": "personalization.user_control",
+          "reason": "No applicable continuous checks.",
+          "status": "not_applicable"
+        },
+        {
+          "metricId": "personalization.input_validity",
+          "reason": "[{\"check\":\"first-recommendation: outcome\",\"passed\":true},{\"check\":\"first-recommendation: publication eeb37ab5-f081-4bd1-bea0-fdeec32ae152\",\"passed\":true},{\"check\":\"second-recommendation: publication 35e4256d-36c1-435c-8d40-3425ee742091\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 3,
+          "denominator": 3
+        },
+        {
+          "metricId": "personalization.comparison_integrity",
+          "reason": "[{\"check\":\"second-recommendation: complete paired evidence\",\"passed\":true}]",
+          "status": "scored",
+          "value": 1,
+          "numerator": 1,
+          "denominator": 1
+        },
+        {
+          "metricId": "personalization.semantic_quality",
+          "reason": "逐检查点评审：推断是否有据、范围是否适当、删除后重学是否有新依据；两组分别记录符合用户取舍的条目数/实际推荐数及理由。注明实际人工评审身份；空推荐或缺失证据保持未完成。",
+          "status": "needs_review"
+        }
+      ]
+    }
+  ]
+}

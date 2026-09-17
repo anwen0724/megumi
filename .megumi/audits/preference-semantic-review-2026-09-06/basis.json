@@ -1,0 +1,2718 @@
+[
+  {
+    "caseId": "controlled/preference-sequence.cooking-delete-new-evidence",
+    "revision": 1,
+    "checkpoint": "step-3",
+    "interests": [
+      {
+        "id": "evaluation:interest:cooking",
+        "description": "家常烹饪",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "delete_preference",
+        "preferenceReferenceId": "cooking-depth"
+      },
+      {
+        "stepId": "step-2",
+        "kind": "feedback",
+        "recommendationReferenceId": "r3",
+        "reaction": "liked"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/1",
+          "contentType": "article",
+          "title": "家常烹饪：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/2",
+          "contentType": "article",
+          "title": "家常烹饪：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/3",
+          "contentType": "article",
+          "title": "家常烹饪：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 3,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "cooking",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "cooking-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:cooking-1",
+        "contentIdentity": "content:sha256:4a6a085719cd8bc40aaf80aedff60110eef1c08be603a8bd385e13b854942621",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/1",
+        "contentType": "article",
+        "title": "家常烹饪：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-2",
+        "contentIdentity": "content:sha256:2b7b1aaf94d02e0f3b159180f8753176bd6bcd010d5c39699091557c30f78f4a",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/2",
+        "contentType": "article",
+        "title": "家常烹饪：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-3",
+        "contentIdentity": "content:sha256:e078d020a64c389035ad149fd9b8321b2707f7d02d0895979f25261dd5074062",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/3",
+        "contentType": "article",
+        "title": "家常烹饪：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-4",
+        "contentIdentity": "content:sha256:c7dfc8a7be7834cd45bfbafbccc3be54e026b8f3f134d1f0bd1b1026e24ee7b6",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/4",
+        "contentType": "article",
+        "title": "家常烹饪：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-5",
+        "contentIdentity": "content:sha256:faf02c7fc6dc926f08dca0c9119aaa62cea921a1edaf90a473e74c1dca385228",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/5",
+        "contentType": "article",
+        "title": "家常烹饪：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-6",
+        "contentIdentity": "content:sha256:2a0c0608ccc639f3e747ca10e8d22fbaf903595b32bf8c3f3afcabf4ef74ea82",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/6",
+        "contentType": "article",
+        "title": "家常烹饪：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "cooking-depth",
+        "preferenceSetId": "evaluation:preference-set:cooking",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "revision": 2,
+        "status": "deleted",
+        "deletedAt": "2026-09-06T08:00:00.000Z",
+        "deletedFeedbackSequence": 2,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.cooking-description-change",
+    "revision": 1,
+    "checkpoint": "step-2",
+    "interests": [
+      {
+        "id": "evaluation:interest:cooking",
+        "description": "低成本家常菜，关注可靠步骤与替代食材",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 1,
+        "userManagedAt": "2026-09-06T08:00:00.000Z",
+        "descriptionUserEditedAt": "2026-09-06T08:00:00.000Z",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "update_interest",
+        "interestReferenceId": "cooking",
+        "action": "update",
+        "description": "低成本家常菜，关注可靠步骤与替代食材"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/1",
+          "contentType": "article",
+          "title": "家常烹饪：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/2",
+          "contentType": "article",
+          "title": "家常烹饪：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/3",
+          "contentType": "article",
+          "title": "家常烹饪：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "cooking",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "cooking-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:cooking-1",
+        "contentIdentity": "content:sha256:4a6a085719cd8bc40aaf80aedff60110eef1c08be603a8bd385e13b854942621",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/1",
+        "contentType": "article",
+        "title": "家常烹饪：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-2",
+        "contentIdentity": "content:sha256:2b7b1aaf94d02e0f3b159180f8753176bd6bcd010d5c39699091557c30f78f4a",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/2",
+        "contentType": "article",
+        "title": "家常烹饪：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-3",
+        "contentIdentity": "content:sha256:e078d020a64c389035ad149fd9b8321b2707f7d02d0895979f25261dd5074062",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/3",
+        "contentType": "article",
+        "title": "家常烹饪：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-4",
+        "contentIdentity": "content:sha256:c7dfc8a7be7834cd45bfbafbccc3be54e026b8f3f134d1f0bd1b1026e24ee7b6",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/4",
+        "contentType": "article",
+        "title": "家常烹饪：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-5",
+        "contentIdentity": "content:sha256:faf02c7fc6dc926f08dca0c9119aaa62cea921a1edaf90a473e74c1dca385228",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/5",
+        "contentType": "article",
+        "title": "家常烹饪：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-6",
+        "contentIdentity": "content:sha256:2a0c0608ccc639f3e747ca10e8d22fbaf903595b32bf8c3f3afcabf4ef74ea82",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/6",
+        "contentType": "article",
+        "title": "家常烹饪：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "cooking-depth",
+        "preferenceSetId": "evaluation:preference-set:cooking",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "revision": 2,
+        "status": "needs_review",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.cooking-feedback-reversal",
+    "revision": 1,
+    "checkpoint": "step-2",
+    "interests": [
+      {
+        "id": "evaluation:interest:cooking",
+        "description": "家常烹饪",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "disliked"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/1",
+          "contentType": "article",
+          "title": "家常烹饪：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "disliked",
+          "reactionRevision": 2,
+          "reactionSequence": 3,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "disliked",
+          "learnedReactionRevision": 2,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/2",
+          "contentType": "article",
+          "title": "家常烹饪：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/3",
+          "contentType": "article",
+          "title": "家常烹饪：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "cooking",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "cooking-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:cooking-1",
+        "contentIdentity": "content:sha256:4a6a085719cd8bc40aaf80aedff60110eef1c08be603a8bd385e13b854942621",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/1",
+        "contentType": "article",
+        "title": "家常烹饪：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-2",
+        "contentIdentity": "content:sha256:2b7b1aaf94d02e0f3b159180f8753176bd6bcd010d5c39699091557c30f78f4a",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/2",
+        "contentType": "article",
+        "title": "家常烹饪：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-3",
+        "contentIdentity": "content:sha256:e078d020a64c389035ad149fd9b8321b2707f7d02d0895979f25261dd5074062",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/3",
+        "contentType": "article",
+        "title": "家常烹饪：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-4",
+        "contentIdentity": "content:sha256:c7dfc8a7be7834cd45bfbafbccc3be54e026b8f3f134d1f0bd1b1026e24ee7b6",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/4",
+        "contentType": "article",
+        "title": "家常烹饪：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-5",
+        "contentIdentity": "content:sha256:faf02c7fc6dc926f08dca0c9119aaa62cea921a1edaf90a473e74c1dca385228",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/5",
+        "contentType": "article",
+        "title": "家常烹饪：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-6",
+        "contentIdentity": "content:sha256:2a0c0608ccc639f3e747ca10e8d22fbaf903595b32bf8c3f3afcabf4ef74ea82",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/6",
+        "contentType": "article",
+        "title": "家常烹饪：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "cooking-depth",
+        "preferenceSetId": "evaluation:preference-set:cooking",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "revision": 2,
+        "status": "needs_review",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.cooking-opposing-feedback",
+    "revision": 1,
+    "checkpoint": "step-3",
+    "interests": [
+      {
+        "id": "evaluation:interest:cooking",
+        "description": "家常烹饪",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "liked"
+      },
+      {
+        "stepId": "step-2",
+        "kind": "feedback",
+        "recommendationReferenceId": "r3",
+        "reaction": "disliked"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/1",
+          "contentType": "article",
+          "title": "家常烹饪：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/2",
+          "contentType": "article",
+          "title": "家常烹饪：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/3",
+          "contentType": "article",
+          "title": "家常烹饪：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reaction": "disliked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "disliked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:cooking-1",
+        "contentIdentity": "content:sha256:4a6a085719cd8bc40aaf80aedff60110eef1c08be603a8bd385e13b854942621",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/1",
+        "contentType": "article",
+        "title": "家常烹饪：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-2",
+        "contentIdentity": "content:sha256:2b7b1aaf94d02e0f3b159180f8753176bd6bcd010d5c39699091557c30f78f4a",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/2",
+        "contentType": "article",
+        "title": "家常烹饪：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-3",
+        "contentIdentity": "content:sha256:e078d020a64c389035ad149fd9b8321b2707f7d02d0895979f25261dd5074062",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/3",
+        "contentType": "article",
+        "title": "家常烹饪：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-4",
+        "contentIdentity": "content:sha256:c7dfc8a7be7834cd45bfbafbccc3be54e026b8f3f134d1f0bd1b1026e24ee7b6",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/4",
+        "contentType": "article",
+        "title": "家常烹饪：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-5",
+        "contentIdentity": "content:sha256:faf02c7fc6dc926f08dca0c9119aaa62cea921a1edaf90a473e74c1dca385228",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/5",
+        "contentType": "article",
+        "title": "家常烹饪：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-6",
+        "contentIdentity": "content:sha256:2a0c0608ccc639f3e747ca10e8d22fbaf903595b32bf8c3f3afcabf4ef74ea82",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/6",
+        "contentType": "article",
+        "title": "家常烹饪：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": []
+  },
+  {
+    "caseId": "controlled/preference-sequence.cooking-pause-resume",
+    "revision": 1,
+    "checkpoint": "step-4",
+    "interests": [
+      {
+        "id": "evaluation:interest:cooking",
+        "description": "家常烹饪",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 2,
+        "userManagedAt": "2026-09-06T08:00:00.000Z",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "update_interest",
+        "interestReferenceId": "cooking",
+        "action": "pause"
+      },
+      {
+        "stepId": "step-2",
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "cooking"
+        }
+      },
+      {
+        "stepId": "step-3",
+        "kind": "update_interest",
+        "interestReferenceId": "cooking",
+        "action": "resume"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/1",
+          "contentType": "article",
+          "title": "家常烹饪：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/2",
+          "contentType": "article",
+          "title": "家常烹饪：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/cooking/3",
+          "contentType": "article",
+          "title": "家常烹饪：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "cooking",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "cooking-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:cooking-1",
+        "contentIdentity": "content:sha256:4a6a085719cd8bc40aaf80aedff60110eef1c08be603a8bd385e13b854942621",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/1",
+        "contentType": "article",
+        "title": "家常烹饪：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-2",
+        "contentIdentity": "content:sha256:2b7b1aaf94d02e0f3b159180f8753176bd6bcd010d5c39699091557c30f78f4a",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/2",
+        "contentType": "article",
+        "title": "家常烹饪：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-3",
+        "contentIdentity": "content:sha256:e078d020a64c389035ad149fd9b8321b2707f7d02d0895979f25261dd5074062",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/3",
+        "contentType": "article",
+        "title": "家常烹饪：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-4",
+        "contentIdentity": "content:sha256:c7dfc8a7be7834cd45bfbafbccc3be54e026b8f3f134d1f0bd1b1026e24ee7b6",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/4",
+        "contentType": "article",
+        "title": "家常烹饪：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-5",
+        "contentIdentity": "content:sha256:faf02c7fc6dc926f08dca0c9119aaa62cea921a1edaf90a473e74c1dca385228",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/5",
+        "contentType": "article",
+        "title": "家常烹饪：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:cooking-6",
+        "contentIdentity": "content:sha256:2a0c0608ccc639f3e747ca10e8d22fbaf903595b32bf8c3f3afcabf4ef74ea82",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/cooking/6",
+        "contentType": "article",
+        "title": "家常烹饪：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "cooking-depth",
+        "preferenceSetId": "evaluation:preference-set:cooking",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的家常烹饪",
+        "revision": 2,
+        "status": "needs_review",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-accumulation",
+    "revision": 1,
+    "checkpoint": "step-4",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "liked"
+      },
+      {
+        "stepId": "step-2",
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "photo"
+        }
+      },
+      {
+        "stepId": "step-3",
+        "kind": "feedback",
+        "recommendationReferenceId": "r2",
+        "reaction": "liked"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": []
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-delete-old-evidence",
+    "revision": 1,
+    "checkpoint": "step-2",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "delete_preference",
+        "preferenceReferenceId": "photo-depth"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "photo",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "photo-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "photo-depth",
+        "preferenceSetId": "evaluation:preference-set:photo",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "revision": 2,
+        "status": "deleted",
+        "deletedAt": "2026-09-06T08:00:00.000Z",
+        "deletedFeedbackSequence": 2,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-last-support",
+    "revision": 1,
+    "checkpoint": "step-3",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "none"
+      },
+      {
+        "stepId": "step-2",
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "photo"
+        }
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reactionRevision": 2,
+          "reactionSequence": 3,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReactionRevision": 2,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "photo",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "photo-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "supportingRecommendationReferenceIds": [
+          "r1"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "photo-depth",
+        "preferenceSetId": "evaluation:preference-set:photo",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "revision": 2,
+        "status": "needs_review",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-partial-support",
+    "revision": 1,
+    "checkpoint": "step-2",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "none"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reactionRevision": 2,
+          "reactionSequence": 3,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReactionRevision": 2,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "photo",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "photo-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "photo-depth",
+        "preferenceSetId": "evaluation:preference-set:photo",
+        "origin": "learned",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "revision": 2,
+        "status": "needs_review",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-user-edit",
+    "revision": 1,
+    "checkpoint": "step-4",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "step-1",
+        "kind": "edit_preference",
+        "preferenceReferenceId": "photo-depth",
+        "statement": "在摄影教程中优先用常见工具完成练习，偶尔也愿意看器材介绍。"
+      },
+      {
+        "stepId": "step-2",
+        "kind": "advance_clock",
+        "milliseconds": 1000
+      },
+      {
+        "stepId": "step-3",
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "photo"
+        }
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [
+      {
+        "interestReferenceId": "photo",
+        "origin": "learned",
+        "status": "active",
+        "revision": 1,
+        "id": "photo-depth",
+        "polarity": "positive",
+        "dimension": "expression_quality",
+        "statement": "偏好有完整操作步骤和对照解释的摄影教程",
+        "supportingRecommendationReferenceIds": [
+          "r1",
+          "r2"
+        ]
+      }
+    ],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": [
+      {
+        "id": "photo-depth",
+        "preferenceSetId": "evaluation:preference-set:photo",
+        "origin": "user",
+        "statement": "在摄影教程中优先用常见工具完成练习，偶尔也愿意看器材介绍。",
+        "revision": 2,
+        "status": "active",
+        "userEditedAt": "2026-09-06T08:00:00.000Z",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-accumulation",
+    "revision": 2,
+    "checkpoint": "first-recommendation",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "first-feedback",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "liked"
+      },
+      {
+        "stepId": "inspect-first",
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "photo"
+        }
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": []
+  },
+  {
+    "caseId": "controlled/preference-sequence.photo-accumulation",
+    "revision": 2,
+    "checkpoint": "second-recommendation",
+    "interests": [
+      {
+        "id": "evaluation:interest:photo",
+        "description": "摄影教程",
+        "status": "active",
+        "createdFrom": "manual",
+        "revision": 0,
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "updatedAt": "2026-09-06T08:00:00.000Z"
+      }
+    ],
+    "operations": [
+      {
+        "stepId": "first-feedback",
+        "kind": "feedback",
+        "recommendationReferenceId": "r1",
+        "reaction": "liked"
+      },
+      {
+        "stepId": "inspect-first",
+        "kind": "inspect",
+        "scope": {
+          "scope": "interest",
+          "interestReferenceId": "photo"
+        }
+      },
+      {
+        "stepId": "first-recommendation",
+        "kind": "recommend",
+        "paired": false
+      },
+      {
+        "stepId": "next-day",
+        "kind": "advance_clock",
+        "milliseconds": 86400000
+      },
+      {
+        "stepId": "second-feedback",
+        "kind": "feedback",
+        "recommendationReferenceId": "r2",
+        "reaction": "liked"
+      }
+    ],
+    "feedback": [
+      {
+        "id": "evaluation:recommendation:r1",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/1",
+          "contentType": "article",
+          "title": "摄影教程：1",
+          "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r1:content",
+          "recommendationId": "evaluation:recommendation:r1",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r1:state",
+          "recommendationId": "evaluation:recommendation:r1",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 1,
+          "reactionChangedAt": "2026-09-06T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r2",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/2",
+          "contentType": "article",
+          "title": "摄影教程：2",
+          "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r2:content",
+          "recommendationId": "evaluation:recommendation:r2",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r2:state",
+          "recommendationId": "evaluation:recommendation:r2",
+          "reaction": "liked",
+          "reactionRevision": 1,
+          "reactionSequence": 2,
+          "reactionChangedAt": "2026-09-07T08:00:00.000Z",
+          "learnedReaction": "liked",
+          "learnedReactionRevision": 1,
+          "updatedAt": "2026-09-07T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "evaluation:recommendation:r3",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/3",
+          "contentType": "article",
+          "title": "摄影教程：3",
+          "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+          "contentTruncated": false,
+          "id": "evaluation:recommendation:r3:content",
+          "recommendationId": "evaluation:recommendation:r3",
+          "sourceName": "Controlled Web"
+        },
+        "reaction": {
+          "id": "evaluation:recommendation:r3:state",
+          "recommendationId": "evaluation:recommendation:r3",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      },
+      {
+        "id": "f3e8ef19-e4a9-4720-a0e7-86157b4b4e2e",
+        "content": {
+          "sourceId": "open_web",
+          "canonicalUrl": "https://example.test/sequence/photo/4",
+          "contentType": "article",
+          "title": "摄影教程：4",
+          "description": "用常见工具完成练习，给出步骤和失败排查。",
+          "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+          "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+          "contentTruncated": false,
+          "id": "67c390f8-3fe0-4964-bad1-1f3da77ebd4a",
+          "recommendationId": "f3e8ef19-e4a9-4720-a0e7-86157b4b4e2e",
+          "sourceName": "Open Web"
+        },
+        "reaction": {
+          "id": "f4376591-a729-4cb4-b4d5-1240abee6f9a",
+          "recommendationId": "f3e8ef19-e4a9-4720-a0e7-86157b4b4e2e",
+          "reactionRevision": 0,
+          "reactionSequence": 0,
+          "learnedReactionRevision": 0,
+          "updatedAt": "2026-09-06T08:00:00.000Z"
+        }
+      }
+    ],
+    "initialPreferences": [],
+    "candidates": [
+      {
+        "id": "evaluation:candidate:photo-1",
+        "contentIdentity": "content:sha256:5fa4f509d426a275a7953b72daed5aa1d18962bc64534947ee8bc4fc0ecbe998",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/1",
+        "contentType": "article",
+        "title": "摄影教程：1",
+        "description": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentSummary": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentExcerpt": "用固定条件对比不同操作步骤，解释参数与结果的关系。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-2",
+        "contentIdentity": "content:sha256:ae511105621c32220904abba3b0bc3c3b5e5b3cc314e5d5e17091f65f3646dd9",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/2",
+        "contentType": "article",
+        "title": "摄影教程：2",
+        "description": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentSummary": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentExcerpt": "列出容易失败的原因、完整步骤和实际对照结果。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-3",
+        "contentIdentity": "content:sha256:4893d3469a12170c74619c8739badaa7a5cc052585d0ce989e90eff84febe94d",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/3",
+        "contentType": "article",
+        "title": "摄影教程：3",
+        "description": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentSummary": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentExcerpt": "推荐最新热门器材，主要是购买链接和无测量依据的宣传。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-05T08:00:00.000Z",
+        "expiresAt": "2026-10-05T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-4",
+        "contentIdentity": "content:sha256:5b73828100501eb8ddfa81ea5e6c7b88b8b4c4d5569349e991d4c021cf405390",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/4",
+        "contentType": "article",
+        "title": "摄影教程：4",
+        "description": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentSummary": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentExcerpt": "用常见工具完成练习，给出步骤和失败排查。",
+        "contentTruncated": false,
+        "status": "consumed",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-5",
+        "contentIdentity": "content:sha256:69c569b3146e3c77be128c941a4842f5895ad49c50478a708c6434b5cf560fb4",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/5",
+        "contentType": "article",
+        "title": "摄影教程：5",
+        "description": "分享热门清单，只有结论没有步骤。",
+        "contentSummary": "分享热门清单，只有结论没有步骤。",
+        "contentExcerpt": "分享热门清单，只有结论没有步骤。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      },
+      {
+        "id": "evaluation:candidate:photo-6",
+        "contentIdentity": "content:sha256:fad329b4b294f1c0f9c4e9d2ed18b946a2514b34668cca10c290a08f76337781",
+        "sourceId": "open_web",
+        "canonicalUrl": "https://example.test/sequence/photo/6",
+        "contentType": "article",
+        "title": "摄影教程：6",
+        "description": "解释不同条件下调整方法，给出对照示例。",
+        "contentSummary": "解释不同条件下调整方法，给出对照示例。",
+        "contentExcerpt": "解释不同条件下调整方法，给出对照示例。",
+        "contentTruncated": false,
+        "status": "available",
+        "createdAt": "2026-09-06T08:00:00.000Z",
+        "expiresAt": "2026-10-06T08:00:00.000Z"
+      }
+    ],
+    "preferenceBeforeLearning": []
+  }
+]

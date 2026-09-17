@@ -1,0 +1,1254 @@
+{
+  "key": "resume-recommendation.photo-120.r2.layered",
+  "phase": "formal",
+  "repetition": 2,
+  "arm": "layered",
+  "identity": "controlled/resume-recommendation.photo-120",
+  "modelParameters": {
+    "thinking": {
+      "type": "disabled"
+    },
+    "temperature": 0,
+    "max_tokens": 32768,
+    "max_completion_tokens": 32768
+  },
+  "domain": "photo",
+  "poolSize": 120,
+  "targetCount": 20,
+  "runDirectory": "C:\\all\\work\\study\\megumi\\.megumi\\audits\\resume-metrics-20260908\\attempt-05-formal\\evaluation\\records\\run.20260908072623385.f7067578-97b9-4aa8-868b-022787a71512",
+  "recordStatus": "recorded",
+  "terminalState": "settled",
+  "productResult": {
+    "accepted": {
+      "status": "started",
+      "localDate": "2026-09-08",
+      "requestId": "evaluation:resume-recommendation.photo-120:recommendation-request:1",
+      "phase": "preparing_preferences"
+    },
+    "completion": {
+      "status": "published",
+      "collection": {
+        "localDate": "2026-09-08",
+        "publishedAt": "2026-09-08T08:00:00.000Z",
+        "items": [
+          {
+            "id": "0f664efe-7f2b-4915-ac5b-61dc11f37178",
+            "candidateId": "evaluation:candidate:item-03b7af37b88f",
+            "contentIdentity": "content:sha256:afe394836f4e00ffecbed29c83cf7f0e311cda9cbb43aaae677f47b0d08c4606",
+            "localDate": "2026-09-08",
+            "position": 0,
+            "recommendationReason": "从光线、成像与视觉关系解释黄昏户外逆光人像的画面差异，直接对应你对成像原理与不同条件下调整的学习需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-03b7af37b88f",
+              "contentType": "article",
+              "title": "逆光人像：黄昏户外中的条件与原理",
+              "description": "逆光人像：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "逆光人像：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "逆光人像：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：逆光人像首先区分现象与推断，保留黄昏户外中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "4500b790-c4b5-41de-870c-4737ad630382",
+              "recommendationId": "0f664efe-7f2b-4915-ac5b-61dc11f37178",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "e287b43a-3c40-4caf-8d53-14fd86d4221c",
+              "recommendationId": "0f664efe-7f2b-4915-ac5b-61dc11f37178",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "0fdd8917-08f6-4a40-ae66-11febd02f93b",
+            "candidateId": "evaluation:candidate:item-04f2ff24ab7e",
+            "contentIdentity": "content:sha256:4fb5e13fd7a4d6dbe1c0647e99ea2dcddfa34172c76aa57a0258e9d6a4041a68",
+            "localDate": "2026-09-08",
+            "position": 1,
+            "recommendationReason": "讲解窗边自然光下雨天反光的光线与成像原理，并分析常见直觉失效的条件，契合你关注实际拍摄原理的取向。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-04f2ff24ab7e",
+              "contentType": "article",
+              "title": "雨天反光：窗边自然光中的条件与原理",
+              "description": "雨天反光：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "雨天反光：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "雨天反光：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：雨天反光首先区分现象与推断，保留窗边自然光中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "0e872e0f-dcf0-44b0-ac18-6c8b5dfff4d6",
+              "recommendationId": "0fdd8917-08f6-4a40-ae66-11febd02f93b",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "7e8ceebc-0a8c-4e09-9c7e-b3943b612658",
+              "recommendationId": "0fdd8917-08f6-4a40-ae66-11febd02f93b",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "813c277b-0abc-4b38-9937-fedf46ecb741",
+            "candidateId": "evaluation:candidate:item-061d97575247",
+            "contentIdentity": "content:sha256:ea31eced18b63fc0d2a736861afbabc5cc6d5b83cc4a424cda2c6db0c3de2682",
+            "localDate": "2026-09-08",
+            "position": 2,
+            "recommendationReason": "以阴天街道为背景说明夜景曝光中变量作用与适用条件，属于你关注的成像原理与不同场景调整内容。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-061d97575247",
+              "contentType": "article",
+              "title": "夜景曝光：阴天街道中的条件与原理",
+              "description": "夜景曝光：阴天街道中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "夜景曝光：阴天街道中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "夜景曝光：阴天街道中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：夜景曝光首先区分现象与推断，保留阴天街道中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "f3ea1361-b6e5-4106-ae66-643772ecb05c",
+              "recommendationId": "813c277b-0abc-4b38-9937-fedf46ecb741",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "4286b4c3-42a5-40ef-a136-a7dabc33c25a",
+              "recommendationId": "813c277b-0abc-4b38-9937-fedf46ecb741",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "72cc01a5-659a-4955-bbe0-dae88092b8b3",
+            "candidateId": "evaluation:candidate:item-1a2494e4589c",
+            "contentIdentity": "content:sha256:38d67728647c3c1080b1953f663f931a3b16a7fdaae5be7b175d134e41fb9f63",
+            "localDate": "2026-09-08",
+            "position": 3,
+            "recommendationReason": "从光线与成像关系解释阴天街道逆光人像的差异及直觉失效情形，贴合你对拍摄方法原理的学习兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-1a2494e4589c",
+              "contentType": "article",
+              "title": "逆光人像：阴天街道中的条件与原理",
+              "description": "逆光人像：阴天街道中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "逆光人像：阴天街道中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "逆光人像：阴天街道中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：逆光人像首先区分现象与推断，保留阴天街道中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "26a6b99d-cc93-4046-b436-858c2c22ddfe",
+              "recommendationId": "72cc01a5-659a-4955-bbe0-dae88092b8b3",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "37885bee-23d0-4af9-b111-cc132a36f086",
+              "recommendationId": "72cc01a5-659a-4955-bbe0-dae88092b8b3",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "f27505f5-1adb-447e-986d-d69861194ffb",
+            "candidateId": "evaluation:candidate:item-2130f01f2f2c",
+            "contentIdentity": "content:sha256:af619895c1246291c5a5b43d1280782d0b00a315c6448e6d23d0b55584644f9e",
+            "localDate": "2026-09-08",
+            "position": 4,
+            "recommendationReason": "讲解低照度室内风光滤镜的光线成像原理与适用条件，符合你关注成像原理而非器材促销的偏好。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-2130f01f2f2c",
+              "contentType": "article",
+              "title": "风光滤镜：低照度室内中的条件与原理",
+              "description": "风光滤镜：低照度室内中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "风光滤镜：低照度室内中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "风光滤镜：低照度室内中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：风光滤镜首先区分现象与推断，保留低照度室内中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "ea999c37-5ac4-43cf-8e99-0a481f5fef6e",
+              "recommendationId": "f27505f5-1adb-447e-986d-d69861194ffb",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "a9e8266d-d965-4e14-ba1d-0f53dd6d13fc",
+              "recommendationId": "f27505f5-1adb-447e-986d-d69861194ffb",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "29efa333-2f34-45e9-9bec-723b375de69a",
+            "candidateId": "evaluation:candidate:item-28b65f550fe1",
+            "contentIdentity": "content:sha256:2386b8442695f1542cdc98e11f5900e0851174c8f5742787988d8b3df1bc4553",
+            "localDate": "2026-09-08",
+            "position": 5,
+            "recommendationReason": "从成像与视觉关系解释黄昏户外微距景深的画面差异及方法适用条件，直接服务你的摄影学习目标。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-28b65f550fe1",
+              "contentType": "article",
+              "title": "微距景深：黄昏户外中的条件与原理",
+              "description": "微距景深：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "微距景深：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "微距景深：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：微距景深首先区分现象与推断，保留黄昏户外中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "6afcd2f9-4307-4162-b069-e3665e360924",
+              "recommendationId": "29efa333-2f34-45e9-9bec-723b375de69a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "29a0c475-c883-47cb-8bdf-fb8aa4015618",
+              "recommendationId": "29efa333-2f34-45e9-9bec-723b375de69a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "5f623154-b676-48ee-9466-57c144275b4c",
+            "candidateId": "evaluation:candidate:item-2c0456eef787",
+            "contentIdentity": "content:sha256:eccac1fefdded490f3bd5d685021932b1e7b4a60d0f7d0954cc99eb800ee1ff0",
+            "localDate": "2026-09-08",
+            "position": 6,
+            "recommendationReason": "以窗边自然光为背景说明夜景曝光中变量作用与直觉失效条件，契合你对不同条件下成像调整的学习需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-2c0456eef787",
+              "contentType": "article",
+              "title": "夜景曝光：窗边自然光中的条件与原理",
+              "description": "夜景曝光：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "夜景曝光：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "夜景曝光：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：夜景曝光首先区分现象与推断，保留窗边自然光中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "b779630e-9dfa-42c7-bd30-afea11b902b3",
+              "recommendationId": "5f623154-b676-48ee-9466-57c144275b4c",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "de22bbfe-f6e4-4289-9e34-b7d3ce09453b",
+              "recommendationId": "5f623154-b676-48ee-9466-57c144275b4c",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "c4b7766b-1954-4424-be31-a9c57c5552ed",
+            "candidateId": "evaluation:candidate:item-2cbc282bedc9",
+            "contentIdentity": "content:sha256:58f701b9f9b566dbf24f53f280fdca308b883cb5dd01b7e56184f93278cc1904",
+            "localDate": "2026-09-08",
+            "position": 7,
+            "recommendationReason": "从光线与成像关系解释黄昏户外儿童抓拍的方法适用条件，属于你关注的实际拍摄方法内容。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-2cbc282bedc9",
+              "contentType": "article",
+              "title": "儿童抓拍：黄昏户外中的条件与原理",
+              "description": "儿童抓拍：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "儿童抓拍：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "儿童抓拍：黄昏户外中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：儿童抓拍首先区分现象与推断，保留黄昏户外中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "cdd1132a-52ef-49e9-bd4f-cb678f292a93",
+              "recommendationId": "c4b7766b-1954-4424-be31-a9c57c5552ed",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "2dbc25c7-a17f-4bbf-b790-af7f8563776b",
+              "recommendationId": "c4b7766b-1954-4424-be31-a9c57c5552ed",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "928a6f8f-fe54-4fc0-913f-9fccedd7a74d",
+            "candidateId": "evaluation:candidate:item-305dca4b57c4",
+            "contentIdentity": "content:sha256:68cbc093c0071b959c7c39949d015efca161431569d9ac1a22424b4789d5c8ab",
+            "localDate": "2026-09-08",
+            "position": 8,
+            "recommendationReason": "讲解低照度室内静物布光的光线成像原理与适用条件，贴合你对成像原理与不同条件调整的学习兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-305dca4b57c4",
+              "contentType": "article",
+              "title": "静物布光：低照度室内中的条件与原理",
+              "description": "静物布光：低照度室内中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "静物布光：低照度室内中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "静物布光：低照度室内中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：静物布光首先区分现象与推断，保留低照度室内中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "84e3774f-80df-4657-a46a-315c48f80adf",
+              "recommendationId": "928a6f8f-fe54-4fc0-913f-9fccedd7a74d",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "9449a1a0-1ab3-4e23-a162-4538d2dbc768",
+              "recommendationId": "928a6f8f-fe54-4fc0-913f-9fccedd7a74d",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "aff3c0f8-b822-403b-a19d-deaa537bb54b",
+            "candidateId": "evaluation:candidate:item-5483802ef951",
+            "contentIdentity": "content:sha256:dc87e6c026af21df9a512f1d7367875a95763d7c51f950fd47fe2ce8aa195ca2",
+            "localDate": "2026-09-08",
+            "position": 9,
+            "recommendationReason": "从光线与成像关系解释窗边自然光室内白平衡的画面差异及直觉失效条件，契合你的成像原理学习需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-5483802ef951",
+              "contentType": "article",
+              "title": "室内白平衡：窗边自然光中的条件与原理",
+              "description": "室内白平衡：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "室内白平衡：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "室内白平衡：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：室内白平衡首先区分现象与推断，保留窗边自然光中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "b513b441-29e7-411b-a0c4-20d990f2ab85",
+              "recommendationId": "aff3c0f8-b822-403b-a19d-deaa537bb54b",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "11473515-7589-4969-90da-7258d9fee9aa",
+              "recommendationId": "aff3c0f8-b822-403b-a19d-deaa537bb54b",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "14f7d0ac-d5be-4664-8a5a-243071d5f5e1",
+            "candidateId": "evaluation:candidate:item-5c7e77e24c87",
+            "contentIdentity": "content:sha256:387aa1e3d5358b3c5b9fab1a4912ff1a422cbeeffb6f0a343a8c39420ffc2903",
+            "localDate": "2026-09-08",
+            "position": 10,
+            "recommendationReason": "以窗边自然光为背景说明风光滤镜的光线成像原理与适用条件，符合你关注实际拍摄原理的取向。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-5c7e77e24c87",
+              "contentType": "article",
+              "title": "风光滤镜：窗边自然光中的条件与原理",
+              "description": "风光滤镜：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "风光滤镜：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "风光滤镜：窗边自然光中的条件与原理。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：风光滤镜首先区分现象与推断，保留窗边自然光中的限制条件。从光线、成像与视觉关系解释画面差异，说明变量间的作用和方法的适用条件，并分析常见直觉在哪些条件下失效。",
+              "contentTruncated": false,
+              "id": "cf399aff-9d63-4dce-8f26-b409bd7cae84",
+              "recommendationId": "14f7d0ac-d5be-4664-8a5a-243071d5f5e1",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "86beb62e-6508-4cb0-aa0b-9ab184b2026d",
+              "recommendationId": "14f7d0ac-d5be-4664-8a5a-243071d5f5e1",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "78cae37c-31ef-421d-8c7e-fc4a861bcfa1",
+            "candidateId": "evaluation:candidate:item-10d5a61a7f0a",
+            "contentIdentity": "content:sha256:3dcffd9502e543ff10ba1cb1361af032a4f478fee514553610d3351809ccb7c9",
+            "localDate": "2026-09-08",
+            "position": 11,
+            "recommendationReason": "通过固定构图光线、逐次改变参数记录画面的方式讲解雨天反光，直接对应你关注的实际拍摄方法。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-10d5a61a7f0a",
+              "contentType": "article",
+              "title": "雨天反光：窗边自然光中的操作记录",
+              "description": "雨天反光：窗边自然光中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "雨天反光：窗边自然光中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "雨天反光：窗边自然光中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：雨天反光首先区分现象与推断，保留窗边自然光中的限制条件。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。",
+              "contentTruncated": false,
+              "id": "f189fbc2-f3c5-404c-82d8-954405f8ab56",
+              "recommendationId": "78cae37c-31ef-421d-8c7e-fc4a861bcfa1",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "40039912-3c1a-4ca8-84a9-64fadcf325fc",
+              "recommendationId": "78cae37c-31ef-421d-8c7e-fc4a861bcfa1",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "65d8fd63-7070-4654-ad89-62cdad2b0ddf",
+            "candidateId": "evaluation:candidate:item-2589e00e0e34",
+            "contentIdentity": "content:sha256:504b6f62f67604d1476529cbd292ededf683598d5006f49103225425a8f53418",
+            "localDate": "2026-09-08",
+            "position": 12,
+            "recommendationReason": "以逐次改变拍摄参数并比较高光暗部细节的方式讲解低照度室内微距景深，属于你关注的实际拍摄方法内容。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-2589e00e0e34",
+              "contentType": "article",
+              "title": "微距景深：低照度室内中的操作记录",
+              "description": "微距景深：低照度室内中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "微距景深：低照度室内中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "微距景深：低照度室内中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：微距景深首先区分现象与推断，保留低照度室内中的限制条件。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。",
+              "contentTruncated": false,
+              "id": "2c10d7e1-8c62-49b4-bf8f-30ac92b6aea0",
+              "recommendationId": "65d8fd63-7070-4654-ad89-62cdad2b0ddf",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "f520cb3c-8095-408d-9b5b-915202355ee2",
+              "recommendationId": "65d8fd63-7070-4654-ad89-62cdad2b0ddf",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "b4f515b2-37af-4dd4-ab8a-59f67a90d246",
+            "candidateId": "evaluation:candidate:item-274920178d43",
+            "contentIdentity": "content:sha256:fccb6ae15bf4da2a5641f6ce5cf1f90ff14c4622f26783e5cf32bf3da1787190",
+            "localDate": "2026-09-08",
+            "position": 13,
+            "recommendationReason": "通过固定构图光线、逐次调整参数记录画面的方式讲解黄昏户外儿童抓拍，契合你对实际拍摄方法的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-274920178d43",
+              "contentType": "article",
+              "title": "儿童抓拍：黄昏户外中的操作记录",
+              "description": "儿童抓拍：黄昏户外中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "儿童抓拍：黄昏户外中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "儿童抓拍：黄昏户外中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：儿童抓拍首先区分现象与推断，保留黄昏户外中的限制条件。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。",
+              "contentTruncated": false,
+              "id": "2e7b3bd4-09db-44e3-b865-e3737911b8cf",
+              "recommendationId": "b4f515b2-37af-4dd4-ab8a-59f67a90d246",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "fc59b26d-b613-4555-b889-bf1e6233240d",
+              "recommendationId": "b4f515b2-37af-4dd4-ab8a-59f67a90d246",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "3f2e0e9b-ffe0-4804-acb6-3c5e9b484410",
+            "candidateId": "evaluation:candidate:item-3c7c2f99c9b1",
+            "contentIdentity": "content:sha256:1ade3a6f9aa6b385c795693059d8d808b1caf0b205e5ac562619f6ee48c49511",
+            "localDate": "2026-09-08",
+            "position": 14,
+            "recommendationReason": "以逐次改变参数并比较画面差异的方式讲解窗边自然光运动追焦，直接服务你关注的实际拍摄方法学习。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-3c7c2f99c9b1",
+              "contentType": "article",
+              "title": "运动追焦：窗边自然光中的操作记录",
+              "description": "运动追焦：窗边自然光中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "运动追焦：窗边自然光中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "运动追焦：窗边自然光中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：运动追焦首先区分现象与推断，保留窗边自然光中的限制条件。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。",
+              "contentTruncated": false,
+              "id": "5740398f-037b-458e-9c1d-62f2f896cb76",
+              "recommendationId": "3f2e0e9b-ffe0-4804-acb6-3c5e9b484410",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "f86add45-c5e8-42f5-9946-2e95b32bbdd1",
+              "recommendationId": "3f2e0e9b-ffe0-4804-acb6-3c5e9b484410",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "99278267-1604-426e-a3c0-b430ab1ae721",
+            "candidateId": "evaluation:candidate:item-4fdd105846ab",
+            "contentIdentity": "content:sha256:963a9823ecac08112a91c4a2fca536ea6e9adf39109baa9a9b1c1a4d34be02f0",
+            "localDate": "2026-09-08",
+            "position": 15,
+            "recommendationReason": "通过固定构图光线、逐次调整参数记录画面的方式讲解黄昏户外街头构图，属于你关注的实际拍摄方法内容。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-4fdd105846ab",
+              "contentType": "article",
+              "title": "街头构图：黄昏户外中的操作记录",
+              "description": "街头构图：黄昏户外中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "街头构图：黄昏户外中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "街头构图：黄昏户外中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：街头构图首先区分现象与推断，保留黄昏户外中的限制条件。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。",
+              "contentTruncated": false,
+              "id": "0d61110c-8c87-44bf-8cdb-4d070bdc6f3d",
+              "recommendationId": "99278267-1604-426e-a3c0-b430ab1ae721",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "3002c05a-3cdb-4d15-9e21-9d21f12ad5f0",
+              "recommendationId": "99278267-1604-426e-a3c0-b430ab1ae721",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "1c7ea2e8-5a7b-49cb-9f57-cf8ea52c8c4e",
+            "candidateId": "evaluation:candidate:item-5ccdd6fcc600",
+            "contentIdentity": "content:sha256:d290cebf6c88cd9c5c5841ec75d2a64bad3ee2f3d73715688ca3f7a3233db4ce",
+            "localDate": "2026-09-08",
+            "position": 16,
+            "recommendationReason": "以逐次改变拍摄参数并比较高光暗部细节的方式讲解低照度室内夜景曝光，贴合你对实际拍摄方法的兴趣。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-5ccdd6fcc600",
+              "contentType": "article",
+              "title": "夜景曝光：低照度室内中的操作记录",
+              "description": "夜景曝光：低照度室内中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "夜景曝光：低照度室内中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "夜景曝光：低照度室内中的操作记录。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。 本文以低照度室内为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：夜景曝光首先区分现象与推断，保留低照度室内中的限制条件。先固定构图和光线，逐次改变拍摄参数并记录对应画面，比较高光、暗部与主体细节，再按画面差异调整设置。",
+              "contentTruncated": false,
+              "id": "3af8f1da-af3c-46db-b398-563bf7c98d5c",
+              "recommendationId": "1c7ea2e8-5a7b-49cb-9f57-cf8ea52c8c4e",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "c96f717e-8b65-4cbb-8b89-72b81d45d055",
+              "recommendationId": "1c7ea2e8-5a7b-49cb-9f57-cf8ea52c8c4e",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "9989daf2-3e03-4829-97a0-47b26f6f5542",
+            "candidateId": "evaluation:candidate:item-09e96ac6aea0",
+            "contentIdentity": "content:sha256:2887f58d95f6fbfb1bef0817f7d45fd520e38e41c9fd5e1fa7c35ca0ea40b79c",
+            "localDate": "2026-09-08",
+            "position": 17,
+            "recommendationReason": "列举黄昏户外微距景深的常用概念并说明可能遇到的现象，为你的摄影学习提供问题目录与入门指引。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-09e96ac6aea0",
+              "contentType": "article",
+              "title": "微距景深：黄昏户外中的概念速览",
+              "description": "微距景深：黄昏户外中的概念速览。列举微距景深的常用概念，简要说明黄昏户外中可能遇到的现象，为进一步阅读提供问题目录。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "微距景深：黄昏户外中的概念速览。列举微距景深的常用概念，简要说明黄昏户外中可能遇到的现象，为进一步阅读提供问题目录。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "微距景深：黄昏户外中的概念速览。列举微距景深的常用概念，简要说明黄昏户外中可能遇到的现象，为进一步阅读提供问题目录。 本文以黄昏户外为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：微距景深首先区分现象与推断，保留黄昏户外中的限制条件。列举微距景深的常用概念，简要说明黄昏户外中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "953e9369-8771-4ddd-81d7-a96766f2a4eb",
+              "recommendationId": "9989daf2-3e03-4829-97a0-47b26f6f5542",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "4d777aeb-8d5d-4a0f-8554-e06c9e51ddc5",
+              "recommendationId": "9989daf2-3e03-4829-97a0-47b26f6f5542",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "f0799e95-89b4-4e76-8a96-f306f114627f",
+            "candidateId": "evaluation:candidate:item-224628e85f98",
+            "contentIdentity": "content:sha256:e90a52bd65996552be82dba1d41c0f9f3b8dd92591eab98bdcdb780ca7745547",
+            "localDate": "2026-09-08",
+            "position": 18,
+            "recommendationReason": "列举阴天街道逆光人像的常用概念并说明可能遇到的现象，契合你系统学习摄影概念的需求。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-224628e85f98",
+              "contentType": "article",
+              "title": "逆光人像：阴天街道中的概念速览",
+              "description": "逆光人像：阴天街道中的概念速览。列举逆光人像的常用概念，简要说明阴天街道中可能遇到的现象，为进一步阅读提供问题目录。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "逆光人像：阴天街道中的概念速览。列举逆光人像的常用概念，简要说明阴天街道中可能遇到的现象，为进一步阅读提供问题目录。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "逆光人像：阴天街道中的概念速览。列举逆光人像的常用概念，简要说明阴天街道中可能遇到的现象，为进一步阅读提供问题目录。 本文以阴天街道为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：逆光人像首先区分现象与推断，保留阴天街道中的限制条件。列举逆光人像的常用概念，简要说明阴天街道中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "f423af99-fe11-46be-ac46-2c1d565e7247",
+              "recommendationId": "f0799e95-89b4-4e76-8a96-f306f114627f",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "fd2c9a4b-f237-49dc-ad3d-3805907f1518",
+              "recommendationId": "f0799e95-89b4-4e76-8a96-f306f114627f",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "ef638171-b6a0-4f13-bee8-c6aff9ebdcba",
+            "candidateId": "evaluation:candidate:item-5b90f11f0d74",
+            "contentIdentity": "content:sha256:f686cd8c5dd7a09f13ac224e950eaf8a5f465a9af8e4828e5eafd9d9bd5102d9",
+            "localDate": "2026-09-08",
+            "position": 19,
+            "recommendationReason": "列举窗边自然光室内白平衡的常用概念并说明可能遇到的现象，为你的摄影学习提供进一步阅读的问题目录。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:photo",
+              "matchedInterestIds": [
+                "evaluation:interest:photo"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:photo",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "9c716a80-f996-429d-8b86-54bcce866773",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/photo/item-5b90f11f0d74",
+              "contentType": "article",
+              "title": "室内白平衡：窗边自然光中的概念速览",
+              "description": "室内白平衡：窗边自然光中的概念速览。列举室内白平衡的常用概念，简要说明窗边自然光中可能遇到的现象，为进一步阅读提供问题目录。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "室内白平衡：窗边自然光中的概念速览。列举室内白平衡的常用概念，简要说明窗边自然光中可能遇到的现象，为进一步阅读提供问题目录。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "室内白平衡：窗边自然光中的概念速览。列举室内白平衡的常用概念，简要说明窗边自然光中可能遇到的现象，为进一步阅读提供问题目录。 本文以窗边自然光为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：室内白平衡首先区分现象与推断，保留窗边自然光中的限制条件。列举室内白平衡的常用概念，简要说明窗边自然光中可能遇到的现象，为进一步阅读提供问题目录。",
+              "contentTruncated": false,
+              "id": "057b9d4d-0352-4436-87ef-b06adaf1972f",
+              "recommendationId": "ef638171-b6a0-4f13-bee8-c6aff9ebdcba",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "d69dbbc6-3f43-4150-9dd5-315ef606d9fd",
+              "recommendationId": "ef638171-b6a0-4f13-bee8-c6aff9ebdcba",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publishedCount": 20,
+  "relatedCount": 20,
+  "relatedRate": 1,
+  "effectiveDeliveryRate": 1,
+  "ndcg": 0.9342394979329264,
+  "inputNoncached": 32515,
+  "inputCachedRead": 30464,
+  "inputCachedWrite": 0,
+  "inputTotal": 62979,
+  "outputTokens": 4077,
+  "modelCalls": 2,
+  "toolCalls": 1,
+  "durationMs": 24533,
+  "issues": [],
+  "rows": [
+    {
+      "id": "item-03b7af37b88f",
+      "grade": 2,
+      "position": 0,
+      "reason": "从光线、成像与视觉关系解释黄昏户外逆光人像的画面差异，直接对应你对成像原理与不同条件下调整的学习需求。"
+    },
+    {
+      "id": "item-04f2ff24ab7e",
+      "grade": 2,
+      "position": 1,
+      "reason": "讲解窗边自然光下雨天反光的光线与成像原理，并分析常见直觉失效的条件，契合你关注实际拍摄原理的取向。"
+    },
+    {
+      "id": "item-061d97575247",
+      "grade": 2,
+      "position": 2,
+      "reason": "以阴天街道为背景说明夜景曝光中变量作用与适用条件，属于你关注的成像原理与不同场景调整内容。"
+    },
+    {
+      "id": "item-1a2494e4589c",
+      "grade": 2,
+      "position": 3,
+      "reason": "从光线与成像关系解释阴天街道逆光人像的差异及直觉失效情形，贴合你对拍摄方法原理的学习兴趣。"
+    },
+    {
+      "id": "item-2130f01f2f2c",
+      "grade": 2,
+      "position": 4,
+      "reason": "讲解低照度室内风光滤镜的光线成像原理与适用条件，符合你关注成像原理而非器材促销的偏好。"
+    },
+    {
+      "id": "item-28b65f550fe1",
+      "grade": 2,
+      "position": 5,
+      "reason": "从成像与视觉关系解释黄昏户外微距景深的画面差异及方法适用条件，直接服务你的摄影学习目标。"
+    },
+    {
+      "id": "item-2c0456eef787",
+      "grade": 2,
+      "position": 6,
+      "reason": "以窗边自然光为背景说明夜景曝光中变量作用与直觉失效条件，契合你对不同条件下成像调整的学习需求。"
+    },
+    {
+      "id": "item-2cbc282bedc9",
+      "grade": 2,
+      "position": 7,
+      "reason": "从光线与成像关系解释黄昏户外儿童抓拍的方法适用条件，属于你关注的实际拍摄方法内容。"
+    },
+    {
+      "id": "item-305dca4b57c4",
+      "grade": 2,
+      "position": 8,
+      "reason": "讲解低照度室内静物布光的光线成像原理与适用条件，贴合你对成像原理与不同条件调整的学习兴趣。"
+    },
+    {
+      "id": "item-5483802ef951",
+      "grade": 2,
+      "position": 9,
+      "reason": "从光线与成像关系解释窗边自然光室内白平衡的画面差异及直觉失效条件，契合你的成像原理学习需求。"
+    },
+    {
+      "id": "item-5c7e77e24c87",
+      "grade": 2,
+      "position": 10,
+      "reason": "以窗边自然光为背景说明风光滤镜的光线成像原理与适用条件，符合你关注实际拍摄原理的取向。"
+    },
+    {
+      "id": "item-10d5a61a7f0a",
+      "grade": 2,
+      "position": 11,
+      "reason": "通过固定构图光线、逐次改变参数记录画面的方式讲解雨天反光，直接对应你关注的实际拍摄方法。"
+    },
+    {
+      "id": "item-2589e00e0e34",
+      "grade": 2,
+      "position": 12,
+      "reason": "以逐次改变拍摄参数并比较高光暗部细节的方式讲解低照度室内微距景深，属于你关注的实际拍摄方法内容。"
+    },
+    {
+      "id": "item-274920178d43",
+      "grade": 2,
+      "position": 13,
+      "reason": "通过固定构图光线、逐次调整参数记录画面的方式讲解黄昏户外儿童抓拍，契合你对实际拍摄方法的兴趣。"
+    },
+    {
+      "id": "item-3c7c2f99c9b1",
+      "grade": 2,
+      "position": 14,
+      "reason": "以逐次改变参数并比较画面差异的方式讲解窗边自然光运动追焦，直接服务你关注的实际拍摄方法学习。"
+    },
+    {
+      "id": "item-4fdd105846ab",
+      "grade": 2,
+      "position": 15,
+      "reason": "通过固定构图光线、逐次调整参数记录画面的方式讲解黄昏户外街头构图，属于你关注的实际拍摄方法内容。"
+    },
+    {
+      "id": "item-5ccdd6fcc600",
+      "grade": 2,
+      "position": 16,
+      "reason": "以逐次改变拍摄参数并比较高光暗部细节的方式讲解低照度室内夜景曝光，贴合你对实际拍摄方法的兴趣。"
+    },
+    {
+      "id": "item-09e96ac6aea0",
+      "grade": 1,
+      "position": 17,
+      "reason": "列举黄昏户外微距景深的常用概念并说明可能遇到的现象，为你的摄影学习提供问题目录与入门指引。"
+    },
+    {
+      "id": "item-224628e85f98",
+      "grade": 1,
+      "position": 18,
+      "reason": "列举阴天街道逆光人像的常用概念并说明可能遇到的现象，契合你系统学习摄影概念的需求。"
+    },
+    {
+      "id": "item-5b90f11f0d74",
+      "grade": 1,
+      "position": 19,
+      "reason": "列举窗边自然光室内白平衡的常用概念并说明可能遇到的现象，为你的摄影学习提供进一步阅读的问题目录。"
+    }
+  ]
+}

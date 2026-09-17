@@ -1,0 +1,574 @@
+{
+  "observationId": "observation:preference-learning.preference-retraction:r1",
+  "taskId": "preference-learning.preference-retraction",
+  "operation": "preference_learning",
+  "profile": "controlled",
+  "collectedAt": "2026-09-01T13:32:01.591Z",
+  "environment": {
+    "profile": "controlled",
+    "taskId": "preference-learning.preference-retraction",
+    "taskRevision": 1,
+    "candidateModel": "deepseek/deepseek-v4-flash",
+    "candidateModelSource": "current",
+    "graderModel": "deepseek/deepseek-v4-flash",
+    "graderModelSource": "current",
+    "timezone": "UTC",
+    "permissions": "allow",
+    "sources": []
+  },
+  "input": {
+    "type": "preference_learning",
+    "recommendationReferenceId": "target",
+    "reaction": "none"
+  },
+  "executionOutcome": {
+    "status": "completed"
+  },
+  "productResult": {
+    "updated": {
+      "recommendation": {
+        "recommendationId": "evaluation:recommendation:target",
+        "batchId": "evaluation:batch:1",
+        "localDate": "2025-01-01",
+        "position": 0,
+        "sourceId": "open_web",
+        "sourceName": "Open Web",
+        "canonicalUrl": "https://example.test/retraction",
+        "contentType": "article",
+        "title": "TypeScript 长篇教程",
+        "description": "长篇教程。",
+        "recommendationReason": "详细教程",
+        "hidden": false,
+        "favorite": false,
+        "watchLater": false,
+        "publishedAt": "2026-01-15T08:00:00.000Z"
+      },
+      "feedbackChange": {
+        "changed": true,
+        "recommendationId": "evaluation:recommendation:target",
+        "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+        "status": "pending",
+        "changedAt": "2026-01-15T08:00:00.000Z"
+      }
+    },
+    "completion": {
+      "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+      "status": "learned",
+      "batchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+      "resultRevisions": [
+        {
+          "scopeKey": "interest:evaluation:interest:typescript",
+          "revision": 2
+        }
+      ],
+      "changedAt": "2026-01-15T08:00:00.000Z",
+      "completedAt": "2026-01-15T08:00:00.000Z"
+    },
+    "facts": {
+      "status": "ok",
+      "facts": {
+        "asOf": "2026-01-15T08:00:00.000Z",
+        "batch": {
+          "batchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+          "startedAt": "2026-01-15T08:00:00.000Z",
+          "changeCount": 1
+        },
+        "interests": [
+          {
+            "interestId": "evaluation:interest:typescript",
+            "description": "TypeScript 工程实践",
+            "status": "active",
+            "revision": 1
+          }
+        ],
+        "currentPreferences": [
+          {
+            "scopeKey": "interest:evaluation:interest:typescript",
+            "scope": "interest",
+            "interestId": "evaluation:interest:typescript",
+            "revision": 2,
+            "directions": [
+              {
+                "directionId": "prefer-long-form",
+                "polarity": "positive",
+                "dimension": "expression_quality",
+                "statement": "偏好有细节的长篇教程",
+                "supportingFeedbackIds": [
+                  "evaluation:feedback:2",
+                  "evaluation:feedback:3"
+                ],
+                "updatedAt": "2026-01-15T08:00:00.000Z"
+              }
+            ]
+          }
+        ],
+        "feedbackChanges": [
+          {
+            "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+            "feedbackId": "evaluation:feedback:1",
+            "recommendationId": "evaluation:recommendation:target",
+            "previousReaction": "liked",
+            "feedbackRevision": 2,
+            "changedAt": "2026-01-15T08:00:00.000Z",
+            "requiresCorrection": true,
+            "recommendation": {
+              "title": "TypeScript 长篇教程",
+              "sourceName": "Open Web",
+              "contentType": "article",
+              "publishedAt": "2026-01-15T08:00:00.000Z",
+              "recommendationReason": "详细教程",
+              "matchedInterestIds": [
+                "evaluation:interest:typescript"
+              ],
+              "contentEvidence": {
+                "sourceId": "open_web",
+                "canonicalUrl": "https://example.test/retraction",
+                "title": "TypeScript 长篇教程",
+                "description": "长篇教程。",
+                "contentText": "详细教程内容。",
+                "completeness": "full"
+              }
+            },
+            "previouslySupportedDirectionIds": []
+          }
+        ]
+      }
+    }
+  },
+  "artifacts": {
+    "workspaceFiles": {}
+  },
+  "traceTargets": [
+    {
+      "traceKind": "preference_learning",
+      "correlation": {
+        "preferenceLearningBatchId": "evaluation:preference-learning.preference-retraction:preference-batch:1"
+      },
+      "expectation": "required"
+    }
+  ],
+  "traceIds": [
+    "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b"
+  ],
+  "traceSummaries": [
+    {
+      "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+      "traceKind": "preference_learning",
+      "status": "ok",
+      "diagnostics": "complete",
+      "correlation": {
+        "preferenceLearningBatchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+        "batchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+        "modelCallId": "evaluation:preference-learning.preference-retraction:model-call:1"
+      },
+      "startedAt": "2026-09-01T13:31:59.903Z",
+      "durationMs": 1685,
+      "issueCount": 0,
+      "spans": [
+        {
+          "spanId": "a656ab93-aa44-4b16-abc7-152fba9bf602",
+          "name": "preference.batch.claim",
+          "outcome": {
+            "status": "ok"
+          },
+          "durationMs": 9
+        },
+        {
+          "spanId": "6ebbd4a2-d310-46e0-9982-665f1639b500",
+          "name": "context.build",
+          "outcome": {
+            "status": "ok"
+          },
+          "durationMs": 4
+        },
+        {
+          "spanId": "aba6aa14-c235-4a12-a2ab-ae8daea08ee1",
+          "parentSpanId": "6ebbd4a2-d310-46e0-9982-665f1639b500",
+          "name": "context.resolve",
+          "outcome": {
+            "status": "ok"
+          },
+          "durationMs": 2
+        },
+        {
+          "spanId": "3446e335-d744-4fc4-b2c2-8e7ea60dd142",
+          "parentSpanId": "6ebbd4a2-d310-46e0-9982-665f1639b500",
+          "name": "prompt.build",
+          "outcome": {
+            "status": "ok"
+          },
+          "durationMs": 0
+        },
+        {
+          "spanId": "34554141-5845-4675-b76c-04811d8986e6",
+          "name": "model.call",
+          "outcome": {
+            "status": "ok"
+          },
+          "durationMs": 1637
+        },
+        {
+          "spanId": "3f444a02-649a-4699-bc8e-bfaa7a8fc54c",
+          "name": "preference.commit",
+          "outcome": {
+            "status": "ok"
+          },
+          "durationMs": 15
+        }
+      ]
+    }
+  ],
+  "evidence": {
+    "input": {
+      "business": {
+        "recommendationId": "evaluation:recommendation:target",
+        "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+        "batchFeedback": [
+          {
+            "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+            "feedbackId": "evaluation:feedback:1",
+            "recommendationId": "evaluation:recommendation:target",
+            "previousReaction": "liked",
+            "feedbackRevision": 2,
+            "changedAt": "2026-01-15T08:00:00.000Z",
+            "requiresCorrection": true,
+            "recommendation": {
+              "title": "TypeScript 长篇教程",
+              "sourceName": "Open Web",
+              "contentType": "article",
+              "publishedAt": "2026-01-15T08:00:00.000Z",
+              "recommendationReason": "详细教程",
+              "matchedInterestIds": [
+                "evaluation:interest:typescript"
+              ],
+              "contentEvidence": {
+                "sourceId": "open_web",
+                "canonicalUrl": "https://example.test/retraction",
+                "title": "TypeScript 长篇教程",
+                "description": "长篇教程。",
+                "contentText": "详细教程内容。",
+                "completeness": "full"
+              }
+            },
+            "previouslySupportedDirectionIds": []
+          }
+        ]
+      },
+      "traceContent": [],
+      "task": {
+        "type": "preference_learning",
+        "recommendationReferenceId": "target",
+        "reaction": "none"
+      }
+    },
+    "context": {
+      "business": {
+        "preferenceRevisionsBefore": [
+          {
+            "scopeKey": "interest:evaluation:interest:typescript",
+            "revision": 2
+          }
+        ]
+      },
+      "traceContent": [
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "sequence": 7,
+          "kind": "context.resolved",
+          "status": "available",
+          "encoding": "json",
+          "mediaType": "application/json",
+          "byteLength": 3671,
+          "body": "{\"batchId\":\"evaluation:preference-learning.preference-retraction:preference-batch:1\",\"currentMessages\":[],\"kind\":\"preference_learning\",\"material\":{\"batch\":{\"batchId\":\"evaluation:preference-learning.preference-retraction:preference-batch:1\",\"changeCount\":1,\"startedAt\":\"2026-01-15T08:00:00.000Z\"},\"currentPreferences\":[{\"directions\":[{\"dimension\":\"expression_quality\",\"directionId\":\"prefer-long-form\",\"polarity\":\"positive\",\"statement\":\"偏好有细节的长篇教程\",\"supportingFeedbackIds\":[\"evaluation:feedback:1\",\"evaluation:feedback:2\",\"evaluation:feedback:3\"],\"updatedAt\":\"2026-01-15T08:00:00.000Z\"}],\"interestId\":\"evaluation:interest:typescript\",\"revision\":1,\"scope\":\"interest\",\"scopeKey\":\"interest:evaluation:interest:typescript\"}],\"feedbackChanges\":[{\"changedAt\":\"2026-01-15T08:00:00.000Z\",\"feedbackChangeId\":\"evaluation:preference-learning.preference-retraction:feedback-change:1\",\"feedbackId\":\"evaluation:feedback:1\",\"feedbackRevision\":2,\"previousReaction\":\"liked\",\"previouslySupportedDirectionIds\":[\"prefer-long-form\"],\"recommendation\":{\"contentEvidence\":{\"canonicalUrl\":\"https://example.test/retraction\",\"completeness\":\"full\",\"contentText\":\"详细教程内容。\",\"description\":\"长篇教程。\",\"sourceId\":\"open_web\",\"title\":\"TypeScript 长篇教程\"},\"contentType\":\"article\",\"matchedInterestIds\":[\"evaluation:interest:typescript\"],\"publishedAt\":\"2026-01-15T08:00:00.000Z\",\"recommendationReason\":\"详细教程\",\"sourceName\":\"Open Web\",\"title\":\"TypeScript 长篇教程\"},\"recommendationId\":\"evaluation:recommendation:target\",\"requiresCorrection\":true}],\"interests\":[{\"description\":\"TypeScript 工程实践\",\"interestId\":\"evaluation:interest:typescript\",\"revision\":1,\"status\":\"active\"}]},\"startedAt\":\"2026-01-15T08:00:00.000Z\",\"systemInstructions\":[{\"content\":\"You are Megumi, the user's personal agent. Use the provided session context, project instructions, runtime facts, and tool results to continue the user's task.\",\"instructionId\":\"megumi.common\",\"sourcePath\":\"C:\\\\all\\\\work\\\\study\\\\megumi\\\\packages\\\\agent\\\\instructions\\\\content\\\\common.md\"},{\"content\":\"You maintain stable, explainable preferences derived from recommendation feedback.\\n\\nReturn JSON only with this shape:\\n`{\\\"scopes\\\":[{\\\"scopeKey\\\":\\\"...\\\",\\\"baseRevision\\\":0,\\\"directions\\\":[{\\\"directionId\\\":\\\"existing ID or empty for a new direction\\\",\\\"polarity\\\":\\\"positive|negative\\\",\\\"dimension\\\":\\\"topic|source|author|content_type|recency|expression_quality\\\",\\\"statement\\\":\\\"...\\\",\\\"supportingFeedbackIds\\\":[\\\"...\\\"]}]}]}`\\n\\nRules:\\n- Return one complete next state for every scope present in the input, including an empty directions list when evidence no longer supports a direction.\\n- Use only Interest, scope, Direction, and Feedback IDs present in the input. An empty directionId requests a new stable ID from the runtime.\\n- A liked item supports seeing semantically similar characteristics more often; a disliked item supports seeing them less often. Do not infer loss of the entire Interest.\\n- Keep scopes isolated. Recommendations matched to Interests may affect only those Interest scopes; unmatched Recommendations may affect only exploration.\\n- Statements must describe a concrete, human-readable choice tendency. Do not output scores, topic keys, personality claims, or new Interests.\\n- Every direction needs at least one currently effective supporting Feedback ID. Remove directions whose evidence was withdrawn.\\n- Prefer preserving an existing Direction ID when its meaning remains materially the same.\",\"instructionId\":\"megumi.preference-learning\",\"sourcePath\":\"C:\\\\all\\\\work\\\\study\\\\megumi\\\\packages\\\\agent\\\\instructions\\\\content\\\\preference-learning.md\"}],\"tools\":[]}"
+        },
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "sequence": 10,
+          "kind": "prompt.final",
+          "status": "available",
+          "encoding": "json",
+          "mediaType": "application/json",
+          "byteLength": 3527,
+          "body": "{\"messages\":[],\"systemPrompt\":\"You are Megumi, the user's personal agent. Use the provided session context, project instructions, runtime facts, and tool results to continue the user's task.\\n\\nYou maintain stable, explainable preferences derived from recommendation feedback.\\n\\nReturn JSON only with this shape:\\n`{\\\"scopes\\\":[{\\\"scopeKey\\\":\\\"...\\\",\\\"baseRevision\\\":0,\\\"directions\\\":[{\\\"directionId\\\":\\\"existing ID or empty for a new direction\\\",\\\"polarity\\\":\\\"positive|negative\\\",\\\"dimension\\\":\\\"topic|source|author|content_type|recency|expression_quality\\\",\\\"statement\\\":\\\"...\\\",\\\"supportingFeedbackIds\\\":[\\\"...\\\"]}]}]}`\\n\\nRules:\\n- Return one complete next state for every scope present in the input, including an empty directions list when evidence no longer supports a direction.\\n- Use only Interest, scope, Direction, and Feedback IDs present in the input. An empty directionId requests a new stable ID from the runtime.\\n- A liked item supports seeing semantically similar characteristics more often; a disliked item supports seeing them less often. Do not infer loss of the entire Interest.\\n- Keep scopes isolated. Recommendations matched to Interests may affect only those Interest scopes; unmatched Recommendations may affect only exploration.\\n- Statements must describe a concrete, human-readable choice tendency. Do not output scores, topic keys, personality claims, or new Interests.\\n- Every direction needs at least one currently effective supporting Feedback ID. Remove directions whose evidence was withdrawn.\\n- Prefer preserving an existing Direction ID when its meaning remains materially the same.\\n\\n<preference_learning_material>\\n  <started_at>2026-01-15T08:00:00.000Z</started_at>\\n  <batch>{\\\"batchId\\\":\\\"evaluation:preference-learning.preference-retraction:preference-batch:1\\\",\\\"startedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\",\\\"changeCount\\\":1}</batch>\\n  <interests>[{\\\"interestId\\\":\\\"evaluation:interest:typescript\\\",\\\"description\\\":\\\"TypeScript 工程实践\\\",\\\"status\\\":\\\"active\\\",\\\"revision\\\":1}]</interests>\\n  <current_preferences>[{\\\"scopeKey\\\":\\\"interest:evaluation:interest:typescript\\\",\\\"scope\\\":\\\"interest\\\",\\\"interestId\\\":\\\"evaluation:interest:typescript\\\",\\\"revision\\\":1,\\\"directions\\\":[{\\\"directionId\\\":\\\"prefer-long-form\\\",\\\"polarity\\\":\\\"positive\\\",\\\"dimension\\\":\\\"expression_quality\\\",\\\"statement\\\":\\\"偏好有细节的长篇教程\\\",\\\"supportingFeedbackIds\\\":[\\\"evaluation:feedback:1\\\",\\\"evaluation:feedback:2\\\",\\\"evaluation:feedback:3\\\"],\\\"updatedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\"}]}]</current_preferences>\\n  <feedback_changes>[{\\\"feedbackChangeId\\\":\\\"evaluation:preference-learning.preference-retraction:feedback-change:1\\\",\\\"feedbackId\\\":\\\"evaluation:feedback:1\\\",\\\"recommendationId\\\":\\\"evaluation:recommendation:target\\\",\\\"previousReaction\\\":\\\"liked\\\",\\\"feedbackRevision\\\":2,\\\"changedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\",\\\"requiresCorrection\\\":true,\\\"recommendation\\\":{\\\"title\\\":\\\"TypeScript 长篇教程\\\",\\\"sourceName\\\":\\\"Open Web\\\",\\\"contentType\\\":\\\"article\\\",\\\"publishedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\",\\\"recommendationReason\\\":\\\"详细教程\\\",\\\"matchedInterestIds\\\":[\\\"evaluation:interest:typescript\\\"],\\\"contentEvidence\\\":{\\\"sourceId\\\":\\\"open_web\\\",\\\"canonicalUrl\\\":\\\"https://example.test/retraction\\\",\\\"title\\\":\\\"TypeScript 长篇教程\\\",\\\"description\\\":\\\"长篇教程。\\\",\\\"contentText\\\":\\\"详细教程内容。\\\",\\\"completeness\\\":\\\"full\\\"}},\\\"previouslySupportedDirectionIds\\\":[\\\"prefer-long-form\\\"]}]</feedback_changes>\\n</preference_learning_material>\",\"tools\":[]}"
+        }
+      ]
+    },
+    "execution": {
+      "business": {},
+      "traceContent": [
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "sequence": 12,
+          "kind": "model.request",
+          "status": "available",
+          "encoding": "json",
+          "mediaType": "application/json",
+          "byteLength": 3602,
+          "body": "{\"model\":{\"modelId\":\"deepseek-v4-flash\",\"providerId\":\"deepseek\"},\"prompt\":{\"messages\":[],\"systemPrompt\":\"You are Megumi, the user's personal agent. Use the provided session context, project instructions, runtime facts, and tool results to continue the user's task.\\n\\nYou maintain stable, explainable preferences derived from recommendation feedback.\\n\\nReturn JSON only with this shape:\\n`{\\\"scopes\\\":[{\\\"scopeKey\\\":\\\"...\\\",\\\"baseRevision\\\":0,\\\"directions\\\":[{\\\"directionId\\\":\\\"existing ID or empty for a new direction\\\",\\\"polarity\\\":\\\"positive|negative\\\",\\\"dimension\\\":\\\"topic|source|author|content_type|recency|expression_quality\\\",\\\"statement\\\":\\\"...\\\",\\\"supportingFeedbackIds\\\":[\\\"...\\\"]}]}]}`\\n\\nRules:\\n- Return one complete next state for every scope present in the input, including an empty directions list when evidence no longer supports a direction.\\n- Use only Interest, scope, Direction, and Feedback IDs present in the input. An empty directionId requests a new stable ID from the runtime.\\n- A liked item supports seeing semantically similar characteristics more often; a disliked item supports seeing them less often. Do not infer loss of the entire Interest.\\n- Keep scopes isolated. Recommendations matched to Interests may affect only those Interest scopes; unmatched Recommendations may affect only exploration.\\n- Statements must describe a concrete, human-readable choice tendency. Do not output scores, topic keys, personality claims, or new Interests.\\n- Every direction needs at least one currently effective supporting Feedback ID. Remove directions whose evidence was withdrawn.\\n- Prefer preserving an existing Direction ID when its meaning remains materially the same.\\n\\n<preference_learning_material>\\n  <started_at>2026-01-15T08:00:00.000Z</started_at>\\n  <batch>{\\\"batchId\\\":\\\"evaluation:preference-learning.preference-retraction:preference-batch:1\\\",\\\"startedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\",\\\"changeCount\\\":1}</batch>\\n  <interests>[{\\\"interestId\\\":\\\"evaluation:interest:typescript\\\",\\\"description\\\":\\\"TypeScript 工程实践\\\",\\\"status\\\":\\\"active\\\",\\\"revision\\\":1}]</interests>\\n  <current_preferences>[{\\\"scopeKey\\\":\\\"interest:evaluation:interest:typescript\\\",\\\"scope\\\":\\\"interest\\\",\\\"interestId\\\":\\\"evaluation:interest:typescript\\\",\\\"revision\\\":1,\\\"directions\\\":[{\\\"directionId\\\":\\\"prefer-long-form\\\",\\\"polarity\\\":\\\"positive\\\",\\\"dimension\\\":\\\"expression_quality\\\",\\\"statement\\\":\\\"偏好有细节的长篇教程\\\",\\\"supportingFeedbackIds\\\":[\\\"evaluation:feedback:1\\\",\\\"evaluation:feedback:2\\\",\\\"evaluation:feedback:3\\\"],\\\"updatedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\"}]}]</current_preferences>\\n  <feedback_changes>[{\\\"feedbackChangeId\\\":\\\"evaluation:preference-learning.preference-retraction:feedback-change:1\\\",\\\"feedbackId\\\":\\\"evaluation:feedback:1\\\",\\\"recommendationId\\\":\\\"evaluation:recommendation:target\\\",\\\"previousReaction\\\":\\\"liked\\\",\\\"feedbackRevision\\\":2,\\\"changedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\",\\\"requiresCorrection\\\":true,\\\"recommendation\\\":{\\\"title\\\":\\\"TypeScript 长篇教程\\\",\\\"sourceName\\\":\\\"Open Web\\\",\\\"contentType\\\":\\\"article\\\",\\\"publishedAt\\\":\\\"2026-01-15T08:00:00.000Z\\\",\\\"recommendationReason\\\":\\\"详细教程\\\",\\\"matchedInterestIds\\\":[\\\"evaluation:interest:typescript\\\"],\\\"contentEvidence\\\":{\\\"sourceId\\\":\\\"open_web\\\",\\\"canonicalUrl\\\":\\\"https://example.test/retraction\\\",\\\"title\\\":\\\"TypeScript 长篇教程\\\",\\\"description\\\":\\\"长篇教程。\\\",\\\"contentText\\\":\\\"详细教程内容。\\\",\\\"completeness\\\":\\\"full\\\"}},\\\"previouslySupportedDirectionIds\\\":[\\\"prefer-long-form\\\"]}]</feedback_changes>\\n</preference_learning_material>\",\"tools\":[]}}"
+        }
+      ],
+      "outcome": {
+        "status": "completed"
+      },
+      "traces": [
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "traceKind": "preference_learning",
+          "status": "ok",
+          "diagnostics": "complete",
+          "correlation": {
+            "preferenceLearningBatchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+            "batchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+            "modelCallId": "evaluation:preference-learning.preference-retraction:model-call:1"
+          },
+          "startedAt": "2026-09-01T13:31:59.903Z",
+          "durationMs": 1685,
+          "issueCount": 0,
+          "spans": [
+            {
+              "spanId": "a656ab93-aa44-4b16-abc7-152fba9bf602",
+              "name": "preference.batch.claim",
+              "outcome": {
+                "status": "ok"
+              },
+              "durationMs": 9
+            },
+            {
+              "spanId": "6ebbd4a2-d310-46e0-9982-665f1639b500",
+              "name": "context.build",
+              "outcome": {
+                "status": "ok"
+              },
+              "durationMs": 4
+            },
+            {
+              "spanId": "aba6aa14-c235-4a12-a2ab-ae8daea08ee1",
+              "parentSpanId": "6ebbd4a2-d310-46e0-9982-665f1639b500",
+              "name": "context.resolve",
+              "outcome": {
+                "status": "ok"
+              },
+              "durationMs": 2
+            },
+            {
+              "spanId": "3446e335-d744-4fc4-b2c2-8e7ea60dd142",
+              "parentSpanId": "6ebbd4a2-d310-46e0-9982-665f1639b500",
+              "name": "prompt.build",
+              "outcome": {
+                "status": "ok"
+              },
+              "durationMs": 0
+            },
+            {
+              "spanId": "34554141-5845-4675-b76c-04811d8986e6",
+              "name": "model.call",
+              "outcome": {
+                "status": "ok"
+              },
+              "durationMs": 1637
+            },
+            {
+              "spanId": "3f444a02-649a-4699-bc8e-bfaa7a8fc54c",
+              "name": "preference.commit",
+              "outcome": {
+                "status": "ok"
+              },
+              "durationMs": 15
+            }
+          ]
+        }
+      ]
+    },
+    "output": {
+      "business": {
+        "preferenceRevisionsAfter": [
+          {
+            "scopeKey": "interest:evaluation:interest:typescript",
+            "revision": 2
+          }
+        ]
+      },
+      "traceContent": [
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "sequence": 15,
+          "kind": "model.response",
+          "status": "available",
+          "encoding": "json",
+          "mediaType": "application/json",
+          "byteLength": 827,
+          "body": "{\"api\":\"openai-completions\",\"content\":[{\"text\":\"{\\\"scopes\\\":[{\\\"scopeKey\\\":\\\"interest:evaluation:interest:typescript\\\",\\\"baseRevision\\\":1,\\\"directions\\\":[{\\\"directionId\\\":\\\"prefer-long-form\\\",\\\"polarity\\\":\\\"positive\\\",\\\"dimension\\\":\\\"expression_quality\\\",\\\"statement\\\":\\\"偏好有细节的长篇教程\\\",\\\"supportingFeedbackIds\\\":[\\\"evaluation:feedback:2\\\",\\\"evaluation:feedback:3\\\"]}]}]}\",\"type\":\"text\"}],\"model\":\"deepseek-v4-flash\",\"provider\":\"deepseek\",\"rawStopReason\":\"stop\",\"responseId\":\"c6269608-b6a1-4c76-92cd-cbb58cbad9ea\",\"role\":\"assistant\",\"stopReason\":\"stop\",\"timestamp\":1788269519917,\"usage\":{\"cacheRead\":768,\"cacheWrite\":0,\"cost\":{\"cacheRead\":0.0000021503999999999998,\"cacheWrite\":0,\"input\":0.0000028000000000000003,\"output\":0.00002184,\"total\":0.0000267904},\"input\":20,\"output\":78,\"reasoning\":0,\"totalTokens\":866}}"
+        },
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "sequence": 16,
+          "kind": "preference.learning.result",
+          "status": "available",
+          "encoding": "json",
+          "mediaType": "application/json",
+          "byteLength": 308,
+          "body": "{\"scopes\":[{\"baseRevision\":1,\"directions\":[{\"dimension\":\"expression_quality\",\"directionId\":\"prefer-long-form\",\"polarity\":\"positive\",\"statement\":\"偏好有细节的长篇教程\",\"supportingFeedbackIds\":[\"evaluation:feedback:2\",\"evaluation:feedback:3\"]}],\"scopeKey\":\"interest:evaluation:interest:typescript\"}]}"
+        },
+        {
+          "traceId": "9e2f5070-bb32-4cb8-84ae-cf9d27842c8b",
+          "sequence": 19,
+          "kind": "preference.committed",
+          "status": "available",
+          "encoding": "json",
+          "mediaType": "application/json",
+          "byteLength": 449,
+          "body": "{\"affectedInterestIds\":[\"evaluation:interest:typescript\"],\"batchId\":\"evaluation:preference-learning.preference-retraction:preference-batch:1\",\"scopes\":[{\"baseRevision\":1,\"directions\":[{\"dimension\":\"expression_quality\",\"directionId\":\"prefer-long-form\",\"polarity\":\"positive\",\"statement\":\"偏好有细节的长篇教程\",\"supportingFeedbackIds\":[\"evaluation:feedback:2\",\"evaluation:feedback:3\"]}],\"scopeKey\":\"interest:evaluation:interest:typescript\"}]}"
+        }
+      ],
+      "productResult": {
+        "updated": {
+          "recommendation": {
+            "recommendationId": "evaluation:recommendation:target",
+            "batchId": "evaluation:batch:1",
+            "localDate": "2025-01-01",
+            "position": 0,
+            "sourceId": "open_web",
+            "sourceName": "Open Web",
+            "canonicalUrl": "https://example.test/retraction",
+            "contentType": "article",
+            "title": "TypeScript 长篇教程",
+            "description": "长篇教程。",
+            "recommendationReason": "详细教程",
+            "hidden": false,
+            "favorite": false,
+            "watchLater": false,
+            "publishedAt": "2026-01-15T08:00:00.000Z"
+          },
+          "feedbackChange": {
+            "changed": true,
+            "recommendationId": "evaluation:recommendation:target",
+            "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+            "status": "pending",
+            "changedAt": "2026-01-15T08:00:00.000Z"
+          }
+        },
+        "completion": {
+          "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+          "status": "learned",
+          "batchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+          "resultRevisions": [
+            {
+              "scopeKey": "interest:evaluation:interest:typescript",
+              "revision": 2
+            }
+          ],
+          "changedAt": "2026-01-15T08:00:00.000Z",
+          "completedAt": "2026-01-15T08:00:00.000Z"
+        },
+        "facts": {
+          "status": "ok",
+          "facts": {
+            "asOf": "2026-01-15T08:00:00.000Z",
+            "batch": {
+              "batchId": "evaluation:preference-learning.preference-retraction:preference-batch:1",
+              "startedAt": "2026-01-15T08:00:00.000Z",
+              "changeCount": 1
+            },
+            "interests": [
+              {
+                "interestId": "evaluation:interest:typescript",
+                "description": "TypeScript 工程实践",
+                "status": "active",
+                "revision": 1
+              }
+            ],
+            "currentPreferences": [
+              {
+                "scopeKey": "interest:evaluation:interest:typescript",
+                "scope": "interest",
+                "interestId": "evaluation:interest:typescript",
+                "revision": 2,
+                "directions": [
+                  {
+                    "directionId": "prefer-long-form",
+                    "polarity": "positive",
+                    "dimension": "expression_quality",
+                    "statement": "偏好有细节的长篇教程",
+                    "supportingFeedbackIds": [
+                      "evaluation:feedback:2",
+                      "evaluation:feedback:3"
+                    ],
+                    "updatedAt": "2026-01-15T08:00:00.000Z"
+                  }
+                ]
+              }
+            ],
+            "feedbackChanges": [
+              {
+                "feedbackChangeId": "evaluation:preference-learning.preference-retraction:feedback-change:1",
+                "feedbackId": "evaluation:feedback:1",
+                "recommendationId": "evaluation:recommendation:target",
+                "previousReaction": "liked",
+                "feedbackRevision": 2,
+                "changedAt": "2026-01-15T08:00:00.000Z",
+                "requiresCorrection": true,
+                "recommendation": {
+                  "title": "TypeScript 长篇教程",
+                  "sourceName": "Open Web",
+                  "contentType": "article",
+                  "publishedAt": "2026-01-15T08:00:00.000Z",
+                  "recommendationReason": "详细教程",
+                  "matchedInterestIds": [
+                    "evaluation:interest:typescript"
+                  ],
+                  "contentEvidence": {
+                    "sourceId": "open_web",
+                    "canonicalUrl": "https://example.test/retraction",
+                    "title": "TypeScript 长篇教程",
+                    "description": "长篇教程。",
+                    "contentText": "详细教程内容。",
+                    "completeness": "full"
+                  }
+                },
+                "previouslySupportedDirectionIds": []
+              }
+            ]
+          }
+        }
+      },
+      "workspaceFiles": {}
+    },
+    "measurement": {
+      "durationMs": 2223,
+      "inputTokens": 20,
+      "outputTokens": 78,
+      "modelCalls": 1,
+      "toolCalls": 0,
+      "sourceCalls": 0,
+      "retries": 0,
+      "candidatesProduced": 0,
+      "recommendationsPublished": 0,
+      "preferenceRevisions": 1,
+      "estimatedCostUsd": 0.0000267904,
+      "graderModelCalls": 0,
+      "graderInputTokens": 0,
+      "graderOutputTokens": 0,
+      "graderEstimatedCostUsd": 0,
+      "unavailable": []
+    }
+  },
+  "measurements": {
+    "durationMs": 2223,
+    "inputTokens": 20,
+    "outputTokens": 78,
+    "modelCalls": 1,
+    "toolCalls": 0,
+    "sourceCalls": 0,
+    "retries": 0,
+    "candidatesProduced": 0,
+    "recommendationsPublished": 0,
+    "preferenceRevisions": 1,
+    "estimatedCostUsd": 0.0000267904,
+    "graderModelCalls": 0,
+    "graderInputTokens": 0,
+    "graderOutputTokens": 0,
+    "graderEstimatedCostUsd": 0,
+    "unavailable": []
+  },
+  "issues": []
+}

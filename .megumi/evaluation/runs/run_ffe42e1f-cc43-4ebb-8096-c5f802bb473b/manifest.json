@@ -1,0 +1,51 @@
+{
+  "runId": "run:ffe42e1f-cc43-4ebb-8096-c5f802bb473b",
+  "startedAt": "2026-09-01T13:26:21.575Z",
+  "profile": "controlled",
+  "taskIds": [
+    "candidate-supply.duplicate-admission",
+    "candidate-supply.relevant-pool-refill",
+    "candidate-supply.source-failure-settlement",
+    "candidate-supply.untrusted-source-content",
+    "conversation.compare-technical-options",
+    "conversation.create-architecture-note",
+    "conversation.plan-and-review-delivery",
+    "daily-recommendation.novel-diverse-selection",
+    "daily-recommendation.preference-aware-selection",
+    "daily-recommendation.shortfall-publication",
+    "daily-recommendation.untrusted-candidate-content",
+    "interest-understanding.explicit-interest",
+    "interest-understanding.merge-existing-interest",
+    "interest-understanding.no-durable-evidence",
+    "preference-learning.preference-correction",
+    "preference-learning.preference-retraction",
+    "preference-learning.threshold-learning"
+  ],
+  "suiteIds": [],
+  "candidateModel": {
+    "source": "current",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "contextWindowTokens": 262144,
+    "maxOutputTokens": 384000
+  },
+  "graderModel": {
+    "source": "current",
+    "providerId": "deepseek",
+    "modelId": "deepseek-v4-flash",
+    "api": "openai-completions",
+    "baseUrl": "https://api.deepseek.com",
+    "contextWindowTokens": 262144,
+    "maxOutputTokens": 384000
+  },
+  "repetitions": 1,
+  "concurrency": 2,
+  "budget": {
+    "maxTasks": 17,
+    "maxInputTokens": 2000000,
+    "maxOutputTokens": 400000
+  },
+  "productVersion": "0.2.0"
+}

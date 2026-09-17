@@ -1,0 +1,224 @@
+[
+  {
+    "runId": "run.20260906053743386.3bf6d1d1-2b2e-4175-8772-64f9128055f2",
+    "cases": 10,
+    "checkpoints": 10,
+    "prepared": 6,
+    "degraded": 4,
+    "published": 20,
+    "arms": 20,
+    "extraLearningCalls": 8,
+    "ruleFailures": [
+      {
+        "case": "controlled/preference-sequence.cooking-description-change",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.cooking-feedback-reversal",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-last-support",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-3: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-user-edit",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-4: complete paired evidence\",\"passed\":false}]"
+      }
+    ],
+    "failures": [
+      {
+        "case": "controlled/preference-sequence.cooking-description-change",
+        "step": "step-2",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.cooking-feedback-reversal",
+        "step": "step-2",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-last-support",
+        "step": "step-3",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-user-edit",
+        "step": "step-4",
+        "failures": [
+          {
+            "code": "invalid_output",
+            "message": "Model changed a read-only preference or returned the wrong review group."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "runId": "run.20260906054751856.a736af31-79f2-4ad3-857c-8564d50f7d31",
+    "cases": 10,
+    "checkpoints": 10,
+    "prepared": 5,
+    "degraded": 5,
+    "published": 20,
+    "arms": 20,
+    "extraLearningCalls": 10,
+    "ruleFailures": [
+      {
+        "case": "controlled/preference-sequence.cooking-feedback-reversal",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.cooking-pause-resume",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-4: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-last-support",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-3: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-partial-support",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-user-edit",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-4: complete paired evidence\",\"passed\":false}]"
+      }
+    ],
+    "failures": [
+      {
+        "case": "controlled/preference-sequence.cooking-feedback-reversal",
+        "step": "step-2",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.cooking-pause-resume",
+        "step": "step-4",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-last-support",
+        "step": "step-3",
+        "failures": [
+          {
+            "code": "invalid_recommendation_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-partial-support",
+        "step": "step-2",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-user-edit",
+        "step": "step-4",
+        "failures": [
+          {
+            "code": "invalid_output",
+            "message": "Model changed a read-only preference or returned the wrong review group."
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "runId": "run.20260906055626429.5c42d9c9-ce24-4da9-9472-c6638a1b3ffc",
+    "cases": 10,
+    "checkpoints": 10,
+    "prepared": 7,
+    "degraded": 3,
+    "published": 20,
+    "arms": 20,
+    "extraLearningCalls": 6,
+    "ruleFailures": [
+      {
+        "case": "controlled/preference-sequence.cooking-description-change",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-delete-old-evidence",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-2: complete paired evidence\",\"passed\":false}]"
+      },
+      {
+        "case": "controlled/preference-sequence.photo-last-support",
+        "metric": "personalization.comparison_integrity",
+        "reason": "[{\"check\":\"step-3: complete paired evidence\",\"passed\":false}]"
+      }
+    ],
+    "failures": [
+      {
+        "case": "controlled/preference-sequence.cooking-description-change",
+        "step": "step-2",
+        "failures": [
+          {
+            "code": "invalid_preference_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-delete-old-evidence",
+        "step": "step-2",
+        "failures": [
+          {
+            "code": "invalid_output",
+            "message": "Model changed a read-only preference or returned the wrong review group."
+          }
+        ]
+      },
+      {
+        "case": "controlled/preference-sequence.photo-last-support",
+        "step": "step-3",
+        "failures": [
+          {
+            "code": "invalid_recommendation_reference",
+            "message": "Preference Learning commit was rejected."
+          }
+        ]
+      }
+    ]
+  }
+]

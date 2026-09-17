@@ -1,0 +1,1254 @@
+{
+  "key": "resume-recommendation.cooking-120.r1.layered",
+  "phase": "formal",
+  "repetition": 1,
+  "arm": "layered",
+  "identity": "controlled/resume-recommendation.cooking-120",
+  "modelParameters": {
+    "thinking": {
+      "type": "disabled"
+    },
+    "temperature": 0,
+    "max_tokens": 32768,
+    "max_completion_tokens": 32768
+  },
+  "domain": "cooking",
+  "poolSize": 120,
+  "targetCount": 20,
+  "runDirectory": "C:\\all\\work\\study\\megumi\\.megumi\\audits\\resume-metrics-20260908\\attempt-05-formal\\evaluation\\records\\run.20260908065847908.16b31b71-5794-43ba-b0bc-7f4727ff6b67",
+  "recordStatus": "recorded",
+  "terminalState": "settled",
+  "productResult": {
+    "accepted": {
+      "status": "started",
+      "localDate": "2026-09-08",
+      "requestId": "evaluation:resume-recommendation.cooking-120:recommendation-request:1",
+      "phase": "preparing_preferences"
+    },
+    "completion": {
+      "status": "published",
+      "collection": {
+        "localDate": "2026-09-08",
+        "publishedAt": "2026-09-08T08:00:00.000Z",
+        "items": [
+          {
+            "id": "2b2117c6-b5f7-44d6-bac9-53ffd3e5926a",
+            "candidateId": "evaluation:candidate:item-024e99402549",
+            "contentIdentity": "content:sha256:20b5b745bd5d146c27a0678b3149f464d92a585d1e6a126e5b9df63fc8c55db9",
+            "localDate": "2026-09-08",
+            "position": 0,
+            "recommendationReason": "这份煎饺操作记录给出食材用量、处理次序、加热强度与时间，并针对过干、出水或不熟提供调整步骤，正符合你对可复现家常做法与食材处理的需求，且以工作日备餐为场景便于直接套用。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-024e99402549",
+              "contentType": "article",
+              "title": "煎饺：工作日备餐中的操作记录",
+              "description": "煎饺：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "煎饺：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "煎饺：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：煎饺首先区分现象与推断，保留工作日备餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "cd820f81-1c17-4a18-99fd-a5b9c1f22664",
+              "recommendationId": "2b2117c6-b5f7-44d6-bac9-53ffd3e5926a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "578067d4-d007-4673-8a7f-8a4f6a6ae5a0",
+              "recommendationId": "2b2117c6-b5f7-44d6-bac9-53ffd3e5926a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "1f397107-a847-4b6e-a618-115d3f209dfd",
+            "candidateId": "evaluation:candidate:item-02ec789dd9bf",
+            "contentIdentity": "content:sha256:4da92ebe27670ee40b9df4328b939f5328cf6a4ec94d7ac414f609c68318dd42",
+            "localDate": "2026-09-08",
+            "position": 1,
+            "recommendationReason": "清汤调味操作记录提供具体用量、加热记录与批次口感比较及调整步骤，契合你关注可复现做法和食材处理的家常烹饪兴趣，家庭周末午餐场景贴近日常下厨。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-02ec789dd9bf",
+              "contentType": "article",
+              "title": "清汤调味：家庭周末午餐中的操作记录",
+              "description": "清汤调味：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "清汤调味：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "清汤调味：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：清汤调味首先区分现象与推断，保留家庭周末午餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "4db3c9ab-7a83-4295-ae5a-f3522b573d59",
+              "recommendationId": "1f397107-a847-4b6e-a618-115d3f209dfd",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "6c4f0f5e-7fad-4a1b-8be4-b3a774440268",
+              "recommendationId": "1f397107-a847-4b6e-a618-115d3f209dfd",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "98b55bc8-e31d-4073-96f1-9b97f3f50521",
+            "candidateId": "evaluation:candidate:item-085ac75e2f6f",
+            "contentIdentity": "content:sha256:dbd0ec878e464ed7f7d08dcc762612d241b9810567b6caf5024f07ad10f5585b",
+            "localDate": "2026-09-08",
+            "position": 2,
+            "recommendationReason": "煎豆腐操作记录涵盖食材用量、加热强度时间与过干/出水/不熟的修正方法，直接对应你对可复现做法和食材处理的核心关注，家庭周末午餐背景便于实践。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-085ac75e2f6f",
+              "contentType": "article",
+              "title": "煎豆腐：家庭周末午餐中的操作记录",
+              "description": "煎豆腐：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "煎豆腐：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "煎豆腐：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：煎豆腐首先区分现象与推断，保留家庭周末午餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "b7ac87bf-1f5b-4f7f-8785-0ac419db3111",
+              "recommendationId": "98b55bc8-e31d-4073-96f1-9b97f3f50521",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "04294a56-21d3-4687-9b94-79416c64cbab",
+              "recommendationId": "98b55bc8-e31d-4073-96f1-9b97f3f50521",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "1d4e5f57-d1ed-4444-a174-fb8d857e0e5a",
+            "candidateId": "evaluation:candidate:item-1635bae1e58d",
+            "contentIdentity": "content:sha256:55b81ecb0b501994c04830580de42f4cf3edaa081a31ef24659047a26eedf143",
+            "localDate": "2026-09-08",
+            "position": 3,
+            "recommendationReason": "米饭含水量操作记录给出水量与处理次序并比较批次口感、提供调整步骤，属于你关注的食材处理与可复现结果范畴，家庭周末午餐场景贴近日常。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-1635bae1e58d",
+              "contentType": "article",
+              "title": "米饭含水量：家庭周末午餐中的操作记录",
+              "description": "米饭含水量：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "米饭含水量：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "米饭含水量：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：米饭含水量首先区分现象与推断，保留家庭周末午餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "aab6cdde-00fe-458e-b737-120c327f615d",
+              "recommendationId": "1d4e5f57-d1ed-4444-a174-fb8d857e0e5a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "94247732-0567-43f6-bc33-ddbd28afa1d1",
+              "recommendationId": "1d4e5f57-d1ed-4444-a174-fb8d857e0e5a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "8c8daee6-c3f1-418e-a10a-baed4d2ce026",
+            "candidateId": "evaluation:candidate:item-1d12fb72a0b5",
+            "contentIdentity": "content:sha256:2222d32c78f558bd8171643d5a08a7e4b266c6f20f6f8a7991ce5702fb0e9dba",
+            "localDate": "2026-09-08",
+            "position": 4,
+            "recommendationReason": "蒸鱼操作记录提供用量、加热时间与不熟/过干等问题的调整步骤，契合你对可复现家常做法和食材处理的需求，家庭周末午餐场景便于对照执行。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-1d12fb72a0b5",
+              "contentType": "article",
+              "title": "蒸鱼：家庭周末午餐中的操作记录",
+              "description": "蒸鱼：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蒸鱼：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蒸鱼：家庭周末午餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蒸鱼首先区分现象与推断，保留家庭周末午餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "a2a5eddf-af9c-432d-b86b-12f2840ad1fb",
+              "recommendationId": "8c8daee6-c3f1-418e-a10a-baed4d2ce026",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "91e3f38d-0704-4510-9ee2-99e270cb5fe7",
+              "recommendationId": "8c8daee6-c3f1-418e-a10a-baed4d2ce026",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "545e6ac2-5c93-4aa3-9310-3a314a85d400",
+            "candidateId": "evaluation:candidate:item-2802591dd8c9",
+            "contentIdentity": "content:sha256:3455e20eb6624fbae3afb53bd0640038ced843d593bc4ee1bd7a3442f628fec9",
+            "localDate": "2026-09-08",
+            "position": 5,
+            "recommendationReason": "蔬菜焯水操作记录给出用量、加热强度时间与出水/过干等调整步骤，直接服务你关注的食材处理与可复现做法，工作日备餐场景适合高效实践。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-2802591dd8c9",
+              "contentType": "article",
+              "title": "蔬菜焯水：工作日备餐中的操作记录",
+              "description": "蔬菜焯水：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蔬菜焯水：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蔬菜焯水：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蔬菜焯水首先区分现象与推断，保留工作日备餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "3914b412-8ef6-4f42-99fc-c5bdebfd46c2",
+              "recommendationId": "545e6ac2-5c93-4aa3-9310-3a314a85d400",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "44990a60-4fbb-4020-ac64-c6aa6cf0707c",
+              "recommendationId": "545e6ac2-5c93-4aa3-9310-3a314a85d400",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "278d6c04-827d-42f3-bfd7-e9bcc9d311d2",
+            "candidateId": "evaluation:candidate:item-342993e68175",
+            "contentIdentity": "content:sha256:4246e67fa9ca6345619b4af78f2b22e8246154564d4de4225ed76cbfa559d8af",
+            "localDate": "2026-09-08",
+            "position": 6,
+            "recommendationReason": "炖牛肉操作记录记录用量、加热与批次口感比较并提供调整步骤，符合你对可复现家常做法和食材处理的需求，工作日备餐场景便于安排。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-342993e68175",
+              "contentType": "article",
+              "title": "炖牛肉：工作日备餐中的操作记录",
+              "description": "炖牛肉：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "炖牛肉：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "炖牛肉：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：炖牛肉首先区分现象与推断，保留工作日备餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "b081b512-66c4-4490-b076-f96a62e5fb3b",
+              "recommendationId": "278d6c04-827d-42f3-bfd7-e9bcc9d311d2",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "7f296c6c-e22c-4782-a8ab-72c7d9eebb9a",
+              "recommendationId": "278d6c04-827d-42f3-bfd7-e9bcc9d311d2",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "8d7e4991-9251-455e-9f93-8746b3c3528a",
+            "candidateId": "evaluation:candidate:item-47ec3b435037",
+            "contentIdentity": "content:sha256:db0994d4173756b38afa625e769d85a2e9d019e39bf9a357f9bdbd9d44cfa21b",
+            "localDate": "2026-09-08",
+            "position": 7,
+            "recommendationReason": "番茄炒蛋操作记录给出食材用量与处理次序、加热记录及调整步骤，是典型家常菜的可复现做法，契合你的烹饪兴趣，两人晚餐场景贴近日常。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-47ec3b435037",
+              "contentType": "article",
+              "title": "番茄炒蛋：两人晚餐中的操作记录",
+              "description": "番茄炒蛋：两人晚餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "番茄炒蛋：两人晚餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "番茄炒蛋：两人晚餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：番茄炒蛋首先区分现象与推断，保留两人晚餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "403046e4-c28f-423e-b9b1-d4b4c324ed4a",
+              "recommendationId": "8d7e4991-9251-455e-9f93-8746b3c3528a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "ad7f8e5d-0e1f-40a5-aa3b-2819bba6eb77",
+              "recommendationId": "8d7e4991-9251-455e-9f93-8746b3c3528a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "d1c97609-28ef-453a-9455-cb38f516c17c",
+            "candidateId": "evaluation:candidate:item-58677ff38120",
+            "contentIdentity": "content:sha256:317f839b4450195e6c51060400cb7c19a591533c2c7ce999073aefc496203741",
+            "localDate": "2026-09-08",
+            "position": 8,
+            "recommendationReason": "面团发酵操作记录提供用量、处理次序与加热时间及调整步骤，属于你关注的食材处理与可复现做法，小份试做场景适合先验证再放大。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-58677ff38120",
+              "contentType": "article",
+              "title": "面团发酵：小份试做中的操作记录",
+              "description": "面团发酵：小份试做中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "面团发酵：小份试做中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "面团发酵：小份试做中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：面团发酵首先区分现象与推断，保留小份试做中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "2b4b3037-588a-4756-bbac-47e7de8ce540",
+              "recommendationId": "d1c97609-28ef-453a-9455-cb38f516c17c",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "b7e82b48-a2a5-434b-aab6-4781c9cce5a8",
+              "recommendationId": "d1c97609-28ef-453a-9455-cb38f516c17c",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "91525a56-8772-4b6a-8ae4-c9b00c512db1",
+            "candidateId": "evaluation:candidate:item-41f1925e3d74",
+            "contentIdentity": "content:sha256:cd7f0f0c0720c4459b4c39718303508add7fd5c005e00e028d019de4186e492d",
+            "localDate": "2026-09-08",
+            "position": 9,
+            "recommendationReason": "米饭含水量操作记录给出水量与处理次序、批次口感比较及调整步骤，契合你对食材处理与可复现结果的需求，工作日备餐场景便于稳定复现。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-41f1925e3d74",
+              "contentType": "article",
+              "title": "米饭含水量：工作日备餐中的操作记录",
+              "description": "米饭含水量：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "米饭含水量：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "米饭含水量：工作日备餐中的操作记录。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：米饭含水量首先区分现象与推断，保留工作日备餐中的限制条件。给出食材用量与处理次序，记录加热强度和时间，比较不同批次的口感，并提供过干、出水或不熟时的调整步骤。",
+              "contentTruncated": false,
+              "id": "3c51bd3f-a88a-4287-b332-f9da29f7562d",
+              "recommendationId": "91525a56-8772-4b6a-8ae4-c9b00c512db1",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "c4e32395-2890-4df9-9ba6-04fbee97d164",
+              "recommendationId": "91525a56-8772-4b6a-8ae4-c9b00c512db1",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "1ad74cd2-5934-4d70-883c-b4f2e89ff1bf",
+            "candidateId": "evaluation:candidate:item-0714769b6401",
+            "contentIdentity": "content:sha256:7c22f0e598227da95984c7dacc7036296ea14e5c86449dd76a12a34798caddec",
+            "localDate": "2026-09-08",
+            "position": 10,
+            "recommendationReason": "煎豆腐条件与原理解释水分、温度和食材结构如何共同影响口感，并说明替换食材时哪些条件改变，直接对应你对烹饪原理的关注，两人晚餐场景贴近日常。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-0714769b6401",
+              "contentType": "article",
+              "title": "煎豆腐：两人晚餐中的条件与原理",
+              "description": "煎豆腐：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "煎豆腐：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "煎豆腐：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：煎豆腐首先区分现象与推断，保留两人晚餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "2639d0bb-94af-45c4-a555-b7d6bc3a1391",
+              "recommendationId": "1ad74cd2-5934-4d70-883c-b4f2e89ff1bf",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "6bafe5dd-cdea-4cc3-bbee-29e701b47a1d",
+              "recommendationId": "1ad74cd2-5934-4d70-883c-b4f2e89ff1bf",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "7d158113-df36-4a16-b65f-fcb77915c42c",
+            "candidateId": "evaluation:candidate:item-0ac37da79bac",
+            "contentIdentity": "content:sha256:8455481355984d447116fc0446686dde3070135ea165db81aa9ef94b2ef29b16",
+            "localDate": "2026-09-08",
+            "position": 11,
+            "recommendationReason": "蒸鱼条件与原理分析水分、温度与食材结构对口感的影响及处理方式边界，契合你对烹饪原理的理解需求，工作日备餐场景便于结合实践。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-0ac37da79bac",
+              "contentType": "article",
+              "title": "蒸鱼：工作日备餐中的条件与原理",
+              "description": "蒸鱼：工作日备餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蒸鱼：工作日备餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蒸鱼：工作日备餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蒸鱼首先区分现象与推断，保留工作日备餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "d60f77ec-189c-4ec7-a331-e9da2b7ca8a8",
+              "recommendationId": "7d158113-df36-4a16-b65f-fcb77915c42c",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "570a54fb-c54a-482b-b833-c8354d1e740d",
+              "recommendationId": "7d158113-df36-4a16-b65f-fcb77915c42c",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "d5c2bbe5-a3f4-4a9f-9ffd-472c9ca32923",
+            "candidateId": "evaluation:candidate:item-0ef03b868945",
+            "contentIdentity": "content:sha256:7f305b6a104d07543a04aa733d4117332efad23a698892fdfd44121b224af560",
+            "localDate": "2026-09-08",
+            "position": 12,
+            "recommendationReason": "鸡胸肉口感条件与原理解释水分、温度与结构如何影响口感并比较处理方式边界，正符合你对烹饪原理的关注，小份试做场景适合验证原理。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-0ef03b868945",
+              "contentType": "article",
+              "title": "鸡胸肉口感：小份试做中的条件与原理",
+              "description": "鸡胸肉口感：小份试做中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "鸡胸肉口感：小份试做中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "鸡胸肉口感：小份试做中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：鸡胸肉口感首先区分现象与推断，保留小份试做中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "e4386c97-407c-405d-a498-a49bd64feb2f",
+              "recommendationId": "d5c2bbe5-a3f4-4a9f-9ffd-472c9ca32923",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "80168235-4d28-4cb3-9364-f8cce694f89c",
+              "recommendationId": "d5c2bbe5-a3f4-4a9f-9ffd-472c9ca32923",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "7c4a43e0-6191-4136-9bb4-31e4e248159a",
+            "candidateId": "evaluation:candidate:item-1f7a4e5259fb",
+            "contentIdentity": "content:sha256:f99c555d5f8f004bfff02fcb220597633bb4668b0547029c54f761f3ad05a83b",
+            "localDate": "2026-09-08",
+            "position": 13,
+            "recommendationReason": "蔬菜焯水条件与原理说明水分、温度与食材结构对口感的作用及替换食材时的条件变化，契合你对烹饪原理与食材处理的需求，小份试做便于对照。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-1f7a4e5259fb",
+              "contentType": "article",
+              "title": "蔬菜焯水：小份试做中的条件与原理",
+              "description": "蔬菜焯水：小份试做中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蔬菜焯水：小份试做中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蔬菜焯水：小份试做中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以小份试做为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蔬菜焯水首先区分现象与推断，保留小份试做中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "65691c1d-26eb-4e4b-8fc0-146235762e43",
+              "recommendationId": "7c4a43e0-6191-4136-9bb4-31e4e248159a",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "5485c645-4f88-4285-a332-4d095de17259",
+              "recommendationId": "7c4a43e0-6191-4136-9bb4-31e4e248159a",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "492bde69-f1e0-4ffd-a0b0-bfc5640dab51",
+            "candidateId": "evaluation:candidate:item-20168695fc11",
+            "contentIdentity": "content:sha256:216c9c384472e0017e0cb4b22b2d6a6dbb0d8a1c661a65d3a84751f42ea77ea5",
+            "localDate": "2026-09-08",
+            "position": 14,
+            "recommendationReason": "清汤调味条件与原理解释影响口感的条件与处理方式边界，直接对应你对烹饪原理的关注，家庭周末午餐场景贴近日常下厨。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-20168695fc11",
+              "contentType": "article",
+              "title": "清汤调味：家庭周末午餐中的条件与原理",
+              "description": "清汤调味：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "清汤调味：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "清汤调味：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：清汤调味首先区分现象与推断，保留家庭周末午餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "0b3ae690-b272-4b0b-b068-5318cd294b71",
+              "recommendationId": "492bde69-f1e0-4ffd-a0b0-bfc5640dab51",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "e69207f9-a3a5-47bf-b682-cd7839a1cda8",
+              "recommendationId": "492bde69-f1e0-4ffd-a0b0-bfc5640dab51",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "d4fdf10e-d648-4853-97da-2becf0e2c18c",
+            "candidateId": "evaluation:candidate:item-20d117d62c34",
+            "contentIdentity": "content:sha256:c56fccb4f927dac6662c9c5bdc36aad62114aadbac599d13f7e20d7ac3a5c6b5",
+            "localDate": "2026-09-08",
+            "position": 15,
+            "recommendationReason": "番茄炒蛋条件与原理分析水分、温度与结构对口感的影响及替换食材的条件变化，契合你对烹饪原理的理解需求，两人晚餐场景贴近日常。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-20d117d62c34",
+              "contentType": "article",
+              "title": "番茄炒蛋：两人晚餐中的条件与原理",
+              "description": "番茄炒蛋：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "番茄炒蛋：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "番茄炒蛋：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：番茄炒蛋首先区分现象与推断，保留两人晚餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "4854c7fc-6005-43b2-b9b8-24ff26c9c9e3",
+              "recommendationId": "d4fdf10e-d648-4853-97da-2becf0e2c18c",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "b50add52-4796-4964-9a32-e9d67f272e41",
+              "recommendationId": "d4fdf10e-d648-4853-97da-2becf0e2c18c",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "915ad407-8b64-4f84-b823-e04f1939e8d4",
+            "candidateId": "evaluation:candidate:item-2bd3f1c7d71a",
+            "contentIdentity": "content:sha256:4543c015780ae6de270fbcb62148e19cc83771e058cb1e86f7e645bc224afb90",
+            "localDate": "2026-09-08",
+            "position": 16,
+            "recommendationReason": "面团发酵条件与原理解释水分、温度与结构如何影响发酵口感并说明处理边界，符合你对烹饪原理的关注，家庭周末午餐场景便于实践验证。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-2bd3f1c7d71a",
+              "contentType": "article",
+              "title": "面团发酵：家庭周末午餐中的条件与原理",
+              "description": "面团发酵：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "面团发酵：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "面团发酵：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：面团发酵首先区分现象与推断，保留家庭周末午餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "a0d8bf33-3eb0-41de-8e87-12fdceb1bd6a",
+              "recommendationId": "915ad407-8b64-4f84-b823-e04f1939e8d4",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "a9c001cc-9002-4d1c-acf8-b4314bd0e789",
+              "recommendationId": "915ad407-8b64-4f84-b823-e04f1939e8d4",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "96e94fea-c1f8-4af6-ac96-fc05a249b498",
+            "candidateId": "evaluation:candidate:item-3302498cd23d",
+            "contentIdentity": "content:sha256:cefad177ebf503ffd8a9524bd0751d1aea4472bd2a8327ccf26f1d613497490c",
+            "localDate": "2026-09-08",
+            "position": 17,
+            "recommendationReason": "煎饺条件与原理说明水分、温度与食材结构对口感的影响及替换食材时的条件变化，契合你对烹饪原理的需求，两人晚餐场景贴近日常。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-3302498cd23d",
+              "contentType": "article",
+              "title": "煎饺：两人晚餐中的条件与原理",
+              "description": "煎饺：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "煎饺：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "煎饺：两人晚餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以两人晚餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：煎饺首先区分现象与推断，保留两人晚餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "0f6e81e5-d4cd-48ba-9143-5bb45c357ffb",
+              "recommendationId": "96e94fea-c1f8-4af6-ac96-fc05a249b498",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "66899baf-bce6-4738-8cd3-24ebab282108",
+              "recommendationId": "96e94fea-c1f8-4af6-ac96-fc05a249b498",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "a0d2be78-3f9f-4dd1-886b-fea709df64a5",
+            "candidateId": "evaluation:candidate:item-34eb4892cc8d",
+            "contentIdentity": "content:sha256:8bcda2c03545791dd15a641057f161ad7c76628a2d7f835f1ecfa3a7fd8af58d",
+            "localDate": "2026-09-08",
+            "position": 18,
+            "recommendationReason": "蒸鱼条件与原理解释水分、温度与结构对口感的作用及处理方式边界，直接对应你对烹饪原理的关注，家庭周末午餐场景便于对照实践。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-34eb4892cc8d",
+              "contentType": "article",
+              "title": "蒸鱼：家庭周末午餐中的条件与原理",
+              "description": "蒸鱼：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "蒸鱼：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "蒸鱼：家庭周末午餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以家庭周末午餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：蒸鱼首先区分现象与推断，保留家庭周末午餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "ea07fd6d-90fb-492f-b405-031c09b0f1cf",
+              "recommendationId": "a0d2be78-3f9f-4dd1-886b-fea709df64a5",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "4c22d1d8-d991-465d-85f4-9ef985bd0b94",
+              "recommendationId": "a0d2be78-3f9f-4dd1-886b-fea709df64a5",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          },
+          {
+            "id": "3ce226c1-6daf-476f-b926-844d2f984c93",
+            "candidateId": "evaluation:candidate:item-5b3fc88bc33f",
+            "contentIdentity": "content:sha256:f3c1c87548275e80af94c5d32e507451525647bae75d8f4cbb15d16881ece6da",
+            "localDate": "2026-09-08",
+            "position": 19,
+            "recommendationReason": "鸡胸肉口感条件与原理分析水分、温度与结构如何影响口感并比较处理方式边界，契合你对烹饪原理的理解需求，工作日备餐场景便于结合日常实践。",
+            "selectionBasis": {
+              "preferencePolicyRevisions": [
+                {
+                  "setId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "policyRevision": 0
+                }
+              ],
+              "primaryInterestId": "evaluation:interest:cooking",
+              "matchedInterestIds": [
+                "evaluation:interest:cooking"
+              ],
+              "interestRevisions": [
+                {
+                  "interestId": "evaluation:interest:cooking",
+                  "revision": 0
+                }
+              ],
+              "preferenceRevisions": [
+                {
+                  "preferenceSetId": "4b77c968-5cc9-4039-af18-c64f8a5d0500",
+                  "revision": 1
+                }
+              ]
+            },
+            "publishedAt": "2026-09-08T08:00:00.000Z",
+            "content": {
+              "sourceId": "open_web",
+              "canonicalUrl": "https://example.test/resume/cooking/item-5b3fc88bc33f",
+              "contentType": "article",
+              "title": "鸡胸肉口感：工作日备餐中的条件与原理",
+              "description": "鸡胸肉口感：工作日备餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentSummary": "鸡胸肉口感：工作日备餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。",
+              "contentExcerpt": "鸡胸肉口感：工作日备餐中的条件与原理。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。 本文以工作日备餐为背景，按准备、观察、分析和复查四部分组织材料。案例只描述当前场景，不承诺适用于全部情况；读者需要核对自身条件再判断是否采用。\n\n具体记录：鸡胸肉口感首先区分现象与推断，保留工作日备餐中的限制条件。解释水分、温度和食材结构如何共同影响口感，比较不同处理方式的作用边界，并说明替换食材时哪些条件会改变。",
+              "contentTruncated": false,
+              "id": "7b7809a6-7ad7-467d-ab4d-ec15f715fe6a",
+              "recommendationId": "3ce226c1-6daf-476f-b926-844d2f984c93",
+              "sourceName": "Open Web"
+            },
+            "state": {
+              "id": "35abb434-fe27-4933-9dbc-7a677decb493",
+              "recommendationId": "3ce226c1-6daf-476f-b926-844d2f984c93",
+              "reactionRevision": 0,
+              "reactionSequence": 0,
+              "learnedReactionRevision": 0,
+              "updatedAt": "2026-09-08T08:00:00.000Z"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "publishedCount": 20,
+  "relatedCount": 20,
+  "relatedRate": 1,
+  "effectiveDeliveryRate": 1,
+  "ndcg": 1,
+  "inputNoncached": 34498,
+  "inputCachedRead": 32128,
+  "inputCachedWrite": 0,
+  "inputTotal": 66626,
+  "outputTokens": 8741,
+  "modelCalls": 2,
+  "toolCalls": 1,
+  "durationMs": 53809,
+  "issues": [],
+  "rows": [
+    {
+      "id": "item-024e99402549",
+      "grade": 2,
+      "position": 0,
+      "reason": "这份煎饺操作记录给出食材用量、处理次序、加热强度与时间，并针对过干、出水或不熟提供调整步骤，正符合你对可复现家常做法与食材处理的需求，且以工作日备餐为场景便于直接套用。"
+    },
+    {
+      "id": "item-02ec789dd9bf",
+      "grade": 2,
+      "position": 1,
+      "reason": "清汤调味操作记录提供具体用量、加热记录与批次口感比较及调整步骤，契合你关注可复现做法和食材处理的家常烹饪兴趣，家庭周末午餐场景贴近日常下厨。"
+    },
+    {
+      "id": "item-085ac75e2f6f",
+      "grade": 2,
+      "position": 2,
+      "reason": "煎豆腐操作记录涵盖食材用量、加热强度时间与过干/出水/不熟的修正方法，直接对应你对可复现做法和食材处理的核心关注，家庭周末午餐背景便于实践。"
+    },
+    {
+      "id": "item-1635bae1e58d",
+      "grade": 2,
+      "position": 3,
+      "reason": "米饭含水量操作记录给出水量与处理次序并比较批次口感、提供调整步骤，属于你关注的食材处理与可复现结果范畴，家庭周末午餐场景贴近日常。"
+    },
+    {
+      "id": "item-1d12fb72a0b5",
+      "grade": 2,
+      "position": 4,
+      "reason": "蒸鱼操作记录提供用量、加热时间与不熟/过干等问题的调整步骤，契合你对可复现家常做法和食材处理的需求，家庭周末午餐场景便于对照执行。"
+    },
+    {
+      "id": "item-2802591dd8c9",
+      "grade": 2,
+      "position": 5,
+      "reason": "蔬菜焯水操作记录给出用量、加热强度时间与出水/过干等调整步骤，直接服务你关注的食材处理与可复现做法，工作日备餐场景适合高效实践。"
+    },
+    {
+      "id": "item-342993e68175",
+      "grade": 2,
+      "position": 6,
+      "reason": "炖牛肉操作记录记录用量、加热与批次口感比较并提供调整步骤，符合你对可复现家常做法和食材处理的需求，工作日备餐场景便于安排。"
+    },
+    {
+      "id": "item-47ec3b435037",
+      "grade": 2,
+      "position": 7,
+      "reason": "番茄炒蛋操作记录给出食材用量与处理次序、加热记录及调整步骤，是典型家常菜的可复现做法，契合你的烹饪兴趣，两人晚餐场景贴近日常。"
+    },
+    {
+      "id": "item-58677ff38120",
+      "grade": 2,
+      "position": 8,
+      "reason": "面团发酵操作记录提供用量、处理次序与加热时间及调整步骤，属于你关注的食材处理与可复现做法，小份试做场景适合先验证再放大。"
+    },
+    {
+      "id": "item-41f1925e3d74",
+      "grade": 2,
+      "position": 9,
+      "reason": "米饭含水量操作记录给出水量与处理次序、批次口感比较及调整步骤，契合你对食材处理与可复现结果的需求，工作日备餐场景便于稳定复现。"
+    },
+    {
+      "id": "item-0714769b6401",
+      "grade": 2,
+      "position": 10,
+      "reason": "煎豆腐条件与原理解释水分、温度和食材结构如何共同影响口感，并说明替换食材时哪些条件改变，直接对应你对烹饪原理的关注，两人晚餐场景贴近日常。"
+    },
+    {
+      "id": "item-0ac37da79bac",
+      "grade": 2,
+      "position": 11,
+      "reason": "蒸鱼条件与原理分析水分、温度与食材结构对口感的影响及处理方式边界，契合你对烹饪原理的理解需求，工作日备餐场景便于结合实践。"
+    },
+    {
+      "id": "item-0ef03b868945",
+      "grade": 2,
+      "position": 12,
+      "reason": "鸡胸肉口感条件与原理解释水分、温度与结构如何影响口感并比较处理方式边界，正符合你对烹饪原理的关注，小份试做场景适合验证原理。"
+    },
+    {
+      "id": "item-1f7a4e5259fb",
+      "grade": 2,
+      "position": 13,
+      "reason": "蔬菜焯水条件与原理说明水分、温度与食材结构对口感的作用及替换食材时的条件变化，契合你对烹饪原理与食材处理的需求，小份试做便于对照。"
+    },
+    {
+      "id": "item-20168695fc11",
+      "grade": 2,
+      "position": 14,
+      "reason": "清汤调味条件与原理解释影响口感的条件与处理方式边界，直接对应你对烹饪原理的关注，家庭周末午餐场景贴近日常下厨。"
+    },
+    {
+      "id": "item-20d117d62c34",
+      "grade": 2,
+      "position": 15,
+      "reason": "番茄炒蛋条件与原理分析水分、温度与结构对口感的影响及替换食材的条件变化，契合你对烹饪原理的理解需求，两人晚餐场景贴近日常。"
+    },
+    {
+      "id": "item-2bd3f1c7d71a",
+      "grade": 2,
+      "position": 16,
+      "reason": "面团发酵条件与原理解释水分、温度与结构如何影响发酵口感并说明处理边界，符合你对烹饪原理的关注，家庭周末午餐场景便于实践验证。"
+    },
+    {
+      "id": "item-3302498cd23d",
+      "grade": 2,
+      "position": 17,
+      "reason": "煎饺条件与原理说明水分、温度与食材结构对口感的影响及替换食材时的条件变化，契合你对烹饪原理的需求，两人晚餐场景贴近日常。"
+    },
+    {
+      "id": "item-34eb4892cc8d",
+      "grade": 2,
+      "position": 18,
+      "reason": "蒸鱼条件与原理解释水分、温度与结构对口感的作用及处理方式边界，直接对应你对烹饪原理的关注，家庭周末午餐场景便于对照实践。"
+    },
+    {
+      "id": "item-5b3fc88bc33f",
+      "grade": 2,
+      "position": 19,
+      "reason": "鸡胸肉口感条件与原理分析水分、温度与结构如何影响口感并比较处理方式边界，契合你对烹饪原理的理解需求，工作日备餐场景便于结合日常实践。"
+    }
+  ]
+}

@@ -1,0 +1,1432 @@
+{
+  "evidence": [
+    {
+      "key": "resume-recommendation.cooking-120.r1.full",
+      "digest": "cc496d039ba7d4ce577581180eaba71bbb68014d0aa366adc2c83cea6aec60fb",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-120.r1.layered",
+      "digest": "dc08cbcb5bc46cb6a1f5761b091ca651510084c91726102353605d0fe42b6937",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-120.r2.full",
+      "digest": "fe970e04b997af66a8420473cf25dc8904a7fbb2248053008c1cd6f45d29e499",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-120.r2.layered",
+      "digest": "2cc14d2cb88a83862647bf78a816c6986cd6b1a2f0ff48f0c19dbd8794c85624",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-200.r1.full",
+      "digest": "bac6be20d7adac4819d3ae217b5b1e4118ad4d38b4d7fad5ccf9ccb8fdc8fa2d",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-200.r1.layered",
+      "digest": "29fc0f18b29c0935942e86f238caf6b71deed4f7a8d294f1c39ab09e714912a1",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-200.r2.full",
+      "digest": "8f8afa3c76ac8bf73d1789f1782bcee0bb0d409312808252a9b240e9df5f2952",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-200.r2.layered",
+      "digest": "f779270640618aba74798194905110240b6d6a6b35e4b2a2227352f1c3247834",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-80.r1.full",
+      "digest": "8d8a81b9682bf002de3cdbe3b6b4c541e3d31f6ae87f6c4d3f4bafa9892aa99f",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-80.r1.layered",
+      "digest": "9ae1609246133327aa4d8a6366b151b6dbe10da584597c3adb151835c8fa783a",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-80.r2.full",
+      "digest": "60d61108d46a2847c9f8c881f0e8ab1efc21dc0ea293ca65fcf2494a981f64c9",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 5,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.cooking-80.r2.layered",
+      "digest": "9eaa0d688edf668915c4488c8f22bc977d6152833e1567c6c790b4e96213e226",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-120.r1.full",
+      "digest": "389531ef4be273b43c81c15823fffc2766cf7a41bcb985d9797b239dc72bdca0",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-120.r1.layered",
+      "digest": "bc534cb5e8e91d23f2e29e56dfa5620abb27ca3ce90f84ef46b2003ae8ebf59e",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-120.r2.full",
+      "digest": "8a22418563c927cb2482878650e1628579e168bbe3aab9d43a10a1e1636cca7d",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-120.r2.layered",
+      "digest": "eb0b9eb1274615a000d0f727e636bb3e36b0e77b32a31263193dbdab9887f8a5",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-200.r1.full",
+      "digest": "0f7f493b581110d815645f0f5365be56999d1cf294b07614d70e8e485e760f75",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-200.r1.layered",
+      "digest": "db5af162ca53dfdf4fe2aa758f4462560aa503f1c7856498055b6cb9d8b4b169",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-200.r2.full",
+      "digest": "181d3bca41d02a11907a48cbbe034aa908a2d2d19416c1e5cba04c903392ab67",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-200.r2.layered",
+      "digest": "7c73df2d02e2c283494c888fcb8ba5531689e8483be84bb9596673942ec602a5",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-80.r1.full",
+      "digest": "6f363cb526feecc7a65b6e2452c5f49fdef58b7c92d9ad55817cdbc06b1198ae",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-80.r1.layered",
+      "digest": "2c7acd0097fe77ab70c3602c3fd4d9a8cf5e4844d8cc4efaf34bb1d232991970",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-80.r2.full",
+      "digest": "414a0133cb8a450b7c9a58872d38b06c59e47a4c021c1903740b3efdeb0ff742",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.garden-80.r2.layered",
+      "digest": "b28627a729c2e0c07ca9459d4703bf8be4f06d52625f6ff4aec632bc29cd9f44",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-120.r1.full",
+      "digest": "8de19c10d877ade99e176fbe016db7ed0524d060a0db27863af8dc070614643c",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 5,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-120.r1.layered",
+      "digest": "c385476dae1866fa17143bf100dbf47888271039333be40a6c811288d3230c91",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-120.r2.full",
+      "digest": "70d3f4e2a775df80193715881bf2ec2cba136ed51bbfc5f27f63b25bbe9d7372",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-120.r2.layered",
+      "digest": "e33ceab890e8e87dff47624687a163181a0e08be54639d7497518832062e5bc9",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-200.r1.full",
+      "digest": "eaaddac271a361eb57d8d5f3337017a9050fa83452729ea8ac689184193075f6",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-200.r1.layered",
+      "digest": "b6b88c59000a92f3ad2691e05cd16492a82c324adcde6c4c649a925931cc38fa",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-200.r2.full",
+      "digest": "5456f453d8a3af86532af0b2b398e04bdf211ce6403a1346969e0aa41314114e",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-200.r2.layered",
+      "digest": "4946adf7f7dbd1200c3b4feb5ad7c5d9f2fa696c2f114e265830b5df4afce30a",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-80.r1.full",
+      "digest": "3cd417031fc8b312895d739a25fe6f46516c5afd0ac6acf1c0c9bc94e57a220a",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-80.r1.layered",
+      "digest": "c75d825849429395a64fa10e3873106cf243499585883c16bc35333467894e23",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-80.r2.full",
+      "digest": "27a92346bfcfd901d1cef9c63c491801bfc9ed129bd9c0e002f8bb7db4204956",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.java-80.r2.layered",
+      "digest": "ce602547ac4a8aced447883881ff90e14b7c25244e8343e5048736c58a7eac70",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-120.r1.full",
+      "digest": "40930252caec31421bab54411e745c64af20f9293dd4afc7198c3897de23f298",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-120.r1.layered",
+      "digest": "fb9099f9aaef9c92b64c0ab58c241f8345a432fc2c945cf1492915926cc03871",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-120.r2.full",
+      "digest": "836110781c84c330dc740caea4d2b91a13b5c2752b2c09d89765a1decb404a0b",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-120.r2.layered",
+      "digest": "ef2e5c0c4646367562f9ab12ce4b411f9e1c1821092eff409dea5c40fa018742",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-200.r1.full",
+      "digest": "cbd29dc0bf2666c8db6780569998655d0c75a45af15e4c832cbe24394aa762ac",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-200.r1.layered",
+      "digest": "997b3ce2f2b7a59abe5746dbc9cc184ea4239985712692b5cce0d6a3d4bc8618",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-200.r2.full",
+      "digest": "5cab6ba3015c9a61a9f92c1d6da13ebff3eb278217827477b1eb97520fe87f6f",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-200.r2.layered",
+      "digest": "e1d3232eead04b5f470ce486f68447fe0afe457da45c569e351c37137966b2fa",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 5,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-80.r1.full",
+      "digest": "94d7cb96bf08c04b1e7628b6ff1a5b527fb6f9db6c5dfa8a8b3c51a2272383b9",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 5,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-80.r1.layered",
+      "digest": "c35fd7e7f41c3e3c7677bc679b08740b7e4854752dd51d847ae315d68e97f5a1",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-80.r2.full",
+      "digest": "be995243ce8ec9aca886c833fb5fae96f26c60ac2e3d41e7a85ceb2cf8f00bf2",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 4,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-recommendation.photo-80.r2.layered",
+      "digest": "1ab34df8e7a4d172ca8c7a186dbfcf2fad25f84cc514e2545479874d83e7bece",
+      "inputComparable": true,
+      "publication": "published",
+      "traceIntegrity": "complete",
+      "interrupted": 0,
+      "costVerified": true,
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed"
+    },
+    {
+      "key": "resume-preference.cooking-u1.r1",
+      "digest": "454c38f8808c4141ce0c9dc8af3581e9195cc1744d7605eb3953b55f2b13da2b",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5661,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 52203,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.cooking-u1.r1",
+          "evidenceDigest": "454c38f8808c4141ce0c9dc8af3581e9195cc1744d7605eb3953b55f2b13da2b",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48596,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u1.r2",
+      "digest": "00a67dc0c5f90f26d911fbd2070659f646f60bafca1637e136c1176a142ac06d",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5660,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 54648,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.cooking-u1.r2",
+          "evidenceDigest": "00a67dc0c5f90f26d911fbd2070659f646f60bafca1637e136c1176a142ac06d",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48446,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u1.r3",
+      "digest": "b830fc9e9b08595721c3b8554ba21b55b3ce9f0b2ad5b5d19513cddd0bbce885",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5666,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 50221,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.cooking-u1.r3",
+          "evidenceDigest": "b830fc9e9b08595721c3b8554ba21b55b3ce9f0b2ad5b5d19513cddd0bbce885",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 49515,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u2.r1",
+      "digest": "7588cc87d1573307e45298442e59904199faae4471745ea0b69f07ddd94ef4a5",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5662,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 54917,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.cooking-u2.r1",
+          "evidenceDigest": "7588cc87d1573307e45298442e59904199faae4471745ea0b69f07ddd94ef4a5",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48627,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u2.r2",
+      "digest": "5dcdb2a0a5cbdda22ecfff3dc14737f4eb89d9446a0292393d84ccff79a2a005",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5661,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 55487,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.cooking-u2.r2",
+          "evidenceDigest": "5dcdb2a0a5cbdda22ecfff3dc14737f4eb89d9446a0292393d84ccff79a2a005",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48783,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u2.r3",
+      "digest": "5161c406c13c2a18e5dbd1f38a2acb7a4a3b6af64caa264f2859ffb490444a47",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5664,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 55451,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.cooking-u2.r3",
+          "evidenceDigest": "5161c406c13c2a18e5dbd1f38a2acb7a4a3b6af64caa264f2859ffb490444a47",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48546,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u1.r1",
+      "digest": "83aa23f17ce5f6cefd201173e866b3ac85b0c7ee36370cbbf71398bc8423e92b",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5681,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 54754,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.java-u1.r1",
+          "evidenceDigest": "83aa23f17ce5f6cefd201173e866b3ac85b0c7ee36370cbbf71398bc8423e92b",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 49972,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u1.r2",
+      "digest": "92c776d5f79c06b1e379907e996babd858f1f2af72387f34e19bf70176e9a234",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5677,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 49158,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.java-u1.r2",
+          "evidenceDigest": "92c776d5f79c06b1e379907e996babd858f1f2af72387f34e19bf70176e9a234",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48629,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u1.r3",
+      "digest": "7b4fb6629437bce687f8154d05bf62c415c9fa5bf67637680660d2155f21b403",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5680,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 48373,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.java-u1.r3",
+          "evidenceDigest": "7b4fb6629437bce687f8154d05bf62c415c9fa5bf67637680660d2155f21b403",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48265,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u2.r1",
+      "digest": "5d3dcacccddb35b4bb90e07b01765eb5a8d6f1cc3e54070a93f37e8febc3fdc6",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5680,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 54388,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.java-u2.r1",
+          "evidenceDigest": "5d3dcacccddb35b4bb90e07b01765eb5a8d6f1cc3e54070a93f37e8febc3fdc6",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 49274,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u2.r2",
+      "digest": "2481f1b468c387ec6ae1038b375a1bd5e088a8555ec580aee7acad04378027b0",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5679,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 52928,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.java-u2.r2",
+          "evidenceDigest": "2481f1b468c387ec6ae1038b375a1bd5e088a8555ec580aee7acad04378027b0",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 48811,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u2.r3",
+      "digest": "22f7d6c9fd47d0139a0890aa93ac160b044cb42ef65b6ee211813a631b8a0e97",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5678,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 55464,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.java-u2.r3",
+          "evidenceDigest": "22f7d6c9fd47d0139a0890aa93ac160b044cb42ef65b6ee211813a631b8a0e97",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 49035,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u1.r1",
+      "digest": "82f0d1ee9a636fa65e4e58e20e4e25b019e7b87e264db7acf06c88a12cf7d1d0",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5784,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 56169,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.photo-u1.r1",
+          "evidenceDigest": "82f0d1ee9a636fa65e4e58e20e4e25b019e7b87e264db7acf06c88a12cf7d1d0",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 49544,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u1.r2",
+      "digest": "6e95e85b7407d1308334f3ff981fa3b3045589c57af0efb33918aeccc5a86203",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5783,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 51383,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.photo-u1.r2",
+          "evidenceDigest": "6e95e85b7407d1308334f3ff981fa3b3045589c57af0efb33918aeccc5a86203",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 50107,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u1.r3",
+      "digest": "8382ee40d4c280fbf1b4cd6c3f57ed6ab077e21021eae1235b0e816dc698acff",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5789,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 51246,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.photo-u1.r3",
+          "evidenceDigest": "8382ee40d4c280fbf1b4cd6c3f57ed6ab077e21021eae1235b0e816dc698acff",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 50990,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u2.r1",
+      "digest": "f306b6db9cae9ad443229a0194ff378adea95958c16ceed05d78e34d962acb3b",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5790,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 57188,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.photo-u2.r1",
+          "evidenceDigest": "f306b6db9cae9ad443229a0194ff378adea95958c16ceed05d78e34d962acb3b",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 49803,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u2.r2",
+      "digest": "d6a1d5dc349440128ec743bd97f0673c225608add34f0928b9cf33ec9c41874d",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5789,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 55915,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.photo-u2.r2",
+          "evidenceDigest": "d6a1d5dc349440128ec743bd97f0673c225608add34f0928b9cf33ec9c41874d",
+          "interrupted": 0,
+          "known": true,
+          "inputTotal": 50743,
+          "modelCalls": 2,
+          "verifiedProviderRequests": 2
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u2.r3",
+      "digest": "1923f2eb60ca39057726661ec78378d0a2a00bfa66e71cad2a79bd474cd755ee",
+      "cost": {
+        "sharedLearning": {
+          "known": true,
+          "inputTotal": 5788,
+          "modelCalls": 1
+        },
+        "learned": {
+          "known": true,
+          "inputTotal": 56774,
+          "modelCalls": 2
+        },
+        "omitted": {
+          "key": "resume-preference.photo-u2.r3",
+          "evidenceDigest": "1923f2eb60ca39057726661ec78378d0a2a00bfa66e71cad2a79bd474cd755ee",
+          "interrupted": 1,
+          "known": false,
+          "inputTotal": null,
+          "modelCalls": 3,
+          "verifiedProviderRequests": 3
+        }
+      },
+      "comparable": true,
+      "traceIntegrity": "complete",
+      "verifiedProviderRequests": 2,
+      "cleanup": "removed",
+      "verifiedOmittedProviderRequests": 3
+    }
+  ],
+  "createdAt": "2026-09-08T07:30:21.029Z",
+  "mode": "final",
+  "modelParameters": {
+    "thinking": {
+      "type": "disabled"
+    },
+    "temperature": 0,
+    "max_tokens": 32768,
+    "max_completion_tokens": 32768
+  },
+  "counts": {
+    "a": 48,
+    "b": 18
+  },
+  "byPool": [
+    {
+      "poolSize": 80,
+      "pairs": 8,
+      "costPairs": 8,
+      "layeredInput": 577844,
+      "fullInput": 795630,
+      "inputReduction": 0.2737277377675553,
+      "layered": {
+        "tasks": 8,
+        "published": 160,
+        "target": 160,
+        "related": 160,
+        "ndcg": 0.9358776975502068,
+        "stronglyRelated": 141,
+        "completeTasks": 8
+      },
+      "full": {
+        "tasks": 8,
+        "published": 160,
+        "target": 160,
+        "related": 160,
+        "ndcg": 0.9190981738457545,
+        "stronglyRelated": 136,
+        "completeTasks": 8
+      }
+    },
+    {
+      "poolSize": 120,
+      "pairs": 8,
+      "costPairs": 8,
+      "layeredInput": 515411,
+      "fullInput": 1031167,
+      "inputReduction": 0.5001672861912765,
+      "layered": {
+        "tasks": 8,
+        "published": 160,
+        "target": 160,
+        "related": 160,
+        "ndcg": 0.969036879280403,
+        "stronglyRelated": 151,
+        "completeTasks": 8
+      },
+      "full": {
+        "tasks": 8,
+        "published": 160,
+        "target": 160,
+        "related": 160,
+        "ndcg": 0.9488578368741137,
+        "stronglyRelated": 142,
+        "completeTasks": 8
+      }
+    },
+    {
+      "poolSize": 200,
+      "pairs": 8,
+      "costPairs": 8,
+      "layeredInput": 746818,
+      "fullInput": 1482918,
+      "inputReduction": 0.4963861791413956,
+      "layered": {
+        "tasks": 8,
+        "published": 160,
+        "target": 160,
+        "related": 160,
+        "ndcg": 0.9096431535337406,
+        "stronglyRelated": 132,
+        "completeTasks": 8
+      },
+      "full": {
+        "tasks": 8,
+        "published": 160,
+        "target": 160,
+        "related": 160,
+        "ndcg": 0.9729701982638417,
+        "stronglyRelated": 152,
+        "completeTasks": 8
+      }
+    }
+  ],
+  "recommendation": {
+    "pairs": 16,
+    "costPairs": 16,
+    "excludedCostPairs": [],
+    "layeredInput": 1262229,
+    "fullInput": 2514085,
+    "inputReduction": 0.49793702281346897,
+    "layered": {
+      "tasks": 16,
+      "published": 320,
+      "target": 320,
+      "related": 320,
+      "ndcg": 0.9393400164070719,
+      "stronglyRelated": 283,
+      "completeTasks": 16
+    },
+    "full": {
+      "tasks": 16,
+      "published": 320,
+      "target": 320,
+      "related": 320,
+      "ndcg": 0.9609140175689777,
+      "stronglyRelated": 294,
+      "completeTasks": 16
+    },
+    "pairedInputReductions": [
+      {
+        "key": "controlled/resume-recommendation.cooking-120.r1",
+        "value": 0.2620643060462746
+      },
+      {
+        "key": "controlled/resume-recommendation.cooking-120.r2",
+        "value": 0.30361501418299364
+      },
+      {
+        "key": "controlled/resume-recommendation.cooking-200.r1",
+        "value": 0.06616395710826706
+      },
+      {
+        "key": "controlled/resume-recommendation.cooking-200.r2",
+        "value": 0.7865003668378576
+      },
+      {
+        "key": "controlled/resume-recommendation.garden-120.r1",
+        "value": 0.2968153704434794
+      },
+      {
+        "key": "controlled/resume-recommendation.garden-120.r2",
+        "value": 0.6699743649009267
+      },
+      {
+        "key": "controlled/resume-recommendation.garden-200.r1",
+        "value": 0.5774062303076797
+      },
+      {
+        "key": "controlled/resume-recommendation.garden-200.r2",
+        "value": 0.12675331448491667
+      },
+      {
+        "key": "controlled/resume-recommendation.java-120.r1",
+        "value": 0.7816150557563188
+      },
+      {
+        "key": "controlled/resume-recommendation.java-120.r2",
+        "value": 0.30303663309732176
+      },
+      {
+        "key": "controlled/resume-recommendation.java-200.r1",
+        "value": 0.5745211863822511
+      },
+      {
+        "key": "controlled/resume-recommendation.java-200.r2",
+        "value": 0.5579731027857828
+      },
+      {
+        "key": "controlled/resume-recommendation.photo-120.r1",
+        "value": 0.2625977620667088
+      },
+      {
+        "key": "controlled/resume-recommendation.photo-120.r2",
+        "value": 0.3294827843195707
+      },
+      {
+        "key": "controlled/resume-recommendation.photo-200.r1",
+        "value": 0.56465344386665
+      },
+      {
+        "key": "controlled/resume-recommendation.photo-200.r2",
+        "value": 0.4594214466408759
+      }
+    ]
+  },
+  "preference": {
+    "pairs": 18,
+    "comparable": 18,
+    "effectivePairs": 16,
+    "learnedNdcg": 1,
+    "omittedNdcg": 1,
+    "sameOrder": 1,
+    "sameSet": 3,
+    "rows": [
+      {
+        "key": "resume-preference.cooking-u1.r1",
+        "comparable": true,
+        "effectivePreferences": 2,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.cooking-u1.r2",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.cooking-u1.r3",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.cooking-u2.r1",
+        "comparable": true,
+        "effectivePreferences": 2,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": true,
+        "sameSet": true
+      },
+      {
+        "key": "resume-preference.cooking-u2.r2",
+        "comparable": true,
+        "effectivePreferences": 2,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": true
+      },
+      {
+        "key": "resume-preference.cooking-u2.r3",
+        "comparable": true,
+        "effectivePreferences": 2,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": true
+      },
+      {
+        "key": "resume-preference.java-u1.r1",
+        "comparable": true,
+        "effectivePreferences": 2,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.java-u1.r2",
+        "comparable": true,
+        "effectivePreferences": 0,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.java-u1.r3",
+        "comparable": true,
+        "effectivePreferences": 0,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.java-u2.r1",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.java-u2.r2",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.java-u2.r3",
+        "comparable": true,
+        "effectivePreferences": 2,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.photo-u1.r1",
+        "comparable": true,
+        "effectivePreferences": 4,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.photo-u1.r2",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.photo-u1.r3",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.photo-u2.r1",
+        "comparable": true,
+        "effectivePreferences": 4,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.photo-u2.r2",
+        "comparable": true,
+        "effectivePreferences": 1,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      },
+      {
+        "key": "resume-preference.photo-u2.r3",
+        "comparable": true,
+        "effectivePreferences": 4,
+        "learned": 1,
+        "omitted": 1,
+        "sameOrder": false,
+        "sameSet": false
+      }
+    ]
+  },
+  "omittedAudit": "omitted-trace-audit.json"
+}

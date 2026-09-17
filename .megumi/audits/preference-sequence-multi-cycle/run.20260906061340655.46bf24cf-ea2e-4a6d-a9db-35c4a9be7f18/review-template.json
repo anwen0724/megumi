@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "runId": "run.20260906061340655.46bf24cf-ea2e-4a6d-a9db-35c4a9be7f18",
+  "profileDigest": "a850cba58d2c95e817d620fa526cdcc5bfe0b4f84615f00d9723cfd295a75fdf",
+  "entries": [
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "68d621cb0419d8c6e6e3af322ea42b925f25c27e5edac6f35ff03483c44c46c4",
+      "evidenceDigest": "6ea1e142fa4b23ec3d836652b58757c774cd03379df9c53b21904da1402a9ec4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "first-recommendation",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "68d621cb0419d8c6e6e3af322ea42b925f25c27e5edac6f35ff03483c44c46c4",
+      "evidenceDigest": "6ea1e142fa4b23ec3d836652b58757c774cd03379df9c53b21904da1402a9ec4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "second-recommendation",
+      "arm": "shared"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "68d621cb0419d8c6e6e3af322ea42b925f25c27e5edac6f35ff03483c44c46c4",
+      "evidenceDigest": "6ea1e142fa4b23ec3d836652b58757c774cd03379df9c53b21904da1402a9ec4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "second-recommendation",
+      "arm": "learned"
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "caseDigest": "68d621cb0419d8c6e6e3af322ea42b925f25c27e5edac6f35ff03483c44c46c4",
+      "evidenceDigest": "6ea1e142fa4b23ec3d836652b58757c774cd03379df9c53b21904da1402a9ec4",
+      "metricId": "personalization.semantic_quality",
+      "decision": "pending",
+      "checkpointId": "second-recommendation",
+      "arm": "omitted"
+    }
+  ]
+}

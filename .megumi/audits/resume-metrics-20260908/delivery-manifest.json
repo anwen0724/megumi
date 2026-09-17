@@ -1,0 +1,241 @@
+{
+  "generatedAt": "2026-09-08T07:41:46.9603530Z",
+  "productCommit": "4412e447a286bdd53a2aa066f15ac1d851d43356",
+  "trackedChanges": [],
+  "stagedChanges": [],
+  "checkedLocalLinks": 128,
+  "brokenLinks": [],
+  "formalRuns": 66,
+  "formalRecommendationExecutions": 84,
+  "metricsFile": ".megumi/audits/resume-metrics-20260908/verified-metrics.json",
+  "files": [
+    {
+      "path": "docs/current/verification-baseline.md",
+      "sha256": "138501f2be7488a911225f085ac358e9d17f0fa23f3a52c20098c32de6f17648"
+    },
+    {
+      "path": "docs/megumi-resume-and-interview-guide-v2.md",
+      "sha256": "14e20cc6068585643524ef5757bfcb91209bdbcd701ae7cbf72be1d0360f5dad"
+    },
+    {
+      "path": "docs/README.md",
+      "sha256": "ba7e1bda575de884ce8f3c98f4afdeefd24f13e38a590dbf7483d9e71323d088"
+    },
+    {
+      "path": "docs/status/active-work.md",
+      "sha256": "48839e77b40e68e42cf850b5540c97097642b397dc389043f1913a4b6a664c7e"
+    },
+    {
+      "path": "docs/status/known-issues.md",
+      "sha256": "38b60ff87e6c49fb07e59a5cb761fbbd99ad68dd49344cbd52b6ecdf1d07c20e"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/aggregate.mts",
+      "sha256": "af65aa5833c38fff8c0f08c185d43031cc54ee7e0a58e9820324c74a677601a3"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/audit-omitted.mts",
+      "sha256": "b5d07fd5c373a3972d4877ebbb6c3dac72fbded5badb8b83b5b2614b59785a56"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/corpus-freeze.json",
+      "sha256": "73dea622c3500fc5c28376efe03bf56e3b841adb862a92175bf3ad270aac0fd1"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.cooking-120.json",
+      "sha256": "1b00e523f557a8dc67e2fb8091a1b68b91b169a7d7f4f200f034e5522cd8424e"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.cooking-200.json",
+      "sha256": "31fed98e05b2de83c29e0f272d9bdfacf51ceffa390c1473de25e965b183913b"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.cooking-80.json",
+      "sha256": "6b78e53313ef7c44431e1040dab1c44e0da3809e11d8d713d877ba4495d0f51d"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.garden-120.json",
+      "sha256": "18b3d3985c9979c1d18d443d2f47751856deb8170cc523a70fdfae8c9f33ca36"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.garden-200.json",
+      "sha256": "041809d7d1f35637c51fe18d981b6f7b954de8854d22b92b0ee74c666a0a9e98"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.garden-80.json",
+      "sha256": "417930588bca0097becb0f4cf03fc79b321c637693c0f86bb50c78b6099685a8"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.java-120.json",
+      "sha256": "452dcdbd9a6396f01c0949f67d65034d1c19dcb49ad718cd692c0efc37276a1e"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.java-200.json",
+      "sha256": "72f84dc5004746aa56395b7565fed42ed6b9f9cce9c7a7a3a43aae75cb989a68"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.java-80.json",
+      "sha256": "4075fd17c9e971c800e80fdf869b34bb4540d92f4b50be176681c505fa6263eb"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.photo-120.json",
+      "sha256": "5a98f75c73b31e9d0e6f91d67b32d258deaef2106628f4d580c111e419ac436f"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.photo-200.json",
+      "sha256": "3078da52fb2734b4fc36d194339d4cde4524acc7c49e84adc4bd1322d38b6103"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/cases/recommendation/resume-recommendation.photo-80.json",
+      "sha256": "b397df84e3d4e328bc84491f61ed371f95b96fbf5616126f7fce196a52f4da62"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/full/controlled/manifests/resume-recommendation.json",
+      "sha256": "cd070cdacb079d7695ea19a979c086204a8ba843efd529a139b27971ddbaef21"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.cooking-120.json",
+      "sha256": "5a680447796d8ccb468290a0086e0edfeb9db76871cbf162952c308944201b13"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.cooking-200.json",
+      "sha256": "3f41fc8ee77f4286f461fa7bf40f836b035932b4ce72683c45e09a5f2db0e9bc"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.cooking-80.json",
+      "sha256": "6b78e53313ef7c44431e1040dab1c44e0da3809e11d8d713d877ba4495d0f51d"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.garden-120.json",
+      "sha256": "512d1d0f1e6934e0cdd9836504a584232aca639a142e3069e7da55f8e2f7e480"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.garden-200.json",
+      "sha256": "7cf337003a6417740f4453abd00b7df8aa76123fe28ef5ee667e92794503d991"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.garden-80.json",
+      "sha256": "417930588bca0097becb0f4cf03fc79b321c637693c0f86bb50c78b6099685a8"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.java-120.json",
+      "sha256": "5348a381acc2c4fb77e384121e21b863af070a7c5cf85e03e8197ef2cbc61bae"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.java-200.json",
+      "sha256": "1dbf6771b40cb8c23a816b5354b1bfe6b5d0a0a3846d10228403bc8118292e25"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.java-80.json",
+      "sha256": "4075fd17c9e971c800e80fdf869b34bb4540d92f4b50be176681c505fa6263eb"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.photo-120.json",
+      "sha256": "ef18cae3f543f42d73c9fca9a863a9e70898c3aa1e351cea37610e0e37a89553"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.photo-200.json",
+      "sha256": "4a76199c673e07313c9e1ca12fbbe211be3b2f19bad816cab75ce86304293910"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/cases/recommendation/resume-recommendation.photo-80.json",
+      "sha256": "b397df84e3d4e328bc84491f61ed371f95b96fbf5616126f7fce196a52f4da62"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/layered/controlled/manifests/resume-recommendation.json",
+      "sha256": "cd070cdacb079d7695ea19a979c086204a8ba843efd529a139b27971ddbaef21"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/cases/preference-sequence/resume-preference.cooking-u1.json",
+      "sha256": "5de5c67f24c3b4d54066c3485ef3b7a36ab007701ebfe3075abd5e38612e8ea0"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/cases/preference-sequence/resume-preference.cooking-u2.json",
+      "sha256": "99d126c5043d52ff058c33a67948304a3eaf3cca2627e4f954510a2726599854"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/cases/preference-sequence/resume-preference.java-u1.json",
+      "sha256": "ca67c1399ab2fedb1305c680d7a6303b9e5339f956feca6d3674238a96b124f8"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/cases/preference-sequence/resume-preference.java-u2.json",
+      "sha256": "a38096ca0caa791a14d9f4d0f24a6e0a68b23d3586b6f146384db31e5e315d6b"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/cases/preference-sequence/resume-preference.photo-u1.json",
+      "sha256": "f66386888aff14251718c90673e9302ddde33fae932519d5d8f40a63ad4c97d5"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/cases/preference-sequence/resume-preference.photo-u2.json",
+      "sha256": "0752be4a35d5e6c8f679b156f4d23165f6590f1ee626106534ac1d56606e0308"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/datasets/preference/controlled/manifests/resume-preference.json",
+      "sha256": "fefd8090a0b92f4f41fb88482c382cfa23410f656f953747a48a3277f903cfff"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/final-metrics.json",
+      "sha256": "d5cb0c05e4fd73421defe154996654d7f4bbf7c36564d86262b6270e5117610f"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/model-configuration.mts",
+      "sha256": "41e6275bdefa037390d29906656e61101571489f86f3858658d4d56e876697d9"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/omitted-trace-audit.json",
+      "sha256": "1e6ea94b1bad65a55700001e6421e9aecabcc72f289565bc65fad80e7ebe0120"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/preference-labels.json",
+      "sha256": "5e57b7c53b22fc89345ac543edbf841f7c6b4edf8d37f75f5245beba1b865532"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/prepare-preference.mts",
+      "sha256": "42b8ce7ec549ea2df15aabf39df6e1ac919694c12e3675e0824d640ceecfbe6a"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/prepare-recommendation.mts",
+      "sha256": "b472ddfa8207e35949c8ad27d9e49ba49fdcb3b90566faaa298dc41f75e52ed1"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/recommendation-labels.json",
+      "sha256": "0bba1e48b7890e7e1919ee2b1de380919f53cb2ee5656e92bef50b68c6dfd6b5"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/resume-before.md",
+      "sha256": "1c1979b41b1710cb041ff741d8c0eb27b443e7f23692f89968cd24894bee81ec"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/run-preference.mts",
+      "sha256": "146da38e298ce58798e8f7519677f4648ea5325e533c301f7cb7b1c2d51ed26d"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/run-recommendation.mts",
+      "sha256": "06d80326b8af6f4ab241fcdb44f8f60063fe50130ffcf7cd98b80bb5972b5dac"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/tsconfig.json",
+      "sha256": "750cb7a23a3cc1d468e8440fa0671a16fa7f28897938ed02685f28fba91c772a"
+    },
+    {
+      "path": ".megumi/audits/resume-metrics-20260908/verified-metrics.json",
+      "sha256": "313ebb21b4804037631ec3eb9f80911087b9d18a706f3441a1abc1aaa1446a45"
+    },
+    {
+      "path": "docs/notes/agent-resume-metrics-2026-09-08/attempts-01-03.md",
+      "sha256": "80484f165972a68eae8cbb498247473f7043ae296227b3aae9b6b23d361e0ce5"
+    },
+    {
+      "path": "docs/notes/agent-resume-metrics-2026-09-08/attempts-06-07-preference.md",
+      "sha256": "a31a1aa0749c918a956869e2523ab6d542469cd5542972dbcb8ad839c660d7e8"
+    },
+    {
+      "path": "docs/notes/agent-resume-metrics-2026-09-08/protocol.md",
+      "sha256": "c200e4193082cd52687828e997d47cc66ce27526600240e5f899b414b1bc326b"
+    },
+    {
+      "path": "docs/notes/agent-resume-metrics-2026-09-08/report.md",
+      "sha256": "76e9a8de01bb92e5aa4e42de3ef92da034b31676e96c7729e6d3bfccbc0e7d33"
+    }
+  ]
+}

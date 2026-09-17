@@ -1,0 +1,167 @@
+{
+  "createdAt": "2026-09-08T07:34:20.808Z",
+  "results": [
+    {
+      "key": "resume-preference.cooking-u1.r1",
+      "evidenceDigest": "454c38f8808c4141ce0c9dc8af3581e9195cc1744d7605eb3953b55f2b13da2b",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48596,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u1.r2",
+      "evidenceDigest": "00a67dc0c5f90f26d911fbd2070659f646f60bafca1637e136c1176a142ac06d",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48446,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u1.r3",
+      "evidenceDigest": "b830fc9e9b08595721c3b8554ba21b55b3ce9f0b2ad5b5d19513cddd0bbce885",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 49515,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u2.r1",
+      "evidenceDigest": "7588cc87d1573307e45298442e59904199faae4471745ea0b69f07ddd94ef4a5",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48627,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u2.r2",
+      "evidenceDigest": "5dcdb2a0a5cbdda22ecfff3dc14737f4eb89d9446a0292393d84ccff79a2a005",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48783,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.cooking-u2.r3",
+      "evidenceDigest": "5161c406c13c2a18e5dbd1f38a2acb7a4a3b6af64caa264f2859ffb490444a47",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48546,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u1.r1",
+      "evidenceDigest": "83aa23f17ce5f6cefd201173e866b3ac85b0c7ee36370cbbf71398bc8423e92b",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 49972,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u1.r2",
+      "evidenceDigest": "92c776d5f79c06b1e379907e996babd858f1f2af72387f34e19bf70176e9a234",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48629,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u1.r3",
+      "evidenceDigest": "7b4fb6629437bce687f8154d05bf62c415c9fa5bf67637680660d2155f21b403",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48265,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u2.r1",
+      "evidenceDigest": "5d3dcacccddb35b4bb90e07b01765eb5a8d6f1cc3e54070a93f37e8febc3fdc6",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 49274,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u2.r2",
+      "evidenceDigest": "2481f1b468c387ec6ae1038b375a1bd5e088a8555ec580aee7acad04378027b0",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 48811,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.java-u2.r3",
+      "evidenceDigest": "22f7d6c9fd47d0139a0890aa93ac160b044cb42ef65b6ee211813a631b8a0e97",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 49035,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u1.r1",
+      "evidenceDigest": "82f0d1ee9a636fa65e4e58e20e4e25b019e7b87e264db7acf06c88a12cf7d1d0",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 49544,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u1.r2",
+      "evidenceDigest": "6e95e85b7407d1308334f3ff981fa3b3045589c57af0efb33918aeccc5a86203",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 50107,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u1.r3",
+      "evidenceDigest": "8382ee40d4c280fbf1b4cd6c3f57ed6ab077e21021eae1235b0e816dc698acff",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 50990,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u2.r1",
+      "evidenceDigest": "f306b6db9cae9ad443229a0194ff378adea95958c16ceed05d78e34d962acb3b",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 49803,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u2.r2",
+      "evidenceDigest": "d6a1d5dc349440128ec743bd97f0673c225608add34f0928b9cf33ec9c41874d",
+      "interrupted": 0,
+      "known": true,
+      "inputTotal": 50743,
+      "modelCalls": 2,
+      "verifiedProviderRequests": 2
+    },
+    {
+      "key": "resume-preference.photo-u2.r3",
+      "evidenceDigest": "1923f2eb60ca39057726661ec78378d0a2a00bfa66e71cad2a79bd474cd755ee",
+      "interrupted": 1,
+      "known": false,
+      "inputTotal": null,
+      "modelCalls": 3,
+      "verifiedProviderRequests": 3
+    }
+  ]
+}

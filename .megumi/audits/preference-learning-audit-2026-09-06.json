@@ -1,0 +1,42 @@
+{
+  "kind": "repository-audit-probes",
+  "timestamp": "2026-09-06T02:12:42.383Z",
+  "results": {
+    "sparseFeedbackAfterAbstention": {
+      "simulatedModelDecision": "No preference was justified by the first feedback; return an empty next set.",
+      "firstFeedbackCompletion": "learned",
+      "nextBatchFeedbackIds": [
+        "recommendation:2"
+      ],
+      "nextBatchSupportingIds": [
+        "recommendation:2"
+      ],
+      "nextBatchContainsFirstContent": false,
+      "firstFeedbackStillStored": true
+    },
+    "historicalEvidenceVisibility": {
+      "initialBatchContainsOriginalContent": true,
+      "nextBatchContainsOriginalContent": false,
+      "historicalSupportFields": [
+        "recommendationId",
+        "reactionRevision",
+        "reaction",
+        "matchedInterestIds"
+      ],
+      "retainedStatements": [
+        "偏好包含实践步骤与对照实验的教程。"
+      ]
+    },
+    "omittedExistingPreference": {
+      "simulatedModelDecision": "The complete replacement list accidentally omits a still-supported existing preference.",
+      "commitStatus": "committed",
+      "existingPreferenceSurvives": false,
+      "originalFeedbackCompletion": "learned"
+    },
+    "semanticValidationBoundary": {
+      "simulatedModelDecision": "An unsupported platform-wide dislike inferred from a liked article, with valid IDs and versions.",
+      "commitStatus": "committed",
+      "resultingStatement": "用户不喜欢整个开放网页平台的所有内容。"
+    }
+  }
+}

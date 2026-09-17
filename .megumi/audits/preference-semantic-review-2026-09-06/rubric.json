@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "reviewer": {
+    "kind": "ai",
+    "name": "Codex assistant",
+    "humanValidated": false
+  },
+  "purpose": "评估现有封存证据是否足以支持偏好学习的简历效果数据；不改写正式人工评分。",
+  "rules": [
+    "先依据显式要求、操作及当前反馈解释目标，不把自动生成的偏好或推荐理由作为正确答案。",
+    "删除一个偏好不是讨厌所有相关内容；撤回一个支持引用不等于不存在其它支持反馈。",
+    "推荐符合度分为有据符合、部分/未知、有据不符合；未知不补成0或1。",
+    "同主题不等于符合偏好；推荐理由里的新增用户动机/事实需单独检查。",
+    "学习项审查引用当前性、推断是否有据、范围是否过度、用户纠正和删除后新证据是否相关。",
+    "主分析保留十类样本三次重复全体；无有效自动偏好的对照单列，不当作学习带来提升。",
+    "仅比较同一状态的learned/omitted组；多轮revision2单列，初始不配对推荐不混入分母。"
+  ],
+  "candidate_rubrics": {
+    "consistent_procedural_feedback": {
+      "cases": [
+        "cooking-opposing-feedback",
+        "cooking-pause-resume",
+        "photo-accumulation",
+        "photo-last-support",
+        "photo-partial-support"
+      ],
+      "supported": [
+        "4",
+        "6"
+      ],
+      "not_supported": [
+        "5"
+      ],
+      "basis": "4提供步骤/失败排查，6提供条件调整/对照；这些可观察特征与当前正向反馈内容相近。5只有结论不体现这些特征。此判断仅是按样本反馈作出的AI推测，不证明稳定偏好或用户真实满意。"
+    },
+    "photo-user-edit": {
+      "supported": [
+        "4"
+      ],
+      "unknown": [
+        "5",
+        "6"
+      ],
+      "basis": "用户明确优先常见工具练习，4直接满足；其它内容未说明工具门槛，不作绝对禁止推断。"
+    },
+    "cooking-description-change": {
+      "partial_or_unknown": [
+        "4",
+        "5",
+        "6"
+      ],
+      "basis": "要求低成本、可靠步骤、替代食材；4提供步骤和常见工具，但成本和替代食材未提供，不能判定完整符合。"
+    },
+    "cooking-feedback-reversal": {
+      "unknown": [
+        "4",
+        "5",
+        "6"
+      ],
+      "basis": "对相近步骤/对照内容一赞一踩，无法确定变化原因；不能推定所有对照内容变差。"
+    },
+    "cooking-delete-new-evidence": {
+      "unknown": [
+        "4",
+        "5",
+        "6"
+      ],
+      "basis": "用户删除步骤/对照判断后新增喜欢器材宣传，不能把这条新反馈作为原步骤偏好的恢复依据。"
+    },
+    "photo-delete-old-evidence": {
+      "unknown": [
+        "4",
+        "5",
+        "6"
+      ],
+      "basis": "用户删除偏好但保留原反馈；不能继续把被删除陈述当作用户已确认取舍，也不能推定同类内容被禁止。"
+    }
+  }
+}

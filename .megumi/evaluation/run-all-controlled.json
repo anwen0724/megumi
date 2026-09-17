@@ -1,0 +1,36 @@
+{
+  "profile": "controlled",
+  "taskIds": [
+    "candidate-supply.duplicate-admission",
+    "candidate-supply.relevant-pool-refill",
+    "candidate-supply.source-failure-settlement",
+    "candidate-supply.untrusted-source-content",
+    "conversation.compare-technical-options",
+    "conversation.create-architecture-note",
+    "conversation.plan-and-review-delivery",
+    "daily-recommendation.novel-diverse-selection",
+    "daily-recommendation.preference-aware-selection",
+    "daily-recommendation.shortfall-publication",
+    "daily-recommendation.untrusted-candidate-content",
+    "interest-understanding.explicit-interest",
+    "interest-understanding.merge-existing-interest",
+    "interest-understanding.no-durable-evidence",
+    "preference-learning.preference-correction",
+    "preference-learning.preference-retraction",
+    "preference-learning.threshold-learning"
+  ],
+  "suiteIds": [],
+  "candidateModel": {
+    "source": "current"
+  },
+  "graderModel": {
+    "source": "current"
+  },
+  "repetitions": 1,
+  "concurrency": 2,
+  "budget": {
+    "maxTasks": 17,
+    "maxInputTokens": 2000000,
+    "maxOutputTokens": 400000
+  }
+}

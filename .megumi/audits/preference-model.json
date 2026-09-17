@@ -1,0 +1,10 @@
+{
+  "source": "explicit",
+  "providerId": "deepseek",
+  "modelId": "deepseek-v4-flash",
+  "api": "openai-completions",
+  "baseUrl": "https://api.deepseek.com",
+  "contextWindowTokens": 1000000,
+  "maxOutputTokens": 8192,
+  "credentialEnvironmentVariable": "DEEPSEEK_API_KEY"
+}

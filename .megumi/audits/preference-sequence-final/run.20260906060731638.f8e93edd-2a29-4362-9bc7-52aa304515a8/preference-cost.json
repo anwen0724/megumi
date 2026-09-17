@@ -1,0 +1,986 @@
+{
+  "schemaVersion": 1,
+  "runId": "run.20260906060731638.f8e93edd-2a29-4362-9bc7-52aa304515a8",
+  "cases": [
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-delete-new-evidence",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-3",
+          "mainPath": {
+            "traceIds": [
+              "a78c16db-df93-4193-a36a-9e78689a61cc",
+              "274a1a57-6c8a-4f82-b27f-3a1ebb97b50a"
+            ],
+            "modelCalls": 7,
+            "retries": 0,
+            "traceDurationMs": 33421,
+            "usage": {
+              "inputTokens": 6165,
+              "outputTokens": 4181,
+              "cacheReadTokens": 32640,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "274a1a57-6c8a-4f82-b27f-3a1ebb97b50a"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 799,
+            "usage": {
+              "inputTokens": 2114,
+              "outputTokens": 43,
+              "cacheReadTokens": 256,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "a78c16db-df93-4193-a36a-9e78689a61cc"
+                ],
+                "modelCalls": 6,
+                "retries": 0,
+                "traceDurationMs": 32622,
+                "usage": {
+                  "inputTokens": 4051,
+                  "outputTokens": 4138,
+                  "cacheReadTokens": 32384,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "40f41995-0afc-4757-9f5a-ad89f0c95f0d"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 21730,
+                "usage": {
+                  "inputTokens": 1610,
+                  "outputTokens": 2825,
+                  "cacheReadTokens": 12800,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-description-change",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-2",
+          "mainPath": {
+            "traceIds": [
+              "34768080-d54c-497d-a92f-122b599e6255",
+              "a227d194-9c59-4873-8a5c-bd8b8dcb8e0d"
+            ],
+            "modelCalls": 4,
+            "retries": 0,
+            "traceDurationMs": 30802,
+            "usage": {
+              "inputTokens": 5855,
+              "outputTokens": 4067,
+              "cacheReadTokens": 14976,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "a227d194-9c59-4873-8a5c-bd8b8dcb8e0d"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 1800,
+            "usage": {
+              "inputTokens": 75,
+              "outputTokens": 220,
+              "cacheReadTokens": 2048,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "34768080-d54c-497d-a92f-122b599e6255"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 29002,
+                "usage": {
+                  "inputTokens": 5780,
+                  "outputTokens": 3847,
+                  "cacheReadTokens": 12928,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "17bc15e8-0077-4103-8521-ddd965eb7d75"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 44122,
+                "usage": {
+                  "inputTokens": 1602,
+                  "outputTokens": 5596,
+                  "cacheReadTokens": 15360,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-feedback-reversal",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-2",
+          "mainPath": {
+            "traceIds": [
+              "784d8313-87e2-4f13-a690-e4c81bd79865",
+              "5231139a-2e07-4a34-817c-3e6ed3d03f2b"
+            ],
+            "modelCalls": 4,
+            "retries": 0,
+            "traceDurationMs": 74465,
+            "usage": {
+              "inputTokens": 3188,
+              "outputTokens": 9360,
+              "cacheReadTokens": 22144,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "5231139a-2e07-4a34-817c-3e6ed3d03f2b"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 1517,
+            "usage": {
+              "inputTokens": 49,
+              "outputTokens": 155,
+              "cacheReadTokens": 2048,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "784d8313-87e2-4f13-a690-e4c81bd79865"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 72948,
+                "usage": {
+                  "inputTokens": 3139,
+                  "outputTokens": 9205,
+                  "cacheReadTokens": 20096,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "949a544f-edbf-400b-8fdd-b3fff021c736"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 29426,
+                "usage": {
+                  "inputTokens": 5181,
+                  "outputTokens": 3608,
+                  "cacheReadTokens": 10240,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-opposing-feedback",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-3",
+          "mainPath": {
+            "traceIds": [
+              "2d030de4-a022-4137-abe8-7b7157834a11",
+              "4d646e21-1992-4d8f-acc6-c848a2ecc42e"
+            ],
+            "modelCalls": 4,
+            "retries": 0,
+            "traceDurationMs": 56829,
+            "usage": {
+              "inputTokens": 8724,
+              "outputTokens": 6842,
+              "cacheReadTokens": 11392,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "4d646e21-1992-4d8f-acc6-c848a2ecc42e"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 752,
+            "usage": {
+              "inputTokens": 660,
+              "outputTokens": 59,
+              "cacheReadTokens": 1152,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "2d030de4-a022-4137-abe8-7b7157834a11"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 56077,
+                "usage": {
+                  "inputTokens": 8064,
+                  "outputTokens": 6783,
+                  "cacheReadTokens": 10240,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "8aca7e99-e5c2-4f02-97b0-c0c8d563e101"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 28589,
+                "usage": {
+                  "inputTokens": 1671,
+                  "outputTokens": 3576,
+                  "cacheReadTokens": 14080,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.cooking-pause-resume",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-4",
+          "mainPath": {
+            "traceIds": [
+              "e06eacbd-aa6b-4703-972a-7267c22f7bc5",
+              "b5b950a7-64bf-48c7-8629-22f9a15c2d52"
+            ],
+            "modelCalls": 6,
+            "retries": 0,
+            "traceDurationMs": 18691,
+            "usage": {
+              "inputTokens": 3377,
+              "outputTokens": 2502,
+              "cacheReadTokens": 27520,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "b5b950a7-64bf-48c7-8629-22f9a15c2d52"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 1787,
+            "usage": {
+              "inputTokens": 47,
+              "outputTokens": 226,
+              "cacheReadTokens": 2048,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "e06eacbd-aa6b-4703-972a-7267c22f7bc5"
+                ],
+                "modelCalls": 5,
+                "retries": 0,
+                "traceDurationMs": 16904,
+                "usage": {
+                  "inputTokens": 3330,
+                  "outputTokens": 2276,
+                  "cacheReadTokens": 25472,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "4f3bb859-3756-4f97-8ae7-9b3f6bc295ad"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 22564,
+                "usage": {
+                  "inputTokens": 1557,
+                  "outputTokens": 2679,
+                  "cacheReadTokens": 12160,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-accumulation",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-4",
+          "mainPath": {
+            "traceIds": [
+              "9da22c3d-f23e-4fc0-bc59-47c50079da62",
+              "271b808c-2c6a-4897-afd9-6035ba086ccf"
+            ],
+            "modelCalls": 3,
+            "retries": 0,
+            "traceDurationMs": 16322,
+            "usage": {
+              "inputTokens": 1883,
+              "outputTokens": 1835,
+              "cacheReadTokens": 6784,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "271b808c-2c6a-4897-afd9-6035ba086ccf"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 746,
+            "usage": {
+              "inputTokens": 652,
+              "outputTokens": 58,
+              "cacheReadTokens": 1152,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "9da22c3d-f23e-4fc0-bc59-47c50079da62"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 15576,
+                "usage": {
+                  "inputTokens": 1231,
+                  "outputTokens": 1777,
+                  "cacheReadTokens": 5632,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "bab77b2e-a430-4805-9083-b2508a3d3c3f"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 13671,
+                "usage": {
+                  "inputTokens": 229,
+                  "outputTokens": 1715,
+                  "cacheReadTokens": 6528,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-delete-old-evidence",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-2",
+          "mainPath": {
+            "traceIds": [
+              "7f4a34cd-82b9-4a56-a87b-ab29a099a6a0",
+              "216f4f03-0250-44bc-93af-424ad1dc5526"
+            ],
+            "modelCalls": 3,
+            "retries": 0,
+            "traceDurationMs": 14547,
+            "usage": {
+              "inputTokens": 235,
+              "outputTokens": 1704,
+              "cacheReadTokens": 8448,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "216f4f03-0250-44bc-93af-424ad1dc5526"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 909,
+            "usage": {
+              "inputTokens": 42,
+              "outputTokens": 43,
+              "cacheReadTokens": 2048,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "7f4a34cd-82b9-4a56-a87b-ab29a099a6a0"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 13638,
+                "usage": {
+                  "inputTokens": 193,
+                  "outputTokens": 1661,
+                  "cacheReadTokens": 6400,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "57a1d1a5-2377-43e7-ae58-4dd9e1e23089"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 9057,
+                "usage": {
+                  "inputTokens": 224,
+                  "outputTokens": 1116,
+                  "cacheReadTokens": 5888,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-last-support",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-3",
+          "mainPath": {
+            "traceIds": [
+              "9ce6ad36-8fc6-4a7e-95b2-c64cc794a030",
+              "12b1e1d1-5f72-4b8a-bdde-fd775800860f"
+            ],
+            "modelCalls": 4,
+            "retries": 0,
+            "traceDurationMs": 51185,
+            "usage": {
+              "inputTokens": 2824,
+              "outputTokens": 6205,
+              "cacheReadTokens": 16896,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "12b1e1d1-5f72-4b8a-bdde-fd775800860f"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 1520,
+            "usage": {
+              "inputTokens": 13,
+              "outputTokens": 154,
+              "cacheReadTokens": 1920,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "9ce6ad36-8fc6-4a7e-95b2-c64cc794a030"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 49665,
+                "usage": {
+                  "inputTokens": 2811,
+                  "outputTokens": 6051,
+                  "cacheReadTokens": 14976,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "07b5919f-e5c1-420a-bb9d-6741042a3695"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 21345,
+                "usage": {
+                  "inputTokens": 2497,
+                  "outputTokens": 2699,
+                  "cacheReadTokens": 11648,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-partial-support",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-2",
+          "mainPath": {
+            "traceIds": [
+              "55d3b597-7c02-4f3c-83ec-16fed3c98bdb",
+              "972ceac9-7ee1-4bb0-94ee-381b653e1ab7"
+            ],
+            "modelCalls": 5,
+            "retries": 0,
+            "traceDurationMs": 30298,
+            "usage": {
+              "inputTokens": 2785,
+              "outputTokens": 3905,
+              "cacheReadTokens": 22144,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "972ceac9-7ee1-4bb0-94ee-381b653e1ab7"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 1159,
+            "usage": {
+              "inputTokens": 113,
+              "outputTokens": 148,
+              "cacheReadTokens": 1920,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "55d3b597-7c02-4f3c-83ec-16fed3c98bdb"
+                ],
+                "modelCalls": 4,
+                "retries": 0,
+                "traceDurationMs": 29139,
+                "usage": {
+                  "inputTokens": 2672,
+                  "outputTokens": 3757,
+                  "cacheReadTokens": 20224,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "bf91a422-108d-486c-9664-29e484338a6f"
+                ],
+                "modelCalls": 3,
+                "retries": 0,
+                "traceDurationMs": 15253,
+                "usage": {
+                  "inputTokens": 1487,
+                  "outputTokens": 1971,
+                  "cacheReadTokens": 11904,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "caseIdentity": "controlled/preference-sequence.photo-user-edit",
+      "status": "captured",
+      "checkpoints": [
+        {
+          "checkpointId": "step-4",
+          "mainPath": {
+            "traceIds": [
+              "3e9dc7fa-6290-47bc-b5aa-cb3427929e2e",
+              "210ad707-bfff-4522-ac95-c1f514f1e2b9"
+            ],
+            "modelCalls": 3,
+            "retries": 0,
+            "traceDurationMs": 6835,
+            "usage": {
+              "inputTokens": 171,
+              "outputTokens": 848,
+              "cacheReadTokens": 8832,
+              "cacheWriteTokens": 0
+            }
+          },
+          "sharedLearning": {
+            "traceIds": [
+              "210ad707-bfff-4522-ac95-c1f514f1e2b9"
+            ],
+            "modelCalls": 1,
+            "retries": 0,
+            "traceDurationMs": 551,
+            "usage": {
+              "inputTokens": 46,
+              "outputTokens": 43,
+              "cacheReadTokens": 2048,
+              "cacheWriteTokens": 0
+            }
+          },
+          "recommendations": [
+            {
+              "arm": "learned",
+              "cost": {
+                "traceIds": [
+                  "3e9dc7fa-6290-47bc-b5aa-cb3427929e2e"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 6284,
+                "usage": {
+                  "inputTokens": 125,
+                  "outputTokens": 805,
+                  "cacheReadTokens": 6784,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            },
+            {
+              "arm": "omitted",
+              "cost": {
+                "traceIds": [
+                  "5b66f1b0-b642-4ee0-8f17-8c26ee9edf84"
+                ],
+                "modelCalls": 2,
+                "retries": 0,
+                "traceDurationMs": 7887,
+                "usage": {
+                  "inputTokens": 92,
+                  "outputTokens": 995,
+                  "cacheReadTokens": 7040,
+                  "cacheWriteTokens": 0
+                }
+              },
+              "unexpectedLearning": {
+                "traceIds": [],
+                "modelCalls": 0,
+                "retries": 0,
+                "traceDurationMs": 0,
+                "usage": {
+                  "inputTokens": 0,
+                  "outputTokens": 0,
+                  "cacheReadTokens": 0,
+                  "cacheWriteTokens": 0
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
