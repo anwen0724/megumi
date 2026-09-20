@@ -71,6 +71,7 @@ from app.ai.runtime.retry import (
     retry_assistant_call,
     retry_provider_request,
 )
+from app.ai.stream import AssistantResponse
 from app.ai.tools.arguments import (
     parse_partial_arguments,
     validate_tool_arguments,
@@ -101,6 +102,7 @@ __all__ = [
     "AssistantMessageEvent",
     "AssistantMessageFrame",
     "AssistantMessageFrameEncoder",
+    "AssistantResponse",
     "AuthError",
     "AuthOverride",
     "CallOptions",
