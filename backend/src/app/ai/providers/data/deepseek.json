@@ -1,0 +1,52 @@
+[
+  {
+    "id": "deepseek-flash",
+    "name": "DeepSeek V4.1 Flash",
+    "provider": "deepseek",
+    "api": "openai-completions",
+    "context_window": 1000000,
+    "max_output_tokens": 384000,
+    "capabilities": {
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "tools": true,
+      "temperature": true,
+      "reasoning_levels": {
+        "off": "disabled",
+        "minimal": "low",
+        "low": "low",
+        "medium": "high",
+        "high": "high",
+        "xhigh": "high",
+        "max": "max"
+      }
+    },
+    "pricing": {
+      "tiers": [
+        {
+          "condition": "Peak: 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday, excluding Chinese public holidays.",
+          "input": "0.30",
+          "output": "1.20",
+          "cache_read": "0.006",
+          "cache_write": null
+        },
+        {
+          "condition": "Off-peak: all other hours, including weekends and Chinese public holidays.",
+          "input": "0.15",
+          "output": "0.60",
+          "cache_read": "0.003",
+          "cache_write": null
+        }
+      ]
+    },
+    "source": {
+      "url": "https://api-docs.deepseek.com/quick_start/pricing/",
+      "checked_at": "2026-09-20"
+    },
+    "compat": {
+      "temperature_requires_reasoning_off": true
+    }
+  }
+]

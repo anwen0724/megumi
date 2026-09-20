@@ -16,11 +16,26 @@ class ModelCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
+class PricingTier:
+    """Conditional rates in the parent pricing currency and token unit.
+
+    Conditions are descriptive metadata, not executable billing rules.
+    """
+
+    condition: str
+    input: Decimal | None = None
+    output: Decimal | None = None
+    cache_read: Decimal | None = None
+    cache_write: Decimal | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Pricing:
-    """Local per-million-token rates; None means unknown rather than free."""
+    """Rates per unit_tokens; None means unknown rather than free."""
 
     currency: str = "USD"
     unit_tokens: int = 1_000_000
+    tiers: tuple[PricingTier, ...] = ()
     input: Decimal | None = None
     output: Decimal | None = None
     cache_read: Decimal | None = None
@@ -37,9 +52,10 @@ class CatalogSource:
 
 @dataclass(frozen=True, slots=True)
 class ModelCompat:
-    """Protocol-specific message role compatibility."""
+    """Declared protocol differences used by subsequent request adapters."""
 
     system_role: str = "system"
+    temperature_requires_reasoning_off: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,0 +1,28 @@
+[
+  {
+    "id": "gpt-4.1",
+    "name": "GPT-4.1",
+    "provider": "openai",
+    "api": "openai-responses",
+    "context_window": 1047576,
+    "max_output_tokens": 32768,
+    "capabilities": {
+      "input_modalities": [
+        "text",
+        "image"
+      ],
+      "tools": true,
+      "temperature": true
+    },
+    "pricing": {
+      "input": "2.00",
+      "output": "8.00",
+      "cache_read": "0.50",
+      "cache_write": null
+    },
+    "source": {
+      "url": "https://developers.openai.com/api/docs/models/gpt-4.1",
+      "checked_at": "2026-09-20"
+    }
+  }
+]

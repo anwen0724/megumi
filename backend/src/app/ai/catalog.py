@@ -1,12 +1,14 @@
 """Validate complete catalogs before publishing provider configuration."""
 
+import json
 import re
 from collections.abc import Mapping
 from copy import deepcopy
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, urlsplit
 
 from app.ai.errors import ConfigurationError
+from app.ai.model import CatalogSource, Model, ModelCapabilities, ModelCompat, Pricing, PricingTier
 from app.ai.provider import Provider
 
 SUPPORTED_APIS = frozenset({"openai-completions", "openai-responses"})
@@ -88,11 +90,19 @@ def snapshot_provider(provider: Provider) -> Provider:
             or pricing.unit_tokens <= 0
         ):
             raise ConfigurationError("Invalid pricing currency or unit")
-        for rate in (pricing.input, pricing.output, pricing.cache_read, pricing.cache_write):
-            if rate is not None and (
-                not isinstance(rate, Decimal) or not rate.is_finite() or rate < 0
-            ):
-                raise ConfigurationError("Prices must be finite nonnegative decimals or unknown")
+        rate_groups: tuple[Pricing | PricingTier, ...] = (pricing, *pricing.tiers)
+        for rates in rate_groups:
+            if isinstance(rates, PricingTier) and not rates.condition.strip():
+                raise ConfigurationError("Pricing tiers require a billing condition")
+            for rate in (rates.input, rates.output, rates.cache_read, rates.cache_write):
+                if rate is not None and (
+                    not isinstance(rate, Decimal) or not rate.is_finite() or rate < 0
+                ):
+                    raise ConfigurationError(
+                        "Prices must be finite nonnegative decimals or unknown"
+                    )
+        if type(model.compat.temperature_requires_reasoning_off) is not bool:
+            raise ConfigurationError("Invalid sampling compatibility declaration")
         caps = model.capabilities
         if not caps.input_modalities or not set(caps.input_modalities) <= {"text", "image"}:
             raise ConfigurationError("Invalid input modality declaration")
@@ -106,3 +116,41 @@ def snapshot_provider(provider: Provider) -> Provider:
             raise ConfigurationError("Invalid reasoning mapping")
         seen.add(model.id)
     return deepcopy(provider)
+
+
+def load_catalog(text: str) -> tuple[Model, ...]:
+    """Decode maintained package data; provider validation follows in its factory."""
+    try:
+        entries = json.loads(text)
+        if not isinstance(entries, list):
+            raise TypeError
+        models = []
+        for entry in entries:
+            data = dict(entry)
+            pricing = dict(data.pop("pricing", {}))
+            tiers = pricing.pop("tiers", [])
+            for rates in [pricing, *tiers]:
+                for field in ("input", "output", "cache_read", "cache_write"):
+                    rate = rates.get(field)
+                    if rate is not None:
+                        if not isinstance(rate, str):
+                            raise TypeError
+                        rates[field] = Decimal(rate)
+            pricing["tiers"] = tuple(PricingTier(**tier) for tier in tiers)
+            capabilities = dict(data.pop("capabilities", {}))
+            if "input_modalities" in capabilities:
+                capabilities["input_modalities"] = tuple(capabilities["input_modalities"])
+            source = data.pop("source", None)
+            compat = ModelCompat(**data.pop("compat", {}))
+            models.append(
+                Model(
+                    **data,
+                    capabilities=ModelCapabilities(**capabilities),
+                    pricing=Pricing(**pricing),
+                    compat=compat,
+                    source=CatalogSource(**source) if source is not None else None,
+                )
+            )
+        return tuple(models)
+    except (TypeError, ValueError, KeyError, InvalidOperation):
+        raise ConfigurationError("Invalid static catalog structure") from None
