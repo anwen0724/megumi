@@ -40,7 +40,6 @@ def test_same_source_keeps_snapshot_bytes_and_fetch_date(tool):
     assert before == {p.name: p.read_bytes() for p in (tool.inputs / "snapshots").glob("*.json")}
 
 
-
 @pytest.mark.parametrize("bad", ["missing", "empty", "invalid-json", "timeout", "http"])
 def test_failed_fetch_preserves_all_selected_snapshots(tool, bad):
     good = response(openai={"new-model": raw_model()}, deepseek={"new-model": raw_model()})

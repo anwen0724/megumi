@@ -15,7 +15,7 @@ SOURCE_URL = "https://models.dev/api.json"
 def download(url: str, timeout: float) -> bytes:
     """Bound network access to the explicit fetch operation."""
     with urlopen(url, timeout=timeout) as response:
-        return response.read()
+        return bytes(response.read())
 
 
 class CatalogTool:
