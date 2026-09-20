@@ -1,13 +1,16 @@
 """Maintain provider model catalogs through explicit development operations."""
 
+import argparse
 import re
+import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
 
-from app.ai.scripts.catalog_io import CatalogError, decode, digest, encode
+from app.ai.scripts.catalog_io import CatalogError, decode, digest, encode, publish
+from app.ai.scripts.catalog_transform import fields, generate_catalog
 
 SOURCE_URL = "https://models.dev/api.json"
 
@@ -82,7 +85,153 @@ class CatalogTool:
                     continue
             pending[target] = encode(snapshot)
             reports.append(f"{identity}: fetched {SOURCE_URL}")
-        for target, content in pending.items():
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content)
+        publish(pending)
         return reports
+
+    def generate(
+        self, providers: list[str] | None = None, *, write: bool = False, check: bool = False
+    ) -> tuple[int, list[str]]:
+        """Build offline, report differences and optionally publish selected results."""
+        selected = self.select(providers)
+        if write and check:
+            raise CatalogError("check cannot write")
+        manifest_path = self.output / "manifest.json"
+        old_manifest: dict[str, Any] = (
+            decode(manifest_path.read_bytes())
+            if manifest_path.exists()
+            else {"schema_version": 1, "providers": {}}
+        )
+        manifest: dict[str, Any] = {"schema_version": 1, "providers": dict(old_manifest["providers"])}
+        pending: dict[Path, bytes] = {}
+        report: list[str] = []
+        changed = False
+        for identity in selected:
+            raw_snapshot = (self.inputs / "snapshots" / f"{identity}.json").read_bytes()
+            snapshot = decode(raw_snapshot)
+            models, traces, discovery = generate_catalog(snapshot, self.rules[identity])
+            report.append(
+                f"{identity}: source {snapshot['source_url']} fetched {snapshot['fetched_at']}"
+            )
+            report.extend(f"{identity}: {item}" for item in discovery)
+            candidate = encode(models)
+            target = self.output / f"{identity}.json"
+            previous = target.read_bytes() if target.exists() else None
+            entry = {
+                "snapshot_hash": digest(raw_snapshot),
+                "rules_hash": digest(encode(self.rules[identity])),
+                "generator_hash": generator_hash(),
+                "output_hash": digest(candidate),
+                "source_url": snapshot["source_url"],
+                "fetched_at": snapshot["fetched_at"],
+                "models": traces,
+            }
+            if previous != candidate:
+                changed = True
+                report.extend(differences(identity, previous, models))
+            if old_manifest["providers"].get(identity) != entry:
+                changed = True
+                report.append(f"{identity}: manifest differs")
+            manifest["providers"][identity] = entry
+            pending[target] = candidate
+        if providers is None and check:
+            actual = {path.stem for path in self.output.glob("*.json")} - {"manifest"}
+            expected = set(self.rules)
+            if actual != expected or set(old_manifest["providers"]) != expected:
+                changed = True
+                report.append(
+                    f"catalog collection differs: expected {sorted(expected)}, "
+                    f"files {sorted(actual)}, manifest {sorted(old_manifest['providers'])}"
+                )
+        pending[manifest_path] = encode(manifest)
+        if (
+            providers is None
+            and check
+            and manifest_path.exists()
+            and manifest_path.read_bytes() != pending[manifest_path]
+        ):
+            changed = True
+            report.append("manifest representation differs")
+        if write:
+            publish(pending)
+        report.append("different" if changed else "consistent")
+        return (1 if check and changed else 0), report
+
+
+def generator_hash() -> str:
+    """Fingerprint conversion code and runtime contracts, independent of line endings."""
+    folder = Path(__file__).resolve().parent
+    sources = sorted(folder.glob("*.py")) + [
+        folder.parent / name for name in ("catalog.py", "model.py", "provider.py")
+    ]
+    return digest(
+        b"".join(
+            path.name.encode() + b"\0" + path.read_bytes().replace(b"\r\n", b"\n")
+            for path in sources
+        )
+    )
+
+
+def differences(identity: str, previous: bytes | None, models: list[dict[str, Any]]) -> list[str]:
+    """Describe model additions, removals and changed fields without using old data as input."""
+    try:
+        entries = decode(previous) if previous is not None else []
+        old = {item["id"]: item for item in entries}
+    except (ValueError, KeyError, TypeError):
+        return [f"{identity}: saved catalog is invalid; replacing with validated candidate"]
+    new = {item["id"]: item for item in models}
+    report = [f"{identity}/{key}: added" for key in sorted(new.keys() - old.keys())]
+    report.extend(f"{identity}/{key}: removed" for key in sorted(old.keys() - new.keys()))
+    for key in sorted(new.keys() & old.keys()):
+        before, after = fields(old[key]), fields(new[key])
+        for field in sorted(before.keys() | after.keys()):
+            if before.get(field) != after.get(field) or (field in before) != (field in after):
+                report.append(
+                    f"{identity}/{key}.{field}: {before.get(field)!r} -> {after.get(field)!r}"
+                )
+    if not report:
+        report.append(f"{identity}: JSON representation differs")
+    return report
+
+
+def main(argv: list[str] | None = None, *, tool: CatalogTool | None = None) -> int:
+    """Run one explicit maintenance operation and return its documented exit code."""
+    parser = argparse.ArgumentParser(description="Maintain offline provider model catalogs")
+    commands = parser.add_subparsers(dest="operation", required=True)
+    for operation in ("fetch", "generate", "check"):
+        command = commands.add_parser(operation)
+        command.add_argument("--provider", action="append", dest="providers")
+        if operation == "generate":
+            command.add_argument("--write", action="store_true")
+    try:
+        args = parser.parse_args(argv)
+    except SystemExit as exc:
+        return int(exc.code or 0)
+    try:
+        active = tool if tool is not None else default_tool()
+        if args.operation == "fetch":
+            report = active.fetch(args.providers)
+            status = 0
+        else:
+            status, report = active.generate(
+                args.providers, write=getattr(args, "write", False), check=args.operation == "check"
+            )
+        for line in report:
+            print(line)
+        return status
+    except (CatalogError, OSError, KeyError, TypeError, AttributeError) as exc:
+        print(f"Catalog error: {exc}", file=sys.stderr)
+        return 2
+
+
+def default_tool() -> CatalogTool:
+    """Resolve package-owned inputs, never the caller's current directory."""
+    folder = Path(__file__).resolve().parent
+    inputs = folder / "catalog_inputs"
+    rules = decode((inputs / "rules.json").read_bytes())
+    if rules.get("schema_version") != 1 or not isinstance(rules.get("providers"), dict):
+        raise CatalogError("Invalid rules document")
+    return CatalogTool(inputs, folder.parent / "providers" / "data", rules["providers"])
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

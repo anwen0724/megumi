@@ -2,7 +2,11 @@
 
 import hashlib
 import json
+import os
+import shutil
+import tempfile
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 
@@ -59,3 +63,58 @@ def encode(value: Any) -> bytes:
 def digest(data: bytes) -> str:
     """Content address for stable source and artifact identity."""
     return hashlib.sha256(data).hexdigest()
+
+
+def publish(pending: dict[Path, bytes]) -> None:
+    """Stage every file and backup first; recover ordinary replacement failures."""
+    changes = {
+        path: value
+        for path, value in pending.items()
+        if not path.exists() or path.read_bytes() != value
+    }
+    if not changes:
+        return
+    parents = {path.parent.resolve() for path in changes}
+    if len(parents) != 1:
+        raise CatalogError("Publication requires one destination directory")
+    parent = parents.pop()
+    parent.mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix=".catalog-", dir=parent))
+    records: list[tuple[Path, Path, Path | None]] = []
+    installed: list[tuple[Path, Path | None]] = []
+    preserve = False
+    try:
+        for index, (target, content) in enumerate(changes.items()):
+            staged = folder / f"{index}.new"
+            staged.write_bytes(content)
+            backup = folder / f"{index}.bak" if target.exists() else None
+            if backup is not None:
+                backup.write_bytes(target.read_bytes())
+            records.append((target, staged, backup))
+        for target, staged, backup in records:
+            os.replace(staged, target)
+            installed.append((target, backup))
+    except OSError as exc:
+        failures = []
+        for target, backup in reversed(installed):
+            try:
+                if backup is None:
+                    target.unlink()
+                else:
+                    restore = backup.with_suffix(".restore")
+                    restore.write_bytes(backup.read_bytes())
+                    os.replace(restore, target)
+            except OSError:
+                failures.append(str(target))
+        if failures:
+            preserve = True
+            raise CatalogError(
+                f"Publication failed: {exc}; rollback failed for {failures}; backups: {folder}"
+            ) from exc
+        raise CatalogError(f"Publication failed: {exc}; old files restored") from exc
+    finally:
+        if not preserve:
+            # Only this call's newly created directory can be cleaned up.
+            if folder.resolve().parent != parent:
+                raise CatalogError(f"Unexpected staging path: {folder}")
+            shutil.rmtree(folder)
