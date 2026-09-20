@@ -48,6 +48,8 @@ def validate_url(value: str) -> None:
 def validate_headers(headers: Mapping[str, str | None]) -> None:
     """Validate header syntax without echoing potentially sensitive values."""
     for name, value in headers.items():
+        if name.lower() in {"authorization", "host", "content-length"}:
+            raise ConfigurationError("Cannot override a managed header")
         if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", name):
             raise ConfigurationError("Invalid header name")
         if value is not None and ("\r" in value or "\n" in value):
