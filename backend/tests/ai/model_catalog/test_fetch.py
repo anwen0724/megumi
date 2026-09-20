@@ -78,3 +78,48 @@ def test_fetch_only_selected_provider(tool):
     previous = (tool.inputs / "snapshots/deepseek.json").read_bytes()
     tool.fetch(["openai"], transport=lambda *_: response(openai={"second": raw_model("second")}))
     assert (tool.inputs / "snapshots/deepseek.json").read_bytes() == previous
+
+
+def test_download_identifies_catalog_tool_to_public_source(monkeypatch):
+    from io import BytesIO
+    from urllib.error import HTTPError
+    from urllib.request import Request
+
+    from app.ai.scripts import model_catalog
+
+    def public_source(request, *, timeout):
+        if (
+            not isinstance(request, Request)
+            or request.get_header("User-agent") != "Megumi-ModelCatalog/1.0"
+        ):
+            raise HTTPError("https://models.dev/api.json", 403, "Forbidden", None, None)
+        assert request.full_url == "https://models.dev/api.json"
+        assert timeout == 30
+        assert request.get_header("Authorization") is None
+        return BytesIO(b'{"ok": true}')
+
+    monkeypatch.setattr(model_catalog, "urlopen", public_source)
+    assert model_catalog.download("https://models.dev/api.json", 30) == b'{"ok": true}'
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"openai":{"models":{"a":{"id":"a"},"b":{"id":"a"}}}}',
+        b'{"openai":{"models":{"a":{"id":"a"},"a":{"id":"a"}}}}',
+        b'{"openai":{"id":"other","models":{"a":{"id":"a"}}}}',
+    ],
+)
+def test_invalid_upstream_identity_never_becomes_a_snapshot(tool, body):
+    with pytest.raises(CatalogError):
+        tool.fetch(["openai"], transport=lambda *_: body)
+    assert not tool.inputs.exists()
+
+
+def test_changed_boolean_is_not_equal_to_numeric_one_when_fetching(tool):
+    good = response(openai={"new-model": raw_model()})
+    tool.fetch(["openai"], transport=lambda *_: good)
+    before = (tool.inputs / "snapshots/openai.json").read_bytes()
+    changed = response(openai={"new-model": raw_model(tool_call=1)})
+    tool.fetch(["openai"], transport=lambda *_: changed)
+    assert (tool.inputs / "snapshots/openai.json").read_bytes() != before

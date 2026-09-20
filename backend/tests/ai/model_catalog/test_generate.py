@@ -131,3 +131,53 @@ def test_exact_prices_unknown_zero_and_currency_are_preserved():
     models, _, _ = generate_catalog(snapshot({"new-model": raw}), settings)
     loaded = load_catalog(encode(models).decode())[0]
     assert loaded.pricing.currency == "CNY" and loaded.pricing.input is None
+
+
+def test_verified_toggle_and_alias_rules_are_distinct_from_effort_list():
+    settings = rule("openai")
+    settings["toggle_map"] = {"off": "disabled"}
+    settings["reasoning_aliases"] = {"minimal": "low", "medium": "high"}
+    raw = raw_model(
+        reasoning=True,
+        reasoning_options=[{"type": "toggle"}, {"type": "effort", "values": ["low", "high"]}],
+    )
+    models, _, _ = generate_catalog(snapshot({"new-model": raw}), settings)
+    assert models[0]["capabilities"]["reasoning_levels"] == {
+        "off": "disabled",
+        "minimal": "low",
+        "low": "low",
+        "medium": "high",
+        "high": "high",
+    }
+
+
+def test_service_mode_prices_are_not_lost_or_assumed_standard():
+    raw = raw_model(
+        experimental={
+            "modes": {
+                "fast": {
+                    "cost": {"input": 4, "output": 8},
+                    "provider": {"body": {"service_tier": "priority"}},
+                }
+            }
+        }
+    )
+    models, _, _ = generate_catalog(snapshot({"new-model": raw}), rule("openai"))
+    assert any(
+        t["input"] == "4" and "priority" in t["condition"] for t in models[0]["pricing"]["tiers"]
+    )
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("schema_version", True),
+        ("source_url", "not-a-url"),
+        ("fetched_at", "not-a-date"),
+    ],
+)
+def test_source_metadata_is_validated_before_generation(field, value):
+    data = snapshot({"new-model": raw_model()})
+    data[field] = value
+    with pytest.raises(CatalogError):
+        generate_catalog(data, rule("openai"))

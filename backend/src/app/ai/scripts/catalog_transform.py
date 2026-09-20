@@ -1,7 +1,7 @@
 """Build runtime catalogs from source facts and explicit provider rules."""
 
 from copy import deepcopy
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -32,6 +32,9 @@ def reasoning(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, str]:
             result.update(rule["toggle_map"])
         else:
             raise CatalogError(f"reasoning: unsupported option {option}")
+    for level, target in rule.get("reasoning_aliases", {}).items():
+        if target in result.values():
+            result[level] = target
     return result
 
 
@@ -112,6 +115,19 @@ def pricing(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, Any]:
                 {"condition": f"{scope}; input context > {size}{upper} tokens", **tier_rates}
             )
         result.update(dict.fromkeys(RATES))
+    modes = raw.get("experimental", {}).get("modes", {})
+    for name, mode in sorted(modes.items()):
+        if "cost" not in mode:
+            continue
+        body = mode.get("provider", {}).get("body", {})
+        service = body.get("service_tier")
+        if not isinstance(service, str) or body.keys() != {"service_tier"}:
+            raise CatalogError(f"pricing mode {name}: uninterpretable service condition")
+        condition = f"service_tier={service}; mode={name}"
+        if thresholds and not mode["cost"].get("tiers"):
+            condition += "; context range not supplied by upstream"
+        mode_pricing = pricing({"cost": mode["cost"]}, {**rule, "price_condition": condition})
+        result["tiers"].extend(mode_pricing["tiers"])
     if rule["currency"] != rule["source_currency"]:
         result.update(dict.fromkeys(RATES))
         result["tiers"] = []
@@ -141,6 +157,7 @@ def base_model(raw: dict[str, Any], rule: dict[str, Any], report: list[str]) -> 
         },
         "source": None,
         "pricing": pricing(raw, rule),
+        "compat": deepcopy(rule.get("compat", {})),
     }
     for output, source in (("context_window", "context"), ("max_output_tokens", "output")):
         if source in limits:
@@ -155,7 +172,22 @@ def validate_model(model: dict[str, Any], rule: dict[str, Any]) -> None:
             raise CatalogError(f"{field}: expected positive integer")
     if not isinstance(model.get("name"), str) or not model["name"].strip():
         raise CatalogError("name: expected nonempty string")
-    caps = model["capabilities"]
+    caps = model.get("capabilities")
+    if (
+        not isinstance(caps, dict)
+        or not {"tools", "temperature", "input_modalities", "reasoning_levels"} <= caps.keys()
+    ):
+        raise CatalogError("capabilities: incomplete model definition")
+    if not isinstance(caps["reasoning_levels"], dict) or not isinstance(
+        caps["input_modalities"], list
+    ):
+        raise CatalogError("capabilities: invalid modalities or reasoning mapping")
+    price = model.get("pricing")
+    if (
+        not isinstance(price, dict)
+        or not {"currency", "unit_tokens", *RATES, "tiers"} <= price.keys()
+    ):
+        raise CatalogError("pricing: a complete currency, unit and rate group is required")
     for field in ("temperature", "tools"):
         if type(caps.get(field)) is not bool:
             raise CatalogError(f"{field}: expected boolean")
@@ -178,9 +210,17 @@ def generate_catalog(
     snapshot: dict[str, Any], rule: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
     """Return validated models, provenance and discovery diagnostics."""
-    if snapshot.get("schema_version") != 1 or snapshot.get("content_hash") != digest(
-        encode(snapshot.get("data"))
-    ):
+    try:
+        validate_url(snapshot["source_url"])
+        if datetime.fromisoformat(snapshot["fetched_at"]).tzinfo is None:
+            raise ValueError("fetched_at requires a timezone")
+        if snapshot["data"].get("id") != rule["upstream_id"]:
+            raise ValueError("wrong upstream provider identity")
+    except (KeyError, ValueError, TypeError, AttributeError) as exc:
+        raise CatalogError(f"{rule['id']}: invalid snapshot source: {exc}") from exc
+    if type(snapshot.get("schema_version")) is not int or snapshot["schema_version"] != 1:
+        raise CatalogError(f"{rule['id']}: invalid snapshot schema_version")
+    if snapshot.get("content_hash") != digest(encode(snapshot.get("data"))):
         raise CatalogError(f"{rule['id']}: invalid snapshot version or hash")
     upstream = snapshot["data"]["models"]
     if not isinstance(upstream, dict) or not upstream:
@@ -223,6 +263,27 @@ def generate_catalog(
         }
         for model in models
     }
+    for model in models:
+        trace_fields = traces[model["id"]]["fields"]
+        for path, record in trace_fields.items():
+            source_path = SOURCE_PATHS.get(path)
+            if path.startswith("pricing."):
+                source_path = "cost"
+            if path.startswith("capabilities.reasoning_levels"):
+                source_path = "reasoning_options"
+            if path in {
+                "provider",
+                "api",
+                "pricing.currency",
+                "pricing.unit_tokens",
+            } or path.startswith("compat"):
+                record["kind"] = "rule"
+                record["rule_path"] = path.removeprefix("pricing.")
+            elif path == "source":
+                record["kind"] = "review_status"
+            else:
+                record["upstream_path"] = source_path or path
+            record["rule_sources"] = deepcopy(rule.get("rule_sources", []))
     for item in rule["supplements"]:
         evidence(item)
         model = deepcopy(item["model"])
@@ -268,10 +329,10 @@ def generate_catalog(
                 raise CatalogError(f"{identity}: missing parent for {path}")
             parent = parent[key]
         current = parent.get(parts[-1], MISSING)
-        if current == item["replacement"]:
+        if encode(current) == encode(item["replacement"]):
             report.append(f"{identity}.{path}: redundant patch")
             status = "redundant"
-        elif current == item["expected"] and type(current) is type(item["expected"]):
+        elif encode(current) == encode(item["expected"]):
             parent[parts[-1]] = deepcopy(item["replacement"])
             status = "applied"
         else:
@@ -302,7 +363,7 @@ def generate_catalog(
         for path, value in item["fields"].items():
             if path not in current_fields:
                 stale.append(path)
-            elif current_fields[path] == value and type(current_fields[path]) is type(value):
+            elif encode(current_fields[path]) == encode(value):
                 matched.append(path)
                 traces[identity]["fields"][path].update(
                     {"verified": True, "review_source": item["source"]}
@@ -317,6 +378,14 @@ def generate_catalog(
     for model in models:
         for item in traces[model["id"]]["patches"]:
             model["source"] = latest_source(model.get("source"), item["source"])
+        final_fields = fields(model)
+        trace_fields = traces[model["id"]]["fields"]
+        for path in list(trace_fields):
+            if path not in final_fields:
+                del trace_fields[path]
+        for path, value in final_fields.items():
+            record = trace_fields.setdefault(path, {"kind": "review_status"})
+            record["value"] = deepcopy(value)
         try:
             validate_model(model, rule)
         except CatalogError as exc:
@@ -380,3 +449,12 @@ def latest_source(previous: Any, current: dict[str, Any]) -> dict[str, Any]:
     if previous is None or current["checked_at"] >= previous["checked_at"]:
         return deepcopy(current)
     return dict(previous)
+
+
+SOURCE_PATHS = {
+    "context_window": "limit.context",
+    "max_output_tokens": "limit.output",
+    "capabilities.input_modalities": "modalities.input",
+    "capabilities.tools": "tool_call",
+    "capabilities.temperature": "temperature",
+}

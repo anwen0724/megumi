@@ -4,6 +4,8 @@ import json
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from hashlib import sha256
+from importlib.resources import files
 
 import pytest
 
@@ -43,6 +45,12 @@ def test_builtin_catalog_has_valid_identity_metadata_and_sources(
         env_var,
         base_url,
     )
+    artifact = files("app.ai.providers").joinpath(f"data/{identity}.json").read_bytes()
+    manifest = json.loads(
+        files("app.ai.providers").joinpath("data/manifest.json").read_text("utf-8")
+    )
+    provenance = manifest["providers"][identity]
+    assert provenance["output_hash"] == sha256(artifact).hexdigest()
     models = create_models([provider]).get_models(identity)
     assert models
     for model in models:
@@ -50,9 +58,10 @@ def test_builtin_catalog_has_valid_identity_metadata_and_sources(
         assert model.api == api
         assert model.context_window > 0
         assert model.max_output_tokens > 0
-        assert model.source is not None
-        assert model.source.url.startswith("https://")
-        assert date.fromisoformat(model.source.checked_at) <= date.today()
+        assert provenance["models"][model.id]["fields"]
+        if model.source is not None:
+            assert model.source.url.startswith("https://")
+            assert date.fromisoformat(model.source.checked_at) <= date.today()
 
 
 @pytest.mark.parametrize("factory", [deepseek_provider, openai_provider])

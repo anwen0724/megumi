@@ -225,3 +225,46 @@ def test_whole_cny_price_correction_keeps_time_conditions():
     settings["patches"] = [patch("pricing.currency", "USD", "CNY")]
     with pytest.raises(CatalogError):
         generate_catalog(snapshot({"new-model": raw_model()}), settings)
+
+
+@pytest.mark.parametrize(
+    "remove",
+    [
+        "pricing",
+        "capabilities.input_modalities",
+        "capabilities.reasoning_levels",
+    ],
+)
+def test_full_supplements_cannot_use_runtime_defaults_for_missing_facts(remove):
+    settings = rule("openai")
+    extra = definition()
+    parent = extra
+    parts = remove.split(".")
+    for key in parts[:-1]:
+        parent = parent[key]
+    del parent[parts[-1]]
+    settings["supplements"] = [{"model": extra, "source": SOURCE, "reason": "extra"}]
+    with pytest.raises(CatalogError):
+        generate_catalog(snapshot({"new-model": raw_model()}), settings)
+
+
+def test_field_provenance_distinguishes_rule_decisions_from_upstream_facts():
+    from app.ai.scripts.catalog_transform import fields
+
+    settings = rule("openai")
+    settings["patches"] = [patch("max_output_tokens", 2048, 512)]
+    models, traces, _ = generate_catalog(snapshot({"new-model": raw_model()}), settings)
+    recorded = traces["new-model"]["fields"]
+    assert recorded["api"]["kind"] == "rule"
+    assert recorded["context_window"]["upstream_path"] == "limit.context"
+    assert set(recorded) == set(fields(models[0]))
+    for path, value in fields(models[0]).items():
+        assert recorded[path]["value"] == value
+
+
+def test_boolean_replacement_cannot_be_mistaken_for_a_redundant_integer():
+    settings = rule("openai")
+    settings["patches"] = [patch("max_output_tokens", 2048, True)]
+    raw = raw_model(limit={"context": 8192, "output": 1})
+    with pytest.raises(CatalogError):
+        generate_catalog(snapshot({"new-model": raw}), settings)

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from app.ai.scripts.catalog_io import CatalogError, decode, digest, encode, publish
 from app.ai.scripts.catalog_transform import fields, generate_catalog
@@ -17,7 +17,10 @@ SOURCE_URL = "https://models.dev/api.json"
 
 def download(url: str, timeout: float) -> bytes:
     """Bound network access to the explicit fetch operation."""
-    with urlopen(url, timeout=timeout) as response:
+    request = Request(
+        url, headers={"User-Agent": "Megumi-ModelCatalog/1.0", "Accept": "application/json"}
+    )
+    with urlopen(request, timeout=timeout) as response:
         return bytes(response.read())
 
 
@@ -70,6 +73,18 @@ class CatalogTool:
                 or not data["models"]
             ):
                 raise CatalogError(f"{identity}: missing or empty upstream models")
+            if data.get("id") != self.rules[identity]["upstream_id"]:
+                raise CatalogError(f"{identity}: wrong upstream provider identity")
+            for model_id, model in data["models"].items():
+                if (
+                    not isinstance(model_id, str)
+                    or not model_id.strip()
+                    or not isinstance(model, dict)
+                    or model.get("id") != model_id
+                ):
+                    raise CatalogError(
+                        f"{identity}/{model_id}: inconsistent or duplicate model identity"
+                    )
             snapshot = {
                 "schema_version": 1,
                 "source_url": SOURCE_URL,
@@ -80,7 +95,10 @@ class CatalogTool:
             target = self.inputs / "snapshots" / f"{identity}.json"
             if target.exists():
                 previous = decode(target.read_bytes())
-                if previous.get("data") == data:
+                if (
+                    encode(previous.get("data")) == encode(data)
+                    and previous.get("content_hash") == snapshot["content_hash"]
+                ):
                     reports.append(f"{identity}: unchanged {previous['fetched_at']}")
                     continue
             pending[target] = encode(snapshot)
@@ -101,7 +119,10 @@ class CatalogTool:
             if manifest_path.exists()
             else {"schema_version": 1, "providers": {}}
         )
-        manifest: dict[str, Any] = {"schema_version": 1, "providers": dict(old_manifest["providers"])}
+        manifest: dict[str, Any] = {
+            "schema_version": 1,
+            "providers": dict(old_manifest["providers"]),
+        }
         pending: dict[Path, bytes] = {}
         report: list[str] = []
         changed = False
@@ -128,7 +149,7 @@ class CatalogTool:
             if previous != candidate:
                 changed = True
                 report.extend(differences(identity, previous, models))
-            if old_manifest["providers"].get(identity) != entry:
+            if encode(old_manifest["providers"].get(identity)) != encode(entry):
                 changed = True
                 report.append(f"{identity}: manifest differs")
             manifest["providers"][identity] = entry
@@ -184,9 +205,12 @@ def differences(identity: str, previous: bytes | None, models: list[dict[str, An
     for key in sorted(new.keys() & old.keys()):
         before, after = fields(old[key]), fields(new[key])
         for field in sorted(before.keys() | after.keys()):
-            if before.get(field) != after.get(field) or (field in before) != (field in after):
+            if encode(before.get(field)) != encode(after.get(field)) or (field in before) != (
+                field in after
+            ):
                 report.append(
-                    f"{identity}/{key}.{field}: {before.get(field)!r} -> {after.get(field)!r}"
+                    f"{identity}/{key}.{field}: {before.get(field, '<missing>')!r} -> "
+                    f"{after.get(field, '<missing>')!r}"
                 )
     if not report:
         report.append(f"{identity}: JSON representation differs")
