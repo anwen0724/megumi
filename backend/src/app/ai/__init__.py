@@ -66,6 +66,7 @@ from app.ai.options import CallOptions, ProviderResponse, SimpleOptions
 from app.ai.provider import Provider
 from app.ai.providers.deepseek import deepseek_provider
 from app.ai.providers.openai import openai_provider
+from app.ai.runtime.retry import retry_provider_request
 from app.ai.tools.arguments import (
     parse_partial_arguments,
     validate_tool_arguments,
@@ -167,6 +168,7 @@ __all__ = [
     "resolve_json_schema_strict_sampling",
     "resolve_transcript",
     "resolve_transcript_tools",
+    "retry_provider_request",
     "to_tool_declaration",
     "transform_messages",
     "validate_tool_arguments",
