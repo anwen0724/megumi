@@ -9,6 +9,7 @@ from app.ai.errors import (
     ConfigurationError,
     LifecycleError,
     MessageDecodeError,
+    StrictSchemaError,
     ToolValidationError,
 )
 from app.ai.messages import (
@@ -51,6 +52,7 @@ from app.ai.tools.arguments import (
     validate_tool_arguments,
     validate_tool_call,
 )
+from app.ai.tools.schema import make_strict_json_schema, resolve_json_schema_strict_sampling
 from app.ai.transcript import (
     declarations_equal,
     get_current_system_message,
@@ -94,6 +96,7 @@ __all__ = [
     "Provider",
     "ResolvedAuth",
     "StopReason",
+    "StrictSchemaError",
     "SystemMessage",
     "TextContent",
     "ThinkingContent",
@@ -118,10 +121,12 @@ __all__ = [
     "get_supported_thinking_levels",
     "get_system_message_text",
     "get_tool_state_changes",
+    "make_strict_json_schema",
     "normalize_context",
     "openai_provider",
     "parse_partial_arguments",
     "render_system_message_update",
+    "resolve_json_schema_strict_sampling",
     "resolve_transcript",
     "resolve_transcript_tools",
     "to_tool_declaration",

@@ -37,3 +37,7 @@ class ToolValidationError(ValueError):
         self.path = path
         self.reason = reason
         super().__init__(f"{path}: {reason}")
+
+
+class StrictSchemaError(ValueError):
+    """A required provider strict schema cannot preserve the declared tool contract."""
