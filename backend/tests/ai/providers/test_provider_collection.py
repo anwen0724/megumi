@@ -107,3 +107,54 @@ async def test_closed_collection_rejects_service_operations(provider, operation)
             await models.get_available_models()
         else:
             await models.resolve_auth(provider.models[0])
+
+
+@pytest.mark.asyncio
+async def test_provider_management_returns_snapshots_and_preserves_credentials(provider):
+    from dataclasses import replace
+
+    from app.ai import ApiKeyCredential, InMemoryCredentialStore
+
+    store = InMemoryCredentialStore()
+    await store.set(provider.id, ApiKeyCredential("fake-key"))
+    other = replace(provider, id="other", models=[])
+    models = create_models([provider, other], credentials=store)
+    snapshot = models.get_provider(provider.id)
+    assert models.get_provider("missing") is None
+    assert [p.id for p in models.get_providers()] == ["sample", "other"]
+    snapshot.headers["external"] = "value"
+    assert models.get_provider(provider.id).headers == {}
+    models.delete_provider(provider.id)
+    models.delete_provider("missing")
+    assert models.get_provider(provider.id) is None
+    assert snapshot.models[0].id == "small"
+    assert models.get_models() == ()
+    assert [p.id for p in models.get_providers()] == ["other"]
+    models.clear()
+    assert models.get_providers() == ()
+    assert (await store.read(provider.id)).key == "fake-key"
+
+
+@pytest.mark.asyncio
+async def test_provider_can_declare_multiple_protocols_without_fake_adapters(provider):
+    from dataclasses import replace
+
+    from app.ai import AuthOverride, ConfigurationError
+
+    response_model = replace(provider.models[0], id="responses", api="openai-responses")
+    mixed = replace(
+        provider,
+        api=("openai-completions", "openai-responses"),
+        models=[provider.models[0], response_model],
+    )
+    models = create_models([mixed])
+    assert [m.api for m in models.get_models()] == ["openai-completions", "openai-responses"]
+    assert (
+        await models.resolve_auth(response_model, AuthOverride(api_key="fake-key"))
+    ).key == "fake-key"
+    with pytest.raises(ConfigurationError):
+        models.set_provider(replace(mixed, api=("openai-completions",)))
+    assert len(models.get_models()) == 2
+    for apis in ((), ("unknown",), ("openai-completions", "openai-completions")):
+        with pytest.raises(ConfigurationError):
+            create_models([replace(provider, api=apis)])

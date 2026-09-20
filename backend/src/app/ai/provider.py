@@ -13,7 +13,12 @@ class Provider:
     id: str
     name: str
     base_url: str
-    api: str
+    api: str | tuple[str, ...]
     env_var: str
     models: Sequence[Model] = ()
     headers: Mapping[str, str | None] = field(default_factory=dict)
+
+    @property
+    def apis(self) -> tuple[str, ...]:
+        """规范化声明以供目录校验。这里不持有可执行适配器。"""
+        return (self.api,) if isinstance(self.api, str) else self.api

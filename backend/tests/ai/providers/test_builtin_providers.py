@@ -79,8 +79,9 @@ def test_custom_catalog_replaces_defaults_and_uses_common_validation(factory):
     assert factory(models=[]).models == []
     with pytest.raises(ConfigurationError):
         factory(models=[custom, custom])
-    with pytest.raises(ConfigurationError):
-        factory(headers={"Authorization": "fake-not-allowed"})
+    assert factory(headers={"Authorization": "Custom fake-token"}).headers == {
+        "Authorization": "Custom fake-token"
+    }
 
 
 def test_catalog_preserves_conditional_prices_and_sampling_support():

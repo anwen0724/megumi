@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import Literal
 
 from app.ai.auth.memory import InMemoryCredentialStore
-from app.ai.auth.resolve import resolve_api_key, resolve_auth
+from app.ai.auth.resolve import has_auth_header, merge_headers, resolve_api_key, resolve_auth
 from app.ai.auth.types import AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.catalog import snapshot_provider
 from app.ai.errors import AuthError, ConfigurationError, LifecycleError
@@ -42,6 +42,22 @@ class Models:
         snapshot = snapshot_provider(provider)
         self._providers[snapshot.id] = snapshot
 
+    def get_provider(self, provider_id: str) -> Provider | None:
+        """返回供应商独立快照。不存在时返回 None。"""
+        return deepcopy(self._providers.get(provider_id))
+
+    def get_providers(self) -> tuple[Provider, ...]:
+        """列出已设置的供应商。调用方修改副本不会污染集合。"""
+        return tuple(deepcopy(provider) for provider in self._providers.values())
+
+    def delete_provider(self, provider_id: str) -> None:
+        """删除配置但保留凭据和已取得的快照。"""
+        self._providers.pop(provider_id, None)
+
+    def clear(self) -> None:
+        """清空供应商配置。外部凭据的生命周期由存储管理。"""
+        self._providers.clear()
+
     def get_model(self, provider: str, model_id: str) -> Model | None:
         """Look up a provider-qualified model, returning None when absent."""
         self._ensure_open()
@@ -72,13 +88,17 @@ class Models:
         )
         available: list[Model] = []
         for entry in entries:
+            key: str | None = None
             try:
-                await resolve_api_key(entry, AuthOverride(), self._credentials, None)
+                key, _ = await resolve_api_key(entry, AuthOverride(), self._credentials, None)
             except AuthError as exc:
-                if exc.code == "not_configured":
-                    continue
-                raise
-            available.extend(deepcopy(model) for model in entry.models)
+                if exc.code != "not_configured":
+                    raise
+            # 每个供应商只读一次凭据, 再逐模型判断静态授权头。
+            for model in entry.models:
+                headers = merge_headers(entry.headers, model.headers)
+                if key is not None or has_auth_header(headers):
+                    available.append(deepcopy(model))
         return tuple(available)
 
     async def resolve_auth(

@@ -48,7 +48,7 @@ async def test_headers_merge_case_insensitively_and_null_removes_defaults(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("name", ["Authorization", "aUtHoRiZaTiOn", "Host", "CONTENT-LENGTH"])
+@pytest.mark.parametrize("name", ["Host", "CONTENT-LENGTH"])
 @pytest.mark.parametrize("layer", ["provider", "model", "request"])
 async def test_managed_headers_cannot_be_overridden(
     provider: Provider, name: str, layer: str
@@ -124,3 +124,205 @@ async def test_concurrent_resolution_freezes_headers_before_waiting(provider: Pr
     assert (first.key, first.headers["x-request"]) == ("fake-stored", "first")
     assert (second.key, second.headers["x-request"]) == ("fake-explicit", "second")
     assert first.headers is not second.headers
+
+
+@pytest.mark.asyncio
+async def test_authorization_can_override_or_remove_default_bearer(provider):
+    for authorization in ("Custom fake-token", None):
+        result = await resolve_auth(
+            provider,
+            provider.models[0],
+            AuthOverride(api_key="fake-key", headers={"Authorization": authorization}),
+            credentials=InMemoryCredentialStore(),
+        )
+        assert result.headers.get("authorization") == authorization
+        assert result.key == "fake-key"
+
+
+@pytest.mark.asyncio
+async def test_header_only_auth_is_available_per_model_and_can_be_removed(provider):
+    from app.ai import AuthError, create_models
+
+    authenticated = replace(provider.models[0], headers={"Authorization": "Custom fake-token"})
+    unauthenticated = replace(provider.models[0], id="no-header")
+    models = create_models([replace(provider, models=[authenticated, unauthenticated])])
+    assert await models.get_available_models() == (authenticated,)
+    result = await models.resolve_auth(authenticated)
+    assert result.key is None and result.source == "headers"
+    assert result.headers["authorization"] == "Custom fake-token"
+    with pytest.raises(AuthError) as caught:
+        await models.resolve_auth(authenticated, AuthOverride(headers={"Authorization": None}))
+    assert caught.value.code == "not_configured"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["explicit", "stored", "store"])
+async def test_header_auth_never_masks_invalid_keys_or_store_failure(provider, fault):
+    from app.ai import ApiKeyCredential, AuthError
+
+    class Store(InMemoryCredentialStore):
+        async def read(self, provider_id):
+            if fault == "store":
+                raise OSError("private-store-details")
+            return ApiKeyCredential(" ")
+
+    with pytest.raises(AuthError) as caught:
+        await resolve_auth(
+            provider,
+            provider.models[0],
+            AuthOverride(
+                api_key=" " if fault == "explicit" else None,
+                headers={"Authorization": "Custom fake-token"},
+            ),
+            credentials=Store(),
+        )
+    assert caught.value.code == (
+        "credential_store_error" if fault == "store" else "invalid_credential"
+    )
+
+
+@pytest.mark.asyncio
+async def test_scoped_environment_endpoint_and_async_transform_are_isolated(provider, monkeypatch):
+    import asyncio
+    import os
+
+    entered, release = asyncio.Event(), asyncio.Event()
+    monkeypatch.setenv("SAMPLE_API_KEY", "fake-process")
+    env = {"SAMPLE_API_KEY": "fake-first"}
+    seen = []
+
+    class BlockingStore(InMemoryCredentialStore):
+        async def read(self, provider_id):
+            entered.set()
+            await release.wait()
+            return None
+
+    async def transform(headers):
+        seen.append(dict(headers))
+        await asyncio.sleep(0)
+        return {**headers, "Authorization": "Custom transformed", "X-Request": "transformed"}
+
+    first = asyncio.create_task(
+        resolve_auth(
+            replace(provider, headers={"X-Request": "provider"}),
+            replace(provider.models[0], headers={"X-Request": "model"}),
+            AuthOverride(
+                env=env,
+                base_url="https://auth-first.test/v1",
+                headers={"X-Request": "request"},
+                transform_headers=transform,
+            ),
+            credentials=BlockingStore(),
+        )
+    )
+    await entered.wait()
+    try:
+        env["SAMPLE_API_KEY"] = "mutated"
+        second = await resolve_auth(
+            provider,
+            provider.models[0],
+            AuthOverride(
+                env={"SAMPLE_API_KEY": "fake-second"}, base_url="https://auth-second.test/v1"
+            ),
+            credentials=InMemoryCredentialStore(),
+        )
+    finally:
+        release.set()
+    result = await first
+    assert (result.key, result.base_url) == ("fake-first", "https://auth-first.test/v1")
+    assert (second.key, second.base_url) == ("fake-second", "https://auth-second.test/v1")
+    assert seen == [{"x-request": "request", "authorization": "Bearer fake-first"}]
+    assert result.headers == {"x-request": "transformed", "authorization": "Custom transformed"}
+    assert result.env == {"SAMPLE_API_KEY": "fake-first"}
+    assert os.environ["SAMPLE_API_KEY"] == "fake-process"
+    fallback = await resolve_auth(
+        provider,
+        provider.models[0],
+        AuthOverride(env={"OTHER": "local"}),
+        credentials=InMemoryCredentialStore(),
+    )
+    assert fallback.key == "fake-process"
+    assert "fake-first" not in repr(result)
+
+
+@pytest.mark.asyncio
+async def test_scoped_env_can_mask_external_key_and_transform_can_supply_auth(
+    provider, monkeypatch
+):
+    from app.ai import AuthError
+
+    monkeypatch.setenv("SAMPLE_API_KEY", "fake-process")
+    with pytest.raises(AuthError) as caught:
+        await resolve_auth(
+            provider,
+            provider.models[0],
+            AuthOverride(env={"SAMPLE_API_KEY": None}),
+            credentials=InMemoryCredentialStore(),
+        )
+    assert caught.value.code == "not_configured"
+    result = await resolve_auth(
+        provider,
+        provider.models[0],
+        AuthOverride(
+            env={"SAMPLE_API_KEY": None},
+            transform_headers=lambda _: {"Authorization": "Custom fake"},
+        ),
+        credentials=InMemoryCredentialStore(),
+    )
+    assert result.key is None and result.source == "headers"
+    assert result.headers == {"authorization": "Custom fake"}
+
+
+@pytest.mark.asyncio
+async def test_transform_failure_or_invalid_output_never_returns_partial_auth(provider):
+    from app.ai import ConfigurationError
+
+    def fail(headers):
+        raise RuntimeError("transform failed")
+
+    with pytest.raises(RuntimeError, match="transform failed"):
+        await resolve_auth(
+            provider,
+            provider.models[0],
+            AuthOverride(api_key="fake-key", transform_headers=fail),
+            credentials=InMemoryCredentialStore(),
+        )
+    for transform in (
+        lambda _: {"Host": "forbidden"},
+        lambda _: {"X": "bad\nvalue"},
+        lambda _: None,
+    ):
+        with pytest.raises(ConfigurationError):
+            await resolve_auth(
+                provider,
+                provider.models[0],
+                AuthOverride(api_key="fake-key", transform_headers=transform),
+                credentials=InMemoryCredentialStore(),
+            )
+    with pytest.raises(ConfigurationError):
+        await resolve_auth(
+            provider,
+            provider.models[0],
+            AuthOverride(api_key="fake-key", base_url="/relative"),
+            credentials=InMemoryCredentialStore(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_bound_header_transform_keeps_its_callers_identity(provider):
+    class Transformer:
+        def __init__(self):
+            self.calls = []
+
+        def apply(self, headers):
+            self.calls.append(dict(headers))
+            return headers
+
+    transformer = Transformer()
+    await resolve_auth(
+        provider,
+        provider.models[0],
+        AuthOverride(api_key="fake-key", transform_headers=transformer.apply),
+        credentials=InMemoryCredentialStore(),
+    )
+    assert transformer.calls == [{"authorization": "Bearer fake-key"}]

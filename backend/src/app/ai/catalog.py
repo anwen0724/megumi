@@ -51,8 +51,12 @@ def validate_url(value: str) -> None:
 
 def validate_headers(headers: Mapping[str, str | None]) -> None:
     """Validate header syntax without echoing potentially sensitive values."""
+    if not isinstance(headers, Mapping):
+        raise ConfigurationError("Headers must be a mapping")
     for name, value in headers.items():
-        if name.lower() in {"authorization", "host", "content-length"}:
+        if not isinstance(name, str) or (value is not None and not isinstance(value, str)):
+            raise ConfigurationError("Invalid header name or value type")
+        if name.lower() in {"host", "content-length"}:
             raise ConfigurationError("Cannot override a managed header")
         if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", name):
             raise ConfigurationError("Invalid header name")
@@ -66,7 +70,12 @@ def snapshot_provider(provider: Provider) -> Provider:
         raise ConfigurationError(
             "Provider identity and authentication declaration must be nonempty"
         )
-    if provider.api not in SUPPORTED_APIS:
+    if (
+        not isinstance(provider.apis, tuple)
+        or not provider.apis
+        or any(not isinstance(api, str) or api not in SUPPORTED_APIS for api in provider.apis)
+        or len(set(provider.apis)) != len(provider.apis)
+    ):
         raise ConfigurationError("Unsupported protocol declaration")
     validate_url(provider.base_url)
     validate_headers(provider.headers)
@@ -76,7 +85,7 @@ def snapshot_provider(provider: Provider) -> Provider:
             not model.id.strip()
             or model.id in seen
             or model.provider != provider.id
-            or model.api != provider.api
+            or model.api not in provider.apis
         ):
             raise ConfigurationError("Invalid model identity or protocol declaration")
         for count in (model.context_window, model.max_output_tokens):

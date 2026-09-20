@@ -1,6 +1,6 @@
 """Credential contracts independent of persistence and HTTP clients."""
 
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -28,19 +28,28 @@ class CredentialStore(Protocol):
         ...
 
 
+type HeaderTransform = Callable[
+    [dict[str, str]], Mapping[str, str | None] | Awaitable[Mapping[str, str | None]]
+]
+
+
 @dataclass(frozen=True, slots=True)
 class AuthOverride:
     """Request-scoped overrides; never persisted back to a credential store."""
 
     api_key: str | None = field(default=None, repr=False)
     headers: Mapping[str, str | None] = field(default_factory=dict, repr=False)
+    env: Mapping[str, str | None] = field(default_factory=dict, repr=False)
+    base_url: str | None = None
+    transform_headers: HeaderTransform | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedAuth:
     """An independent request configuration with a redacted representation."""
 
-    key: str = field(repr=False)
-    source: Literal["explicit", "stored", "environment"]
+    key: str | None = field(repr=False)
+    source: Literal["explicit", "stored", "environment", "headers"]
     base_url: str
     headers: Mapping[str, str] = field(default_factory=dict, repr=False)
+    env: Mapping[str, str | None] = field(default_factory=dict, repr=False)
