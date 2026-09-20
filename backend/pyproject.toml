@@ -9,8 +9,11 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "jsonschema>=4.26.0",
+    "partial-json-parser>=0.2.1.1.post7",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "referencing>=0.37.0",
     "uvicorn[standard]>=0.53.0",
 ]
 
@@ -25,6 +28,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.8",
+    "types-jsonschema>=4.26.0.20260518",
 ]
 
 # --- ruff: linter + formatter (Java: Checkstyle + formatter) ---

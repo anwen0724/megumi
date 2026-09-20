@@ -28,3 +28,12 @@ class LifecycleError(RuntimeError):
 
 class MessageDecodeError(ValueError):
     """Saved message data does not satisfy the message contract."""
+
+
+class ToolValidationError(ValueError):
+    """An unknown tool or invalid argument with a caller-readable path and cause."""
+
+    def __init__(self, path: str, reason: str) -> None:
+        self.path = path
+        self.reason = reason
+        super().__init__(f"{path}: {reason}")

@@ -4,7 +4,13 @@ from app.ai.api.transform import transform_messages
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.types import ApiKeyCredential, AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.codec import decode_messages, encode_messages
-from app.ai.errors import AuthError, ConfigurationError, LifecycleError
+from app.ai.errors import (
+    AuthError,
+    ConfigurationError,
+    LifecycleError,
+    MessageDecodeError,
+    ToolValidationError,
+)
 from app.ai.messages import (
     AssistantContent,
     AssistantMessage,
@@ -40,6 +46,11 @@ from app.ai.models import Models, create_models
 from app.ai.provider import Provider
 from app.ai.providers.deepseek import deepseek_provider
 from app.ai.providers.openai import openai_provider
+from app.ai.tools.arguments import (
+    parse_partial_arguments,
+    validate_tool_arguments,
+    validate_tool_call,
+)
 from app.ai.transcript import (
     declarations_equal,
     get_current_system_message,
@@ -73,6 +84,7 @@ __all__ = [
     "JsonSchemaSampling",
     "LifecycleError",
     "Message",
+    "MessageDecodeError",
     "Model",
     "ModelCapabilities",
     "ModelCompat",
@@ -88,6 +100,7 @@ __all__ = [
     "ToolCall",
     "ToolDefinition",
     "ToolResultMessage",
+    "ToolValidationError",
     "Transcript",
     "Usage",
     "UsageCost",
@@ -107,10 +120,13 @@ __all__ = [
     "get_tool_state_changes",
     "normalize_context",
     "openai_provider",
+    "parse_partial_arguments",
     "render_system_message_update",
     "resolve_transcript",
     "resolve_transcript_tools",
     "to_tool_declaration",
     "transform_messages",
+    "validate_tool_arguments",
+    "validate_tool_call",
     "without_initial_system_message",
 ]
