@@ -9,6 +9,17 @@ from app.ai.assistant_message_frames import (
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.types import ApiKeyCredential, AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.codec import decode_messages, encode_messages
+from app.ai.context_budget import (
+    ContextUsageEstimate,
+    adjust_max_tokens_for_thinking,
+    calculate_context_tokens,
+    clamp_max_tokens_to_context,
+    estimate_context_tokens,
+    estimate_message_tokens,
+    estimate_text_tokens,
+    is_context_overflow,
+    is_recoverable_length,
+)
 from app.ai.errors import (
     AuthError,
     ConfigurationError,
@@ -51,6 +62,7 @@ from app.ai.model import (
     get_supported_thinking_levels,
 )
 from app.ai.models import Models, create_models
+from app.ai.options import CallOptions, ProviderResponse, SimpleOptions
 from app.ai.provider import Provider
 from app.ai.providers.deepseek import deepseek_provider
 from app.ai.providers.openai import openai_provider
@@ -86,9 +98,11 @@ __all__ = [
     "AssistantMessageFrameEncoder",
     "AuthError",
     "AuthOverride",
+    "CallOptions",
     "CatalogSource",
     "ConfigurationError",
     "Context",
+    "ContextUsageEstimate",
     "CredentialStore",
     "FrameSequenceError",
     "ImageContent",
@@ -106,7 +120,9 @@ __all__ = [
     "Pricing",
     "PricingTier",
     "Provider",
+    "ProviderResponse",
     "ResolvedAuth",
+    "SimpleOptions",
     "StopReason",
     "StrictSchemaError",
     "SystemMessage",
@@ -120,13 +136,19 @@ __all__ = [
     "Usage",
     "UsageCost",
     "UserMessage",
+    "adjust_max_tokens_for_thinking",
+    "calculate_context_tokens",
     "calculate_usage_cost",
+    "clamp_max_tokens_to_context",
     "clamp_thinking_level",
     "create_models",
     "declarations_equal",
     "decode_messages",
     "deepseek_provider",
     "encode_messages",
+    "estimate_context_tokens",
+    "estimate_message_tokens",
+    "estimate_text_tokens",
     "get_current_system_message",
     "get_current_system_prompt",
     "get_current_tools",
@@ -134,6 +156,8 @@ __all__ = [
     "get_supported_thinking_levels",
     "get_system_message_text",
     "get_tool_state_changes",
+    "is_context_overflow",
+    "is_recoverable_length",
     "make_strict_json_schema",
     "normalize_context",
     "openai_provider",
