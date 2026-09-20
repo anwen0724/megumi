@@ -8,6 +8,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Literal
 
+import httpx2
+
 from app.ai.auth.types import AuthOverride
 from app.ai.messages import JSONValue
 from app.ai.model import Model
@@ -34,6 +36,7 @@ type ResponseHook = Callable[[ProviderResponse, Model], Awaitable[None] | None]
 class CallOptions(AuthOverride):
     """Common invocation controls; protocol-specific fields belong to adapters."""
 
+    http_client: httpx2.AsyncClient | None = field(default=None, repr=False)
     signal: asyncio.Event | None = field(default=None, repr=False)
     temperature: float | None = None
     max_output_tokens: int | None = None
@@ -61,6 +64,7 @@ class SimpleOptions(CallOptions):
 def snapshot_options[T: CallOptions](options: T) -> T:
     """Copy request data while retaining the identity of callbacks and controls."""
     controls = (
+        options.http_client,
         options.signal,
         options.on_payload,
         options.on_response,

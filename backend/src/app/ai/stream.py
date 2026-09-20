@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from copy import deepcopy
 
 from app.ai.events import AssistantMessageEvent
 from app.ai.messages import AssistantMessage
 from app.ai.model import Model
-from app.ai.runtime.diagnostics import append_cleanup_diagnostic
+from app.ai.runtime.diagnostics import append_cleanup_diagnostic, format_error, redact_text
 from app.ai.runtime.retry import SignalAborted
 
 
@@ -27,6 +27,7 @@ class ResponseWriter:
         )
         self._emit = emit
         self._final: AssistantMessage | None = None
+        self._sensitive_values: set[str] = set()
         self._cleanups: list[Callable[[], Awaitable[None]]] = []
 
     def emit(self, event: AssistantMessageEvent) -> None:
@@ -42,6 +43,10 @@ class ResponseWriter:
     def add_cleanup(self, cleanup: Callable[[], Awaitable[None]]) -> None:
         """Register each acquired resource immediately; cleanup executes in reverse order."""
         self._cleanups.append(cleanup)
+
+    def protect(self, values: Iterable[str]) -> None:
+        """Register known credentials for exception and cleanup diagnostic redaction."""
+        self._sensitive_values.update(value for value in values if value)
 
     def fail(self, reason: str, *, aborted: bool = False) -> None:
         """Select a failure only if the protocol has not already chosen a terminal result."""
@@ -112,7 +117,7 @@ class AssistantResponse:
         except (asyncio.CancelledError, SignalAborted):
             self._writer.fail("Request aborted", aborted=True)
         except Exception as error:
-            self._writer.fail(str(error) or type(error).__name__)
+            self._writer.fail(format_error(error, sensitive_values=self._writer._sensitive_values))
         finally:
             self._finalizing = True
             if self._signal_task is not None:
@@ -120,11 +125,17 @@ class AssistantResponse:
                 await asyncio.gather(self._signal_task, return_exceptions=True)
             final = self._writer._final
             if final is not None:
+                if final.error_message is not None:
+                    final.error_message = redact_text(
+                        final.error_message, self._writer._sensitive_values
+                    )
                 for cleanup in reversed(self._writer._cleanups):
                     try:
                         await cleanup()
                     except (Exception, asyncio.CancelledError) as error:
-                        append_cleanup_diagnostic(final, error)
+                        append_cleanup_diagnostic(
+                            final, error, sensitive_values=self._writer._sensitive_values
+                        )
                 if final.stop_reason in {"stop", "length", "tool_use"}:
                     self._queue.put_nowait(
                         {"type": "done", "reason": final.stop_reason, "message": final}

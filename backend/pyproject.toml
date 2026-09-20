@@ -9,7 +9,9 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
+    "httpx2>=2.13.0",
     "jsonschema>=4.26.0",
+    "openai>=3.16.2",
     "partial-json-parser>=0.2.1.1.post7",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
