@@ -1,17 +1,24 @@
 """Public configuration API for the Python AI layer; importing performs no I/O."""
 
 from app.ai.api.transform import transform_messages
+from app.ai.assistant_message_frames import (
+    AssistantMessageFrame,
+    AssistantMessageFrameEncoder,
+    reduce_assistant_message_frames,
+)
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.types import ApiKeyCredential, AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.codec import decode_messages, encode_messages
 from app.ai.errors import (
     AuthError,
     ConfigurationError,
+    FrameSequenceError,
     LifecycleError,
     MessageDecodeError,
     StrictSchemaError,
     ToolValidationError,
 )
+from app.ai.events import AssistantMessageEvent
 from app.ai.messages import (
     AssistantContent,
     AssistantMessage,
@@ -73,12 +80,16 @@ __all__ = [
     "ApiKeyCredential",
     "AssistantContent",
     "AssistantMessage",
+    "AssistantMessageEvent",
+    "AssistantMessageFrame",
+    "AssistantMessageFrameEncoder",
     "AuthError",
     "AuthOverride",
     "CatalogSource",
     "ConfigurationError",
     "Context",
     "CredentialStore",
+    "FrameSequenceError",
     "ImageContent",
     "InMemoryCredentialStore",
     "InputContent",
@@ -125,6 +136,7 @@ __all__ = [
     "normalize_context",
     "openai_provider",
     "parse_partial_arguments",
+    "reduce_assistant_message_frames",
     "render_system_message_update",
     "resolve_json_schema_strict_sampling",
     "resolve_transcript",

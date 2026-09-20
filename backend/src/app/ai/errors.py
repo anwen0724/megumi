@@ -41,3 +41,7 @@ class ToolValidationError(ValueError):
 
 class StrictSchemaError(ValueError):
     """A required provider strict schema cannot preserve the declared tool contract."""
+
+
+class FrameSequenceError(ValueError):
+    """Assistant progress events or saved frames have an invalid sequence or block type."""
