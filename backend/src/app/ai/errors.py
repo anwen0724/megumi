@@ -24,3 +24,7 @@ class AuthError(RuntimeError):
 
 class LifecycleError(RuntimeError):
     """A model collection service was used after closing."""
+
+
+class MessageDecodeError(ValueError):
+    """Saved message data does not satisfy the message contract."""
