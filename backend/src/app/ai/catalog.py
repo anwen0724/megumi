@@ -110,7 +110,7 @@ def snapshot_provider(provider: Provider) -> Provider:
             raise ConfigurationError("Invalid boolean capability")
         levels = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
         if any(
-            level not in levels or not target.strip()
+            level not in levels or not isinstance(target, str) or not target.strip()
             for level, target in caps.reasoning_levels.items()
         ):
             raise ConfigurationError("Invalid reasoning mapping")

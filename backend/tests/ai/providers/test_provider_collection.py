@@ -1,5 +1,8 @@
 """Model collection behavior through its public interface."""
 
+import pytest
+
+from app.ai.errors import LifecycleError
 from app.ai.models import create_models
 from app.ai.provider import Provider
 
@@ -75,3 +78,32 @@ def test_original_inputs_and_returned_models_cannot_mutate_collection(provider: 
     models.get_models()[0].capabilities.reasoning_levels["low"] = "external"
     assert models.get_model("sample", "small").headers == {"X-Trace": "original"}
     assert models.get_model("sample", "small").capabilities.reasoning_levels == {"low": "low"}
+
+
+@pytest.mark.asyncio
+async def test_close_is_idempotent_and_existing_model_remains_readable(provider):
+    models = create_models([provider])
+    model = models.get_model("sample", "small")
+    await models.aclose()
+    await models.aclose()
+    assert model is not None
+    assert model.id == "small"
+    assert model.context_window == 4096
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["set", "get", "list", "available", "resolve"])
+async def test_closed_collection_rejects_service_operations(provider, operation):
+    models = create_models([provider])
+    await models.aclose()
+    with pytest.raises(LifecycleError, match="closed"):
+        if operation == "set":
+            models.set_provider(provider)
+        elif operation == "get":
+            models.get_model("sample", "small")
+        elif operation == "list":
+            models.get_models()
+        elif operation == "available":
+            await models.get_available_models()
+        else:
+            await models.resolve_auth(provider.models[0])

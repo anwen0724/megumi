@@ -31,6 +31,7 @@ async def test_explicit_key_bypasses_lower_priority_sources(provider: Provider) 
     assert result.key == "fake-explicit"
     assert result.source == "explicit"
     assert "fake-explicit" not in repr(result)
+    assert (await InMemoryCredentialStore.read(store, "sample")).key == "fake-stored"
 
 
 @pytest.mark.asyncio
@@ -79,7 +80,7 @@ async def test_invalid_selected_credential_never_falls_back(
 ) -> None:
     from app.ai.errors import AuthError
 
-    store = InMemoryCredentialStore()
+    store = UnreadableStore() if source == "explicit" else InMemoryCredentialStore()
     await store.set("sample", ApiKeyCredential(value if source == "stored" else "fake-valid"))
     overrides = AuthOverride(api_key=value) if source == "explicit" else None
     with pytest.raises(AuthError) as error:

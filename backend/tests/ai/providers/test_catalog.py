@@ -111,3 +111,20 @@ def test_invalid_price_or_capability_data_is_rejected(provider: Provider, kind: 
     }[kind]
     with pytest.raises(ValueError):
         create_models([replace(provider, models=[replace(provider.models[0], **changes)])])
+
+
+@pytest.mark.parametrize("mapping", [{"high": 1}, {"low": None}])
+def test_malformed_reasoning_mapping_is_a_configuration_error_and_preserves_state(
+    provider, mapping
+):
+    from app.ai.errors import ConfigurationError
+    from app.ai.model import ModelCapabilities
+
+    models = create_models([provider])
+    bad = replace(
+        provider.models[0],
+        capabilities=ModelCapabilities(reasoning_levels=mapping),
+    )
+    with pytest.raises(ConfigurationError):
+        models.set_provider(replace(provider, models=[bad]))
+    assert models.get_models() == (provider.models[0],)

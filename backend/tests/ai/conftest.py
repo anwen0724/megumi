@@ -25,3 +25,10 @@ def provider() -> Provider:
             )
         ],
     )
+
+
+@pytest.fixture(autouse=True)
+def isolated_credential_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent real credentials from entering any new AI contract test."""
+    for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "SAMPLE_API_KEY", "OTHER_API_KEY"):
+        monkeypatch.delenv(name, raising=False)

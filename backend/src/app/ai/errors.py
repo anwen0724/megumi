@@ -20,3 +20,7 @@ class AuthError(RuntimeError):
             "credential_store_error": "Credential store read failed",
         }
         super().__init__(messages[code])
+
+
+class LifecycleError(RuntimeError):
+    """A model collection service was used after closing."""

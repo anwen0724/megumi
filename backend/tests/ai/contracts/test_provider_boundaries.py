@@ -26,11 +26,10 @@ def test_fresh_import_and_configuration_never_attempt_network():
         sys.addaudithook(forbid_network)
 
         from dataclasses import replace
-        from app.ai.models import create_models
-        from app.ai.auth.memory import InMemoryCredentialStore
-        from app.ai.auth.types import ApiKeyCredential
-        from app.ai.providers.deepseek import deepseek_provider
-        from app.ai.providers.openai import openai_provider
+        from app.ai import (
+            create_models, InMemoryCredentialStore, ApiKeyCredential,
+            deepseek_provider, openai_provider,
+        )
 
         async def check():
             credentials = InMemoryCredentialStore()
@@ -49,6 +48,7 @@ def test_fresh_import_and_configuration_never_attempt_network():
             resolved = await models.resolve_auth(custom)
             assert resolved.base_url == "http://localhost:9999/v1"
             assert resolved.source == "stored"
+            await models.aclose()
 
         try:
             loop.run_until_complete(check())
