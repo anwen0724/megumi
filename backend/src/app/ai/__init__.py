@@ -62,11 +62,15 @@ from app.ai.model import (
     get_supported_thinking_levels,
 )
 from app.ai.models import Models, create_models
-from app.ai.options import CallOptions, ProviderResponse, SimpleOptions
+from app.ai.options import CallOptions, ProviderResponse, RetryCallbacks, RetryPolicy, SimpleOptions
 from app.ai.provider import Provider
 from app.ai.providers.deepseek import deepseek_provider
 from app.ai.providers.openai import openai_provider
-from app.ai.runtime.retry import retry_provider_request
+from app.ai.runtime.retry import (
+    is_retryable_assistant_error,
+    retry_assistant_call,
+    retry_provider_request,
+)
 from app.ai.tools.arguments import (
     parse_partial_arguments,
     validate_tool_arguments,
@@ -123,6 +127,8 @@ __all__ = [
     "Provider",
     "ProviderResponse",
     "ResolvedAuth",
+    "RetryCallbacks",
+    "RetryPolicy",
     "SimpleOptions",
     "StopReason",
     "StrictSchemaError",
@@ -159,6 +165,7 @@ __all__ = [
     "get_tool_state_changes",
     "is_context_overflow",
     "is_recoverable_length",
+    "is_retryable_assistant_error",
     "make_strict_json_schema",
     "normalize_context",
     "openai_provider",
@@ -168,6 +175,7 @@ __all__ = [
     "resolve_json_schema_strict_sampling",
     "resolve_transcript",
     "resolve_transcript_tools",
+    "retry_assistant_call",
     "retry_provider_request",
     "to_tool_declaration",
     "transform_messages",

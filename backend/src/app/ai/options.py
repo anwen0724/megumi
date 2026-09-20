@@ -68,3 +68,22 @@ def snapshot_options[T: CallOptions](options: T) -> T:
         options.telemetry_context,
     )
     return deepcopy(options, {id(value): value for value in controls if value is not None})
+
+
+@dataclass(frozen=True, kw_only=True)
+class RetryPolicy:
+    """Whole-assistant retry budget; separate from HTTP establishment retries."""
+
+    enabled: bool
+    max_retries: int
+    base_delay_ms: float
+    max_agent_delay_ms: float = 60000
+
+
+@dataclass(frozen=True, kw_only=True)
+class RetryCallbacks:
+    """Awaitable lifecycle hooks; callback exceptions propagate."""
+
+    scheduled: Callable[[int, int, float, str], Awaitable[None] | None] | None = None
+    attempt_start: Callable[[], Awaitable[None] | None] | None = None
+    finished: Callable[[bool, int, str | None], Awaitable[None] | None] | None = None
