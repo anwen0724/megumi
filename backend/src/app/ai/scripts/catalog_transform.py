@@ -1,9 +1,11 @@
 """Build runtime catalogs from source facts and explicit provider rules."""
 
+from copy import deepcopy
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.ai.catalog import load_catalog, snapshot_provider
+from app.ai.catalog import load_catalog, snapshot_provider, validate_url
 from app.ai.provider import Provider
 from app.ai.scripts.catalog_io import CatalogError, digest, encode
 
@@ -59,14 +61,60 @@ def rates(data: dict[str, Any]) -> dict[str, str | None]:
 def pricing(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, Any]:
     """Never relabel source money into a different currency."""
     cost = raw.get("cost", {})
-    result = {
+    if not isinstance(cost, dict):
+        raise CatalogError("pricing: expected cost object")
+    allowed = {*RATES, "tiers", "context_over_200k", "reasoning"}
+    if cost.keys() - allowed:
+        raise CatalogError(f"pricing: uninterpretable fields {sorted(cost.keys() - allowed)}")
+    base = rates(cost)
+    if "reasoning" in cost and rates({"output": cost["reasoning"]})["output"] != base["output"]:
+        raise CatalogError("pricing: separate reasoning price cannot be represented")
+    tiers = cost.get("tiers", [])
+    if not isinstance(tiers, list):
+        raise CatalogError("pricing.tiers: expected array")
+    thresholds: list[tuple[int, dict[str, Any]]] = []
+    for tier in tiers:
+        condition = tier.get("tier", {})
+        size = condition.get("size")
+        if (
+            condition.get("type") != "context"
+            or type(size) is not int
+            or size <= 0
+            or tier.keys() - {*RATES, "tier"}
+        ):
+            raise CatalogError("pricing.tiers: unknown condition or rates")
+        thresholds.append((size, rates(tier)))
+    thresholds.sort(key=lambda entry: entry[0])
+    if len({size for size, _ in thresholds}) != len(thresholds):
+        raise CatalogError("pricing.tiers: duplicate context threshold")
+    # Prefer the explicit threshold over the legacy alias name (which can mean 272k).
+    if "context_over_200k" in cost:
+        legacy = rates(cost["context_over_200k"])
+        if thresholds:
+            if legacy != thresholds[0][1]:
+                raise CatalogError("pricing.context_over_200k: conflicts with explicit tier")
+        else:
+            thresholds.append((200000, legacy))
+    result: dict[str, Any] = {
         "currency": rule["currency"],
         "unit_tokens": rule["unit_tokens"],
-        **rates(cost),
+        **base,
         "tiers": [],
     }
+    scope = rule.get("price_condition", "")
+    if thresholds or scope:
+        scope = scope or "Standard service tier"
+        upper = f"; input context <= {thresholds[0][0]} tokens" if thresholds else ""
+        result["tiers"].append({"condition": scope + upper, **base})
+        for index, (size, tier_rates) in enumerate(thresholds):
+            upper = f" and <= {thresholds[index + 1][0]}" if index + 1 < len(thresholds) else ""
+            result["tiers"].append(
+                {"condition": f"{scope}; input context > {size}{upper} tokens", **tier_rates}
+            )
+        result.update(dict.fromkeys(RATES))
     if rule["currency"] != rule["source_currency"]:
         result.update(dict.fromkeys(RATES))
+        result["tiers"] = []
     return result
 
 
@@ -144,6 +192,8 @@ def generate_catalog(
     exclusions = {item["model_id"]: item for item in rule["excluded"]}
     if len(exclusions) != len(rule["excluded"]):
         raise CatalogError("Duplicate exclusions")
+    for item in exclusions.values():
+        evidence(item)
     for identity, raw in sorted(upstream.items()):
         try:
             if not isinstance(raw, dict) or raw.get("id") != identity:
@@ -155,12 +205,178 @@ def generate_catalog(
                 report.append(f"{identity}: excluded: {exclusions[identity]['reason']}")
                 continue
             model = base_model(raw, rule, report)
-            validate_model(model, rule)
             models.append(model)
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
             raise CatalogError(f"{rule['id']}/{identity}: {exc}") from exc
+    traces: dict[str, Any] = {
+        model["id"]: {
+            "fields": {
+                path: {
+                    "kind": "upstream",
+                    "source_url": snapshot["source_url"],
+                    "fetched_at": snapshot["fetched_at"],
+                }
+                for path in fields(model)
+            },
+            "patches": [],
+            "reviews": [],
+        }
+        for model in models
+    }
+    for item in rule["supplements"]:
+        evidence(item)
+        model = deepcopy(item["model"])
+        identity = model.get("id")
+        if (
+            identity in upstream
+            or identity in exclusions
+            or identity in traces
+            or model.get("capabilities", {}).get("tools") is not True
+            or model.get("provider") != rule["id"]
+            or model.get("api") != rule["api"]
+        ):
+            raise CatalogError(f"{rule['id']}/{identity}: invalid or conflicting supplement")
+        model["source"] = deepcopy(item["source"])
+        models.append(model)
+        traces[model["id"]] = {
+            "fields": {
+                path: {"kind": "supplement", "source": item["source"], "reason": item["reason"]}
+                for path in fields(model)
+            },
+            "patches": [],
+            "reviews": [],
+        }
+    by_id = {model["id"]: model for model in models}
+    touched: dict[str, set[str]] = {}
+    for item in rule["patches"]:
+        evidence(item)
+        identity, path = item["model_id"], item["path"]
+        used = touched.setdefault(identity, set())
+        if path not in PATCH_PATHS or any(
+            path == previous or path.startswith(previous + ".") or previous.startswith(path + ".")
+            for previous in used
+        ):
+            raise CatalogError(f"{rule['id']}/{identity}: duplicate or invalid patch path {path}")
+        used.add(path)
+        if identity not in by_id:
+            raise CatalogError(f"{rule['id']}/{identity}: patch target not in candidates")
+        model = by_id[identity]
+        parent = model
+        parts = path.split(".")
+        for key in parts[:-1]:
+            if key not in parent or not isinstance(parent[key], dict):
+                raise CatalogError(f"{identity}: missing parent for {path}")
+            parent = parent[key]
+        current = parent.get(parts[-1], MISSING)
+        if current == item["replacement"]:
+            report.append(f"{identity}.{path}: redundant patch")
+            status = "redundant"
+        elif current == item["expected"] and type(current) is type(item["expected"]):
+            parent[parts[-1]] = deepcopy(item["replacement"])
+            status = "applied"
+        else:
+            raise CatalogError(
+                f"{rule['id']}/{identity}.{path}: stale patch; "
+                f"expected {item['expected']!r}, got {current!r}; review required"
+            )
+        for field in list(traces[identity]["fields"]):
+            if field == path or field.startswith(path + "."):
+                del traces[identity]["fields"][field]
+        replacement_fields = fields({parts[-1]: parent[parts[-1]]})
+        for field in replacement_fields:
+            actual_path = ".".join([*parts[:-1], field])
+            traces[identity]["fields"][actual_path] = {
+                "kind": "patch",
+                "source": item["source"],
+                "reason": item["reason"],
+            }
+        traces[identity]["patches"].append({**item, "status": status})
+    for item in rule["reviews"]:
+        evidence(item)
+        identity = item["model_id"]
+        if identity not in by_id:
+            report.append(f"{identity}: unmatched review")
+            continue
+        current_fields = fields(by_id[identity])
+        matched, stale = [], []
+        for path, value in item["fields"].items():
+            if path not in current_fields:
+                stale.append(path)
+            elif current_fields[path] == value and type(current_fields[path]) is type(value):
+                matched.append(path)
+                traces[identity]["fields"][path].update(
+                    {"verified": True, "review_source": item["source"]}
+                )
+            else:
+                stale.append(path)
+        traces[identity]["reviews"].append(
+            {**item, "matched": sorted(matched), "stale": sorted(stale)}
+        )
+        if matched:
+            by_id[identity]["source"] = latest_source(by_id[identity].get("source"), item["source"])
+    for model in models:
+        for item in traces[model["id"]]["patches"]:
+            model["source"] = latest_source(model.get("source"), item["source"])
+        try:
+            validate_model(model, rule)
+        except CatalogError as exc:
+            raise CatalogError(f"{rule['id']}/{model['id']}: {exc}") from exc
     if not models:
         raise CatalogError(f"{rule['id']}: empty candidate catalog")
     for identity in sorted(exclusions.keys() - upstream.keys()):
         report.append(f"{identity}: unmatched exclusion")
-    return models, {}, report
+    return sorted(models, key=lambda model: model["id"]), traces, report
+
+
+def fields(value: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Flatten object fields for provenance; arrays are indivisible values."""
+    result = {}
+    for name, child in value.items():
+        path = f"{prefix}.{name}" if prefix else name
+        if isinstance(child, dict) and child:
+            result.update(fields(child, path))
+        else:
+            result[path] = child
+    return result
+
+
+MISSING = {"missing": True}
+PATCH_PATHS = {
+    "name",
+    "context_window",
+    "max_output_tokens",
+    "base_url",
+    "headers",
+    "capabilities.input_modalities",
+    "capabilities.temperature",
+    "capabilities.reasoning_levels",
+    "compat",
+    "compat.system_role",
+    "compat.temperature_requires_reasoning_off",
+    "pricing",
+    "pricing.input",
+    "pricing.output",
+    "pricing.cache_read",
+    "pricing.cache_write",
+    "pricing.tiers",
+}
+
+
+def evidence(item: dict[str, Any]) -> None:
+    """Reject maintenance records that cannot be traced to a dated source."""
+    try:
+        source = item["source"]
+        validate_url(source["url"])
+        if date.fromisoformat(source["checked_at"]) > date.today():
+            raise ValueError("future review date")
+        if not isinstance(item["reason"], str) or not item["reason"].strip():
+            raise ValueError("missing reason")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CatalogError(f"Invalid maintenance evidence: {exc}") from exc
+
+
+def latest_source(previous: Any, current: dict[str, Any]) -> dict[str, Any]:
+    """Keep the latest actual review date, never a fetch or generation timestamp."""
+    if previous is None or current["checked_at"] >= previous["checked_at"]:
+        return deepcopy(current)
+    return dict(previous)
