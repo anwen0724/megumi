@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from app.ai.scripts.model_catalog import CatalogTool
+from app.ai.catalog_generation.generate import CatalogTool
 
 
 def raw_model(identity="new-model", **changes):

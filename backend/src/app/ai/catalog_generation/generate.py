@@ -1,13 +1,17 @@
 """Build runtime catalogs from source facts and explicit provider rules."""
 
+from collections.abc import Callable
 from copy import deepcopy
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Any
 
 from app.ai.catalog import load_catalog, snapshot_provider, validate_url
+from app.ai.catalog_generation import CatalogError
+from app.ai.catalog_generation.output import decode, digest, encode, fields, write_or_check
+from app.ai.catalog_generation.source import download, fetch_snapshots, load_rules, select_providers
 from app.ai.provider import Provider
-from app.ai.scripts.catalog_io import CatalogError, digest, encode
 
 
 def reasoning(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, str]:
@@ -397,18 +401,6 @@ def generate_catalog(
     return sorted(models, key=lambda model: model["id"]), traces, report
 
 
-def fields(value: dict[str, Any], prefix: str = "") -> dict[str, Any]:
-    """Flatten object fields for provenance; arrays are indivisible values."""
-    result = {}
-    for name, child in value.items():
-        path = f"{prefix}.{name}" if prefix else name
-        if isinstance(child, dict) and child:
-            result.update(fields(child, path))
-        else:
-            result[path] = child
-    return result
-
-
 MISSING = {"missing": True}
 PATCH_PATHS = {
     "name",
@@ -458,3 +450,91 @@ SOURCE_PATHS = {
     "capabilities.tools": "tool_call",
     "capabilities.temperature": "temperature",
 }
+
+
+class CatalogTool:
+    """Build selected provider candidates using the source and output modules."""
+
+    def __init__(self, inputs: Path, output: Path, rules: dict[str, Any]) -> None:
+        self.inputs = inputs
+        self.output = output
+        self.rules = rules
+
+    def fetch(
+        self,
+        providers: list[str] | None = None,
+        *,
+        transport: Callable[[str, float], bytes] = download,
+        fetched_at: str | None = None,
+    ) -> list[str]:
+        """Delegate explicit network acquisition to the source module."""
+        return fetch_snapshots(
+            self.inputs, self.rules, providers, transport=transport, fetched_at=fetched_at
+        )
+
+    def generate(
+        self, providers: list[str] | None = None, *, write: bool = False, check: bool = False
+    ) -> tuple[int, list[str]]:
+        """Build all selected candidates before comparing or publishing any output."""
+        selected = select_providers(self.rules, providers)
+        if write and check:
+            raise CatalogError("check cannot write")
+        candidates: dict[str, dict[str, Any]] = {}
+        report: list[str] = []
+        fingerprint = generator_hash()
+        for identity in selected:
+            raw_snapshot = (self.inputs / f"{identity}.snapshot.json").read_bytes()
+            snapshot = decode(raw_snapshot)
+            models, traces, discovery = generate_catalog(snapshot, self.rules[identity])
+            report.append(
+                f"{identity}: source {snapshot['source_url']} fetched {snapshot['fetched_at']}"
+            )
+            report.extend(f"{identity}: {item}" for item in discovery)
+            content = encode(models)
+            candidates[identity] = {
+                "content": content,
+                "models": models,
+                "manifest": {
+                    "snapshot_hash": digest(raw_snapshot),
+                    "rules_hash": digest(encode(self.rules[identity])),
+                    "generator_hash": fingerprint,
+                    "output_hash": digest(content),
+                    "source_url": snapshot["source_url"],
+                    "fetched_at": snapshot["fetched_at"],
+                    "models": traces,
+                },
+            }
+        return write_or_check(
+            self.output,
+            candidates,
+            set(self.rules),
+            full=providers is None,
+            write=write,
+            check=check,
+            report=report,
+        )
+
+
+def generator_hash() -> str:
+    """Fingerprint generator code, its command entry and runtime model contracts."""
+    folder = Path(__file__).resolve().parent
+    sources = [
+        *sorted(folder.glob("*.py")),
+        folder.parent / "scripts" / "generate_models.py",
+        *(folder.parent / name for name in ("catalog.py", "model.py", "provider.py")),
+    ]
+    return digest(
+        b"".join(
+            path.relative_to(folder.parent).as_posix().encode()
+            + b"\0"
+            + path.read_bytes().replace(b"\r\n", b"\n")
+            for path in sources
+        )
+    )
+
+
+def default_tool() -> CatalogTool:
+    """Resolve package-owned inputs and outputs without depending on the working directory."""
+    folder = Path(__file__).resolve().parent
+    inputs = folder / "inputs"
+    return CatalogTool(inputs, folder.parent / "providers" / "data", load_rules(inputs))

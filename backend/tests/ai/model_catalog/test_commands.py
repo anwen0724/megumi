@@ -2,7 +2,7 @@
 
 from conftest import raw_model, response
 
-from app.ai.scripts.catalog_io import decode
+from app.ai.catalog_generation.output import decode
 
 
 def seed(tool, models=None):
@@ -54,7 +54,7 @@ def test_check_detects_manifest_tampering_and_extra_catalog(tool):
     manifest = tool.output / "manifest.json"
     data = decode(manifest.read_bytes())
     data["providers"]["openai"]["source_url"] = "https://example.test/wrong"
-    from app.ai.scripts.catalog_io import encode
+    from app.ai.catalog_generation.output import encode
 
     manifest.write_bytes(encode(data))
     assert tool.generate(check=True)[0] == 1

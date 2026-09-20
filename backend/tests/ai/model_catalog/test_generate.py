@@ -4,8 +4,9 @@ import pytest
 from conftest import raw_model, rule
 
 from app.ai.catalog import load_catalog
-from app.ai.scripts.catalog_io import CatalogError, digest, encode
-from app.ai.scripts.catalog_transform import generate_catalog
+from app.ai.catalog_generation import CatalogError
+from app.ai.catalog_generation.generate import generate_catalog
+from app.ai.catalog_generation.output import digest, encode
 
 
 def snapshot(models, identity="openai"):

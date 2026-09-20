@@ -19,7 +19,7 @@ from app.ai import create_models, openai_provider, deepseek_provider
 assert not any(name.startswith("app.ai.scripts") for name in sys.modules)
 models = create_models([openai_provider(), deepseek_provider()])
 assert models.get_models("openai") and models.get_models("deepseek")
-from app.ai.scripts.model_catalog import main
+from app.ai.scripts.generate_models import main
 assert main(["generate"]) == 0
 assert main(["check"]) == 0
 assert not attempts

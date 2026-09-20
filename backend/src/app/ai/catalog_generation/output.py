@@ -1,4 +1,4 @@
-"""Exact JSON and source validation shared by development catalog operations."""
+"""Compare, serialize and publish model catalogs with recoverable file replacement."""
 
 import hashlib
 import json
@@ -9,9 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-
-class CatalogError(ValueError):
-    """A maintenance failure that must not publish a partial catalog."""
+from app.ai.catalog_generation import CatalogError
 
 
 def decode(data: str | bytes) -> Any:
@@ -118,3 +116,99 @@ def publish(pending: dict[Path, bytes]) -> None:
             if folder.resolve().parent != parent:
                 raise CatalogError(f"Unexpected staging path: {folder}")
             shutil.rmtree(folder)
+
+
+def fields(value: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """Flatten object fields for provenance; arrays are indivisible values."""
+    result = {}
+    for name, child in value.items():
+        path = f"{prefix}.{name}" if prefix else name
+        if isinstance(child, dict) and child:
+            result.update(fields(child, path))
+        else:
+            result[path] = child
+    return result
+
+
+def differences(identity: str, previous: bytes | None, models: list[dict[str, Any]]) -> list[str]:
+    """Describe model additions, removals and changed fields without using old data as input."""
+    try:
+        entries = decode(previous) if previous is not None else []
+        old = {item["id"]: item for item in entries}
+    except (ValueError, KeyError, TypeError):
+        return [f"{identity}: saved catalog is invalid; replacing with validated candidate"]
+    new = {item["id"]: item for item in models}
+    report = [f"{identity}/{key}: added" for key in sorted(new.keys() - old.keys())]
+    report.extend(f"{identity}/{key}: removed" for key in sorted(old.keys() - new.keys()))
+    for key in sorted(new.keys() & old.keys()):
+        before, after = fields(old[key]), fields(new[key])
+        for field in sorted(before.keys() | after.keys()):
+            if encode(before.get(field)) != encode(after.get(field)) or (field in before) != (
+                field in after
+            ):
+                report.append(
+                    f"{identity}/{key}.{field}: {before.get(field, '<missing>')!r} -> "
+                    f"{after.get(field, '<missing>')!r}"
+                )
+    if not report:
+        report.append(f"{identity}: JSON representation differs")
+    return report
+
+
+def write_or_check(
+    output: Path,
+    candidates: dict[str, dict[str, Any]],
+    registered: set[str],
+    *,
+    full: bool,
+    write: bool,
+    check: bool,
+    report: list[str],
+) -> tuple[int, list[str]]:
+    """Compare validated candidates, preserving unselected provider manifest entries."""
+    manifest_path = output / "manifest.json"
+    old_manifest: dict[str, Any] = (
+        decode(manifest_path.read_bytes())
+        if manifest_path.exists()
+        else {"schema_version": 1, "providers": {}}
+    )
+    manifest: dict[str, Any] = {
+        "schema_version": 1,
+        "providers": dict(old_manifest["providers"]),
+    }
+    pending: dict[Path, bytes] = {}
+    changed = False
+    for identity, candidate in candidates.items():
+        target = output / f"{identity}.json"
+        previous = target.read_bytes() if target.exists() else None
+        content = candidate["content"]
+        entry = candidate["manifest"]
+        if previous != content:
+            changed = True
+            report.extend(differences(identity, previous, candidate["models"]))
+        if encode(old_manifest["providers"].get(identity)) != encode(entry):
+            changed = True
+            report.append(f"{identity}: manifest differs")
+        manifest["providers"][identity] = entry
+        pending[target] = content
+    if full and check:
+        actual = {path.stem for path in output.glob("*.json")} - {"manifest"}
+        if actual != registered or set(old_manifest["providers"]) != registered:
+            changed = True
+            report.append(
+                f"catalog collection differs: expected {sorted(registered)}, "
+                f"files {sorted(actual)}, manifest {sorted(old_manifest['providers'])}"
+            )
+    pending[manifest_path] = encode(manifest)
+    if (
+        full
+        and check
+        and manifest_path.exists()
+        and manifest_path.read_bytes() != pending[manifest_path]
+    ):
+        changed = True
+        report.append("manifest representation differs")
+    if write:
+        publish(pending)
+    report.append("different" if changed else "consistent")
+    return (1 if check and changed else 0), report

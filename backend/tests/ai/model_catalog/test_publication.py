@@ -6,14 +6,14 @@ import pytest
 from conftest import raw_model, response
 from test_commands import seed
 
-from app.ai.scripts.catalog_io import CatalogError
+from app.ai.catalog_generation import CatalogError
 
 
 @pytest.mark.parametrize("operation", ["fetch", "generate"])
 def test_replace_failure_restores_every_old_file(tool, monkeypatch, operation):
     seed(tool)
     tool.generate(write=True)
-    root = tool.inputs / "snapshots" if operation == "fetch" else tool.output
+    root = tool.inputs if operation == "fetch" else tool.output
     before = {p.name: p.read_bytes() for p in root.iterdir()}
     replacement = response(openai={"next": raw_model("next")}, deepseek={"next": raw_model("next")})
     if operation == "generate":

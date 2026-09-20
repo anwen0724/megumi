@@ -5,7 +5,7 @@ import json
 import pytest
 from conftest import raw_model, response
 
-from app.ai.scripts.catalog_io import CatalogError
+from app.ai.catalog_generation import CatalogError
 
 
 def test_fetch_preserves_raw_fields_precision_and_runtime_outputs(tool):
@@ -20,7 +20,7 @@ def test_fetch_preserves_raw_fields_precision_and_runtime_outputs(tool):
         return body
 
     tool.fetch(transport=transport, fetched_at="2026-09-20T10:00:00+00:00")
-    saved = tool.inputs / "snapshots/openai.json"
+    saved = tool.inputs / "openai.snapshot.json"
     assert saved.exists()
     text = saved.read_text(encoding="utf-8")
     assert "0.123456789012345678901" in text
@@ -35,16 +35,16 @@ def test_fetch_preserves_raw_fields_precision_and_runtime_outputs(tool):
 def test_same_source_keeps_snapshot_bytes_and_fetch_date(tool):
     body = response(openai={"new-model": raw_model()}, deepseek={"new-model": raw_model()})
     tool.fetch(transport=lambda *_: body, fetched_at="2026-01-01T00:00:00+00:00")
-    before = {p.name: p.read_bytes() for p in (tool.inputs / "snapshots").glob("*.json")}
+    before = {p.name: p.read_bytes() for p in tool.inputs.glob("*.snapshot.json")}
     tool.fetch(transport=lambda *_: body, fetched_at="2026-09-20T00:00:00+00:00")
-    assert before == {p.name: p.read_bytes() for p in (tool.inputs / "snapshots").glob("*.json")}
+    assert before == {p.name: p.read_bytes() for p in tool.inputs.glob("*.snapshot.json")}
 
 
 @pytest.mark.parametrize("bad", ["missing", "empty", "invalid-json", "timeout", "http"])
 def test_failed_fetch_preserves_all_selected_snapshots(tool, bad):
     good = response(openai={"new-model": raw_model()}, deepseek={"new-model": raw_model()})
     tool.fetch(transport=lambda *_: good)
-    before = {p.name: p.read_bytes() for p in (tool.inputs / "snapshots").glob("*.json")}
+    before = {p.name: p.read_bytes() for p in tool.inputs.glob("*.snapshot.json")}
 
     def broken(*_):
         if bad == "timeout":
@@ -61,7 +61,7 @@ def test_failed_fetch_preserves_all_selected_snapshots(tool, bad):
 
     with pytest.raises(CatalogError):
         tool.fetch(transport=broken)
-    assert before == {p.name: p.read_bytes() for p in (tool.inputs / "snapshots").glob("*.json")}
+    assert before == {p.name: p.read_bytes() for p in tool.inputs.glob("*.snapshot.json")}
 
 
 @pytest.mark.parametrize("identity", ["unknown", "../outside", "CON", "openai/child"])
@@ -75,9 +75,9 @@ def test_bad_provider_is_rejected_before_network_or_writes(tool, identity):
 def test_fetch_only_selected_provider(tool):
     good = response(openai={"new-model": raw_model()}, deepseek={"new-model": raw_model()})
     tool.fetch(transport=lambda *_: good)
-    previous = (tool.inputs / "snapshots/deepseek.json").read_bytes()
+    previous = (tool.inputs / "deepseek.snapshot.json").read_bytes()
     tool.fetch(["openai"], transport=lambda *_: response(openai={"second": raw_model("second")}))
-    assert (tool.inputs / "snapshots/deepseek.json").read_bytes() == previous
+    assert (tool.inputs / "deepseek.snapshot.json").read_bytes() == previous
 
 
 def test_download_identifies_catalog_tool_to_public_source(monkeypatch):
@@ -85,7 +85,7 @@ def test_download_identifies_catalog_tool_to_public_source(monkeypatch):
     from urllib.error import HTTPError
     from urllib.request import Request
 
-    from app.ai.scripts import model_catalog
+    from app.ai.catalog_generation import source as model_catalog
 
     def public_source(request, *, timeout):
         if (
@@ -119,7 +119,7 @@ def test_invalid_upstream_identity_never_becomes_a_snapshot(tool, body):
 def test_changed_boolean_is_not_equal_to_numeric_one_when_fetching(tool):
     good = response(openai={"new-model": raw_model()})
     tool.fetch(["openai"], transport=lambda *_: good)
-    before = (tool.inputs / "snapshots/openai.json").read_bytes()
+    before = (tool.inputs / "openai.snapshot.json").read_bytes()
     changed = response(openai={"new-model": raw_model(tool_call=1)})
     tool.fetch(["openai"], transport=lambda *_: changed)
-    assert (tool.inputs / "snapshots/openai.json").read_bytes() != before
+    assert (tool.inputs / "openai.snapshot.json").read_bytes() != before

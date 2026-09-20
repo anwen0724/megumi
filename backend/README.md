@@ -66,10 +66,10 @@ asyncio.run(main())
 运行时仍只读取 `src/app/ai/providers/data/` 中的 JSON，不联网刷新。开发工具位于 AI 包内：
 
 ```powershell
-uv run python -m app.ai.scripts.model_catalog fetch
-uv run python -m app.ai.scripts.model_catalog generate
-uv run python -m app.ai.scripts.model_catalog generate --write
-uv run python -m app.ai.scripts.model_catalog check
+uv run python -m app.ai.scripts.generate_models fetch
+uv run python -m app.ai.scripts.generate_models generate
+uv run python -m app.ai.scripts.generate_models generate --write
+uv run python -m app.ai.scripts.generate_models check
 ```
 
 - `fetch` 获取 models.dev，保存两家快照，不改运行时文件；只有此命令联网。
@@ -79,9 +79,31 @@ uv run python -m app.ai.scripts.model_catalog check
 - 路径按包位置定位，不依赖当前工作目录。不读取 API key。Windows 如终端编码不同，可设置 `$env:PYTHONUTF8='1'` 查看中文报告。
 - 所选目录全部校验后才写入；正常写入异常会恢复旧文件。若恢复失败，错误报告保留的备份路径；工具不承诺断电或并发维护事务。
 
+### 代码组织
+
+```text
+src/app/ai/
+├── scripts/
+│   ├── __init__.py
+│   └── generate_models.py       # fetch / generate / check 命令入口
+├── catalog_generation/
+│   ├── __init__.py
+│   ├── source.py                # 上游获取、解析与规则输入读取
+│   ├── generate.py              # 筛选、转换、修正、校验候选及来源清单
+│   ├── output.py                # 差异比较、保存与失败恢复
+│   └── inputs/
+│       ├── openai.rules.json
+│       ├── deepseek.rules.json
+│       ├── openai.snapshot.json
+│       └── deepseek.snapshot.json
+└── providers/data/              # 运行时模型 JSON 与 manifest.json
+```
+
+每份规则文件包含 `schema_version: 1` 和该家的 `provider` 对象；文件名与 provider.id 一致。获取只访问公共上游，生成只使用已保存输入，输出模块负责文件更新；命令入口不承载这些业务实现。
+
 ### 输入与生成关系
 
-`scripts/catalog_inputs/rules.json` 登记供应商、协议规则、精确排除、完整补充、字段修正和人工核对；`snapshots/<provider>.json` 由 fetch 维护。新增模型通过严格 `tool_call=true` 自动发现，不维护人工纳入名单。新增供应商使用相同源与协议时只需登记规则；新协议不由生成工具实现。
+`catalog_generation/inputs/<provider>.rules.json` 分别登记各供应商的协议规则、精确排除、完整补充、字段修正和人工核对；同目录的 `<provider>.snapshot.json` 由 fetch 维护。新增模型通过严格 `tool_call=true` 自动发现，不维护人工纳入名单。新增供应商使用相同源与协议时只需登记规则；新协议不由生成工具实现。
 
 修正路径针对转换后的 Model 字段，`expected` 为转换值，缺失用 `{"missing": true}`，与 null 区别。当前值匹配 expected 才替换；已经等于 replacement 时报告冗余；其它变化要求重新核对。数组整体替换，禁止身份修正和重叠修正。变更币种或单位必须提供完整 pricing 对象，不能改标签混用费率。完整补充只用于上游缺失的、有依据的模型。
 

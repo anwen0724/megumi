@@ -6,8 +6,8 @@ import pytest
 from conftest import raw_model, rule
 from test_generate import snapshot
 
-from app.ai.scripts.catalog_io import CatalogError
-from app.ai.scripts.catalog_transform import generate_catalog
+from app.ai.catalog_generation import CatalogError
+from app.ai.catalog_generation.generate import generate_catalog
 
 SOURCE = {"url": "https://example.test/official", "checked_at": "2026-09-20"}
 
@@ -249,7 +249,7 @@ def test_full_supplements_cannot_use_runtime_defaults_for_missing_facts(remove):
 
 
 def test_field_provenance_distinguishes_rule_decisions_from_upstream_facts():
-    from app.ai.scripts.catalog_transform import fields
+    from app.ai.catalog_generation.generate import fields
 
     settings = rule("openai")
     settings["patches"] = [patch("max_output_tokens", 2048, 512)]

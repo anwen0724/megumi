@@ -1,0 +1,211 @@
+{
+  "schema_version": 1,
+  "provider": {
+    "id": "deepseek",
+    "upstream_id": "deepseek",
+    "name": "DeepSeek",
+    "api": "openai-completions",
+    "base_url": "https://api.deepseek.com",
+    "env_var": "DEEPSEEK_API_KEY",
+    "currency": "CNY",
+    "source_currency": "USD",
+    "unit_tokens": 1000000,
+    "reasoning_map": {
+      "none": "off",
+      "minimal": "minimal",
+      "low": "low",
+      "medium": "medium",
+      "high": "high",
+      "xhigh": "xhigh",
+      "max": "max"
+    },
+    "excluded": [
+      {
+        "model_id": "deepseek-v4-flash",
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "旧名称已转向 deepseek-flash，相应旧模型已下线；保留标准名称"
+      },
+      {
+        "model_id": "deepseek-v4-flash-vision-exp",
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "旧名称已转向 deepseek-flash，相应旧模型已下线；保留标准名称"
+      }
+    ],
+    "patches": [
+      {
+        "model_id": "deepseek-flash",
+        "path": "pricing",
+        "expected": {
+          "input": null,
+          "output": null,
+          "cache_read": null,
+          "cache_write": null,
+          "currency": "CNY",
+          "unit_tokens": 1000000,
+          "tiers": []
+        },
+        "replacement": {
+          "input": null,
+          "output": null,
+          "cache_read": null,
+          "cache_write": null,
+          "currency": "CNY",
+          "unit_tokens": 1000000,
+          "tiers": [
+            {
+              "condition": "高峰：Asia/Shanghai (UTC+08:00)，周一至周五且非中国法定节假日 09:00–12:00、14:00–18:00",
+              "input": "2",
+              "output": "8",
+              "cache_read": "0.04",
+              "cache_write": null
+            },
+            {
+              "condition": "空闲：上述高峰以外的所有时段，包括周末和中国法定节假日全天",
+              "input": "1",
+              "output": "4",
+              "cache_read": "0.02",
+              "cache_write": null
+            }
+          ]
+        },
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "上游为 USD；中文官方 CNY 分时价格作为完整价格组保存，不换汇"
+      },
+      {
+        "model_id": "deepseek-v4-pro",
+        "path": "pricing",
+        "expected": {
+          "input": null,
+          "output": null,
+          "cache_read": null,
+          "cache_write": null,
+          "currency": "CNY",
+          "unit_tokens": 1000000,
+          "tiers": []
+        },
+        "replacement": {
+          "input": null,
+          "output": null,
+          "cache_read": null,
+          "cache_write": null,
+          "currency": "CNY",
+          "unit_tokens": 1000000,
+          "tiers": [
+            {
+              "condition": "高峰：Asia/Shanghai (UTC+08:00)，周一至周五且非中国法定节假日 09:00–12:00、14:00–18:00",
+              "input": "9.0",
+              "output": "27.0",
+              "cache_read": "0.30",
+              "cache_write": null
+            },
+            {
+              "condition": "空闲：上述高峰以外的所有时段，包括周末和中国法定节假日全天",
+              "input": "4.5",
+              "output": "13.5",
+              "cache_read": "0.15",
+              "cache_write": null
+            }
+          ]
+        },
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "上游为 USD；中文官方 CNY 分时价格作为完整价格组保存，不换汇"
+      },
+      {
+        "model_id": "deepseek-v4-pro",
+        "path": "capabilities.reasoning_levels",
+        "expected": {
+          "off": "disabled",
+          "medium": "high",
+          "high": "high",
+          "xhigh": "high",
+          "max": "max"
+        },
+        "replacement": {
+          "off": "disabled",
+          "minimal": "low",
+          "low": "low",
+          "medium": "high",
+          "high": "high",
+          "xhigh": "high",
+          "max": "max"
+        },
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "官方当前两家模型支持 low/high/max 与通用等级映射；补充上游 Pro 未列出的 low"
+      }
+    ],
+    "supplements": [],
+    "reviews": [
+      {
+        "model_id": "deepseek-flash",
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "核对标准 ID、工具与图片能力",
+        "fields": {
+          "capabilities.tools": true,
+          "capabilities.input_modalities": [
+            "text",
+            "image"
+          ]
+        }
+      },
+      {
+        "model_id": "deepseek-v4-pro",
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "核对标准 ID、工具与图片能力",
+        "fields": {
+          "capabilities.tools": true,
+          "capabilities.input_modalities": [
+            "text"
+          ]
+        }
+      }
+    ],
+    "toggle_map": {
+      "off": "disabled"
+    },
+    "reasoning_aliases": {
+      "minimal": "low",
+      "medium": "high",
+      "xhigh": "high"
+    },
+    "compat": {
+      "temperature_requires_reasoning_off": true
+    },
+    "rule_sources": [
+      {
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/guides/thinking_mode/",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "Chat Completions thinking toggle, effort mapping and temperature limitation"
+      },
+      {
+        "source": {
+          "url": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "CNY prices per million tokens; endpoints and model capabilities"
+      }
+    ]
+  }
+}

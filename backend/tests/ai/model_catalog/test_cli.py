@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.ai.scripts.model_catalog import main
+from app.ai.scripts.generate_models import main
 
 
 @pytest.mark.parametrize(

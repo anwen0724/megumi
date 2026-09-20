@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "provider": {
+    "id": "openai",
+    "upstream_id": "openai",
+    "name": "OpenAI",
+    "api": "openai-responses",
+    "base_url": "https://api.openai.com/v1",
+    "env_var": "OPENAI_API_KEY",
+    "currency": "USD",
+    "source_currency": "USD",
+    "unit_tokens": 1000000,
+    "reasoning_map": {
+      "none": "off",
+      "minimal": "minimal",
+      "low": "low",
+      "medium": "medium",
+      "high": "high",
+      "xhigh": "xhigh",
+      "max": "max"
+    },
+    "excluded": [
+      {
+        "model_id": "gpt-realtime-2.1",
+        "source": {
+          "url": "https://developers.openai.com/api/docs/models/gpt-realtime-2.1",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "仅支持 Realtime endpoint，当前接入 Responses，不生成此协议模型"
+      },
+      {
+        "model_id": "gpt-5.6",
+        "source": {
+          "url": "https://github.com/earendil-works/pi/blob/e98f287ee/packages/ai/scripts/generate-models.ts",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "参考 pi 明确记录此 models.dev 别名不被 OpenAI API 接受；非本项目真实调用验证"
+      }
+    ],
+    "patches": [],
+    "supplements": [],
+    "reviews": [
+      {
+        "model_id": "gpt-6-astra",
+        "source": {
+          "url": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "抽查限制、输入模态和 effort，不代表所有模型已复核",
+        "fields": {
+          "context_window": 1050000,
+          "max_output_tokens": 128000,
+          "capabilities.input_modalities": [
+            "text",
+            "image"
+          ],
+          "capabilities.reasoning_levels.low": "low",
+          "capabilities.reasoning_levels.max": "max"
+        }
+      },
+      {
+        "model_id": "gpt-5-pro",
+        "source": {
+          "url": "https://developers.openai.com/api/docs/models/gpt-5-pro",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "核对最大输出与仅 high 推理等级；上游当前已一致，无需修正",
+        "fields": {
+          "context_window": 400000,
+          "max_output_tokens": 272000,
+          "capabilities.reasoning_levels.high": "high"
+        }
+      },
+      {
+        "model_id": "gpt-4.1",
+        "source": {
+          "url": "https://developers.openai.com/api/docs/models/gpt-4.1",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "本次重新核对限制与输入模态，保留已核实来源",
+        "fields": {
+          "context_window": 1047576,
+          "max_output_tokens": 32768,
+          "capabilities.input_modalities": [
+            "text",
+            "image"
+          ],
+          "capabilities.tools": true
+        }
+      }
+    ],
+    "price_condition": "Standard service tier; default reasoning mode; non-regional-processing endpoint",
+    "rule_sources": [
+      {
+        "source": {
+          "url": "https://developers.openai.com/api/docs/pricing",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "USD per million tokens; Standard only; context tiers are request-wide"
+      },
+      {
+        "source": {
+          "url": "https://developers.openai.com/api/reference/resources/responses/methods/create",
+          "checked_at": "2026-09-20"
+        },
+        "reason": "Responses reasoning effort maps none to off; other declared levels retain their value"
+      }
+    ]
+  }
+}
