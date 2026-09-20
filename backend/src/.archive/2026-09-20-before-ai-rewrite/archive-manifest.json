@@ -1,0 +1,592 @@
+[
+  {
+    "path": "app\\__init__.py",
+    "sha256": "FE8DF10AA27CCEE5A9C4A1DB5E545CCAA9A362C3B7A48A625F55C353D5B9B7C9",
+    "bytes": 80
+  },
+  {
+    "path": "app\\py.typed",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "bytes": 0
+  },
+  {
+    "path": "app\\ai\\__init__.py",
+    "sha256": "214DE84A5A3BE5FC8F32DE6CCB83F9B96BFB44F453056A7A6D91CD394018CDFE",
+    "bytes": 84
+  },
+  {
+    "path": "app\\ai\\env_api_keys.py",
+    "sha256": "1C7E5D9ACD5DC8762E9D7AE79B122177292761112249567D0A23819522CD2E4D",
+    "bytes": 2163
+  },
+  {
+    "path": "app\\ai\\models_store.py",
+    "sha256": "DBD764361423BC1D5060A281AA6840FFA70A02235C3B09FC76036A11BA0E15C5",
+    "bytes": 3133
+  },
+  {
+    "path": "app\\ai\\models.py",
+    "sha256": "ACB291CDB293C228A6FF2860BBF01775F5066C9A31B7518B4FFF3322DEC6DAB6",
+    "bytes": 36143
+  },
+  {
+    "path": "app\\ai\\types.py",
+    "sha256": "25201C38C02FD270152F8DE412182AC367494C43861BE49742CF575553F611CB",
+    "bytes": 38322
+  },
+  {
+    "path": "app\\ai\\api\\__init__.py",
+    "sha256": "7DEC581AB898D09C32BE7B455FD67EED0D22EB38F3A68525FA897623D878709C",
+    "bytes": 53
+  },
+  {
+    "path": "app\\ai\\api\\constrained_sampling.py",
+    "sha256": "F4B8552416596F0F04CBEF00C273689E51215DF81D0B9AB1205F91FF108B3CCD",
+    "bytes": 14335
+  },
+  {
+    "path": "app\\ai\\api\\lazy.py",
+    "sha256": "1E394FEFE6D226E7B10FC44AD31943F0775FD7EBD46AB5D731098FCE0712AAAE",
+    "bytes": 5032
+  },
+  {
+    "path": "app\\ai\\api\\openai_completions_lazy.py",
+    "sha256": "0DB5E5C27B111BE23B336A3A2F0CF03E75E95248C36D499B42BBB77596E23828",
+    "bytes": 1700
+  },
+  {
+    "path": "app\\ai\\api\\openai_completions_params.py",
+    "sha256": "CBEC97FFEA2D9D65D83CA231E4B92976C4E3414B896C3390A82498840FF60197",
+    "bytes": 57850
+  },
+  {
+    "path": "app\\ai\\api\\openai_completions.py",
+    "sha256": "F1F0DE4A7ED8A23D804016F746D51E2C69ACFCCC7062E645FC8970070C4EB83D",
+    "bytes": 27936
+  },
+  {
+    "path": "app\\ai\\api\\openai_prompt_cache.py",
+    "sha256": "D2FD52C3E513FF8D241796D2B85C0707271D6272AAA4C528E700F36D1DA1D8CF",
+    "bytes": 998
+  },
+  {
+    "path": "app\\ai\\api\\simple_options.py",
+    "sha256": "2AE0C9043A8C26C51346327F243D74A4442515C23080BB0F9198E1169CCF4CF6",
+    "bytes": 5773
+  },
+  {
+    "path": "app\\ai\\api\\sse_transport.py",
+    "sha256": "94CF7D1A7F930C46C07E72901FE1DC2EAC587428C11A22B1F1C960F244C35D14",
+    "bytes": 6056
+  },
+  {
+    "path": "app\\ai\\api\\transform_messages.py",
+    "sha256": "975526E097F7564AD65FFB7B2829B97B8ADDC52E263361196816D9B6700BD800",
+    "bytes": 12869
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "188BE1C94C1F4389F346571E54D3DA49CD733E7EB1974D13F2437BA4F945E50A",
+    "bytes": 217
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\constrained_sampling.cpython-312.pyc",
+    "sha256": "4825F1B9740C84DFFA846C2988639C78A217A5917A206D6CC3338A513F34080E",
+    "bytes": 16867
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\lazy.cpython-312.pyc",
+    "sha256": "7D3FEE3A5F09663F51933DFAFC32CB5D0D584E251038A3E2B249A142646A152E",
+    "bytes": 7345
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\openai_completions_lazy.cpython-312.pyc",
+    "sha256": "0BFE2507C0068D3286BF062B817E7153E6EA137AFB64B7C6C4799F021D30AC9B",
+    "bytes": 2328
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\openai_completions_params.cpython-312.pyc",
+    "sha256": "D501C6013FD7F3CE41A10694AB1F950CBED61DA04F9B0964DB6319A100EDF5F7",
+    "bytes": 55557
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\openai_completions.cpython-312.pyc",
+    "sha256": "EA4002E12EEA20CF2532F6E41C00FA2AED2930456391411F13C268B5247AE2AF",
+    "bytes": 30846
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\openai_prompt_cache.cpython-312.pyc",
+    "sha256": "EE376A77529D041F948CED3B4A592B5B1CEAEC3E80722BB5A1606E40691A6421",
+    "bytes": 1235
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\simple_options.cpython-312.pyc",
+    "sha256": "416445C0D6FF745B519B83376A47309303432DBDEF342138EECECF1CD6E8F28F",
+    "bytes": 6339
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\sse_transport.cpython-312.pyc",
+    "sha256": "9E88E7E5CB4DB8C70F53D26C0742E539F1F45FDCE525221DE7059CDB54F2E289",
+    "bytes": 8653
+  },
+  {
+    "path": "app\\ai\\api\\__pycache__\\transform_messages.cpython-312.pyc",
+    "sha256": "50C685AB87A5AD76DEE0E4066EB39EDC331AB6617429796558814A207D28FF27",
+    "bytes": 11810
+  },
+  {
+    "path": "app\\ai\\auth\\__init__.py",
+    "sha256": "D949972C7B2F65F73370BF6BD1D2B8DC5B43013C194729AD686C5C0E8856427C",
+    "bytes": 44
+  },
+  {
+    "path": "app\\ai\\auth\\context.py",
+    "sha256": "BB0C3331533AD0B24BE6C83C6F960688BE49E1CC9891DAD5829454C9D94EFBAD",
+    "bytes": 1477
+  },
+  {
+    "path": "app\\ai\\auth\\helpers.py",
+    "sha256": "8511DE113A29BEC5FF66E6054A67B2F0BE03733DDB2FFD253F89E6CB4F98A069",
+    "bytes": 4021
+  },
+  {
+    "path": "app\\ai\\auth\\resolve.py",
+    "sha256": "B291C3B92B1C819367A41228D9CAE0332DBB2C5CA92F24484F1D77D1EA419E08",
+    "bytes": 8182
+  },
+  {
+    "path": "app\\ai\\auth\\types.py",
+    "sha256": "19F988F86677401785A0FECEEA2DC852822C6774CE8D20B68914F4D5C456EC89",
+    "bytes": 8172
+  },
+  {
+    "path": "app\\ai\\auth\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "ACD3E2FC9CDAFBA958EB76A921936B9371D1B6D26FEE3C03F956125A8B9EC7DD",
+    "bytes": 209
+  },
+  {
+    "path": "app\\ai\\auth\\__pycache__\\context.cpython-312.pyc",
+    "sha256": "E3660353F2A22C93C68E5B3E1AB7DBD7EFC2DF77ED00F48260D97813CFCE689E",
+    "bytes": 2292
+  },
+  {
+    "path": "app\\ai\\auth\\__pycache__\\helpers.cpython-312.pyc",
+    "sha256": "1EB660D1605021AD28AACDE629AADED225BFA91E189D55F66E9F625172F6FCFE",
+    "bytes": 5751
+  },
+  {
+    "path": "app\\ai\\auth\\__pycache__\\resolve.cpython-312.pyc",
+    "sha256": "20357E084FCC82781844A12805342377162B619F32334F2230B81EB4BE52DF49",
+    "bytes": 9911
+  },
+  {
+    "path": "app\\ai\\auth\\__pycache__\\types.cpython-312.pyc",
+    "sha256": "AA068FC1D689C5D97EA67FEE3394B561C46D5FC6F9B69B27387020E2482F48D2",
+    "bytes": 12733
+  },
+  {
+    "path": "app\\ai\\providers\\__init__.py",
+    "sha256": "092C00DF948ACAA74DCA8FA75A1073C59C0207A18427699DA16C063F94859684",
+    "bytes": 55
+  },
+  {
+    "path": "app\\ai\\providers\\builtins.py",
+    "sha256": "E759DC5EB40B193F6A6FA565BEA0563E3187ED2B3F50C9B8C342AA9CCF80CF7B",
+    "bytes": 2993
+  },
+  {
+    "path": "app\\ai\\providers\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "26D97DC69DFA63E658BF523A4F0992466A5FD92F3F88F0C11E0BFC3FD749476F",
+    "bytes": 225
+  },
+  {
+    "path": "app\\ai\\providers\\__pycache__\\builtins.cpython-312.pyc",
+    "sha256": "29BEFB5CECFB52F9D194BE2A0D6AD3B403AB6DC45517D0F8A4860C7BEE6D4DC6",
+    "bytes": 3645
+  },
+  {
+    "path": "app\\ai\\providers\\__pycache__\\deepseek_models.cpython-312.pyc",
+    "sha256": "302E4522A8B454F7C2A02CB4D3950971496FB48C341B7638E8A7819A130483F5",
+    "bytes": 1213
+  },
+  {
+    "path": "app\\ai\\providers\\__pycache__\\huggingface_models.cpython-312.pyc",
+    "sha256": "A1E5F8ED3FEF3F5CF1689DF820788E46A0B1C6F85A397D7079BB16D9FF1B21A6",
+    "bytes": 896
+  },
+  {
+    "path": "app\\ai\\providers\\__pycache__\\image_models_generated.cpython-312.pyc",
+    "sha256": "BA43B353E6F24DDABDF22DDC4B04AA3A5E5769D2207EC0E9225DD5A455CEA5B3",
+    "bytes": 914
+  },
+  {
+    "path": "app\\ai\\providers\\__pycache__\\moonshotai_models.cpython-312.pyc",
+    "sha256": "5C85485515294E5F88E22DC9AD1F91851BD6E49A115AE4771D7A03472C93C39C",
+    "bytes": 867
+  },
+  {
+    "path": "app\\ai\\scripts\\__init__.py",
+    "sha256": "FC5F6F354610875E4A691D6056BDDD63F3FACA551D1B56450C52D22ABEF2317B",
+    "bytes": 61
+  },
+  {
+    "path": "app\\ai\\scripts\\check_model_data.py",
+    "sha256": "378ECD80B9541FD570E5BD195991591CC5B3EDDF7E1B0925DA67508B2BD7445B",
+    "bytes": 1222
+  },
+  {
+    "path": "app\\ai\\scripts\\generate_image_models.py",
+    "sha256": "617701CE9916A60B55A5FD86210BF55956939CCB477DE84341F24DD09DC56AF9",
+    "bytes": 7564
+  },
+  {
+    "path": "app\\ai\\scripts\\generate_test_image.py",
+    "sha256": "078376A4A6DAA5CE0072C4C73DBB7C0E9E603B307E0E236CCA2B8AC9E5C7B525",
+    "bytes": 2449
+  },
+  {
+    "path": "app\\ai\\scripts\\model_data.py",
+    "sha256": "042B29355B6155C615080679874152DFA7D8EC036205CDED142BDF4675D2555C",
+    "bytes": 15187
+  },
+  {
+    "path": "app\\ai\\scripts\\models_dev_reasoning_options.py",
+    "sha256": "617D385F06720F07B5552D7CBBAE50A845B10FDE6AA0ABA9931126FBBB9D01E5",
+    "bytes": 2531
+  },
+  {
+    "path": "app\\ai\\scripts\\openrouter_reasoning_options.py",
+    "sha256": "3066B7078D5361E1F9BFC5D01E1DBF40810C543C60704865DA2CDCEF5BD6CA11",
+    "bytes": 2151
+  },
+  {
+    "path": "app\\ai\\scripts\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "1D781F39A40B5A5737F749E6DB035477FC0A25992B4D35C0DE0CAECBEA231947",
+    "bytes": 229
+  },
+  {
+    "path": "app\\ai\\scripts\\__pycache__\\check_model_data.cpython-312.pyc",
+    "sha256": "FEAD0047885B256C2F2796861E5493B44FC28347E510F9E6CA2D67B9401D8DC0",
+    "bytes": 1750
+  },
+  {
+    "path": "app\\ai\\scripts\\__pycache__\\generate_image_models.cpython-312.pyc",
+    "sha256": "F4496FE876D97911F1B4A265637682703B16D58462262256F60200A2B5EDEFE6",
+    "bytes": 9769
+  },
+  {
+    "path": "app\\ai\\scripts\\__pycache__\\generate_test_image.cpython-312.pyc",
+    "sha256": "BF741D4D973543E6278E293E759E6071789AE8566F227662A5AA305B1F88B9BC",
+    "bytes": 3865
+  },
+  {
+    "path": "app\\ai\\scripts\\__pycache__\\model_data.cpython-312.pyc",
+    "sha256": "1FCE95DE0C7A3EAE31BFA1E501B0FE0EE0D00E9C888E105DC3627C9693AF9920",
+    "bytes": 20776
+  },
+  {
+    "path": "app\\ai\\utils\\__init__.py",
+    "sha256": "4B8871C1FB68DA9BDEA650925C2D420C73E1852D74825844573D9914053F6DCD",
+    "bytes": 48
+  },
+  {
+    "path": "app\\ai\\utils\\abort_signals.py",
+    "sha256": "0BCE75CB4F2E0F325BCBCA4A7BCFEE718BA6D7D509EAAB1444D4776C5C846C99",
+    "bytes": 2378
+  },
+  {
+    "path": "app\\ai\\utils\\abort.py",
+    "sha256": "3D63D5952341BA7D798E79E6DF8A79E512E5BC852E36314750416704833DB72C",
+    "bytes": 6208
+  },
+  {
+    "path": "app\\ai\\utils\\awaitable.py",
+    "sha256": "AB8FFA935E912C3EB0A692B40CD5EFAA6378DAF53E0D76AB6886776989E9BED0",
+    "bytes": 4612
+  },
+  {
+    "path": "app\\ai\\utils\\diagnostics.py",
+    "sha256": "762615D72DE9DFC9F6E0DF3B929869339E1AF596DC474796C3FB7F47CA2896BF",
+    "bytes": 2687
+  },
+  {
+    "path": "app\\ai\\utils\\error_body.py",
+    "sha256": "13DBF54873886FB8AED85CF735EE8EFC964CC8574DCB0B569FBB3B622903471A",
+    "bytes": 6075
+  },
+  {
+    "path": "app\\ai\\utils\\estimate.py",
+    "sha256": "20AA008797D343C091FB8B0D3ABBF1E57B320A125AD1CC2C8F5298592F5B2B57",
+    "bytes": 6605
+  },
+  {
+    "path": "app\\ai\\utils\\event_stream.py",
+    "sha256": "61B4027044774A9FB9819E8CD0ABB41812F1A3D25E0DDCAF562411F5B454FAB9",
+    "bytes": 6218
+  },
+  {
+    "path": "app\\ai\\utils\\hash.py",
+    "sha256": "455DD252B5F7595FCAE824DA739D71C0D87BCDE1A0232B5A28C21123F37B1F74",
+    "bytes": 1988
+  },
+  {
+    "path": "app\\ai\\utils\\headers.py",
+    "sha256": "1E7D3DBA64EFBA50C230B09F39B8E9D2F2423DF9473EA8480A34A5101BC2A61A",
+    "bytes": 1402
+  },
+  {
+    "path": "app\\ai\\utils\\http_proxy.py",
+    "sha256": "069D2B7AFE28825454A01E3613389141BA51DC22E18C8E6976344818D1C54C05",
+    "bytes": 6862
+  },
+  {
+    "path": "app\\ai\\utils\\int_math.py",
+    "sha256": "6689F746BF21B5BEE8DEA3DF5180DDF4F78EF66F2D6EBE990C7EF593825732A1",
+    "bytes": 1497
+  },
+  {
+    "path": "app\\ai\\utils\\json_parse.py",
+    "sha256": "F13BB7F8159F31868FE7DDB8339CCC5CBCC34016051356C1B7757F2C03B676F0",
+    "bytes": 12386
+  },
+  {
+    "path": "app\\ai\\utils\\json_schema.py",
+    "sha256": "17C5C316199920BE1B0820756E0BFC78BEADD2654526966E8C001005926FE976",
+    "bytes": 1166
+  },
+  {
+    "path": "app\\ai\\utils\\overflow.py",
+    "sha256": "6643E957CFF88E785F1E8D7A9674BF4B0CAF882F5513952F74C3420D3657D218",
+    "bytes": 5318
+  },
+  {
+    "path": "app\\ai\\utils\\provider_env.py",
+    "sha256": "7B6ECAA21229DBF03016232ECCA12C276C336D323ADC5D732E203F598F6CBF1E",
+    "bytes": 1960
+  },
+  {
+    "path": "app\\ai\\utils\\provider_retry.py",
+    "sha256": "FEF6734AA4809B4F12545252DA8067F33FDB3F4DD88AE6D6C4A29EDC28CB5A42",
+    "bytes": 8271
+  },
+  {
+    "path": "app\\ai\\utils\\retry.py",
+    "sha256": "21E5F652A8A569BFCF725BD24D7A0A5F7B935EFEF3BA4EEA8C86BE99661099A6",
+    "bytes": 9659
+  },
+  {
+    "path": "app\\ai\\utils\\sanitize_unicode.py",
+    "sha256": "6A627773F694C1986F0F87215A7FA3715C294119417948223E988905D5FDC291",
+    "bytes": 922
+  },
+  {
+    "path": "app\\ai\\utils\\sleep.py",
+    "sha256": "74B6A3AACE94A747508DEF22D3584B43E805B2BD45801D07B13D89181C16614D",
+    "bytes": 1870
+  },
+  {
+    "path": "app\\ai\\utils\\text.py",
+    "sha256": "B1F82109E83D45623E0C83DEE5B8F73BA1B650E833AF1D69EB6D95B7F1B0510A",
+    "bytes": 2336
+  },
+  {
+    "path": "app\\ai\\utils\\transcript.py",
+    "sha256": "7C8F2C2D6201B252005B21A911B6BABD96242AB56FA13E14673BE1982BD95485",
+    "bytes": 12923
+  },
+  {
+    "path": "app\\ai\\utils\\user_agent.py",
+    "sha256": "CB9577AAB518781FAE00259B21D0EE7A73436137EABE52BE23FD0F3D714BBF02",
+    "bytes": 1389
+  },
+  {
+    "path": "app\\ai\\utils\\uuid.py",
+    "sha256": "92A6D8638432E43088F6A9A6143884D5B72097AC1800F3BBDB0A2E779563BF5B",
+    "bytes": 3122
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "0AC323A15C1CBC1985129CCE50AB3B9CB99E80750303F2CF372025FAB8DA09FB",
+    "bytes": 213
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\abort_signals.cpython-312.pyc",
+    "sha256": "E21C14EB3EC013F2A874BE2E5A68788A232F21E6CD9576984D227DF3627736CD",
+    "bytes": 3448
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\abort.cpython-312.pyc",
+    "sha256": "27B9659BE8AB26AF251B65BF66F1199AE66205A74516B8E4B0688EA3DCCC7D2B",
+    "bytes": 8937
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\awaitable.cpython-312.pyc",
+    "sha256": "B6D64ACE836159BB04673B89CFD146768AC86731B44919C7DCB8C1816729C0BA",
+    "bytes": 5475
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\diagnostics.cpython-312.pyc",
+    "sha256": "5250C9A34C3E483C9100F187C518A6C8439A1AB2A7FF8CA6E6E93ED313DCCE8B",
+    "bytes": 3498
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\error_body.cpython-312.pyc",
+    "sha256": "BF9BA15BC9FB66791FF5B4AE23450DA3F3B4194EC1D255580C9AC5A2D91C224D",
+    "bytes": 7297
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\estimate.cpython-312.pyc",
+    "sha256": "597004F4650C12D3C342C98D14AF8CEE469ADAAFFEBCEE7F3E36FDA60DE7A488",
+    "bytes": 8576
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\event_stream.cpython-312.pyc",
+    "sha256": "BC3B5D39D5AC574D7165363EB912DB00D3DAC4B3D9AE84F335422E358CFAB2EF",
+    "bytes": 9574
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\hash.cpython-312.pyc",
+    "sha256": "732750C1282E29D6AE7824A6A3A8F4900165C1E373FA405F9EFED22B196DC512",
+    "bytes": 2981
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\headers.cpython-312.pyc",
+    "sha256": "504D92B3073EEB55CF595159A67DBC547656CD8BF8D563ACEB80ADF4B41F0E84",
+    "bytes": 1744
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\http_proxy.cpython-312.pyc",
+    "sha256": "EDB24C0C5ACAC51F66B660B0EF6461BE2DE17BA09DD1F0B5225DE43D4F6B8341",
+    "bytes": 8008
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\int_math.cpython-312.pyc",
+    "sha256": "5120030B198BA6DC225F9AB07B3316B18506AAA46C2B6B58E596F355384B50EA",
+    "bytes": 2016
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\json_parse.cpython-312.pyc",
+    "sha256": "1A7D34D1D929771524DD50898DED60C17FBADA73C498484B45912E0117D2762F",
+    "bytes": 17107
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\json_schema.cpython-312.pyc",
+    "sha256": "A5DE38217729B6F679BE58DC7437E1E6AC3EDCDFAEF52D323FEF9154A1B452AA",
+    "bytes": 1416
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\overflow.cpython-312.pyc",
+    "sha256": "C6F271971B34DD6C0249ACE4E10DF5B0FB5B02011201BE5EC851B435C3280BDB",
+    "bytes": 5427
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\provider_env.cpython-312.pyc",
+    "sha256": "E65F475EDA0B49E5C081877088B26A5CBCF6AAD40A32952DBE7BF85E659AC460",
+    "bytes": 2519
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\provider_retry.cpython-312.pyc",
+    "sha256": "0DCF8865D76E2A1D6A74E309575DB077D23D5491C38E7E79FFF9A8FECE8B6907",
+    "bytes": 10619
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\retry.cpython-312.pyc",
+    "sha256": "3A79777AA9EF0A939ACCA9294450809E3F6C3FCCDAFE453C9AA15913BE08FD20",
+    "bytes": 10074
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\sanitize_unicode.cpython-312.pyc",
+    "sha256": "B6881AB1C4ADF97109ED12B1C46CA73839DF8A32E1BF3565ADD6DB0CEA340F86",
+    "bytes": 1226
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\sleep.cpython-312.pyc",
+    "sha256": "1D8C92B9E3BA31806C7671E1795F49C618C57B72174D058691E75C216DE61180",
+    "bytes": 2972
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\text.cpython-312.pyc",
+    "sha256": "9FEB2C0C8D81E70342A87E6EF47C32C3482269AB29E63A229105D3A05551F676",
+    "bytes": 3421
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\transcript.cpython-312.pyc",
+    "sha256": "D249E1DC8CE1D529A65BA7E356842CE4A6CCC097A2BBBDF32D210B73A67C0030",
+    "bytes": 15544
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\user_agent.cpython-312.pyc",
+    "sha256": "002CB9C116149820830BA819BB49A32B3E53E6F8FCBF5B5D65CFAAE40CD1829F",
+    "bytes": 1671
+  },
+  {
+    "path": "app\\ai\\utils\\__pycache__\\uuid.cpython-312.pyc",
+    "sha256": "D9B4425978E30BD793902E126DDA92A048B4D9EC418EAB9BEA664B5D125200F7",
+    "bytes": 3858
+  },
+  {
+    "path": "app\\ai\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "E3E9333551CD1E8ECE0D2555C8DEE484E77CBE88A014F53D1E6B7DD0FA105C70",
+    "bytes": 243
+  },
+  {
+    "path": "app\\ai\\__pycache__\\models_store.cpython-312.pyc",
+    "sha256": "7D138A792BD0FC586BA1CD4C59AF35D154A2D8394709ABD5C719A361203F9754",
+    "bytes": 4849
+  },
+  {
+    "path": "app\\ai\\__pycache__\\models.cpython-312.pyc",
+    "sha256": "09F179DB9E52E684C15863E1914587F94816C0C8460A0B467B052EB378528647",
+    "bytes": 45989
+  },
+  {
+    "path": "app\\ai\\__pycache__\\types.cpython-312.pyc",
+    "sha256": "4D6064A14A7217D467CFE041073E2C1F9B210819B24CD32ADD3B860564DF2276",
+    "bytes": 52308
+  },
+  {
+    "path": "app\\server\\__init__.py",
+    "sha256": "5D91E7CD16630E3E46CF27979C89EFDCFAFB4163C98B36A2BCBB7F7F112769AD",
+    "bytes": 35
+  },
+  {
+    "path": "app\\server\\app.py",
+    "sha256": "673723B0C3089545A42DC7D9269C8C6D2BC78257937BE7BF31FE47DDA314E9F8",
+    "bytes": 786
+  },
+  {
+    "path": "app\\telemetry\\__init__.py",
+    "sha256": "EBB7847302CDA6A6CFA145724032664BCB4CC7D0F48C50A2F85F6D9B070A8452",
+    "bytes": 2913
+  },
+  {
+    "path": "app\\telemetry\\memory.py",
+    "sha256": "B15A27ED5F47FC96F763572B5DBC7ACACB97B461096D4BAD32377049DC62C1F4",
+    "bytes": 9501
+  },
+  {
+    "path": "app\\telemetry\\noop.py",
+    "sha256": "07C2F2702E024F7CC3CF9C0A4893B047D5C5D42236A09FFCA885FF3C628DE0D7",
+    "bytes": 1455
+  },
+  {
+    "path": "app\\telemetry\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "613D24E7CEBEA57105623779FCC5C58EBF4671DA386D7BF19E856368D5B7C7F5",
+    "bytes": 4580
+  },
+  {
+    "path": "app\\telemetry\\__pycache__\\memory.cpython-312.pyc",
+    "sha256": "54FD5496003D6FCD9D32EA045E307733AA684C904B873FC7B21D76B35CFB1BBA",
+    "bytes": 13460
+  },
+  {
+    "path": "app\\telemetry\\__pycache__\\noop.cpython-312.pyc",
+    "sha256": "87527028F56F81680FC15314709AAC1359A6C131172123933FA8B88B2F2DE1E0",
+    "bytes": 2709
+  },
+  {
+    "path": "app\\__pycache__\\__init__.cpython-312.pyc",
+    "sha256": "C9CD798042802370F4F3CA6224CB2B56A412D41F156F7EC861769D903C2AC14E",
+    "bytes": 243
+  }
+]

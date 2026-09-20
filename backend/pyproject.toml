@@ -32,6 +32,7 @@ dev = [
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = [".archive"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -40,6 +41,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 [tool.mypy]
 python_version = "3.12"
 files = ["src"]
+exclude = ['(^|[\\/])\.archive([\\/]|$)']
 strict = true
 warn_unreachable = true
 show_error_codes = true
@@ -48,4 +50,4 @@ show_error_codes = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "strict"
-addopts = "-q"
+addopts = "-q --ignore=tests/.archive"
