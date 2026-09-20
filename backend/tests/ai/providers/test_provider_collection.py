@@ -2,7 +2,6 @@
 
 import pytest
 
-from app.ai.errors import LifecycleError
 from app.ai.models import create_models
 from app.ai.provider import Provider
 
@@ -92,21 +91,29 @@ async def test_close_is_idempotent_and_existing_model_remains_readable(provider)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["set", "get", "list", "available", "resolve"])
-async def test_closed_collection_rejects_service_operations(provider, operation):
-    models = create_models([provider])
+async def test_closing_runtime_keeps_static_management_and_auth_checks_available(provider):
+    from dataclasses import replace
+
+    from app.ai import ApiKeyCredential, InMemoryCredentialStore
+
+    credentials = InMemoryCredentialStore()
+    await credentials.set(provider.id, ApiKeyCredential("fake-key"))
+    models = create_models([provider], credentials=credentials)
+    snapshot = models.get_model("sample", "small")
     await models.aclose()
-    with pytest.raises(LifecycleError, match="closed"):
-        if operation == "set":
-            models.set_provider(provider)
-        elif operation == "get":
-            models.get_model("sample", "small")
-        elif operation == "list":
-            models.get_models()
-        elif operation == "available":
-            await models.get_available_models()
-        else:
-            await models.resolve_auth(provider.models[0])
+    assert models.get_model("sample", "small") == snapshot
+    assert models.get_models() == (snapshot,)
+    assert await models.get_available_models() == (snapshot,)
+    assert (await models.resolve_auth(snapshot)).key == "fake-key"
+    models.set_provider(replace(provider, name="Replacement"))
+    assert models.get_provider(provider.id).name == "Replacement"
+    models.delete_provider(provider.id)
+    assert models.get_providers() == ()
+    models.set_provider(provider)
+    models.clear()
+    assert models.get_models() == ()
+    await models.aclose()
+    assert snapshot.id == "small"
 
 
 @pytest.mark.asyncio
