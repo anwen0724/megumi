@@ -216,3 +216,13 @@ def test_unknown_tools_missing_fields_and_extra_properties_are_explicit_errors()
     call = ToolCall(id="c", name="example", arguments={"count": "2"})
     assert validate_tool_call([tool], call) == {"count": 2}
     assert call.arguments == {"count": "2"}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(1e-7, "1e-7"), (1e-6, "0.000001"), (1e21, "1e+21"), (-0.0, "0")]
+)
+def test_number_to_string_uses_pi_number_format(value, expected):
+    from app.ai.tools.arguments import validate_tool_arguments
+
+    tool = make_tool({"type": "object", "properties": {"value": {"type": "string"}}})
+    assert validate_tool_arguments(tool, {"value": value}) == {"value": expected}

@@ -84,7 +84,7 @@ type AssistantContent = Annotated[
 class SystemMessage(_Record):
     """An ordered instruction and tool declaration change."""
 
-    content: str
+    content: str | list[TextContent]
     timestamp: int
     sections: dict[str, str | None] | None = None
     tools_added: list[ToolDefinition] | None = None

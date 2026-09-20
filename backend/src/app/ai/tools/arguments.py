@@ -5,6 +5,7 @@ import math
 import re
 from collections.abc import Sequence
 from copy import deepcopy
+from decimal import Decimal
 from typing import cast
 
 from partial_json_parser import loads as partial_loads  # type: ignore[import-untyped]
@@ -120,11 +121,7 @@ def _primitive(value: JSONValue, kind: str) -> JSONValue:
         if isinstance(value, bool):
             return "true" if value else "false"
         if isinstance(value, (int, float)):
-            return (
-                str(int(value))
-                if math.isfinite(value) and float(value).is_integer()
-                else str(value)
-            )
+            return _number_text(value)
     elif kind == "null" and (value == "" or value == 0):
         return None
     return value
@@ -224,3 +221,20 @@ def validate_tool_call(
     if tool is None:
         raise ToolValidationError("tool", f'unknown tool "{tool_call.name}"')
     return validate_tool_arguments(tool, tool_call.arguments)
+
+
+def _number_text(value: int | float) -> str:
+    """Use pi/JavaScript decimal-versus-exponent thresholds, not Python repr defaults."""
+    number = Decimal(str(value))
+    if not number.is_finite():
+        return "NaN" if number.is_nan() else "-Infinity" if number.is_signed() else "Infinity"
+    if number.is_zero():
+        return "0"
+    if Decimal("0.000001") <= number.copy_abs() < Decimal("1e21"):
+        text = format(number, "f")
+        return text.rstrip("0").rstrip(".") if "." in text else text
+    mantissa, exponent = format(number, "e").split("e")
+    if "." in mantissa:
+        mantissa = mantissa.rstrip("0").rstrip(".")
+    power = int(exponent)
+    return f"{mantissa}e{power:+d}"

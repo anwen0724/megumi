@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 
-from app.ai.messages import Context, Message, SystemMessage, ToolDefinition, Transcript
+from app.ai.messages import Context, Message, SystemMessage, TextContent, ToolDefinition, Transcript
 
 
 def normalize_context(context: Context) -> Transcript:
@@ -36,8 +36,9 @@ def get_current_system_message(messages: Sequence[Message]) -> SystemMessage | N
         if message.replace:
             text.clear()
             sections.clear()
-        if message.content:
-            text.append(message.content)
+        rendered = content_text(message.content)
+        if rendered:
+            text.append(rendered)
         for name, value in (message.sections or {}).items():
             if value is None:
                 sections.pop(name, None)
@@ -56,7 +57,7 @@ def get_current_system_message(messages: Sequence[Message]) -> SystemMessage | N
 def get_system_message_text(message: SystemMessage) -> str:
     """Render a complete prompt, following section insertion order."""
     return "\n\n".join(
-        part for part in [message.content, *(message.sections or {}).values()] if part
+        part for part in [content_text(message.content), *(message.sections or {}).values()] if part
     )
 
 
@@ -68,7 +69,8 @@ def get_current_system_prompt(messages: Sequence[Message]) -> str:
 
 def render_system_message_update(message: SystemMessage) -> str:
     """Explain named section updates when system messages remain in place."""
-    parts = [message.content] if message.content else []
+    rendered = content_text(message.content)
+    parts = [rendered] if rendered else []
     for name, value in (message.sections or {}).items():
         parts.append(
             f'Removed system prompt section "{name}".'
@@ -193,3 +195,8 @@ def get_tool_state_changes(
             if t.name not in after or not declarations_equal(t, after[t.name])
         ],
     )
+
+
+def content_text(content: str | Sequence[TextContent], separator: str = "\n") -> str:
+    """Render text blocks without changing their stored representation."""
+    return content if isinstance(content, str) else separator.join(block.text for block in content)

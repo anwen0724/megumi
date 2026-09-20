@@ -113,3 +113,19 @@ def test_declarations_strip_callbacks_and_compare_serialized_schema_order():
     first.parameters = {"type": "object", "properties": {}}
     second.parameters = {"properties": {}, "type": "object"}
     assert not declarations_equal(first, second)
+
+
+def test_system_text_blocks_round_trip_and_render_with_pi_separators():
+    from app.ai.codec import decode_messages, encode_messages
+    from app.ai.messages import TextContent
+    from app.ai.transcript import get_current_system_prompt, render_system_message_update
+
+    history = [
+        SystemMessage(content=[TextContent(text="A"), TextContent(text="B")], timestamp=0),
+        SystemMessage(content=[TextContent(text="C")], timestamp=1, sections={"s": "D"}),
+    ]
+    assert decode_messages(encode_messages(history)) == history
+    assert get_current_system_prompt(history) == "A\nB\n\nC\n\nD"
+    assert (
+        render_system_message_update(history[1]) == 'C\n\nUpdated system prompt section "s":\n\nD'
+    )

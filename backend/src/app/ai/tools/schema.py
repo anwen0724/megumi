@@ -47,14 +47,13 @@ def _allows_null(schema: dict[str, JSONValue]) -> bool:
     variants = schema.get("anyOf")
     return (
         kinds == "null"
-        or (isinstance(kinds, list)
-        and "null" in kinds)
-        or ("const" in schema
-        and schema["const"] is None)
-        or (isinstance(enum, list)
-        and None in enum)
-        or (isinstance(variants, list)
-        and any(isinstance(v, dict) and _allows_null(v) for v in variants))
+        or (isinstance(kinds, list) and "null" in kinds)
+        or ("const" in schema and schema["const"] is None)
+        or (isinstance(enum, list) and None in enum)
+        or (
+            isinstance(variants, list)
+            and any(isinstance(v, dict) and _allows_null(v) for v in variants)
+        )
     )
 
 
@@ -96,8 +95,7 @@ def _make_strict_node(schema: JSONValue) -> None:
                 if (
                     "properties" in variant
                     or "items" in variant
-                    or (isinstance(kinds, list)
-                    and any(k in kinds for k in ("object", "array")))
+                    or (isinstance(kinds, list) and any(k in kinds for k in ("object", "array")))
                 ):
                     raise StrictSchemaError("structured unions are unsupported")
             _make_strict_node(variant)

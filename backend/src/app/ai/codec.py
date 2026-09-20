@@ -21,20 +21,19 @@ def decode_messages(data: str) -> list[Message]:
         raise MessageDecodeError(str(exc)) from exc
 
 
-def _json_default(value: object) -> str:
-    """Decimal is the only non-JSON value allowed in the saved data."""
-    if isinstance(value, Decimal):
-        return str(value)
-    raise TypeError(f"Not JSON serializable: {type(value).__name__}")
-
-
 def encode_messages(messages: Sequence[Message]) -> str:
-    """Save a plain message array, validating before returning serialized data."""
-    encoded = json.dumps(
-        [asdict(message) for message in messages],
-        ensure_ascii=False,
-        default=_json_default,
-        allow_nan=False,
-    )
+    """Save a validated plain array; only monetary Decimal fields become strings."""
+    records = [asdict(message) for message in messages]
+    for record in records:
+        usage = record.get("usage")
+        if isinstance(usage, dict):
+            cost = usage.get("cost")
+            if isinstance(cost, dict):
+                for name in ("input", "output", "cache_read", "cache_write", "total"):
+                    amount = cost.get(name)
+                    if isinstance(amount, Decimal):
+                        cost[name] = str(amount)
+    # Do not use a global Decimal encoder: arguments/details must retain JSON types.
+    encoded = json.dumps(records, ensure_ascii=False, allow_nan=False)
     decode_messages(encoded)
     return encoded

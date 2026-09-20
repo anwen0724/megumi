@@ -166,3 +166,24 @@ def test_images_ids_and_null_content_are_normalized_without_editing_input(provid
         capabilities=replace(provider.models[0].capabilities, input_modalities=("text", "image")),
     )
     assert transform_messages([user], vision)[0].content == user.content
+
+
+def test_id_callback_observes_original_source_calls_even_after_prior_ids_change(provider):
+    from dataclasses import replace
+
+    source = assistant(
+        provider,
+        [
+            ToolCall(id="first", name="t", arguments={}, thought_signature="signed"),
+            ToolCall(id="second", name="t", arguments={}, thought_signature="signed"),
+        ],
+    )
+    observed = []
+
+    def normalize(call_id, target, original):
+        observed.append([(call.id, call.thought_signature) for call in original.content])
+        return "new-" + call_id
+
+    transformed = transform_messages([source], replace(provider.models[0], id="other"), normalize)
+    assert observed == [[("first", "signed"), ("second", "signed")]] * 2
+    assert [c.id for c in transformed[0].content] == ["new-first", "new-second"]

@@ -96,6 +96,7 @@ def _transform_content(
             model.api,
             model.id,
         )
+        original_source = deepcopy(message)
         content: list[AssistantContent] = []
         for block in message.content:
             if isinstance(block, ThinkingContent):
@@ -114,7 +115,7 @@ def _transform_content(
                 if normalize_tool_call_id:
                     # Supply the source identity before rewriting its call ID.
                     original = block.id
-                    normalized = normalize_tool_call_id(original, model, deepcopy(message))
+                    normalized = normalize_tool_call_id(original, model, deepcopy(original_source))
                     if normalized != original:
                         id_map[original] = normalized
                         block.id = normalized

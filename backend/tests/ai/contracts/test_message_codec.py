@@ -127,3 +127,19 @@ def test_encoder_does_not_serialize_arbitrary_objects_or_coerce_argument_numbers
     message.diagnostics = object()
     with pytest.raises((TypeError, MessageDecodeError)):
         encode_messages([message])
+
+
+def test_decimal_is_only_serialized_in_cost_fields_not_tool_arguments():
+    from decimal import Decimal
+
+    from app.ai.messages import ToolCall
+
+    msg = AssistantMessage(
+        content=[ToolCall(id="c", name="t", arguments={"n": Decimal("1.2")})],
+        provider="p",
+        api="a",
+        model="m",
+        timestamp=1,
+    )
+    with pytest.raises((TypeError, MessageDecodeError)):
+        encode_messages([msg])
