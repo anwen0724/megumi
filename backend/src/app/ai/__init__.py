@@ -1,5 +1,6 @@
 """Public configuration API for the Python AI layer; importing performs no I/O."""
 
+from app.ai.api.transform import transform_messages
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.types import ApiKeyCredential, AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.codec import decode_messages, encode_messages
@@ -110,5 +111,6 @@ __all__ = [
     "resolve_transcript",
     "resolve_transcript_tools",
     "to_tool_declaration",
+    "transform_messages",
     "without_initial_system_message",
 ]
