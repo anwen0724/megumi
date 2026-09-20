@@ -2,7 +2,10 @@
 
 import json
 
+import pytest
 from conftest import raw_model, response
+
+from app.ai.scripts.catalog_io import CatalogError
 
 
 def test_fetch_preserves_raw_fields_precision_and_runtime_outputs(tool):
@@ -36,10 +39,6 @@ def test_same_source_keeps_snapshot_bytes_and_fetch_date(tool):
     tool.fetch(transport=lambda *_: body, fetched_at="2026-09-20T00:00:00+00:00")
     assert before == {p.name: p.read_bytes() for p in (tool.inputs / "snapshots").glob("*.json")}
 
-
-import pytest
-
-from app.ai.scripts.catalog_io import CatalogError
 
 
 @pytest.mark.parametrize("bad", ["missing", "empty", "invalid-json", "timeout", "http"])
