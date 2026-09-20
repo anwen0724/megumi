@@ -1,6 +1,6 @@
 # Megumi Python AI
 
-当前实现模型与供应商管理：静态目录、供应商查询/原子替换/删除、模型查询与推理等级选择、key/headers 认证、请求配置快照以及关闭行为。可独立于 FastAPI 使用；尚不提供模型生成、SSE、协议适配器或 Agent Core。
+当前实现消息与上下文处理，以及模型与供应商管理：静态目录、供应商查询/原子替换/删除、模型查询与推理等级选择、key/headers 认证、请求配置快照以及关闭行为。可独立于 FastAPI 使用；尚不提供模型生成、SSE、协议适配器或 Agent Core。
 
 ## 使用
 
@@ -66,6 +66,47 @@ headers 按供应商、模型、认证产生的默认 Bearer、单次覆盖合�
 `aclose` 幂等标记运行时关闭，静态设置、查询和认证检查仍可用。当前没有实际生成调用或 SDK；阻止新生成和清理活动请求的行为由后续调用实现提供。
 
 Model 的 `sampling_params` 保存 JSON 采样默认，`compat` 保存两协议的可选覆盖，None 交由协议默认决定。`ModelCapabilities.reasoning` 独立声明推理能力；`reasoning_levels` 的 null 表示不支持，普通等级缺省允许，xhigh/max 需要显式声明。`get_supported_thinking_levels` 返回支持列表，`clamp_thinking_level` 对不支持等级先向上、再向下寻找；不支持推理时仅 off。
+
+## 消息、工具参数与生成进度
+
+消息与上下文接口可以独立使用：system 正文/section/工具声明重放、跨模型历史转换及缺失工具结果补齐、普通 JSON 保存恢复、工具参数解析与验证、strict Schema 转换、消息帧及 Decimal 费用计算。
+
+```python
+from app.ai import (
+    Context, UserMessage, ToolDefinition,
+    normalize_context, encode_messages, decode_messages,
+    parse_partial_arguments, validate_tool_arguments,
+)
+
+context = Context(
+    system_prompt="Answer briefly.",
+    messages=[UserMessage(content="Hello", timestamp=1)],
+)
+transcript = normalize_context(context)
+saved = encode_messages(transcript.messages)
+assert decode_messages(saved) == transcript.messages
+
+tool = ToolDefinition(
+    name="weather",
+    description="Query weather",
+    parameters={
+        "type": "object",
+        "properties": {"city": {"type": "string"}},
+        "required": ["city"],
+    },
+)
+parsed = parse_partial_arguments('{"city":"Beijing"}')
+arguments = validate_tool_arguments(tool, parsed)
+assert arguments == {"city": "Beijing"}
+```
+
+`parse_partial_arguments` 保留数组、标量与完整 null 等解析结果；`validate_tool_arguments`/`validate_tool_call` 成功才返回独立参数字典。不执行工具、不插默认值，原生 null 不转为数字/布尔/字符串。`make_strict_json_schema` 与 `resolve_json_schema_strict_sampling` 按已支持的 Schema 子集处理 prefer/require。
+
+`transform_messages` 接收消息序列、目标 Model 和可选工具 ID 回调，返回新历史。图片占位、签名转换及缺失结果补齐不写回原会话。`resolve_transcript` 与 `resolve_transcript_tools` 分别判断指令位置和工具新增锚点；同名再次声明即使内容相同也退出 additions-only。
+
+`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。当前只有事件契约和帧处理，尚无模型调用的后台生产、队列或取消运行时。
+
+`calculate_usage_cost(usage, pricing, ...)` 返回独立 UsageCost，不改 Usage。input 已排除缓存，reasoning 不重复收费；未知计数或费率保持 None。响应 service_tier 优先于请求值，不能证明适用的服务档不使用基础价。`condition_matches` 由调用方在有效服务档下给出各条件是否适用，键为现有 PricingTier.condition 原文；函数不解析条件描述。未知或多项竞争条件不能确定唯一价格时保持未知；已知零计数可为零费用。
 
 ## 模型目录维护
 

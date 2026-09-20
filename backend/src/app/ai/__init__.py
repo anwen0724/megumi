@@ -75,6 +75,7 @@ from app.ai.transcript import (
     to_tool_declaration,
     without_initial_system_message,
 )
+from app.ai.usage import calculate_usage_cost
 
 __all__ = [
     "ApiKeyCredential",
@@ -119,6 +120,7 @@ __all__ = [
     "Usage",
     "UsageCost",
     "UserMessage",
+    "calculate_usage_cost",
     "clamp_thinking_level",
     "create_models",
     "declarations_equal",
