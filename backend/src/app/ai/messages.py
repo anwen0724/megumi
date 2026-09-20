@@ -165,3 +165,19 @@ class ToolResultMessage(_Record):
 type Message = Annotated[
     SystemMessage | UserMessage | AssistantMessage | ToolResultMessage, Field(discriminator="role")
 ]
+
+
+@dataclass(kw_only=True)
+class Context:
+    """Caller shorthand; normalization moves prompt and tools into system messages."""
+
+    messages: list[Message]
+    system_prompt: str | None = None
+    tools: list[ToolDefinition] | None = None
+
+
+@dataclass(kw_only=True)
+class Transcript:
+    """Normalized input whose system records own prompt and tool state."""
+
+    messages: list[Message]
