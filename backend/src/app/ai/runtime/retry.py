@@ -71,7 +71,7 @@ async def retry_provider_request[T](
             if not permitted:
                 raise
             await wait_with_signal(
-                _sleep(_retry_delay(headers, attempt, max_retry_delay_ms)), signal
+                _sleep(_retry_delay(headers, attempt, max_retry_delay_ms, str(error))), signal
             )
     raise AssertionError("unreachable")
 
@@ -108,7 +108,9 @@ def _parse_number(value: str) -> float | None:
     return float(match[1])
 
 
-def _retry_delay(headers: Mapping[str, str], attempt: int, maximum_ms: float) -> float:
+def _retry_delay(
+    headers: Mapping[str, str], attempt: int, maximum_ms: float, provider_message: str
+) -> float:
     """Resolve server instructions before applying the local jitter policy."""
     milliseconds = _parse_number(headers.get("retry-after-ms", ""))
     if milliseconds is None and headers.get("retry-after"):
@@ -124,8 +126,8 @@ def _retry_delay(headers: Mapping[str, str], attempt: int, maximum_ms: float) ->
     if milliseconds is not None:
         if maximum_ms > 0 and milliseconds > maximum_ms:
             raise ValueError(
-                f"Server requested {milliseconds / 1000:g}s retry delay "
-                f"(max: {maximum_ms / 1000:g}s)"
+                f"Server requested {math.ceil(milliseconds / 1000)}s retry delay "
+                f"(max: {math.ceil(maximum_ms / 1000)}s). {provider_message}"
             )
         return max(0, milliseconds) / 1000
     return float(min(0.5 * 2 ** min(attempt, 4), 8) * (1 - _random() * 0.25))

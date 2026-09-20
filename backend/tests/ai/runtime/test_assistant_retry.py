@@ -189,3 +189,32 @@ async def test_user_exceptions_propagate_without_an_extra_attempt(phase):
             produce, RetryPolicy(enabled=True, max_retries=2, base_delay_ms=0), callbacks=hooks
         )
     assert len(calls) == (2 if phase == "finished" else 1)
+
+
+@pytest.mark.asyncio
+async def test_retry_delay_cap_preserves_quota_reason_across_both_retry_layers():
+    calls = []
+
+    class ProviderError(Exception):
+        status = 429
+        def __init__(self, text):
+            super().__init__(text)
+            self.headers = {"retry-after": "61"}
+
+    async def request():
+        calls.append(1)
+        raise ProviderError("429 insufficient_quota: billing limit reached")
+
+    async def produce():
+        try:
+            await retry.retry_provider_request(request, max_retries=1)
+        except Exception as error:
+            return message("error", str(error))
+        raise AssertionError("request should fail")
+
+    result = await retry_assistant_call(
+        produce, RetryPolicy(enabled=True, max_retries=2, base_delay_ms=0)
+    )
+    assert len(calls) == 1
+    assert "retry delay" in result.error_message
+    assert "insufficient_quota: billing limit reached" in result.error_message
