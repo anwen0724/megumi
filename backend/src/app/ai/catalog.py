@@ -1,9 +1,11 @@
 """Validate complete catalogs before publishing provider configuration."""
 
 import json
+import math
 import re
 from collections.abc import Mapping
 from copy import deepcopy
+from dataclasses import fields
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, urlsplit
 
@@ -101,21 +103,67 @@ def snapshot_provider(provider: Provider) -> Provider:
                     raise ConfigurationError(
                         "Prices must be finite nonnegative decimals or unknown"
                     )
-        if type(model.compat.temperature_requires_reasoning_off) is not bool:
-            raise ConfigurationError("Invalid sampling compatibility declaration")
-        caps = model.capabilities
-        if not caps.input_modalities or not set(caps.input_modalities) <= {"text", "image"}:
-            raise ConfigurationError("Invalid input modality declaration")
-        if type(caps.tools) is not bool or type(caps.temperature) is not bool:
-            raise ConfigurationError("Invalid boolean capability")
-        levels = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
-        if any(
-            level not in levels or not isinstance(target, str) or not target.strip()
-            for level, target in caps.reasoning_levels.items()
-        ):
-            raise ConfigurationError("Invalid reasoning mapping")
+        validate_model_metadata(model)
         seen.add(model.id)
     return deepcopy(provider)
+
+
+COMPAT_CHOICES = {
+    "system_role": {"system", "developer"},
+    "max_tokens_field": {"max_tokens", "max_completion_tokens"},
+    "thinking_format": {"openai", "deepseek"},
+    "session_affinity_format": {"openai", "openai-nosession"},
+}
+
+
+def validate_json(value: object) -> None:
+    """采样扩展只接受 JSON 数据; 不将对象、集合或非有限数偷偷字符串化。"""
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float) and math.isfinite(value):
+        return
+    if isinstance(value, Mapping):
+        for key, child in value.items():
+            if not isinstance(key, str):
+                raise ConfigurationError("sampling_params: JSON keys must be strings")
+            validate_json(child)
+        return
+    if isinstance(value, list):
+        for child in value:
+            validate_json(child)
+        return
+    raise ConfigurationError("sampling_params: expected finite JSON data")
+
+
+def validate_model_metadata(model: Model) -> None:
+    """目录加载和注册共享元数据约束, 保留 None 与未声明的区别。"""
+    if model.sampling_params is not None:
+        if not isinstance(model.sampling_params, Mapping):
+            raise ConfigurationError("sampling_params: expected object")
+        validate_json(model.sampling_params)
+    for definition in fields(model.compat):
+        value = getattr(model.compat, definition.name)
+        if definition.name == "temperature_requires_reasoning_off":
+            if type(value) is not bool:
+                raise ConfigurationError("Invalid sampling compatibility declaration")
+        elif value is not None:
+            choices = COMPAT_CHOICES.get(definition.name)
+            if (choices is not None and (not isinstance(value, str) or value not in choices)) or (
+                choices is None and type(value) is not bool
+            ):
+                raise ConfigurationError(f"Invalid compat.{definition.name}")
+    caps = model.capabilities
+    if not caps.input_modalities or not set(caps.input_modalities) <= {"text", "image"}:
+        raise ConfigurationError("Invalid input modality declaration")
+    if any(type(value) is not bool for value in (caps.tools, caps.temperature, caps.reasoning)):
+        raise ConfigurationError("Invalid boolean capability")
+    levels = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
+    if not isinstance(caps.reasoning_levels, Mapping) or any(
+        level not in levels
+        or (target is not None and (not isinstance(target, str) or not target.strip()))
+        for level, target in caps.reasoning_levels.items()
+    ):
+        raise ConfigurationError("Invalid reasoning mapping")
 
 
 def load_catalog(text: str) -> tuple[Model, ...]:
@@ -151,6 +199,8 @@ def load_catalog(text: str) -> tuple[Model, ...]:
                     source=CatalogSource(**source) if source is not None else None,
                 )
             )
+        for model in models:
+            validate_model_metadata(model)
         return tuple(models)
     except (TypeError, ValueError, KeyError, InvalidOperation):
         raise ConfigurationError("Invalid static catalog structure") from None

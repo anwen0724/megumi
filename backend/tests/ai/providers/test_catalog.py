@@ -113,7 +113,7 @@ def test_invalid_price_or_capability_data_is_rejected(provider: Provider, kind: 
         create_models([replace(provider, models=[replace(provider.models[0], **changes)])])
 
 
-@pytest.mark.parametrize("mapping", [{"high": 1}, {"low": None}])
+@pytest.mark.parametrize("mapping", [{"high": 1}, {"unknown": None}])
 def test_malformed_reasoning_mapping_is_a_configuration_error_and_preserves_state(
     provider, mapping
 ):
