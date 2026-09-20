@@ -78,6 +78,10 @@ class AssistantResponse:
             asyncio.create_task(self._watch_signal(signal)) if signal is not None else None
         )
 
+    def _on_closed(self, callback: Callable[[AssistantResponse], None]) -> None:
+        """Allow the owning runtime to release its strong reference after finalization."""
+        self._task.add_done_callback(lambda _: callback(self))
+
     @property
     def partial(self) -> AssistantMessage:
         """The producer's mutable message; use frames to retain progress snapshots."""

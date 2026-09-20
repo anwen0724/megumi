@@ -1,36 +1,183 @@
 """Explicit collection of provider configurations and model definitions."""
 
-from collections.abc import Iterable
+import asyncio
+from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from dataclasses import replace
+from inspect import isawaitable
 from typing import Literal
 
+from app.ai.api.base import ProtocolAdapter
+from app.ai.api.simple_options import prepare_simple_options
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.resolve import has_auth_header, merge_headers, resolve_api_key, resolve_auth
 from app.ai.auth.types import AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.catalog import snapshot_provider
-from app.ai.errors import AuthError, ConfigurationError
+from app.ai.errors import AuthError, ConfigurationError, LifecycleError
+from app.ai.messages import AssistantMessage, Context, Transcript
 from app.ai.model import Model
+from app.ai.options import CallOptions, SimpleOptions, prepare_call_options
 from app.ai.provider import Provider
+from app.ai.runtime.clients import ClientRuntime
+from app.ai.runtime.diagnostics import sensitive_header_values
+from app.ai.stream import AssistantResponse, ResponseWriter
+from app.ai.transcript import normalize_context
 
 
 class Models:
     """Own a collection of provider definitions."""
 
     def __init__(
-        self, providers: Iterable[Provider] = (), *, credentials: CredentialStore | None = None
+        self,
+        providers: Iterable[Provider] = (),
+        *,
+        credentials: CredentialStore | None = None,
+        adapters: Mapping[str, ProtocolAdapter] | None = None,
     ) -> None:
         self._state: Literal["open", "closing", "closed"] = "open"
         self._credentials = credentials if credentials is not None else InMemoryCredentialStore()
+        self._adapters = dict(adapters or {})
+        self._clients = ClientRuntime()
+        self._responses: set[AssistantResponse] = set()
+        self._close_task: asyncio.Task[None] | None = None
         self._providers: dict[str, Provider] = {}
         for provider in providers:
             self.set_provider(provider)
 
+    def stream_simple(
+        self, model: Model, context: Context | Transcript, options: SimpleOptions | None = None
+    ) -> AssistantResponse:
+        """Start background generation from normalized simple call preferences."""
+        return self._start(model, context, options, simple=True)
+
+    def stream(
+        self, model: Model, context: Context | Transcript, options: CallOptions | None = None
+    ) -> AssistantResponse:
+        """Start generation with the selected protocol's explicit options."""
+        return self._start(model, context, options, simple=False)
+
+    async def complete(
+        self, model: Model, context: Context | Transcript, options: CallOptions | None = None
+    ) -> AssistantMessage:
+        """Await the same execution path as stream, owning the created response."""
+        return await self._complete_response(self.stream(model, context, options))
+
+    async def complete_simple(
+        self, model: Model, context: Context | Transcript, options: SimpleOptions | None = None
+    ) -> AssistantMessage:
+        """Await the same execution path as stream_simple."""
+        return await self._complete_response(self.stream_simple(model, context, options))
+
+    @staticmethod
+    async def _complete_response(response: AssistantResponse) -> AssistantMessage:
+        """Cancellation owns this response and must wait for its cleanup before propagating."""
+        try:
+            return await response.result()
+        except asyncio.CancelledError:
+            while True:
+                try:
+                    await response.aclose()
+                    break
+                except asyncio.CancelledError:
+                    continue
+            raise
+
+    def _start(
+        self,
+        model: Model,
+        context: Context | Transcript,
+        options: CallOptions | None,
+        *,
+        simple: bool,
+    ) -> AssistantResponse:
+        """Capture independent inputs before the background task's first await."""
+        if self._state != "open":
+            raise LifecycleError("Model call runtime is closed")
+        if not isinstance(model, Model) or not isinstance(context, (Context, Transcript)):
+            raise TypeError("Expected Model and Context or Transcript")
+        provider = self.get_provider(model.provider)
+        current = self.get_model(model.provider, model.id)
+        transcript = (
+            normalize_context(context) if isinstance(context, Context) else deepcopy(context)
+        )
+        adapter = self._adapters.get((current or model).api)
+        if options is None:
+            options = (
+                SimpleOptions()
+                if simple
+                else (adapter.options_type() if adapter else CallOptions())
+            )
+        if not isinstance(options, SimpleOptions if simple else CallOptions):
+            raise TypeError("Options do not match the call entry")
+        if not simple and adapter is not None and not isinstance(options, adapter.options_type):
+            raise TypeError(
+                f"Expected {adapter.options_type.__name__} for {(current or model).api}"
+            )
+        captured = prepare_call_options(current or model, options)
+
+        async def produce(writer: ResponseWriter) -> None:
+            if provider is None or current is None:
+                raise ConfigurationError("Model is not registered")
+            writer.protect([captured.api_key or "", *sensitive_header_values(captured.headers)])
+
+            async def transform(headers: dict[str, str]) -> Mapping[str, str | None]:
+                writer.protect(sensitive_header_values(headers))
+                if captured.transform_headers is None:
+                    return headers
+                changed = captured.transform_headers(headers)
+                result = await changed if isawaitable(changed) else changed
+                writer.protect(sensitive_header_values(result))
+                return result
+
+            auth = await resolve_auth(
+                provider,
+                current,
+                replace(captured, transform_headers=transform),
+                credentials=self._credentials,
+            )
+            writer.protect([auth.key or "", *sensitive_header_values(auth.headers)])
+            if adapter is None:
+                raise ConfigurationError(f"No protocol adapter is bound for {current.api}")
+            if simple:
+                assert isinstance(captured, SimpleOptions)
+                prepared = prepare_simple_options(current, transcript, captured)
+                await adapter.stream_simple(
+                    model=current,
+                    transcript=transcript,
+                    options=prepared,
+                    auth=auth,
+                    clients=self._clients,
+                    writer=writer,
+                )
+            else:
+                await adapter.stream(
+                    model=current,
+                    transcript=transcript,
+                    options=captured,
+                    auth=auth,
+                    clients=self._clients,
+                    writer=writer,
+                )
+
+        response = AssistantResponse(current or model, produce, signal=captured.signal)
+        self._responses.add(response)
+        response._on_closed(self._responses.discard)
+        return response
+
     async def aclose(self) -> None:
-        """幂等标记调用运行时关闭。静态目录和认证配置仍可使用。"""
-        if self._state == "closed":
-            return
-        self._state = "closing"
-        self._state = "closed"
+        """Stop new calls, drain active responses and release only owned HTTP resources."""
+        if self._close_task is None:
+            self._state = "closing"
+            self._close_task = asyncio.create_task(self._close_runtime())
+        await asyncio.shield(self._close_task)
+
+    async def _close_runtime(self) -> None:
+        """Retain cleanup ownership even when an individual close waiter is cancelled."""
+        try:
+            await asyncio.gather(*(response.aclose() for response in tuple(self._responses)))
+            await self._clients.aclose()
+        finally:
+            self._state = "closed"
 
     def set_provider(self, provider: Provider) -> None:
         """Add or fully replace one provider definition."""
@@ -105,7 +252,10 @@ class Models:
 
 
 def create_models(
-    providers: Iterable[Provider] = (), *, credentials: CredentialStore | None = None
+    providers: Iterable[Provider] = (),
+    *,
+    credentials: CredentialStore | None = None,
+    adapters: Mapping[str, ProtocolAdapter] | None = None,
 ) -> Models:
     """Create an independent model collection."""
-    return Models(providers, credentials=credentials)
+    return Models(providers, credentials=credentials, adapters=adapters)

@@ -2,7 +2,7 @@
 
 import json
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from app.ai.messages import AssistantMessage, JSONValue
 
@@ -45,3 +45,17 @@ def redact_text(text: str, sensitive_values: Iterable[str]) -> str:
         if value:
             text = text.replace(value, "[redacted]")
     return text
+
+
+def sensitive_header_values(headers: Mapping[str, str | None]) -> list[str]:
+    """Recognize credential-bearing header values without storing a request diagnostic."""
+    values = []
+    for name, value in headers.items():
+        if value and any(
+            part in name.lower()
+            for part in ("authorization", "api-key", "token", "secret", "cookie")
+        ):
+            values.append(value)
+            if name.lower() in {"authorization", "proxy-authorization"} and " " in value:
+                values.append(value.split(" ", 1)[1])
+    return values

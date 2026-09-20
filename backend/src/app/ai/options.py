@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from copy import deepcopy
-from dataclasses import dataclass, field
-from typing import Literal
+from dataclasses import dataclass, field, replace
+from typing import Literal, cast
 
 import httpx2
 
@@ -91,3 +92,19 @@ class RetryCallbacks:
     scheduled: Callable[[int, int, float, str], Awaitable[None] | None] | None = None
     attempt_start: Callable[[], Awaitable[None] | None] | None = None
     finished: Callable[[bool, int, str | None], Awaitable[None] | None] | None = None
+
+
+def prepare_call_options[T: CallOptions](model: Model, options: T) -> T:
+    """Merge copied sampling defaults and resolve the scoped cache preference."""
+    result = snapshot_options(options)
+    sampling = {**(model.sampling_params or {}), **(result.sampling_params or {})}
+    cache_env = (
+        result.env.get("PI_CACHE_RETENTION")
+        if "PI_CACHE_RETENTION" in result.env
+        else os.getenv("PI_CACHE_RETENTION")
+    )
+    return replace(
+        result,
+        sampling_params=cast(dict[str, JSONValue], deepcopy(sampling)) if sampling else None,
+        cache_retention=result.cache_retention or ("long" if cache_env == "long" else "short"),
+    )
