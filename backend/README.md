@@ -1,6 +1,6 @@
 # Megumi Python AI
 
-当前实现模型与供应商管理：静态目录、供应商原子替换、模型查询、API key 解析、请求配置快照以及关闭行为。可独立于 FastAPI 使用；尚不提供模型生成、SSE、协议适配器或 Agent Core。
+当前实现模型与供应商管理：静态目录、供应商查询/原子替换/删除、模型查询与推理等级选择、key/headers 认证、请求配置快照以及关闭行为。可独立于 FastAPI 使用；尚不提供模型生成、SSE、协议适配器或 Agent Core。
 
 ## 使用
 
@@ -55,11 +55,17 @@ async def main():
 asyncio.run(main())
 ```
 
-也可以通过 `DEEPSEEK_API_KEY`、`OPENAI_API_KEY` 提供凭据。解析顺序为单次显式 key → 存储 → 对应环境变量。有效显式 key 不读取后两者；存储故障或显式/存储空白 key 报错，不回退。环境变量缺失、空字符串或纯空白均表示未配置。
+也可以通过 `DEEPSEEK_API_KEY`、`OPENAI_API_KEY` 提供凭据。解析顺序为单次显式 key → 存储 → 对应环境变量。有效显式 key 不读取后两者；存储故障或显式/存储空白 key 报错，不回退。环境变量缺失、空字符串或纯空白均表示该 key 来源未配置。所有 key 来源缺少时，最终有效 Authorization 可单独完成认证；此时 ResolvedAuth.key 为 None、source 为 headers。头认证不掩盖空 key 或存储故障。
 
-`get_available_models(provider=None)` 只检查所选供应商的本地认证配置：未配置时排除该供应商；存储故障或非法凭据使整次查询报错，可单独查询正常供应商。它不证明账号权限、余额或远端可达性。
+`get_available_models(provider=None)` 只检查所选供应商的本地认证配置：按供应商检查 key、逐模型合并静态授权头，未配置时排除该模型；存储故障或非法凭据使整次查询报错，可单独查询正常供应商。它不证明账号权限、余额或远端可达性。
 
-`get_model` 查不到返回 None；`get_models` 查不到返回空元组。设置和查询均隔离嵌套配置；非法替换保留原集合。headers 按供应商、模型、单次覆盖合并，名称不区分大小写，None 删除可选字段；Authorization、Host、Content-Length 不允许自定义。关闭后的服务操作抛 `LifecycleError`，重复关闭幂等，已查询的数据仍可使用。
+`get_model` 查不到返回 None；`get_models` 查不到返回空元组。设置和查询均隔离嵌套配置；非法替换保留原集合。`get_provider/get_providers` 查询供应商快照，`delete_provider/clear` 删除配置而不删除凭据。Provider.api 可以是单个协议字符串或多个协议的元组；这里只校验声明，不代表已经实现调用。
+
+headers 按供应商、模型、认证产生的默认 Bearer、单次覆盖合并，名称不区分大小写，None 删除字段。Authorization 可覆盖或删除，Host/Content-Length 与非法换行仍拒绝。`AuthOverride` 的 `base_url` 覆盖本次端点，`env` 只覆盖本次环境读取（未指定名称查外部环境、None 遮蔽外部值），`transform_headers` 可同步或异步返回最终头；原始参数及进程环境不会被修改。
+
+`aclose` 幂等标记运行时关闭，静态设置、查询和认证检查仍可用。当前没有实际生成调用或 SDK；阻止新生成和清理活动请求的行为由后续调用实现提供。
+
+Model 的 `sampling_params` 保存 JSON 采样默认，`compat` 保存两协议的可选覆盖，None 交由协议默认决定。`ModelCapabilities.reasoning` 独立声明推理能力；`reasoning_levels` 的 null 表示不支持，普通等级缺省允许，xhigh/max 需要显式声明。`get_supported_thinking_levels` 返回支持列表，`clamp_thinking_level` 对不支持等级先向上、再向下寻找；不支持推理时仅 off。
 
 ## 模型目录维护
 
@@ -106,6 +112,8 @@ src/app/ai/
 `catalog_generation/inputs/<provider>.rules.json` 分别登记各供应商的协议规则、精确排除、完整补充、字段修正和人工核对；同目录的 `<provider>.snapshot.json` 由 fetch 维护。新增模型通过严格 `tool_call=true` 自动发现，不维护人工纳入名单。新增供应商使用相同源与协议时只需登记规则；新协议不由生成工具实现。
 
 修正路径针对转换后的 Model 字段，`expected` 为转换值，缺失用 `{"missing": true}`，与 null 区别。当前值匹配 expected 才替换；已经等于 replacement 时报告冗余；其它变化要求重新核对。数组整体替换，禁止身份修正和重叠修正。变更币种或单位必须提供完整 pricing 对象，不能改标签混用费率。完整补充只用于上游缺失的、有依据的模型。
+
+供应商规则可提供 `sampling_params` 和 `compat` 默认；修正支持整体 `sampling_params`、`capabilities.reasoning`/`reasoning_levels` 及已定义的 `compat` 字段，补充模型携带同样字段。完整补充须明确 reasoning 布尔值。上游明确 effort/toggle 集合之外的等级生成 null，避免加载后被当成默认支持。非法新字段在发布前失败，清单保留规则/修正/补充来源。
 
 维护输入和产物应一起提交；不要直接编辑生成 JSON。manifest 保存输入/规则/生成器/产物哈希、字段依据及实际核对状态。Model.source 可以为 null；它表示没有人工核对记录，不阻止合法模型纳入。source 日期不是 fetch 日期。快照保留未映射的原始字段。
 

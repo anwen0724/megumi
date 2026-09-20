@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from copy import deepcopy
+from dataclasses import fields as dataclass_fields
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -11,10 +12,11 @@ from app.ai.catalog import load_catalog, snapshot_provider, validate_url
 from app.ai.catalog_generation import CatalogError
 from app.ai.catalog_generation.output import decode, digest, encode, fields, write_or_check
 from app.ai.catalog_generation.source import download, fetch_snapshots, load_rules, select_providers
+from app.ai.model import THINKING_LEVELS, ModelCompat
 from app.ai.provider import Provider
 
 
-def reasoning(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, str]:
+def reasoning(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, str | None]:
     """Map only declared effort values and separately verified toggle semantics."""
     if type(raw.get("reasoning")) is not bool:
         raise CatalogError("reasoning: missing boolean capability")
@@ -23,7 +25,8 @@ def reasoning(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, str]:
     options = raw.get("reasoning_options")
     if not isinstance(options, list) or not options:
         raise CatalogError("reasoning: missing options")
-    result: dict[str, str] = {}
+    # 上游给出了明确集合。未列入的等级必须为 null, 不能省略后变成默认支持。
+    result: dict[str, str | None] = dict.fromkeys(THINKING_LEVELS)
     for option in options:
         if option.get("type") == "effort" and isinstance(option.get("values"), list):
             for value in option["values"]:
@@ -157,12 +160,15 @@ def base_model(raw: dict[str, Any], rule: dict[str, Any], report: list[str]) -> 
             "tools": True,
             "input_modalities": supported,
             "temperature": raw.get("temperature"),
+            "reasoning": raw.get("reasoning"),
             "reasoning_levels": reasoning(raw, rule),
         },
         "source": None,
         "pricing": pricing(raw, rule),
         "compat": deepcopy(rule.get("compat", {})),
     }
+    if "sampling_params" in rule:
+        model["sampling_params"] = deepcopy(rule["sampling_params"])
     for output, source in (("context_window", "context"), ("max_output_tokens", "output")):
         if source in limits:
             model[output] = limits[source]
@@ -179,7 +185,8 @@ def validate_model(model: dict[str, Any], rule: dict[str, Any]) -> None:
     caps = model.get("capabilities")
     if (
         not isinstance(caps, dict)
-        or not {"tools", "temperature", "input_modalities", "reasoning_levels"} <= caps.keys()
+        or not {"tools", "temperature", "reasoning", "input_modalities", "reasoning_levels"}
+        <= caps.keys()
     ):
         raise CatalogError("capabilities: incomplete model definition")
     if not isinstance(caps["reasoning_levels"], dict) or not isinstance(
@@ -192,7 +199,7 @@ def validate_model(model: dict[str, Any], rule: dict[str, Any]) -> None:
         or not {"currency", "unit_tokens", *RATES, "tiers"} <= price.keys()
     ):
         raise CatalogError("pricing: a complete currency, unit and rate group is required")
-    for field in ("temperature", "tools"):
+    for field in ("temperature", "tools", "reasoning"):
         if type(caps.get(field)) is not bool:
             raise CatalogError(f"{field}: expected boolean")
     try:
@@ -280,7 +287,7 @@ def generate_catalog(
                 "api",
                 "pricing.currency",
                 "pricing.unit_tokens",
-            } or path.startswith("compat"):
+            } or path.startswith(("compat", "sampling_params")):
                 record["kind"] = "rule"
                 record["rule_path"] = path.removeprefix("pricing.")
             elif path == "source":
@@ -411,9 +418,10 @@ PATCH_PATHS = {
     "capabilities.input_modalities",
     "capabilities.temperature",
     "capabilities.reasoning_levels",
+    "capabilities.reasoning",
+    "sampling_params",
     "compat",
-    "compat.system_role",
-    "compat.temperature_requires_reasoning_off",
+    *(f"compat.{field.name}" for field in dataclass_fields(ModelCompat)),
     "pricing",
     "pricing.input",
     "pricing.output",
@@ -449,6 +457,7 @@ SOURCE_PATHS = {
     "capabilities.input_modalities": "modalities.input",
     "capabilities.tools": "tool_call",
     "capabilities.temperature": "temperature",
+    "capabilities.reasoning": "reasoning",
 }
 
 

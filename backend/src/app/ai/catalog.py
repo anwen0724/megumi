@@ -198,7 +198,12 @@ def load_catalog(text: str) -> tuple[Model, ...]:
             if "input_modalities" in capabilities:
                 capabilities["input_modalities"] = tuple(capabilities["input_modalities"])
             source = data.pop("source", None)
-            compat = ModelCompat(**data.pop("compat", {}))
+            compat_data = data.pop("compat", {})
+            if not isinstance(compat_data, dict) or compat_data.keys() - {
+                field.name for field in fields(ModelCompat)
+            }:
+                raise ConfigurationError("Invalid or unknown compat fields")
+            compat = ModelCompat(**compat_data)
             models.append(
                 Model(
                     **data,
@@ -211,5 +216,7 @@ def load_catalog(text: str) -> tuple[Model, ...]:
         for model in models:
             validate_model_metadata(model)
         return tuple(models)
+    except ConfigurationError:
+        raise
     except (TypeError, ValueError, KeyError, InvalidOperation):
         raise ConfigurationError("Invalid static catalog structure") from None

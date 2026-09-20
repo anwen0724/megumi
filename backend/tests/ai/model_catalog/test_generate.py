@@ -113,7 +113,12 @@ def test_effort_mapping_never_invents_off_or_unlisted_levels(efforts, expected):
         modalities={"input": ["text", "image", "pdf"], "output": ["text"]},
     )
     models, _, report = generate_catalog(snapshot({"new-model": raw}), rule("openai"))
-    assert models[0]["capabilities"]["reasoning_levels"] == expected
+    mapping = models[0]["capabilities"]["reasoning_levels"]
+    assert {level: value for level, value in mapping.items() if value is not None} == expected
+    assert all(
+        mapping.get(level, "missing") is None
+        for level in {"off", "minimal", "low", "medium", "high", "xhigh", "max"} - expected.keys()
+    )
     assert models[0]["capabilities"]["input_modalities"] == ["text", "image"]
     assert any("pdf" in item for item in report)
 
@@ -144,6 +149,8 @@ def test_verified_toggle_and_alias_rules_are_distinct_from_effort_list():
     )
     models, _, _ = generate_catalog(snapshot({"new-model": raw}), settings)
     assert models[0]["capabilities"]["reasoning_levels"] == {
+        "xhigh": None,
+        "max": None,
         "off": "disabled",
         "minimal": "low",
         "low": "low",
@@ -182,3 +189,19 @@ def test_source_metadata_is_validated_before_generation(field, value):
     data[field] = value
     with pytest.raises(CatalogError):
         generate_catalog(data, rule("openai"))
+
+
+def test_explicit_upstream_reasoning_survives_generation_and_runtime_level_selection():
+    from app.ai import clamp_thinking_level, get_supported_thinking_levels
+
+    raw = raw_model(reasoning=True, reasoning_options=[{"type": "effort", "values": ["high"]}])
+    models, traces, _ = generate_catalog(snapshot({"new-model": raw}), rule("openai"))
+    loaded = load_catalog(encode(models).decode())[0]
+    assert loaded.capabilities.reasoning is True
+    assert get_supported_thinking_levels(loaded) == ("high",)
+    assert clamp_thinking_level(loaded, "off") == "high"
+    assert traces["new-model"]["fields"]["capabilities.reasoning"]["upstream_path"] == "reasoning"
+    models, _, _ = generate_catalog(snapshot({"new-model": raw_model()}), rule("openai"))
+    loaded = load_catalog(encode(models).decode())[0]
+    assert loaded.capabilities.reasoning is False
+    assert get_supported_thinking_levels(loaded) == ("off",)

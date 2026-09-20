@@ -130,7 +130,9 @@
           "medium": "high",
           "high": "high",
           "xhigh": "high",
-          "max": "max"
+          "max": "max",
+          "minimal": null,
+          "low": null
         },
         "replacement": {
           "off": "disabled",

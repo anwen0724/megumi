@@ -35,6 +35,7 @@ def definition(identity="extra"):
             "tools": True,
             "input_modalities": ["text"],
             "temperature": True,
+            "reasoning": False,
             "reasoning_levels": {},
         },
         "pricing": {
@@ -233,6 +234,7 @@ def test_whole_cny_price_correction_keeps_time_conditions():
         "pricing",
         "capabilities.input_modalities",
         "capabilities.reasoning_levels",
+        "capabilities.reasoning",
     ],
 )
 def test_full_supplements_cannot_use_runtime_defaults_for_missing_facts(remove):
@@ -268,3 +270,62 @@ def test_boolean_replacement_cannot_be_mistaken_for_a_redundant_integer():
     raw = raw_model(limit={"context": 8192, "output": 1})
     with pytest.raises(CatalogError):
         generate_catalog(snapshot({"new-model": raw}), settings)
+
+
+def test_generated_metadata_round_trips_with_rule_patch_and_supplement_provenance(tool):
+    from test_commands import seed
+
+    from app.ai import Provider, create_models, get_supported_thinking_levels
+    from app.ai.catalog import load_catalog
+    from app.ai.catalog_generation.output import decode
+
+    seed(tool)
+    settings = tool.rules["openai"]
+    settings["sampling_params"] = {"top_p": 0.8, "extension": {"enabled": True}}
+    settings["compat"] = {"supports_strict_mode": True, "supports_long_cache_retention": False}
+    settings["patches"] = [
+        patch("capabilities.reasoning", False, True),
+        patch("capabilities.reasoning_levels", {}, {"off": None, "max": "maximum"}),
+        patch("compat.supports_max_output_tokens", {"missing": True}, False),
+    ]
+    extra = definition()
+    extra["sampling_params"] = {"temperature": 0.3}
+    settings["supplements"] = [{"model": extra, "source": SOURCE, "reason": "missing upstream"}]
+    tool.generate(write=True)
+    loaded = load_catalog((tool.output / "openai.json").read_text("utf-8"))
+    models = create_models(
+        [
+            Provider(
+                id="openai",
+                name="OpenAI",
+                api="openai-responses",
+                env_var="OPENAI_API_KEY",
+                base_url="https://example.test",
+                models=loaded,
+            )
+        ]
+    )
+    model = models.get_model("openai", "new-model")
+    assert model.sampling_params == settings["sampling_params"]
+    assert model.compat.supports_strict_mode is True
+    assert model.compat.supports_long_cache_retention is False
+    assert model.compat.supports_max_output_tokens is False
+    assert get_supported_thinking_levels(model) == ("minimal", "low", "medium", "high", "max")
+    assert models.get_model("openai", "extra").sampling_params == {"temperature": 0.3}
+    manifest = decode((tool.output / "manifest.json").read_bytes())["providers"]["openai"]["models"]
+    assert manifest["new-model"]["fields"]["sampling_params.top_p"]["kind"] == "rule"
+    assert manifest["new-model"]["fields"]["capabilities.reasoning_levels.off"]["kind"] == "patch"
+    assert manifest["extra"]["fields"]["sampling_params.temperature"]["kind"] == "supplement"
+    assert tool.generate(check=True)[0] == 0
+
+
+@pytest.mark.parametrize("replacement", [{"top_p": 0.9}, None])
+def test_sampling_patch_distinguishes_missing_null_and_values(replacement):
+    settings = rule("openai")
+    settings["patches"] = [patch("sampling_params", {"missing": True}, replacement)]
+    models, traces, _ = generate_catalog(snapshot({"new-model": raw_model()}), settings)
+    assert models[0]["sampling_params"] == replacement
+    assert any(
+        path.startswith("sampling_params") and record["kind"] == "patch"
+        for path, record in traces["new-model"]["fields"].items()
+    )

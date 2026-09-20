@@ -77,3 +77,23 @@ def test_invalid_second_provider_never_publishes_first(tool):
     with pytest.raises(CatalogError, match="openai/broken"):
         tool.generate(write=True)
     assert before == {p.name: p.read_bytes() for p in tool.output.iterdir()}
+
+
+@pytest.mark.parametrize(
+    "field,value,diagnostic",
+    [
+        ("sampling_params", [], "sampling_params"),
+        ("compat", {"supports_strict_mode": "yes"}, "compat"),
+        ("compat", {"unimplemented_option": True}, "compat"),
+    ],
+)
+def test_invalid_extended_metadata_reports_field_and_never_publishes(
+    tool, field, value, diagnostic
+):
+    seed(tool)
+    tool.generate(write=True)
+    before = {p.name: p.read_bytes() for p in tool.output.iterdir()}
+    tool.rules["openai"][field] = value
+    with pytest.raises(CatalogError, match=f"openai/new-model.*{diagnostic}"):
+        tool.generate(write=True)
+    assert before == {p.name: p.read_bytes() for p in tool.output.iterdir()}
