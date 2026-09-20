@@ -4,10 +4,10 @@ from collections.abc import Iterable
 from copy import deepcopy
 
 from app.ai.auth.memory import InMemoryCredentialStore
-from app.ai.auth.resolve import resolve_auth
+from app.ai.auth.resolve import resolve_api_key, resolve_auth
 from app.ai.auth.types import AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.catalog import snapshot_provider
-from app.ai.errors import ConfigurationError
+from app.ai.errors import AuthError, ConfigurationError
 from app.ai.model import Model
 from app.ai.provider import Provider
 
@@ -45,6 +45,24 @@ class Models:
             else ([self._providers[provider]] if provider in self._providers else [])
         )
         return tuple(deepcopy(model) for entry in entries for model in entry.models)
+
+    async def get_available_models(self, provider: str | None = None) -> tuple[Model, ...]:
+        """Filter missing credentials; propagate configuration and storage failures."""
+        entries = tuple(
+            self._providers.values()
+            if provider is None
+            else ([self._providers[provider]] if provider in self._providers else [])
+        )
+        available: list[Model] = []
+        for entry in entries:
+            try:
+                await resolve_api_key(entry, AuthOverride(), self._credentials, None)
+            except AuthError as exc:
+                if exc.code == "not_configured":
+                    continue
+                raise
+            available.extend(deepcopy(model) for model in entry.models)
+        return tuple(available)
 
     async def resolve_auth(
         self, model: Model, overrides: AuthOverride | None = None

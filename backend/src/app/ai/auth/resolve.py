@@ -34,12 +34,12 @@ async def resolve_auth(
                 headers.pop(normalized, None)
             else:
                 headers[normalized] = value
-    key, source = await _resolve_key(provider, overrides, credentials, env_read)
+    key, source = await resolve_api_key(provider, overrides, credentials, env_read)
     headers["authorization"] = f"Bearer {key}"
     return ResolvedAuth(key=key, source=source, base_url=endpoint, headers=headers)
 
 
-async def _resolve_key(
+async def resolve_api_key(
     provider: Provider,
     overrides: AuthOverride,
     credentials: CredentialStore,
