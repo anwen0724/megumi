@@ -187,3 +187,40 @@ async def test_owned_http_client_is_lazy_shared_and_closed_by_owner(provider, mo
     await runtime.aclose()
     await runtime.aclose()
     assert created[0].is_closed
+
+
+@pytest.mark.asyncio
+async def test_header_overrides_are_not_duplicated_and_removed_auth_is_not_reintroduced(provider):
+    requests = []
+
+    def handle(request):
+        requests.append(request)
+        return httpx2.Response(200, content=b"data: [DONE]\n\n")
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
+        runtime = ClientRuntime()
+
+        async def produce(writer):
+            stream = await runtime.open_stream(
+                "/responses",
+                {},
+                model=provider.models[0],
+                auth=ResolvedAuth(
+                    key="fake",
+                    source="explicit",
+                    base_url=provider.base_url,
+                    headers={"content-type": "application/json", "accept": "text/event-stream"},
+                ),
+                options=CallOptions(http_client=http),
+                writer=writer,
+            )
+            async for _ in stream:
+                pass
+            writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
+
+        final = await AssistantResponse(provider.models[0], produce).result()
+        assert final.stop_reason == "stop", final.error_message
+        assert "authorization" not in requests[0].headers
+        assert requests[0].headers["content-type"] == "application/json"
+        assert requests[0].headers["accept"] == "text/event-stream"
+        await runtime.aclose()

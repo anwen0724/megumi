@@ -464,3 +464,149 @@ async def test_omitted_explicit_options_use_protocol_defaults(provider, monkeypa
     assert final.stop_reason == "stop"
     assert adapter.calls[0]["options"].native is True
     await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_frames_and_result_waiters_share_generation_and_cleaned_final(provider):
+    from app.ai import AssistantMessageFrameEncoder, reduce_assistant_message_frames
+
+    progress, release, cleanup_entered, finish_cleanup = (asyncio.Event() for _ in range(4))
+
+    class FramedAdapter(RecordingAdapter):
+        async def stream_simple(self, **call):
+            writer = call["writer"]
+
+            async def cleanup():
+                cleanup_entered.set()
+                await finish_cleanup.wait()
+
+            writer.add_cleanup(cleanup)
+            writer.emit({"type": "start", "partial": writer.partial})
+            writer.partial.content.append(TextContent(text="one"))
+            writer.emit({"type": "text_start", "content_index": 0, "partial": writer.partial})
+            writer.emit(
+                {
+                    "type": "text_delta",
+                    "content_index": 0,
+                    "delta": "one",
+                    "partial": writer.partial,
+                }
+            )
+            progress.set()
+            await release.wait()
+            writer.partial.content[0].text += " two"
+            writer.emit(
+                {
+                    "type": "text_delta",
+                    "content_index": 0,
+                    "delta": " two",
+                    "partial": writer.partial,
+                }
+            )
+            writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
+
+    models = create_models([provider], adapters={provider.api: FramedAdapter()})
+    response = models.stream_simple(
+        provider.models[0], Context(messages=[]), SimpleOptions(api_key="fake")
+    )
+    await asyncio.wait_for(progress.wait(), 1)
+    iterator, encoder = aiter(response), AssistantMessageFrameEncoder()
+    frames = [encoder.encode(await anext(iterator)), encoder.encode(await anext(iterator))]
+    catch_up = encoder.encode(await anext(iterator))
+    assert catch_up is None
+    before = reduce_assistant_message_frames(frames)
+    cancelled = asyncio.create_task(response.result())
+    surviving = asyncio.create_task(response.result())
+    await asyncio.sleep(0)
+    cancelled.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await cancelled
+    release.set()
+    await asyncio.wait_for(cleanup_entered.wait(), 1)
+    assert not surviving.done()
+    assert before.content[0].text == "one"
+    assert response.partial.content[0].text == "one two"
+    frames.append(encoder.encode(await anext(iterator)))
+    assert reduce_assistant_message_frames(frames).content[0].text == "one two"
+    finish_cleanup.set()
+    final = await surviving
+    assert final.stop_reason == "stop"
+    assert (await anext(iterator))["message"] is final
+    await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_models_close_survives_cancelled_waiter_and_drains_different_waits(
+    provider, monkeypatch
+):
+    import app.ai.runtime.retry as retry
+
+    authenticating, reading, backing_off, cleanup_entered, release = (
+        asyncio.Event() for _ in range(5)
+    )
+    ended = set()
+
+    async def wait_at(name, entered):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            ended.add(name)
+
+    class Store(InMemoryCredentialStore):
+        async def read(self, provider_id):
+            await wait_at("auth", authenticating)
+
+    class Body(httpx2.AsyncByteStream):
+        closed = False
+
+        async def __aiter__(self):
+            await wait_at("body", reading)
+            yield b"unused"
+
+        async def aclose(self):
+            cleanup_entered.set()
+            await release.wait()
+            self.closed = True
+
+    body = Body()
+
+    async def sleep(delay):
+        await wait_at("backoff", backing_off)
+
+    monkeypatch.setattr(retry, "_sleep", sleep)
+
+    def handle(request):
+        if request.headers["authorization"] == "Bearer retry-key":
+            return httpx2.Response(
+                429, headers={"retry-after-ms": "1"}, json={"error": {"message": "busy"}}
+            )
+        return httpx2.Response(200, stream=body)
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
+        models = create_models(
+            [provider], credentials=Store(), adapters={provider.api: TransportAdapter()}
+        )
+        calls = [
+            models.stream_simple(
+                provider.models[0],
+                Context(messages=[]),
+                SimpleOptions(api_key=key, http_client=http, max_retries=2),
+            )
+            for key in [None, "stream-key", "retry-key"]
+        ]
+        await asyncio.wait_for(
+            asyncio.gather(authenticating.wait(), reading.wait(), backing_off.wait()), 1
+        )
+        closing = asyncio.create_task(models.aclose())
+        await asyncio.wait_for(cleanup_entered.wait(), 1)
+        with pytest.raises(LifecycleError):
+            models.stream_simple(provider.models[0], Context(messages=[]))
+        closing.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await closing
+        release.set()
+        await asyncio.wait_for(models.aclose(), 1)
+        assert ended == {"auth", "body", "backoff"} and body.closed
+        assert [(await call.result()).stop_reason for call in calls] == ["aborted"] * 3
+        assert not http.is_closed

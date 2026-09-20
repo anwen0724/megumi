@@ -1,4 +1,4 @@
-"""Explicit collection of provider configurations and model definitions."""
+"""Provider snapshots and background calls share a Models-owned runtime."""
 
 import asyncio
 from collections.abc import Iterable, Mapping
@@ -25,7 +25,7 @@ from app.ai.transcript import normalize_context
 
 
 class Models:
-    """Own a collection of provider definitions."""
+    """Own provider definitions, active calls and lazily created HTTP resources."""
 
     def __init__(
         self,

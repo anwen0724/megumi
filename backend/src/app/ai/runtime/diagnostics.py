@@ -25,6 +25,7 @@ def append_cleanup_diagnostic(
 
 def format_error(error: BaseException, *, sensitive_values: Iterable[str] = ()) -> str:
     """Include already-read body evidence once, without reading HTTP streams."""
+    sensitive_values = tuple(sensitive_values)
     message = str(error) or type(error).__name__
     body = getattr(error, "body", None)
     try:
@@ -32,7 +33,7 @@ def format_error(error: BaseException, *, sensitive_values: Iterable[str] = ()) 
     except (TypeError, ValueError):
         text = ""
     if body is not None and text and text not in message and str(body) not in message:
-        message += "\n" + text[:4000]
+        message += "\n" + redact_text(text, sensitive_values)[:4000]
     status = getattr(error, "status_code", None)
     if type(status) is int and str(status) not in message:
         message = f"HTTP {status}: {message}"
@@ -41,7 +42,18 @@ def format_error(error: BaseException, *, sensitive_values: Iterable[str] = ()) 
 
 def redact_text(text: str, sensitive_values: Iterable[str]) -> str:
     """Remove known local secret values, matching complete values before substrings."""
-    for value in sorted(set(sensitive_values), key=len, reverse=True):
+    forms = {
+        form
+        for value in sensitive_values
+        if value
+        for form in (
+            value,
+            json.dumps(value, ensure_ascii=False)[1:-1],
+            json.dumps(value, ensure_ascii=True)[1:-1],
+            repr(value)[1:-1],
+        )
+    }
+    for value in sorted(forms, key=len, reverse=True):
         if value:
             text = text.replace(value, "[redacted]")
     return text

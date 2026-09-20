@@ -35,3 +35,21 @@ def test_redact_longer_sensitive_values_before_substrings():
         format_error(error, sensitive_values=["fake-key", "Bearer fake-key"])
         == "[redacted] echoed [redacted]"
     )
+
+
+def test_secrets_are_redacted_before_body_truncation():
+    class Error(Exception):
+        pass
+
+    error = Error("failed")
+    error.body = "x" * 3995 + "sensitive-secret"
+    message = format_error(error, sensitive_values=["sensitive-secret"])
+    assert message == "failed\n" + ("x" * 3995 + "[redacted]")[:4000]
+
+
+def test_known_credential_is_redacted_from_sdk_json_and_repr_forms():
+    secret = "fake\\key"
+    body = {"error": {"message": secret}}
+    for encoded in (json.dumps(body), str(body)):
+        result = format_error(ValueError(encoded), sensitive_values=[secret])
+        assert "fake" not in result and "[redacted]" in result

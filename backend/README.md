@@ -1,6 +1,6 @@
 # Megumi Python AI
 
-当前实现消息与上下文处理，以及模型与供应商管理：静态目录、供应商查询/原子替换/删除、模型查询与推理等级选择、key/headers 认证、请求配置快照以及关闭行为。可独立于 FastAPI 使用；尚不提供模型生成、SSE、协议适配器或 Agent Core。
+当前实现模型与供应商管理、消息与上下文，以及模型调用运行时：后台事件流、独立结果、两层重试、预算、请求钩子、取消和 SDK/HTTP 资源管理。可独立于 FastAPI 使用。Chat Completions / Responses 的业务编码与事件解析尚未接入，因此当前不能请求真实模型；没有实现 Agent Core。
 
 ## 使用
 
@@ -63,7 +63,7 @@ asyncio.run(main())
 
 headers 按供应商、模型、认证产生的默认 Bearer、单次覆盖合并，名称不区分大小写，None 删除字段。Authorization 可覆盖或删除，Host/Content-Length 与非法换行仍拒绝。`AuthOverride` 的 `base_url` 覆盖本次端点，`env` 只覆盖本次环境读取（未指定名称查外部环境、None 遮蔽外部值），`transform_headers` 可同步或异步返回最终头；原始参数及进程环境不会被修改。
 
-`aclose` 幂等标记运行时关闭，静态设置、查询和认证检查仍可用。当前没有实际生成调用或 SDK；阻止新生成和清理活动请求的行为由后续调用实现提供。
+`aclose` 阻止新生成、取消并等待活动请求、关闭自有 HTTP 客户端；静态设置、查询和认证检查仍可用。关闭幂等，外部注入客户端由调用方关闭。
 
 Model 的 `sampling_params` 保存 JSON 采样默认，`compat` 保存两协议的可选覆盖，None 交由协议默认决定。`ModelCapabilities.reasoning` 独立声明推理能力；`reasoning_levels` 的 null 表示不支持，普通等级缺省允许，xhigh/max 需要显式声明。`get_supported_thinking_levels` 返回支持列表，`clamp_thinking_level` 对不支持等级先向上、再向下寻找；不支持推理时仅 off。
 
@@ -104,9 +104,68 @@ assert arguments == {"city": "Beijing"}
 
 `transform_messages` 接收消息序列、目标 Model 和可选工具 ID 回调，返回新历史。图片占位、签名转换及缺失结果补齐不写回原会话。`resolve_transcript` 与 `resolve_transcript_tools` 分别判断指令位置和工具新增锚点；同名再次声明即使内容相同也退出 additions-only。
 
-`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。当前只有事件契约和帧处理，尚无模型调用的后台生产、队列或取消运行时。
+`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。模型调用运行时会产生统一事件；原生协议事件到这些事件的映射仍由后续适配器完成。
 
 `calculate_usage_cost(usage, pricing, ...)` 返回独立 UsageCost，不改 Usage。input 已排除缓存，reasoning 不重复收费；未知计数或费率保持 None。响应 service_tier 优先于请求值，不能证明适用的服务档不使用基础价。`condition_matches` 由调用方在有效服务档下给出各条件是否适用，键为现有 PricingTier.condition 原文；函数不解析条件描述。未知或多项竞争条件不能确定唯一价格时保持未知；已知零计数可为零费用。
+
+## 模型调用运行时
+
+`Models.stream` / `stream_simple` 在运行中的事件循环内立即返回 `AssistantResponse`；生产在后台执行，不依赖事件迭代。`complete` / `complete_simple` 使用同一路径并返回最终消息。当前尚未注册内置协议适配器，调用会得到明确的设置失败；下面示例可运行，但不会发出网络请求。
+
+```python
+import asyncio
+from app.ai import Context, SimpleOptions, create_models, deepseek_provider
+
+async def inspect_call():
+    models = create_models([deepseek_provider()])
+    model = models.get_models("deepseek")[0]
+    try:
+        response = models.stream_simple(
+            model, Context(messages=[]), SimpleOptions(api_key="fake-example-key")
+        )
+        async for event in response:
+            print(event["type"])  # 当前输出 error：尚未绑定协议适配器
+        final = await response.result()
+        assert final.stop_reason == "error"
+        assert "No protocol adapter" in final.error_message
+        assert await response.result() is final
+
+        # 已结束时无副作用；活动请求会取消生产并等待资源清理。
+        await response.aclose()
+        # complete_simple 同样返回设置失败，不会伪造模型答案。
+        completed = await models.complete_simple(
+            model, Context(messages=[]), SimpleOptions(api_key="fake-example-key")
+        )
+        assert completed.stop_reason == "error"
+    finally:
+        await models.aclose()
+
+asyncio.run(inspect_call())
+```
+
+等待 `result()` 或下一条事件的任务被取消时，只结束该等待者；显式 `response.cancel()`、`await response.aclose()`、请求 `signal.set()` 或 `Models.aclose()` 才停止生成。`complete*` 拥有内部响应，其任务取消会等待清理后传播 `CancelledError`。停止事件迭代不自动取消生成。事件队列不是广播订阅。
+
+协议确定结果后，先释放响应、追加必要清理诊断，再发布一次 done/error；清理失败不改变已确定的结束原因。保存活动状态使用消息帧，最终消息另存。
+
+`CallOptions` 包含认证覆盖、采样、缓存/会话偏好、钩子、重试、超时与传输注入；`SimpleOptions` 增加 reasoning、tool_choice 和 thinking_budgets。模型默认采样与单次采样合并；mutable 数据复制，回调、signal、telemetry_context 和借用客户端保持身份。`on_payload` 可同步/异步修改或替换 payload，None 保留原地修改；它在重试外执行一次。`on_response` 只得到状态/headers，在成功建流后、start 前执行；钩子异常形成 error。
+
+`http_client` 接收 `httpx2.AsyncClient`。锁定的 `openai==3.16.2` 使用 `httpx2==2.13.0`；共享 SDK 执行入口位于 `runtime/clients.py`，SSE 解码由 SDK 提供，业务消息解析归协议适配器。SDK 内部重试设为 0，共享请求策略默认也不额外尝试。请求 `timeout_ms` 仅在提供时传递，缺省沿用 SDK/传输默认值。SDK 的环境默认头不会覆盖已经解析的认证和头配置。
+
+显式启用整次 Assistant 调用重试的接口如下，`produce` 由调用方提供：
+
+```python
+from app.ai import RetryPolicy, retry_assistant_call
+
+async def with_recovery(produce):
+    return await retry_assistant_call(
+        produce,
+        RetryPolicy(enabled=True, max_retries=2, base_delay_ms=500),
+    )
+```
+
+请求重试只覆盖建流，不重新发送已经开始读取的流；Assistant helper 只重试可恢复的 error 消息，默认不叠加两层策略。`estimate_context_tokens`、`is_context_overflow`、`is_recoverable_length` 提供估算与恢复判断，不改历史、不自动摘要或重发，未知用量保持未知。
+
+测试通过 `create_models(..., adapters={api: collaborator})` 注入协议协作者，并以实际 SDK + 模拟 HTTP 验证资源与重试。这些验证不代表 DeepSeek/OpenAI 已经联调。
 
 ## 模型目录维护
 
@@ -166,7 +225,7 @@ DeepSeek 排除指向 Flash 的两个旧别名，保留 `deepseek-flash` 与 `de
 
 OpenAI 使用 USD，保留 Standard 适用范围、上下文分档及上游提供的其他服务档价格；部分 Fast 条目没有上游上下文范围，条件明确标为未知，不推算缺失费率。排除仅支持 Realtime 的 `gpt-realtime-2.1`；`gpt-5.6` 排除依据是 [pi 明确记录的无效别名](https://github.com/earendil-works/pi/blob/e98f287ee/packages/ai/scripts/generate-models.ts)，不是本项目真实调用验证。抽查 GPT-4.1、GPT-5 Pro、GPT-6 Astra 的官方限制/能力及[官方价格](https://developers.openai.com/api/docs/pricing)，没有逐一复核全部 37 个模型。
 
-价格保持 Decimal 精度，None 表示未知；需要条件才能确定的费率放在 PricingTier，无条件基础价保持未知。没有费用引擎、供应商推理调用或账号可用性验证。自定义 Provider 的完整替换契约不变。
+价格保持 Decimal 精度，None 表示未知；需要条件才能确定的费率放在 PricingTier，无条件基础价保持未知。已经提供基于已知用量和费率的费用计算；没有供应商推理调用或账号可用性验证。自定义 Provider 的完整替换契约不变。
 
 ## 验证
 

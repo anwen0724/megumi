@@ -13,6 +13,7 @@ from openai import (
     Omit,
 )
 from openai._models import SecurityOptions
+from openai._types import RequestOptions
 
 from app.ai.auth.types import ResolvedAuth
 from app.ai.messages import JSONValue
@@ -41,8 +42,8 @@ class _RequestClient(AsyncOpenAI):
     @property
     def default_headers(self) -> dict[str, str | Omit]:
         return {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
+            "accept": "application/json",
+            "content-type": "application/json",
             "authorization": Omit(),
             **self._resolved_headers,
         }
@@ -87,6 +88,12 @@ class ClientRuntime:
                 self._owned = DefaultAsyncHttpxClient()
             http = self._owned
         client = _RequestClient(auth, http)
+        request_options: RequestOptions = {}
+        if options.timeout_ms is not None:
+            request_options["timeout"] = options.timeout_ms / 1000
+        if "authorization" not in auth.headers:
+            # SDK requires a request-level omission to honor explicitly removed authorization.
+            request_options["headers"] = {"authorization": Omit()}
 
         async def request() -> AsyncStream[dict[str, object]]:
             stream = await client.post(
@@ -95,9 +102,7 @@ class ClientRuntime:
                 cast_to=dict[str, object],
                 stream=True,
                 stream_cls=AsyncStream[dict[str, object]],
-                options={"timeout": options.timeout_ms / 1000}
-                if options.timeout_ms is not None
-                else {},
+                options=request_options,
             )
             writer.add_cleanup(stream.close)
             return stream
