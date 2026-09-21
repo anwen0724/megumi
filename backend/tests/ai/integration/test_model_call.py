@@ -474,7 +474,7 @@ async def test_omitted_explicit_options_use_protocol_defaults(provider, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_frames_and_result_waiters_share_generation_and_cleaned_final(provider):
+async def test_frames_and_result_waiters_share_generation_before_cleanup_finishes(provider):
     from app.ai import AssistantMessageFrameEncoder, reduce_assistant_message_frames
 
     progress, release, cleanup_entered, finish_cleanup = (asyncio.Event() for _ in range(4))
@@ -530,14 +530,15 @@ async def test_frames_and_result_waiters_share_generation_and_cleaned_final(prov
         await cancelled
     release.set()
     await asyncio.wait_for(cleanup_entered.wait(), 1)
-    assert not surviving.done()
+    final = await asyncio.wait_for(surviving, 1)
+    assert final.stop_reason == "stop"
     assert before.content[0].text == "one"
     assert response.partial.content[0].text == "one two"
     frames.append(encoder.encode(await anext(iterator)))
     assert reduce_assistant_message_frames(frames).content[0].text == "one two"
     finish_cleanup.set()
-    final = await surviving
-    assert final.stop_reason == "stop"
+    await response.aclose()
+    assert await response.result() is final
     assert (await anext(iterator))["message"] is final
     await models.aclose()
 
@@ -617,3 +618,94 @@ async def test_models_close_survives_cancelled_waiter_and_drains_different_waits
         assert ended == {"auth", "body", "backoff"} and body.closed
         assert [(await call.result()).stop_reason for call in calls] == ["aborted"] * 3
         assert not http.is_closed
+
+
+@pytest.mark.asyncio
+async def test_models_close_keeps_finished_cleanup_errors_and_drains_all_resources(
+    provider, monkeypatch
+):
+    import app.ai.runtime.clients as clients
+
+    release, cleaning = asyncio.Event(), asyncio.Event()
+    http = httpx2.AsyncClient(
+        transport=httpx2.MockTransport(
+            lambda request: httpx2.Response(
+                200, content=b'data: {"text": "answer"}\n\ndata: [DONE]\n\n'
+            )
+        )
+    )
+    monkeypatch.setattr(clients, "DefaultAsyncHttpxClient", lambda: http)
+
+    class CleanupAdapter(TransportAdapter):
+        async def stream_simple(self, **call):
+            wait = call["options"].metadata["wait"]
+
+            async def cleanup():
+                if wait:
+                    cleaning.set()
+                    await release.wait()
+                raise OSError("second close" if wait else "first close")
+
+            call["writer"].add_cleanup(cleanup)
+            await super().stream_simple(**call)
+
+    models = create_models([provider], adapters={provider.api: CleanupAdapter()})
+    first = models.stream_simple(
+        provider.models[0],
+        Context(messages=[]),
+        SimpleOptions(api_key="fake", metadata={"wait": False}),
+    )
+    assert (await first.result()).stop_reason == "stop"
+    with pytest.raises(ExceptionGroup):
+        await first.aclose()
+    second = models.stream_simple(
+        provider.models[0],
+        Context(messages=[]),
+        SimpleOptions(api_key="fake", metadata={"wait": True}),
+    )
+    assert (await second.result()).stop_reason == "stop"
+    await asyncio.wait_for(cleaning.wait(), 1)
+    closing = asyncio.create_task(models.aclose())
+    await asyncio.sleep(0)
+    assert not closing.done() and not http.is_closed
+    release.set()
+    with pytest.raises(ExceptionGroup) as caught:
+        await closing
+
+    def leaves(error):
+        if isinstance(error, BaseExceptionGroup):
+            return [text for child in error.exceptions for text in leaves(child)]
+        return [str(error)]
+
+    assert sorted(leaves(caught.value)) == ["OSError: first close", "OSError: second close"]
+    assert http.is_closed
+    assert (await first.result()).stop_reason == (await second.result()).stop_reason == "stop"
+    assert models.get_model(provider.id, "small") is not None
+
+
+@pytest.mark.asyncio
+async def test_complete_cancellation_still_propagates_when_cleanup_fails(provider):
+    entered = asyncio.Event()
+
+    class FailingCloseAdapter(RecordingAdapter):
+        async def stream_simple(self, **call):
+            async def cleanup():
+                raise OSError("close failed during cancellation")
+
+            call["writer"].add_cleanup(cleanup)
+            entered.set()
+            await asyncio.Event().wait()
+
+    models = create_models([provider], adapters={provider.api: FailingCloseAdapter()})
+    task = asyncio.create_task(
+        models.complete_simple(
+            provider.models[0], Context(messages=[]), SimpleOptions(api_key="fake")
+        )
+    )
+    await entered.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    with pytest.raises(ExceptionGroup) as caught:
+        await models.aclose()
+    assert "close failed during cancellation" in str(caught.value.exceptions[0])

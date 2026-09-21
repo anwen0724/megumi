@@ -39,6 +39,7 @@ class Models:
         self._adapters = dict(adapters or {})
         self._clients = ClientRuntime()
         self._responses: set[AssistantResponse] = set()
+        self._cleanup_errors: list[Exception] = []
         self._close_task: asyncio.Task[None] | None = None
         self._providers: dict[str, Provider] = {}
         for provider in providers:
@@ -80,6 +81,9 @@ class Models:
                     break
                 except asyncio.CancelledError:
                     continue
+                except ExceptionGroup:
+                    # Models retains cleanup failures; preserve the caller's cancellation.
+                    break
             raise
 
     def _start(
@@ -161,7 +165,7 @@ class Models:
 
         response = AssistantResponse(current or model, produce, signal=captured.signal)
         self._responses.add(response)
-        response._on_closed(self._responses.discard)
+        response._on_closed(self._response_closed)
         return response
 
     async def aclose(self) -> None:
@@ -171,13 +175,31 @@ class Models:
             self._close_task = asyncio.create_task(self._close_runtime())
         await asyncio.shield(self._close_task)
 
+    def _response_closed(self, response: AssistantResponse) -> None:
+        """Release completed calls while retaining their sanitized cleanup failures."""
+        if response in self._responses:
+            self._cleanup_errors.extend(response._cleanup_errors)
+            self._responses.discard(response)
+
     async def _close_runtime(self) -> None:
-        """Retain cleanup ownership even when an individual close waiter is cancelled."""
+        """Attempt every close before reporting failures, even for already-finished calls."""
         try:
-            await asyncio.gather(*(response.aclose() for response in tuple(self._responses)))
-            await self._clients.aclose()
+            responses = tuple(self._responses)
+            outcomes = await asyncio.gather(
+                *(response.aclose() for response in responses), return_exceptions=True
+            )
+            for response, outcome in zip(responses, outcomes, strict=True):
+                self._response_closed(response)
+                if isinstance(outcome, Exception) and not response._cleanup_errors:
+                    self._cleanup_errors.append(outcome)
+            try:
+                await self._clients.aclose()
+            except Exception as error:
+                self._cleanup_errors.append(error)
         finally:
             self._state = "closed"
+        if self._cleanup_errors:
+            raise ExceptionGroup("Models cleanup failed", self._cleanup_errors)
 
     def set_provider(self, provider: Provider) -> None:
         """Add or fully replace one provider definition."""

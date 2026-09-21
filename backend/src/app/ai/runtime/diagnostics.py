@@ -1,27 +1,9 @@
 """Serializable diagnostics contain selected error data, never SDK objects."""
 
 import json
-import time
 from collections.abc import Iterable, Mapping
 
-from app.ai.messages import AssistantMessage, AssistantMessageDiagnostic, DiagnosticErrorInfo
-
-
-def append_cleanup_diagnostic(
-    message: AssistantMessage, error: BaseException, *, sensitive_values: Iterable[str] = ()
-) -> None:
-    """Record cleanup failure before publication without changing the selected outcome."""
-    append_assistant_message_diagnostic(
-        message,
-        AssistantMessageDiagnostic(
-            type="cleanup_error",
-            timestamp=time.time_ns() // 1_000_000,
-            error=DiagnosticErrorInfo(
-                name=type(error).__name__,
-                message=format_error(error, sensitive_values=sensitive_values),
-            ),
-        ),
-    )
+from app.ai.messages import AssistantMessage, AssistantMessageDiagnostic
 
 
 def append_assistant_message_diagnostic(

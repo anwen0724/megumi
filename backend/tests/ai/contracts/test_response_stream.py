@@ -85,31 +85,31 @@ async def test_live_partial_and_saved_frame_have_different_lifetimes(provider):
 
 
 @pytest.mark.asyncio
-async def test_cleanup_finishes_before_final_and_failure_does_not_change_stop(provider):
-    cleaning = asyncio.Event()
-    release = asyncio.Event()
+async def test_result_and_terminal_event_do_not_wait_for_cleanup_but_close_does(provider):
+    cleaning, release = asyncio.Event(), asyncio.Event()
 
     async def cleanup():
         cleaning.set()
         await release.wait()
-        raise OSError("close failed")
 
     async def produce(writer):
         writer.add_cleanup(cleanup)
-        writer.partial.stop_reason = "length"
         writer.emit({"type": "done", "reason": "length", "message": writer.partial})
 
     response = AssistantResponse(provider.models[0], produce)
-    result = asyncio.create_task(response.result())
     await asyncio.wait_for(cleaning.wait(), 1)
-    assert not result.done()
-    response.cancel()
-    release.set()
-    final = await asyncio.wait_for(result, 1)
-    assert final.stop_reason == "length"
-    assert final.diagnostics[0].type == "cleanup_error"
-    assert final.diagnostics[0].error.message == "close failed"
-    await response.aclose()
+    closer = asyncio.create_task(response.aclose())
+    try:
+        final = await asyncio.wait_for(response.result(), 0.2)
+        assert final.stop_reason == "length"
+        assert [event["type"] async for event in response] == ["done"]
+        assert not closer.done()
+        response.cancel()
+        assert not closer.done()
+    finally:
+        release.set()
+        await closer
+    assert await response.result() is final
 
 
 @pytest.mark.asyncio
@@ -124,3 +124,39 @@ async def test_setup_failure_and_missing_terminal_return_error_without_hanging(p
     assert result.stop_reason == "error"
     assert ("setup failed" if behavior == "raise" else "terminal") in result.error_message
     assert [e["type"] async for e in response] == ["error"]
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failure_is_reported_by_close_without_mutating_published_message(provider):
+    from app.ai import AssistantMessageDiagnostic
+    from app.ai.codec import encode_messages
+
+    release, finished = asyncio.Event(), []
+
+    async def cleanup_failure():
+        await release.wait()
+        finished.append("failed")
+        raise OSError("close failed")
+
+    async def cleanup_other():
+        finished.append("other")
+
+    async def produce(writer):
+        writer.partial.diagnostics = [AssistantMessageDiagnostic(type="provider_note", timestamp=1)]
+        writer.add_cleanup(cleanup_other)
+        writer.add_cleanup(cleanup_failure)
+        writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
+
+    response = AssistantResponse(provider.models[0], produce)
+    final = await response.result()
+    saved = encode_messages([final])
+    release.set()
+    with pytest.raises(ExceptionGroup) as caught:
+        await response.aclose()
+    assert "close failed" in str(caught.value.exceptions[0])
+    assert finished == ["failed", "other"]
+    assert encode_messages([final]) == saved
+    assert (await response.result()) is final
+    with pytest.raises(ExceptionGroup):
+        await response.aclose()
+    assert finished == ["failed", "other"]

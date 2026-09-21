@@ -79,7 +79,7 @@ async def test_cancel_sdk_body_read_closes_response_before_final(provider, statu
 
 
 @pytest.mark.asyncio
-async def test_failure_diagnostics_redact_credentials_and_cleanup_errors(provider):
+async def test_generation_and_close_errors_both_redact_credentials(provider):
     def handle(request):
         return httpx2.Response(400, json={"error": {"message": "bad fake-secret"}})
 
@@ -105,12 +105,18 @@ async def test_failure_diagnostics_redact_credentials_and_cleanup_errors(provide
                 writer=writer,
             )
 
-        final = await AssistantResponse(provider.models[0], produce).result()
+        response = AssistantResponse(provider.models[0], produce)
+        final = await response.result()
         assert final.stop_reason == "error"
         assert "400" in final.error_message and "bad" in final.error_message
         assert "fake-secret" not in str(final)
         assert "private-image" not in str(final) and "private-args" not in str(final)
-        assert "close [redacted]" in str(final.diagnostics)
+        assert final.diagnostics is None
+        with pytest.raises(ExceptionGroup) as caught:
+            await response.aclose()
+        assert "close [redacted]" in str(caught.value.exceptions[0])
+        assert "fake-secret" not in str(caught.value.exceptions[0])
+        assert final.diagnostics is None
         await runtime.aclose()
 
 

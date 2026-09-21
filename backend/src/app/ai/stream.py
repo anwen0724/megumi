@@ -10,7 +10,7 @@ from copy import deepcopy
 from app.ai.events import AssistantMessageEvent
 from app.ai.messages import AssistantMessage
 from app.ai.model import Model
-from app.ai.runtime.diagnostics import append_cleanup_diagnostic, format_error, redact_text
+from app.ai.runtime.diagnostics import format_error, redact_text
 from app.ai.runtime.retry import SignalAborted
 
 
@@ -70,6 +70,7 @@ class AssistantResponse:
         self._queue: asyncio.Queue[AssistantMessageEvent | None] = asyncio.Queue()
         self._result: asyncio.Future[AssistantMessage] = asyncio.get_running_loop().create_future()
         self._writer = ResponseWriter(model, self._queue.put_nowait)
+        self._cleanup_errors: list[Exception] = []
         self._started = False
         self._finalizing = False
         self._cancel_requested = bool(signal and signal.is_set())
@@ -106,9 +107,11 @@ class AssistantResponse:
         self.cancel()
 
     async def aclose(self) -> None:
-        """Stop active generation and wait for cleanup; repeated calls are harmless."""
+        """Stop generation, await cleanup and report saved failures without repeating cleanup."""
         self.cancel()
         await asyncio.shield(self._task)
+        if self._cleanup_errors:
+            raise ExceptionGroup("Response cleanup failed", self._cleanup_errors) from None
 
     async def _run(self, produce: Callable[[ResponseWriter], Awaitable[None]]) -> None:
         self._started = True
@@ -133,13 +136,6 @@ class AssistantResponse:
                     final.error_message = redact_text(
                         final.error_message, self._writer._sensitive_values
                     )
-                for cleanup in reversed(self._writer._cleanups):
-                    try:
-                        await cleanup()
-                    except (Exception, asyncio.CancelledError) as error:
-                        append_cleanup_diagnostic(
-                            final, error, sensitive_values=self._writer._sensitive_values
-                        )
                 if final.stop_reason in {"stop", "length", "tool_use"}:
                     self._queue.put_nowait(
                         {"type": "done", "reason": final.stop_reason, "message": final}
@@ -154,9 +150,23 @@ class AssistantResponse:
                     )
                 self._result.set_result(final)
             self._queue.put_nowait(None)
+            if final is not None:
+                for cleanup in reversed(self._writer._cleanups):
+                    try:
+                        await cleanup()
+                    except (Exception, asyncio.CancelledError) as error:
+                        # Keep sanitized cleanup evidence outside the published message.
+                        self._cleanup_errors.append(
+                            RuntimeError(
+                                f"{type(error).__name__}: "
+                                + format_error(
+                                    error, sensitive_values=self._writer._sensitive_values
+                                )
+                            )
+                        )
 
     async def result(self) -> AssistantMessage:
-        """Await the cached cleaned result without exposing its Future to waiter cancellation."""
+        """Await the cached generation result without exposing its Future to waiter cancellation."""
         return await asyncio.shield(self._result)
 
     async def __aiter__(self) -> AsyncIterator[AssistantMessageEvent]:
