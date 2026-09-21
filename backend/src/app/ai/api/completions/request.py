@@ -5,7 +5,7 @@ import re
 
 from app.ai.api.completions.options import CompletionsOptions
 from app.ai.api.completions.response import valid_reasoning_detail
-from app.ai.api.transform import transform_messages
+from app.ai.api.transform import clean_text, short_hash, transform_messages
 from app.ai.messages import (
     AssistantMessage,
     ImageContent,
@@ -27,11 +27,6 @@ from app.ai.transcript import (
     resolve_transcript,
     resolve_transcript_tools,
 )
-
-
-def clean_text(value: str) -> str:
-    """Remove lone surrogates while preserving valid pairs and Unicode code points."""
-    return value.encode("utf-16-le", errors="surrogatepass").decode("utf-16-le", errors="ignore")
 
 
 def image_part(block: ImageContent) -> dict[str, JSONValue]:
@@ -239,29 +234,6 @@ def normalize_call_id(value: str, model: Model) -> str:
         return combined
     digest = short_hash(value)[:8]
     return f"{call[: max(1, 39 - len(digest))]}_{digest}"
-
-
-def short_hash(value: str) -> str:
-    """Port pi's two unsigned 32-bit accumulators over JavaScript UTF-16 units."""
-    mask = 0xFFFFFFFF
-    h1, h2 = 0xDEADBEEF, 0x41C6CE57
-    raw = value.encode("utf-16-le", errors="surrogatepass")
-    for offset in range(0, len(raw), 2):
-        char = int.from_bytes(raw[offset : offset + 2], "little")
-        h1 = ((h1 ^ char) * 2654435761) & mask
-        h2 = ((h2 ^ char) * 1597334677) & mask
-    h1 = (((h1 ^ (h1 >> 16)) * 2246822507) ^ ((h2 ^ (h2 >> 13)) * 3266489909)) & mask
-    h2 = (((h2 ^ (h2 >> 16)) * 2246822507) ^ ((h1 ^ (h1 >> 13)) * 3266489909)) & mask
-    return base36(h2) + base36(h1)
-
-
-def base36(value: int) -> str:
-    """Format an unsigned integer with the radix used by the reference implementation."""
-    result = ""
-    while value:
-        value, remainder = divmod(value, 36)
-        result = "0123456789abcdefghijklmnopqrstuvwxyz"[remainder] + result
-    return result or "0"
 
 
 def reasoning_details(message: AssistantMessage) -> list[JSONValue] | None:

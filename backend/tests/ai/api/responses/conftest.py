@@ -20,3 +20,24 @@ def response_sse(native_sse):
         return native_sse(*events)
 
     return response
+
+
+@pytest.fixture
+def responses_harness(sdk_harness, response_sse):
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def harness(**kwargs):
+        kwargs.setdefault(
+            "data",
+            response_sse(
+                {
+                    "type": "response.completed",
+                    "response": {"id": "r", "status": "completed", "output": []},
+                }
+            ),
+        )
+        async with sdk_harness(**kwargs) as result:
+            yield result
+
+    return harness
