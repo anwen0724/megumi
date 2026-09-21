@@ -6,7 +6,7 @@ import pytest
 
 from app.ai.codec import decode_messages, encode_messages
 from app.ai.errors import MessageDecodeError
-from app.ai.messages import AssistantMessage, TextContent, UserMessage
+from app.ai.messages import AssistantMessage, AssistantMessageDiagnostic, TextContent, UserMessage
 
 
 def test_text_conversation_round_trip():
@@ -79,7 +79,11 @@ def test_tool_and_system_history_preserves_signatures_and_unvalidated_values():
             response_id="r1",
             response_model="resolved",
             raw_stop_reason="limit",
-            diagnostics={"request_id": "fake"},
+            diagnostics=[
+                AssistantMessageDiagnostic(
+                    type="request", timestamp=2, details={"request_id": "fake"}
+                )
+            ],
             end_turn=False,
             provider_thinking_level="high",
         ),
@@ -143,3 +147,27 @@ def test_decimal_is_only_serialized_in_cost_fields_not_tool_arguments():
     )
     with pytest.raises((TypeError, MessageDecodeError)):
         encode_messages([msg])
+
+
+@pytest.mark.parametrize(
+    "diagnostics",
+    [
+        {"request_id": "fake"},
+        [{"type": "note"}],
+        [{"type": "note", "timestamp": 1, "error": {"name": "Error"}}],
+    ],
+)
+def test_diagnostics_reject_invalid_structure_on_both_codec_directions(diagnostics):
+    record = {
+        "role": "assistant",
+        "content": [],
+        "provider": "p",
+        "api": "a",
+        "model": "m",
+        "timestamp": 1,
+        "diagnostics": diagnostics,
+    }
+    with pytest.raises(MessageDecodeError):
+        decode_messages(json.dumps([record]))
+    with pytest.raises(MessageDecodeError):
+        encode_messages([AssistantMessage(**record)])

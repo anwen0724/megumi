@@ -128,6 +128,26 @@ class Usage(_Record):
 
 
 @dataclass(kw_only=True)
+class DiagnosticErrorInfo(_Record):
+    """Serializable error evidence carried by a pi-style message diagnostic."""
+
+    message: str
+    name: str | None = None
+    stack: str | None = None
+    code: str | int | float | None = None
+
+
+@dataclass(kw_only=True)
+class AssistantMessageDiagnostic(_Record):
+    """One ordered diagnostic, separate from generated content and stop reason."""
+
+    type: str
+    timestamp: int
+    error: DiagnosticErrorInfo | None = None
+    details: dict[str, JSONValue] | None = None
+
+
+@dataclass(kw_only=True)
 class AssistantMessage(_Record):
     """Provider-qualified generated content, including active partial state."""
 
@@ -142,7 +162,7 @@ class AssistantMessage(_Record):
     response_model: str | None = None
     raw_stop_reason: str | None = None
     error_message: str | None = None
-    diagnostics: JSONValue = None
+    diagnostics: list[AssistantMessageDiagnostic] | None = None
     provider_thinking_level: str | None = None
     end_turn: bool | None = None
     role: Literal["assistant"] = "assistant"

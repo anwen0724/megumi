@@ -4,23 +4,31 @@ import json
 import time
 from collections.abc import Iterable, Mapping
 
-from app.ai.messages import AssistantMessage, JSONValue
+from app.ai.messages import AssistantMessage, AssistantMessageDiagnostic, DiagnosticErrorInfo
 
 
 def append_cleanup_diagnostic(
     message: AssistantMessage, error: BaseException, *, sensitive_values: Iterable[str] = ()
 ) -> None:
     """Record cleanup failure before publication without changing the selected outcome."""
-    diagnostic: JSONValue = {
-        "type": "cleanup_error",
-        "timestamp": time.time_ns() // 1_000_000,
-        "error": {
-            "name": type(error).__name__,
-            "message": format_error(error, sensitive_values=sensitive_values),
-        },
-    }
-    existing = message.diagnostics if isinstance(message.diagnostics, list) else []
-    message.diagnostics = [*existing, diagnostic]
+    append_assistant_message_diagnostic(
+        message,
+        AssistantMessageDiagnostic(
+            type="cleanup_error",
+            timestamp=time.time_ns() // 1_000_000,
+            error=DiagnosticErrorInfo(
+                name=type(error).__name__,
+                message=format_error(error, sensitive_values=sensitive_values),
+            ),
+        ),
+    )
+
+
+def append_assistant_message_diagnostic(
+    message: AssistantMessage, diagnostic: AssistantMessageDiagnostic
+) -> None:
+    """Append one pi-style diagnostic without discarding existing records."""
+    message.diagnostics = [*(message.diagnostics or []), diagnostic]
 
 
 def format_error(error: BaseException, *, sensitive_values: Iterable[str] = ()) -> str:

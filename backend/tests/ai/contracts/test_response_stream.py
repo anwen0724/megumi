@@ -107,8 +107,8 @@ async def test_cleanup_finishes_before_final_and_failure_does_not_change_stop(pr
     release.set()
     final = await asyncio.wait_for(result, 1)
     assert final.stop_reason == "length"
-    assert final.diagnostics[0]["type"] == "cleanup_error"
-    assert final.diagnostics[0]["error"]["message"] == "close failed"
+    assert final.diagnostics[0].type == "cleanup_error"
+    assert final.diagnostics[0].error.message == "close failed"
     await response.aclose()
 
 
