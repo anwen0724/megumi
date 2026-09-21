@@ -13,15 +13,18 @@ from app.ai.messages import (
     TextContent,
     ThinkingContent,
     ToolCall,
+    ToolDefinition,
     ToolResultMessage,
     Transcript,
     UserMessage,
 )
 from app.ai.model import Model
+from app.ai.tools.schema import make_strict_json_schema, resolve_json_schema_strict_sampling
 from app.ai.transcript import (
     get_system_message_text,
     render_system_message_update,
     resolve_transcript,
+    resolve_transcript_tools,
 )
 
 
@@ -44,6 +47,13 @@ def build_request(model: Model, transcript: Transcript) -> dict[str, JSONValue]:
     history = transform_messages(
         resolved.messages, model, lambda value, target, _: normalize_call_id(value, target)
     )
+    tools = resolve_transcript_tools(
+        resolved.messages,
+        bool(
+            model.compat.supports_mid_convo_system_messages
+            and model.compat.supports_mid_convo_tool_additions
+        ),
+    )
     messages: list[JSONValue] = []
     role = model.compat.system_role or (
         "developer"
@@ -53,6 +63,13 @@ def build_request(model: Model, transcript: Transcript) -> dict[str, JSONValue]:
     tool_images: list[JSONValue] = []
     for index, message in enumerate(history):
         if isinstance(message, SystemMessage):
+            if index > 0 and tools.anchors_additions and message.tools_added:
+                messages.append(
+                    {
+                        "role": "system",
+                        "tools": [encode_tool(tool, model) for tool in message.tools_added],
+                    }
+                )
             text = (
                 get_system_message_text(message)
                 if index == 0
@@ -111,7 +128,17 @@ def build_request(model: Model, transcript: Transcript) -> dict[str, JSONValue]:
                     }
                 )
                 tool_images = []
-    return {"model": model.id, "stream": True, "messages": messages}
+    payload: dict[str, JSONValue] = {"model": model.id, "stream": True, "messages": messages}
+    if tools.request_tools:
+        payload["tools"] = [encode_tool(tool, model) for tool in tools.request_tools]
+    elif any(
+        isinstance(message, ToolResultMessage)
+        or (isinstance(message, AssistantMessage)
+        and any(isinstance(block, ToolCall) for block in message.content))
+        for message in transcript.messages
+    ):
+        payload["tools"] = []
+    return payload
 
 
 def encode_assistant(message: AssistantMessage) -> dict[str, JSONValue] | None:
@@ -216,3 +243,17 @@ def reasoning_details(message: AssistantMessage) -> list[JSONValue] | None:
         ):
             legacy.append(value)
     return legacy or None
+
+
+def encode_tool(tool: ToolDefinition, model: Model) -> dict[str, JSONValue]:
+    """Resolve strict policy using the shared converter, without validating generated arguments."""
+    supported = model.compat.supports_strict_mode is not False
+    strict = resolve_json_schema_strict_sampling(tool, supported)
+    function: dict[str, JSONValue] = {
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": make_strict_json_schema(tool.parameters) if strict else tool.parameters,
+    }
+    if supported:
+        function["strict"] = strict or False
+    return {"type": "function", "function": function}
