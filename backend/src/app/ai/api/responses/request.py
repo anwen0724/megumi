@@ -13,15 +13,18 @@ from app.ai.messages import (
     TextContent,
     ThinkingContent,
     ToolCall,
+    ToolDefinition,
     ToolResultMessage,
     Transcript,
     UserMessage,
 )
 from app.ai.model import Model
+from app.ai.tools.schema import make_strict_json_schema, resolve_json_schema_strict_sampling
 from app.ai.transcript import (
     get_system_message_text,
     render_system_message_update,
     resolve_transcript,
+    resolve_transcript_tools,
 )
 
 
@@ -40,6 +43,10 @@ def build_request(
     """Resolve instruction updates and encode independent full history."""
     resolved = resolve_transcript(transcript, model.compat.supports_mid_convo_system_messages)
     history = transform_messages(resolved.messages, model, normalize_call_id)
+    tools = resolve_transcript_tools(
+        resolved.messages,
+        bool(model.compat.supports_additional_tools or model.compat.supports_tool_search),
+    )
     items: list[JSONValue] = []
     role = model.compat.system_role or (
         "developer"
@@ -49,6 +56,8 @@ def build_request(
     message_index = 0
     for index, message in enumerate(history):
         if isinstance(message, SystemMessage):
+            if index > 0 and tools.anchors_additions and message.tools_added:
+                items.extend(encode_tool_additions(message.tools_added, model, message_index))
             text = (
                 get_system_message_text(message)
                 if index == 0
@@ -96,7 +105,15 @@ def build_request(
             )
         if not (index == 0 and isinstance(message, SystemMessage)):
             message_index += 1
-    return {"model": model.id, "stream": True, "store": False, "input": items}
+    payload: dict[str, JSONValue] = {
+        "model": model.id,
+        "stream": True,
+        "store": False,
+        "input": items,
+    }
+    if tools.request_tools:
+        payload["tools"] = [encode_tool(tool, model) for tool in tools.request_tools]
+    return payload
 
 
 def parse_text_signature(signature: str | None) -> tuple[str | None, str | None]:
@@ -175,3 +192,48 @@ def normalize_call_id(value: str, target: Model, source: AssistantMessage) -> st
     if not item.startswith("fc_"):
         item = f"fc_{item}"
     return f"{part(call)}|{part(item)}"
+
+
+def encode_tool(tool: ToolDefinition, model: Model) -> dict[str, JSONValue]:
+    """Convert function declarations using the shared strict-schema policy."""
+    supported = model.compat.supports_strict_mode is True
+    strict = resolve_json_schema_strict_sampling(tool, supported)
+    result: dict[str, JSONValue] = {
+        "type": "function",
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": make_strict_json_schema(tool.parameters) if strict else tool.parameters,
+    }
+    if supported:
+        result["strict"] = strict or False
+    return result
+
+
+def encode_tool_additions(
+    tools: list[ToolDefinition], model: Model, message_index: int
+) -> list[JSONValue]:
+    """Represent already-known client declarations, without executing a search."""
+    encoded: list[JSONValue] = [encode_tool(tool, model) for tool in tools]
+    if model.compat.supports_additional_tools:
+        return [{"type": "additional_tools", "role": "developer", "tools": encoded}]
+    names = [tool.name for tool in tools]
+    call_id = "pi_tool_load_" + short_hash(f"system:{message_index}:" + ",".join(names))
+    deferred: list[JSONValue] = [
+        {**encode_tool(tool, model), "defer_loading": True} for tool in tools
+    ]
+    return [
+        {
+            "type": "tool_search_call",
+            "call_id": call_id,
+            "execution": "client",
+            "status": "completed",
+            "arguments": {"query": " ".join(names), "limit": len(names)},
+        },
+        {
+            "type": "tool_search_output",
+            "call_id": call_id,
+            "execution": "client",
+            "status": "completed",
+            "tools": deferred,
+        },
+    ]
