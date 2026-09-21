@@ -26,7 +26,10 @@ async def consume_response(
     async for native in events:
         if isinstance(native, BaseModel):
             assembly.feed(
-                cast(dict[str, JSONValue], native.model_dump(mode="json", exclude_unset=True))
+                cast(
+                    dict[str, JSONValue],
+                    native.model_dump(mode="json", exclude_unset=True, warnings=False),
+                )
             )
     assembly.finish()
 
@@ -125,6 +128,23 @@ class ResponseAssembly:
         slot = self.slots.get(index) if type(index) is int else None
         if slot is None and isinstance(identity, str):
             slot = self.by_id.get(identity)
+        expected_type = (
+            {
+                "response.output_text.delta": TextContent,
+                "response.output_text.done": TextContent,
+                "response.refusal.delta": TextContent,
+                "response.refusal.done": TextContent,
+                "response.reasoning_summary_text.delta": ThinkingContent,
+                "response.reasoning_text.delta": ThinkingContent,
+                "response.reasoning_summary_part.done": ThinkingContent,
+                "response.function_call_arguments.delta": ToolCall,
+                "response.function_call_arguments.done": ToolCall,
+            }.get(kind)
+            if isinstance(kind, str)
+            else None
+        )
+        if expected_type and (slot is None or not isinstance(slot.block, expected_type)):
+            raise ValueError("Invalid Responses content event: missing or incompatible item")
         if (
             kind in ("response.output_text.delta", "response.refusal.delta")
             and slot
