@@ -1,7 +1,9 @@
 """Request-scoped OpenAI SDK wrappers share HTTP resources owned by Models."""
 
+from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from inspect import isawaitable
+from typing import TypedDict
 
 import httpx2
 from openai import (
@@ -13,7 +15,6 @@ from openai import (
     Omit,
 )
 from openai._models import SecurityOptions
-from openai._types import RequestOptions
 
 from app.ai.auth.types import ResolvedAuth
 from app.ai.messages import JSONValue
@@ -22,6 +23,18 @@ from app.ai.options import CallOptions, ProviderResponse
 from app.ai.runtime.diagnostics import sensitive_header_values
 from app.ai.runtime.retry import ProviderErrorInfo, provider_error_info, retry_provider_request
 from app.ai.stream import ResponseWriter
+
+
+class StreamRequestOptions(TypedDict, total=False):
+    """Request-scoped SDK controls forwarded by a protocol's create operation."""
+
+    timeout: float
+    extra_headers: dict[str, str | Omit]
+
+
+type StreamRequest[T] = Callable[
+    [AsyncOpenAI, dict[str, JSONValue], StreamRequestOptions], Awaitable[AsyncStream[T]]
+]
 
 
 class _RequestClient(AsyncOpenAI):
@@ -60,17 +73,17 @@ class ClientRuntime:
         if self._owned is not None:
             await self._owned.aclose()
 
-    async def open_stream(
+    async def open_stream[T](
         self,
-        path: str,
+        operation: StreamRequest[T],
         payload: dict[str, JSONValue],
         *,
         model: Model,
         auth: ResolvedAuth,
         options: CallOptions,
         writer: ResponseWriter,
-    ) -> AsyncStream[dict[str, object]]:
-        """Create an SSE stream; business event interpretation belongs to the adapter."""
+    ) -> AsyncStream[T]:
+        """Run a protocol SDK operation with shared hooks, retries and response ownership."""
         writer.protect([auth.key or "", *sensitive_header_values(auth.headers)])
         payload = deepcopy(payload)
         if options.on_payload is not None:
@@ -88,22 +101,15 @@ class ClientRuntime:
                 self._owned = DefaultAsyncHttpxClient()
             http = self._owned
         client = _RequestClient(auth, http)
-        request_options: RequestOptions = {}
+        request_options: StreamRequestOptions = {}
         if options.timeout_ms is not None:
             request_options["timeout"] = options.timeout_ms / 1000
         if "authorization" not in auth.headers:
             # SDK requires a request-level omission to honor explicitly removed authorization.
-            request_options["headers"] = {"authorization": Omit()}
+            request_options["extra_headers"] = {"authorization": Omit()}
 
-        async def request() -> AsyncStream[dict[str, object]]:
-            stream = await client.post(
-                path,
-                body=payload,
-                cast_to=dict[str, object],
-                stream=True,
-                stream_cls=AsyncStream[dict[str, object]],
-                options=request_options,
-            )
+        async def request() -> AsyncStream[T]:
+            stream = await operation(client, payload, request_options)
             writer.add_cleanup(stream.close)
             return stream
 

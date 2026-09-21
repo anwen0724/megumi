@@ -19,6 +19,13 @@ from app.ai.errors import LifecycleError
 from app.ai.options import CallOptions
 
 
+async def create_response_stream(client, payload, request_options):
+    """Exercise the real SDK endpoint with a minimal test-only protocol request."""
+    return await client.responses.create(
+        model="sample", input="hello", stream=True, extra_body=payload, **request_options
+    )
+
+
 class RecordingAdapter:
     options_type = CallOptions
 
@@ -222,7 +229,7 @@ class TransportAdapter(RecordingAdapter):
         self.calls.append(call)
         writer = call["writer"]
         stream = await call["clients"].open_stream(
-            "/responses",
+            create_response_stream,
             {"source": "adapter", "stream": True},
             model=call["model"],
             auth=call["auth"],
@@ -231,7 +238,7 @@ class TransportAdapter(RecordingAdapter):
         )
         writer.emit({"type": "start", "partial": writer.partial})
         async for item in stream:
-            writer.partial.content.append(TextContent(text=str(item["text"])))
+            writer.partial.content.append(TextContent(text=str(item.text)))
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
 

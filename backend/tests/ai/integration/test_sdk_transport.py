@@ -11,6 +11,13 @@ from app.ai.runtime.clients import ClientRuntime
 from app.ai.stream import AssistantResponse
 
 
+async def create_response_stream(client, payload, request_options):
+    """Exercise the real SDK endpoint with a minimal test-only protocol request."""
+    return await client.responses.create(
+        model="sample", input="hello", stream=True, extra_body=payload, **request_options
+    )
+
+
 class WaitingBody(httpx2.AsyncByteStream):
     def __init__(self):
         self.reading = asyncio.Event()
@@ -44,7 +51,7 @@ async def test_cancel_sdk_body_read_closes_response_before_final(provider, statu
 
         async def produce(writer):
             stream = await runtime.open_stream(
-                "/responses",
+                create_response_stream,
                 {"stream": True},
                 model=provider.models[0],
                 auth=ResolvedAuth(
@@ -85,7 +92,7 @@ async def test_failure_diagnostics_redact_credentials_and_cleanup_errors(provide
 
             writer.add_cleanup(fail_close)
             await runtime.open_stream(
-                "/responses",
+                create_response_stream,
                 {"stream": True, "image": "private-image", "arguments": "private-args"},
                 model=provider.models[0],
                 auth=ResolvedAuth(
@@ -132,7 +139,7 @@ async def test_body_connection_failure_is_not_retried(provider):
 
         async def produce(writer):
             stream = await runtime.open_stream(
-                "/responses",
+                create_response_stream,
                 {},
                 model=provider.models[0],
                 auth=ResolvedAuth(
