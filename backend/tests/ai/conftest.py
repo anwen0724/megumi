@@ -32,3 +32,53 @@ def isolated_credential_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     """Prevent real credentials from entering any new AI contract test."""
     for name in ("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "SAMPLE_API_KEY", "OTHER_API_KEY"):
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture
+def native_sse():
+    """Serialize hand-authored native events, independently of production parsing."""
+    import json
+
+    def encode(*chunks):
+        return (
+            "".join("data: " + json.dumps(chunk) + "\n\n" for chunk in chunks) + "data: [DONE]\n\n"
+        ).encode()
+
+    return encode
+
+
+@pytest.fixture
+def sdk_harness(provider, native_sse):
+    """Own the real Models and SDK; replace only the external HTTP service."""
+    from contextlib import asynccontextmanager
+
+    import httpx2
+
+    from app.ai import Models
+
+    @asynccontextmanager
+    async def harness(*, data=None, handler=None, providers=None):
+        requests = []
+        if data is None:
+            data = native_sse(
+                {"choices": [{"index": 0, "delta": {"content": "ok"}, "finish_reason": "stop"}]}
+            )
+
+        async def respond(request):
+            requests.append(request)
+            if handler is not None:
+                return await handler(request)
+            return httpx2.Response(
+                200,
+                headers={"content-type": "text/event-stream", "x-request-id": "native-id"},
+                content=data,
+            )
+
+        async with httpx2.AsyncClient(transport=httpx2.MockTransport(respond)) as http:
+            models = Models(providers if providers is not None else [provider])
+            try:
+                yield models, http, requests
+            finally:
+                await models.aclose()
+
+    return harness

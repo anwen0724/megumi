@@ -146,8 +146,9 @@ async def test_call_snapshots_precede_auth_wait_and_survive_provider_replacement
 
 @pytest.mark.asyncio
 async def test_settings_failures_are_final_but_python_misuse_raises(provider):
+    model = replace(provider.models[0], api="openai-responses")
+    provider = replace(provider, api="openai-responses", models=[model])
     models = create_models([provider])
-    model = provider.models[0]
     no_auth = models.stream_simple(model, Context(messages=[]))
     assert (await no_auth.result()).stop_reason == "error"
     assert [e["type"] async for e in no_auth] == ["error"]

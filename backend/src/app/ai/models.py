@@ -8,6 +8,7 @@ from inspect import isawaitable
 from typing import Literal
 
 from app.ai.api.base import ProtocolAdapter
+from app.ai.api.completions.adapter import CompletionsAdapter
 from app.ai.api.simple_options import prepare_simple_options
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.resolve import has_auth_header, merge_headers, resolve_api_key, resolve_auth
@@ -36,7 +37,8 @@ class Models:
     ) -> None:
         self._state: Literal["open", "closing", "closed"] = "open"
         self._credentials = credentials if credentials is not None else InMemoryCredentialStore()
-        self._adapters = dict(adapters or {})
+        self._adapters: dict[str, ProtocolAdapter] = {"openai-completions": CompletionsAdapter()}
+        self._adapters.update(adapters or {})
         self._clients = ClientRuntime()
         self._responses: set[AssistantResponse] = set()
         self._cleanup_errors: list[Exception] = []
