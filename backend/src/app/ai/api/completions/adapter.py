@@ -79,7 +79,7 @@ class CompletionsAdapter:
             options=options,
             writer=writer,
         )
-        await consume_response(chunks, writer)
+        await consume_response(chunks, writer, effective)
 
     async def stream_simple(
         self,

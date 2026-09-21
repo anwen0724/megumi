@@ -7,16 +7,18 @@ from typing import cast
 
 from openai.types.chat import ChatCompletionChunk
 
-from app.ai.messages import JSONValue, TextContent, ThinkingContent, ToolCall
+from app.ai.messages import JSONValue, TextContent, ThinkingContent, ToolCall, Usage
+from app.ai.model import Model
 from app.ai.stream import ResponseWriter
 from app.ai.tools.arguments import parse_partial_arguments
+from app.ai.usage import calculate_usage_cost
 
 
 async def consume_response(
-    chunks: AsyncIterable[ChatCompletionChunk], writer: ResponseWriter
+    chunks: AsyncIterable[ChatCompletionChunk], writer: ResponseWriter, model: Model
 ) -> None:
     """Read to EOF before settling, retaining a shared partial during assembly."""
-    state = ResponseAssembly(writer)
+    state = ResponseAssembly(writer, model)
     writer.emit({"type": "start", "partial": writer.partial})
     try:
         async for chunk in chunks:
@@ -40,7 +42,8 @@ class ToolAssembly:
 class ResponseAssembly:
     """Keep parser bookkeeping outside persistable assistant content."""
 
-    def __init__(self, writer: ResponseWriter) -> None:
+    def __init__(self, writer: ResponseWriter, model: Model) -> None:
+        self.model = model
         self.writer = writer
         self.partial = writer.partial
         self.text: TextContent | None = None
@@ -58,13 +61,28 @@ class ResponseAssembly:
             self.partial.response_id = self.partial.response_id or identity
         if isinstance(model, str) and model and model != self.partial.model:
             self.partial.response_model = self.partial.response_model or model
+        usage = chunk.get("usage")
+        if isinstance(usage, dict):
+            self.partial.usage = parse_usage(usage, self.model)
         choices = chunk.get("choices")
         if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
             return
         choice = choices[0]
-        if choice.get("finish_reason") == "stop":
-            self.partial.stop_reason = "stop"
-            self.partial.raw_stop_reason = "stop"
+        fallback_usage = choice.get("usage")
+        if not isinstance(usage, dict) and isinstance(fallback_usage, dict):
+            self.partial.usage = parse_usage(fallback_usage, self.model)
+        reason = choice.get("finish_reason")
+        if isinstance(reason, str) and reason:
+            self.partial.raw_stop_reason = reason
+            if reason in ("stop", "end"):
+                self.partial.stop_reason = "stop"
+            elif reason == "length":
+                self.partial.stop_reason = "length"
+            elif reason in ("function_call", "tool_calls"):
+                self.partial.stop_reason = "tool_use"
+            else:
+                self.partial.stop_reason = "error"
+                self.partial.error_message = f"Provider finish_reason: {reason}"
         delta = choice.get("delta")
         if not isinstance(delta, dict):
             return
@@ -214,9 +232,21 @@ class ResponseAssembly:
                         "partial": self.partial,
                     }
                 )
-        if self.partial.stop_reason != "stop":
+        if (
+            self.partial.raw_stop_reason is None
+            and self.model.compat.supports_finish_reason is False
+        ):
+            self.partial.stop_reason = (
+                "tool_use"
+                if any(isinstance(block, ToolCall) for block in self.partial.content)
+                else "stop"
+            )
+        reason = self.partial.stop_reason
+        if reason == "error":
+            raise ValueError(self.partial.error_message)
+        if reason not in ("stop", "length", "tool_use"):
             raise ValueError("Stream ended without finish_reason")
-        self.writer.emit({"type": "done", "reason": "stop", "message": self.partial})
+        self.writer.emit({"type": "done", "reason": reason, "message": self.partial})
 
 
 def valid_reasoning_detail(value: JSONValue) -> bool:
@@ -257,3 +287,51 @@ def append_reasoning_detail(
                 target[key] = detail[key]
     else:
         details.append(dict(detail))
+
+
+def token_count(value: JSONValue) -> int | None:
+    """Keep absent native counters unknown, including values the SDK defaults to None."""
+    return value if type(value) is int else None
+
+
+def parse_usage(raw: dict[str, JSONValue], model: Model) -> Usage:
+    """Subtract cache components from prompt tokens; reasoning is already in output."""
+    prompt = raw.get("prompt_tokens_details")
+    prompt = prompt if isinstance(prompt, dict) else {}
+    completion = raw.get("completion_tokens_details")
+    completion = completion if isinstance(completion, dict) else {}
+    read = token_count(prompt.get("cached_tokens"))
+    if read is None:
+        read = token_count(raw.get("prompt_cache_hit_tokens"))
+    if read is None:
+        read = token_count(raw.get("cached_tokens"))
+    write = token_count(prompt.get("cache_write_tokens"))
+    if write is None and (
+        model.provider in ("openai", "deepseek")
+        or any(
+            host in (model.base_url or "").lower() for host in ("api.openai.com", "deepseek.com")
+        )
+    ):
+        write = 0
+    total_prompt = token_count(raw.get("prompt_tokens"))
+    output = token_count(raw.get("completion_tokens"))
+    input_count = (
+        max(0, total_prompt - read - write)
+        if total_prompt is not None and read is not None and write is not None
+        else None
+    )
+    total = (
+        input_count + output + read + write
+        if input_count is not None and output is not None and read is not None and write is not None
+        else None
+    )
+    usage = Usage(
+        input=input_count,
+        output=output,
+        cache_read=read,
+        cache_write=write,
+        reasoning=token_count(completion.get("reasoning_tokens")),
+        total_tokens=total,
+    )
+    usage.cost = calculate_usage_cost(usage, model.pricing)
+    return usage

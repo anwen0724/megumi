@@ -205,3 +205,64 @@ async def test_tool_end_keeps_repaired_or_partial_arguments(
             next(e["tool_call"].arguments for e in events if e["type"] == "toolcall_end")
             == expected
         )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "native,expected",
+    [
+        ("stop", "stop"),
+        ("end", "stop"),
+        ("length", "length"),
+        ("function_call", "tool_use"),
+        ("tool_calls", "tool_use"),
+        ("content_filter", "error"),
+        ("network_error", "error"),
+        ("new_reason", "error"),
+    ],
+)
+async def test_native_finish_reason_is_preserved(
+    provider, sdk_harness, native_sse, native, expected
+):
+    data = native_sse({"choices": [{"delta": {"content": "partial"}, "finish_reason": native}]})
+    async with sdk_harness(data=data) as (models, http, _):
+        response = models.stream(
+            provider.models[0],
+            Context(messages=[]),
+            CompletionsOptions(api_key="key", http_client=http),
+        )
+        final = await response.result()
+        assert final.stop_reason == expected, final.error_message
+        assert final.raw_stop_reason == native
+        assert final.content == [TextContent(text="partial")]
+        assert sum(e["type"] in ("done", "error") for e in [e async for e in response]) == 1
+        if expected == "error":
+            assert native in final.error_message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tools", [False, True])
+async def test_explicit_no_finish_compat_infers_terminal(provider, sdk_harness, native_sse, tools):
+    from dataclasses import replace
+
+    from app.ai import ModelCompat
+
+    model = replace(provider.models[0], compat=ModelCompat(supports_finish_reason=False))
+    delta = (
+        {
+            "tool_calls": [
+                {"index": 0, "id": "a", "function": {"name": "call", "arguments": '{"x":1'}}
+            ]
+        }
+        if tools
+        else {"content": "text"}
+    )
+    async with sdk_harness(
+        providers=[replace(provider, models=[model])],
+        data=native_sse({"choices": [{"delta": delta}]}),
+    ) as (models, http, _):
+        final = await models.complete(
+            model, Context(messages=[]), CompletionsOptions(api_key="key", http_client=http)
+        )
+        assert final.stop_reason == ("tool_use" if tools else "stop"), final.error_message
+        assert final.raw_stop_reason is None
