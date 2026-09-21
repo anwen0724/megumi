@@ -171,7 +171,7 @@ async def with_recovery(produce):
 
 请求重试只覆盖建流，不重新发送已经开始读取的流；Assistant helper 只重试可恢复的 error 消息，默认不叠加两层策略。`estimate_context_tokens`、`is_context_overflow`、`is_recoverable_length` 提供估算与恢复判断，不改历史、不自动摘要或重发，未知用量保持未知。
 
-Completions 协议测试走 Models → 内置适配器 → 实际 SDK → 模拟 HTTP；共享运行时测试仍可显式注入协议协作者。这些验证不代表 DeepSeek/OpenAI 已经联调。
+两个协议测试走 Models → 内置适配器 → 实际 SDK → 模拟 HTTP；共享运行时测试仍可显式注入协议协作者。这些验证不代表 DeepSeek/OpenAI 已经联调。
 
 ## 模型目录维护
 
@@ -267,3 +267,17 @@ $env:MEGUMI_AI_LIVE_DEEPSEEK_MODEL = "<目录中的模型 ID>"
 只有整体合法终态才完成：completed 返回 stop 或 tool_use；incomplete.max_output_tokens 返回 length，其余失败保留部分内容。原始结束原因保留 status.reason。Responses 使用供应商报告的 total_tokens；缺失计数与未知费用保持 None。响应 service_tier 优先于最终实际请求值，不使用硬编码费用倍率。
 
 缓存、strict 和中途工具声明按 Model.compat 控制。命名字段先生成，再由合并后的 sampling_params 覆盖，最后运行 on_payload。共同运行时仍负责认证、建流重试、取消与资源清理。
+
+
+## OpenAI Responses 真实联调
+
+五项 live 用例覆盖文本、reasoning、工具往返、取消和视觉。默认禁网；需配置 OPENAI_API_KEY，再选择生成目录内的模型后显式执行：
+
+```powershell
+$env:MEGUMI_AI_LIVE='1'
+$env:MEGUMI_AI_LIVE_OPENAI_MODEL='<目录中的模型 ID>'
+uv run pytest tests/ai/live/test_openai_responses.py -v -rs
+Remove-Item Env:MEGUMI_AI_LIVE
+```
+
+模型不支持 reasoning/图片时，该项明确跳过，仍待验收，可换支持该能力的模型单独重跑。测试只记录日期、目录/实际模型、SDK、响应 ID 和终态，不记录凭据或完整 reasoning 签名。当前没有可用 live 配置，OpenAI 与 DeepSeek 真实联调均未执行。
