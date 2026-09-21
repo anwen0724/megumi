@@ -197,6 +197,7 @@ async def test_retry_delay_cap_preserves_quota_reason_across_both_retry_layers()
 
     class ProviderError(Exception):
         status = 429
+
         def __init__(self, text):
             super().__init__(text)
             self.headers = {"retry-after": "61"}

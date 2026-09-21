@@ -130,7 +130,7 @@ async def inspect_call():
         assert "No protocol adapter" in final.error_message
         assert await response.result() is final
 
-        # 已结束时无副作用；活动请求会取消生产并等待资源清理。
+        # 结果已发布仍可能正在清理；等待关闭完成，失败时抛 ExceptionGroup。
         await response.aclose()
         # complete_simple 同样返回设置失败，不会伪造模型答案。
         completed = await models.complete_simple(
@@ -145,11 +145,13 @@ asyncio.run(inspect_call())
 
 等待 `result()` 或下一条事件的任务被取消时，只结束该等待者；显式 `response.cancel()`、`await response.aclose()`、请求 `signal.set()` 或 `Models.aclose()` 才停止生成。`complete*` 拥有内部响应，其任务取消会等待清理后传播 `CancelledError`。停止事件迭代不自动取消生成。事件队列不是广播订阅。
 
-协议确定结果后，先释放响应、追加必要清理诊断，再发布一次 done/error；清理失败不改变已确定的结束原因。保存活动状态使用消息帧，最终消息另存。
+协议处理完成后发布一次 done/error 并完成 result，后台继续释放剩余资源。`response.aclose()` / `Models.aclose()` 等待清理完成；即使某项失败也继续其他清理，最后通过 `ExceptionGroup` 报告失败。清理错误不改写已发布消息，已结束请求的清理失败仍由 Models 保留。SDK 在迭代退出时进行的清理保持原顺序。保存活动状态使用消息帧，最终消息另存。
 
 `CallOptions` 包含认证覆盖、采样、缓存/会话偏好、钩子、重试、超时与传输注入；`SimpleOptions` 增加 reasoning、tool_choice 和 thinking_budgets。模型默认采样与单次采样合并；mutable 数据复制，回调、signal、telemetry_context 和借用客户端保持身份。`on_payload` 可同步/异步修改或替换 payload，None 保留原地修改；它在重试外执行一次。`on_response` 只得到状态/headers，在成功建流后、start 前执行；钩子异常形成 error。
 
-`http_client` 接收 `httpx2.AsyncClient`。锁定的 `openai==3.16.2` 使用 `httpx2==2.13.0`；共享 SDK 执行入口位于 `runtime/clients.py`，SSE 解码由 SDK 提供，业务消息解析归协议适配器。SDK 内部重试设为 0，共享请求策略默认也不额外尝试。请求 `timeout_ms` 仅在提供时传递，缺省沿用 SDK/传输默认值。SDK 的环境默认头不会覆盖已经解析的认证和头配置。
+`http_client` 接收 `httpx2.AsyncClient`。锁定的 `openai==3.16.2` 使用 `httpx2==2.13.0`；共享 SDK 执行入口位于 `runtime/clients.py`，接收协议提供的 SDK 请求操作及最终 payload；协议操作分别调用 `chat.completions.create()` / `responses.create()`，不再固定使用底层 post。SSE 解码由 SDK 提供，业务消息解析归协议适配器。SDK 内部重试设为 0，共享请求策略默认也不额外尝试。请求 `timeout_ms` 仅在提供时传递，缺省沿用 SDK/传输默认值。SDK 的环境默认头不会覆盖已经解析的认证和头配置。
+
+生成消息的 `diagnostics` 为可选 `AssistantMessageDiagnostic` 数组，每条包含 type/timestamp 和可选 error/details；编解码拒绝非法结构。它不承载结果发布后的清理错误。
 
 显式启用整次 Assistant 调用重试的接口如下，`produce` 由调用方提供：
 
