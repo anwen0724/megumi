@@ -243,3 +243,16 @@ uv run mypy src/app
 ```
 
 新测试使用合成配置、虚构凭据和内存存储，包含独立进程的禁网验证；没有真实供应商联调。旧源码与全部旧测试保留在各自目录的 `.archive/2026-09-20-before-ai-rewrite/` 中，不参与新实现和测试发现。
+
+
+## DeepSeek 真实联调
+
+默认 `pytest` 不联网，四项 live 用例会跳过。真实联调须在本地配置 `DEEPSEEK_API_KEY`，并明确选择目录中的模型：
+
+```powershell
+$env:MEGUMI_AI_LIVE = "1"
+$env:MEGUMI_AI_LIVE_DEEPSEEK_MODEL = "<目录中的模型 ID>"
+.venv/Scripts/python.exe -X utf8 -m pytest tests/ai/live/test_deepseek_completions.py --junitxml=.venv/deepseek-live-results.xml
+```
+
+覆盖文本、推理、工具消息保存后继续请求、生成中取消。JUnit 记录执行日期、SDK 版本、目录/实际模型、响应 ID 与终态，不记录凭据和完整请求。显式启用但缺少 key/模型时测试报配置失败；默认跳过或模拟测试通过都不表示真实联调成功。运行后可删除这两个 live 开关，恢复默认离线测试。
