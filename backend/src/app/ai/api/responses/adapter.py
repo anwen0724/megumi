@@ -1,5 +1,6 @@
 """Compose Responses encoding and parsing with the shared authenticated SDK runtime."""
 
+from dataclasses import replace
 from typing import cast
 
 from openai import AsyncOpenAI, AsyncStream
@@ -62,15 +63,28 @@ class ResponsesAdapter:
     ) -> None:
         """Execute explicit protocol options through the shared request lifecycle."""
         assert isinstance(options, ResponsesOptions)
+        request_tier: str | None = None
+
+        async def operation(
+            client: AsyncOpenAI,
+            payload: dict[str, JSONValue],
+            request_options: StreamRequestOptions,
+        ) -> AsyncStream[ResponseStreamEvent]:
+            """Capture the final wire tier after sampling overrides and the payload hook."""
+            nonlocal request_tier
+            tier = payload.get("service_tier")
+            request_tier = tier if isinstance(tier, str) else None
+            return await create_stream(client, payload, request_options)
+
         stream = await clients.open_stream(
-            create_stream,
+            operation,
             build_request(model, transcript, options),
             model=model,
             auth=auth,
             options=options,
             writer=writer,
         )
-        await consume_response(stream, writer)
+        await consume_response(stream, writer, replace(model, base_url=auth.base_url), request_tier)
 
     async def stream_simple(
         self,

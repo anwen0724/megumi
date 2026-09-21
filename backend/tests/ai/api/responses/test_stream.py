@@ -205,3 +205,108 @@ async def test_parallel_function_arguments_done_is_authoritative(
             e["delta"] for e in events if e["type"] == "toolcall_delta" and e["content_index"] == 0
         ] == expected_deltas
         assert [e["content_index"] for e in events if e["type"] == "toolcall_end"] == [1, 0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event,expected,raw",
+    [
+        (terminal(), "stop", "completed"),
+        (
+            terminal("incomplete", incomplete_details={"reason": "max_output_tokens"}),
+            "length",
+            "max_output_tokens",
+        ),
+        (
+            terminal("incomplete", incomplete_details={"reason": "content_filter"}),
+            "error",
+            "content_filter",
+        ),
+        (terminal("incomplete"), "error", "incomplete"),
+        (
+            terminal("failed", error={"code": "server_error", "message": "failed generation"}),
+            "error",
+            "failed",
+        ),
+        (
+            {"type": "error", "code": "bad_request", "message": "invalid input"},
+            "error",
+            "bad_request",
+        ),
+        ({"type": "response.auxiliary", "metadata": {}}, "error", None),
+    ],
+)
+async def test_overall_terminal_mapping(provider, sdk_harness, response_sse, event, expected, raw):
+    data = response_sse(
+        item_event("done", 0, message("msg_1", "partial")),
+        {"type": "response.future_auxiliary", "foo": "bar"},
+        event,
+    )
+    async with sdk_harness(data=data) as (models, http, _):
+        response = models.stream(
+            provider.models[0],
+            Context(messages=[]),
+            ResponsesOptions(api_key="key", http_client=http),
+        )
+        final = await response.result()
+        events = [e async for e in response]
+        assert final.stop_reason == expected
+        assert final.raw_stop_reason == raw
+        assert final.content[0].text == "partial"
+        assert sum(e["type"] in ("done", "error") for e in events) == 1
+        if expected == "error":
+            assert final.error_message
+
+
+@pytest.mark.asyncio
+async def test_completed_function_call_is_tool_use(provider, sdk_harness, response_sse):
+    data = response_sse(
+        item_event(
+            "done",
+            0,
+            {
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "c",
+                "name": "run",
+                "arguments": "{}",
+            },
+        ),
+        terminal(),
+    )
+    async with sdk_harness(data=data) as (models, http, _):
+        final = await models.complete(
+            provider.models[0],
+            Context(messages=[]),
+            ResponsesOptions(api_key="key", http_client=http),
+        )
+        assert final.stop_reason == "tool_use"
+
+
+@pytest.mark.asyncio
+async def test_terminal_backfills_only_matching_missing_reasoning_signature(
+    provider, sdk_harness, response_sse
+):
+    a = {"type": "reasoning", "id": "rs_a", "summary": [{"type": "summary_text", "text": "A"}]}
+    b = {"type": "reasoning", "id": "rs_b", "summary": [], "encrypted_content": "original"}
+    data = response_sse(
+        item_event("done", 0, a),
+        item_event("done", 1, b),
+        terminal(
+            output=[
+                {**b, "encrypted_content": "replacement"},
+                {**a, "encrypted_content": "late", "summary": []},
+                {"type": "reasoning", "id": "unrelated", "encrypted_content": "unrelated"},
+            ]
+        ),
+    )
+    async with sdk_harness(data=data) as (models, http, _):
+        final = await models.complete(
+            provider.models[0],
+            Context(messages=[]),
+            ResponsesOptions(api_key="key", http_client=http),
+        )
+        assert final.stop_reason == "stop", final.error_message
+        assert json.loads(final.content[0].thinking_signature) == {**a, "encrypted_content": "late"}
+        assert json.loads(final.content[1].thinking_signature) == b
+        assert len(final.content) == 2 and final.content[0].thinking == "A"

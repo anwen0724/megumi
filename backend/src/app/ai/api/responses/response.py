@@ -7,14 +7,21 @@ from typing import cast
 
 from openai import BaseModel
 
-from app.ai.messages import JSONValue, TextContent, ThinkingContent, ToolCall
+from app.ai.messages import JSONValue, TextContent, ThinkingContent, ToolCall, Usage
+from app.ai.model import Model
 from app.ai.stream import ResponseWriter
 from app.ai.tools.arguments import parse_partial_arguments
+from app.ai.usage import calculate_usage_cost
 
 
-async def consume_response(events: AsyncIterable[object], writer: ResponseWriter) -> None:
+async def consume_response(
+    events: AsyncIterable[object],
+    writer: ResponseWriter,
+    model: Model,
+    request_service_tier: str | None,
+) -> None:
     """Consume the SDK iterator completely and require an overall terminal event."""
-    assembly = ResponseAssembly(writer)
+    assembly = ResponseAssembly(writer, model, request_service_tier)
     writer.emit({"type": "start", "partial": writer.partial})
     async for native in events:
         if isinstance(native, BaseModel):
@@ -37,7 +44,11 @@ class OutputSlot:
 class ResponseAssembly:
     """Associate interleaved output indices and publish authoritative item completions."""
 
-    def __init__(self, writer: ResponseWriter) -> None:
+    def __init__(
+        self, writer: ResponseWriter, model: Model, request_service_tier: str | None
+    ) -> None:
+        self.model = model
+        self.request_service_tier = request_service_tier
         self.writer = writer
         self.partial = writer.partial
         self.slots: dict[int, OutputSlot] = {}
@@ -186,8 +197,14 @@ class ResponseAssembly:
                         "partial": self.partial,
                     }
                 )
-        elif kind == "response.completed":
-            self.terminal = True
+        elif kind in ("response.completed", "response.incomplete", "response.failed"):
+            if not isinstance(response, dict):
+                raise ValueError("Invalid Responses terminal response")
+            self.set_terminal(response)
+        elif kind == "error":
+            code = event.get("code")
+            self.partial.raw_stop_reason = code if isinstance(code, str) else "error"
+            raise ValueError(f"Error Code {code}: {required_string(event, 'message')}")
 
     def end_item(self, slot: OutputSlot, item: dict[str, JSONValue]) -> None:
         """Replace partial text with authoritative content and record replay identity."""
@@ -251,8 +268,68 @@ class ResponseAssembly:
         """Do not treat item completion or EOF as an overall successful response."""
         if not self.terminal:
             raise ValueError("Responses stream ended without a terminal response event")
-        self.partial.raw_stop_reason = "completed"
-        self.writer.emit({"type": "done", "reason": "stop", "message": self.partial})
+        reason = self.partial.stop_reason
+        if reason in ("stop", "length", "tool_use"):
+            self.writer.emit({"type": "done", "reason": reason, "message": self.partial})
+        else:
+            self.writer.emit({"type": "error", "reason": "error", "error": self.partial})
+
+    def set_terminal(self, response: dict[str, JSONValue]) -> None:
+        """Map overall status independently of whether individual content items finished."""
+        raw_usage = response.get("usage")
+        if isinstance(raw_usage, dict):
+            self.partial.usage = parse_usage(raw_usage, self.model)
+            tier = response.get("service_tier")
+            self.partial.usage.cost = calculate_usage_cost(
+                self.partial.usage,
+                self.model.pricing,
+                response_service_tier=tier if isinstance(tier, str) else None,
+                request_service_tier=self.request_service_tier,
+            )
+        output = response.get("output")
+        if isinstance(output, list):
+            for item in output:
+                if not isinstance(item, dict) or item.get("type") != "reasoning":
+                    continue
+                identity, encrypted = item.get("id"), item.get("encrypted_content")
+                slot = self.by_id.get(identity) if isinstance(identity, str) else None
+                if (
+                    slot
+                    and isinstance(slot.block, ThinkingContent)
+                    and encrypted
+                    and slot.block.thinking_signature
+                ):
+                    saved = json.loads(slot.block.thinking_signature)
+                    if not saved.get("encrypted_content"):
+                        saved["encrypted_content"] = encrypted
+                        slot.block.thinking_signature = json.dumps(saved, separators=(",", ":"))
+        status = required_string(response, "status")
+        self.terminal = True
+        self.partial.raw_stop_reason = status
+        if status == "completed":
+            self.partial.stop_reason = (
+                "tool_use" if any(isinstance(b, ToolCall) for b in self.partial.content) else "stop"
+            )
+            return
+        details = response.get("incomplete_details")
+        reason = details.get("reason") if isinstance(details, dict) else None
+        if isinstance(reason, str):
+            self.partial.raw_stop_reason = reason
+        if status == "incomplete" and reason == "max_output_tokens":
+            self.partial.stop_reason = "length"
+            return
+        self.partial.stop_reason = "error"
+        error = response.get("error")
+        if isinstance(error, dict):
+            self.partial.error_message = f"{error.get('code')}: {error.get('message')}"
+        elif status == "incomplete":
+            self.partial.error_message = (
+                f"Response incomplete: {reason}"
+                if reason
+                else "Response incomplete without a provider reason"
+            )
+        else:
+            self.partial.error_message = f"Response status: {status}"
 
 
 def required_string(value: dict[str, JSONValue], field: str) -> str:
@@ -261,3 +338,34 @@ def required_string(value: dict[str, JSONValue], field: str) -> str:
     if not isinstance(result, str):
         raise ValueError(f"Invalid Responses {field}")
     return result
+
+
+def token_count(value: JSONValue) -> int | None:
+    """Absent or non-integer counts remain unknown."""
+    return value if type(value) is int else None
+
+
+def parse_usage(raw: dict[str, JSONValue], model: Model) -> Usage:
+    """Subtract known cache components, but retain the supplier's reported total."""
+    details = raw.get("input_tokens_details")
+    details = details if isinstance(details, dict) else {}
+    output_details = raw.get("output_tokens_details")
+    output_details = output_details if isinstance(output_details, dict) else {}
+    read = token_count(details.get("cached_tokens"))
+    write = token_count(details.get("cache_write_tokens"))
+    if write is None and (
+        model.provider == "openai" or "api.openai.com" in (model.base_url or "").lower()
+    ):
+        # OpenAI automatic prompt caching has no separately charged cache-write counter.
+        write = 0
+    input_total = token_count(raw.get("input_tokens"))
+    return Usage(
+        input=max(0, input_total - read - write)
+        if input_total is not None and read is not None and write is not None
+        else None,
+        output=token_count(raw.get("output_tokens")),
+        cache_read=read,
+        cache_write=write,
+        reasoning=token_count(output_details.get("reasoning_tokens")),
+        total_tokens=token_count(raw.get("total_tokens")),
+    )
