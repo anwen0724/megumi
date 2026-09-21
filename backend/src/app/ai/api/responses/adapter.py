@@ -34,6 +34,22 @@ class ResponsesAdapter:
 
     options_type = ResponsesOptions
 
+    def request_headers(self, model: Model, options: CallOptions, base_url: str) -> dict[str, str]:
+        """Provide session defaults before shared provider/model/caller header precedence."""
+        if not options.session_id or model.compat.send_session_affinity_headers is False:
+            return {}
+        form = model.compat.session_affinity_format or (
+            "openrouter"
+            if model.provider == "openrouter" or "openrouter.ai" in base_url.lower()
+            else "openai"
+        )
+        if form == "openrouter":
+            return {"x-session-id": options.session_id}
+        headers = {"x-client-request-id": options.session_id}
+        if form == "openai":
+            headers["session_id"] = options.session_id
+        return headers
+
     async def stream(
         self,
         *,

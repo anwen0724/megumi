@@ -113,6 +113,46 @@ def build_request(
     }
     if tools.request_tools:
         payload["tools"] = [encode_tool(tool, model) for tool in tools.request_tools]
+    if model.capabilities.reasoning:
+        mapping = model.capabilities.reasoning_levels
+        if options.reasoning_effort or options.reasoning_summary:
+            effort = (
+                mapping.get(options.reasoning_effort) or options.reasoning_effort
+                if options.reasoning_effort
+                else "medium"
+            )
+            payload["reasoning"] = {
+                "effort": effort,
+                "summary": options.reasoning_summary or "auto",
+            }
+            payload["include"] = ["reasoning.encrypted_content"]
+        elif mapping.get("off", "none") is not None:
+            payload["reasoning"] = {"effort": mapping.get("off") or "none"}
+    if (
+        options.max_output_tokens is not None
+        and model.compat.supports_max_output_tokens is not False
+    ):
+        payload["max_output_tokens"] = max(16, options.max_output_tokens)
+    if options.temperature is not None:
+        payload["temperature"] = options.temperature
+    if options.tool_choice is not None:
+        payload["tool_choice"] = options.tool_choice
+    if options.service_tier is not None:
+        payload["service_tier"] = options.service_tier
+    if options.cache_retention != "none" and options.session_id:
+        payload["prompt_cache_key"] = options.session_id[:64]
+    long_cache = (
+        options.cache_retention == "long"
+        and model.compat.supports_long_cache_retention is not False
+    )
+    if model.compat.supports_explicit_prompt_cache_mode:
+        if options.cache_retention == "none":
+            payload["prompt_cache_options"] = {"mode": "explicit"}
+        elif long_cache:
+            payload["prompt_cache_options"] = {"ttl": "30m"}
+    elif long_cache:
+        payload["prompt_cache_retention"] = "24h"
+    payload.update(options.sampling_params or {})
     return payload
 
 
