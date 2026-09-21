@@ -54,7 +54,8 @@ show_error_codes = true
 
 # --- pytest: test runner (Java: JUnit) ---
 [tool.pytest.ini_options]
+# Protocol suites intentionally share descriptive test module names.
 markers = ["live: explicitly enabled real provider verification"]
 testpaths = ["tests"]
 asyncio_mode = "strict"
-addopts = "-q --ignore=tests/.archive"
+addopts = "-q --ignore=tests/.archive --import-mode=importlib"

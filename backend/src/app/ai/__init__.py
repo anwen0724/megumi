@@ -1,6 +1,7 @@
 """Public configuration API for the Python AI layer; importing performs no I/O."""
 
 from app.ai.api.completions.options import CompletionsOptions
+from app.ai.api.responses.options import ResponsesOptions
 from app.ai.api.transform import transform_messages
 from app.ai.assistant_message_frames import (
     AssistantMessageFrame,
@@ -135,6 +136,7 @@ __all__ = [
     "Provider",
     "ProviderResponse",
     "ResolvedAuth",
+    "ResponsesOptions",
     "RetryCallbacks",
     "RetryPolicy",
     "SimpleOptions",

@@ -152,8 +152,12 @@ async def test_settings_failures_are_final_but_python_misuse_raises(provider):
     no_auth = models.stream_simple(model, Context(messages=[]))
     assert (await no_auth.result()).stop_reason == "error"
     assert [e["type"] async for e in no_auth] == ["error"]
-    missing = models.stream_simple(model, Context(messages=[]), SimpleOptions(api_key="fake"))
-    assert "No protocol adapter" in (await missing.result()).error_message
+    from app.ai import ConfigurationError
+
+    with pytest.raises(ConfigurationError, match="Unsupported protocol"):
+        models.set_provider(
+            replace(provider, api="unimplemented", models=[replace(model, api="unimplemented")])
+        )
     unknown = models.stream_simple(replace(model, id="missing"), Context(messages=[]))
     assert "not registered" in (await unknown.result()).error_message
     with pytest.raises(TypeError):
