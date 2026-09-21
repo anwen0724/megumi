@@ -77,10 +77,14 @@ def build_request(
                     else image_part(block)
                     for block in message.content
                 ]
-            if content:
-                items.append({"role": "user", "content": content})
+            if not content:
+                continue
+            items.append({"role": "user", "content": content})
         elif isinstance(message, AssistantMessage):
-            items.extend(encode_assistant(message, message_index, model))
+            encoded = encode_assistant(message, message_index, model)
+            if not encoded:
+                continue
+            items.extend(encoded)
         elif isinstance(message, ToolResultMessage):
             text = clean_text(
                 "\n".join(b.text for b in message.content if isinstance(b, TextContent))

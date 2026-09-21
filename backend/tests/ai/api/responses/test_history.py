@@ -241,3 +241,31 @@ async def test_foreign_tool_ids_and_empty_output(provider, responses_harness):
         assert call["call_id"] == result["call_id"] == "call_1_item_1"
         assert "id" not in call and "namespace" not in call
         assert result["output"] == "(no tool output)"
+
+
+@pytest.mark.asyncio
+async def test_empty_unrepresentable_messages_do_not_consume_fallback_item_identity(
+    provider, responses_harness
+):
+    messages = [
+        UserMessage(content=[], timestamp=0),
+        AssistantMessage(
+            provider="sample", api="openai-responses", model="small", timestamp=1, content=[]
+        ),
+        AssistantMessage(
+            provider="sample",
+            api="openai-responses",
+            model="small",
+            timestamp=2,
+            content=[TextContent(text="visible")],
+        ),
+    ]
+    async with responses_harness() as (models, http, requests):
+        final = await models.complete(
+            provider.models[0],
+            Context(messages=messages),
+            ResponsesOptions(api_key="key", http_client=http),
+        )
+        assert final.stop_reason == "stop", final.error_message
+        items = json.loads(requests[0].content)["input"]
+        assert len(items) == 1 and items[0]["id"] == "msg_pi_0"

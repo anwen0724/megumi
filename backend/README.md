@@ -1,6 +1,6 @@
 # Megumi Python AI
 
-当前实现模型与供应商管理、消息与上下文，以及模型调用运行时：后台事件流、独立结果、两层重试、预算、请求钩子、取消和 SDK/HTTP 资源管理。可独立于 FastAPI 使用。Chat Completions 已接入官方 SDK，包含 DeepSeek 兼容处理；Responses 和 Agent Core 尚未实现。协议已经过实际 SDK + 模拟 HTTP 验证，DeepSeek 真实联调尚未执行。
+当前实现模型与供应商管理、消息与上下文，以及模型调用运行时：后台事件流、独立结果、两层重试、预算、请求钩子、取消和 SDK/HTTP 资源管理。可独立于 FastAPI 使用。Chat Completions 与 Responses 均已接入官方 SDK，分别覆盖 DeepSeek 兼容和 OpenAI Responses item 协议。两个协议经过实际 SDK + 模拟 HTTP 验证；DeepSeek、OpenAI 真实联调待验收，Agent Core 尚未实现。
 
 ## 使用
 
@@ -104,13 +104,13 @@ assert arguments == {"city": "Beijing"}
 
 `transform_messages` 接收消息序列、目标 Model 和可选工具 ID 回调，返回新历史。图片占位、签名转换及缺失结果补齐不写回原会话。`resolve_transcript` 与 `resolve_transcript_tools` 分别判断指令位置和工具新增锚点；同名再次声明即使内容相同也退出 additions-only。
 
-`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。模型调用运行时会产生统一事件；Chat Completions 已实现原生事件转换；Responses 尚未实现。
+`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。模型调用运行时会产生统一事件；Chat Completions 与 Responses 均已实现原生事件转换。
 
 `calculate_usage_cost(usage, pricing, ...)` 返回独立 UsageCost，不改 Usage。input 已排除缓存，reasoning 不重复收费；未知计数或费率保持 None。响应 service_tier 优先于请求值，不能证明适用的服务档不使用基础价。`condition_matches` 由调用方在有效服务档下给出各条件是否适用，键为现有 PricingTier.condition 原文；函数不解析条件描述。未知或多项竞争条件不能确定唯一价格时保持未知；已知零计数可为零费用。
 
 ## 模型调用运行时
 
-`Models.stream` / `stream_simple` 在运行中的事件循环内立即返回 `AssistantResponse`；生产在后台执行，不依赖事件迭代。`complete` / `complete_simple` 使用同一路径并返回最终消息。已内置 `openai-completions`，显式 `adapters` 同名配置优先。`openai-responses` 仍返回未绑定协议错误。
+`Models.stream` / `stream_simple` 在运行中的事件循环内立即返回 `AssistantResponse`；生产在后台执行，不依赖事件迭代。`complete` / `complete_simple` 使用同一路径并返回最终消息。已内置 `openai-completions` 与 `openai-responses`，显式 `adapters` 同名配置优先。
 
 以下示例会真实请求 DeepSeek，需要预先配置 `DEEPSEEK_API_KEY`，命令行传入当前目录中的模型 ID：
 
@@ -256,3 +256,14 @@ $env:MEGUMI_AI_LIVE_DEEPSEEK_MODEL = "<目录中的模型 ID>"
 ```
 
 覆盖文本、推理、工具消息保存后继续请求、生成中取消。JUnit 记录执行日期、SDK 版本、目录/实际模型、响应 ID 与终态，不记录凭据和完整请求。显式启用但缺少 key/模型时测试报配置失败；默认跳过或模拟测试通过都不表示真实联调成功。运行后可删除这两个 live 开关，恢复默认离线测试。
+
+
+## Responses 协议
+
+`openai_provider()` 的模型通过 `responses.create()` 调用。`ResponsesOptions` 提供 `reasoning_effort`、`reasoning_summary`、`tool_choice`、`service_tier` 及共享调用字段；也可使用 `SimpleOptions` 与四个 Models 调用入口。请求提交完整 input 历史，默认 `store=False`，不依赖 `previous_response_id`。
+
+文本/拒绝内容、reasoning 和 function call 按原生 item 分别组装。最终文本签名包含 item ID/phase，reasoning 签名保存完整原生 item；整体终态可按 ID 补齐 encrypted_content。消息经 encode/decode 后，同源可回放签名；跨模型或协议转换遵循共享历史规则。工具结果只引用 call_id，支持的图片放在 function_call_output 内容数组中。
+
+只有整体合法终态才完成：completed 返回 stop 或 tool_use；incomplete.max_output_tokens 返回 length，其余失败保留部分内容。原始结束原因保留 status.reason。Responses 使用供应商报告的 total_tokens；缺失计数与未知费用保持 None。响应 service_tier 优先于最终实际请求值，不使用硬编码费用倍率。
+
+缓存、strict 和中途工具声明按 Model.compat 控制。命名字段先生成，再由合并后的 sampling_params 覆盖，最后运行 on_payload。共同运行时仍负责认证、建流重试、取消与资源清理。

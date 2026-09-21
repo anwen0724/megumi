@@ -334,7 +334,7 @@ class ResponseAssembly:
         details = response.get("incomplete_details")
         reason = details.get("reason") if isinstance(details, dict) else None
         if isinstance(reason, str):
-            self.partial.raw_stop_reason = reason
+            self.partial.raw_stop_reason = f"{status}.{reason}"
         if status == "incomplete" and reason == "max_output_tokens":
             self.partial.stop_reason = "length"
             return

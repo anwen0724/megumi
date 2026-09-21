@@ -215,12 +215,12 @@ async def test_parallel_function_arguments_done_is_authoritative(
         (
             terminal("incomplete", incomplete_details={"reason": "max_output_tokens"}),
             "length",
-            "max_output_tokens",
+            "incomplete.max_output_tokens",
         ),
         (
             terminal("incomplete", incomplete_details={"reason": "content_filter"}),
             "error",
-            "content_filter",
+            "incomplete.content_filter",
         ),
         (terminal("incomplete"), "error", "incomplete"),
         (
