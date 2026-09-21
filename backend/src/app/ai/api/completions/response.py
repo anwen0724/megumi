@@ -4,7 +4,7 @@ from collections.abc import AsyncIterable
 
 from openai.types.chat import ChatCompletionChunk
 
-from app.ai.messages import TextContent
+from app.ai.messages import JSONValue, TextContent
 from app.ai.stream import ResponseWriter
 
 
@@ -46,3 +46,25 @@ async def consume_response(
     if partial.stop_reason != "stop":
         raise ValueError("Stream ended without finish_reason")
     writer.emit({"type": "done", "reason": "stop", "message": partial})
+
+
+def valid_reasoning_detail(value: JSONValue) -> bool:
+    """Accept pi's replay metadata shapes while preserving unknown provider fields."""
+    if not isinstance(value, dict):
+        return False
+    if value.get("id") is not None and not isinstance(value["id"], str):
+        return False
+    if "format" in value and not isinstance(value["format"], str):
+        return False
+    if "index" in value and type(value["index"]) not in (int, float):
+        return False
+    kind = value.get("type")
+    if kind == "reasoning.summary":
+        return isinstance(value.get("summary"), str)
+    if kind == "reasoning.encrypted":
+        return isinstance(value.get("data"), str)
+    return (
+        kind == "reasoning.text"
+        and isinstance(value.get("text"), str)
+        and (value.get("signature") is None or isinstance(value["signature"], str))
+    )
