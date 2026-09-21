@@ -3,6 +3,7 @@
 import json
 
 import httpx2
+import pytest
 from openai import BadRequestError
 
 from app.ai.runtime.diagnostics import format_error
@@ -23,8 +24,9 @@ def test_supplement_is_bounded_and_unknown_objects_are_not_serialized():
         pass
 
     error = Error("failed")
+    error.status_code = 400
     error.body = "x" * 5000
-    assert format_error(error) == "failed\n" + "x" * 4000
+    assert format_error(error) == "400: " + "x" * 4000 + "... [truncated 1000 chars]"
     error.body = object()
     assert format_error(error) == "failed"
 
@@ -42,9 +44,10 @@ def test_secrets_are_redacted_before_body_truncation():
         pass
 
     error = Error("failed")
+    error.status_code = 400
     error.body = "x" * 3995 + "sensitive-secret"
     message = format_error(error, sensitive_values=["sensitive-secret"])
-    assert message == "failed\n" + ("x" * 3995 + "[redacted]")[:4000]
+    assert message == "400: " + "x" * 3995 + "[reda... [truncated 5 chars]"
 
 
 def test_known_credential_is_redacted_from_sdk_json_and_repr_forms():
@@ -73,3 +76,33 @@ def test_appending_diagnostics_preserves_existing_records_and_codec_roundtrip():
     restored = decode_messages(encode_messages([message]))[0]
     assert restored.diagnostics == [first, second]
     assert first.details == {"id": "r1"}
+
+
+@pytest.mark.parametrize("body", ["  ", {}, None, object()])
+def test_empty_or_unread_error_bodies_preserve_sdk_message(body):
+    response = httpx2.Response(403, request=httpx2.Request("POST", "https://example.test"))
+    error = BadRequestError("403 status code (no body)", response=response, body=body)
+    assert format_error(error) == "403 status code (no body)"
+
+
+@pytest.mark.parametrize(
+    "prefix,expected",
+    [
+        (None, "403: API key disabled"),
+        ("OpenAI API error", "OpenAI API error (403): API key disabled"),
+    ],
+)
+def test_error_uses_status_and_body_or_keeps_existing_message(prefix, expected):
+    response = httpx2.Response(403, request=httpx2.Request("POST", "https://example.test"))
+    error = BadRequestError("request failed", response=response, body="  API key disabled  ")
+    assert format_error(error, prefix=prefix) == expected
+    error = BadRequestError(
+        "provider: API key disabled", response=response, body="API key disabled"
+    )
+    assert format_error(error) == "provider: API key disabled"
+
+
+def test_error_body_limit_counts_utf16_units_and_marks_truncation():
+    response = httpx2.Response(400, request=httpx2.Request("POST", "https://example.test"))
+    error = BadRequestError("failed", response=response, body="😀" * 3000)
+    assert format_error(error) == "400: " + "😀" * 2000 + "... [truncated 2000 chars]"

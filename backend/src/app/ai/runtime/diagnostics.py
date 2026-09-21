@@ -31,21 +31,41 @@ def append_assistant_message_diagnostic(
     message.diagnostics = [*(message.diagnostics or []), diagnostic]
 
 
-def format_error(error: BaseException, *, sensitive_values: Iterable[str] = ()) -> str:
-    """Include already-read body evidence once, without reading HTTP streams."""
+def format_error(
+    error: BaseException, *, sensitive_values: Iterable[str] = (), prefix: str | None = None
+) -> str:
+    """Map Python SDK fields to pi's body/status display rules without reading streams."""
     sensitive_values = tuple(sensitive_values)
-    message = str(error) or type(error).__name__
+    message = redact_text(str(error) or type(error).__name__, sensitive_values)
     body = getattr(error, "body", None)
     try:
-        text = body if isinstance(body, str) else json.dumps(body, ensure_ascii=False)
+        text = (
+            body.strip()
+            if isinstance(body, str)
+            else json.dumps(body, ensure_ascii=False, separators=(",", ":"))
+            if type(body) is dict and body
+            else ""
+        )
     except (TypeError, ValueError):
         text = ""
-    if body is not None and text and text not in message and str(body) not in message:
-        message += "\n" + redact_text(text, sensitive_values)[:4000]
+    text = redact_text(text, sensitive_values)
+    # Python SDK status errors may already include the parsed body's repr.
+    carries_body = (
+        not text or text in message or redact_text(str(body), sensitive_values) in message
+    )
+    encoded = text.encode("utf-16-le", errors="surrogatepass")
+    units = len(encoded) // 2
+    if units > 4000:
+        text = encoded[:8000].decode("utf-16-le", errors="surrogatepass")
+        text += f"... [truncated {units - 4000} chars]"
     status = getattr(error, "status_code", None)
-    if type(status) is int and str(status) not in message:
-        message = f"HTTP {status}: {message}"
-    return redact_text(message, sensitive_values)
+    if carries_body or type(status) is not int:
+        return (
+            f"{prefix} ({status}): {message}"
+            if prefix is not None and type(status) is int
+            else message
+        )
+    return f"{prefix} ({status}): {text}" if prefix is not None else f"{status}: {text}"
 
 
 def redact_text(text: str, sensitive_values: Iterable[str]) -> str:
