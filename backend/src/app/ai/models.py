@@ -7,7 +7,7 @@ from dataclasses import replace
 from inspect import isawaitable
 from typing import Literal
 
-from app.ai.api.base import ProtocolAdapter
+from app.ai.api.base import ProtocolAdapter, RequestHeaderDefaults
 from app.ai.api.completions.adapter import CompletionsAdapter
 from app.ai.api.simple_options import prepare_simple_options
 from app.ai.auth.memory import InMemoryCredentialStore
@@ -135,8 +135,15 @@ class Models:
                 writer.protect(sensitive_header_values(result))
                 return result
 
+            auth_provider = provider
+            header_adapter: object = adapter
+            if isinstance(header_adapter, RequestHeaderDefaults):
+                defaults = header_adapter.request_headers(
+                    current, captured, captured.base_url or current.base_url or provider.base_url
+                )
+                auth_provider = replace(provider, headers={**defaults, **provider.headers})
             auth = await resolve_auth(
-                provider,
+                auth_provider,
                 current,
                 replace(captured, transform_headers=transform),
                 credentials=self._credentials,

@@ -1,6 +1,7 @@
 """Protocol collaborators receive prepared call snapshots and a shared runtime."""
 
-from typing import Protocol
+from collections.abc import Mapping
+from typing import Protocol, runtime_checkable
 
 from app.ai.auth.types import ResolvedAuth
 from app.ai.messages import Transcript
@@ -42,4 +43,15 @@ class ProtocolAdapter(Protocol):
         writer: ResponseWriter,
     ) -> None:
         """Map prepared simple preferences before producing protocol events."""
+        ...
+
+
+@runtime_checkable
+class RequestHeaderDefaults(Protocol):
+    """Optional protocol defaults, merged before provider/model/caller header overrides."""
+
+    def request_headers(
+        self, model: Model, options: CallOptions, base_url: str
+    ) -> Mapping[str, str]:
+        """Return defaults before authentication and the final header transform."""
         ...

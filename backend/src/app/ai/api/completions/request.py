@@ -3,6 +3,7 @@
 import json
 import re
 
+from app.ai.api.completions.options import CompletionsOptions
 from app.ai.api.completions.response import valid_reasoning_detail
 from app.ai.api.transform import transform_messages
 from app.ai.messages import (
@@ -41,7 +42,9 @@ def image_part(block: ImageContent) -> dict[str, JSONValue]:
     }
 
 
-def build_request(model: Model, transcript: Transcript) -> dict[str, JSONValue]:
+def build_request(
+    model: Model, transcript: Transcript, options: CompletionsOptions
+) -> dict[str, JSONValue]:
     """Resolve transcript updates before encoding an independent outbound history."""
     resolved = resolve_transcript(transcript, model.compat.supports_mid_convo_system_messages)
     history = transform_messages(
@@ -95,6 +98,11 @@ def build_request(model: Model, transcript: Transcript) -> dict[str, JSONValue]:
         elif isinstance(message, AssistantMessage):
             encoded = encode_assistant(message)
             if encoded is not None:
+                if (
+                    model.capabilities.reasoning
+                    and model.compat.requires_reasoning_content_on_assistant_messages
+                ):
+                    encoded.setdefault("reasoning_content", "")
                 messages.append(encoded)
         elif isinstance(message, ToolResultMessage):
             text = "\n".join(b.text for b in message.content if isinstance(b, TextContent))
@@ -133,11 +141,52 @@ def build_request(model: Model, transcript: Transcript) -> dict[str, JSONValue]:
         payload["tools"] = [encode_tool(tool, model) for tool in tools.request_tools]
     elif any(
         isinstance(message, ToolResultMessage)
-        or (isinstance(message, AssistantMessage)
-        and any(isinstance(block, ToolCall) for block in message.content))
+        or (
+            isinstance(message, AssistantMessage)
+            and any(isinstance(block, ToolCall) for block in message.content)
+        )
         for message in transcript.messages
     ):
         payload["tools"] = []
+    if model.compat.supports_usage_in_streaming is not False:
+        payload["stream_options"] = {"include_usage": True}
+    if model.compat.supports_store:
+        payload["store"] = False
+    if options.max_output_tokens is not None:
+        payload[model.compat.max_tokens_field or "max_completion_tokens"] = (
+            options.max_output_tokens
+        )
+    if options.tool_choice is not None:
+        payload["tool_choice"] = options.tool_choice
+    effort = options.reasoning_effort
+    mapping = model.capabilities.reasoning_levels
+    if model.capabilities.reasoning:
+        if model.compat.thinking_format == "deepseek":
+            if effort:
+                payload["thinking"] = {"type": "enabled"}
+            elif "off" not in mapping or mapping["off"] is not None:
+                payload["thinking"] = {"type": "disabled"}
+        if model.compat.supports_reasoning_effort:
+            mapped = mapping.get(effort, effort) if effort else mapping.get("off")
+            if isinstance(mapped, str) and (effort or model.compat.thinking_format != "deepseek"):
+                payload["reasoning_effort"] = mapped
+    if options.thinking is not None:
+        payload["thinking"] = options.thinking
+    if options.temperature is not None and not (
+        model.compat.temperature_requires_reasoning_off
+        and model.capabilities.reasoning
+        and (bool(effort) or mapping.get("off", "off") is None)
+    ):
+        payload["temperature"] = options.temperature
+    long_cache = options.cache_retention == "long" and model.compat.supports_long_cache_retention
+    if long_cache:
+        payload["prompt_cache_retention"] = "24h"
+    if options.session_id and (
+        long_cache
+        or (options.cache_retention != "none" and "api.openai.com" in (model.base_url or ""))
+    ):
+        payload["prompt_cache_key"] = clean_text(options.session_id)[:64]
+    payload.update(options.sampling_params or {})
     return payload
 
 
