@@ -172,10 +172,16 @@ def build_request(
                 payload["reasoning_effort"] = mapped
     if options.thinking is not None:
         payload["thinking"] = options.thinking
+    thinking = payload.get("thinking")
+    thinking_on = (
+        thinking.get("type") != "disabled"
+        if isinstance(thinking, dict)
+        else bool(effort) or mapping.get("off", "off") is None
+    )
     if options.temperature is not None and not (
         model.compat.temperature_requires_reasoning_off
         and model.capabilities.reasoning
-        and (bool(effort) or mapping.get("off", "off") is None)
+        and thinking_on
     ):
         payload["temperature"] = options.temperature
     long_cache = options.cache_retention == "long" and model.compat.supports_long_cache_retention

@@ -1,6 +1,6 @@
 # Megumi Python AI
 
-当前实现模型与供应商管理、消息与上下文，以及模型调用运行时：后台事件流、独立结果、两层重试、预算、请求钩子、取消和 SDK/HTTP 资源管理。可独立于 FastAPI 使用。Chat Completions / Responses 的业务编码与事件解析尚未接入，因此当前不能请求真实模型；没有实现 Agent Core。
+当前实现模型与供应商管理、消息与上下文，以及模型调用运行时：后台事件流、独立结果、两层重试、预算、请求钩子、取消和 SDK/HTTP 资源管理。可独立于 FastAPI 使用。Chat Completions 已接入官方 SDK，包含 DeepSeek 兼容处理；Responses 和 Agent Core 尚未实现。协议已经过实际 SDK + 模拟 HTTP 验证，DeepSeek 真实联调尚未执行。
 
 ## 使用
 
@@ -104,44 +104,48 @@ assert arguments == {"city": "Beijing"}
 
 `transform_messages` 接收消息序列、目标 Model 和可选工具 ID 回调，返回新历史。图片占位、签名转换及缺失结果补齐不写回原会话。`resolve_transcript` 与 `resolve_transcript_tools` 分别判断指令位置和工具新增锚点；同名再次声明即使内容相同也退出 additions-only。
 
-`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。模型调用运行时会产生统一事件；原生协议事件到这些事件的映射仍由后续适配器完成。
+`AssistantMessageFrameEncoder.encode` 接收事件数据并返回独立帧或 None；`reduce_assistant_message_frames` 返回独立 partial，没有 start 则返回 None。事件使用 TypedDict，partial/内容块使用消息 dataclass；帧的 JSON 保存和读取可通过 `pydantic.TypeAdapter(list[AssistantMessageFrame])` 完成。保存位置由调用方选择，最终 done/error 消息另存。模型调用运行时会产生统一事件；Chat Completions 已实现原生事件转换；Responses 尚未实现。
 
 `calculate_usage_cost(usage, pricing, ...)` 返回独立 UsageCost，不改 Usage。input 已排除缓存，reasoning 不重复收费；未知计数或费率保持 None。响应 service_tier 优先于请求值，不能证明适用的服务档不使用基础价。`condition_matches` 由调用方在有效服务档下给出各条件是否适用，键为现有 PricingTier.condition 原文；函数不解析条件描述。未知或多项竞争条件不能确定唯一价格时保持未知；已知零计数可为零费用。
 
 ## 模型调用运行时
 
-`Models.stream` / `stream_simple` 在运行中的事件循环内立即返回 `AssistantResponse`；生产在后台执行，不依赖事件迭代。`complete` / `complete_simple` 使用同一路径并返回最终消息。当前尚未注册内置协议适配器，调用会得到明确的设置失败；下面示例可运行，但不会发出网络请求。
+`Models.stream` / `stream_simple` 在运行中的事件循环内立即返回 `AssistantResponse`；生产在后台执行，不依赖事件迭代。`complete` / `complete_simple` 使用同一路径并返回最终消息。已内置 `openai-completions`，显式 `adapters` 同名配置优先。`openai-responses` 仍返回未绑定协议错误。
+
+以下示例会真实请求 DeepSeek，需要预先配置 `DEEPSEEK_API_KEY`，命令行传入当前目录中的模型 ID：
 
 ```python
 import asyncio
-from app.ai import Context, SimpleOptions, create_models, deepseek_provider
+import sys
+from app.ai import Context, SimpleOptions, UserMessage, create_models, deepseek_provider
 
-async def inspect_call():
+async def ask(model_id: str):
     models = create_models([deepseek_provider()])
-    model = models.get_models("deepseek")[0]
     try:
+        model = models.get_model("deepseek", model_id)
+        if model is None:
+            raise ValueError("Model ID is absent from the local DeepSeek catalog")
         response = models.stream_simple(
-            model, Context(messages=[]), SimpleOptions(api_key="fake-example-key")
+            model,
+            Context(messages=[UserMessage(content="Hello", timestamp=0)]),
+            SimpleOptions(reasoning="off", max_output_tokens=512),
         )
         async for event in response:
-            print(event["type"])  # 当前输出 error：尚未绑定协议适配器
+            if event["type"] == "text_delta":
+                print(event["delta"], end="", flush=True)
         final = await response.result()
-        assert final.stop_reason == "error"
-        assert "No protocol adapter" in final.error_message
-        assert await response.result() is final
-
-        # 结果已发布仍可能正在清理；等待关闭完成，失败时抛 ExceptionGroup。
+        if final.stop_reason in ("error", "aborted"):
+            raise RuntimeError(final.error_message)
         await response.aclose()
-        # complete_simple 同样返回设置失败，不会伪造模型答案。
-        completed = await models.complete_simple(
-            model, Context(messages=[]), SimpleOptions(api_key="fake-example-key")
-        )
-        assert completed.stop_reason == "error"
     finally:
         await models.aclose()
 
-asyncio.run(inspect_call())
+asyncio.run(ask(sys.argv[1]))
 ```
+
+只需要最终消息时使用 `complete_simple`。显式协议调用使用 `CompletionsOptions`，支持 `reasoning_effort`、`thinking`、`tool_choice` 和公共控制参数。模型/请求 `sampling_params` 在命名字段之后合并，`on_payload` 最后执行。
+
+同一 Completions 适配器服务声明该 API 的不同 Provider。已知 DeepSeek 身份或地址提供兼容默认，显式 `Model.compat` 优先；默认 system/max_tokens、不发送 store、按目录等级映射 thinking。缓存字段和亲和头受端点、缓存模式和兼容配置控制；亲和默认头也经过供应商/模型/请求覆盖及最终 `transform_headers`。
 
 等待 `result()` 或下一条事件的任务被取消时，只结束该等待者；显式 `response.cancel()`、`await response.aclose()`、请求 `signal.set()` 或 `Models.aclose()` 才停止生成。`complete*` 拥有内部响应，其任务取消会等待清理后传播 `CancelledError`。停止事件迭代不自动取消生成。事件队列不是广播订阅。
 
@@ -167,7 +171,7 @@ async def with_recovery(produce):
 
 请求重试只覆盖建流，不重新发送已经开始读取的流；Assistant helper 只重试可恢复的 error 消息，默认不叠加两层策略。`estimate_context_tokens`、`is_context_overflow`、`is_recoverable_length` 提供估算与恢复判断，不改历史、不自动摘要或重发，未知用量保持未知。
 
-测试通过 `create_models(..., adapters={api: collaborator})` 注入协议协作者，并以实际 SDK + 模拟 HTTP 验证资源与重试。这些验证不代表 DeepSeek/OpenAI 已经联调。
+Completions 协议测试走 Models → 内置适配器 → 实际 SDK → 模拟 HTTP；共享运行时测试仍可显式注入协议协作者。这些验证不代表 DeepSeek/OpenAI 已经联调。
 
 ## 模型目录维护
 

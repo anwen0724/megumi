@@ -282,3 +282,20 @@ async def test_response_hook_precedes_start(provider, sdk_harness):
             if event["type"] == "start":
                 assert observed == [(200, "native-id")]
         assert (await response.result()).stop_reason == "stop"
+
+
+@pytest.mark.asyncio
+async def test_explicit_thinking_controls_named_temperature(sdk_harness):
+    provider = deepseek_provider()
+    async with sdk_harness(providers=[provider]) as (models, http, requests):
+        final = await models.complete(
+            provider.models[0],
+            Context(messages=[]),
+            CompletionsOptions(
+                api_key="key", http_client=http, thinking={"type": "enabled"}, temperature=0.7
+            ),
+        )
+        assert final.stop_reason == "stop", final.error_message
+        payload = json.loads(requests[0].content)
+        assert payload["thinking"] == {"type": "enabled"}
+        assert "temperature" not in payload
