@@ -10,7 +10,7 @@ from app.ai.options import SimpleOptions
 
 
 def test_simple_merges_defaults_clamps_and_preserves_control_identity(provider, monkeypatch):
-    monkeypatch.setenv("PI_CACHE_RETENTION", "long")
+    monkeypatch.setenv("MEGUMI_AI_CACHE_RETENTION", "long")
     model = replace(
         provider.models[0],
         context_window=10000,
@@ -29,7 +29,7 @@ def test_simple_merges_defaults_clamps_and_preserves_control_identity(provider, 
         signal=signal,
         tool_choice="none",
         on_payload=callback,
-        env={"PI_CACHE_RETENTION": None},
+        env={"MEGUMI_AI_CACHE_RETENTION": None},
     )
     prepared = prepare_simple_options(model, Transcript(messages=[]), options)
     assert (prepared.reasoning, prepared.max_output_tokens, prepared.cache_retention) == (

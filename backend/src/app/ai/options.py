@@ -99,9 +99,9 @@ def prepare_call_options[T: CallOptions](model: Model, options: T) -> T:
     result = snapshot_options(options)
     sampling = {**(model.sampling_params or {}), **(result.sampling_params or {})}
     cache_env = (
-        result.env.get("PI_CACHE_RETENTION")
-        if "PI_CACHE_RETENTION" in result.env
-        else os.getenv("PI_CACHE_RETENTION")
+        result.env.get("MEGUMI_AI_CACHE_RETENTION")
+        if "MEGUMI_AI_CACHE_RETENTION" in result.env
+        else os.getenv("MEGUMI_AI_CACHE_RETENTION")
     )
     return replace(
         result,

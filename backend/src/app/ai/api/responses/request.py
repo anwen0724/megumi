@@ -261,7 +261,7 @@ def encode_tool_additions(
     if model.compat.supports_additional_tools:
         return [{"type": "additional_tools", "role": "developer", "tools": encoded}]
     names = [tool.name for tool in tools]
-    call_id = "pi_tool_load_" + short_hash(f"system:{message_index}:" + ",".join(names))
+    call_id = "megumi_tool_load_" + short_hash(f"system:{message_index}:" + ",".join(names))
     deferred: list[JSONValue] = [
         {**encode_tool(tool, model), "defer_loading": True} for tool in tools
     ]

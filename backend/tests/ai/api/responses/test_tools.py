@@ -151,6 +151,7 @@ async def test_tool_changes_follow_declared_wire_capability(
             }
             assert output["type"] == "tool_search_output"
             assert call["call_id"] == output["call_id"]
+            assert call["call_id"].startswith("megumi_tool_load_")
             assert call["execution"] == output["execution"] == "client"
             assert call["status"] == output["status"] == "completed"
             assert output["tools"][0]["defer_loading"] is True

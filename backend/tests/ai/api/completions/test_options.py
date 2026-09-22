@@ -216,7 +216,7 @@ async def test_cache_fields_follow_endpoint_and_compat(
                 http_client=http,
                 session_id=session,
                 cache_retention=retention,
-                env={"PI_CACHE_RETENTION": "long"},
+                env={"MEGUMI_AI_CACHE_RETENTION": "long"},
             ),
         )
         assert final.stop_reason == "stop", final.error_message

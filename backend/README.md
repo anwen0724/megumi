@@ -153,6 +153,8 @@ asyncio.run(ask(sys.argv[1]))
 
 `CallOptions` 包含认证覆盖、采样、缓存/会话偏好、钩子、重试、超时与传输注入；`SimpleOptions` 增加 reasoning、tool_choice 和 thinking_budgets。模型默认采样与单次采样合并；mutable 数据复制，回调、signal、telemetry_context 和借用客户端保持身份。`on_payload` 可同步/异步修改或替换 payload，None 保留原地修改；它在重试外执行一次。`on_response` 只得到状态/headers，在成功建流后、start 前执行；钩子异常形成 error。
 
+`cache_retention` 显式值优先；未指定时，读取调用作用域 `env` 中的 `MEGUMI_AI_CACHE_RETENTION`，该键不存在才读取同名进程环境变量。值为 `long` 时采用长缓存偏好，否则为 `short`；作用域显式设为 `None` 可屏蔽进程设置。不再读取旧的 pi 前缀环境变量。实际缓存请求字段由协议和模型兼容配置决定，保留时间和命中由供应商决定。
+
 `http_client` 接收 `httpx2.AsyncClient`。锁定的 `openai==3.16.2` 使用 `httpx2==2.13.0`；共享 SDK 执行入口位于 `runtime/clients.py`，接收协议提供的 SDK 请求操作及最终 payload；协议操作分别调用 `chat.completions.create()` / `responses.create()`，不再固定使用底层 post。SSE 解码由 SDK 提供，业务消息解析归协议适配器。SDK 内部重试设为 0，共享请求策略默认也不额外尝试。请求 `timeout_ms` 仅在提供时传递，缺省沿用 SDK/传输默认值。SDK 的环境默认头不会覆盖已经解析的认证和头配置。
 
 生成消息的 `diagnostics` 为可选 `AssistantMessageDiagnostic` 数组，每条包含 type/timestamp 和可选 error/details；编解码拒绝非法结构。它不承载结果发布后的清理错误。

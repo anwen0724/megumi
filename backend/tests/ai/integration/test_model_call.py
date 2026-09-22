@@ -57,7 +57,7 @@ async def test_simple_call_prepares_auth_options_and_transcript_before_protocol(
             sampling_params={"top_p": 0.5},
             tool_choice="none",
             session_id="session",
-            env={"PI_CACHE_RETENTION": "long"},
+            env={"MEGUMI_AI_CACHE_RETENTION": "long"},
         ),
     )
     final = await response.result()
@@ -381,7 +381,9 @@ async def test_explicit_protocol_options_also_merge_model_defaults(provider):
         model,
         Context(messages=[]),
         CallOptions(
-            api_key="fake", sampling_params={"top_p": 0.2}, env={"PI_CACHE_RETENTION": "long"}
+            api_key="fake",
+            sampling_params={"top_p": 0.2},
+            env={"MEGUMI_AI_CACHE_RETENTION": "long"},
         ),
     )
     assert adapter.calls[0]["options"].sampling_params == {"top_p": 0.2, "seed": 10}
