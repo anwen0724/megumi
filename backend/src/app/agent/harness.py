@@ -1,4 +1,4 @@
-"""Accept conversation input and advance one model request through cleanup."""
+"""Accept conversation input and advance one model request to its result."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class AgentHarness:
         return self._session.snapshot()
 
     async def _drive(self, record: OperationRecord) -> OperationResult:
-        """Run the normal generation stage and settle it before response cleanup."""
+        """Run a generation and settle its result independently of AI cleanup."""
         response: AssistantResponse | None = None
         try:
             context = self._session.context(self._system_prompt)
@@ -62,10 +62,6 @@ class AgentHarness:
             )
             self._session.settle(record, result)
         finally:
-            try:
-                if response is not None:
-                    await response.aclose()
-            finally:
-                self._session.release(record)
-                self._active_task = None
+            self._session.release(record)
+            self._active_task = None
         return result

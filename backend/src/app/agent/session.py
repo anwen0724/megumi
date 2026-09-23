@@ -44,14 +44,14 @@ class Session:
         return Context(messages=deepcopy(self.messages), system_prompt=system_prompt)
 
     def settle(self, record: OperationRecord, result: OperationResult) -> None:
-        """Save the final AI message and outcome before response cleanup."""
+        """Save the final AI message and operation outcome."""
         if result.assistant_message is not None:
             self.messages.append(deepcopy(result.assistant_message))
         record.result = deepcopy(result)
         record.phase = "result_recorded"
 
     def release(self, record: OperationRecord) -> None:
-        """Clear the active claim only when its owned response has finished closing."""
+        """Clear the active claim after the operation has settled."""
         record.phase = "finished"
         self.active_operation_id = None
 

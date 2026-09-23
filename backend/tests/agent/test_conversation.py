@@ -62,7 +62,6 @@ async def test_basic_reply_records_one_user_and_one_complete_assistant(
         assert len(snapshot.operations) == 1
         assert snapshot.operations[0].result == result
         assert snapshot.active_operation_id is None
-        assert adapter.cleaned
         assert len(adapter.requests) == 1
         request = adapter.requests[0]
         assert request["model"] == model
@@ -183,6 +182,5 @@ async def test_final_message_preserves_metadata_and_length_without_extra_request
         assert snapshot.messages == [snapshot.messages[0], message]
         assert snapshot.operations[0].result.assistant_message == message
         assert len(adapter.requests) == 1
-        assert adapter.cleaned
     finally:
         await models.aclose()

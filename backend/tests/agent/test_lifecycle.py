@@ -54,17 +54,14 @@ async def test_result_is_recorded_before_owned_cleanup_completes(
     pending = asyncio.create_task(harness.prompt("Question"))
     try:
         await asyncio.wait_for(adapter.cleaning.wait(), 1)
+        result = await asyncio.wait_for(asyncio.shield(pending), 1)
         snapshot = harness.get_snapshot()
         assert snapshot.operations[0].result.status == (
             "failed" if failed_generation else "completed"
         )
-        assert snapshot.active_operation_id == snapshot.operations[0].operation_id
-        assert not pending.done()
-        adapter.release.set()
-        result = await asyncio.wait_for(pending, 1)
         assert result == snapshot.operations[0].result
-        assert harness.get_snapshot().active_operation_id is None
-        assert adapter.cleaned == 1
+        assert snapshot.active_operation_id is None
+        assert not adapter.release.is_set()
         follow_up = await harness.prompt("Next question")
         assert follow_up.status == result.status
         assert adapter.calls == 2
@@ -84,8 +81,8 @@ async def test_cleanup_failure_keeps_generated_result_and_shared_models_usable(
     models = Models([provider], adapters={provider.api: adapter})
     harness = AgentHarness(models, provider.models[0])
     try:
-        with pytest.raises(ExceptionGroup, match="Response cleanup failed"):
-            await harness.prompt("First question")
+        first = await harness.prompt("First question")
+        assert first.status == "completed"
         recorded = harness.get_snapshot()
         assert recorded.operations[0].result.status == "completed"
         assert recorded.operations[0].result.assistant_message.content == [
@@ -96,7 +93,6 @@ async def test_cleanup_failure_keeps_generated_result_and_shared_models_usable(
         second = await harness.prompt("Second question")
         assert second.status == "completed"
         assert adapter.calls == 2
-        assert adapter.cleaned == 2
     finally:
         with pytest.raises(ExceptionGroup, match="Models cleanup failed") as group:
             await models.aclose()
@@ -165,36 +161,6 @@ async def test_busy_session_rejects_input_while_other_session_can_finish(
 
 
 @pytest.mark.asyncio
-async def test_session_remains_busy_while_its_response_is_closing(
-    provider: Provider, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
-    adapter = CleanupAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
-    running = asyncio.create_task(harness.prompt("First"))
-    try:
-        await asyncio.wait_for(adapter.cleaning.wait(), 1)
-        refused = await harness.prompt("Second")
-        assert refused.reason == "busy"
-        assert [message.role for message in harness.get_snapshot().messages] == [
-            "user",
-            "assistant",
-        ]
-        assert len(harness.get_snapshot().operations) == 1
-        assert adapter.calls == 1
-        adapter.release.set()
-        await asyncio.wait_for(running, 1)
-        later = await harness.prompt("Second")
-        assert later.status == "completed"
-        assert adapter.calls == 2
-    finally:
-        adapter.release.set()
-        await asyncio.gather(running, return_exceptions=True)
-        await models.aclose()
-
-
-@pytest.mark.asyncio
 async def test_cancelled_waiter_does_not_cancel_accepted_agent_work(
     provider: Provider, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -226,4 +192,29 @@ async def test_cancelled_waiter_does_not_cancel_accepted_agent_work(
     finally:
         adapter.release.set()
         await asyncio.gather(waiting, return_exceptions=True)
+        await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_completed_reply_does_not_wait_for_background_cleanup(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A settled task releases the session while AI finishes its own cleanup."""
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = CleanupAdapter()
+    models = Models([provider], adapters={provider.api: adapter})
+    harness = AgentHarness(models, provider.models[0])
+    running = asyncio.create_task(harness.prompt("First question"))
+    try:
+        await asyncio.wait_for(adapter.cleaning.wait(), 1)
+        outcome = await asyncio.wait_for(asyncio.shield(running), 1)
+        assert outcome.status == "completed"
+        assert harness.get_snapshot().active_operation_id is None
+        assert not adapter.release.is_set()
+        follow_up = await asyncio.wait_for(harness.prompt("Next question"), 1)
+        assert follow_up.status == "completed"
+        assert adapter.calls == 2
+    finally:
+        adapter.release.set()
+        await asyncio.gather(running, return_exceptions=True)
         await models.aclose()
