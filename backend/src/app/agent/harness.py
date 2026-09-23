@@ -21,12 +21,18 @@ class AgentHarness:
         system_prompt: str | None = None,
         *,
         tools: list[AgentTool] | None = None,
+        active_tool_names: list[str] | None = None,
         tool_context: object | None = None,
     ) -> None:
         self._models = models
         self._model = model
         self._system_prompt = system_prompt
-        self._tools = list(tools or [])
+        self._tools = {tool.definition.name: tool for tool in tools or []}
+        if len(self._tools) != len(tools or []):
+            raise ValueError("duplicate tool name")
+        self._active_tool_names = (
+            list(self._tools) if active_tool_names is None else list(active_tool_names)
+        )
         self._tool_context = tool_context
         self._session = Session()
         self._active_task: asyncio.Task[OperationResult] | None = None
@@ -48,8 +54,12 @@ class AgentHarness:
         """Advance assistant and tool calls in one admitted operation."""
         try:
             while True:
+                missing = [name for name in self._active_tool_names if name not in self._tools]
+                if missing:
+                    raise ValueError(f"enabled tool is not registered: {missing[0]}")
+                enabled = {name: self._tools[name] for name in self._active_tool_names}
                 context = self._session.context(
-                    self._system_prompt, [tool.definition for tool in self._tools]
+                    self._system_prompt, [tool.definition for tool in enabled.values()]
                 )
                 record.phase = "assistant.effect_pending"
                 response = self._models.stream_simple(self._model, context)
@@ -60,9 +70,7 @@ class AgentHarness:
                 if calls and final.stop_reason in {"tool_use", "stop"}:
                     self._session.append_message(final)
                     for call in calls:
-                        tool = next(
-                            tool for tool in self._tools if tool.definition.name == call.name
-                        )
+                        tool = enabled[call.name]
                         _result, message = await execute_tool_call(
                             call, tool, record.operation_id, self._tool_context
                         )

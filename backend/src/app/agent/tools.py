@@ -39,4 +39,3 @@ class AgentTool:
     definition: ToolDefinition
     execute: ToolExecute
     prepare_arguments: Callable[[JSONValue], JSONValue] | None = None
-

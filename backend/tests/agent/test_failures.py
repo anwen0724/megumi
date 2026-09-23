@@ -14,9 +14,11 @@ class FailThenSucceedAdapter:
     def __init__(self, partial: bool) -> None:
         self.partial = partial
         self.calls = 0
+        self.requests: list[object] = []
 
     async def stream_simple(self, **call: object) -> None:
         self.calls += 1
+        self.requests.append(call["transcript"])
         writer = call["writer"]
         if self.calls == 1:
             writer.emit({"type": "start", "partial": writer.partial})
@@ -65,6 +67,7 @@ async def test_failed_generation_retains_evidence_and_frees_session(
         follow_up = await harness.prompt("Second input")
         assert follow_up.status == "completed"
         assert adapter.calls == 2
+        assert [message.role for message in adapter.requests[1].messages] == ["user", "user"]
     finally:
         await models.aclose()
 

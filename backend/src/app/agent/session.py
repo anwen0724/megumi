@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from app.agent.operation import OperationRecord, OperationResult
-from app.ai import Context, Message, ToolDefinition, UserMessage
+from app.ai import AssistantMessage, Context, Message, ToolDefinition, UserMessage
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +43,17 @@ class Session:
         self, system_prompt: str | None, tools: list[ToolDefinition] | None = None
     ) -> Context:
         """Project saved conversation history into one independent AI request."""
-        return Context(messages=deepcopy(self.messages), system_prompt=system_prompt, tools=tools)
+        visible = [
+            message
+            for message in self.messages
+            if not (
+                isinstance(message, AssistantMessage)
+                and message.stop_reason in {"error", "aborted"}
+            )
+        ]
+        return Context(
+            messages=deepcopy(visible), system_prompt=system_prompt, tools=deepcopy(tools)
+        )
 
     def append_message(self, message: Message) -> None:
         """Record one settled assistant or tool result without ending the operation."""
