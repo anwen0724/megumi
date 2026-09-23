@@ -6,16 +6,28 @@ import asyncio
 
 from app.agent.operation import BusyResult, OperationRecord, OperationResult
 from app.agent.session import Session, SessionSnapshot
-from app.ai import AssistantResponse, Model, Models
+from app.agent.tool_execution import execute_tool_call
+from app.agent.tools import AgentTool
+from app.ai import Model, Models, ToolCall
 
 
 class AgentHarness:
     """Own one session's admitted work while sharing the host's Models runtime."""
 
-    def __init__(self, models: Models, model: Model, system_prompt: str | None = None) -> None:
+    def __init__(
+        self,
+        models: Models,
+        model: Model,
+        system_prompt: str | None = None,
+        *,
+        tools: list[AgentTool] | None = None,
+        tool_context: object | None = None,
+    ) -> None:
         self._models = models
         self._model = model
         self._system_prompt = system_prompt
+        self._tools = list(tools or [])
+        self._tool_context = tool_context
         self._session = Session()
         self._active_task: asyncio.Task[OperationResult] | None = None
 
@@ -33,27 +45,40 @@ class AgentHarness:
         return self._session.snapshot()
 
     async def _drive(self, record: OperationRecord) -> OperationResult:
-        """Run a generation and settle its result independently of AI cleanup."""
-        response: AssistantResponse | None = None
+        """Advance assistant and tool calls in one admitted operation."""
         try:
-            context = self._session.context(self._system_prompt)
-            record.phase = "assistant.effect_pending"
-            response = self._models.stream_simple(self._model, context)
-            async for _event in response:
-                pass
-            final = await response.result()
-            completed = final.stop_reason in {"stop", "length"} and not any(
-                block.type == "toolCall" for block in final.content
-            )
-            result = OperationResult(
-                operation_id=record.operation_id,
-                status="completed" if completed else "failed",
-                assistant_message=final,
-                error_message=None
-                if completed
-                else (final.error_message or f"Assistant ended with {final.stop_reason}"),
-            )
-            self._session.settle(record, result)
+            while True:
+                context = self._session.context(
+                    self._system_prompt, [tool.definition for tool in self._tools]
+                )
+                record.phase = "assistant.effect_pending"
+                response = self._models.stream_simple(self._model, context)
+                async for _event in response:
+                    pass
+                final = await response.result()
+                calls = [block for block in final.content if isinstance(block, ToolCall)]
+                if calls and final.stop_reason in {"tool_use", "stop"}:
+                    self._session.append_message(final)
+                    for call in calls:
+                        tool = next(
+                            tool for tool in self._tools if tool.definition.name == call.name
+                        )
+                        _result, message = await execute_tool_call(
+                            call, tool, record.operation_id, self._tool_context
+                        )
+                        self._session.append_message(message)
+                    continue
+                completed = final.stop_reason in {"stop", "length"} and not calls
+                result = OperationResult(
+                    operation_id=record.operation_id,
+                    status="completed" if completed else "failed",
+                    assistant_message=final,
+                    error_message=None
+                    if completed
+                    else (final.error_message or f"Assistant ended with {final.stop_reason}"),
+                )
+                self._session.settle(record, result)
+                break
         except Exception as error:
             result = OperationResult(
                 operation_id=record.operation_id,
