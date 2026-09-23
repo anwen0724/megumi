@@ -81,3 +81,22 @@ async def test_duplicate_name_rejected_and_missing_enabled_name_fails_before_req
         assert adapter.requests == []
     finally:
         await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_tool_declaration_is_fixed_at_harness_construction(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = AnswerAdapter()
+    models = Models([provider], adapters={provider.api: adapter})
+    original = make_tool("first")
+    harness = AgentHarness(models, provider.models[0], tools=[original])
+    original.definition.name = "renamed"
+    original.definition.description = "renamed"
+    try:
+        assert (await harness.prompt("hello")).status == "completed"
+        tools = get_current_tools(adapter.requests[0].messages)
+        assert [(item.name, item.description) for item in tools] == [("first", "first")]
+    finally:
+        await models.aclose()

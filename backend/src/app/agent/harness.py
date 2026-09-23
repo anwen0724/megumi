@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from copy import deepcopy
 from typing import Literal
 
 from app.agent.events import AgentEvents
@@ -31,7 +32,14 @@ class AgentHarness:
         self._models = models
         self._model = model
         self._system_prompt = system_prompt
-        self._tools = {tool.definition.name: tool for tool in tools or []}
+        self._tools = {
+            tool.definition.name: AgentTool(
+                definition=deepcopy(tool.definition),
+                execute=tool.execute,
+                prepare_arguments=tool.prepare_arguments,
+            )
+            for tool in tools or []
+        }
         if len(self._tools) != len(tools or []):
             raise ValueError("duplicate tool name")
         self._active_tool_names = (

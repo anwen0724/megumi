@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.agent import AgentHarness, AgentTool, AgentToolResult
-from app.agent.hooks import AfterToolPatch, BeforeToolDecision
+from app.agent import AfterToolPatch, AgentHarness, AgentTool, AgentToolResult, BeforeToolDecision
 from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall, ToolDefinition
 
 
