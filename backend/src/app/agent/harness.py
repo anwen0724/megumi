@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 
 from app.agent.events import AgentEvents
 from app.agent.hooks import AgentHooks
 from app.agent.operation import BusyResult, OperationRecord, OperationResult
 from app.agent.session import Session, SessionSnapshot
 from app.agent.tool_execution import execute_tool_call
-from app.agent.tools import AgentTool
-from app.ai import Model, Models, ToolCall
+from app.agent.tools import AgentTool, AgentToolResult
+from app.ai import Model, Models, ToolCall, ToolResultMessage
 
 
 class AgentHarness:
@@ -25,6 +26,7 @@ class AgentHarness:
         tools: list[AgentTool] | None = None,
         active_tool_names: list[str] | None = None,
         tool_context: object | None = None,
+        tool_execution: Literal["sequential", "parallel"] = "parallel",
     ) -> None:
         self._models = models
         self._model = model
@@ -35,6 +37,9 @@ class AgentHarness:
         self._active_tool_names = (
             list(self._tools) if active_tool_names is None else list(active_tool_names)
         )
+        if tool_execution not in {"sequential", "parallel"}:
+            raise ValueError(f"unsupported tool execution mode: {tool_execution}")
+        self._tool_execution = tool_execution
         self._tool_context = tool_context
         self.events = AgentEvents()
         self.hooks = AgentHooks()
@@ -73,17 +78,12 @@ class AgentHarness:
                 calls = [block for block in final.content if isinstance(block, ToolCall)]
                 if calls and final.stop_reason in {"tool_use", "stop", "length"}:
                     self._session.append_message(final)
-                    for call in calls:
-                        _result, message = await execute_tool_call(
-                            call,
-                            enabled.get(call.name),
-                            record.operation_id,
-                            self._tool_context,
-                            events=self.events,
-                            hooks=self.hooks,
-                            incomplete=final.stop_reason == "length",
-                        )
-                        self._session.append_message(message)
+                    await self._execute_batch(
+                        calls,
+                        enabled,
+                        record.operation_id,
+                        incomplete=final.stop_reason == "length",
+                    )
                     continue
                 completed = final.stop_reason in {"stop", "length"} and not calls
                 result = OperationResult(
@@ -107,3 +107,60 @@ class AgentHarness:
             self._session.release(record)
             self._active_task = None
         return result
+
+    async def _execute_batch(
+        self,
+        calls: list[ToolCall],
+        enabled: dict[str, AgentTool],
+        operation_id: str,
+        *,
+        incomplete: bool,
+    ) -> list[AgentToolResult]:
+        """Run one batch and place settled results in the model's call order."""
+
+        async def run(call: ToolCall) -> tuple[AgentToolResult, ToolResultMessage]:
+            return await execute_tool_call(
+                call,
+                enabled.get(call.name),
+                operation_id,
+                self._tool_context,
+                events=self.events,
+                hooks=self.hooks,
+                incomplete=incomplete,
+            )
+
+        results: list[AgentToolResult] = []
+        if self._tool_execution == "sequential":
+            for call in calls:
+                result, message = await run(call)
+                self._session.append_message(message)
+                results.append(result)
+            return results
+
+        tasks = [asyncio.create_task(run(call)) for call in calls]
+        indices = {task: index for index, task in enumerate(tasks)}
+        settled: list[tuple[AgentToolResult, ToolResultMessage] | None] = [None] * len(tasks)
+        pending = set(tasks)
+        next_index = 0
+        first_error: Exception | None = None
+        try:
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                for task in done:
+                    try:
+                        settled[indices[task]] = task.result()
+                    except Exception as error:
+                        if first_error is None:
+                            first_error = error
+                while next_index < len(settled) and settled[next_index] is not None:
+                    item = settled[next_index]
+                    assert item is not None
+                    result, message = item
+                    self._session.append_message(message)
+                    results.append(result)
+                    next_index += 1
+            if first_error is not None:
+                raise first_error
+            return results
+        finally:
+            await asyncio.gather(*tasks, return_exceptions=True)
