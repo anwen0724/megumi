@@ -59,3 +59,37 @@ async def test_basic_reply_records_one_user_and_one_complete_assistant(
         assert [message.role for message in transcript.messages] == ["system", "user"]
     finally:
         await models.aclose()
+
+@pytest.mark.asyncio
+async def test_follow_up_uses_prior_messages_without_leaking_another_session(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = TextAdapter()
+    models = Models([provider], adapters={provider.api: adapter})
+    first = AgentHarness(models, provider.models[0], system_prompt="Reply briefly")
+    second = AgentHarness(models, provider.models[0], system_prompt="Other session")
+    try:
+        await first.prompt("My name is Ming")
+        old_view = first.get_snapshot()
+        old_view.messages[1].content[0].text = "changed outside"
+        await first.prompt("What is my name?")
+        await second.prompt("Independent question")
+        first_history = adapter.requests[1]["transcript"].messages
+        second_history = adapter.requests[2]["transcript"].messages
+        assert [message.content for message in first_history[1:]] == [
+            "My name is Ming",
+            [TextContent(text="Hello!")],
+            "What is my name?",
+        ]
+        assert get_current_system_prompt(first_history) == "Reply briefly"
+        assert [message.content for message in second_history[1:]] == ["Independent question"]
+        assert get_current_system_prompt(second_history) == "Other session"
+        assert [message.role for message in first.get_snapshot().messages] == [
+            "user", "assistant", "user", "assistant"
+        ]
+        assert len(first.get_snapshot().operations) == 2
+        assert len(second.get_snapshot().operations) == 1
+        assert first.get_snapshot().session_id != second.get_snapshot().session_id
+    finally:
+        await models.aclose()
