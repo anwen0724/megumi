@@ -23,6 +23,7 @@ class AgentToolResult:
     details: JSONValue = None
     usage: Usage | None = None
     terminate: bool = False
+    is_error: bool = False
 
 
 type ToolUpdate = Callable[[AgentToolResult], None]

@@ -67,12 +67,15 @@ class AgentHarness:
                     pass
                 final = await response.result()
                 calls = [block for block in final.content if isinstance(block, ToolCall)]
-                if calls and final.stop_reason in {"tool_use", "stop"}:
+                if calls and final.stop_reason in {"tool_use", "stop", "length"}:
                     self._session.append_message(final)
                     for call in calls:
-                        tool = enabled[call.name]
                         _result, message = await execute_tool_call(
-                            call, tool, record.operation_id, self._tool_context
+                            call,
+                            enabled.get(call.name),
+                            record.operation_id,
+                            self._tool_context,
+                            incomplete=final.stop_reason == "length",
                         )
                         self._session.append_message(message)
                     continue
