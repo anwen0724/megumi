@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from app.agent.events import AgentEvents
 from app.agent.operation import BusyResult, OperationRecord, OperationResult
 from app.agent.session import Session, SessionSnapshot
 from app.agent.tool_execution import execute_tool_call
@@ -34,6 +35,7 @@ class AgentHarness:
             list(self._tools) if active_tool_names is None else list(active_tool_names)
         )
         self._tool_context = tool_context
+        self.events = AgentEvents()
         self._session = Session()
         self._active_task: asyncio.Task[OperationResult] | None = None
 
@@ -75,6 +77,7 @@ class AgentHarness:
                             enabled.get(call.name),
                             record.operation_id,
                             self._tool_context,
+                            events=self.events,
                             incomplete=final.stop_reason == "length",
                         )
                         self._session.append_message(message)

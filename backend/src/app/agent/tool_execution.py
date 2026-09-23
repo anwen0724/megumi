@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
+from copy import deepcopy
 
+from app.agent.events import AgentEvents, ToolEvent
 from app.agent.tools import AgentTool, AgentToolResult, ToolInvocation
 from app.ai import TextContent, ToolCall, ToolResultMessage, validate_tool_arguments
 
@@ -19,9 +22,14 @@ async def execute_tool_call(
     operation_id: str,
     tool_context: object | None,
     *,
+    events: AgentEvents | None = None,
     incomplete: bool = False,
 ) -> tuple[AgentToolResult, ToolResultMessage]:
     """Prepare, validate and run one call while preserving its original identity."""
+    if events is not None:
+        await events.emit(
+            ToolEvent("tool_start", operation_id, call.id, call.name, deepcopy(call.arguments))
+        )
     if incomplete:
         result = error_result(
             "Tool arguments may be incomplete because generation stopped at length"
@@ -39,16 +47,55 @@ async def execute_tool_call(
         except Exception as error:
             result = error_result(str(error) or type(error).__name__)
         else:
+            active = True
+            pending: asyncio.Task[None] | None = None
+
+            def on_update(partial: AgentToolResult) -> None:
+                nonlocal pending
+                if not active or events is None:
+                    return
+                previous = pending
+                snapshot = deepcopy(partial)
+
+                async def deliver() -> None:
+                    if previous is not None:
+                        await previous
+                    await events.emit(
+                        ToolEvent(
+                            "tool_update",
+                            operation_id,
+                            call.id,
+                            call.name,
+                            result=snapshot,
+                        )
+                    )
+
+                pending = asyncio.create_task(deliver())
+
             try:
                 result = await tool.execute(
                     call.id,
                     arguments,
-                    lambda _partial: None,
+                    on_update,
                     tool_context,
                     ToolInvocation(operation_id),
                 )
             except Exception as error:
                 result = error_result(str(error) or type(error).__name__)
+            finally:
+                active = False
+                if pending is not None:
+                    await pending
+    if events is not None:
+        await events.emit(
+            ToolEvent(
+                "tool_end",
+                operation_id,
+                call.id,
+                call.name,
+                result=deepcopy(result),
+            )
+        )
     return result, ToolResultMessage(
         tool_call_id=call.id,
         tool_name=call.name,
