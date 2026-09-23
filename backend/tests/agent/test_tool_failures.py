@@ -192,3 +192,56 @@ async def test_model_can_issue_new_call_after_execution_error(
         assert adapter.requests[2].messages[-1] == results[1]
     finally:
         await models.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_failure_message", [False, True])
+async def test_model_failure_after_tool_keeps_result_without_reexecution(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch, has_failure_message: bool
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = ScriptedAdapter(
+        [
+            ("tool_use", [tool_call("first")]),
+            ("error", "supplier failed"),
+        ]
+    )
+    models = Models([provider], adapters={provider.api: adapter})
+    executions: list[str] = []
+
+    async def execute(call_id: str, *_args: object) -> AgentToolResult:
+        executions.append(call_id)
+        if not has_failure_message:
+            await models.aclose()
+        return AgentToolResult(content=[TextContent(text="stored result")])
+
+    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    try:
+        outcome = await harness.prompt("lookup")
+        assert outcome.status == "failed"
+        assert executions == ["first"]
+        history = harness.get_snapshot()
+        assert isinstance(history.messages[2], ToolResultMessage)
+        assert history.messages[2].content == [TextContent(text="stored result")]
+        assert (outcome.assistant_message is not None) == has_failure_message
+        assert len(adapter.requests) == (2 if has_failure_message else 1)
+    finally:
+        if has_failure_message:
+            await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_tool_use_without_call_fails_without_another_request(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = ScriptedAdapter([("tool_use", [])])
+    models = Models([provider], adapters={provider.api: adapter})
+    harness = AgentHarness(models, provider.models[0])
+    try:
+        outcome = await harness.prompt("lookup")
+        assert outcome.status == "failed"
+        assert len(adapter.requests) == 1
+        assert [m.role for m in harness.get_snapshot().messages] == ["user", "assistant"]
+    finally:
+        await models.aclose()

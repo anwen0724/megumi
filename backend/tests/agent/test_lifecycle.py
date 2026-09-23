@@ -6,8 +6,15 @@ import asyncio
 
 import pytest
 
-from app.agent import AgentHarness, BusyResult, OperationResult, SessionSnapshot
-from app.ai import CallOptions, Models, Provider, TextContent
+from app.agent import (
+    AgentHarness,
+    AgentTool,
+    AgentToolResult,
+    BusyResult,
+    OperationResult,
+    SessionSnapshot,
+)
+from app.ai import CallOptions, Models, Provider, TextContent, ToolCall, ToolDefinition
 
 
 class CleanupAdapter:
@@ -216,5 +223,125 @@ async def test_completed_reply_does_not_wait_for_background_cleanup(
         assert adapter.calls == 2
     finally:
         adapter.release.set()
+        await asyncio.gather(running, return_exceptions=True)
+        await models.aclose()
+
+
+class ToolLifecycleAdapter:
+    options_type = CallOptions
+
+    def __init__(self) -> None:
+        self.requests: list[object] = []
+        self.cleanup_started = asyncio.Event()
+        self.cleanup_release = asyncio.Event()
+        self.continued = asyncio.Event()
+
+    async def _cleanup(self) -> None:
+        self.cleanup_started.set()
+        await self.cleanup_release.wait()
+
+    async def stream_simple(self, **call: object) -> None:
+        transcript = call["transcript"]
+        self.requests.append(transcript)
+        writer = call["writer"]
+        writer.emit({"type": "start", "partial": writer.partial})
+        last = transcript.messages[-1]
+        if last.role == "user" and last.content == "Need tool":
+            writer.add_cleanup(self._cleanup)
+            writer.partial.content.append(ToolCall(id="tool-1", name="lookup", arguments={}))
+            reason = "tool_use"
+        else:
+            if last.role == "toolResult":
+                self.continued.set()
+            writer.partial.content.append(TextContent(text="done"))
+            reason = "stop"
+        writer.emit({"type": "done", "reason": reason, "message": writer.partial})
+
+    async def stream(self, **call: object) -> None:
+        await self.stream_simple(**call)
+
+
+def lifecycle_tool(execute: object) -> AgentTool:
+    return AgentTool(
+        definition=ToolDefinition(
+            name="lookup",
+            description="Lookup",
+            parameters={"type": "object"},
+        ),
+        execute=execute,
+    )
+
+
+@pytest.mark.asyncio
+async def test_blocked_tool_keeps_session_busy_after_waiter_leaves(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = ToolLifecycleAdapter()
+    adapter.cleanup_release.set()
+    models = Models([provider], adapters={provider.api: adapter})
+    tool_started = asyncio.Event()
+    release_tool = asyncio.Event()
+
+    async def execute(*_args: object) -> AgentToolResult:
+        tool_started.set()
+        await release_tool.wait()
+        return AgentToolResult(content=[TextContent(text="found")])
+
+    harness = AgentHarness(models, provider.models[0], tools=[lifecycle_tool(execute)])
+    other = AgentHarness(models, provider.models[0])
+    waiting = asyncio.create_task(harness.prompt("Need tool"))
+    try:
+        await asyncio.wait_for(tool_started.wait(), 5)
+        waiting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiting
+        assert isinstance(await harness.prompt("Refused"), BusyResult)
+        assert [m.role for m in harness.get_snapshot().messages] == ["user", "assistant"]
+        assert (await other.prompt("Separate work")).status == "completed"
+        release_tool.set()
+        await asyncio.wait_for(adapter.continued.wait(), 5)
+
+        async def wait_for_settlement() -> None:
+            while harness.get_snapshot().active_operation_id is not None:
+                await asyncio.sleep(0)
+
+        await asyncio.wait_for(wait_for_settlement(), 5)
+        snapshot = harness.get_snapshot()
+        assert len(snapshot.operations) == 1
+        assert snapshot.operations[0].result.status == "completed"
+        assert (await harness.prompt("Again")).status == "completed"
+        assert [m.content for m in snapshot.messages if m.role == "user"] == ["Need tool"]
+    finally:
+        release_tool.set()
+        adapter.cleanup_release.set()
+        await asyncio.gather(waiting, return_exceptions=True)
+        await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_tool_and_next_model_request_do_not_wait_for_prior_ai_cleanup(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    adapter = ToolLifecycleAdapter()
+    models = Models([provider], adapters={provider.api: adapter})
+    tool_started = asyncio.Event()
+
+    async def execute(*_args: object) -> AgentToolResult:
+        tool_started.set()
+        return AgentToolResult(content=[TextContent(text="found")])
+
+    harness = AgentHarness(models, provider.models[0], tools=[lifecycle_tool(execute)])
+    running = asyncio.create_task(harness.prompt("Need tool"))
+    try:
+        await asyncio.wait_for(adapter.cleanup_started.wait(), 5)
+        await asyncio.wait_for(tool_started.wait(), 5)
+        await asyncio.wait_for(adapter.continued.wait(), 5)
+        assert (await asyncio.wait_for(asyncio.shield(running), 5)).status == "completed"
+        assert not adapter.cleanup_release.is_set()
+        assert len(adapter.requests) == 2
+    finally:
+        adapter.cleanup_release.set()
         await asyncio.gather(running, return_exceptions=True)
         await models.aclose()

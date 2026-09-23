@@ -78,12 +78,18 @@ class AgentHarness:
                 calls = [block for block in final.content if isinstance(block, ToolCall)]
                 if calls and final.stop_reason in {"tool_use", "stop", "length"}:
                     self._session.append_message(final)
-                    await self._execute_batch(
+                    batch_results = await self._execute_batch(
                         calls,
                         enabled,
                         record.operation_id,
                         incomplete=final.stop_reason == "length",
                     )
+                    if all(item.terminate for item in batch_results):
+                        result = OperationResult(
+                            operation_id=record.operation_id, status="completed"
+                        )
+                        self._session.settle(record, result)
+                        break
                     continue
                 completed = final.stop_reason in {"stop", "length"} and not calls
                 result = OperationResult(

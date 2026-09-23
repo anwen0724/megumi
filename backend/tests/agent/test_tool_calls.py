@@ -128,3 +128,63 @@ async def test_tool_result_is_returned_to_model_within_one_operation(
         ]
     finally:
         await models.aclose()
+
+
+@pytest.mark.asyncio
+async def test_two_tool_rounds_belong_to_one_operation(
+    provider: Provider, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+
+    class TwoRoundsAdapter(ToolThenAnswerAdapter):
+        async def stream_simple(self, **call: object) -> None:
+            writer = call["writer"]
+            self.requests.append(call["transcript"])
+            writer.emit({"type": "start", "partial": writer.partial})
+            if len(self.requests) <= 2:
+                writer.partial.content.append(
+                    ToolCall(
+                        id=f"call-{len(self.requests)}",
+                        name="read_article",
+                        arguments={"id": f"article-{len(self.requests)}"},
+                    )
+                )
+                reason = "tool_use"
+            else:
+                writer.partial.content.append(TextContent(text="both read"))
+                reason = "stop"
+            writer.emit({"type": "done", "reason": reason, "message": writer.partial})
+
+    adapter = TwoRoundsAdapter()
+    models = Models([provider], adapters={provider.api: adapter})
+    calls: list[str] = []
+
+    async def read_article(call_id: str, *_args: object) -> AgentToolResult:
+        calls.append(call_id)
+        return AgentToolResult(content=[TextContent(text=call_id)])
+
+    tool = AgentTool(
+        definition=ToolDefinition(
+            name="read_article",
+            description="Read",
+            parameters={"type": "object"},
+        ),
+        execute=read_article,
+    )
+    harness = AgentHarness(models, provider.models[0], tools=[tool])
+    try:
+        outcome = await harness.prompt("read two")
+        assert outcome.status == "completed"
+        assert calls == ["call-1", "call-2"]
+        assert len(adapter.requests) == 3
+        assert len(harness.get_snapshot().operations) == 1
+        assert [m.role for m in harness.get_snapshot().messages] == [
+            "user",
+            "assistant",
+            "toolResult",
+            "assistant",
+            "toolResult",
+            "assistant",
+        ]
+    finally:
+        await models.aclose()

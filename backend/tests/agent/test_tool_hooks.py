@@ -88,6 +88,7 @@ async def test_before_hook_block_error_or_invalid_replacement_prevents_execution
     calls: list[object] = []
     later: list[object] = []
     errors: list[object] = []
+    after_calls: list[object] = []
 
     async def execute(*args: object) -> AgentToolResult:
         calls.append(args)
@@ -104,10 +105,12 @@ async def test_before_hook_block_error_or_invalid_replacement_prevents_execution
 
     harness.hooks.on("before_tool", before)
     harness.hooks.on("before_tool", later.append)
+    harness.hooks.on("after_tool", after_calls.append)
     harness.events.on("handler_error", errors.append)
     try:
         assert (await harness.prompt("lookup")).status == "completed"
         assert calls == []
+        assert after_calls == []
         result = harness.get_snapshot().messages[2]
         assert result.is_error
         assert len(errors) == (1 if mode == "throw" else 0)
