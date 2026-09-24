@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.ai import InputContent, JSONValue, ToolDefinition, Usage
+from app.ai import InputContent, JSONValue, Tool, Usage
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,9 +34,8 @@ type ToolExecute = Callable[
 
 
 @dataclass(kw_only=True)
-class AgentTool:
-    """Bind an AI declaration to its host-owned execution function."""
+class AgentTool(Tool):
+    """Extend model-visible tool fields with host-owned execution."""
 
-    definition: ToolDefinition
     execute: ToolExecute
     prepare_arguments: Callable[[JSONValue], JSONValue] | None = None

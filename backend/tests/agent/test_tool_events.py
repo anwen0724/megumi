@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
-from app.ai import CallOptions, Models, Provider, TextContent, ToolCall, ToolDefinition
+from app.ai import CallOptions, Models, Provider, TextContent, ToolCall
 
 
 class OneToolAdapter:
@@ -32,9 +32,9 @@ class OneToolAdapter:
 
 def lookup_tool(execute: object) -> AgentTool:
     return AgentTool(
-        definition=ToolDefinition(
-            name="lookup", description="Lookup", parameters={"type": "object"}
-        ),
+        name="lookup",
+        description="Lookup",
+        parameters={"type": "object"},
         execute=execute,
     )
 

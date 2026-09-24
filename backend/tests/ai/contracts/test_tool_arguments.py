@@ -49,9 +49,9 @@ def test_partial_and_repaired_json_retains_available_content(text, expected):
 
 
 def make_tool(schema):
-    from app.ai.messages import ToolDefinition
+    from app.ai.messages import Tool
 
-    return ToolDefinition(name="example", description="Example", parameters=schema)
+    return Tool(name="example", description="Example", parameters=schema)
 
 
 @pytest.mark.parametrize("value", [[], None, 123, "text", False])

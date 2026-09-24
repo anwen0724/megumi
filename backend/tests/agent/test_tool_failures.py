@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
-from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall, ToolDefinition
+from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall
 from app.ai.messages import ToolResultMessage
 
 
@@ -36,15 +36,13 @@ def tool_call(call_id: str, name: str = "lookup", value: JSONValue = "1") -> Too
 
 def make_tool(execute: object, prepare: object | None = None) -> AgentTool:
     return AgentTool(
-        definition=ToolDefinition(
-            name="lookup",
-            description="Lookup",
-            parameters={
-                "type": "object",
-                "properties": {"id": {"type": "integer"}},
-                "required": ["id"],
-            },
-        ),
+        name="lookup",
+        description="Lookup",
+        parameters={
+            "type": "object",
+            "properties": {"id": {"type": "integer"}},
+            "required": ["id"],
+        },
         execute=execute,
         prepare_arguments=prepare,
     )

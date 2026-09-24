@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.agent import AfterToolPatch, AgentHarness, AgentTool, AgentToolResult, BeforeToolDecision
-from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall, ToolDefinition
+from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall
 
 
 class HookAdapter:
@@ -32,21 +32,19 @@ class HookAdapter:
 
 def make_tool(execute: object) -> AgentTool:
     return AgentTool(
-        definition=ToolDefinition(
-            name="lookup",
-            description="Lookup",
-            parameters={
-                "type": "object",
-                "properties": {"id": {"type": "integer"}},
-                "required": ["id"],
-            },
-        ),
+        name="lookup",
+        description="Lookup",
+        parameters={
+            "type": "object",
+            "properties": {"id": {"type": "integer"}},
+            "required": ["id"],
+        },
         execute=execute,
     )
 
 
 @pytest.mark.asyncio
-async def test_before_hooks_pass_revalidated_arguments_and_can_block(
+async def test_before_hooks_pass_replacements_and_validate_final_arguments(
     provider: Provider, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
@@ -70,7 +68,7 @@ async def test_before_hooks_pass_revalidated_arguments_and_can_block(
     harness.hooks.on("before_tool", see)
     try:
         assert (await harness.prompt("lookup")).status == "completed"
-        assert seen == [{"id": 2}]
+        assert seen == [{"id": "2"}]
         assert calls == [{"id": 2}]
         assert harness.get_snapshot().messages[1].content[0].arguments == {"id": "1"}
     finally:
@@ -113,7 +111,9 @@ async def test_before_hook_block_error_or_invalid_replacement_prevents_execution
         result = harness.get_snapshot().messages[2]
         assert result.is_error
         assert len(errors) == (1 if mode == "throw" else 0)
-        assert later == []
+        assert [context.arguments for context in later] == (
+            [{"id": "bad"}] if mode == "invalid" else []
+        )
     finally:
         await models.aclose()
 

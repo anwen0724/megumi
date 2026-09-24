@@ -35,12 +35,12 @@ def test_tool_and_system_history_preserves_signatures_and_unvalidated_values():
         JsonSchemaSampling,
         SystemMessage,
         ThinkingContent,
+        Tool,
         ToolCall,
-        ToolDefinition,
         ToolResultMessage,
     )
 
-    tool = ToolDefinition(
+    tool = Tool(
         name="weather",
         description="Weather",
         parameters={"type": "object"},

@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult, OperationResult
-from app.ai import JSONValue, Models, Provider, TextContent, ToolDefinition
+from app.ai import JSONValue, Models, Provider, TextContent
 from app.ai.messages import ToolResultMessage
 from app.ai.model import Model
 
@@ -26,15 +26,13 @@ async def test_real_tool_call_and_short_reply(
         return AgentToolResult(content=[TextContent(text="The token is blue-orbit-7.")])
 
     tool = AgentTool(
-        definition=ToolDefinition(
-            name="read_token",
-            description="Read the short token required to answer the user's question.",
-            parameters={
-                "type": "object",
-                "properties": {"key": {"type": "string"}},
-                "required": ["key"],
-            },
-        ),
+        name="read_token",
+        description="Read the short token required to answer the user's question.",
+        parameters={
+            "type": "object",
+            "properties": {"key": {"type": "string"}},
+            "required": ["key"],
+        },
         execute=read_token,
     )
     harness = AgentHarness(

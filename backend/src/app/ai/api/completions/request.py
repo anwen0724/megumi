@@ -13,8 +13,8 @@ from app.ai.messages import (
     SystemMessage,
     TextContent,
     ThinkingContent,
+    Tool,
     ToolCall,
-    ToolDefinition,
     ToolResultMessage,
     Transcript,
     UserMessage,
@@ -272,7 +272,7 @@ def reasoning_details(message: AssistantMessage) -> list[JSONValue] | None:
     return legacy or None
 
 
-def encode_tool(tool: ToolDefinition, model: Model) -> dict[str, JSONValue]:
+def encode_tool(tool: Tool, model: Model) -> dict[str, JSONValue]:
     """Resolve strict policy using the shared converter, without validating generated arguments."""
     supported = model.compat.supports_strict_mode is not False
     strict = resolve_json_schema_strict_sampling(tool, supported)

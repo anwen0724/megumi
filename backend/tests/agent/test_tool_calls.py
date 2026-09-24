@@ -13,7 +13,6 @@ from app.ai import (
     TextContent,
     ThinkingContent,
     ToolCall,
-    ToolDefinition,
     Usage,
     get_current_system_prompt,
     get_current_tools,
@@ -78,15 +77,13 @@ async def test_tool_result_is_returned_to_model_within_one_operation(
         return AgentToolResult(content=[TextContent(text="Article: hello")])
 
     tool = AgentTool(
-        definition=ToolDefinition(
-            name="read_article",
-            description="Read one short article",
-            parameters={
-                "type": "object",
-                "properties": {"id": {"type": "string"}},
-                "required": ["id"],
-            },
-        ),
+        name="read_article",
+        description="Read one short article",
+        parameters={
+            "type": "object",
+            "properties": {"id": {"type": "string"}},
+            "required": ["id"],
+        },
         execute=read_article,
     )
     harness = AgentHarness(models, provider.models[0], system_prompt="Use tools", tools=[tool])
@@ -164,11 +161,9 @@ async def test_two_tool_rounds_belong_to_one_operation(
         return AgentToolResult(content=[TextContent(text=call_id)])
 
     tool = AgentTool(
-        definition=ToolDefinition(
-            name="read_article",
-            description="Read",
-            parameters={"type": "object"},
-        ),
+        name="read_article",
+        description="Read",
+        parameters={"type": "object"},
         execute=read_article,
     )
     harness = AgentHarness(models, provider.models[0], tools=[tool])

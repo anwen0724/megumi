@@ -73,7 +73,7 @@ Model 的 `sampling_params` 保存 JSON 采样默认，`compat` 保存两协议�
 
 ```python
 from app.ai import (
-    Context, UserMessage, ToolDefinition,
+    Context, UserMessage, Tool,
     normalize_context, encode_messages, decode_messages,
     parse_partial_arguments, validate_tool_arguments,
 )
@@ -86,7 +86,7 @@ transcript = normalize_context(context)
 saved = encode_messages(transcript.messages)
 assert decode_messages(saved) == transcript.messages
 
-tool = ToolDefinition(
+tool = Tool(
     name="weather",
     description="Query weather",
     parameters={

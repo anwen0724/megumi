@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
-from app.ai import CallOptions, Models, Provider, TextContent, ToolDefinition, get_current_tools
+from app.ai import CallOptions, Models, Provider, TextContent, get_current_tools
 
 
 class AnswerAdapter:
@@ -30,7 +30,9 @@ def make_tool(name: str) -> AgentTool:
         return AgentToolResult(content=[TextContent(text=name)])
 
     return AgentTool(
-        definition=ToolDefinition(name=name, description=name, parameters={"type": "object"}),
+        name=name,
+        description=name,
+        parameters={"type": "object"},
         execute=execute,
     )
 
@@ -92,8 +94,8 @@ async def test_tool_declaration_is_fixed_at_harness_construction(
     models = Models([provider], adapters={provider.api: adapter})
     original = make_tool("first")
     harness = AgentHarness(models, provider.models[0], tools=[original])
-    original.definition.name = "renamed"
-    original.definition.description = "renamed"
+    original.name = "renamed"
+    original.description = "renamed"
     try:
         assert (await harness.prompt("hello")).status == "completed"
         tools = get_current_tools(adapter.requests[0].messages)

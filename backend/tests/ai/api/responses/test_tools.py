@@ -11,7 +11,7 @@ from app.ai import (
     ModelCompat,
     ResponsesOptions,
     SystemMessage,
-    ToolDefinition,
+    Tool,
     Transcript,
     UserMessage,
 )
@@ -35,7 +35,7 @@ async def test_function_strict_policy(provider, responses_harness, mode, support
     schema = {"type": "object", "properties": {"q": {"type": "string"}}}
     if not convertible:
         schema["additionalProperties"] = True
-    tool = ToolDefinition(
+    tool = Tool(
         name="lookup",
         description="Find",
         parameters=schema,
@@ -90,8 +90,8 @@ async def test_function_strict_policy(provider, responses_harness, mode, support
 async def test_tool_changes_follow_declared_wire_capability(
     provider, responses_harness, mode, change
 ):
-    first = ToolDefinition(name="a", description="old", parameters={"type": "object"})
-    second = ToolDefinition(
+    first = Tool(name="a", description="old", parameters={"type": "object"})
+    second = Tool(
         name="a" if change == "replace" else "b", description="new", parameters={"type": "object"}
     )
     model = replace(

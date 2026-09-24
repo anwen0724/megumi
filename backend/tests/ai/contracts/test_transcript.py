@@ -1,6 +1,6 @@
 """Replay instructions and tool declarations through public transcript operations."""
 
-from app.ai.messages import Context, SystemMessage, ToolDefinition, UserMessage
+from app.ai.messages import Context, SystemMessage, Tool, UserMessage
 from app.ai.transcript import normalize_context
 
 
@@ -42,7 +42,7 @@ def test_system_sections_append_remove_replace_and_keep_original_timestamp():
 
 
 def tool(name, description="old"):
-    return ToolDefinition(name=name, description=description, parameters={"type": "object"})
+    return Tool(name=name, description=description, parameters={"type": "object"})
 
 
 def test_tools_overwrite_preserve_position_remove_before_add_and_replace():

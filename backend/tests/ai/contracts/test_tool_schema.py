@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from app.ai.messages import JsonSchemaSampling, ToolDefinition
+from app.ai.messages import JsonSchemaSampling, Tool
 from app.ai.tools.arguments import validate_tool_arguments
 from app.ai.tools.schema import make_strict_json_schema
 
@@ -26,7 +26,7 @@ def test_optional_schema_conversion_pairs_with_original_argument_validation():
     assert strict["properties"]["limit"] == {"anyOf": [{"type": "integer"}, {"type": "null"}]}
     nested = strict["properties"]["options"]["anyOf"][0]
     assert nested["additionalProperties"] is False and nested["required"] == ["enabled"]
-    tool = ToolDefinition(name="t", description="", parameters=schema)
+    tool = Tool(name="t", description="", parameters=schema)
     assert validate_tool_arguments(
         tool, {"name": "hi", "limit": None, "options": {"enabled": None}}
     ) == {"name": "hi", "options": {}}
@@ -54,7 +54,7 @@ def test_unsupported_strict_shapes_fall_back_or_fail_without_rewriting_semantics
     from app.ai.tools.schema import resolve_json_schema_strict_sampling
 
     schema = {"type": "object", "properties": {"x": child}}
-    tool = ToolDefinition(
+    tool = Tool(
         name="t",
         description="",
         parameters=schema,
@@ -77,7 +77,7 @@ def test_scalar_unions_and_capability_sampling_modes():
         "properties": {"value": {"anyOf": [{"type": "string"}, {"type": "null"}]}},
     }
     assert make_strict_json_schema(schema)["properties"]["value"] == schema["properties"]["value"]
-    tool = ToolDefinition(name="t", description="", parameters=schema)
+    tool = Tool(name="t", description="", parameters=schema)
     assert resolve_json_schema_strict_sampling(tool, True) is None
     tool.constrained_sampling = False
     assert resolve_json_schema_strict_sampling(tool, True) is None

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from uuid import uuid4
 
 from app.agent.operation import OperationRecord, OperationResult
-from app.ai import AssistantMessage, Context, Message, ToolDefinition, UserMessage
+from app.ai import AssistantMessage, Context, Message, Tool, UserMessage
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,9 +39,7 @@ class Session:
         self.active_operation_id = record.operation_id
         return record
 
-    def context(
-        self, system_prompt: str | None, tools: list[ToolDefinition] | None = None
-    ) -> Context:
+    def context(self, system_prompt: str | None, tools: list[Tool] | None = None) -> Context:
         """Project saved conversation history into one independent AI request."""
         visible = [
             message

@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 
-from app.ai.messages import Context, Message, SystemMessage, TextContent, ToolDefinition, Transcript
+from app.ai.messages import Context, Message, SystemMessage, TextContent, Tool, Transcript
 
 
 def normalize_context(context: Context) -> Transcript:
@@ -80,9 +80,9 @@ def render_system_message_update(message: SystemMessage) -> str:
     return "\n\n".join(parts)
 
 
-def get_current_tools(messages: Sequence[Message]) -> list[ToolDefinition]:
+def get_current_tools(messages: Sequence[Message]) -> list[Tool]:
     """Apply removals before additions; replacement clears prior declarations."""
-    tools: dict[str, ToolDefinition] = {}
+    tools: dict[str, Tool] = {}
     for message in messages:
         if not isinstance(message, SystemMessage):
             continue
@@ -99,7 +99,7 @@ def get_current_tools(messages: Sequence[Message]) -> list[ToolDefinition]:
 class TranscriptTools:
     """Top-level declarations and whether later additions retain their positions."""
 
-    request_tools: list[ToolDefinition]
+    request_tools: list[Tool]
     anchors_additions: bool
 
 
@@ -152,9 +152,9 @@ def resolve_transcript_tools(
     return TranscriptTools(deepcopy(request), anchors)
 
 
-def to_tool_declaration(tool: ToolDefinition) -> ToolDefinition:
+def to_tool_declaration(tool: Tool) -> Tool:
     """Copy declared fields only; execution/display attributes never reach requests."""
-    return ToolDefinition(
+    return Tool(
         name=tool.name,
         description=tool.description,
         parameters=deepcopy(tool.parameters),
@@ -162,7 +162,7 @@ def to_tool_declaration(tool: ToolDefinition) -> ToolDefinition:
     )
 
 
-def declarations_equal(left: ToolDefinition, right: ToolDefinition) -> bool:
+def declarations_equal(left: Tool, right: Tool) -> bool:
     """Compare serialized declarations, including schema insertion order."""
     return json.dumps(asdict(to_tool_declaration(left)), ensure_ascii=False) == json.dumps(
         asdict(to_tool_declaration(right)), ensure_ascii=False
@@ -173,13 +173,11 @@ def declarations_equal(left: ToolDefinition, right: ToolDefinition) -> bool:
 class ToolStateChanges:
     """A changed declaration is a removal followed by an addition."""
 
-    tools_added: list[ToolDefinition]
+    tools_added: list[Tool]
     tools_removed: list[str]
 
 
-def get_tool_state_changes(
-    previous: Sequence[ToolDefinition], current: Sequence[ToolDefinition]
-) -> ToolStateChanges:
+def get_tool_state_changes(previous: Sequence[Tool], current: Sequence[Tool]) -> ToolStateChanges:
     """Describe how to replace one complete declaration set with another."""
     before = {t.name: t for t in previous}
     after = {t.name: t for t in current}

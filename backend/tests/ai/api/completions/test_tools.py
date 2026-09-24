@@ -12,8 +12,8 @@ from app.ai import (
     JsonSchemaSampling,
     ModelCompat,
     SystemMessage,
+    Tool,
     ToolCall,
-    ToolDefinition,
     Transcript,
     UserMessage,
 )
@@ -37,7 +37,7 @@ async def test_function_strict_policy(provider, sdk_harness, mode, support, conv
     schema = {"type": "object", "properties": {"q": {"type": "string"}}}
     if not convertible:
         schema["additionalProperties"] = True
-    tool = ToolDefinition(
+    tool = Tool(
         name="lookup",
         description="Find",
         parameters=schema,
@@ -83,8 +83,8 @@ async def test_function_strict_policy(provider, sdk_harness, mode, support, conv
     "change,preserve", [("add", True), ("add", False), ("replace", True), ("remove", True)]
 )
 async def test_mid_conversation_tool_changes(provider, sdk_harness, change, preserve):
-    first = ToolDefinition(name="a", description="old", parameters={"type": "object"})
-    second = ToolDefinition(
+    first = Tool(name="a", description="old", parameters={"type": "object"})
+    second = Tool(
         name="a" if change == "replace" else "b", description="new", parameters={"type": "object"}
     )
     update = SystemMessage(

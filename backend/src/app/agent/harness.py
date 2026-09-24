@@ -10,9 +10,9 @@ from app.agent.events import AgentEvents
 from app.agent.hooks import AgentHooks
 from app.agent.operation import BusyResult, OperationRecord, OperationResult
 from app.agent.session import Session, SessionSnapshot
-from app.agent.tool_execution import execute_tool_call
+from app.agent.tool_execution import PreparedToolCall, execute_tool_call, prepare_tool_call
 from app.agent.tools import AgentTool, AgentToolResult
-from app.ai import Model, Models, ToolCall, ToolResultMessage
+from app.ai import Model, Models, ToolCall, ToolResultMessage, to_tool_declaration
 
 
 class AgentHarness:
@@ -33,8 +33,11 @@ class AgentHarness:
         self._model = model
         self._system_prompt = system_prompt
         self._tools = {
-            tool.definition.name: AgentTool(
-                definition=deepcopy(tool.definition),
+            tool.name: AgentTool(
+                name=tool.name,
+                description=tool.description,
+                parameters=deepcopy(tool.parameters),
+                constrained_sampling=deepcopy(tool.constrained_sampling),
                 execute=tool.execute,
                 prepare_arguments=tool.prepare_arguments,
             )
@@ -76,7 +79,7 @@ class AgentHarness:
                     raise ValueError(f"enabled tool is not registered: {missing[0]}")
                 enabled = {name: self._tools[name] for name in self._active_tool_names}
                 context = self._session.context(
-                    self._system_prompt, [tool.definition for tool in enabled.values()]
+                    self._system_prompt, [to_tool_declaration(tool) for tool in enabled.values()]
                 )
                 record.phase = "assistant.effect_pending"
                 response = self._models.stream_simple(self._model, context)
@@ -132,8 +135,8 @@ class AgentHarness:
     ) -> list[AgentToolResult]:
         """Run one batch and place settled results in the model's call order."""
 
-        async def run(call: ToolCall) -> tuple[AgentToolResult, ToolResultMessage]:
-            return await execute_tool_call(
+        async def prepare(call: ToolCall) -> PreparedToolCall | AgentToolResult:
+            return await prepare_tool_call(
                 call,
                 enabled.get(call.name),
                 operation_id,
@@ -143,38 +146,61 @@ class AgentHarness:
                 incomplete=incomplete,
             )
 
+        async def run(
+            call: ToolCall, prepared: PreparedToolCall | AgentToolResult
+        ) -> tuple[AgentToolResult, ToolResultMessage]:
+            return await execute_tool_call(
+                call,
+                prepared,
+                operation_id,
+                self._tool_context,
+                events=self.events,
+                hooks=self.hooks,
+            )
+
         results: list[AgentToolResult] = []
         if self._tool_execution == "sequential":
             for call in calls:
-                result, message = await run(call)
+                result, message = await run(call, await prepare(call))
                 self._session.append_message(message)
                 results.append(result)
             return results
 
-        tasks = [asyncio.create_task(run(call)) for call in calls]
-        indices = {task: index for index, task in enumerate(tasks)}
-        settled: list[tuple[AgentToolResult, ToolResultMessage] | None] = [None] * len(tasks)
-        pending = set(tasks)
+        settled: list[tuple[AgentToolResult, ToolResultMessage] | None] = [None] * len(calls)
         next_index = 0
-        first_error: Exception | None = None
+
+        async def run_and_place(
+            index: int,
+            call: ToolCall,
+            prepared: PreparedToolCall | AgentToolResult,
+            started: asyncio.Event,
+        ) -> None:
+            nonlocal next_index
+            # 通知调度器已进入执行阶段。下一项准备无需等待本次执行完成。
+            started.set()
+            settled[index] = await run(call, prepared)
+            # 后续调用仍在等待前置钩子时。已完成的前缀也可以立即进入历史。
+            # 此处没有 await。因此多个任务不会交错修改回填位置。
+            while next_index < len(settled) and settled[next_index] is not None:
+                item = settled[next_index]
+                assert item is not None
+                result, message = item
+                self._session.append_message(message)
+                results.append(result)
+                next_index += 1
+
+        tasks: list[asyncio.Task[None]] = []
         try:
-            while pending:
-                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-                for task in done:
-                    try:
-                        settled[indices[task]] = task.result()
-                    except Exception as error:
-                        if first_error is None:
-                            first_error = error
-                while next_index < len(settled) and settled[next_index] is not None:
-                    item = settled[next_index]
-                    assert item is not None
-                    result, message = item
-                    self._session.append_message(message)
-                    results.append(result)
-                    next_index += 1
-            if first_error is not None:
-                raise first_error
+            for index, call in enumerate(calls):
+                prepared = await prepare(call)
+                started = asyncio.Event()
+                tasks.append(asyncio.create_task(run_and_place(index, call, prepared, started)))
+                await started.wait()
+            # 普通工具异常已转为错误结果。框架异常在其他已启动任务结束后上抛。
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+            for outcome in outcomes:
+                if isinstance(outcome, BaseException):
+                    raise outcome
             return results
         finally:
             await asyncio.gather(*tasks, return_exceptions=True)

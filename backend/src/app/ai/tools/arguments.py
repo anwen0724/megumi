@@ -11,7 +11,7 @@ from typing import cast
 from partial_json_parser import loads as partial_loads  # type: ignore[import-untyped]
 
 from app.ai.errors import ToolValidationError
-from app.ai.messages import JSONValue, ToolCall, ToolDefinition
+from app.ai.messages import JSONValue, Tool, ToolCall
 from app.ai.tools.schema import schema_accepts, schema_errors
 
 
@@ -63,7 +63,7 @@ def parse_partial_arguments(text: str | None) -> JSONValue:
     return {}
 
 
-def validate_tool_arguments(tool: ToolDefinition, arguments: JSONValue) -> dict[str, JSONValue]:
+def validate_tool_arguments(tool: Tool, arguments: JSONValue) -> dict[str, JSONValue]:
     """Copy and validate arguments without executing or changing the caller's data."""
     if not isinstance(arguments, dict):
         raise ToolValidationError("root", "tool arguments must be an object")
@@ -213,9 +213,7 @@ def _normalize_optional_nulls(value: JSONValue, schema: dict[str, JSONValue] | b
                 _normalize_optional_nulls(value[name], child)
 
 
-def validate_tool_call(
-    tools: Sequence[ToolDefinition], tool_call: ToolCall
-) -> dict[str, JSONValue]:
+def validate_tool_call(tools: Sequence[Tool], tool_call: ToolCall) -> dict[str, JSONValue]:
     """Find the declared tool and return validated arguments without executing it."""
     tool = next((tool for tool in tools if tool.name == tool_call.name), None)
     if tool is None:

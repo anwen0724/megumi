@@ -8,8 +8,8 @@ from app.ai.messages import (
     ImageContent,
     SystemMessage,
     TextContent,
+    Tool,
     ToolCall,
-    ToolDefinition,
     Transcript,
     Usage,
     UserMessage,
@@ -58,7 +58,7 @@ def test_images_tools_and_unknown_usage_are_estimated():
         SystemMessage(
             content="",
             timestamp=3,
-            tools_added=[ToolDefinition(name="f", description="", parameters={})],
+            tools_added=[Tool(name="f", description="", parameters={})],
         ),
     ]
     before = deepcopy(messages)

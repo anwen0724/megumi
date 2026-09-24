@@ -8,8 +8,8 @@ from app.ai import (
     SimpleOptions,
     TextContent,
     ThinkingContent,
+    Tool,
     ToolCall,
-    ToolDefinition,
     ToolResultMessage,
     UserMessage,
     decode_messages,
@@ -51,7 +51,7 @@ async def test_live_reasoning(live_models, live_model, record_final):
 
 async def test_live_tool_roundtrip(live_models, live_model, record_final):
     _, model = live_model
-    tool = ToolDefinition(
+    tool = Tool(
         name="lookup",
         description="Return the test record by key.",
         parameters={

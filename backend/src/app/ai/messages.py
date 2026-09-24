@@ -65,7 +65,7 @@ class JsonSchemaSampling(_Record):
 
 
 @dataclass(kw_only=True)
-class ToolDefinition(_Record):
+class Tool(_Record):
     """Serializable tool declaration, without execution or presentation callbacks."""
 
     name: str
@@ -87,7 +87,7 @@ class SystemMessage(_Record):
     content: str | list[TextContent]
     timestamp: int
     sections: dict[str, str | None] | None = None
-    tools_added: list[ToolDefinition] | None = None
+    tools_added: list[Tool] | None = None
     tools_removed: list[str] | None = None
     replace: bool = False
     role: Literal["system"] = "system"
@@ -193,7 +193,7 @@ class Context:
 
     messages: list[Message]
     system_prompt: str | None = None
-    tools: list[ToolDefinition] | None = None
+    tools: list[Tool] | None = None
 
 
 @dataclass(kw_only=True)

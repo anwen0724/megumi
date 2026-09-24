@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from copy import deepcopy
+from dataclasses import dataclass
 
 from app.agent.events import AgentEvents, ToolEvent
 from app.agent.hooks import AgentHooks
@@ -17,7 +18,15 @@ def error_result(message: str) -> AgentToolResult:
     return AgentToolResult(content=[TextContent(text=message)], is_error=True)
 
 
-async def execute_tool_call(
+@dataclass(frozen=True, slots=True)
+class PreparedToolCall:
+    """保存已通过参数校验和前置钩子的调用。供调度器启动执行。"""
+
+    tool: AgentTool
+    arguments: dict[str, JSONValue]
+
+
+async def prepare_tool_call(
     call: ToolCall,
     tool: AgentTool | None,
     operation_id: str,
@@ -26,54 +35,58 @@ async def execute_tool_call(
     events: AgentEvents | None = None,
     hooks: AgentHooks | None = None,
     incomplete: bool = False,
-) -> tuple[AgentToolResult, ToolResultMessage]:
-    """Prepare, validate and run one call while preserving its original identity."""
+) -> PreparedToolCall | AgentToolResult:
+    """按调用顺序完成准备。失败或被阻止时直接形成错误结果。"""
+    if incomplete:
+        return error_result("Tool arguments may be incomplete because generation stopped at length")
+    if tool is None:
+        return error_result(f'Unknown or unavailable tool "{call.name}"')
+    try:
+        prepared = (
+            tool.prepare_arguments(call.arguments)
+            if tool.prepare_arguments is not None
+            else call.arguments
+        )
+        arguments = validate_tool_arguments(tool, prepared)
+        if hooks is not None and events is not None:
+            replacement, blocked = await hooks.before(
+                tool, operation_id, call.id, arguments, tool_context, events
+            )
+            if blocked is not None:
+                return blocked
+            arguments = validate_tool_arguments(tool, replacement)
+    except Exception as error:
+        return error_result(str(error) or type(error).__name__)
     if events is not None:
+        # 准备成功后发布实际执行参数。监听结束后调度器才能启动工具。
+        await events.emit(
+            ToolEvent("tool_start", operation_id, call.id, call.name, deepcopy(arguments))
+        )
+    return PreparedToolCall(tool, arguments)
+
+
+async def execute_tool_call(
+    call: ToolCall,
+    prepared: PreparedToolCall | AgentToolResult,
+    operation_id: str,
+    tool_context: object | None,
+    *,
+    events: AgentEvents | None = None,
+    hooks: AgentHooks | None = None,
+) -> tuple[AgentToolResult, ToolResultMessage]:
+    """执行已获准的调用。或发布准备阶段产生的结果。不重复运行前置钩子。"""
+    if isinstance(prepared, AgentToolResult) and events is not None:
+        # 未执行分支在错误结果确定后补发 start。参数仍为模型原始输入。
         await events.emit(
             ToolEvent("tool_start", operation_id, call.id, call.name, deepcopy(call.arguments))
         )
-    if incomplete:
-        result = error_result(
-            "Tool arguments may be incomplete because generation stopped at length"
+    result = (
+        await _run_tool(
+            call, prepared.tool, operation_id, tool_context, prepared.arguments, events, hooks
         )
-    elif tool is None:
-        result = error_result(f'Unknown or unavailable tool "{call.name}"')
-    else:
-        try:
-            prepared = (
-                tool.prepare_arguments(call.arguments)
-                if tool.prepare_arguments is not None
-                else call.arguments
-            )
-            arguments = validate_tool_arguments(tool.definition, prepared)
-        except Exception as error:
-            result = error_result(str(error) or type(error).__name__)
-        else:
-            blocked = None
-            if hooks is not None and events is not None:
-                try:
-                    arguments, blocked = await hooks.before(
-                        tool,
-                        operation_id,
-                        call.id,
-                        arguments,
-                        tool_context,
-                        events,
-                    )
-                except Exception as error:
-                    blocked = error_result(str(error) or type(error).__name__)
-            if blocked is not None:
-                result = blocked
-            else:
-                result = await _run_tool(
-                    call,
-                    tool,
-                    operation_id,
-                    tool_context,
-                    arguments,
-                    events,
-                    hooks,
-                )
+        if isinstance(prepared, PreparedToolCall)
+        else prepared
+    )
     if events is not None:
         await events.emit(
             ToolEvent(
@@ -145,5 +158,7 @@ async def _run_tool(
         if pending is not None:
             await pending
     if hooks is not None and events is not None:
-        result = await hooks.after(tool, operation_id, call.id, result, tool_context, events)
+        result = await hooks.after(
+            tool, operation_id, call.id, arguments, result, tool_context, events
+        )
     return result

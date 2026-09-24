@@ -8,7 +8,7 @@ import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
 from app.agent.hooks import AfterToolPatch
-from app.ai import CallOptions, Models, Provider, TextContent, ToolCall, ToolDefinition
+from app.ai import CallOptions, Models, Provider, TextContent, ToolCall
 from app.ai.messages import ToolResultMessage
 
 
@@ -41,11 +41,9 @@ class TwoCallAdapter:
 
 def tool(name: str, execute: object) -> AgentTool:
     return AgentTool(
-        definition=ToolDefinition(
-            name=name,
-            description=name,
-            parameters={"type": "object"},
-        ),
+        name=name,
+        description=name,
+        parameters={"type": "object"},
         execute=execute,
     )
 

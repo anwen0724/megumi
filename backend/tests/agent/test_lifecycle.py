@@ -14,7 +14,7 @@ from app.agent import (
     OperationResult,
     SessionSnapshot,
 )
-from app.ai import CallOptions, Models, Provider, TextContent, ToolCall, ToolDefinition
+from app.ai import CallOptions, Models, Provider, TextContent, ToolCall
 
 
 class CleanupAdapter:
@@ -263,11 +263,9 @@ class ToolLifecycleAdapter:
 
 def lifecycle_tool(execute: object) -> AgentTool:
     return AgentTool(
-        definition=ToolDefinition(
-            name="lookup",
-            description="Lookup",
-            parameters={"type": "object"},
-        ),
+        name="lookup",
+        description="Lookup",
+        parameters={"type": "object"},
         execute=execute,
     )
 

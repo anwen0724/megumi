@@ -12,8 +12,8 @@ from app.ai.messages import (
     SystemMessage,
     TextContent,
     ThinkingContent,
+    Tool,
     ToolCall,
-    ToolDefinition,
     ToolResultMessage,
     Transcript,
     UserMessage,
@@ -238,7 +238,7 @@ def normalize_call_id(value: str, target: Model, source: AssistantMessage) -> st
     return f"{part(call)}|{part(item)}"
 
 
-def encode_tool(tool: ToolDefinition, model: Model) -> dict[str, JSONValue]:
+def encode_tool(tool: Tool, model: Model) -> dict[str, JSONValue]:
     """Convert function declarations using the shared strict-schema policy."""
     supported = model.compat.supports_strict_mode is True
     strict = resolve_json_schema_strict_sampling(tool, supported)
@@ -253,9 +253,7 @@ def encode_tool(tool: ToolDefinition, model: Model) -> dict[str, JSONValue]:
     return result
 
 
-def encode_tool_additions(
-    tools: list[ToolDefinition], model: Model, message_index: int
-) -> list[JSONValue]:
+def encode_tool_additions(tools: list[Tool], model: Model, message_index: int) -> list[JSONValue]:
     """Represent already-known client declarations, without executing a search."""
     encoded: list[JSONValue] = [encode_tool(tool, model) for tool in tools]
     if model.compat.supports_additional_tools:

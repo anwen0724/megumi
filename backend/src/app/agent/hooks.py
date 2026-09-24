@@ -10,7 +10,7 @@ from typing import Literal
 
 from app.agent.events import AgentEvents
 from app.agent.tools import AgentTool, AgentToolResult
-from app.ai import InputContent, JSONValue, TextContent, Usage, validate_tool_arguments
+from app.ai import InputContent, JSONValue, TextContent, Usage
 
 
 class _Unchanged:
@@ -42,22 +42,23 @@ class AfterToolPatch:
 
 @dataclass(frozen=True, slots=True)
 class BeforeToolContext:
-    """Call identity and currently validated arguments for a before hook."""
+    """调用标识和前序钩子传入的参数。整组处理结束后才校验最终参数。"""
 
     operation_id: str
     call_id: str
     tool_name: str
-    arguments: dict[str, JSONValue]
+    arguments: JSONValue
     tool_context: object | None
 
 
 @dataclass(frozen=True, slots=True)
 class AfterToolContext:
-    """Call identity and accumulated result for an after hook."""
+    """调用标识、实际执行参数与前序钩子修改后的结果。"""
 
     operation_id: str
     call_id: str
     tool_name: str
+    arguments: dict[str, JSONValue]
     result: AgentToolResult
     tool_context: object | None
 
@@ -94,14 +95,14 @@ class AgentHooks:
         arguments: dict[str, JSONValue],
         tool_context: object | None,
         events: AgentEvents,
-    ) -> tuple[dict[str, JSONValue], AgentToolResult | None]:
-        """Apply ordered decisions and revalidate each replacement."""
-        current = arguments
+    ) -> tuple[JSONValue, AgentToolResult | None]:
+        """按注册顺序聚合参数修改和阻止决定。此处不校验中间参数。"""
+        current: JSONValue = arguments
         for handler in list(self._handlers["before_tool"]):
             context = BeforeToolContext(
                 operation_id,
                 call_id,
-                tool.definition.name,
+                tool.name,
                 deepcopy(current),
                 tool_context,
             )
@@ -130,7 +131,7 @@ class AgentHooks:
                     terminate=decision.terminate,
                 )
             if not isinstance(decision.arguments, _Unchanged):
-                current = validate_tool_arguments(tool.definition, decision.arguments)
+                current = decision.arguments
         return current, None
 
     async def after(
@@ -138,6 +139,7 @@ class AgentHooks:
         tool: AgentTool,
         operation_id: str,
         call_id: str,
+        arguments: dict[str, JSONValue],
         result: AgentToolResult,
         tool_context: object | None,
         events: AgentEvents,
@@ -148,7 +150,8 @@ class AgentHooks:
             context = AfterToolContext(
                 operation_id,
                 call_id,
-                tool.definition.name,
+                tool.name,
+                deepcopy(arguments),
                 deepcopy(current),
                 tool_context,
             )

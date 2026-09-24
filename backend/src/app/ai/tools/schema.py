@@ -9,7 +9,7 @@ from referencing import Registry
 from referencing.exceptions import Unresolvable
 
 from app.ai.errors import StrictSchemaError, ToolValidationError
-from app.ai.messages import JSONValue, ToolDefinition
+from app.ai.messages import JSONValue, Tool
 
 
 def schema_errors(
@@ -125,9 +125,7 @@ def _make_strict_node(schema: JSONValue) -> None:
     schema["additionalProperties"] = False
 
 
-def resolve_json_schema_strict_sampling(
-    tool: ToolDefinition, supports_strict_mode: bool
-) -> bool | None:
+def resolve_json_schema_strict_sampling(tool: Tool, supports_strict_mode: bool) -> bool | None:
     """Enable strict only when supported; prefer falls back and require raises."""
     config = tool.constrained_sampling
     if config is None or config is False:
