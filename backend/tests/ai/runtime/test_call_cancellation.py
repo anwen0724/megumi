@@ -25,7 +25,7 @@ async def test_cancelled_result_and_event_waiters_do_not_stop_shared_generation(
         writer.partial.stop_reason = "stop"
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     await entered.wait()
     waiter = asyncio.create_task(response.result())
     iterator = aiter(response)
@@ -65,7 +65,7 @@ async def test_explicit_cancellation_stops_work_and_cleans_exactly_once(provider
 
     if method == "pre_signal":
         signal.set()
-    response = AssistantResponse(provider.models[0], produce, signal=signal)
+    response = AssistantResponse(provider.get_models()[0], produce, signal=signal)
     if method == "pre_cancel":
         response.cancel()
     if not method.startswith("pre"):
@@ -103,7 +103,7 @@ async def test_cancelled_close_waiter_does_not_abandon_cleanup(provider):
         reading.set()
         await asyncio.Event().wait()
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     await reading.wait()
     closer = asyncio.create_task(response.aclose())
     await cleaning.wait()

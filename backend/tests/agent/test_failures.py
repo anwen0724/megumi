@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.agent import AgentHarness
 from app.ai import CallOptions, Models, Provider, TextContent
+from app.ai.api.openai_runtime import OpenAIProtocol
 
 
-class FailThenSucceedAdapter:
+class FailThenSucceedAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self, partial: bool) -> None:
@@ -16,7 +19,7 @@ class FailThenSucceedAdapter:
         self.calls = 0
         self.requests: list[object] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.calls += 1
         self.requests.append(call["transcript"])
         writer = call["writer"]
@@ -37,8 +40,8 @@ class FailThenSucceedAdapter:
         writer.partial.content.append(TextContent(text="Recovered on new input"))
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 @pytest.mark.asyncio
@@ -48,8 +51,8 @@ async def test_failed_generation_retains_evidence_and_frees_session(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = FailThenSucceedAdapter(partial)
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     try:
         failed = await harness.prompt("First input")
         snapshot = harness.get_snapshot()
@@ -76,7 +79,7 @@ async def test_failed_generation_retains_evidence_and_frees_session(
 async def test_call_setup_failure_has_no_invented_assistant_message(provider: Provider) -> None:
     models = Models([provider])
     await models.aclose()
-    harness = AgentHarness(models, provider.models[0])
+    harness = AgentHarness(models, provider.get_models()[0])
     first = await harness.prompt("First input")
     second = await harness.prompt("Second input")
     snapshot = harness.get_snapshot()

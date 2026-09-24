@@ -105,7 +105,7 @@ def test_output_and_thinking_budgets(provider):
 
     from app.ai.context_budget import adjust_max_tokens_for_thinking, clamp_max_tokens_to_context
 
-    model = replace(provider.models[0], context_window=10000, max_output_tokens=8000)
+    model = replace(provider.get_models()[0], context_window=10000, max_output_tokens=8000)
     context = Transcript(messages=[assistant(Usage(total_tokens=5000))])
     assert clamp_max_tokens_to_context(model, context, 8000) == 904
     assert (

@@ -30,7 +30,7 @@ def live_model(request, record_property):
         )
     provider = openai_provider() if provider_id == "openai" else deepseek_provider()
     api = "openai-responses" if provider_id == "openai" else "openai-completions"
-    model = next((item for item in provider.models if item.id == identity), None)
+    model = next((item for item in provider.get_models() if item.id == identity), None)
     if model is None or model.provider != provider_id or model.api != api:
         pytest.fail(f"Selected model is absent from the {provider_id} {api} catalog", pytrace=False)
     record_property("provider", provider_id)

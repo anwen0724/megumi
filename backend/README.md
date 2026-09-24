@@ -59,7 +59,7 @@ asyncio.run(main())
 
 `get_available_models(provider=None)` 只检查所选供应商的本地认证配置：按供应商检查 key、逐模型合并静态授权头，未配置时排除该模型；存储故障或非法凭据使整次查询报错，可单独查询正常供应商。它不证明账号权限、余额或远端可达性。
 
-`get_model` 查不到返回 None；`get_models` 查不到返回空元组。设置和查询均隔离嵌套配置；非法替换保留原集合。`get_provider/get_providers` 查询供应商快照，`delete_provider/clear` 删除配置而不删除凭据。Provider.api 可以是单个协议字符串或多个协议的元组；这里只校验声明，不代表已经实现调用。
+`get_model` 查不到返回 None；`get_models` 查不到返回空元组。设置和查询均隔离嵌套配置；非法替换保留原集合。`get_provider/get_providers` 查询供应商快照，`delete_provider/clear` 删除配置而不删除凭据。Provider 提供 auth、get_models、stream 和 stream_simple。create_provider 的 api 接收单一 ProviderStreams 实现或按 model.api 的实现映射；Models 通过 Provider 委托调用，不维护全局协议表。缺少映射时目录仍可查询，调用返回 error。
 
 headers 按供应商、模型、认证产生的默认 Bearer、单次覆盖合并，名称不区分大小写，None 删除字段。Authorization 可覆盖或删除，Host/Content-Length 与非法换行仍拒绝。`AuthOverride` 的 `base_url` 覆盖本次端点，`env` 只覆盖本次环境读取（未指定名称查外部环境、None 遮蔽外部值），`transform_headers` 可同步或异步返回最终头；原始参数及进程环境不会被修改。
 
@@ -145,7 +145,7 @@ asyncio.run(ask(sys.argv[1]))
 
 只需要最终消息时使用 `complete_simple`。显式协议调用使用 `CompletionsOptions`，支持 `reasoning_effort`、`thinking`、`tool_choice` 和公共控制参数。模型/请求 `sampling_params` 在命名字段之后合并，`on_payload` 最后执行。
 
-同一 Completions 适配器服务声明该 API 的不同 Provider。已知 DeepSeek 身份或地址提供兼容默认，显式 `Model.compat` 优先；默认 system/max_tokens、不发送 store、按目录等级映射 thinking。缓存字段和亲和头受端点、缓存模式和兼容配置控制；亲和默认头也经过供应商/模型/请求覆盖及最终 `transform_headers`。
+同一 Completions 适配器服务声明该 API 的不同 Provider。已知 DeepSeek 身份或地址提供兼容默认，显式 `Model.compat` 优先；默认 system/max_tokens、不发送 store、按目录等级映射 thinking。缓存字段和亲和头受端点、缓存模式和兼容配置控制；Models 先准备供应商/模型/请求头并执行 `transform_headers`；协议随后生成亲和默认头，准备后的请求头优先，None 删除意图仍有效。
 
 等待 `result()` 或下一条事件的任务被取消时，只结束该等待者；显式 `response.cancel()`、`await response.aclose()`、请求 `signal.set()` 或 `Models.aclose()` 才停止生成。`complete*` 拥有内部响应，其任务取消会等待清理后传播 `CancelledError`。停止事件迭代不自动取消生成。事件队列不是广播订阅。
 
@@ -173,7 +173,25 @@ async def with_recovery(produce):
 
 请求重试只覆盖建流，不重新发送已经开始读取的流；Assistant helper 只重试可恢复的 error 消息，默认不叠加两层策略。`estimate_context_tokens`、`is_context_overflow`、`is_recoverable_length` 提供估算与恢复判断，不改历史、不自动摘要或重发，未知用量保持未知。
 
-两个协议测试走 Models → 内置适配器 → 实际 SDK → 模拟 HTTP；共享运行时测试仍可显式注入协议协作者。这些验证不代表 DeepSeek/OpenAI 已经联调。
+两个协议测试走 Models → Provider → 协议实现 → 实际 SDK → 模拟 HTTP；测试通过 Provider 工厂组合协议协作者。这些验证不代表 DeepSeek/OpenAI 已经联调。
+
+
+### Provider 装配
+
+```python
+from app.ai import (
+    ProviderAuth, create_provider, env_api_key_auth, openai_completions_api,
+)
+
+provider = create_provider(
+    id="gateway", name="Gateway", base_url="https://gateway.example/v1",
+    auth=ProviderAuth(api_key=env_api_key_auth("Gateway API key", ["GATEWAY_API_KEY"])),
+    models=[],  # 传入 provider="gateway" 的完整模型目录
+    api=openai_completions_api(),
+)
+```
+
+多协议供应商的 api 可传 `{"openai-completions": openai_completions_api(), "openai-responses": openai_responses_api()}`（需导入相应工厂）。新增原生协议实现 ProviderStreams 后在此装配；无需修改 Models。认证也可替换为供应商自己的 ApiKeyAuth.resolve。
 
 ## 模型目录维护
 

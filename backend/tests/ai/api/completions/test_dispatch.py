@@ -28,7 +28,7 @@ async def test_builtin_text_call_uses_sdk_and_emits_one_final(provider):
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(respond)) as http:
         models = Models([provider])
         response = models.stream_simple(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[UserMessage(content="Hi", timestamp=0)]),
             SimpleOptions(api_key="test-key", http_client=http),
         )
@@ -71,7 +71,7 @@ async def test_all_entries_preserve_catalog_identity_and_actual_model(
         options = (SimpleOptions if entry.endswith("simple") else CompletionsOptions)(
             api_key="key", http_client=http
         )
-        response = getattr(models, entry)(provider.models[0], Context(messages=[]), options)
+        response = getattr(models, entry)(provider.get_models()[0], Context(messages=[]), options)
         final = await response if entry.startswith("complete") else await response.result()
         assert (final.provider, final.api, final.model) == ("sample", "openai-completions", "small")
         assert (final.response_id, final.response_model) == ("response-1", "small-actual")
@@ -83,7 +83,9 @@ async def test_missing_finish_is_error_with_partial_content(provider, sdk_harnes
     data = native_sse({"choices": [{"delta": {"content": "unfinished"}, "finish_reason": None}]})
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream_simple(
-            provider.models[0], Context(messages=[]), SimpleOptions(api_key="key", http_client=http)
+            provider.get_models()[0],
+            Context(messages=[]),
+            SimpleOptions(api_key="key", http_client=http),
         )
         final = await response.result()
         assert final.stop_reason == "error"
@@ -98,12 +100,12 @@ async def test_protocol_shared_by_providers_keeps_auth_endpoints_and_extensions(
 ):
     from dataclasses import replace
 
-    second_model = replace(provider.models[0], provider="second")
+    second_model = replace(provider.get_models()[0], provider="second")
     second = replace(
         provider, id="second", models=[second_model], base_url="https://second.test/v2"
     )
     async with sdk_harness(providers=[provider, second]) as (models, http, requests):
-        for model, key in [(provider.models[0], "first-key"), (second_model, "second-key")]:
+        for model, key in [(provider.get_models()[0], "first-key"), (second_model, "second-key")]:
             final = await models.complete_simple(
                 model,
                 Context(messages=[]),

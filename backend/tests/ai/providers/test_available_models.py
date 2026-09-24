@@ -4,6 +4,7 @@ from dataclasses import replace
 
 import pytest
 
+from app.ai import ProviderAuth, env_api_key_auth
 from app.ai.auth.memory import InMemoryCredentialStore
 from app.ai.auth.types import ApiKeyCredential
 from app.ai.errors import AuthError
@@ -16,8 +17,8 @@ async def test_available_models_filter_unconfigured_providers(provider, monkeypa
     other = replace(
         provider,
         id="other",
-        env_var="OTHER_API_KEY",
-        models=[replace(provider.models[0], provider="other")],
+        auth=ProviderAuth(api_key=env_api_key_auth("API key", ["OTHER_API_KEY"])),
+        models=[replace(provider.get_models()[0], provider="other")],
     )
     monkeypatch.delenv("SAMPLE_API_KEY", raising=False)
     monkeypatch.delenv("OTHER_API_KEY", raising=False)
@@ -54,8 +55,8 @@ async def test_failed_all_query_preserves_catalog_and_single_provider_can_succee
     other = replace(
         provider,
         id="other",
-        env_var="OTHER_API_KEY",
-        models=[replace(provider.models[0], provider="other")],
+        auth=ProviderAuth(api_key=env_api_key_auth("API key", ["OTHER_API_KEY"])),
+        models=[replace(provider.get_models()[0], provider="other")],
     )
     models = create_models([provider, other], credentials=SelectiveStore())
     expected = "credential_store_error" if fault == "store" else "invalid_credential"
@@ -64,4 +65,4 @@ async def test_failed_all_query_preserves_catalog_and_single_provider_can_succee
     assert caught.value.code == expected
     assert "fake-sensitive" not in str(caught.value)
     assert len(models.get_models()) == 2
-    assert await models.get_available_models("sample") == (provider.models[0],)
+    assert await models.get_available_models("sample") == (provider.get_models()[0],)

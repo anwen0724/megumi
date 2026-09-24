@@ -10,7 +10,7 @@ from app.ai.catalog import load_catalog
 
 
 def test_sampling_reasoning_and_compat_survive_catalog_and_snapshot(provider):
-    data = asdict(provider.models[0])
+    data = asdict(provider.get_models()[0])
     data["sampling_params"] = {"top_p": 0.8, "extension": {"values": [None, True, 2]}}
     data["capabilities"].update(reasoning=True, reasoning_levels={"off": None, "max": "maximum"})
     data["compat"] = {
@@ -36,7 +36,7 @@ def test_sampling_reasoning_and_compat_survive_catalog_and_snapshot(provider):
 def test_supported_levels_distinguish_defaults_null_and_extended_levels(provider):
     from app.ai import ModelCapabilities, clamp_thinking_level, get_supported_thinking_levels
 
-    model = replace(provider.models[0], capabilities=ModelCapabilities(reasoning=True))
+    model = replace(provider.get_models()[0], capabilities=ModelCapabilities(reasoning=True))
     assert get_supported_thinking_levels(model) == ("off", "minimal", "low", "medium", "high")
     model = replace(
         model,
@@ -85,7 +85,7 @@ def test_supported_levels_distinguish_defaults_null_and_extended_levels(provider
 def test_invalid_metadata_is_rejected_by_loader_and_atomic_setting(provider, changes):
     from app.ai import ConfigurationError, ModelCapabilities, ModelCompat
 
-    data = asdict(provider.models[0])
+    data = asdict(provider.get_models()[0])
     data.update(changes)
     with pytest.raises(ConfigurationError):
         load_catalog(json.dumps([data]))
@@ -96,8 +96,8 @@ def test_invalid_metadata_is_rejected_by_loader_and_atomic_setting(provider, cha
         kwargs["compat"] = ModelCompat(**kwargs["compat"])
     models = create_models([provider])
     with pytest.raises(ConfigurationError):
-        models.set_provider(replace(provider, models=[replace(provider.models[0], **kwargs)]))
-    assert models.get_models() == tuple(provider.models)
+        models.set_provider(replace(provider, models=[replace(provider.get_models()[0], **kwargs)]))
+    assert models.get_models() == tuple(provider.get_models())
 
 
 def test_non_json_sampling_values_and_unknown_catalog_fields_are_rejected(provider):
@@ -106,9 +106,14 @@ def test_non_json_sampling_values_and_unknown_catalog_fields_are_rejected(provid
     for sampling in ({1: "bad-key"}, {"value": object()}, {"value": {1, 2}}):
         with pytest.raises(ConfigurationError):
             create_models(
-                [replace(provider, models=[replace(provider.models[0], sampling_params=sampling)])]
+                [
+                    replace(
+                        provider,
+                        models=[replace(provider.get_models()[0], sampling_params=sampling)],
+                    )
+                ]
             )
-    data = asdict(provider.models[0])
+    data = asdict(provider.get_models()[0])
     data["compat"]["unimplemented_option"] = True
     with pytest.raises(ConfigurationError):
         load_catalog(json.dumps([data]))

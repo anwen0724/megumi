@@ -31,7 +31,7 @@ from app.ai import (
     ],
 )
 async def test_function_strict_policy(provider, responses_harness, mode, support, convertible):
-    model = replace(provider.models[0], compat=ModelCompat(supports_strict_mode=support))
+    model = replace(provider.get_models()[0], compat=ModelCompat(supports_strict_mode=support))
     schema = {"type": "object", "properties": {"q": {"type": "string"}}}
     if not convertible:
         schema["additionalProperties"] = True
@@ -95,7 +95,7 @@ async def test_tool_changes_follow_declared_wire_capability(
         name="a" if change == "replace" else "b", description="new", parameters={"type": "object"}
     )
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         compat=ModelCompat(
             supports_mid_convo_system_messages=True,
             supports_additional_tools=mode == "additional",

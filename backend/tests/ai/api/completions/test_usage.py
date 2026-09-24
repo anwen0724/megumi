@@ -14,7 +14,7 @@ from app.ai import CompletionsOptions, Context, Pricing, Usage
 async def test_finish_waits_for_trailing_usage(provider, sdk_harness, native_sse):
     reached, release = asyncio.Event(), asyncio.Event()
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         pricing=Pricing(
             input=Decimal("2"),
             output=Decimal("4"),
@@ -125,7 +125,7 @@ async def test_deepseek_usage_sources_and_unknown_counts(
         chunk["choices"][0]["usage"] = {"prompt_tokens": 999, "completion_tokens": 999}
     async with sdk_harness(providers=[provider], data=native_sse(chunk)) as (models, http, _):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -147,7 +147,7 @@ async def test_deepseek_usage_sources_and_unknown_counts(
 async def test_unreported_usage_stays_unknown(provider, sdk_harness):
     async with sdk_harness() as (models, http, _):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )

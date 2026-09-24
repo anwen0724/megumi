@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult, ToolInvocation
@@ -17,10 +19,11 @@ from app.ai import (
     get_current_system_prompt,
     get_current_tools,
 )
+from app.ai.api.openai_runtime import OpenAIProtocol
 from app.ai.messages import ToolResultMessage
 
 
-class ToolThenAnswerAdapter:
+class ToolThenAnswerAdapter(OpenAIProtocol):
     """Return fixed external responses without implementing the Agent loop."""
 
     options_type = CallOptions
@@ -28,7 +31,7 @@ class ToolThenAnswerAdapter:
     def __init__(self) -> None:
         self.requests: list[object] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         writer = call["writer"]
         transcript = call["transcript"]
         self.requests.append(transcript)
@@ -53,8 +56,8 @@ class ToolThenAnswerAdapter:
             writer.partial.content.append(TextContent(text="The article says hello."))
             writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 @pytest.mark.asyncio
@@ -63,7 +66,7 @@ async def test_tool_result_is_returned_to_model_within_one_operation(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = ToolThenAnswerAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     executions: list[tuple[str, dict[str, JSONValue], str]] = []
 
     async def read_article(
@@ -86,7 +89,9 @@ async def test_tool_result_is_returned_to_model_within_one_operation(
         },
         execute=read_article,
     )
-    harness = AgentHarness(models, provider.models[0], system_prompt="Use tools", tools=[tool])
+    harness = AgentHarness(
+        models, provider.get_models()[0], system_prompt="Use tools", tools=[tool]
+    )
     try:
         outcome = await harness.prompt("Read article-1 and summarize it")
         assert outcome.status == "completed"
@@ -134,7 +139,7 @@ async def test_two_tool_rounds_belong_to_one_operation(
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
 
     class TwoRoundsAdapter(ToolThenAnswerAdapter):
-        async def stream_simple(self, **call: object) -> None:
+        async def _produce_simple(self, **call: object) -> None:
             writer = call["writer"]
             self.requests.append(call["transcript"])
             writer.emit({"type": "start", "partial": writer.partial})
@@ -153,7 +158,7 @@ async def test_two_tool_rounds_belong_to_one_operation(
             writer.emit({"type": "done", "reason": reason, "message": writer.partial})
 
     adapter = TwoRoundsAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     calls: list[str] = []
 
     async def read_article(call_id: str, *_args: object) -> AgentToolResult:
@@ -166,7 +171,7 @@ async def test_two_tool_rounds_belong_to_one_operation(
         parameters={"type": "object"},
         execute=read_article,
     )
-    harness = AgentHarness(models, provider.models[0], tools=[tool])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[tool])
     try:
         outcome = await harness.prompt("read two")
         assert outcome.status == "completed"

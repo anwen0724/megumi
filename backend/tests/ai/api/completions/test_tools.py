@@ -33,7 +33,7 @@ from app.ai import (
     ],
 )
 async def test_function_strict_policy(provider, sdk_harness, mode, support, convertible):
-    model = replace(provider.models[0], compat=ModelCompat(supports_strict_mode=support))
+    model = replace(provider.get_models()[0], compat=ModelCompat(supports_strict_mode=support))
     schema = {"type": "object", "properties": {"q": {"type": "string"}}}
     if not convertible:
         schema["additionalProperties"] = True
@@ -94,7 +94,7 @@ async def test_mid_conversation_tool_changes(provider, sdk_harness, change, pres
         tools_removed=["a"] if change == "remove" else None,
     )
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         compat=ModelCompat(
             supports_mid_convo_system_messages=preserve, supports_mid_convo_tool_additions=preserve
         ),
@@ -140,7 +140,7 @@ async def test_empty_tools_only_when_tool_history_exists(provider, sdk_harness):
     async with sdk_harness() as (models, http, requests):
         for messages in ([], [assistant]):
             await models.complete(
-                provider.models[0],
+                provider.get_models()[0],
                 Context(messages=messages),
                 CompletionsOptions(api_key="key", http_client=http),
             )

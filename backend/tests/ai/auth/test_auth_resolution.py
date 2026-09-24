@@ -23,7 +23,7 @@ async def test_explicit_key_bypasses_lower_priority_sources(provider: Provider) 
     await store.set("sample", ApiKeyCredential("fake-stored"))
     result = await resolve_auth(
         provider,
-        provider.models[0],
+        provider.get_models()[0],
         AuthOverride(api_key="fake-explicit"),
         credentials=store,
         env_read=unreadable_environment,
@@ -39,7 +39,7 @@ async def test_stored_key_wins_over_environment_without_mutation(provider: Provi
     store = InMemoryCredentialStore()
     await store.set("sample", ApiKeyCredential("fake-stored"))
     result = await resolve_auth(
-        provider, provider.models[0], credentials=store, env_read=unreadable_environment
+        provider, provider.get_models()[0], credentials=store, env_read=unreadable_environment
     )
     assert (result.key, result.source) == ("fake-stored", "stored")
     assert (await store.read("sample")).key == "fake-stored"
@@ -52,7 +52,9 @@ async def test_environment_is_used_only_when_no_credential_is_present(
     import os
 
     monkeypatch.setenv("SAMPLE_API_KEY", "fake-environment")
-    result = await resolve_auth(provider, provider.models[0], credentials=InMemoryCredentialStore())
+    result = await resolve_auth(
+        provider, provider.get_models()[0], credentials=InMemoryCredentialStore()
+    )
     assert (result.key, result.source) == ("fake-environment", "environment")
     assert os.environ["SAMPLE_API_KEY"] == "fake-environment"
 
@@ -65,7 +67,7 @@ async def test_empty_environment_is_not_configured(provider: Provider, value: st
     with pytest.raises(AuthError) as error:
         await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             credentials=InMemoryCredentialStore(),
             env_read=lambda _: value,
         )
@@ -86,7 +88,7 @@ async def test_invalid_selected_credential_never_falls_back(
     with pytest.raises(AuthError) as error:
         await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             overrides,
             credentials=store,
             env_read=unreadable_environment,
@@ -104,7 +106,10 @@ async def test_store_failure_is_distinct_and_does_not_leak_or_fall_back(provider
 
     with pytest.raises(AuthError) as error:
         await resolve_auth(
-            provider, provider.models[0], credentials=BrokenStore(), env_read=unreadable_environment
+            provider,
+            provider.get_models()[0],
+            credentials=BrokenStore(),
+            env_read=unreadable_environment,
         )
     assert error.value.code == "credential_store_error"
     assert "private-fake-key" not in str(error.value)

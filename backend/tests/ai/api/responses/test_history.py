@@ -25,9 +25,9 @@ from app.ai import (
 @pytest.mark.parametrize("supports_images", [True, False])
 async def test_system_and_user_content(provider, responses_harness, supports_images):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=replace(
-            provider.models[0].capabilities,
+            provider.get_models()[0].capabilities,
             reasoning=True,
             input_modalities=("text", "image") if supports_images else ("text",),
         ),
@@ -104,7 +104,7 @@ async def test_assistant_signatures_are_replayed_only_for_same_source(
     original = deepcopy(saved)
     async with responses_harness() as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[saved]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -127,9 +127,11 @@ async def test_tool_call_identity_namespace_and_inline_result(
     provider, responses_harness, source_model
 ):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         provider="openai",
-        capabilities=replace(provider.models[0].capabilities, input_modalities=("text", "image")),
+        capabilities=replace(
+            provider.get_models()[0].capabilities, input_modalities=("text", "image")
+        ),
     )
     source = replace(provider, id="openai", models=[model])
     messages = [
@@ -188,8 +190,10 @@ async def test_system_updates_preserve_position_only_when_supported(
     provider, responses_harness, preserve
 ):
     model = replace(
-        provider.models[0],
-        compat=replace(provider.models[0].compat, supports_mid_convo_system_messages=preserve),
+        provider.get_models()[0],
+        compat=replace(
+            provider.get_models()[0].compat, supports_mid_convo_system_messages=preserve
+        ),
     )
     history = Transcript(
         messages=[
@@ -234,7 +238,7 @@ async def test_foreign_tool_ids_and_empty_output(provider, responses_harness):
     )
     async with responses_harness() as (models, http, requests):
         final = await models.complete(
-            provider.models[0], history, ResponsesOptions(api_key="key", http_client=http)
+            provider.get_models()[0], history, ResponsesOptions(api_key="key", http_client=http)
         )
         assert final.stop_reason == "stop", final.error_message
         call, result = json.loads(requests[0].content)["input"]
@@ -262,7 +266,7 @@ async def test_empty_unrepresentable_messages_do_not_consume_fallback_item_ident
     ]
     async with responses_harness() as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=messages),
             ResponsesOptions(api_key="key", http_client=http),
         )

@@ -15,7 +15,7 @@ from app.ai.provider import Provider
 async def test_model_endpoint_overrides_provider_default(
     provider: Provider, endpoint: str | None
 ) -> None:
-    model = replace(provider.models[0], base_url=endpoint)
+    model = replace(provider.get_models()[0], base_url=endpoint)
     result = await resolve_auth(
         provider, model, AuthOverride(api_key="fake-key"), credentials=InMemoryCredentialStore()
     )
@@ -34,7 +34,7 @@ async def test_headers_merge_case_insensitively_and_null_removes_defaults(
     before = deepcopy((pheaders, mheaders, rheaders))
     result = await resolve_auth(
         replace(provider, headers=pheaders),
-        replace(provider.models[0], headers=mheaders),
+        replace(provider.get_models()[0], headers=mheaders),
         AuthOverride(api_key="fake-key", headers=rheaders),
         credentials=InMemoryCredentialStore(),
     )
@@ -55,9 +55,9 @@ async def test_managed_headers_cannot_be_overridden(
 ) -> None:
     p = replace(provider, headers={name: "bad"}) if layer == "provider" else provider
     m = (
-        replace(provider.models[0], headers={name: "bad"})
+        replace(provider.get_models()[0], headers={name: "bad"})
         if layer == "model"
-        else provider.models[0]
+        else provider.get_models()[0]
     )
     override = AuthOverride(api_key="fake-key", headers={name: "bad"} if layer == "request" else {})
     with pytest.raises(ValueError):
@@ -106,7 +106,10 @@ async def test_concurrent_resolution_freezes_headers_before_waiting(provider: Pr
     headers = {"X-Request": "first"}
     first_task = asyncio.create_task(
         resolve_auth(
-            provider, provider.models[0], AuthOverride(headers=headers), credentials=BlockingStore()
+            provider,
+            provider.get_models()[0],
+            AuthOverride(headers=headers),
+            credentials=BlockingStore(),
         )
     )
     await entered.wait()
@@ -114,7 +117,7 @@ async def test_concurrent_resolution_freezes_headers_before_waiting(provider: Pr
         headers["X-Request"] = "mutated"
         second = await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(api_key="fake-explicit", headers={"X-Request": "second"}),
             credentials=InMemoryCredentialStore(),
         )
@@ -131,7 +134,7 @@ async def test_authorization_can_override_or_remove_default_bearer(provider):
     for authorization in ("Custom fake-token", None):
         result = await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(api_key="fake-key", headers={"Authorization": authorization}),
             credentials=InMemoryCredentialStore(),
         )
@@ -143,8 +146,10 @@ async def test_authorization_can_override_or_remove_default_bearer(provider):
 async def test_header_only_auth_is_available_per_model_and_can_be_removed(provider):
     from app.ai import AuthError, create_models
 
-    authenticated = replace(provider.models[0], headers={"Authorization": "Custom fake-token"})
-    unauthenticated = replace(provider.models[0], id="no-header")
+    authenticated = replace(
+        provider.get_models()[0], headers={"Authorization": "Custom fake-token"}
+    )
+    unauthenticated = replace(provider.get_models()[0], id="no-header")
     models = create_models([replace(provider, models=[authenticated, unauthenticated])])
     assert await models.get_available_models() == (authenticated,)
     result = await models.resolve_auth(authenticated)
@@ -169,7 +174,7 @@ async def test_header_auth_never_masks_invalid_keys_or_store_failure(provider, f
     with pytest.raises(AuthError) as caught:
         await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(
                 api_key=" " if fault == "explicit" else None,
                 headers={"Authorization": "Custom fake-token"},
@@ -205,7 +210,7 @@ async def test_scoped_environment_endpoint_and_async_transform_are_isolated(prov
     first = asyncio.create_task(
         resolve_auth(
             replace(provider, headers={"X-Request": "provider"}),
-            replace(provider.models[0], headers={"X-Request": "model"}),
+            replace(provider.get_models()[0], headers={"X-Request": "model"}),
             AuthOverride(
                 env=env,
                 base_url="https://auth-first.test/v1",
@@ -220,7 +225,7 @@ async def test_scoped_environment_endpoint_and_async_transform_are_isolated(prov
         env["SAMPLE_API_KEY"] = "mutated"
         second = await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(
                 env={"SAMPLE_API_KEY": "fake-second"}, base_url="https://auth-second.test/v1"
             ),
@@ -237,7 +242,7 @@ async def test_scoped_environment_endpoint_and_async_transform_are_isolated(prov
     assert os.environ["SAMPLE_API_KEY"] == "fake-process"
     fallback = await resolve_auth(
         provider,
-        provider.models[0],
+        provider.get_models()[0],
         AuthOverride(env={"OTHER": "local"}),
         credentials=InMemoryCredentialStore(),
     )
@@ -255,14 +260,14 @@ async def test_scoped_env_can_mask_external_key_and_transform_can_supply_auth(
     with pytest.raises(AuthError) as caught:
         await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(env={"SAMPLE_API_KEY": None}),
             credentials=InMemoryCredentialStore(),
         )
     assert caught.value.code == "not_configured"
     result = await resolve_auth(
         provider,
-        provider.models[0],
+        provider.get_models()[0],
         AuthOverride(
             env={"SAMPLE_API_KEY": None},
             transform_headers=lambda _: {"Authorization": "Custom fake"},
@@ -283,7 +288,7 @@ async def test_transform_failure_or_invalid_output_never_returns_partial_auth(pr
     with pytest.raises(RuntimeError, match="transform failed"):
         await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(api_key="fake-key", transform_headers=fail),
             credentials=InMemoryCredentialStore(),
         )
@@ -295,14 +300,14 @@ async def test_transform_failure_or_invalid_output_never_returns_partial_auth(pr
         with pytest.raises(ConfigurationError):
             await resolve_auth(
                 provider,
-                provider.models[0],
+                provider.get_models()[0],
                 AuthOverride(api_key="fake-key", transform_headers=transform),
                 credentials=InMemoryCredentialStore(),
             )
     with pytest.raises(ConfigurationError):
         await resolve_auth(
             provider,
-            provider.models[0],
+            provider.get_models()[0],
             AuthOverride(api_key="fake-key", base_url="/relative"),
             credentials=InMemoryCredentialStore(),
         )
@@ -321,7 +326,7 @@ async def test_bound_header_transform_keeps_its_callers_identity(provider):
     transformer = Transformer()
     await resolve_auth(
         provider,
-        provider.models[0],
+        provider.get_models()[0],
         AuthOverride(api_key="fake-key", transform_headers=transformer.apply),
         credentials=InMemoryCredentialStore(),
     )

@@ -3,9 +3,12 @@
 from collections.abc import Mapping, Sequence
 from importlib.resources import files
 
+from app.ai.api.responses.adapter import openai_responses_api
+from app.ai.auth.helpers import env_api_key_auth
+from app.ai.auth.types import ProviderAuth
 from app.ai.catalog import load_catalog, snapshot_provider
 from app.ai.model import Model
-from app.ai.provider import Provider
+from app.ai.provider import Provider, create_provider
 
 
 def openai_provider(
@@ -21,12 +24,12 @@ def openai_provider(
         else models
     )
     return snapshot_provider(
-        Provider(
+        create_provider(
             id="openai",
             name="OpenAI",
-            api="openai-responses",
+            api=openai_responses_api(),
             base_url=base_url,
-            env_var="OPENAI_API_KEY",
+            auth=ProviderAuth(api_key=env_api_key_auth("openai API key", ["OPENAI_API_KEY"])),
             models=catalog,
             headers=headers if headers is not None else {},
         )

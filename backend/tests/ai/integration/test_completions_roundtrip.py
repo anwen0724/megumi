@@ -28,7 +28,7 @@ async def test_saved_tool_turn_replays_and_frames_survive_delayed_consumption(
     sdk_harness, native_sse, same_source
 ):
     provider = deepseek_provider()
-    model = provider.models[0]
+    model = provider.get_models()[0]
     first_data = native_sse(
         {"id": "r1", "choices": [{"delta": {"reasoning_content": "Check"}}]},
         {
@@ -126,7 +126,7 @@ async def test_running_call_uses_old_snapshot_and_next_call_uses_replacement(
         context = Context(messages=[UserMessage(content="old", timestamp=0)])
         sampling = {"top_p": 0.2}
         first = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             context,
             CompletionsOptions(api_key="old-key", http_client=http, sampling_params=sampling),
         )
@@ -134,13 +134,13 @@ async def test_running_call_uses_old_snapshot_and_next_call_uses_replacement(
         context.messages[0].content = "new"
         sampling["top_p"] = 0.9
         new_model = replace(
-            provider.models[0],
+            provider.get_models()[0],
             sampling_params={"top_p": 0.7},
             compat=ModelCompat(max_tokens_field="max_tokens"),
         )
         models.set_provider(replace(provider, models=[new_model], base_url="https://new.test/v2"))
         second = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             context,
             CompletionsOptions(api_key="new-key", http_client=http, max_output_tokens=50),
         )

@@ -12,7 +12,7 @@ from app.ai.options import SimpleOptions
 def test_simple_merges_defaults_clamps_and_preserves_control_identity(provider, monkeypatch):
     monkeypatch.setenv("MEGUMI_AI_CACHE_RETENTION", "long")
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         context_window=10000,
         max_output_tokens=8000,
         sampling_params={"top_p": 0.8, "x": 1},

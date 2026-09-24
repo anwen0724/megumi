@@ -25,7 +25,7 @@ async def test_background_progress_and_result_do_not_need_event_consumption(prov
         writer.partial.stop_reason = "stop"
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     await asyncio.wait_for(entered.wait(), 1)
     first = asyncio.create_task(response.result())
     second = asyncio.create_task(response.result())
@@ -46,7 +46,7 @@ async def test_final_snapshot_ignores_late_events_and_mutations(provider):
         writer.partial.content[0].text = "changed after done"
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     result = await asyncio.wait_for(response.result(), 1)
     assert result.content[0].text == "first"
     assert [e["type"] async for e in response] == ["done"]
@@ -70,7 +70,7 @@ async def test_live_partial_and_saved_frame_have_different_lifetimes(provider):
         writer.partial.stop_reason = "stop"
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     await first.wait()
     it = aiter(response)
     encoder = AssistantMessageFrameEncoder()
@@ -96,7 +96,7 @@ async def test_result_and_terminal_event_do_not_wait_for_cleanup_but_close_does(
         writer.add_cleanup(cleanup)
         writer.emit({"type": "done", "reason": "length", "message": writer.partial})
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     await asyncio.wait_for(cleaning.wait(), 1)
     closer = asyncio.create_task(response.aclose())
     try:
@@ -119,7 +119,7 @@ async def test_setup_failure_and_missing_terminal_return_error_without_hanging(p
         if behavior == "raise":
             raise RuntimeError("setup failed")
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     result = await asyncio.wait_for(response.result(), 1)
     assert result.stop_reason == "error"
     assert ("setup failed" if behavior == "raise" else "terminal") in result.error_message
@@ -147,7 +147,7 @@ async def test_cleanup_failure_is_reported_by_close_without_mutating_published_m
         writer.add_cleanup(cleanup_failure)
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    response = AssistantResponse(provider.models[0], produce)
+    response = AssistantResponse(provider.get_models()[0], produce)
     final = await response.result()
     saved = encode_messages([final])
     release.set()

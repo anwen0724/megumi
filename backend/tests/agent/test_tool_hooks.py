@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.agent import AfterToolPatch, AgentHarness, AgentTool, AgentToolResult, BeforeToolDecision
 from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall
+from app.ai.api.openai_runtime import OpenAIProtocol
 
 
-class HookAdapter:
+class HookAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
         self.calls = 0
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.calls += 1
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
@@ -26,8 +29,8 @@ class HookAdapter:
             reason = "stop"
         writer.emit({"type": "done", "reason": reason, "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 def make_tool(execute: object) -> AgentTool:
@@ -48,7 +51,7 @@ async def test_before_hooks_pass_replacements_and_validate_final_arguments(
     provider: Provider, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
-    models = Models([provider], adapters={provider.api: HookAdapter()})
+    models = Models([replace(provider, api=HookAdapter())])
     calls: list[dict[str, JSONValue]] = []
     seen: list[dict[str, JSONValue]] = []
 
@@ -56,7 +59,7 @@ async def test_before_hooks_pass_replacements_and_validate_final_arguments(
         calls.append(args)
         return AgentToolResult(content=[TextContent(text="found")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute)])
 
     async def change(_context: object) -> BeforeToolDecision:
         return BeforeToolDecision(arguments={"id": "2"})
@@ -81,7 +84,7 @@ async def test_before_hook_block_error_or_invalid_replacement_prevents_execution
     provider: Provider, monkeypatch: pytest.MonkeyPatch, mode: str
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
-    models = Models([provider], adapters={provider.api: HookAdapter()})
+    models = Models([replace(provider, api=HookAdapter())])
     calls: list[object] = []
     later: list[object] = []
     errors: list[object] = []
@@ -91,7 +94,7 @@ async def test_before_hook_block_error_or_invalid_replacement_prevents_execution
         calls.append(args)
         return AgentToolResult(content=[TextContent(text="found")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute)])
 
     async def before(_context: object) -> BeforeToolDecision:
         if mode == "throw":
@@ -123,14 +126,14 @@ async def test_after_hooks_keep_successful_patches_when_later_handler_throws(
     provider: Provider, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
-    models = Models([provider], adapters={provider.api: HookAdapter()})
+    models = Models([replace(provider, api=HookAdapter())])
     observed: list[str] = []
     errors: list[object] = []
 
     async def execute(*_args: object) -> AgentToolResult:
         raise RuntimeError("tool failed")
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute)])
 
     async def patch(_context: object) -> AfterToolPatch:
         return AfterToolPatch(content=[TextContent(text="recovered")], is_error=False)

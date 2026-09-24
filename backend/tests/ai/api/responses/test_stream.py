@@ -69,7 +69,7 @@ async def test_interleaved_text_refusal_and_done_only(provider, sdk_harness, res
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -125,7 +125,7 @@ async def test_reasoning_items_preserve_visible_summary_and_opaque_signature(
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -190,7 +190,7 @@ async def test_parallel_function_arguments_done_is_authoritative(
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -244,7 +244,7 @@ async def test_overall_terminal_mapping(provider, sdk_harness, response_sse, eve
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -276,7 +276,7 @@ async def test_completed_function_call_is_tool_use(provider, sdk_harness, respon
     )
     async with sdk_harness(data=data) as (models, http, _):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -302,7 +302,7 @@ async def test_terminal_backfills_only_matching_missing_reasoning_signature(
     )
     async with sdk_harness(data=data) as (models, http, _):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )

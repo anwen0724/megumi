@@ -46,7 +46,7 @@ async def test_usage_preserves_reported_total_and_unknowns(
     )
     async with sdk_harness(data=data) as (models, http, _):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -89,7 +89,7 @@ async def test_price_uses_effective_response_or_actual_request_tier(
         cache_read=Decimal("0.5"),
         tiers=(PricingTier(condition="unknown", input=Decimal("9")),) if conditional else (),
     )
-    model = replace(provider.models[0], provider="openai", pricing=pricing)
+    model = replace(provider.get_models()[0], provider="openai", pricing=pricing)
     configured = replace(provider, id="openai", models=[model])
     native = {
         "id": "r",

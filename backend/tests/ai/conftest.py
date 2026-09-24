@@ -2,18 +2,19 @@
 
 import pytest
 
+from app.ai import ProviderAuth, create_provider, env_api_key_auth, openai_completions_api
 from app.ai.model import Model
 from app.ai.provider import Provider
 
 
 @pytest.fixture
 def provider() -> Provider:
-    return Provider(
+    return create_provider(
         id="sample",
         name="Sample",
         base_url="https://example.test/v1",
-        api="openai-completions",
-        env_var="SAMPLE_API_KEY",
+        api=openai_completions_api(),
+        auth=ProviderAuth(api_key=env_api_key_auth("API key", ["SAMPLE_API_KEY"])),
         models=[
             Model(
                 id="small",

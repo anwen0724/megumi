@@ -2,21 +2,24 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
 from app.ai import CallOptions, JSONValue, Models, Provider, TextContent, ToolCall
+from app.ai.api.openai_runtime import OpenAIProtocol
 from app.ai.messages import ToolResultMessage
 
 
-class ScriptedAdapter:
+class ScriptedAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self, turns: list[tuple[str, list[ToolCall] | str]]) -> None:
         self.turns = turns
         self.requests: list[object] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.requests.append(call["transcript"])
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
@@ -26,8 +29,8 @@ class ScriptedAdapter:
         )
         writer.emit({"type": "done", "reason": reason, "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 def tool_call(call_id: str, name: str = "lookup", value: JSONValue = "1") -> ToolCall:
@@ -60,7 +63,7 @@ async def test_unknown_or_disabled_tool_becomes_model_visible_error(
             ("stop", "done"),
         ]
     )
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     calls: list[object] = []
 
     async def execute(*args: object) -> AgentToolResult:
@@ -69,7 +72,7 @@ async def test_unknown_or_disabled_tool_becomes_model_visible_error(
 
     harness = AgentHarness(
         models,
-        provider.models[0],
+        provider.get_models()[0],
         tools=[make_tool(execute)],
         active_tool_names=[] if unavailable == "disabled" else None,
     )
@@ -93,7 +96,7 @@ async def test_preparation_validation_and_execution_failures_return_results(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = ScriptedAdapter([("tool_use", [tool_call("first")]), ("stop", "done")])
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     calls: list[dict[str, JSONValue]] = []
 
     async def execute(_id: str, args: dict[str, JSONValue], *_rest: object) -> AgentToolResult:
@@ -109,7 +112,7 @@ async def test_preparation_validation_and_execution_failures_return_results(
             return {"id": "not-an-integer"}
         return {"id": "2"}
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute, prepare)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute, prepare)])
     try:
         assert (await harness.prompt("lookup")).status == "completed"
         result = harness.get_snapshot().messages[2]
@@ -133,14 +136,14 @@ async def test_length_tool_call_is_not_executed_and_model_can_retry(
             ("stop", "done"),
         ]
     )
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     calls: list[str] = []
 
     async def execute(call_id: str, *_args: object) -> AgentToolResult:
         calls.append(call_id)
         return AgentToolResult(content=[TextContent(text="found")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute)])
     try:
         assert (await harness.prompt("lookup")).status == "completed"
         results = [m for m in harness.get_snapshot().messages if isinstance(m, ToolResultMessage)]
@@ -166,7 +169,7 @@ async def test_model_can_issue_new_call_after_execution_error(
             ("stop", "done"),
         ]
     )
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     calls: list[tuple[str, dict[str, JSONValue]]] = []
 
     async def execute(
@@ -177,7 +180,7 @@ async def test_model_can_issue_new_call_after_execution_error(
             raise RuntimeError("item unavailable")
         return AgentToolResult(content=[TextContent(text="found")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute)])
     try:
         assert (await harness.prompt("lookup")).status == "completed"
         results = [m for m in harness.get_snapshot().messages if isinstance(m, ToolResultMessage)]
@@ -204,7 +207,7 @@ async def test_model_failure_after_tool_keeps_result_without_reexecution(
             ("error", "supplier failed"),
         ]
     )
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     executions: list[str] = []
 
     async def execute(call_id: str, *_args: object) -> AgentToolResult:
@@ -213,7 +216,7 @@ async def test_model_failure_after_tool_keeps_result_without_reexecution(
             await models.aclose()
         return AgentToolResult(content=[TextContent(text="stored result")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[make_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[make_tool(execute)])
     try:
         outcome = await harness.prompt("lookup")
         assert outcome.status == "failed"
@@ -234,8 +237,8 @@ async def test_tool_use_without_call_fails_without_another_request(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = ScriptedAdapter([("tool_use", [])])
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     try:
         outcome = await harness.prompt("lookup")
         assert outcome.status == "failed"

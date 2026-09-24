@@ -35,16 +35,18 @@ from app.ai.providers.openai import openai_provider
         ),
     ],
 )
-def test_builtin_catalog_has_valid_identity_metadata_and_sources(
+@pytest.mark.asyncio
+async def test_builtin_catalog_has_valid_identity_metadata_and_sources(
     factory, identity, api, env_var, base_url
 ):
     provider = factory()
-    assert (provider.id, provider.api, provider.env_var, provider.base_url) == (
-        identity,
-        api,
-        env_var,
-        base_url,
+    assert (provider.id, provider.base_url) == (identity, base_url)
+    from app.ai import AuthContext
+
+    auth = await provider.auth.api_key.resolve(
+        AuthContext(env=lambda name: "fake-key" if name == env_var else None), None
     )
+    assert auth.key == "fake-key"
     artifact = files("app.ai.providers").joinpath(f"data/{identity}.json").read_bytes()
     manifest = json.loads(
         files("app.ai.providers").joinpath("data/manifest.json").read_text("utf-8")
@@ -67,16 +69,16 @@ def test_builtin_catalog_has_valid_identity_metadata_and_sources(
 @pytest.mark.parametrize("factory", [deepseek_provider, openai_provider])
 def test_custom_catalog_replaces_defaults_and_uses_common_validation(factory):
     original = factory()
-    custom = replace(original.models[0], id="private-model")
+    custom = replace(original.get_models()[0], id="private-model")
     headers = {"X-Gateway": "local"}
     configured = factory(models=[custom], base_url="http://localhost:8080/v1", headers=headers)
     headers["X-Gateway"] = "changed"
     collection = create_models([configured])
-    assert collection.get_model(original.id, original.models[0].id) is None
+    assert collection.get_model(original.id, original.get_models()[0].id) is None
     assert [model.id for model in collection.get_models()] == ["private-model"]
     assert configured.base_url == "http://localhost:8080/v1"
     assert configured.headers == {"X-Gateway": "local"}
-    assert factory(models=[]).models == []
+    assert factory(models=[]).get_models() == ()
     with pytest.raises(ConfigurationError):
         factory(models=[custom, custom])
     assert factory(headers={"Authorization": "Custom fake-token"}).headers == {
@@ -107,7 +109,7 @@ def test_catalog_preserves_conditional_prices_and_sampling_support():
         }
     ]
     provider = deepseek_provider(models=load_catalog(json.dumps(data)))
-    model = provider.models[0]
+    model = provider.get_models()[0]
     assert model.pricing.input is None
     tier = model.pricing.tiers[0]
     assert tier.condition == "A documented billing condition"

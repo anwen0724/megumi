@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
 from app.agent.hooks import AfterToolPatch
 from app.ai import CallOptions, Models, Provider, TextContent, ToolCall
+from app.ai.api.openai_runtime import OpenAIProtocol
 from app.ai.messages import ToolResultMessage
 
 
-class TwoCallAdapter:
+class TwoCallAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
         self.requests: list[object] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.requests.append(call["transcript"])
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
@@ -35,8 +37,8 @@ class TwoCallAdapter:
             reason = "stop"
         writer.emit({"type": "done", "reason": reason, "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 def tool(name: str, execute: object) -> AgentTool:
@@ -55,7 +57,7 @@ async def test_batch_execution_mode_and_source_order_placement(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TwoCallAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     first_started = asyncio.Event()
     second_started = asyncio.Event()
     release_first = asyncio.Event()
@@ -74,7 +76,7 @@ async def test_batch_execution_mode_and_source_order_placement(
 
     harness = AgentHarness(
         models,
-        provider.models[0],
+        provider.get_models()[0],
         tools=[tool("first", first), tool("second", second)],
         tool_execution=mode,
     )
@@ -111,7 +113,7 @@ async def test_one_parallel_tool_failure_does_not_cancel_sibling(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TwoCallAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     sibling_started = asyncio.Event()
     sibling_completed = asyncio.Event()
 
@@ -125,7 +127,7 @@ async def test_one_parallel_tool_failure_does_not_cancel_sibling(
         return AgentToolResult(content=[TextContent(text="second survived")])
 
     harness = AgentHarness(
-        models, provider.models[0], tools=[tool("first", failed), tool("second", sibling)]
+        models, provider.get_models()[0], tools=[tool("first", failed), tool("second", sibling)]
     )
     try:
         assert (await asyncio.wait_for(harness.prompt("compare"), 5)).status == "completed"
@@ -146,7 +148,7 @@ async def test_only_whole_batch_termination_skips_final_model_turn(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TwoCallAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
 
     async def first(*_args: object) -> AgentToolResult:
         return AgentToolResult(content=[TextContent(text="one")], terminate=True)
@@ -155,7 +157,7 @@ async def test_only_whole_batch_termination_skips_final_model_turn(
         return AgentToolResult(content=[TextContent(text="two")], terminate=all_terminate)
 
     harness = AgentHarness(
-        models, provider.models[0], tools=[tool("first", first), tool("second", second)]
+        models, provider.get_models()[0], tools=[tool("first", first), tool("second", second)]
     )
     try:
         outcome = await harness.prompt("compare")
@@ -177,7 +179,7 @@ async def test_completed_prefix_is_saved_while_later_parallel_tool_is_pending(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TwoCallAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     second_started = asyncio.Event()
     release_second = asyncio.Event()
 
@@ -190,7 +192,7 @@ async def test_completed_prefix_is_saved_while_later_parallel_tool_is_pending(
         return AgentToolResult(content=[TextContent(text="second")])
 
     harness = AgentHarness(
-        models, provider.models[0], tools=[tool("first", first), tool("second", second)]
+        models, provider.get_models()[0], tools=[tool("first", first), tool("second", second)]
     )
     running = asyncio.create_task(harness.prompt("compare"))
     try:
@@ -221,14 +223,14 @@ async def test_after_hook_final_terminate_flag_controls_whole_batch(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TwoCallAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
 
     async def execute(*_args: object) -> AgentToolResult:
         return AgentToolResult(content=[TextContent(text="done")])
 
     harness = AgentHarness(
         models,
-        provider.models[0],
+        provider.get_models()[0],
         tools=[
             tool("first", execute),
             tool("second", execute),

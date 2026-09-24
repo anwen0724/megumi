@@ -3,17 +3,14 @@
 import json
 import math
 import re
-from collections.abc import Mapping
-from copy import deepcopy
+from collections.abc import Mapping, Sequence
 from dataclasses import fields
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, urlsplit
 
 from app.ai.errors import ConfigurationError
 from app.ai.model import CatalogSource, Model, ModelCapabilities, ModelCompat, Pricing, PricingTier
-from app.ai.provider import Provider
-
-SUPPORTED_APIS = frozenset({"openai-completions", "openai-responses"})
+from app.ai.provider import Provider, copy_provider
 
 
 def validate_url(value: str) -> None:
@@ -66,26 +63,26 @@ def validate_headers(headers: Mapping[str, str | None]) -> None:
 
 def snapshot_provider(provider: Provider) -> Provider:
     """Validate a complete provider before its atomic publication."""
-    if not provider.id.strip() or not provider.name.strip() or not provider.env_var.strip():
-        raise ConfigurationError(
-            "Provider identity and authentication declaration must be nonempty"
-        )
-    if (
-        not isinstance(provider.apis, tuple)
-        or not provider.apis
-        or any(not isinstance(api, str) or api not in SUPPORTED_APIS for api in provider.apis)
-        or len(set(provider.apis)) != len(provider.apis)
-    ):
-        raise ConfigurationError("Unsupported protocol declaration")
+    if not provider.id.strip() or not provider.name.strip():
+        raise ConfigurationError("Provider identity must be nonempty")
+    if not callable(getattr(provider.auth.api_key, "resolve", None)):
+        raise ConfigurationError("Provider requires API key authentication behavior")
     validate_url(provider.base_url)
     validate_headers(provider.headers)
+    validate_models(provider.id, provider.get_models())
+    return copy_provider(provider)
+
+
+def validate_models(provider_id: str, models: Sequence[Model]) -> None:
+    """运行时目录与维护工具共用模型校验, 不把协议可执行性混入目录数据。"""
     seen: set[str] = set()
-    for model in provider.models:
+    for model in models:
         if (
             not model.id.strip()
             or model.id in seen
-            or model.provider != provider.id
-            or model.api not in provider.apis
+            or model.provider != provider_id
+            or not isinstance(model.api, str)
+            or not model.api.strip()
         ):
             raise ConfigurationError("Invalid model identity or protocol declaration")
         for count in (model.context_window, model.max_output_tokens):
@@ -114,7 +111,6 @@ def snapshot_provider(provider: Provider) -> Provider:
                     )
         validate_model_metadata(model)
         seen.add(model.id)
-    return deepcopy(provider)
 
 
 COMPAT_CHOICES = {

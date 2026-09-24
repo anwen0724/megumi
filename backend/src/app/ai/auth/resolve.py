@@ -5,13 +5,20 @@ from collections.abc import Callable, Mapping
 from copy import deepcopy
 from dataclasses import replace
 from inspect import isawaitable
-from typing import Literal
 
-from app.ai.auth.types import ApiKeyCredential, AuthOverride, CredentialStore, ResolvedAuth
+from app.ai.auth.helpers import validate_api_key
+from app.ai.auth.types import (
+    ApiKeyCredential,
+    AuthContext,
+    AuthOverride,
+    AuthResult,
+    CredentialStore,
+    ResolvedAuth,
+)
 from app.ai.catalog import validate_headers, validate_url
 from app.ai.errors import AuthError, ConfigurationError
 from app.ai.model import Model
-from app.ai.provider import Provider
+from app.ai.provider import Provider, copy_provider
 
 
 async def resolve_auth(
@@ -23,11 +30,11 @@ async def resolve_auth(
     env_read: Callable[[str], str | None] | None = None,
 ) -> ResolvedAuth:
     """Resolve an independent request configuration; never contact a provider."""
-    provider, model = deepcopy((provider, model))
+    provider, model = copy_provider(provider), deepcopy(model)
     original = overrides or AuthOverride()
     # 只复制配置数据。回调保留身份, 不复制其持有的状态或外部资源。
     overrides = replace(original, headers=dict(original.headers), env=dict(original.env))
-    if model.provider != provider.id or model.api not in provider.apis:
+    if model.provider != provider.id:
         raise ConfigurationError("Model does not match provider identity or protocol")
     endpoint = model.base_url if model.base_url is not None else provider.base_url
     if overrides.base_url is not None:
@@ -38,17 +45,17 @@ async def resolve_auth(
         for name, value in overrides.env.items()
     ):
         raise ConfigurationError("Invalid scoped environment")
-    key: str | None = None
-    source: Literal["explicit", "stored", "environment", "headers"] = "headers"
-    try:
-        key, source = await resolve_api_key(provider, overrides, credentials, env_read)
-    except AuthError as exc:
-        if exc.code != "not_configured":
-            raise
+    result = await resolve_provider_auth(provider, overrides, credentials, env_read)
+    key = result.key if result else None
+    source = result.source if result else "headers"
+    if result and result.base_url is not None and overrides.base_url is None:
+        endpoint = result.base_url
+        validate_url(endpoint)
     headers = merge_headers(
         provider.headers,
         model.headers,
         {"authorization": f"Bearer {key}"} if key is not None else {},
+        result.headers if result else {},
         overrides.headers,
     )
     if overrides.transform_headers is not None:
@@ -58,7 +65,11 @@ async def resolve_auth(
     if key is None and not has_auth_header(headers):
         raise AuthError("not_configured")
     return ResolvedAuth(
-        key=key, source=source, base_url=endpoint, headers=headers, env=dict(overrides.env)
+        key=key,
+        source=source,
+        base_url=endpoint,
+        headers=headers,
+        env={**(result.env if result else {}), **overrides.env},
     )
 
 
@@ -80,15 +91,15 @@ def has_auth_header(headers: Mapping[str, str]) -> bool:
     return bool(headers.get("authorization", "").strip())
 
 
-async def resolve_api_key(
+async def resolve_provider_auth(
     provider: Provider,
     overrides: AuthOverride,
     credentials: CredentialStore,
-    env_read: Callable[[str], str | None] | None,
-) -> tuple[str, Literal["explicit", "stored", "environment"]]:
-    """Short-circuit credential sources; only missing values allow fallback."""
+    env_read: Callable[[str], str | None] | None = None,
+) -> AuthResult | None:
+    """公共流程读取凭据; 供应商策略负责如何解析, 不写供应商条件分支。"""
     if overrides.api_key is not None:
-        return _validate_key(overrides.api_key), "explicit"
+        return AuthResult(key=validate_api_key(overrides.api_key), source="explicit")
     try:
         credential = await credentials.read(provider.id)
     except Exception:
@@ -96,20 +107,12 @@ async def resolve_api_key(
     if credential is not None:
         if not isinstance(credential, ApiKeyCredential):
             raise AuthError("invalid_credential")
-        return _validate_key(credential.key), "stored"
-    # None 显式遮蔽外部值; 未覆盖的名称仍查询外部环境。
-    value = (
-        overrides.env[provider.env_var]
-        if provider.env_var in overrides.env
-        else (env_read or os.getenv)(provider.env_var)
-    )
-    if value is not None and value.strip():
-        return _validate_key(value), "environment"
-    raise AuthError("not_configured")
+        validate_api_key(credential.key)
 
+    def env(name: str) -> str | None:
+        return overrides.env[name] if name in overrides.env else (env_read or os.getenv)(name)
 
-def _validate_key(key: str) -> str:
-    """Validate local syntax without claiming remote validity."""
-    if not isinstance(key, str) or not key.strip() or "\r" in key or "\n" in key:
-        raise AuthError("invalid_credential")
-    return key
+    result = await provider.auth.api_key.resolve(AuthContext(env=env), credential)
+    if result is not None and result.key is not None:
+        validate_api_key(result.key)
+    return result

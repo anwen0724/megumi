@@ -7,20 +7,17 @@ from dataclasses import replace
 from inspect import isawaitable
 from typing import Literal
 
-from app.ai.api.base import ProtocolAdapter, RequestHeaderDefaults
-from app.ai.api.completions.adapter import CompletionsAdapter
-from app.ai.api.responses.adapter import ResponsesAdapter
-from app.ai.api.simple_options import prepare_simple_options
+import httpx2
+
 from app.ai.auth.memory import InMemoryCredentialStore
-from app.ai.auth.resolve import has_auth_header, merge_headers, resolve_api_key, resolve_auth
+from app.ai.auth.resolve import has_auth_header, merge_headers, resolve_auth, resolve_provider_auth
 from app.ai.auth.types import AuthOverride, CredentialStore, ResolvedAuth
 from app.ai.catalog import snapshot_provider
-from app.ai.errors import AuthError, ConfigurationError, LifecycleError
+from app.ai.errors import ConfigurationError, LifecycleError
 from app.ai.messages import AssistantMessage, Context, Transcript
 from app.ai.model import Model
 from app.ai.options import CallOptions, SimpleOptions, prepare_call_options
-from app.ai.provider import Provider
-from app.ai.runtime.clients import ClientRuntime
+from app.ai.provider import Provider, copy_provider
 from app.ai.runtime.diagnostics import sensitive_header_values
 from app.ai.stream import AssistantResponse, ResponseWriter
 from app.ai.transcript import normalize_context
@@ -34,16 +31,10 @@ class Models:
         providers: Iterable[Provider] = (),
         *,
         credentials: CredentialStore | None = None,
-        adapters: Mapping[str, ProtocolAdapter] | None = None,
     ) -> None:
         self._state: Literal["open", "closing", "closed"] = "open"
         self._credentials = credentials if credentials is not None else InMemoryCredentialStore()
-        self._adapters: dict[str, ProtocolAdapter] = {
-            "openai-completions": CompletionsAdapter(),
-            "openai-responses": ResponsesAdapter(),
-        }
-        self._adapters.update(adapters or {})
-        self._clients = ClientRuntime()
+        self._http_client: httpx2.AsyncClient | None = None
         self._responses: set[AssistantResponse] = set()
         self._cleanup_errors: list[Exception] = []
         self._close_task: asyncio.Task[None] | None = None
@@ -110,25 +101,23 @@ class Models:
         transcript = (
             normalize_context(context) if isinstance(context, Context) else deepcopy(context)
         )
-        adapter = self._adapters.get((current or model).api)
         if options is None:
-            options = (
-                SimpleOptions()
-                if simple
-                else (adapter.options_type() if adapter else CallOptions())
-            )
+            options = SimpleOptions() if simple else CallOptions()
         if not isinstance(options, SimpleOptions if simple else CallOptions):
             raise TypeError("Options do not match the call entry")
-        if not simple and adapter is not None and not isinstance(options, adapter.options_type):
-            raise TypeError(
-                f"Expected {adapter.options_type.__name__} for {(current or model).api}"
-            )
         captured = prepare_call_options(current or model, options)
 
         async def produce(writer: ResponseWriter) -> None:
             if provider is None or current is None:
                 raise ConfigurationError("Model is not registered")
             writer.protect([captured.api_key or "", *sensitive_header_values(captured.headers)])
+
+            removed_headers = {
+                name.lower(): None
+                for layer in (provider.headers, current.headers, captured.headers)
+                for name, value in layer.items()
+                if value is None
+            }
 
             async def transform(headers: dict[str, str]) -> Mapping[str, str | None]:
                 writer.protect(sensitive_header_values(headers))
@@ -137,44 +126,55 @@ class Models:
                 changed = captured.transform_headers(headers)
                 result = await changed if isawaitable(changed) else changed
                 writer.protect(sensitive_header_values(result))
+                # 保留删除意图, 防止协议后续生成的默认头重新引入该字段。
+                removed_headers.update(
+                    {name.lower(): None for name, value in result.items() if value is None}
+                )
+                removed_headers.update(
+                    {
+                        name.lower(): None
+                        for name in headers
+                        if name.lower() not in {key.lower() for key in result}
+                    }
+                )
                 return result
 
-            auth_provider = provider
-            header_adapter: object = adapter
-            if isinstance(header_adapter, RequestHeaderDefaults):
-                defaults = header_adapter.request_headers(
-                    current, captured, captured.base_url or current.base_url or provider.base_url
-                )
-                auth_provider = replace(provider, headers={**defaults, **provider.headers})
             auth = await resolve_auth(
-                auth_provider,
+                provider,
                 current,
                 replace(captured, transform_headers=transform),
                 credentials=self._credentials,
             )
             writer.protect([auth.key or "", *sensitive_header_values(auth.headers)])
-            if adapter is None:
-                raise ConfigurationError(f"No protocol adapter is bound for {current.api}")
+            http = captured.http_client
+            if http is None:
+                if self._http_client is None:
+                    self._http_client = create_http_client()
+                http = self._http_client
+            request_model = replace(current, base_url=auth.base_url, headers={})
+            request_options = replace(
+                captured,
+                api_key=auth.key,
+                base_url=auth.base_url,
+                headers={"authorization": None, **removed_headers, **auth.headers},
+                env=dict(auth.env),
+                transform_headers=None,
+                http_client=http,
+            )
             if simple:
-                assert isinstance(captured, SimpleOptions)
-                prepared = prepare_simple_options(current, transcript, captured)
-                await adapter.stream_simple(
-                    model=current,
-                    transcript=transcript,
-                    options=prepared,
-                    auth=auth,
-                    clients=self._clients,
-                    writer=writer,
-                )
+                assert isinstance(request_options, SimpleOptions)
+                inner = provider.stream_simple(request_model, transcript, request_options)
             else:
-                await adapter.stream(
-                    model=current,
-                    transcript=transcript,
-                    options=captured,
-                    auth=auth,
-                    clients=self._clients,
-                    writer=writer,
-                )
+                inner = provider.stream(request_model, transcript, request_options)
+            # 延迟认证之后委托 Provider; 外层仍负责已有的取消及清理契约。
+            inner._share_partial(writer.partial)
+            writer.add_cleanup(inner.aclose)
+            try:
+                async for event in inner:
+                    writer.emit(event)
+            finally:
+                if writer._final is None:
+                    inner.cancel()
 
         response = AssistantResponse(current or model, produce, signal=captured.signal)
         self._responses.add(response)
@@ -206,7 +206,8 @@ class Models:
                 if isinstance(outcome, Exception) and not response._cleanup_errors:
                     self._cleanup_errors.append(outcome)
             try:
-                await self._clients.aclose()
+                if self._http_client is not None:
+                    await self._http_client.aclose()
             except Exception as error:
                 self._cleanup_errors.append(error)
         finally:
@@ -221,11 +222,12 @@ class Models:
 
     def get_provider(self, provider_id: str) -> Provider | None:
         """返回供应商独立快照。不存在时返回 None。"""
-        return deepcopy(self._providers.get(provider_id))
+        provider = self._providers.get(provider_id)
+        return copy_provider(provider) if provider is not None else None
 
     def get_providers(self) -> tuple[Provider, ...]:
         """列出已设置的供应商。调用方修改副本不会污染集合。"""
-        return tuple(deepcopy(provider) for provider in self._providers.values())
+        return tuple(copy_provider(provider) for provider in self._providers.values())
 
     def delete_provider(self, provider_id: str) -> None:
         """删除配置但保留凭据和已取得的快照。"""
@@ -239,7 +241,7 @@ class Models:
         """Look up a provider-qualified model, returning None when absent."""
         entry = self._providers.get(provider)
         return (
-            deepcopy(next((model for model in entry.models if model.id == model_id), None))
+            deepcopy(next((model for model in entry.get_models() if model.id == model_id), None))
             if entry
             else None
         )
@@ -251,7 +253,7 @@ class Models:
             if provider is None
             else ([self._providers[provider]] if provider in self._providers else [])
         )
-        return tuple(deepcopy(model) for entry in entries for model in entry.models)
+        return tuple(deepcopy(model) for entry in entries for model in entry.get_models())
 
     async def get_available_models(self, provider: str | None = None) -> tuple[Model, ...]:
         """Filter missing credentials; propagate configuration and storage failures."""
@@ -262,16 +264,10 @@ class Models:
         )
         available: list[Model] = []
         for entry in entries:
-            key: str | None = None
-            try:
-                key, _ = await resolve_api_key(entry, AuthOverride(), self._credentials, None)
-            except AuthError as exc:
-                if exc.code != "not_configured":
-                    raise
-            # 每个供应商只读一次凭据, 再逐模型判断静态授权头。
-            for model in entry.models:
-                headers = merge_headers(entry.headers, model.headers)
-                if key is not None or has_auth_header(headers):
+            auth = await resolve_provider_auth(entry, AuthOverride(), self._credentials)
+            for model in entry.get_models():
+                headers = merge_headers(entry.headers, model.headers, auth.headers if auth else {})
+                if (auth is not None and auth.key is not None) or has_auth_header(headers):
                     available.append(deepcopy(model))
         return tuple(available)
 
@@ -290,7 +286,15 @@ def create_models(
     providers: Iterable[Provider] = (),
     *,
     credentials: CredentialStore | None = None,
-    adapters: Mapping[str, ProtocolAdapter] | None = None,
 ) -> Models:
     """Create an independent model collection."""
-    return Models(providers, credentials=credentials, adapters=adapters)
+    return Models(providers, credentials=credentials)
+
+
+def create_http_client() -> httpx2.AsyncClient:
+    """持有跨请求的 HTTP 连接池; 协议可以借用, Models 关闭时统一释放。"""
+    return httpx2.AsyncClient(
+        timeout=httpx2.Timeout(600.0, connect=5.0),
+        limits=httpx2.Limits(max_connections=1000, max_keepalive_connections=100),
+        follow_redirects=True,
+    )

@@ -18,6 +18,7 @@ from app.ai import (
     UserMessage,
     decode_messages,
     encode_messages,
+    openai_responses_api,
     reduce_assistant_message_frames,
 )
 
@@ -26,8 +27,8 @@ from app.ai import (
 def provider(provider):
     return replace(
         provider,
-        api="openai-responses",
-        models=[replace(provider.models[0], api="openai-responses")],
+        api=openai_responses_api(),
+        models=[replace(provider.get_models()[0], api="openai-responses")],
     )
 
 
@@ -93,7 +94,7 @@ async def test_saved_signed_turn_and_delayed_frames_replay(provider, sdk_harness
     async with sdk_harness(handler=handler) as (models, http, _):
         user = UserMessage(content="Look up test", timestamp=0)
         options = ResponsesOptions(api_key="key", http_client=http)
-        response = models.stream(provider.models[0], Context(messages=[user]), options)
+        response = models.stream(provider.get_models()[0], Context(messages=[user]), options)
         one, two = await asyncio.gather(response.result(), response.result())
         assert one is two and one.stop_reason == "tool_use", one.error_message
         encoder = AssistantMessageFrameEncoder()
@@ -115,7 +116,7 @@ async def test_saved_signed_turn_and_delayed_frames_replay(provider, sdk_harness
                 timestamp=1,
             )
         )
-        second = await models.complete(provider.models[0], Context(messages=saved), options)
+        second = await models.complete(provider.get_models()[0], Context(messages=saved), options)
         assert second.stop_reason == "stop" and second.content[0].text == "Found", (
             second.error_message
         )
@@ -164,7 +165,7 @@ async def test_running_call_uses_old_snapshot_and_next_call_uses_replacement(
         context = Context(messages=[UserMessage(content="old", timestamp=0)])
         sampling = {"top_p": 0.2}
         first = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             context,
             ResponsesOptions(api_key="old-key", http_client=http, sampling_params=sampling),
         )
@@ -172,13 +173,13 @@ async def test_running_call_uses_old_snapshot_and_next_call_uses_replacement(
         context.messages[0].content = "new"
         sampling["top_p"] = 0.9
         new_model = replace(
-            provider.models[0],
+            provider.get_models()[0],
             sampling_params={"top_p": 0.7},
-            compat=replace(provider.models[0].compat, supports_max_output_tokens=True),
+            compat=replace(provider.get_models()[0].compat, supports_max_output_tokens=True),
         )
         models.set_provider(replace(provider, models=[new_model], base_url="https://new.test/v2"))
         second = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             context,
             ResponsesOptions(api_key="new-key", http_client=http, max_output_tokens=50),
         )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 
 import pytest
 
@@ -15,9 +16,10 @@ from app.agent import (
     SessionSnapshot,
 )
 from app.ai import CallOptions, Models, Provider, TextContent, ToolCall
+from app.ai.api.openai_runtime import OpenAIProtocol
 
 
-class CleanupAdapter:
+class CleanupAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self, *, failed_generation: bool = False, failed_cleanup: bool = False) -> None:
@@ -28,7 +30,7 @@ class CleanupAdapter:
         self.release = asyncio.Event()
         self.cleaned = 0
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.calls += 1
         writer = call["writer"]
         writer.add_cleanup(self._cleanup)
@@ -45,8 +47,8 @@ class CleanupAdapter:
         if self.failed_cleanup and self.cleaned == 1:
             raise OSError("resource close failed")
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 @pytest.mark.asyncio
@@ -56,8 +58,8 @@ async def test_result_is_recorded_before_owned_cleanup_completes(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = CleanupAdapter(failed_generation=failed_generation)
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     pending = asyncio.create_task(harness.prompt("Question"))
     try:
         await asyncio.wait_for(adapter.cleaning.wait(), 1)
@@ -85,8 +87,8 @@ async def test_cleanup_failure_keeps_generated_result_and_shared_models_usable(
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = CleanupAdapter(failed_cleanup=True)
     adapter.release.set()
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     try:
         first = await harness.prompt("First question")
         assert first.status == "completed"
@@ -107,7 +109,7 @@ async def test_cleanup_failure_keeps_generated_result_and_shared_models_usable(
         assert "resource close failed" in str(group.value.exceptions[0])
 
 
-class HeldGenerationAdapter:
+class HeldGenerationAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
@@ -115,7 +117,7 @@ class HeldGenerationAdapter:
         self.release = asyncio.Event()
         self.calls: list[str] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         writer = call["writer"]
         text = call["transcript"].messages[-1].content
         self.calls.append(text)
@@ -126,8 +128,8 @@ class HeldGenerationAdapter:
         writer.partial.content.append(TextContent(text="Answer"))
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 @pytest.mark.asyncio
@@ -136,9 +138,9 @@ async def test_busy_session_rejects_input_while_other_session_can_finish(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = HeldGenerationAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
-    blocked = AgentHarness(models, provider.models[0])
-    separate = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    blocked = AgentHarness(models, provider.get_models()[0])
+    separate = AgentHarness(models, provider.get_models()[0])
     running = asyncio.create_task(blocked.prompt("Wait here"))
     try:
         await asyncio.wait_for(adapter.entered.wait(), 1)
@@ -173,8 +175,8 @@ async def test_cancelled_waiter_does_not_cancel_accepted_agent_work(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = HeldGenerationAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     waiting = asyncio.create_task(harness.prompt("Wait here"))
     try:
         await asyncio.wait_for(adapter.entered.wait(), 1)
@@ -209,8 +211,8 @@ async def test_completed_reply_does_not_wait_for_background_cleanup(
     """A settled task releases the session while AI finishes its own cleanup."""
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = CleanupAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     running = asyncio.create_task(harness.prompt("First question"))
     try:
         await asyncio.wait_for(adapter.cleaning.wait(), 1)
@@ -227,7 +229,7 @@ async def test_completed_reply_does_not_wait_for_background_cleanup(
         await models.aclose()
 
 
-class ToolLifecycleAdapter:
+class ToolLifecycleAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
@@ -240,7 +242,7 @@ class ToolLifecycleAdapter:
         self.cleanup_started.set()
         await self.cleanup_release.wait()
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         transcript = call["transcript"]
         self.requests.append(transcript)
         writer = call["writer"]
@@ -257,8 +259,8 @@ class ToolLifecycleAdapter:
             reason = "stop"
         writer.emit({"type": "done", "reason": reason, "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 def lifecycle_tool(execute: object) -> AgentTool:
@@ -277,7 +279,7 @@ async def test_blocked_tool_keeps_session_busy_after_waiter_leaves(
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = ToolLifecycleAdapter()
     adapter.cleanup_release.set()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     tool_started = asyncio.Event()
     release_tool = asyncio.Event()
 
@@ -286,8 +288,8 @@ async def test_blocked_tool_keeps_session_busy_after_waiter_leaves(
         await release_tool.wait()
         return AgentToolResult(content=[TextContent(text="found")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[lifecycle_tool(execute)])
-    other = AgentHarness(models, provider.models[0])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[lifecycle_tool(execute)])
+    other = AgentHarness(models, provider.get_models()[0])
     waiting = asyncio.create_task(harness.prompt("Need tool"))
     try:
         await asyncio.wait_for(tool_started.wait(), 5)
@@ -323,14 +325,14 @@ async def test_tool_and_next_model_request_do_not_wait_for_prior_ai_cleanup(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = ToolLifecycleAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     tool_started = asyncio.Event()
 
     async def execute(*_args: object) -> AgentToolResult:
         tool_started.set()
         return AgentToolResult(content=[TextContent(text="found")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[lifecycle_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[lifecycle_tool(execute)])
     running = asyncio.create_task(harness.prompt("Need tool"))
     try:
         await asyncio.wait_for(adapter.cleanup_started.wait(), 5)

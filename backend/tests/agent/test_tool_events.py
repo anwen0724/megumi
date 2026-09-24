@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
 from app.ai import CallOptions, Models, Provider, TextContent, ToolCall
+from app.ai.api.openai_runtime import OpenAIProtocol
 
 
-class OneToolAdapter:
+class OneToolAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
         self.requests: list[object] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.requests.append(call["transcript"])
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
@@ -26,8 +29,8 @@ class OneToolAdapter:
             reason = "stop"
         writer.emit({"type": "done", "reason": reason, "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 def lookup_tool(execute: object) -> AgentTool:
@@ -45,7 +48,7 @@ async def test_progress_events_do_not_enter_history_and_late_updates_are_ignored
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = OneToolAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     recorded: list[object] = []
     saved_update: list[object] = []
 
@@ -55,7 +58,7 @@ async def test_progress_events_do_not_enter_history_and_late_updates_are_ignored
         update(AgentToolResult(content=[TextContent(text="two")]))
         return AgentToolResult(content=[TextContent(text="final")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[lookup_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[lookup_tool(execute)])
     for kind in ("tool_start", "tool_update", "tool_end"):
         harness.events.on(kind, recorded.append)
     try:
@@ -95,14 +98,14 @@ async def test_listener_mutation_and_failure_do_not_change_result_or_other_liste
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = OneToolAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     observed: list[object] = []
     errors: list[object] = []
 
     async def execute(*_args: object) -> AgentToolResult:
         return AgentToolResult(content=[TextContent(text="final")])
 
-    harness = AgentHarness(models, provider.models[0], tools=[lookup_tool(execute)])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[lookup_tool(execute)])
 
     async def mutate(event: object) -> None:
         event.result.content[0].text = "changed"

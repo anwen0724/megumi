@@ -12,7 +12,7 @@ from app.ai.provider import Provider
 def test_bad_directory_never_partially_replaces_or_registers(
     provider: Provider, invalid: str
 ) -> None:
-    model = provider.models[0]
+    model = provider.get_models()[0]
     bad = {
         "duplicate": model,
         "wrong-provider": replace(model, provider="other"),
@@ -68,7 +68,9 @@ def test_invalid_model_configuration_is_rejected(
     provider: Provider, field: str, value: object
 ) -> None:
     with pytest.raises(ValueError):
-        create_models([replace(provider, models=[replace(provider.models[0], **{field: value})])])
+        create_models(
+            [replace(provider, models=[replace(provider.get_models()[0], **{field: value})])]
+        )
 
 
 def test_local_gateway_and_unknown_zero_decimal_prices_preserve_meaning(provider: Provider) -> None:
@@ -77,7 +79,7 @@ def test_local_gateway_and_unknown_zero_decimal_prices_preserve_meaning(provider
     from app.ai.model import CatalogSource, ModelCapabilities, Pricing
 
     definition = replace(
-        provider.models[0],
+        provider.get_models()[0],
         base_url="http://localhost:8080/v1",
         pricing=Pricing(input=None, output=Decimal("0"), cache_read=Decimal("0.125")),
         capabilities=ModelCapabilities(
@@ -110,7 +112,7 @@ def test_invalid_price_or_capability_data_is_rejected(provider: Provider, kind: 
         "bad-reasoning": {"capabilities": ModelCapabilities(reasoning_levels={"high": ""})},
     }[kind]
     with pytest.raises(ValueError):
-        create_models([replace(provider, models=[replace(provider.models[0], **changes)])])
+        create_models([replace(provider, models=[replace(provider.get_models()[0], **changes)])])
 
 
 @pytest.mark.parametrize("mapping", [{"high": 1}, {"unknown": None}])
@@ -122,9 +124,9 @@ def test_malformed_reasoning_mapping_is_a_configuration_error_and_preserves_stat
 
     models = create_models([provider])
     bad = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=ModelCapabilities(reasoning_levels=mapping),
     )
     with pytest.raises(ConfigurationError):
         models.set_provider(replace(provider, models=[bad]))
-    assert models.get_models() == (provider.models[0],)
+    assert models.get_models() == (provider.get_models()[0],)

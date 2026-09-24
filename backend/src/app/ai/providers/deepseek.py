@@ -3,9 +3,12 @@
 from collections.abc import Mapping, Sequence
 from importlib.resources import files
 
+from app.ai.api.completions.adapter import openai_completions_api
+from app.ai.auth.helpers import env_api_key_auth
+from app.ai.auth.types import ProviderAuth
 from app.ai.catalog import load_catalog, snapshot_provider
 from app.ai.model import Model
-from app.ai.provider import Provider
+from app.ai.provider import Provider, create_provider
 
 
 def deepseek_provider(
@@ -21,12 +24,12 @@ def deepseek_provider(
         else models
     )
     return snapshot_provider(
-        Provider(
+        create_provider(
             id="deepseek",
             name="DeepSeek",
-            api="openai-completions",
+            api=openai_completions_api(),
             base_url=base_url,
-            env_var="DEEPSEEK_API_KEY",
+            auth=ProviderAuth(api_key=env_api_key_auth("deepseek API key", ["DEEPSEEK_API_KEY"])),
             models=catalog,
             headers=headers if headers is not None else {},
         )

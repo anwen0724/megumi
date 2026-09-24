@@ -6,12 +6,17 @@ import asyncio
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from copy import deepcopy
+from dataclasses import fields
 
 from app.ai.events import AssistantMessageEvent
 from app.ai.messages import AssistantMessage
 from app.ai.model import Model
 from app.ai.runtime.diagnostics import format_error, redact_text
 from app.ai.runtime.retry import SignalAborted
+
+
+class _CleanupFailure(RuntimeError):
+    """已脱敏的清理错误, 可穿过委托流而不重复格式化。"""
 
 
 class ResponseWriter:
@@ -88,6 +93,12 @@ class AssistantResponse:
         """The producer's mutable message; use frames to retain progress snapshots."""
         return self._writer.partial
 
+    def _share_partial(self, partial: AssistantMessage) -> None:
+        """委托响应启动生产前共用活动消息, 保留调用方已经持有的引用。"""
+        for definition in fields(partial):
+            setattr(partial, definition.name, getattr(self.partial, definition.name))
+        self._writer.partial = partial
+
     def cancel(self) -> None:
         """Cancel owned generation, never an already selected terminal result."""
         if (
@@ -155,15 +166,18 @@ class AssistantResponse:
                     try:
                         await cleanup()
                     except (Exception, asyncio.CancelledError) as error:
-                        # Keep sanitized cleanup evidence outside the published message.
-                        self._cleanup_errors.append(
-                            RuntimeError(
-                                f"{type(error).__name__}: "
-                                + format_error(
-                                    error, sensitive_values=self._writer._sensitive_values
-                                )
-                            )
-                        )
+                        self._record_cleanup_error(error)
+
+    def _record_cleanup_error(self, error: BaseException) -> None:
+        """保留被委托响应的清理错误; 不更改已发布的生成结果。"""
+        if isinstance(error, BaseExceptionGroup):
+            for child in error.exceptions:
+                self._record_cleanup_error(child)
+            return
+        message = format_error(error, sensitive_values=self._writer._sensitive_values)
+        # 内层响应已经格式化的 RuntimeError 不重复追加类型前缀。
+        prefix = "" if isinstance(error, _CleanupFailure) else f"{type(error).__name__}: "
+        self._cleanup_errors.append(_CleanupFailure(prefix + message))
 
     async def result(self) -> AssistantMessage:
         """Await the cached generation result without exposing its Future to waiter cancellation."""

@@ -8,12 +8,11 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-from app.ai.catalog import load_catalog, snapshot_provider, validate_url
+from app.ai.catalog import load_catalog, validate_models, validate_url
 from app.ai.catalog_generation import CatalogError
 from app.ai.catalog_generation.output import decode, digest, encode, fields, write_or_check
 from app.ai.catalog_generation.source import download, fetch_snapshots, load_rules, select_providers
 from app.ai.model import THINKING_LEVELS, ModelCompat
-from app.ai.provider import Provider
 
 
 def reasoning(raw: dict[str, Any], rule: dict[str, Any]) -> dict[str, str | None]:
@@ -203,16 +202,9 @@ def validate_model(model: dict[str, Any], rule: dict[str, Any]) -> None:
         if type(caps.get(field)) is not bool:
             raise CatalogError(f"{field}: expected boolean")
     try:
-        snapshot_provider(
-            Provider(
-                id=rule["id"],
-                name=rule["name"],
-                api=rule["api"],
-                base_url=rule["base_url"],
-                env_var=rule["env_var"],
-                models=load_catalog(encode([model]).decode()),
-            )
-        )
+        if model["api"] != rule["api"]:
+            raise CatalogError("model API does not match generation rule")
+        validate_models(rule["id"], load_catalog(encode([model]).decode()))
     except (ValueError, TypeError, AttributeError) as exc:
         raise CatalogError(f"runtime model validation: {exc}") from exc
 

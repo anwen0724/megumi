@@ -4,13 +4,15 @@ from dataclasses import replace
 
 import pytest
 
+from app.ai import openai_responses_api
+
 
 @pytest.fixture
 def provider(provider):
     return replace(
         provider,
-        api="openai-responses",
-        models=[replace(provider.models[0], api="openai-responses")],
+        api=openai_responses_api(),
+        models=[replace(provider.get_models()[0], api="openai-responses")],
     )
 
 

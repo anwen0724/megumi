@@ -1,0 +1,3 @@
+# Catalog hashes and offline checks require identical bytes on every platform.
+src/app/ai/providers/data/*.json text eol=lf
+src/app/ai/catalog_generation/inputs/*.json text eol=lf

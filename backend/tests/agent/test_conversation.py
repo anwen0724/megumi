@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -18,16 +19,17 @@ from app.ai import (
     UsageCost,
     get_current_system_prompt,
 )
+from app.ai.api.openai_runtime import OpenAIProtocol
 
 
-class TextAdapter:
+class TextAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
         self.requests: list[dict[str, object]] = []
         self.cleaned = False
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.requests.append(call)
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
@@ -38,8 +40,8 @@ class TextAdapter:
     async def _cleanup(self) -> None:
         self.cleaned = True
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 @pytest.mark.asyncio
@@ -48,8 +50,8 @@ async def test_basic_reply_records_one_user_and_one_complete_assistant(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TextAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
-    model = provider.models[0]
+    models = Models([replace(provider, api=adapter)])
+    model = provider.get_models()[0]
     harness = AgentHarness(models, model, system_prompt="Reply briefly")
     try:
         result = await harness.prompt("Hello")
@@ -64,7 +66,7 @@ async def test_basic_reply_records_one_user_and_one_complete_assistant(
         assert snapshot.active_operation_id is None
         assert len(adapter.requests) == 1
         request = adapter.requests[0]
-        assert request["model"] == model
+        assert request["model"] == replace(model, base_url=provider.base_url)
         transcript = request["transcript"]
         assert get_current_system_prompt(transcript.messages) == "Reply briefly"
         assert [message.role for message in transcript.messages] == ["system", "user"]
@@ -78,9 +80,9 @@ async def test_follow_up_uses_prior_messages_without_leaking_another_session(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = TextAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
-    first = AgentHarness(models, provider.models[0], system_prompt="Reply briefly")
-    second = AgentHarness(models, provider.models[0], system_prompt="Other session")
+    models = Models([replace(provider, api=adapter)])
+    first = AgentHarness(models, provider.get_models()[0], system_prompt="Reply briefly")
+    second = AgentHarness(models, provider.get_models()[0], system_prompt="Other session")
     try:
         await first.prompt("My name is Ming")
         old_view = first.get_snapshot()
@@ -115,7 +117,7 @@ class RichAdapter(TextAdapter):
         super().__init__()
         self.reason = reason
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.requests.append(call)
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
@@ -156,8 +158,8 @@ async def test_final_message_preserves_metadata_and_length_without_extra_request
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = RichAdapter(reason)
-    models = Models([provider], adapters={provider.api: adapter})
-    harness = AgentHarness(models, provider.models[0])
+    models = Models([replace(provider, api=adapter)])
+    harness = AgentHarness(models, provider.get_models()[0])
     try:
         result = await harness.prompt("Explain briefly")
         snapshot = harness.get_snapshot()

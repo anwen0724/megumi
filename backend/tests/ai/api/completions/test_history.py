@@ -27,7 +27,7 @@ from app.ai import (
 @pytest.mark.parametrize("preserve", [False, True])
 async def test_system_updates_and_user_parts(provider, sdk_harness, preserve):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=ModelCapabilities(reasoning=True, input_modalities=("text", "image")),
         compat=ModelCompat(supports_mid_convo_system_messages=preserve),
     )
@@ -92,7 +92,7 @@ async def test_assistant_replay_repairs_missing_tool_result_and_cleans_private_r
     original = deepcopy(history)
     async with sdk_harness() as (models, http, requests):
         final = await models.complete(
-            provider.models[0], history, CompletionsOptions(api_key="key", http_client=http)
+            provider.get_models()[0], history, CompletionsOptions(api_key="key", http_client=http)
         )
         assert final.stop_reason == "stop", final.error_message
         messages = json.loads(requests[0].content)["messages"]
@@ -121,7 +121,7 @@ async def test_tool_images_follow_consecutive_results_and_empty_messages_are_ski
     provider, sdk_harness, vision
 ):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=ModelCapabilities(input_modalities=("text", "image") if vision else ("text",)),
     )
     provider = replace(provider, models=[model])
@@ -179,7 +179,7 @@ async def test_responses_ids_normalize_calls_and_results(provider, sdk_harness):
     )
     async with sdk_harness() as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[assistant]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -220,7 +220,7 @@ async def test_structured_reasoning_replay_avoids_duplicate_raw_reasoning(
     )
     async with sdk_harness() as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[assistant]),
             CompletionsOptions(api_key="key", http_client=http),
         )

@@ -2,6 +2,7 @@
 
 import pytest
 
+from app.ai import openai_completions_api, openai_responses_api
 from app.ai.models import create_models
 from app.ai.provider import Provider
 
@@ -22,7 +23,9 @@ def test_missing_model_is_a_normal_query_result(provider: Provider) -> None:
 def test_lists_and_same_named_models_are_provider_qualified(provider: Provider) -> None:
     from dataclasses import replace
 
-    other = replace(provider, id="other", models=[replace(provider.models[0], provider="other")])
+    other = replace(
+        provider, id="other", models=[replace(provider.get_models()[0], provider="other")]
+    )
     models = create_models([provider, other])
     assert models.get_model("other", "small").provider == "other"
     assert {(m.provider, m.id) for m in models.get_models()} == {
@@ -37,7 +40,9 @@ def test_lists_and_same_named_models_are_provider_qualified(provider: Provider) 
 def test_setting_replaces_the_whole_provider_without_affecting_others(provider: Provider) -> None:
     from dataclasses import replace
 
-    other = replace(provider, id="other", models=[replace(provider.models[0], provider="other")])
+    other = replace(
+        provider, id="other", models=[replace(provider.get_models()[0], provider="other")]
+    )
     models = create_models([other])
     models.set_provider(provider)
     assert models.get_model("sample", "small") is not None
@@ -45,7 +50,7 @@ def test_setting_replaces_the_whole_provider_without_affecting_others(provider: 
         provider,
         base_url="https://new.test/v1",
         headers={"X-Region": "new"},
-        models=[replace(provider.models[0], id="large", max_output_tokens=1024)],
+        models=[replace(provider.get_models()[0], id="large", max_output_tokens=1024)],
     )
     models.set_provider(replacement)
     assert models.get_model("sample", "small") is None
@@ -62,7 +67,9 @@ def test_original_inputs_and_returned_models_cannot_mutate_collection(provider: 
     levels = {"low": "low"}
     headers = {"X-Trace": "original"}
     original = replace(
-        provider.models[0], headers=headers, capabilities=ModelCapabilities(reasoning_levels=levels)
+        provider.get_models()[0],
+        headers=headers,
+        capabilities=ModelCapabilities(reasoning_levels=levels),
     )
     inputs = [original]
     models = create_models([replace(provider, models=inputs)])
@@ -134,7 +141,7 @@ async def test_provider_management_returns_snapshots_and_preserves_credentials(p
     models.delete_provider(provider.id)
     models.delete_provider("missing")
     assert models.get_provider(provider.id) is None
-    assert snapshot.models[0].id == "small"
+    assert snapshot.get_models()[0].id == "small"
     assert models.get_models() == ()
     assert [p.id for p in models.get_providers()] == ["other"]
     models.clear()
@@ -148,20 +155,30 @@ async def test_provider_can_declare_multiple_protocols_without_fake_adapters(pro
 
     from app.ai import AuthOverride, ConfigurationError
 
-    response_model = replace(provider.models[0], id="responses", api="openai-responses")
+    response_model = replace(provider.get_models()[0], id="responses", api="openai-responses")
     mixed = replace(
         provider,
-        api=("openai-completions", "openai-responses"),
-        models=[provider.models[0], response_model],
+        api={
+            "openai-completions": openai_completions_api(),
+            "openai-responses": openai_responses_api(),
+        },
+        models=[provider.get_models()[0], response_model],
     )
     models = create_models([mixed])
     assert [m.api for m in models.get_models()] == ["openai-completions", "openai-responses"]
     assert (
         await models.resolve_auth(response_model, AuthOverride(api_key="fake-key"))
     ).key == "fake-key"
-    with pytest.raises(ConfigurationError):
-        models.set_provider(replace(mixed, api=("openai-completions",)))
+    # 与 pi 一致: 可先注册目录, 缺少协议实现由调用结果报告。
+    models.set_provider(replace(mixed, api={"openai-completions": openai_completions_api()}))
+    from app.ai import Context, SimpleOptions
+
+    final = await models.complete_simple(
+        response_model, Context(messages=[]), SimpleOptions(api_key="fake")
+    )
+    assert final.stop_reason == "error" and "no API implementation" in final.error_message
     assert len(models.get_models()) == 2
     for apis in ((), ("unknown",), ("openai-completions", "openai-completions")):
         with pytest.raises(ConfigurationError):
             create_models([replace(provider, api=apis)])
+    await models.aclose()

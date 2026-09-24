@@ -14,6 +14,8 @@ from app.ai import (
     ToolResultMessage,
     decode_messages,
     encode_messages,
+    openai_completions_api,
+    openai_responses_api,
 )
 
 
@@ -22,9 +24,16 @@ from app.ai import (
 async def test_protocols_share_models_and_convert_saved_history(
     provider, sdk_harness, native_sse, first_api
 ):
-    cp = replace(provider.models[0], id="cp", api="openai-completions")
-    rp = replace(provider.models[0], id="rp", api="openai-responses")
-    configured = replace(provider, api=("openai-completions", "openai-responses"), models=[cp, rp])
+    cp = replace(provider.get_models()[0], id="cp", api="openai-completions")
+    rp = replace(provider.get_models()[0], id="rp", api="openai-responses")
+    configured = replace(
+        provider,
+        api={
+            "openai-completions": openai_completions_api(),
+            "openai-responses": openai_responses_api(),
+        },
+        models=[cp, rp],
+    )
     data = {
         "openai-completions": native_sse(
             {"choices": [{"delta": {"reasoning_content": "why"}}]},

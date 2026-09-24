@@ -44,7 +44,7 @@ async def test_builtin_responses_text_call(provider, sdk_harness, response_sse):
     )
     async with sdk_harness(data=data) as (models, http, requests):
         response = models.stream_simple(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[UserMessage(content="Hi", timestamp=0)]),
             SimpleOptions(api_key="key", http_client=http),
         )
@@ -82,7 +82,7 @@ async def test_all_entries_and_two_providers(provider, sdk_harness, response_sse
         provider,
         id="other",
         base_url="https://other.test/v2",
-        models=[replace(provider.models[0], provider="other")],
+        models=[replace(provider.get_models()[0], provider="other")],
     )
     data = response_sse(
         {"type": "response.completed", "response": {"id": "r", "status": "completed", "output": []}}
@@ -94,7 +94,7 @@ async def test_all_entries_and_two_providers(provider, sdk_harness, response_sse
                 http_client=http,
                 on_payload=lambda body, _: {**body, "vendor_extension": {"enabled": True}},
             )
-            call = getattr(models, entry)(source.models[0], Context(messages=[]), options)
+            call = getattr(models, entry)(source.get_models()[0], Context(messages=[]), options)
             final = await call if entry.startswith("complete") else await call.result()
             assert final.stop_reason == "stop", final.error_message
             assert final.provider == source.id
@@ -108,7 +108,9 @@ async def test_item_done_without_overall_terminal_is_error(provider, sdk_harness
     data = response_sse({"type": "response.created", "response": {"id": "r"}})
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream_simple(
-            provider.models[0], Context(messages=[]), SimpleOptions(api_key="key", http_client=http)
+            provider.get_models()[0],
+            Context(messages=[]),
+            SimpleOptions(api_key="key", http_client=http),
         )
         final = await response.result()
         assert final.stop_reason == "error"

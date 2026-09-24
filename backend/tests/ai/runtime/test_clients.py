@@ -46,7 +46,7 @@ async def test_sdk_does_not_retry_outside_shared_request_policy(provider):
             await runtime.open_stream(
                 create_chat_stream,
                 {"stream": True},
-                model=provider.models[0],
+                model=provider.get_models()[0],
                 auth=auth,
                 options=CallOptions(http_client=http),
                 writer=writer,
@@ -54,7 +54,9 @@ async def test_sdk_does_not_retry_outside_shared_request_policy(provider):
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
     try:
-        assert (await AssistantResponse(provider.models[0], produce).result()).stop_reason == "stop"
+        assert (
+            await AssistantResponse(provider.get_models()[0], produce).result()
+        ).stop_reason == "stop"
         assert len(requests) == 1
         assert not http.is_closed
     finally:
@@ -84,7 +86,7 @@ async def test_shared_retry_reads_sdk_status_and_headers_and_borrows_client(prov
         stream = await runtime.open_stream(
             create_chat_stream,
             {"stream": True},
-            model=provider.models[0],
+            model=provider.get_models()[0],
             auth=ResolvedAuth(
                 key="fake",
                 source="explicit",
@@ -98,7 +100,7 @@ async def test_shared_retry_reads_sdk_status_and_headers_and_borrows_client(prov
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
     try:
-        final = await AssistantResponse(provider.models[0], produce).result()
+        final = await AssistantResponse(provider.get_models()[0], produce).result()
         assert final.stop_reason == "stop", final.error_message
         assert len(requests) == 2
         assert all(response.is_closed for response in responses)
@@ -128,7 +130,7 @@ async def test_resolved_configuration_is_authoritative_and_timeout_is_per_reques
                 stream = await runtime.open_stream(
                     create_response_stream,
                     {"stream": True},
-                    model=provider.models[0],
+                    model=provider.get_models()[0],
                     auth=ResolvedAuth(
                         key=key,
                         source="explicit",
@@ -142,7 +144,7 @@ async def test_resolved_configuration_is_authoritative_and_timeout_is_per_reques
                     pass
                 writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-            final = await AssistantResponse(provider.models[0], produce).result()
+            final = await AssistantResponse(provider.get_models()[0], produce).result()
             assert final.stop_reason == "stop", final.error_message
         assert [str(r.url) for r in requests] == ["https://override.test/custom/responses"] * 2
         assert [r.headers["authorization"] for r in requests] == [
@@ -181,7 +183,7 @@ async def test_owned_http_client_is_lazy_shared_and_closed_by_owner(provider, mo
         stream = await runtime.open_stream(
             create_response_stream,
             {},
-            model=provider.models[0],
+            model=provider.get_models()[0],
             auth=ResolvedAuth(
                 key="fake",
                 source="explicit",
@@ -196,7 +198,9 @@ async def test_owned_http_client_is_lazy_shared_and_closed_by_owner(provider, mo
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
     for _ in range(2):
-        assert (await AssistantResponse(provider.models[0], produce).result()).stop_reason == "stop"
+        assert (
+            await AssistantResponse(provider.get_models()[0], produce).result()
+        ).stop_reason == "stop"
     assert len(created) == 1 and not created[0].is_closed
     await runtime.aclose()
     await runtime.aclose()
@@ -218,7 +222,7 @@ async def test_header_overrides_are_not_duplicated_and_removed_auth_is_not_reint
             stream = await runtime.open_stream(
                 create_response_stream,
                 {},
-                model=provider.models[0],
+                model=provider.get_models()[0],
                 auth=ResolvedAuth(
                     key="fake",
                     source="explicit",
@@ -232,7 +236,7 @@ async def test_header_overrides_are_not_duplicated_and_removed_auth_is_not_reint
                 pass
             writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-        final = await AssistantResponse(provider.models[0], produce).result()
+        final = await AssistantResponse(provider.get_models()[0], produce).result()
         assert final.stop_reason == "stop", final.error_message
         assert "authorization" not in requests[0].headers
         assert requests[0].headers["content-type"] == "application/json"
@@ -294,7 +298,7 @@ async def test_protocol_sdk_operation_preserves_extra_body_and_native_event_fiel
             stream = await runtime.open_stream(
                 operation,
                 {"provider_extension": {"enabled": True}},
-                model=provider.models[0],
+                model=provider.get_models()[0],
                 auth=ResolvedAuth(
                     key="fake",
                     source="explicit",
@@ -317,7 +321,7 @@ async def test_protocol_sdk_operation_preserves_extra_body_and_native_event_fiel
                     seen.append(event.model_extra["provider_extra"])
             writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-        response = AssistantResponse(provider.models[0], produce)
+        response = AssistantResponse(provider.get_models()[0], produce)
         final = await response.result()
         await response.aclose()
         await runtime.aclose()

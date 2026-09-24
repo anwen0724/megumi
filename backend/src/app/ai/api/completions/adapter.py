@@ -6,9 +6,11 @@ from typing import cast
 from openai import AsyncOpenAI, AsyncStream
 from openai.types.chat import ChatCompletionChunk, ChatCompletionMessageParam
 
+from app.ai.api.base import ProviderStreams
 from app.ai.api.completions.options import CompletionsOptions, from_simple
 from app.ai.api.completions.request import build_request
 from app.ai.api.completions.response import consume_response
+from app.ai.api.openai_runtime import OpenAIProtocol
 from app.ai.auth.types import ResolvedAuth
 from app.ai.messages import JSONValue, Transcript
 from app.ai.model import Model, ModelCompat
@@ -32,13 +34,13 @@ async def create_stream(
     )
 
 
-class CompletionsAdapter:
+class CompletionsApi(OpenAIProtocol):
     """Execute Chat Completions for any configured provider using this protocol."""
 
     options_type = CompletionsOptions
 
     def request_headers(self, model: Model, options: CallOptions, base_url: str) -> dict[str, str]:
-        """Expose affinity defaults early enough for the shared auth/header precedence rules."""
+        """Provide protocol defaults before applying the prepared request header overrides."""
         compat = resolve_compat(model, base_url)
         if (
             not options.session_id
@@ -56,7 +58,7 @@ class CompletionsAdapter:
             headers["session_id"] = options.session_id
         return headers
 
-    async def stream(
+    async def _produce(
         self,
         *,
         model: Model,
@@ -81,7 +83,7 @@ class CompletionsAdapter:
         )
         await consume_response(chunks, writer, effective)
 
-    async def stream_simple(
+    async def _produce_simple(
         self,
         *,
         model: Model,
@@ -92,7 +94,7 @@ class CompletionsAdapter:
         writer: ResponseWriter,
     ) -> None:
         """Execute prepared simple options through the same request path."""
-        await self.stream(
+        await self._produce(
             model=model,
             transcript=transcript,
             options=from_simple(options),
@@ -123,3 +125,8 @@ def resolve_compat(model: Model, base_url: str) -> ModelCompat:
             if getattr(model.compat, field.name) is not None
         },
     )
+
+
+def openai_completions_api() -> ProviderStreams:
+    """返回可由多个供应商共同使用的协议实现。"""
+    return CompletionsApi()

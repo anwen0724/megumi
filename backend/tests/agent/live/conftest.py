@@ -23,9 +23,11 @@ def live_provider_and_model() -> tuple[Provider, Model]:
     provider = deepseek_provider()
     selected_id = os.getenv("MEGUMI_AI_LIVE_DEEPSEEK_MODEL", "").strip()
     if selected_id:
-        model = next((item for item in provider.models if item.id == selected_id), None)
+        model = next((item for item in provider.get_models() if item.id == selected_id), None)
     else:
-        model = next((item for item in provider.models if item.api == "openai-completions"), None)
+        model = next(
+            (item for item in provider.get_models() if item.api == "openai-completions"), None
+        )
     if model is None or model.api != "openai-completions":
         pytest.fail("Selected DeepSeek model is absent from the Completions catalog", pytrace=False)
     capped = replace(model, max_output_tokens=min(256, model.max_output_tokens))

@@ -7,15 +7,15 @@ from dataclasses import replace
 import httpx2
 import pytest
 
-from app.ai import Context, ResponsesOptions, TextContent
+from app.ai import Context, ResponsesOptions, TextContent, openai_responses_api
 
 
 @pytest.fixture
 def provider(provider):
     return replace(
         provider,
-        api="openai-responses",
-        models=[replace(provider.models[0], api="openai-responses")],
+        api=openai_responses_api(),
+        models=[replace(provider.get_models()[0], api="openai-responses")],
     )
 
 
@@ -58,7 +58,7 @@ async def test_recognized_malformed_events_fail_without_losing_partial(
     data = native_sse(text_start(), text_delta(), bad, terminal())
     async with sdk_harness(data=data) as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -88,7 +88,7 @@ async def test_establishment_retry_runs_hooks_once(provider, sdk_harness, native
 
     async with sdk_harness(handler=handler) as (models, http, requests):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(
                 api_key="key",
@@ -114,7 +114,7 @@ async def test_hook_failure_is_final_without_retry(provider, sdk_harness, hook):
 
     async with sdk_harness() as (models, http, requests):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(
                 api_key="key",
@@ -146,7 +146,7 @@ async def test_cancel_result_waiter_leaves_generation_running(provider, sdk_harn
 
     async with sdk_harness(handler=handler) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http),
         )
@@ -181,7 +181,7 @@ async def test_cancel_establishment_or_retry_wait(provider, sdk_harness, monkeyp
 
     async with sdk_harness(handler=handler) as (models, http, requests):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="key", http_client=http, max_retries=2),
         )
@@ -217,10 +217,12 @@ async def test_cancel_owns_body_read_and_closes_resources(provider, sdk_harness,
         response = (
             None
             if owner == "complete"
-            else models.stream(provider.models[0], Context(messages=[]), options)
+            else models.stream(provider.get_models()[0], Context(messages=[]), options)
         )
         task = (
-            asyncio.create_task(models.complete(provider.models[0], Context(messages=[]), options))
+            asyncio.create_task(
+                models.complete(provider.get_models()[0], Context(messages=[]), options)
+            )
             if owner == "complete"
             else None
         )
@@ -276,7 +278,7 @@ async def test_result_precedes_remaining_cleanup_and_close_reports_failure(
     with pytest.raises(ExceptionGroup, match="Models cleanup failed"):
         async with sdk_harness(handler=handler) as (models, http, _):
             response = models.stream(
-                provider.models[0],
+                provider.get_models()[0],
                 Context(messages=[]),
                 ResponsesOptions(api_key="key", http_client=http),
             )
@@ -348,7 +350,7 @@ async def test_failure_preserves_signed_reasoning_tool_and_text(
 
     async with sdk_harness(handler=handler) as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             ResponsesOptions(api_key="test-secret", http_client=http, max_retries=2),
         )

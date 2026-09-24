@@ -21,7 +21,7 @@ from app.ai import (
 @pytest.mark.parametrize("override", [False, True])
 async def test_deepseek_defaults_and_explicit_compat(sdk_harness, override):
     provider = deepseek_provider()
-    model = provider.models[0]
+    model = provider.get_models()[0]
     if override:
         model = replace(
             model,
@@ -69,7 +69,7 @@ async def test_deepseek_reasoning_mapping_and_assistant_replay(
 ):
     provider = deepseek_provider()
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=ModelCapabilities(
             reasoning=True,
             reasoning_levels={
@@ -121,7 +121,7 @@ async def test_deepseek_reasoning_mapping_and_assistant_replay(
 @pytest.mark.asyncio
 async def test_generic_protocol_does_not_send_deepseek_thinking(provider, sdk_harness):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=ModelCapabilities(
             reasoning=True, reasoning_levels={"off": "none", "medium": "medium"}
         ),
@@ -145,7 +145,7 @@ async def test_generic_protocol_does_not_send_deepseek_thinking(provider, sdk_ha
 @pytest.mark.asyncio
 @pytest.mark.parametrize("replacement", [False, True])
 async def test_sampling_and_payload_hook_are_final_authority(provider, sdk_harness, replacement):
-    model = replace(provider.models[0], sampling_params={"temperature": 0.2, "top_p": 0.6})
+    model = replace(provider.get_models()[0], sampling_params={"temperature": 0.2, "top_p": 0.6})
     observed = []
 
     async def hook(payload, _):
@@ -200,7 +200,9 @@ async def test_sampling_and_payload_hook_are_final_authority(provider, sdk_harne
 async def test_cache_fields_follow_endpoint_and_compat(
     provider, sdk_harness, endpoint, retention, support, key_sent, long_sent
 ):
-    model = replace(provider.models[0], compat=ModelCompat(supports_long_cache_retention=support))
+    model = replace(
+        provider.get_models()[0], compat=ModelCompat(supports_long_cache_retention=support)
+    )
     session = "😀" * 63 + "尾多"
     async with sdk_harness(providers=[replace(provider, models=[model])]) as (
         models,
@@ -227,11 +229,11 @@ async def test_cache_fields_follow_endpoint_and_compat(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("retention", ["none", "short"])
-async def test_affinity_defaults_precede_header_overrides_and_transform(
+async def test_protocol_affinity_defaults_respect_prepared_header_overrides(
     provider, sdk_harness, retention
 ):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         compat=ModelCompat(send_session_affinity_headers=True, session_affinity_format="openai"),
     )
     observed = []
@@ -258,7 +260,10 @@ async def test_affinity_defaults_precede_header_overrides_and_transform(
             ),
         )
         assert final.stop_reason == "stop", final.error_message
-        assert observed[0].get("x-session-affinity") == ("session" if retention != "none" else None)
+        assert "x-session-affinity" not in observed[0]
+        assert requests[0].headers.get("x-session-affinity") == (
+            "session" if retention != "none" else None
+        )
         assert observed[0]["session_id"] == "override"
         assert requests[0].headers["session_id"] == "override"
         assert "x-client-request-id" not in requests[0].headers
@@ -274,7 +279,7 @@ async def test_response_hook_precedes_start(provider, sdk_harness):
 
     async with sdk_harness() as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http, on_response=on_response),
         )
@@ -289,7 +294,7 @@ async def test_explicit_thinking_controls_named_temperature(sdk_harness):
     provider = deepseek_provider()
     async with sdk_harness(providers=[provider]) as (models, http, requests):
         final = await models.complete(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(
                 api_key="key", http_client=http, thinking={"type": "enabled"}, temperature=0.7

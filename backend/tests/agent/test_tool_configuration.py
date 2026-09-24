@@ -2,27 +2,30 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from app.agent import AgentHarness, AgentTool, AgentToolResult
 from app.ai import CallOptions, Models, Provider, TextContent, get_current_tools
+from app.ai.api.openai_runtime import OpenAIProtocol
 
 
-class AnswerAdapter:
+class AnswerAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self) -> None:
         self.requests: list[object] = []
 
-    async def stream_simple(self, **call: object) -> None:
+    async def _produce_simple(self, **call: object) -> None:
         self.requests.append(call["transcript"])
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
         writer.partial.content.append(TextContent(text="done"))
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    async def stream(self, **call: object) -> None:
-        await self.stream_simple(**call)
+    async def _produce(self, **call: object) -> None:
+        await self._produce_simple(**call)
 
 
 def make_tool(name: str) -> AgentTool:
@@ -50,10 +53,10 @@ async def test_declared_tools_match_enabled_names(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = AnswerAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     harness = AgentHarness(
         models,
-        provider.models[0],
+        provider.get_models()[0],
         tools=[make_tool("first"), make_tool("second")],
         active_tool_names=active,
     )
@@ -70,12 +73,17 @@ async def test_duplicate_name_rejected_and_missing_enabled_name_fails_before_req
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = AnswerAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     try:
         with pytest.raises(ValueError, match="duplicate"):
-            AgentHarness(models, provider.models[0], tools=[make_tool("first"), make_tool("first")])
+            AgentHarness(
+                models, provider.get_models()[0], tools=[make_tool("first"), make_tool("first")]
+            )
         harness = AgentHarness(
-            models, provider.models[0], tools=[make_tool("first")], active_tool_names=["missing"]
+            models,
+            provider.get_models()[0],
+            tools=[make_tool("first")],
+            active_tool_names=["missing"],
         )
         outcome = await harness.prompt("hello")
         assert outcome.status == "failed"
@@ -91,9 +99,9 @@ async def test_tool_declaration_is_fixed_at_harness_construction(
 ) -> None:
     monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
     adapter = AnswerAdapter()
-    models = Models([provider], adapters={provider.api: adapter})
+    models = Models([replace(provider, api=adapter)])
     original = make_tool("first")
-    harness = AgentHarness(models, provider.models[0], tools=[original])
+    harness = AgentHarness(models, provider.get_models()[0], tools=[original])
     original.name = "renamed"
     original.description = "renamed"
     try:

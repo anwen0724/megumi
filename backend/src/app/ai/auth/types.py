@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Protocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +49,47 @@ class ResolvedAuth:
     """An independent request configuration with a redacted representation."""
 
     key: str | None = field(repr=False)
-    source: Literal["explicit", "stored", "environment", "headers"]
+    source: str
     base_url: str
     headers: Mapping[str, str] = field(default_factory=dict, repr=False)
     env: Mapping[str, str | None] = field(default_factory=dict, repr=False)
+
+
+@dataclass(frozen=True, slots=True)
+class AuthContext:
+    """供应商认证读取作用域环境; 不会直接依赖进程环境。"""
+
+    env: Callable[[str], str | None]
+
+
+@dataclass(frozen=True, slots=True)
+class AuthResult:
+    """供应商认证解析出的凭据及请求默认值。"""
+
+    key: str | None = field(default=None, repr=False)
+    source: str = "environment"
+    base_url: str | None = None
+    headers: Mapping[str, str | None] = field(default_factory=dict, repr=False)
+    env: Mapping[str, str | None] = field(default_factory=dict, repr=False)
+
+
+class ApiKeyAuth(Protocol):
+    """供应商提供的 API key 认证策略; 登录与 OAuth 不在当前范围。"""
+
+    @property
+    def name(self) -> str:
+        """认证方式的名称。"""
+        ...
+
+    async def resolve(
+        self, ctx: AuthContext, credential: ApiKeyCredential | None
+    ) -> AuthResult | None:
+        """解析存储凭据或外部来源; None 表示未配置。"""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderAuth:
+    """Provider 组合的认证能力。"""
+
+    api_key: ApiKeyAuth

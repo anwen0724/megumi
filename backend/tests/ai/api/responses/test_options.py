@@ -23,9 +23,11 @@ async def test_simple_reasoning_mapping(
     provider, responses_harness, requested, off, mapped, expected
 ):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         capabilities=replace(
-            provider.models[0].capabilities, reasoning=True, reasoning_levels={"off": off, **mapped}
+            provider.get_models()[0].capabilities,
+            reasoning=True,
+            reasoning_levels={"off": off, **mapped},
         ),
     )
     async with responses_harness(providers=[replace(provider, models=[model])]) as (
@@ -52,9 +54,9 @@ async def test_explicit_controls_and_final_payload_override(
     provider, responses_harness, supports_max
 ):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         compat=ModelCompat(supports_max_output_tokens=supports_max),
-        capabilities=replace(provider.models[0].capabilities, reasoning=True),
+        capabilities=replace(provider.get_models()[0].capabilities, reasoning=True),
         sampling_params={"temperature": 0.2},
     )
     observations = []
@@ -118,7 +120,7 @@ async def test_cache_modes_and_unicode_key(
     provider, responses_harness, retention, explicit, long, expected
 ):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         compat=ModelCompat(
             supports_explicit_prompt_cache_mode=explicit,
             supports_long_cache_retention=long,
@@ -150,7 +152,7 @@ async def test_cache_modes_and_unicode_key(
 @pytest.mark.parametrize("form", ["openai", "openrouter", "none"])
 async def test_affinity_headers_respect_capability_and_caller(provider, responses_harness, form):
     model = replace(
-        provider.models[0],
+        provider.get_models()[0],
         compat=ModelCompat(
             session_affinity_format="openai" if form == "openai" else None,
             send_session_affinity_headers=form != "none",

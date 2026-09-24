@@ -1,57 +1,24 @@
-"""Protocol collaborators receive prepared call snapshots and a shared runtime."""
+"""Protocol stream contract shared by provider factories; no SDK dependency."""
 
-from collections.abc import Mapping
-from typing import Protocol, runtime_checkable
+from typing import Protocol
 
-from app.ai.auth.types import ResolvedAuth
 from app.ai.messages import Transcript
 from app.ai.model import Model
 from app.ai.options import CallOptions, SimpleOptions
-from app.ai.runtime.clients import ClientRuntime
-from app.ai.stream import ResponseWriter
+from app.ai.stream import AssistantResponse
 
 
-class ProtocolAdapter(Protocol):
-    """Encode requests and map native events; Models owns response production."""
+class ProviderStreams(Protocol):
+    """与 pi 相同: 协议接收模型、规范化历史、选项, 返回统一响应流。"""
 
-    @property
-    def options_type(self) -> type[CallOptions]:
-        """The options class accepted by this protocol's explicit stream entry."""
+    def stream(
+        self, model: Model, context: Transcript, options: CallOptions | None = None
+    ) -> AssistantResponse:
+        """使用协议原生选项启动一次生成。"""
         ...
 
-    async def stream(
-        self,
-        *,
-        model: Model,
-        transcript: Transcript,
-        options: CallOptions,
-        auth: ResolvedAuth,
-        clients: ClientRuntime,
-        writer: ResponseWriter,
-    ) -> None:
-        """Produce events using explicit protocol options and shared HTTP execution."""
-        ...
-
-    async def stream_simple(
-        self,
-        *,
-        model: Model,
-        transcript: Transcript,
-        options: SimpleOptions,
-        auth: ResolvedAuth,
-        clients: ClientRuntime,
-        writer: ResponseWriter,
-    ) -> None:
-        """Map prepared simple preferences before producing protocol events."""
-        ...
-
-
-@runtime_checkable
-class RequestHeaderDefaults(Protocol):
-    """Optional protocol defaults, merged before provider/model/caller header overrides."""
-
-    def request_headers(
-        self, model: Model, options: CallOptions, base_url: str
-    ) -> Mapping[str, str]:
-        """Return defaults before authentication and the final header transform."""
+    def stream_simple(
+        self, model: Model, context: Transcript, options: SimpleOptions | None = None
+    ) -> AssistantResponse:
+        """使用简化选项启动一次生成。"""
         ...

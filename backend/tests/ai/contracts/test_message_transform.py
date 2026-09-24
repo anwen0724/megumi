@@ -16,7 +16,7 @@ from app.ai.messages import (
 
 
 def assistant(provider, content, stop_reason="tool_use"):
-    model = provider.models[0]
+    model = provider.get_models()[0]
     return AssistantMessage(
         content=content,
         provider=model.provider,
@@ -41,7 +41,7 @@ def test_real_results_hold_system_until_after_results(provider):
         UserMessage(content="next", timestamp=4),
     ]
     original = deepcopy(history)
-    assert transform_messages(history, provider.models[0]) == [
+    assert transform_messages(history, provider.get_models()[0]) == [
         history[0],
         history[2],
         history[1],
@@ -81,7 +81,7 @@ def test_missing_results_close_at_turn_boundaries_without_replaying_failed_calls
     )
     history = [start, system, actual, *suffix]
     original = deepcopy(history)
-    result = transform_messages(history, provider.models[0])
+    result = transform_messages(history, provider.get_models()[0])
     assert result[:4] == [
         start,
         actual,
@@ -111,10 +111,10 @@ def test_reasoning_and_signatures_follow_full_model_identity(provider):
         TextContent(text="answer", text_signature="item"),
     ]
     history = [assistant(provider, content, "stop")]
-    same = transform_messages(history, provider.models[0])[0]
+    same = transform_messages(history, provider.get_models()[0])[0]
     assert same.content == [content[0], content[1], content[3], content[4]]
     for field in ("provider", "api", "id"):
-        target = replace(provider.models[0], **{field: "other"})
+        target = replace(provider.get_models()[0], **{field: "other"})
         cross = transform_messages(history, target)[0]
         assert cross.content == [TextContent(text="visible"), TextContent(text="answer")]
     assert len(history[0].content) == 5
@@ -146,7 +146,7 @@ def test_images_ids_and_null_content_are_normalized_without_editing_input(provid
         seen.append((call_id, target.id, source.model))
         return "safe_id"
 
-    target = replace(provider.models[0], id="other")
+    target = replace(provider.get_models()[0], id="other")
     output = transform_messages(history, target, normalize)
     assert [b.text for b in output[0].content] == [
         "(image omitted: model does not support images)",
@@ -162,8 +162,10 @@ def test_images_ids_and_null_content_are_normalized_without_editing_input(provid
     assert seen == [("original|id", "other", "small")]
     assert history == original
     vision = replace(
-        provider.models[0],
-        capabilities=replace(provider.models[0].capabilities, input_modalities=("text", "image")),
+        provider.get_models()[0],
+        capabilities=replace(
+            provider.get_models()[0].capabilities, input_modalities=("text", "image")
+        ),
     )
     assert transform_messages([user], vision)[0].content == user.content
 
@@ -184,6 +186,8 @@ def test_id_callback_observes_original_source_calls_even_after_prior_ids_change(
         observed.append([(call.id, call.thought_signature) for call in original.content])
         return "new-" + call_id
 
-    transformed = transform_messages([source], replace(provider.models[0], id="other"), normalize)
+    transformed = transform_messages(
+        [source], replace(provider.get_models()[0], id="other"), normalize
+    )
     assert observed == [[("first", "signed"), ("second", "signed")]] * 2
     assert [c.id for c in transformed[0].content] == ["new-first", "new-second"]

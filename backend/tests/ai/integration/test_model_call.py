@@ -14,7 +14,9 @@ from app.ai import (
     TextContent,
     UserMessage,
     create_models,
+    openai_responses_api,
 )
+from app.ai.api.openai_runtime import OpenAIProtocol
 from app.ai.errors import LifecycleError
 from app.ai.options import CallOptions
 
@@ -26,28 +28,28 @@ async def create_response_stream(client, payload, request_options):
     )
 
 
-class RecordingAdapter:
+class RecordingAdapter(OpenAIProtocol):
     options_type = CallOptions
 
     def __init__(self):
         self.calls = []
 
-    async def stream_simple(self, **call):
+    async def _produce_simple(self, **call):
         self.calls.append(call)
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
         writer.partial.content.append(TextContent(text="synthetic answer"))
         writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    async def stream(self, **call):
-        await self.stream_simple(**call)
+    async def _produce(self, **call):
+        await self._produce_simple(**call)
 
 
 @pytest.mark.asyncio
 async def test_simple_call_prepares_auth_options_and_transcript_before_protocol(provider):
     adapter = RecordingAdapter()
-    model = replace(provider.models[0], context_window=16000, sampling_params={"top_p": 0.8})
-    models = create_models([replace(provider, models=[model])], adapters={model.api: adapter})
+    model = replace(provider.get_models()[0], context_window=16000, sampling_params={"top_p": 0.8})
+    models = create_models([replace(replace(provider, models=[model]), api=adapter)])
     context = Context(system_prompt="Be concise", messages=[])
     response = models.stream_simple(
         model,
@@ -79,8 +81,8 @@ async def test_simple_call_prepares_auth_options_and_transcript_before_protocol(
 @pytest.mark.asyncio
 async def test_protocol_and_complete_entries_share_execution_without_second_requests(provider):
     adapter = RecordingAdapter()
-    models = create_models([provider], adapters={provider.api: adapter})
-    model = provider.models[0]
+    models = create_models([replace(provider, api=adapter)])
+    model = provider.get_models()[0]
     context = Context(messages=[])
     response = models.stream(model, context, CallOptions(api_key="fake", temperature=0.2))
     first, second = await asyncio.gather(response.result(), response.result())
@@ -102,7 +104,7 @@ async def test_call_snapshots_precede_auth_wait_and_survive_provider_replacement
     store = InMemoryCredentialStore()
     await store.set(provider.id, ApiKeyCredential("old-key"))
     adapter = RecordingAdapter()
-    models = create_models([provider], credentials=store, adapters={provider.api: adapter})
+    models = create_models([replace(provider, api=adapter)], credentials=store)
     headers = {"X-Request": "original"}
     sampling = {"top_p": 0.7}
     context = Context(messages=[UserMessage(content="original", timestamp=1)])
@@ -114,7 +116,7 @@ async def test_call_snapshots_precede_auth_wait_and_survive_provider_replacement
         return value
 
     response = models.stream_simple(
-        provider.models[0],
+        provider.get_models()[0],
         context,
         SimpleOptions(
             headers=headers,
@@ -127,7 +129,7 @@ async def test_call_snapshots_precede_auth_wait_and_survive_provider_replacement
     sampling["top_p"] = 0.1
     context.messages[0].content = "changed"
     await asyncio.wait_for(entered.wait(), 1)
-    models.set_provider(replace(provider, base_url="https://new.test/v1"))
+    models.set_provider(replace(provider, api=adapter, base_url="https://new.test/v1"))
     await store.set(provider.id, ApiKeyCredential("new-key"))
     release.set()
     assert (await response.result()).stop_reason == "stop"
@@ -138,7 +140,7 @@ async def test_call_snapshots_precede_auth_wait_and_survive_provider_replacement
     assert first["transcript"].messages[0].content == "original"
     assert first["options"].sampling_params == {"top_p": 0.7}
     assert first["options"].telemetry_context is identity
-    await models.complete_simple(provider.models[0], Context(messages=[]))
+    await models.complete_simple(provider.get_models()[0], Context(messages=[]))
     assert adapter.calls[1]["auth"].key == "new-key"
     assert adapter.calls[1]["auth"].base_url == "https://new.test/v1"
     await models.aclose()
@@ -146,18 +148,17 @@ async def test_call_snapshots_precede_auth_wait_and_survive_provider_replacement
 
 @pytest.mark.asyncio
 async def test_settings_failures_are_final_but_python_misuse_raises(provider):
-    model = replace(provider.models[0], api="openai-responses")
-    provider = replace(provider, api="openai-responses", models=[model])
+    model = replace(provider.get_models()[0], api="openai-responses")
+    provider = replace(provider, api=openai_responses_api(), models=[model])
     models = create_models([provider])
     no_auth = models.stream_simple(model, Context(messages=[]))
     assert (await no_auth.result()).stop_reason == "error"
     assert [e["type"] async for e in no_auth] == ["error"]
-    from app.ai import ConfigurationError
-
-    with pytest.raises(ConfigurationError, match="Unsupported protocol"):
-        models.set_provider(
-            replace(provider, api="unimplemented", models=[replace(model, api="unimplemented")])
-        )
+    models.set_provider(replace(provider, api={}))
+    missing_api = await models.complete_simple(
+        model, Context(messages=[]), SimpleOptions(api_key="fake")
+    )
+    assert "no API implementation" in missing_api.error_message
     unknown = models.stream_simple(replace(model, id="missing"), Context(messages=[]))
     assert "not registered" in (await unknown.result()).error_message
     with pytest.raises(TypeError):
@@ -170,7 +171,7 @@ async def test_cancel_complete_owns_response_and_waits_for_cleanup(provider):
     entered, closing, release, closed = (asyncio.Event() for _ in range(4))
 
     class BlockingAdapter(RecordingAdapter):
-        async def stream_simple(self, **call):
+        async def _produce_simple(self, **call):
             async def cleanup():
                 closing.set()
                 await release.wait()
@@ -180,10 +181,10 @@ async def test_cancel_complete_owns_response_and_waits_for_cleanup(provider):
             entered.set()
             await asyncio.Event().wait()
 
-    models = create_models([provider], adapters={provider.api: BlockingAdapter()})
+    models = create_models([replace(provider, api=BlockingAdapter())])
     task = asyncio.create_task(
         models.complete_simple(
-            provider.models[0], Context(messages=[]), SimpleOptions(api_key="fake")
+            provider.get_models()[0], Context(messages=[]), SimpleOptions(api_key="fake")
         )
     )
     await asyncio.wait_for(entered.wait(), 1)
@@ -204,7 +205,7 @@ async def test_models_close_drains_active_generation_and_rejects_new_calls(provi
     entered, cleaned = asyncio.Event(), asyncio.Event()
 
     class BlockingAdapter(RecordingAdapter):
-        async def stream_simple(self, **call):
+        async def _produce_simple(self, **call):
             async def cleanup():
                 cleaned.set()
 
@@ -212,25 +213,25 @@ async def test_models_close_drains_active_generation_and_rejects_new_calls(provi
             entered.set()
             await asyncio.Event().wait()
 
-    models = create_models([provider], adapters={provider.api: BlockingAdapter()})
+    models = create_models([replace(provider, api=BlockingAdapter())])
     response = models.stream_simple(
-        provider.models[0], Context(messages=[]), SimpleOptions(api_key="fake")
+        provider.get_models()[0], Context(messages=[]), SimpleOptions(api_key="fake")
     )
     await asyncio.wait_for(entered.wait(), 1)
     await asyncio.gather(models.aclose(), models.aclose())
     assert cleaned.is_set()
     assert (await response.result()).stop_reason == "aborted"
     with pytest.raises(LifecycleError):
-        models.stream_simple(provider.models[0], Context(messages=[]))
+        models.stream_simple(provider.get_models()[0], Context(messages=[]))
     models.set_provider(provider)
     assert models.get_model(provider.id, "small") is not None
     assert (
-        await models.resolve_auth(provider.models[0], CallOptions(api_key="fake"))
+        await models.resolve_auth(provider.get_models()[0], CallOptions(api_key="fake"))
     ).key == "fake"
 
 
 class TransportAdapter(RecordingAdapter):
-    async def stream_simple(self, **call):
+    async def _produce_simple(self, **call):
         self.calls.append(call)
         writer = call["writer"]
         stream = await call["clients"].open_stream(
@@ -277,9 +278,9 @@ async def test_payload_and_response_hooks_wrap_shared_retry_once(provider, mode)
         )
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
-        models = create_models([provider], adapters={provider.api: TransportAdapter()})
+        models = create_models([replace(provider, api=TransportAdapter())])
         response = models.stream_simple(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             SimpleOptions(
                 api_key="fake",
@@ -326,9 +327,9 @@ async def test_hook_failure_stops_before_start_and_closes_acquired_response(prov
         raise ValueError("hook failed")
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
-        models = create_models([provider], adapters={provider.api: TransportAdapter()})
+        models = create_models([replace(provider, api=TransportAdapter())])
         response = models.stream_simple(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             SimpleOptions(
                 api_key="fake",
@@ -358,13 +359,19 @@ async def test_protocol_option_type_and_api_identity_not_supplier_id(provider):
         options_type = NativeOptions
 
     adapter = NativeAdapter()
-    second_model = replace(provider.models[0], provider="other")
+    second_model = replace(provider.get_models()[0], provider="other")
     second = replace(provider, id="other", models=[second_model])
-    models = create_models([provider, second], adapters={provider.api: adapter})
-    with pytest.raises(TypeError):
-        models.stream(provider.models[0], Context(messages=[]), CallOptions(api_key="fake"))
+    models = create_models([replace(provider, api=adapter), replace(second, api=adapter)])
+    from app.ai import ResponsesOptions
+
+    invalid = await models.complete(
+        provider.get_models()[0], Context(messages=[]), ResponsesOptions(api_key="fake")
+    )
+    assert invalid.stop_reason == "error" and "Expected NativeOptions" in invalid.error_message
     await models.complete(
-        provider.models[0], Context(messages=[]), NativeOptions(api_key="fake", native="chosen")
+        provider.get_models()[0],
+        Context(messages=[]),
+        NativeOptions(api_key="fake", native="chosen"),
     )
     await models.complete(second_model, Context(messages=[]), NativeOptions(api_key="fake"))
     assert [call["model"].provider for call in adapter.calls] == ["sample", "other"]
@@ -375,8 +382,8 @@ async def test_protocol_option_type_and_api_identity_not_supplier_id(provider):
 @pytest.mark.asyncio
 async def test_explicit_protocol_options_also_merge_model_defaults(provider):
     adapter = RecordingAdapter()
-    model = replace(provider.models[0], sampling_params={"top_p": 0.9, "seed": 10})
-    models = create_models([replace(provider, models=[model])], adapters={model.api: adapter})
+    model = replace(provider.get_models()[0], sampling_params={"top_p": 0.9, "seed": 10})
+    models = create_models([replace(replace(provider, models=[model]), api=adapter)])
     await models.complete(
         model,
         Context(messages=[]),
@@ -401,7 +408,7 @@ async def test_auth_transform_error_does_not_echo_stored_credentials(provider):
 
     models = create_models([provider], credentials=store)
     final = await models.complete_simple(
-        provider.models[0], Context(messages=[]), SimpleOptions(transform_headers=transform)
+        provider.get_models()[0], Context(messages=[]), SimpleOptions(transform_headers=transform)
     )
     assert final.error_message == "bad key [redacted]"
     await models.aclose()
@@ -438,12 +445,10 @@ async def test_signal_interrupts_call_preparation_and_transport_waits(provider, 
         monkeypatch.setattr(retry, "_sleep", wait_here)
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
         store = BlockingStore() if stage == "authentication" else InMemoryCredentialStore()
-        models = create_models(
-            [provider], credentials=store, adapters={provider.api: TransportAdapter()}
-        )
+        models = create_models([replace(provider, api=TransportAdapter())], credentials=store)
         signal = asyncio.Event()
         response = models.stream_simple(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             SimpleOptions(
                 api_key=None if stage == "authentication" else "fake",
@@ -471,10 +476,10 @@ async def test_omitted_explicit_options_use_protocol_defaults(provider, monkeypa
     class NativeAdapter(RecordingAdapter):
         options_type = NativeOptions
 
-    monkeypatch.setenv(provider.env_var, "fake-env")
+    monkeypatch.setenv("SAMPLE_API_KEY", "fake-env")
     adapter = NativeAdapter()
-    models = create_models([provider], adapters={provider.api: adapter})
-    final = await models.complete(provider.models[0], Context(messages=[]))
+    models = create_models([replace(provider, api=adapter)])
+    final = await models.complete(provider.get_models()[0], Context(messages=[]))
     assert final.stop_reason == "stop"
     assert adapter.calls[0]["options"].native is True
     await models.aclose()
@@ -487,7 +492,7 @@ async def test_frames_and_result_waiters_share_generation_before_cleanup_finishe
     progress, release, cleanup_entered, finish_cleanup = (asyncio.Event() for _ in range(4))
 
     class FramedAdapter(RecordingAdapter):
-        async def stream_simple(self, **call):
+        async def _produce_simple(self, **call):
             writer = call["writer"]
 
             async def cleanup():
@@ -519,9 +524,9 @@ async def test_frames_and_result_waiters_share_generation_before_cleanup_finishe
             )
             writer.emit({"type": "done", "reason": "stop", "message": writer.partial})
 
-    models = create_models([provider], adapters={provider.api: FramedAdapter()})
+    models = create_models([replace(provider, api=FramedAdapter())])
     response = models.stream_simple(
-        provider.models[0], Context(messages=[]), SimpleOptions(api_key="fake")
+        provider.get_models()[0], Context(messages=[]), SimpleOptions(api_key="fake")
     )
     await asyncio.wait_for(progress.wait(), 1)
     iterator, encoder = aiter(response), AssistantMessageFrameEncoder()
@@ -599,12 +604,10 @@ async def test_models_close_survives_cancelled_waiter_and_drains_different_waits
         return httpx2.Response(200, stream=body)
 
     async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as http:
-        models = create_models(
-            [provider], credentials=Store(), adapters={provider.api: TransportAdapter()}
-        )
+        models = create_models([replace(provider, api=TransportAdapter())], credentials=Store())
         calls = [
             models.stream_simple(
-                provider.models[0],
+                provider.get_models()[0],
                 Context(messages=[]),
                 SimpleOptions(api_key=key, http_client=http, max_retries=2),
             )
@@ -616,7 +619,7 @@ async def test_models_close_survives_cancelled_waiter_and_drains_different_waits
         closing = asyncio.create_task(models.aclose())
         await asyncio.wait_for(cleanup_entered.wait(), 1)
         with pytest.raises(LifecycleError):
-            models.stream_simple(provider.models[0], Context(messages=[]))
+            models.stream_simple(provider.get_models()[0], Context(messages=[]))
         closing.cancel()
         with pytest.raises(asyncio.CancelledError):
             await closing
@@ -631,7 +634,7 @@ async def test_models_close_survives_cancelled_waiter_and_drains_different_waits
 async def test_models_close_keeps_finished_cleanup_errors_and_drains_all_resources(
     provider, monkeypatch
 ):
-    import app.ai.runtime.clients as clients
+    import app.ai.models as model_runtime
 
     release, cleaning = asyncio.Event(), asyncio.Event()
     http = httpx2.AsyncClient(
@@ -641,10 +644,10 @@ async def test_models_close_keeps_finished_cleanup_errors_and_drains_all_resourc
             )
         )
     )
-    monkeypatch.setattr(clients, "DefaultAsyncHttpxClient", lambda: http)
+    monkeypatch.setattr(model_runtime, "create_http_client", lambda: http)
 
     class CleanupAdapter(TransportAdapter):
-        async def stream_simple(self, **call):
+        async def _produce_simple(self, **call):
             wait = call["options"].metadata["wait"]
 
             async def cleanup():
@@ -654,11 +657,11 @@ async def test_models_close_keeps_finished_cleanup_errors_and_drains_all_resourc
                 raise OSError("second close" if wait else "first close")
 
             call["writer"].add_cleanup(cleanup)
-            await super().stream_simple(**call)
+            await super()._produce_simple(**call)
 
-    models = create_models([provider], adapters={provider.api: CleanupAdapter()})
+    models = create_models([replace(provider, api=CleanupAdapter())])
     first = models.stream_simple(
-        provider.models[0],
+        provider.get_models()[0],
         Context(messages=[]),
         SimpleOptions(api_key="fake", metadata={"wait": False}),
     )
@@ -666,7 +669,7 @@ async def test_models_close_keeps_finished_cleanup_errors_and_drains_all_resourc
     with pytest.raises(ExceptionGroup):
         await first.aclose()
     second = models.stream_simple(
-        provider.models[0],
+        provider.get_models()[0],
         Context(messages=[]),
         SimpleOptions(api_key="fake", metadata={"wait": True}),
     )
@@ -695,7 +698,7 @@ async def test_complete_cancellation_still_propagates_when_cleanup_fails(provide
     entered = asyncio.Event()
 
     class FailingCloseAdapter(RecordingAdapter):
-        async def stream_simple(self, **call):
+        async def _produce_simple(self, **call):
             async def cleanup():
                 raise OSError("close failed during cancellation")
 
@@ -703,10 +706,10 @@ async def test_complete_cancellation_still_propagates_when_cleanup_fails(provide
             entered.set()
             await asyncio.Event().wait()
 
-    models = create_models([provider], adapters={provider.api: FailingCloseAdapter()})
+    models = create_models([replace(provider, api=FailingCloseAdapter())])
     task = asyncio.create_task(
         models.complete_simple(
-            provider.models[0], Context(messages=[]), SimpleOptions(api_key="fake")
+            provider.get_models()[0], Context(messages=[]), SimpleOptions(api_key="fake")
         )
     )
     await entered.wait()

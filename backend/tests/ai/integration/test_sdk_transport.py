@@ -53,7 +53,7 @@ async def test_cancel_sdk_body_read_closes_response_before_final(provider, statu
             stream = await runtime.open_stream(
                 create_response_stream,
                 {"stream": True},
-                model=provider.models[0],
+                model=provider.get_models()[0],
                 auth=ResolvedAuth(
                     key="fake",
                     source="explicit",
@@ -66,7 +66,7 @@ async def test_cancel_sdk_body_read_closes_response_before_final(provider, statu
             async for _ in stream:
                 pass
 
-        response = AssistantResponse(provider.models[0], produce)
+        response = AssistantResponse(provider.get_models()[0], produce)
         await asyncio.wait_for(body.reading.wait(), 1)
         response.cancel()
         final = await asyncio.wait_for(response.result(), 1)
@@ -94,7 +94,7 @@ async def test_generation_and_close_errors_both_redact_credentials(provider):
             await runtime.open_stream(
                 create_response_stream,
                 {"stream": True, "image": "private-image", "arguments": "private-args"},
-                model=provider.models[0],
+                model=provider.get_models()[0],
                 auth=ResolvedAuth(
                     key="fake-secret",
                     source="explicit",
@@ -105,7 +105,7 @@ async def test_generation_and_close_errors_both_redact_credentials(provider):
                 writer=writer,
             )
 
-        response = AssistantResponse(provider.models[0], produce)
+        response = AssistantResponse(provider.get_models()[0], produce)
         final = await response.result()
         assert final.stop_reason == "error"
         assert "400" in final.error_message and "bad" in final.error_message
@@ -147,7 +147,7 @@ async def test_body_connection_failure_is_not_retried(provider):
             stream = await runtime.open_stream(
                 create_response_stream,
                 {},
-                model=provider.models[0],
+                model=provider.get_models()[0],
                 auth=ResolvedAuth(
                     key="fake",
                     source="explicit",
@@ -160,7 +160,7 @@ async def test_body_connection_failure_is_not_retried(provider):
             async for _ in stream:
                 pass
 
-        final = await AssistantResponse(provider.models[0], produce).result()
+        final = await AssistantResponse(provider.get_models()[0], produce).result()
         assert final.stop_reason == "error"
         assert "Connection error" in final.error_message
         assert len(requests) == 1 and body.closed

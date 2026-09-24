@@ -17,7 +17,7 @@ async def test_interleaved_text_reasoning_uses_stable_slots(provider, sdk_harnes
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -62,7 +62,7 @@ async def test_structured_reasoning_is_replay_metadata_not_visible_delta(
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -144,7 +144,7 @@ async def test_parallel_tools_late_identity_and_split_json(provider, sdk_harness
 
     async with sdk_harness(handler=handler) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -193,7 +193,7 @@ async def test_tool_end_keeps_repaired_or_partial_arguments(
     )
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -227,7 +227,7 @@ async def test_native_finish_reason_is_preserved(
     data = native_sse({"choices": [{"delta": {"content": "partial"}, "finish_reason": native}]})
     async with sdk_harness(data=data) as (models, http, _):
         response = models.stream(
-            provider.models[0],
+            provider.get_models()[0],
             Context(messages=[]),
             CompletionsOptions(api_key="key", http_client=http),
         )
@@ -247,7 +247,7 @@ async def test_explicit_no_finish_compat_infers_terminal(provider, sdk_harness, 
 
     from app.ai import ModelCompat
 
-    model = replace(provider.models[0], compat=ModelCompat(supports_finish_reason=False))
+    model = replace(provider.get_models()[0], compat=ModelCompat(supports_finish_reason=False))
     delta = (
         {
             "tool_calls": [

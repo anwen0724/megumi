@@ -1,6 +1,9 @@
 """Public configuration API for the Python AI layer; importing performs no I/O."""
 
+from app.ai.api.base import ProviderStreams
+from app.ai.api.completions.adapter import openai_completions_api
 from app.ai.api.completions.options import CompletionsOptions
+from app.ai.api.responses.adapter import openai_responses_api
 from app.ai.api.responses.options import ResponsesOptions
 from app.ai.api.transform import transform_messages
 from app.ai.assistant_message_frames import (
@@ -8,8 +11,18 @@ from app.ai.assistant_message_frames import (
     AssistantMessageFrameEncoder,
     reduce_assistant_message_frames,
 )
+from app.ai.auth.helpers import env_api_key_auth
 from app.ai.auth.memory import InMemoryCredentialStore
-from app.ai.auth.types import ApiKeyCredential, AuthOverride, CredentialStore, ResolvedAuth
+from app.ai.auth.types import (
+    ApiKeyAuth,
+    ApiKeyCredential,
+    AuthContext,
+    AuthOverride,
+    AuthResult,
+    CredentialStore,
+    ProviderAuth,
+    ResolvedAuth,
+)
 from app.ai.codec import decode_messages, encode_messages
 from app.ai.context_budget import (
     ContextUsageEstimate,
@@ -67,7 +80,7 @@ from app.ai.model import (
 )
 from app.ai.models import Models, create_models
 from app.ai.options import CallOptions, ProviderResponse, RetryCallbacks, RetryPolicy, SimpleOptions
-from app.ai.provider import Provider
+from app.ai.provider import Provider, create_provider
 from app.ai.providers.deepseek import deepseek_provider
 from app.ai.providers.openai import openai_provider
 from app.ai.runtime.retry import (
@@ -100,6 +113,7 @@ from app.ai.transcript import (
 from app.ai.usage import calculate_usage_cost
 
 __all__ = [
+    "ApiKeyAuth",
     "ApiKeyCredential",
     "AssistantContent",
     "AssistantMessage",
@@ -108,8 +122,10 @@ __all__ = [
     "AssistantMessageFrame",
     "AssistantMessageFrameEncoder",
     "AssistantResponse",
+    "AuthContext",
     "AuthError",
     "AuthOverride",
+    "AuthResult",
     "CallOptions",
     "CatalogSource",
     "CompletionsOptions",
@@ -134,7 +150,9 @@ __all__ = [
     "Pricing",
     "PricingTier",
     "Provider",
+    "ProviderAuth",
     "ProviderResponse",
+    "ProviderStreams",
     "ResolvedAuth",
     "ResponsesOptions",
     "RetryCallbacks",
@@ -159,10 +177,12 @@ __all__ = [
     "clamp_max_tokens_to_context",
     "clamp_thinking_level",
     "create_models",
+    "create_provider",
     "declarations_equal",
     "decode_messages",
     "deepseek_provider",
     "encode_messages",
+    "env_api_key_auth",
     "estimate_context_tokens",
     "estimate_message_tokens",
     "estimate_text_tokens",
@@ -178,7 +198,9 @@ __all__ = [
     "is_retryable_assistant_error",
     "make_strict_json_schema",
     "normalize_context",
+    "openai_completions_api",
     "openai_provider",
+    "openai_responses_api",
     "parse_partial_arguments",
     "reduce_assistant_message_frames",
     "render_system_message_update",

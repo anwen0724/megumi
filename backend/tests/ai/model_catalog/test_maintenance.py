@@ -6,6 +6,7 @@ import pytest
 from conftest import raw_model, rule
 from test_generate import snapshot
 
+from app.ai import ProviderAuth, create_provider, env_api_key_auth, openai_responses_api
 from app.ai.catalog_generation import CatalogError
 from app.ai.catalog_generation.generate import generate_catalog
 
@@ -275,7 +276,7 @@ def test_boolean_replacement_cannot_be_mistaken_for_a_redundant_integer():
 def test_generated_metadata_round_trips_with_rule_patch_and_supplement_provenance(tool):
     from test_commands import seed
 
-    from app.ai import Provider, create_models, get_supported_thinking_levels
+    from app.ai import create_models, get_supported_thinking_levels
     from app.ai.catalog import load_catalog
     from app.ai.catalog_generation.output import decode
 
@@ -295,11 +296,11 @@ def test_generated_metadata_round_trips_with_rule_patch_and_supplement_provenanc
     loaded = load_catalog((tool.output / "openai.json").read_text("utf-8"))
     models = create_models(
         [
-            Provider(
+            create_provider(
                 id="openai",
                 name="OpenAI",
-                api="openai-responses",
-                env_var="OPENAI_API_KEY",
+                api=openai_responses_api(),
+                auth=ProviderAuth(api_key=env_api_key_auth("API key", ["OPENAI_API_KEY"])),
                 base_url="https://example.test",
                 models=loaded,
             )
