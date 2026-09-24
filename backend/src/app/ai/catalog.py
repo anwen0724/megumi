@@ -117,7 +117,7 @@ COMPAT_CHOICES = {
     "system_role": {"system", "developer"},
     "max_tokens_field": {"max_tokens", "max_completion_tokens"},
     "thinking_format": {"openai", "deepseek"},
-    "session_affinity_format": {"openai", "openai-nosession"},
+    "session_affinity_format": {"openai", "openai-nosession", "openrouter"},
 }
 
 

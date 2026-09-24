@@ -229,12 +229,13 @@ async def test_cache_fields_follow_endpoint_and_compat(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("retention", ["none", "short"])
+@pytest.mark.parametrize("form", ["openai", "openrouter"])
 async def test_protocol_affinity_defaults_respect_prepared_header_overrides(
-    provider, sdk_harness, retention
+    provider, sdk_harness, retention, form
 ):
     model = replace(
         provider.get_models()[0],
-        compat=ModelCompat(send_session_affinity_headers=True, session_affinity_format="openai"),
+        compat=ModelCompat(send_session_affinity_headers=True, session_affinity_format=form),
     )
     observed = []
 
@@ -262,7 +263,10 @@ async def test_protocol_affinity_defaults_respect_prepared_header_overrides(
         assert final.stop_reason == "stop", final.error_message
         assert "x-session-affinity" not in observed[0]
         assert requests[0].headers.get("x-session-affinity") == (
-            "session" if retention != "none" else None
+            "session" if retention != "none" and form == "openai" else None
+        )
+        assert requests[0].headers.get("x-session-id") == (
+            "session" if retention != "none" and form == "openrouter" else None
         )
         assert observed[0]["session_id"] == "override"
         assert requests[0].headers["session_id"] == "override"

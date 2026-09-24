@@ -33,6 +33,15 @@ def test_sampling_reasoning_and_compat_survive_catalog_and_snapshot(provider):
     assert models.get_model("sample", "small").sampling_params == data["sampling_params"]
 
 
+
+def test_explicit_openrouter_affinity_format_survives_registration(provider):
+    data = asdict(provider.get_models()[0])
+    data["compat"]["session_affinity_format"] = "openrouter"
+    loaded = load_catalog(json.dumps([data]))
+    models = create_models([replace(provider, models=loaded)])
+    assert models.get_model("sample", "small").compat.session_affinity_format == "openrouter"
+
+
 def test_supported_levels_distinguish_defaults_null_and_extended_levels(provider):
     from app.ai import ModelCapabilities, clamp_thinking_level, get_supported_thinking_levels
 

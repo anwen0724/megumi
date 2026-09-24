@@ -158,7 +158,7 @@ async def test_affinity_headers_respect_capability_and_caller(
     model = replace(
         provider.get_models()[0],
         compat=ModelCompat(
-            session_affinity_format="openai" if form == "openai" else None,
+            session_affinity_format=form if form != "none" else None,
             send_session_affinity_headers=form != "none",
         ),
     )
@@ -174,7 +174,6 @@ async def test_affinity_headers_respect_capability_and_caller(
                 api_key="key",
                 http_client=http,
                 cache_retention=retention,
-                base_url="https://openrouter.ai/api/v1" if form == "openrouter" else None,
                 session_id="session-1",
                 headers={"x-client-request-id": "caller"} if caller_override else {},
             ),
