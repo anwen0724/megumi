@@ -39,7 +39,11 @@ class ResponsesApi(OpenAIProtocol):
 
     def request_headers(self, model: Model, options: CallOptions, base_url: str) -> dict[str, str]:
         """Provide protocol defaults before applying the prepared request header overrides."""
-        if not options.session_id or model.compat.send_session_affinity_headers is False:
+        if (
+            not options.session_id
+            or options.cache_retention == "none"
+            or model.compat.send_session_affinity_headers is False
+        ):
             return {}
         form = model.compat.session_affinity_format or (
             "openrouter"

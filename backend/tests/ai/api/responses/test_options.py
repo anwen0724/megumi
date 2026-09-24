@@ -150,7 +150,11 @@ async def test_cache_modes_and_unicode_key(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("form", ["openai", "openrouter", "none"])
-async def test_affinity_headers_respect_capability_and_caller(provider, responses_harness, form):
+@pytest.mark.parametrize("retention", ["none", "short"])
+@pytest.mark.parametrize("caller_override", [False, True])
+async def test_affinity_headers_respect_capability_and_caller(
+    provider, responses_harness, form, retention, caller_override
+):
     model = replace(
         provider.get_models()[0],
         compat=ModelCompat(
@@ -169,14 +173,19 @@ async def test_affinity_headers_respect_capability_and_caller(provider, response
             ResponsesOptions(
                 api_key="key",
                 http_client=http,
-                cache_retention="none",
+                cache_retention=retention,
                 base_url="https://openrouter.ai/api/v1" if form == "openrouter" else None,
                 session_id="session-1",
-                headers={"x-client-request-id": "caller"},
+                headers={"x-client-request-id": "caller"} if caller_override else {},
             ),
         )
         assert final.stop_reason == "stop", final.error_message
         headers = requests[0].headers
-        assert headers["x-client-request-id"] == "caller"
-        assert headers.get("session_id") == ("session-1" if form == "openai" else None)
-        assert headers.get("x-session-id") == ("session-1" if form == "openrouter" else None)
+        enabled = retention == "short" and form != "none"
+        assert headers.get("x-client-request-id") == (
+            "caller" if caller_override else "session-1" if enabled and form == "openai" else None
+        )
+        assert headers.get("session_id") == ("session-1" if enabled and form == "openai" else None)
+        assert headers.get("x-session-id") == (
+            "session-1" if enabled and form == "openrouter" else None
+        )
