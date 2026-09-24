@@ -274,7 +274,7 @@ def reasoning_details(message: AssistantMessage) -> list[JSONValue] | None:
 
 def encode_tool(tool: Tool, model: Model) -> dict[str, JSONValue]:
     """Resolve strict policy using the shared converter, without validating generated arguments."""
-    supported = model.compat.supports_strict_mode is not False
+    supported = model.compat.supports_strict_mode is True
     strict = resolve_json_schema_strict_sampling(tool, supported)
     function: dict[str, JSONValue] = {
         "name": tool.name,
