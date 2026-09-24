@@ -53,7 +53,6 @@ def test_tool_and_system_history_preserves_signatures_and_unvalidated_values():
             sections={"style": "brief"},
             tools_added=[tool],
             tools_removed=["old"],
-            replace=True,
         ),
         UserMessage(
             content=[TextContent(text="Look"), ImageContent(mime_type="image/png", data="AA==")],
@@ -106,6 +105,7 @@ def test_tool_and_system_history_preserves_signatures_and_unvalidated_values():
     "record",
     [
         {"role": "unknown", "timestamp": 1, "content": ""},
+        {"role": "system", "timestamp": 0, "content": "", "replace": True},
         {"role": "user", "timestamp": "1", "content": ""},
         {"role": "user", "timestamp": True, "content": ""},
         {"role": "user", "timestamp": 1, "content": "", "api_key": "fake"},

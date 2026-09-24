@@ -14,7 +14,7 @@ def test_context_adds_only_nonempty_initial_instructions():
     assert normalize_context(Context(messages=[], system_prompt="")).messages == []
 
 
-def test_system_sections_append_remove_replace_and_keep_original_timestamp():
+def test_system_sections_append_update_remove_and_keep_original_timestamp():
     from app.ai.transcript import (
         get_current_system_message,
         get_current_system_prompt,
@@ -36,8 +36,6 @@ def test_system_sections_append_remove_replace_and_keep_original_timestamp():
         'B\n\nUpdated system prompt section "first":\n\nnew'
         '\n\nUpdated system prompt section "third":\n\nthree'
     )
-    history.append(SystemMessage(content="Reset", timestamp=11, replace=True))
-    assert get_current_system_message(history) == SystemMessage(content="Reset", timestamp=7)
     assert history[0].sections["first"] == "one"
 
 
@@ -45,7 +43,7 @@ def tool(name, description="old"):
     return Tool(name=name, description=description, parameters={"type": "object"})
 
 
-def test_tools_overwrite_preserve_position_remove_before_add_and_replace():
+def test_tools_overwrite_preserve_position_and_remove_before_add():
     from app.ai.transcript import get_current_system_message, get_current_tools
 
     a, b, new = tool("a"), tool("b"), tool("a", "new")
@@ -59,7 +57,7 @@ def test_tools_overwrite_preserve_position_remove_before_add_and_replace():
     )
     assert get_current_tools(history) == [b, new]
     assert get_current_system_message(history).tools_added == [b, new]
-    history.append(SystemMessage(content="", timestamp=3, replace=True, tools_added=[a]))
+    history.append(SystemMessage(content="", timestamp=3, tools_removed=["b"], tools_added=[a]))
     assert get_current_tools(history) == [a]
     assert history[0].tools_added == [a, b]
 
@@ -87,9 +85,14 @@ def test_protocol_capabilities_choose_in_place_or_collapsed_history():
     assert resolve_transcript_tools(history, False).request_tools == [a, b]
     history.append(SystemMessage(content="", timestamp=3, tools_added=[a]))
     assert not resolve_transcript_tools(history, True).anchors_additions
-    history.append(SystemMessage(content="Reset", timestamp=4, replace=True))
-    assert resolve_transcript(context, True).messages == [
-        SystemMessage(content="Reset", timestamp=0),
+    history.append(
+        SystemMessage(content="", timestamp=4, sections={"mode": "review"}, tools_removed=["b"])
+    )
+    assert resolve_transcript(context, True).messages == history
+    assert resolve_transcript(context, False).messages == [
+        SystemMessage(
+            content="A\n\nB", timestamp=0, sections={"mode": "review"}, tools_added=[a]
+        ),
         user,
     ]
 

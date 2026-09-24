@@ -89,7 +89,6 @@ class SystemMessage(_Record):
     sections: dict[str, str | None] | None = None
     tools_added: list[Tool] | None = None
     tools_removed: list[str] | None = None
-    replace: bool = False
     role: Literal["system"] = "system"
 
 

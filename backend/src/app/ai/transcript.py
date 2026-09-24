@@ -24,7 +24,7 @@ def normalize_context(context: Context) -> Transcript:
 
 
 def get_current_system_message(messages: Sequence[Message]) -> SystemMessage | None:
-    """Replay prompt patches, keeping the first system timestamp even after replacement."""
+    """Replay additive content and named section updates, keeping the first timestamp."""
     text: list[str] = []
     sections: dict[str, str | None] = {}
     timestamp: int | None = None
@@ -33,9 +33,6 @@ def get_current_system_message(messages: Sequence[Message]) -> SystemMessage | N
             continue
         if timestamp is None:
             timestamp = message.timestamp
-        if message.replace:
-            text.clear()
-            sections.clear()
         rendered = content_text(message.content)
         if rendered:
             text.append(rendered)
@@ -81,13 +78,11 @@ def render_system_message_update(message: SystemMessage) -> str:
 
 
 def get_current_tools(messages: Sequence[Message]) -> list[Tool]:
-    """Apply removals before additions; replacement clears prior declarations."""
+    """Replay tool changes by name, applying removals before additions."""
     tools: dict[str, Tool] = {}
     for message in messages:
         if not isinstance(message, SystemMessage):
             continue
-        if message.replace:
-            tools.clear()
         for name in message.tools_removed or []:
             tools.pop(name, None)
         for tool in message.tools_added or []:
@@ -116,9 +111,8 @@ def without_initial_system_message(messages: Sequence[Message]) -> list[Message]
 def resolve_transcript(
     context: Transcript, supports_mid_convo_system_messages: bool | None
 ) -> Transcript:
-    """Collapse later replacements even when mid-conversation instructions are supported."""
-    late_replace = any(isinstance(m, SystemMessage) and m.replace for m in context.messages[1:])
-    if supports_mid_convo_system_messages and not late_replace:
+    """Keep system updates in place when supported; otherwise fold them into the head."""
+    if supports_mid_convo_system_messages:
         return deepcopy(context)
     head = get_current_system_message(context.messages)
     rest = [m for m in context.messages if not isinstance(m, SystemMessage)]
