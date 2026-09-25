@@ -149,10 +149,12 @@ async def test_tool_checkpoint_memos_and_expired_handle(tmp_path, provider, monk
 
 
 @pytest.mark.asyncio
-async def test_checkpoint_storage_error_is_not_a_model_visible_tool_error(
+@pytest.mark.parametrize("boundary", ["checkpoint", "outcome"])
+async def test_tool_storage_error_is_not_a_model_visible_tool_error(
     tmp_path,
     provider,
     monkeypatch,
+    boundary,
 ):
     import sqlite3
 
@@ -163,17 +165,19 @@ async def test_checkpoint_storage_error_is_not_a_model_visible_tool_error(
     store = SQLiteStore(path)
     saved = store.create_session()
     with sqlite3.connect(path) as conn:
-        conn.executescript("""
-            CREATE TRIGGER fail_checkpoint BEFORE UPDATE OF partial_result_json ON tool_executions
-            WHEN NEW.partial_result_json IS NOT NULL
-            BEGIN SELECT RAISE(ABORT, 'checkpoint failure'); END;
+        column = "partial_result_json" if boundary == "checkpoint" else "pending_result_json"
+        conn.executescript(f"""
+            CREATE TRIGGER fail_tool_write BEFORE UPDATE OF {column} ON tool_executions
+            WHEN NEW.{column} IS NOT NULL
+            BEGIN SELECT RAISE(ABORT, 'tool persistence failure'); END;
         """)
     effects = []
 
     async def execute(call_id, arguments, update, context, invocation):
         effects.append(call_id)
-        invocation.checkpoint(AgentToolResult(content=[TextContent(text="progress")]))
-        return AgentToolResult(content=[TextContent(text="never reached")])
+        if boundary == "checkpoint":
+            invocation.checkpoint(AgentToolResult(content=[TextContent(text="progress")]))
+        return AgentToolResult(content=[TextContent(text="effect completed")])
 
     adapter = ToolReplyAdapter()
     models = Models([replace(provider, api=adapter)])
@@ -184,7 +188,7 @@ async def test_checkpoint_storage_error_is_not_a_model_visible_tool_error(
         harness = AgentHarness(
             models, provider.get_models()[0], tools=[tool], session=Session(store, saved.id)
         )
-        with pytest.raises(StorageError, match="checkpoint"):
+        with pytest.raises(StorageError, match="tool persistence"):
             await harness.prompt("Weather")
         assert effects == ["remote-tool"]
         assert len(adapter.requests) == 1
@@ -196,5 +200,101 @@ async def test_checkpoint_storage_error_is_not_a_model_visible_tool_error(
             "assistant",
         ]
     finally:
+        await models.aclose()
+        store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("finish", ["error", "terminate"])
+async def test_parallel_results_and_other_session_survive_reopen(
+    tmp_path,
+    provider,
+    monkeypatch,
+    finish,
+):
+    import asyncio
+
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    path = tmp_path / "agent.sqlite3"
+    store = SQLiteStore(path)
+    first, second = store.create_session("Alpha"), store.create_session("Beta")
+    later_done, release_first = asyncio.Event(), asyncio.Event()
+
+    class ParallelAdapter(ToolReplyAdapter):
+        async def _produce_simple(self, **call):
+            transcript = call["transcript"]
+            self.requests.append(transcript)
+            writer = call["writer"]
+            writer.emit({"type": "start", "partial": writer.partial})
+            if (
+                transcript.messages[-1].role == "user"
+                and transcript.messages[-1].content == "Alpha"
+            ):
+                writer.partial.content.extend(
+                    [
+                        ToolCall(id="first", name="lookup", arguments={}),
+                        ToolCall(id="later", name="lookup", arguments={}),
+                    ]
+                )
+                reason = "tool_use"
+            else:
+                writer.partial.content.append(TextContent(text="Answer"))
+                reason = "stop"
+            writer.emit({"type": "done", "reason": reason, "message": writer.partial})
+
+    async def execute(call_id, arguments, update, context, invocation):
+        if call_id == "first":
+            await release_first.wait()
+        else:
+            later_done.set()
+            if finish == "error":
+                raise ValueError("lookup unavailable")
+        return AgentToolResult(content=[TextContent(text=call_id)], terminate=finish == "terminate")
+
+    adapter = ParallelAdapter()
+    models = Models([replace(provider, api=adapter)])
+    task = None
+    try:
+        tool = AgentTool(
+            name="lookup", description="Lookup", parameters={"type": "object"}, execute=execute
+        )
+        harness = AgentHarness(
+            models, provider.get_models()[0], tools=[tool], session=Session(store, first.id)
+        )
+        other = AgentHarness(models, provider.get_models()[0], session=Session(store, second.id))
+        task = asyncio.create_task(harness.prompt("Alpha"))
+        await asyncio.wait_for(later_done.wait(), 5)
+        operation = store.active_operation(first.id)
+        assert [row.status for row in store.list_tools(operation.id)] == [
+            "effect_pending",
+            "outcome_ready",
+        ]
+        assert [entry.message.role for entry in store.list_entries(first.id)] == [
+            "user",
+            "assistant",
+        ]
+        await other.prompt("Beta")
+        release_first.set()
+        result = await asyncio.wait_for(task, 5)
+        assert result.status == "completed"
+        store.close()
+        store = SQLiteStore(path)
+        messages = [entry.message for entry in store.list_entries(first.id)]
+        assert [message.tool_call_id for message in messages if message.role == "toolResult"] == [
+            "first",
+            "later",
+        ]
+        assert messages[3].is_error == (finish == "error")
+        assert len(messages) == (5 if finish == "error" else 4)
+        assert Session(store, first.id).snapshot().operations[0].result == result
+        other_messages = Session(store, second.id).snapshot().messages
+        assert [m.role for m in other_messages] == ["user", "assistant"]
+        assert other_messages[0].content == "Beta"
+        assert store.active_operation(first.id) is None
+        assert store.active_operation(second.id) is None
+    finally:
+        release_first.set()
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
         await models.aclose()
         store.close()

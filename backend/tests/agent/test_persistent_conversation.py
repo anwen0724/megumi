@@ -85,9 +85,9 @@ async def test_storage_failure_does_not_fake_settlement_or_repeat_request(
             """)
         else:
             conn.executescript("""
-                CREATE TRIGGER fail_write BEFORE INSERT ON session_entries
-                WHEN json_extract(NEW.payload_json, '$.message.role') = 'assistant'
-                BEGIN SELECT RAISE(ABORT, 'blocked reply'); END;
+                CREATE TRIGGER fail_write BEFORE UPDATE OF state_json ON operations
+                WHEN json_extract(NEW.state_json, '$.at') = 'checkpoint'
+                BEGIN SELECT RAISE(ABORT, 'blocked reply commit'); END;
             """)
     adapter = ReplyAdapter()
     models = Models([replace(provider, api=adapter)])

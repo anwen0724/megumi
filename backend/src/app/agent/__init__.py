@@ -10,7 +10,7 @@ from app.agent.hooks import (
     BeforeToolDecision,
 )
 from app.agent.operation import BusyResult, OperationResult
-from app.agent.session import SessionSnapshot
+from app.agent.session import Session, SessionSnapshot
 from app.agent.tools import AgentTool, AgentToolResult, ToolExecute, ToolInvocation, ToolUpdate
 
 __all__ = [
@@ -26,6 +26,7 @@ __all__ = [
     "BusyResult",
     "HandlerErrorEvent",
     "OperationResult",
+    "Session",
     "SessionSnapshot",
     "ToolEvent",
     "ToolExecute",
