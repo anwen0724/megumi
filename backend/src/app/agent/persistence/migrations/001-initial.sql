@@ -51,3 +51,22 @@ CREATE TABLE session_entries (
         DEFERRABLE INITIALLY DEFERRED
 );
 CREATE INDEX entries_operation ON session_entries(operation_id);
+
+CREATE TABLE usage_ledger (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+    operation_id TEXT REFERENCES operations(id) ON DELETE CASCADE,
+    entry_id TEXT REFERENCES session_entries(id) ON DELETE CASCADE,
+    seq INTEGER CHECK(seq >= 0),
+    usage_json TEXT NOT NULL CHECK(json_valid(usage_json)),
+    adjustment INTEGER NOT NULL CHECK(adjustment IN (0, 1)),
+    details_json TEXT CHECK(details_json IS NULL OR json_valid(details_json)),
+    UNIQUE(session_id, seq),
+    FOREIGN KEY(session_id, operation_id) REFERENCES operations(session_id, id),
+    FOREIGN KEY(session_id, entry_id) REFERENCES session_entries(session_id, id),
+    CHECK(session_id IS NOT NULL OR operation_id IS NOT NULL),
+    CHECK((session_id IS NULL AND seq IS NULL AND entry_id IS NULL)
+       OR (session_id IS NOT NULL AND seq IS NOT NULL))
+);
+CREATE INDEX usage_operation ON usage_ledger(operation_id);
+CREATE INDEX usage_entry ON usage_ledger(entry_id);

@@ -3,6 +3,7 @@
 import sqlite3
 import time
 from collections.abc import Callable, Sequence
+from decimal import Decimal, localcontext
 from pathlib import Path
 from typing import Literal, cast
 from uuid import uuid4
@@ -10,8 +11,10 @@ from uuid import uuid4
 from app.agent.persistence.codec import (
     decode_message,
     decode_state,
+    decode_usage,
     encode_message,
     encode_state,
+    encode_usage,
     identity,
     json_decode,
     json_encode,
@@ -26,8 +29,15 @@ from app.agent.persistence.errors import (
     StaleWriteError,
 )
 from app.agent.persistence.operation_state import OperationSettings, OperationState, StartingState
-from app.agent.persistence.records import HistoryEntry, OperationInfo, ResultStatus, SessionInfo
-from app.ai import JSONValue, Message
+from app.agent.persistence.records import (
+    HistoryEntry,
+    OperationInfo,
+    ResultStatus,
+    SessionInfo,
+    UsageEntry,
+    UsageSummary,
+)
+from app.ai import JSONValue, Message, Usage, UsageCost
 
 
 class SQLiteStore:
@@ -377,3 +387,169 @@ class SQLiteStore:
                 entry.message, AssistantMessage
             ):
                 raise InvalidRecordError("Latest assistant must be an assistant in this session")
+
+    def record_usage(
+        self,
+        usage_id: str,
+        usage: Usage,
+        *,
+        session_id: str | None = None,
+        operation_id: str | None = None,
+        entry_id: str | None = None,
+        adjustment: bool = False,
+        details: JSONValue = None,
+    ) -> UsageEntry:
+        """Record one stable fact; identical retries do not add another charge."""
+        identity(usage_id)
+        encoded = encode_usage(usage)
+        encoded_details = json_encode(details) if details is not None else None
+        if session_id is None and operation_id is None:
+            raise InvalidRecordError("Usage needs a session or operation")
+        with self._db.transaction() as conn:
+            if session_id is not None:
+                self.get_session(session_id)
+            if operation_id is not None:
+                operation = self.get_operation(operation_id)
+                if operation.session_id != session_id:
+                    raise InvalidRecordError("Usage and operation session differ")
+            if entry_id is not None:
+                entry = self.get_entry(entry_id)
+                if session_id is None or entry.session_id != session_id:
+                    raise InvalidRecordError("Usage history must belong to its session")
+            existing = conn.execute(
+                "SELECT * FROM usage_ledger WHERE id = ?", (usage_id,)
+            ).fetchone()
+            values = (session_id, operation_id, entry_id, encoded, int(adjustment), encoded_details)
+            if existing:
+                previous = tuple(
+                    existing[key]
+                    for key in (
+                        "session_id",
+                        "operation_id",
+                        "entry_id",
+                        "usage_json",
+                        "adjustment",
+                        "details_json",
+                    )
+                )
+                if previous != values:
+                    raise ConflictError("Usage identity already contains a different fact")
+                return self._usage_entry(existing)
+            seq = (
+                None
+                if session_id is None
+                else conn.execute(
+                    "SELECT COALESCE(MAX(seq), -1) + 1 FROM usage_ledger WHERE session_id = ?",
+                    (session_id,),
+                ).fetchone()[0]
+            )
+            conn.execute(
+                "INSERT INTO usage_ledger VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    usage_id,
+                    session_id,
+                    operation_id,
+                    entry_id,
+                    seq,
+                    encoded,
+                    int(adjustment),
+                    encoded_details,
+                ),
+            )
+            row = conn.execute("SELECT * FROM usage_ledger WHERE id = ?", (usage_id,)).fetchone()
+            assert row is not None
+            return self._usage_entry(row)
+
+    @staticmethod
+    def _usage_entry(row: sqlite3.Row) -> UsageEntry:
+        """Decode exact counters and costs, not recomputed catalog estimates."""
+        return UsageEntry(
+            row["id"],
+            row["session_id"],
+            row["operation_id"],
+            row["entry_id"],
+            row["seq"],
+            decode_usage(row["usage_json"]),
+            bool(row["adjustment"]),
+            json_decode(row["details_json"]) if row["details_json"] is not None else None,
+        )
+
+    def list_usage(
+        self,
+        *,
+        session_id: str | None = None,
+        operation_id: str | None = None,
+        after_seq: int | None = None,
+    ) -> list[UsageEntry]:
+        """Query only committed usage; session sequences are stable continuation positions."""
+        if session_id is None and operation_id is None:
+            raise InvalidRecordError("Usage query requires a session or operation")
+        if after_seq is not None and session_id is None:
+            raise InvalidRecordError("Usage sequence belongs to a session")
+        with self._db.transaction(write=False) as conn:
+            if session_id is not None:
+                self.get_session(session_id)
+            if operation_id is not None:
+                operation = self.get_operation(operation_id)
+                if session_id is not None and operation.session_id != session_id:
+                    raise InvalidRecordError("Usage query crosses sessions")
+            rows = conn.execute(
+                "SELECT * FROM usage_ledger WHERE (? IS NULL OR session_id=?) "
+                "AND (? IS NULL OR operation_id=?) AND (? IS NULL OR seq>?) ORDER BY seq, rowid",
+                (session_id, session_id, operation_id, operation_id, after_seq, after_seq),
+            )
+            return [self._usage_entry(row) for row in rows]
+
+    def summarize_usage(
+        self,
+        *,
+        session_id: str | None = None,
+        operation_id: str | None = None,
+    ) -> UsageSummary:
+        """Sum ledger facts once, retaining unknowns and separating currencies."""
+        entries = self.list_usage(session_id=session_id, operation_id=operation_id)
+        usages = [entry.usage for entry in entries]
+        counts: dict[str, int | None] = {}
+        for field in ("input", "output", "cache_read", "cache_write", "reasoning", "total_tokens"):
+            values: list[int | None] = [getattr(usage, field) for usage in usages]
+            counts[field] = (
+                None if any(v is None for v in values) else sum(v for v in values if v is not None)
+            )
+        currencies = {usage.cost.currency for usage in usages if usage.cost is not None}
+        unknown = any(usage.cost is None for usage in usages)
+        costs: dict[str, UsageCost] = {}
+        for currency in currencies:
+            amounts: dict[str, Decimal | None] = {}
+            for field in ("input", "output", "cache_read", "cache_write", "total"):
+                values_money: list[Decimal | None] = [
+                    getattr(usage.cost, field)
+                    for usage in usages
+                    if usage.cost is not None and usage.cost.currency == currency
+                ]
+                if unknown or any(value is None for value in values_money):
+                    amounts[field] = None
+                else:
+                    known = [v for v in values_money if v is not None]
+                    # Use enough precision for exact addition even for widely separated exponents.
+                    with localcontext() as context:
+                        context.prec = max(
+                            28,
+                            max((v.adjusted() for v in known), default=0)
+                            - min((int(v.as_tuple().exponent) for v in known), default=0)
+                            + len(str(len(known)))
+                            + 2,
+                        )
+                        amounts[field] = sum(known, Decimal(0))
+            costs[currency] = UsageCost(currency=currency, **amounts)
+        return UsageSummary(
+            Usage(
+                input=counts["input"],
+                output=counts["output"],
+                cache_read=counts["cache_read"],
+                cache_write=counts["cache_write"],
+                reasoning=counts["reasoning"],
+                total_tokens=counts["total_tokens"],
+            ),
+            costs,
+            unknown,
+        )

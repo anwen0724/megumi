@@ -1,13 +1,15 @@
 """Validate durable JSON while preserving existing AI message semantics."""
 
 import json
+from dataclasses import asdict
+from decimal import Decimal
 from uuid import UUID
 
 from pydantic import TypeAdapter, ValidationError
 
 from app.agent.persistence.errors import InvalidRecordError
 from app.agent.persistence.operation_state import OperationState
-from app.ai import AssistantMessage, JSONValue, Message, decode_messages, encode_messages
+from app.ai import AssistantMessage, JSONValue, Message, Usage, decode_messages, encode_messages
 
 
 def json_encode(value: object) -> str:
@@ -68,5 +70,25 @@ def decode_state(payload: str) -> OperationState:
     """Decode a complete typed phase, rejecting unsupported values."""
     try:
         return TypeAdapter(OperationState).validate_json(payload, strict=True)
+    except (ValidationError, ValueError) as error:
+        raise InvalidRecordError(str(error)) from error
+
+
+def encode_usage(usage: "Usage") -> str:
+    """Convert monetary Decimal fields only, preserving unknown counters."""
+    data = asdict(usage)
+    if data["cost"] is not None:
+        for key, value in data["cost"].items():
+            if isinstance(value, Decimal):
+                data["cost"][key] = str(value)
+    encoded = json_encode(data)
+    decode_usage(encoded)
+    return encoded
+
+
+def decode_usage(payload: str) -> "Usage":
+    """Restore full usage using the existing AI data contract."""
+    try:
+        return TypeAdapter(Usage).validate_json(payload, strict=True)
     except (ValidationError, ValueError) as error:
         raise InvalidRecordError(str(error)) from error

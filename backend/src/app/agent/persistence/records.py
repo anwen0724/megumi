@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.agent.persistence.operation_state import OperationState
-from app.ai import JSONValue, Message
+from app.ai import JSONValue, Message, Usage, UsageCost
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,3 +51,26 @@ class OperationInfo:
     accepted_at: int
     ended_at: int | None
     released_at: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class UsageEntry:
+    """One stable usage fact or explicit supplement, in commit order."""
+
+    id: str
+    session_id: str | None
+    operation_id: str | None
+    entry_id: str | None
+    seq: int | None
+    usage: Usage
+    adjustment: bool
+    details: JSONValue
+
+
+@dataclass(frozen=True, slots=True)
+class UsageSummary:
+    """Conservative token totals and separate currency totals."""
+
+    tokens: Usage
+    costs: dict[str, UsageCost]
+    has_unknown_cost: bool
