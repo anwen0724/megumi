@@ -70,3 +70,15 @@ CREATE TABLE usage_ledger (
 );
 CREATE INDEX usage_operation ON usage_ledger(operation_id);
 CREATE INDEX usage_entry ON usage_ledger(entry_id);
+
+CREATE TABLE assistant_message_frames (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+    operation_id TEXT NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
+    response_entry_id TEXT NOT NULL,
+    frame_index INTEGER NOT NULL CHECK(frame_index >= 0),
+    frame_json TEXT NOT NULL CHECK(json_valid(frame_json)),
+    UNIQUE(response_entry_id, frame_index),
+    FOREIGN KEY(session_id, operation_id) REFERENCES operations(session_id, id)
+);
+CREATE INDEX frames_operation ON assistant_message_frames(operation_id);

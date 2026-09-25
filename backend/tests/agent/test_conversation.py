@@ -122,6 +122,7 @@ class RichAdapter(TextAdapter):
         writer = call["writer"]
         writer.emit({"type": "start", "partial": writer.partial})
         writer.partial.content.append(TextContent(text="Part one"))
+        writer.emit({"type": "text_start", "content_index": 0, "partial": writer.partial})
         writer.emit(
             {
                 "type": "text_delta",

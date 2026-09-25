@@ -74,3 +74,12 @@ class UsageSummary:
     tokens: Usage
     costs: dict[str, UsageCost]
     has_unknown_cost: bool
+
+
+@dataclass(frozen=True, slots=True)
+class SessionData:
+    """History and operations read together at one committed database snapshot."""
+
+    session: SessionInfo
+    entries: list[HistoryEntry]
+    operations: list[OperationInfo]

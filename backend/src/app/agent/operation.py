@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from app.agent.persistence.records import ResultStatus
 from app.ai import AssistantMessage
 
-type OperationStatus = Literal["completed", "failed"]
+type OperationStatus = ResultStatus
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,5 +1,7 @@
 """Save and query Agent facts through atomic storage operations."""
 
+from __future__ import annotations
+
 import sqlite3
 import time
 from collections.abc import Callable, Sequence
@@ -9,9 +11,11 @@ from typing import Literal, cast
 from uuid import uuid4
 
 from app.agent.persistence.codec import (
+    decode_frame,
     decode_message,
     decode_state,
     decode_usage,
+    encode_frame,
     encode_message,
     encode_state,
     encode_usage,
@@ -28,16 +32,25 @@ from app.agent.persistence.errors import (
     NotFoundError,
     StaleWriteError,
 )
-from app.agent.persistence.operation_state import OperationSettings, OperationState, StartingState
+from app.agent.persistence.operation_state import (
+    AssistantPendingState,
+    AssistantReadyState,
+    CheckpointState,
+    OperationSettings,
+    OperationState,
+    StartingState,
+)
 from app.agent.persistence.records import (
     HistoryEntry,
     OperationInfo,
     ResultStatus,
+    SessionData,
     SessionInfo,
     UsageEntry,
     UsageSummary,
 )
-from app.ai import JSONValue, Message, Usage, UsageCost
+from app.ai import AssistantMessage, JSONValue, Message, Usage, UsageCost
+from app.ai.assistant_message_frames import AssistantMessageFrame
 
 
 class SQLiteStore:
@@ -346,6 +359,9 @@ class SQLiteStore:
                     operation_id,
                 ),
             )
+            conn.execute(
+                "DELETE FROM assistant_message_frames WHERE operation_id=?", (operation_id,)
+            )
             return self.get_operation(operation_id)
 
     def release_operation(self, operation_id: str) -> OperationInfo:
@@ -379,6 +395,20 @@ class SQLiteStore:
 
     def _validate_state(self, operation: OperationInfo, state: OperationState) -> None:
         """Check historical links in the same transaction as the phase write."""
+
+        references: list[str] = []
+        if isinstance(state, (AssistantReadyState, AssistantPendingState)):
+            identity(state.generation_context.step_id)
+            if state.generation_context.trigger_entry_id is not None:
+                references.append(state.generation_context.trigger_entry_id)
+        if isinstance(state, AssistantPendingState):
+            identity(state.response_entry_id)
+            identity(state.usage_id)
+        if isinstance(state, CheckpointState) and state.trigger_entry_id is not None:
+            references.append(state.trigger_entry_id)
+        for entry_id in references:
+            if self.get_entry(entry_id).session_id != operation.session_id:
+                raise InvalidRecordError("State history reference crosses sessions")
         if state.latest_assistant_entry_id is not None:
             from app.ai import AssistantMessage
 
@@ -553,3 +583,105 @@ class SQLiteStore:
             costs,
             unknown,
         )
+
+    def commit_response(
+        self,
+        operation_id: str,
+        *,
+        expected: AssistantPendingState,
+        message: AssistantMessage,
+        next_state: OperationState,
+    ) -> HistoryEntry:
+        """Save the full response, actual usage and successor in one transaction."""
+        with self._db.transaction():
+            operation = self._expect(operation_id, expected)
+            if operation.session_id is None:
+                raise InvalidRecordError("Dialogue response requires its session")
+            entry = self._insert_message(
+                operation.session_id,
+                message,
+                entry_id=expected.response_entry_id,
+                operation_id=operation_id,
+            )
+            self.record_usage(
+                expected.usage_id,
+                message.usage,
+                session_id=operation.session_id,
+                operation_id=operation_id,
+                entry_id=entry.id,
+            )
+            self.transition(operation_id, expected=expected, state=next_state)
+            self._db.connection.execute(
+                "DELETE FROM assistant_message_frames WHERE operation_id=? AND response_entry_id=?",
+                (operation_id, expected.response_entry_id),
+            )
+            return entry
+
+    def append_operation_message(
+        self,
+        operation_id: str,
+        message: Message,
+        *,
+        expected: OperationState | None,
+    ) -> HistoryEntry:
+        """Append a settled message while the admitted operation still owns history."""
+        with self._db.transaction():
+            operation = self._expect(operation_id, expected)
+            if operation.session_id is None:
+                raise InvalidRecordError("Dialogue history requires its session")
+            return self._insert_message(
+                operation.session_id,
+                message,
+                operation_id=operation_id,
+                entry_id=str(uuid4()),
+            )
+
+    def read_session(self, session_id: str) -> SessionData:
+        """Read history and operation views at one consistent committed point."""
+        with self._db.transaction(write=False):
+            return SessionData(
+                self.get_session(session_id),
+                self.list_entries(session_id),
+                self.list_operations(session_id),
+            )
+
+    def append_frame(
+        self,
+        operation_id: str,
+        response_entry_id: str,
+        frame: AssistantMessageFrame,
+    ) -> None:
+        """Persist each valid encoded frame only while its request is still active."""
+        encoded = encode_frame(frame)
+        with self._db.transaction() as conn:
+            operation = self.get_operation(operation_id)
+            if not isinstance(operation.state, AssistantPendingState) or (
+                operation.state.response_entry_id != response_entry_id
+            ):
+                raise StaleWriteError("Frame belongs to an inactive response")
+            seq = conn.execute(
+                "SELECT COALESCE(MAX(frame_index), -1) + 1 FROM assistant_message_frames "
+                "WHERE response_entry_id=?",
+                (response_entry_id,),
+            ).fetchone()[0]
+            if (seq == 0) != (frame["type"] == "start"):
+                raise InvalidRecordError("Response frames must begin with exactly one start")
+            conn.execute(
+                "INSERT INTO assistant_message_frames VALUES (?, ?, ?, ?, ?, ?)",
+                (str(uuid4()), operation.session_id, operation_id, response_entry_id, seq, encoded),
+            )
+
+    def read_frames(
+        self,
+        operation_id: str,
+        response_entry_id: str,
+    ) -> list[AssistantMessageFrame]:
+        """Read saved progress without reconnecting or executing incomplete tool calls."""
+        with self._db.transaction(write=False) as conn:
+            self.get_operation(operation_id)
+            rows = conn.execute(
+                "SELECT frame_json FROM assistant_message_frames "
+                "WHERE operation_id=? AND response_entry_id=? ORDER BY frame_index",
+                (operation_id, response_entry_id),
+            )
+            return [decode_frame(row["frame_json"]) for row in rows]

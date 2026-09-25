@@ -10,6 +10,7 @@ from pydantic import TypeAdapter, ValidationError
 from app.agent.persistence.errors import InvalidRecordError
 from app.agent.persistence.operation_state import OperationState
 from app.ai import AssistantMessage, JSONValue, Message, Usage, decode_messages, encode_messages
+from app.ai.assistant_message_frames import AssistantMessageFrame
 
 
 def json_encode(value: object) -> str:
@@ -90,5 +91,24 @@ def decode_usage(payload: str) -> "Usage":
     """Restore full usage using the existing AI data contract."""
     try:
         return TypeAdapter(Usage).validate_json(payload, strict=True)
+    except (ValidationError, ValueError) as error:
+        raise InvalidRecordError(str(error)) from error
+
+
+def encode_frame(frame: AssistantMessageFrame) -> str:
+    """Encode existing AI frames without inventing a second delta format."""
+    try:
+        adapter: TypeAdapter[AssistantMessageFrame] = TypeAdapter(AssistantMessageFrame)
+        encoded = adapter.dump_json(frame, warnings="error").decode("utf-8")
+        adapter.validate_json(encoded, strict=True)
+        return encoded
+    except (ValidationError, TypeError, ValueError) as error:
+        raise InvalidRecordError(str(error)) from error
+
+
+def decode_frame(payload: str) -> AssistantMessageFrame:
+    """Restore a complete typed frame, including the initial assistant metadata."""
+    try:
+        return TypeAdapter(AssistantMessageFrame).validate_json(payload, strict=True)
     except (ValidationError, ValueError) as error:
         raise InvalidRecordError(str(error)) from error

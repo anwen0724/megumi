@@ -27,6 +27,7 @@ class FailThenSucceedAdapter(OpenAIProtocol):
             writer.emit({"type": "start", "partial": writer.partial})
             if self.partial:
                 writer.partial.content.append(TextContent(text="Partial reply"))
+                writer.emit({"type": "text_start", "content_index": 0, "partial": writer.partial})
                 writer.emit(
                     {
                         "type": "text_delta",

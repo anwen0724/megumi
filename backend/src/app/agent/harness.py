@@ -9,10 +9,19 @@ from typing import Literal
 from app.agent.events import AgentEvents
 from app.agent.hooks import AgentHooks
 from app.agent.operation import BusyResult, OperationRecord, OperationResult
+from app.agent.persistence.errors import BusyError, StorageError
+from app.agent.persistence.operation_state import OperationSettings
 from app.agent.session import Session, SessionSnapshot
 from app.agent.tool_execution import PreparedToolCall, execute_tool_call, prepare_tool_call
 from app.agent.tools import AgentTool, AgentToolResult
-from app.ai import Model, Models, ToolCall, ToolResultMessage, to_tool_declaration
+from app.ai import (
+    AssistantMessageFrameEncoder,
+    Model,
+    Models,
+    ToolCall,
+    ToolResultMessage,
+    to_tool_declaration,
+)
 
 
 class AgentHarness:
@@ -24,6 +33,7 @@ class AgentHarness:
         model: Model,
         system_prompt: str | None = None,
         *,
+        session: Session | None = None,
         tools: list[AgentTool] | None = None,
         active_tool_names: list[str] | None = None,
         tool_context: object | None = None,
@@ -54,14 +64,19 @@ class AgentHarness:
         self._tool_context = tool_context
         self.events = AgentEvents()
         self.hooks = AgentHooks()
-        self._session = Session()
+        self._session = session if session is not None else Session()
         self._active_task: asyncio.Task[OperationResult] | None = None
 
     async def prompt(self, text: str) -> OperationResult | BusyResult:
         """Accept and drive one text input; leaving a wait does not stop owned work."""
         if self._session.active_operation_id is not None:
             return BusyResult()
-        record = self._session.accept(text)
+        try:
+            record = self._session.accept(
+                text, settings=OperationSettings(tool_execution=self._tool_execution)
+            )
+        except BusyError:
+            return BusyResult()
         task = asyncio.create_task(self._drive(record))
         self._active_task = task
         return await asyncio.shield(task)
@@ -81,14 +96,26 @@ class AgentHarness:
                 context = self._session.context(
                     self._system_prompt, [to_tool_declaration(tool) for tool in enabled.values()]
                 )
-                record.phase = "assistant.effect_pending"
+                request_state = self._session.begin_response(record, self._model, list(enabled))
                 response = self._models.stream_simple(self._model, context)
-                async for _event in response:
-                    pass
+                encoder = AssistantMessageFrameEncoder()
+                try:
+                    async for event in response:
+                        frame = encoder.encode(event)
+                        if frame is not None:
+                            self._session.store.append_frame(
+                                record.operation_id,
+                                request_state.response_entry_id,
+                                frame,
+                            )
+                except BaseException:
+                    response.cancel()
+                    raise
                 final = await response.result()
                 calls = [block for block in final.content if isinstance(block, ToolCall)]
-                if calls and final.stop_reason in {"tool_use", "stop", "length"}:
-                    self._session.append_message(final)
+                needs_tools = bool(calls) and final.stop_reason in {"tool_use", "stop", "length"}
+                self._session.record_response(record, request_state, final, needs_tools=needs_tools)
+                if needs_tools:
                     batch_results = await self._execute_batch(
                         calls,
                         enabled,
@@ -113,6 +140,8 @@ class AgentHarness:
                 )
                 self._session.settle(record, result)
                 break
+        except StorageError:
+            raise
         except Exception as error:
             result = OperationResult(
                 operation_id=record.operation_id,
@@ -121,8 +150,8 @@ class AgentHarness:
             )
             self._session.settle(record, result)
         finally:
-            self._session.release(record)
             self._active_task = None
+        self._session.release(record)
         return result
 
     async def _execute_batch(
