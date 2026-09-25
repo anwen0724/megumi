@@ -1,6 +1,10 @@
 """Define typed durable records returned by Agent storage."""
 
 from dataclasses import dataclass
+from typing import Literal
+
+from app.agent.persistence.operation_state import OperationState
+from app.ai import JSONValue, Message
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,3 +16,38 @@ class SessionInfo:
     created_at: int
     last_activity_at: int
     archived_at: int | None
+
+
+type ResultStatus = Literal["completed", "declined", "aborted", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryEntry:
+    """An immutable identity and ordered payload in a session history."""
+
+    id: str
+    session_id: str
+    operation_id: str | None
+    seq: int
+    type: Literal["message", "custom", "compaction"]
+    payload: dict[str, JSONValue]
+    recorded_at: int
+    message: Message | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class OperationInfo:
+    """A consistent saved lifecycle view, independent of runtime tasks."""
+
+    id: str
+    session_id: str | None
+    kind: Literal["run", "compaction"]
+    intent: dict[str, JSONValue] | None
+    state: OperationState | None
+    base_entry_id: str | None
+    final_entry_id: str | None
+    result_status: ResultStatus | None
+    error: dict[str, JSONValue] | None
+    accepted_at: int
+    ended_at: int | None
+    released_at: int | None
