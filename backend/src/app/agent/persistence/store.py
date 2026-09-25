@@ -49,7 +49,9 @@ from app.agent.persistence.operation_state import (
 )
 from app.agent.persistence.records import (
     HistoryEntry,
+    InputKind,
     OperationInfo,
+    PendingInput,
     ResultStatus,
     SessionData,
     SessionInfo,
@@ -65,6 +67,7 @@ from app.ai import (
     ToolResultMessage,
     Usage,
     UsageCost,
+    UserMessage,
 )
 from app.ai.assistant_message_frames import AssistantMessageFrame
 
@@ -293,7 +296,9 @@ class SQLiteStore:
     ) -> str:
         """Append a complete message to an idle session without starting a Run."""
         with self._db.transaction():
-            self._require_idle(session_id)
+            self.get_session(session_id)
+            if self.active_operation(session_id) is not None:
+                return self.enqueue_input(session_id, "write", message, input_id=entry_id).id
             return self._insert_message(session_id, message, entry_id=entry_id or str(uuid4())).id
 
     def accept_operation(
@@ -304,6 +309,7 @@ class SQLiteStore:
         kind: Literal["run", "compaction"] = "run",
         settings: OperationSettings | None = None,
         operation_id: str | None = None,
+        input_ids: Sequence[str] = (),
     ) -> OperationInfo:
         """Atomically claim a session, save direct inputs and establish initial state."""
         operation_id = identity(operation_id or str(uuid4()))
@@ -325,6 +331,7 @@ class SQLiteStore:
                     self._clock(),
                 ),
             )
+            self._consume_selected(session_id, operation_id, input_ids)
             prompt_ids: list[JSONValue] = [
                 self._insert_message(
                     session_id, message, entry_id=str(uuid4()), operation_id=operation_id
@@ -651,25 +658,6 @@ class SQLiteStore:
             )
             return entry
 
-    def append_operation_message(
-        self,
-        operation_id: str,
-        message: Message,
-        *,
-        expected: OperationState | None,
-    ) -> HistoryEntry:
-        """Append a settled message while the admitted operation still owns history."""
-        with self._db.transaction():
-            operation = self._expect(operation_id, expected)
-            if operation.session_id is None:
-                raise InvalidRecordError("Dialogue history requires its session")
-            return self._insert_message(
-                operation.session_id,
-                message,
-                operation_id=operation_id,
-                entry_id=str(uuid4()),
-            )
-
     def read_session(self, session_id: str) -> SessionData:
         """Read history and operation views at one consistent committed point."""
         with self._db.transaction(write=False):
@@ -922,3 +910,183 @@ class SQLiteStore:
                 "UPDATE tool_executions SET memos_json=? WHERE id=?",
                 (json_encode(tool.memos), tool_id),
             )
+
+    def enqueue_input(
+        self,
+        session_id: str,
+        kind: InputKind,
+        message: Message,
+        *,
+        input_id: str | None = None,
+    ) -> PendingInput:
+        """Persist a full message without starting or interrupting a Run."""
+        if isinstance(message, UserMessage):
+            if isinstance(message.content, str) and not message.content:
+                raise InvalidRecordError("Input text and images cannot both be empty")
+            if isinstance(message.content, list) and not message.content:
+                raise InvalidRecordError("Input text and images cannot both be empty")
+        payload = cast(dict[str, JSONValue], json_decode(encode_message(message)))
+        payload["type"] = "message"
+        return self._enqueue(session_id, kind, payload, input_id=input_id)
+
+    def enqueue_custom(
+        self,
+        session_id: str,
+        custom_type: str,
+        data: JSONValue = None,
+    ) -> PendingInput:
+        """Queue an application history record using the internal write category."""
+        return self._enqueue(
+            session_id,
+            "write",
+            {"type": "custom", "custom_type": custom_type, "data": data},
+        )
+
+    def _enqueue(
+        self,
+        session_id: str,
+        kind: InputKind,
+        payload: dict[str, JSONValue],
+        *,
+        input_id: str | None = None,
+    ) -> PendingInput:
+        if kind not in ("steer", "follow_up", "next_run", "write"):
+            raise InvalidRecordError("Unsupported input category")
+        input_id = identity(input_id or str(uuid4()))
+        encoded = json_encode(payload)
+        with self._db.transaction() as conn:
+            self.get_session(session_id)
+            if conn.execute("SELECT id FROM session_entries WHERE id=?", (input_id,)).fetchone():
+                raise ConflictError("Input identity already belongs to formal history")
+            row = conn.execute("SELECT * FROM session_inputs WHERE id=?", (input_id,)).fetchone()
+            if row:
+                if (row["session_id"], row["kind"], row["payload_json"]) != (
+                    session_id,
+                    kind,
+                    encoded,
+                ):
+                    raise ConflictError("Input identity already contains a different fact")
+                return self._input(row)
+            seq = conn.execute(
+                "SELECT COALESCE(MAX(seq), -1) + 1 FROM session_inputs WHERE session_id=?",
+                (session_id,),
+            ).fetchone()[0]
+            now = self._clock()
+            conn.execute(
+                "INSERT INTO session_inputs VALUES (?, ?, ?, ?, ?, ?)",
+                (input_id, session_id, kind, seq, encoded, now),
+            )
+            return PendingInput(
+                input_id,
+                session_id,
+                kind,
+                seq,
+                cast(dict[str, JSONValue], json_decode(encoded)),
+                now,
+            )
+
+    @staticmethod
+    def _input(row: sqlite3.Row) -> PendingInput:
+        payload = json_decode(row["payload_json"])
+        if not isinstance(payload, dict):
+            raise InvalidRecordError("Input payload must be an object")
+        if payload.get("type") == "message":
+            decode_message(row["payload_json"])
+        elif payload.get("type") != "custom" or row["kind"] != "write":
+            raise InvalidRecordError("Custom history is allowed only in write inputs")
+        return PendingInput(
+            row["id"], row["session_id"], row["kind"], row["seq"], payload, row["queued_at"]
+        )
+
+    def list_inputs(self, session_id: str) -> list[PendingInput]:
+        """Read pending inputs in queue order without selecting scheduling categories."""
+        with self._db.transaction(write=False) as conn:
+            self.get_session(session_id)
+            return [
+                self._input(row)
+                for row in conn.execute(
+                    "SELECT * FROM session_inputs WHERE session_id=? ORDER BY seq", (session_id,)
+                )
+            ]
+
+    def withdraw_input(
+        self,
+        session_id: str,
+        input_id: str,
+    ) -> Literal["cancelled", "already_consumed", "not_found"]:
+        """Withdraw only pending input; never delete already committed history."""
+        with self._db.transaction() as conn:
+            self.get_session(session_id)
+            removed = conn.execute(
+                "DELETE FROM session_inputs WHERE session_id=? AND id=?", (session_id, input_id)
+            ).rowcount
+            if removed:
+                return "cancelled"
+            exists = conn.execute(
+                "SELECT id FROM session_entries WHERE session_id=? AND id=?", (session_id, input_id)
+            ).fetchone()
+            return "already_consumed" if exists else "not_found"
+
+    def _consume_selected(
+        self,
+        session_id: str,
+        operation_id: str,
+        input_ids: Sequence[str],
+    ) -> list[HistoryEntry]:
+        """Move selected identities in original order inside the caller's transaction."""
+        if len(set(input_ids)) != len(input_ids):
+            raise InvalidRecordError("Selected input identities must be distinct")
+        selected = [item for item in self.list_inputs(session_id) if item.id in input_ids]
+        if len(selected) != len(input_ids):
+            raise ConflictError("Selected input is missing or belongs to another session")
+        result = []
+        for item in selected:
+            payload = dict(item.payload)
+            entry_type = payload.pop("type")
+            if entry_type not in ("message", "custom"):
+                raise InvalidRecordError("Unsupported input payload")
+            entry = self._insert_entry(
+                session_id,
+                item.id,
+                cast(Literal["message", "custom"], entry_type),
+                payload,
+                operation_id=operation_id,
+            )
+            self._db.connection.execute("DELETE FROM session_inputs WHERE id=?", (item.id,))
+            result.append(entry)
+        return result
+
+    def consume_inputs(
+        self,
+        operation_id: str,
+        input_ids: Sequence[str],
+        *,
+        expected: OperationState | None,
+        next_state: OperationState,
+    ) -> list[HistoryEntry]:
+        """Atomically append selected inputs, remove them from the queue and advance state."""
+        with self._db.transaction():
+            operation = self._expect(operation_id, expected)
+            if operation.session_id is None:
+                raise InvalidRecordError("Dialogue inputs require their session")
+            entries = self._consume_selected(operation.session_id, operation_id, input_ids)
+            self.transition(operation_id, expected=expected, state=next_state)
+            return entries
+
+    def append_custom(
+        self,
+        session_id: str,
+        custom_type: str,
+        data: JSONValue = None,
+    ) -> str:
+        """Append custom history while idle, or queue write while busy."""
+        with self._db.transaction():
+            self.get_session(session_id)
+            if self.active_operation(session_id) is not None:
+                return self.enqueue_custom(session_id, custom_type, data).id
+            return self._insert_entry(
+                session_id,
+                str(uuid4()),
+                "custom",
+                {"custom_type": custom_type, "data": data},
+            ).id

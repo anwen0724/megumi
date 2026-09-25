@@ -101,3 +101,18 @@ class ToolExecutionInfo:
     memos: dict[str, JSONValue]
     pending_result: ToolResultMessage | None
     terminate: bool | None
+
+
+type InputKind = Literal["steer", "follow_up", "next_run", "write"]
+
+
+@dataclass(frozen=True, slots=True)
+class PendingInput:
+    """An accepted input not yet moved into formal session history."""
+
+    id: str
+    session_id: str
+    kind: InputKind
+    seq: int
+    payload: dict[str, JSONValue]
+    queued_at: int

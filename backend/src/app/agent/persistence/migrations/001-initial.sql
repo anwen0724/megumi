@@ -109,3 +109,13 @@ CREATE TABLE tool_executions (
         AND partial_result_json IS NULL AND memos_json = '{}'))
 );
 CREATE INDEX tools_operation ON tool_executions(operation_id);
+
+CREATE TABLE session_inputs (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN ('steer', 'follow_up', 'next_run', 'write')),
+    seq INTEGER NOT NULL CHECK(seq >= 0),
+    payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+    queued_at INTEGER NOT NULL,
+    UNIQUE(session_id, seq)
+);

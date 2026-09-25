@@ -21,7 +21,7 @@ from app.agent.persistence.operation_state import (
     ToolsState,
 )
 from app.agent.persistence.records import HistoryEntry, OperationInfo
-from app.ai import AssistantMessage, Context, Message, Model, Tool, UserMessage
+from app.ai import AssistantMessage, Context, JSONValue, Message, Model, Tool, UserMessage
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,11 +136,13 @@ class Session:
             next_state=next_state,
         )
 
-    def append_message(self, message: Message) -> None:
-        """Append settled tool output for the current admitted operation."""
-        operation = self.store.active_operation(self.session_id)
-        assert operation is not None
-        self.store.append_operation_message(operation.id, message, expected=operation.state)
+    def append_message(self, message: Message) -> str:
+        """Append history while idle or queue a write while a Run owns the session."""
+        return self.store.append_message(self.session_id, message)
+
+    def append_custom(self, custom_type: str, data: JSONValue = None) -> str:
+        """Save application history without automatically adding it to model context."""
+        return self.store.append_custom(self.session_id, custom_type, data)
 
     def settle(self, record: OperationRecord, result: OperationResult) -> None:
         """Save a terminal result; its assistant, if any, is already in history."""
