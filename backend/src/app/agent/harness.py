@@ -13,7 +13,7 @@ from app.agent.persistence.errors import BusyError, StorageError
 from app.agent.persistence.operation_state import OperationSettings, ToolsState
 from app.agent.session import Session, SessionSnapshot
 from app.agent.tool_execution import PreparedToolCall, execute_tool_call, prepare_tool_call
-from app.agent.tools import AgentTool, AgentToolResult
+from app.agent.tools import AgentTool, AgentToolResult, ToolInvocation
 from app.ai import (
     AssistantMessageFrameEncoder,
     Model,
@@ -195,6 +195,7 @@ class AgentHarness:
                 prepared,
                 operation_id,
                 self._tool_context,
+                invocation=ToolInvocation(operation_id, self._session.store, invocation.id),
                 events=self.events,
                 hooks=self.hooks,
             )

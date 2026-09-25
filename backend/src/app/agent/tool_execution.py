@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from app.agent.events import AgentEvents, ToolEvent
 from app.agent.hooks import AgentHooks
+from app.agent.persistence.errors import StorageError
 from app.agent.tools import AgentTool, AgentToolResult, ToolInvocation
 from app.ai import JSONValue, TextContent, ToolCall, ToolResultMessage, validate_tool_arguments
 
@@ -71,6 +72,7 @@ async def execute_tool_call(
     operation_id: str,
     tool_context: object | None,
     *,
+    invocation: ToolInvocation | None = None,
     events: AgentEvents | None = None,
     hooks: AgentHooks | None = None,
 ) -> tuple[AgentToolResult, ToolResultMessage]:
@@ -82,7 +84,14 @@ async def execute_tool_call(
         )
     result = (
         await _run_tool(
-            call, prepared.tool, operation_id, tool_context, prepared.arguments, events, hooks
+            call,
+            prepared.tool,
+            operation_id,
+            tool_context,
+            prepared.arguments,
+            events,
+            hooks,
+            invocation or ToolInvocation(operation_id),
         )
         if isinstance(prepared, PreparedToolCall)
         else prepared
@@ -116,6 +125,7 @@ async def _run_tool(
     arguments: dict[str, JSONValue],
     events: AgentEvents | None,
     hooks: AgentHooks | None,
+    invocation: ToolInvocation,
 ) -> AgentToolResult:
     """Execute and settle progress before applying post-execution hooks."""
     active = True
@@ -149,11 +159,14 @@ async def _run_tool(
             arguments,
             on_update,
             tool_context,
-            ToolInvocation(operation_id),
+            invocation,
         )
+    except StorageError:
+        raise
     except Exception as error:
         result = error_result(str(error) or type(error).__name__)
     finally:
+        invocation._close()
         active = False
         if pending is not None:
             await pending

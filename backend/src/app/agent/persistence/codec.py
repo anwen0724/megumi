@@ -1,9 +1,15 @@
 """Validate durable JSON while preserving existing AI message semantics."""
 
+from __future__ import annotations
+
 import json
 from dataclasses import asdict
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from app.agent.tools import AgentToolResult
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -75,7 +81,7 @@ def decode_state(payload: str) -> OperationState:
         raise InvalidRecordError(str(error)) from error
 
 
-def encode_usage(usage: "Usage") -> str:
+def encode_usage(usage: Usage) -> str:
     """Convert monetary Decimal fields only, preserving unknown counters."""
     data = asdict(usage)
     if data["cost"] is not None:
@@ -87,7 +93,7 @@ def encode_usage(usage: "Usage") -> str:
     return encoded
 
 
-def decode_usage(payload: str) -> "Usage":
+def decode_usage(payload: str) -> Usage:
     """Restore full usage using the existing AI data contract."""
     try:
         return TypeAdapter(Usage).validate_json(payload, strict=True)
@@ -112,3 +118,17 @@ def decode_frame(payload: str) -> AssistantMessageFrame:
         return TypeAdapter(AssistantMessageFrame).validate_json(payload, strict=True)
     except (ValidationError, ValueError) as error:
         raise InvalidRecordError(str(error)) from error
+
+
+def encode_tool_result(partial: AgentToolResult) -> str:
+    """Preserve a full checkpoint while converting only its monetary fields."""
+    from app.agent.tools import AgentToolResult
+
+    data = asdict(partial)
+    data["usage"] = json_decode(encode_usage(partial.usage)) if partial.usage is not None else None
+    encoded = json_encode(data)
+    try:
+        TypeAdapter(AgentToolResult).validate_json(encoded, strict=True)
+    except (ValidationError, ValueError) as error:
+        raise InvalidRecordError(str(error)) from error
+    return encoded

@@ -87,3 +87,114 @@ async def test_tool_intent_precedes_effect_and_results_survive_reopen(
     finally:
         await models.aclose()
         store.close()
+
+
+@pytest.mark.asyncio
+async def test_tool_checkpoint_memos_and_expired_handle(tmp_path, provider, monkeypatch):
+    import asyncio
+
+    from app.agent.persistence.errors import StaleWriteError
+
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    store = SQLiteStore(tmp_path / "agent.sqlite3")
+    saved = store.create_session()
+    handles = []
+    observed = []
+
+    async def execute(call_id, arguments, update, context, invocation):
+        handles.append(invocation)
+        update(AgentToolResult(content=[TextContent(text="visible only")]))
+        row = store.list_tools(invocation.operation_id)[0]
+        observed.append(row.partial_result is None)
+        invocation.checkpoint(AgentToolResult(content=[TextContent(text="durable")]))
+        invocation.checkpoint(AgentToolResult(content=[TextContent(text="latest")]))
+
+        async def put(key, value):
+            invocation.set_memo(key, value)
+
+        await asyncio.gather(put("page", 2), put("cursor", "next"))
+        assert invocation.get_memo("page") == 2
+        assert invocation.get_memo("cursor") == "next"
+        invocation.delete_memo("page")
+        assert invocation.get_memo("page") is None
+        row = store.get_tool(row.id)
+        observed.append(row.partial_result["content"][0]["text"])
+        observed.append(row.memos)
+        return AgentToolResult(content=[TextContent(text="complete")])
+
+    adapter = ToolReplyAdapter()
+    models = Models([replace(provider, api=adapter)])
+    try:
+        tool = AgentTool(
+            name="lookup", description="Lookup", parameters={"type": "object"}, execute=execute
+        )
+        harness = AgentHarness(
+            models, provider.get_models()[0], tools=[tool], session=Session(store, saved.id)
+        )
+
+        async def check_closed(_context):
+            with pytest.raises(StaleWriteError):
+                handles[0].set_memo("after_execute", True)
+
+        harness.hooks.on("after_tool", check_closed)
+        result = await harness.prompt("Weather")
+        assert observed == [True, "latest", {"cursor": "next"}]
+        assert result.status == "completed"
+        with pytest.raises(StaleWriteError):
+            handles[0].set_memo("late", True)
+        assert store.list_tools(result.operation_id) == []
+    finally:
+        await models.aclose()
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_checkpoint_storage_error_is_not_a_model_visible_tool_error(
+    tmp_path,
+    provider,
+    monkeypatch,
+):
+    import sqlite3
+
+    from app.agent.persistence.errors import StorageError
+
+    monkeypatch.setenv("SAMPLE_API_KEY", "synthetic-key")
+    path = tmp_path / "agent.sqlite3"
+    store = SQLiteStore(path)
+    saved = store.create_session()
+    with sqlite3.connect(path) as conn:
+        conn.executescript("""
+            CREATE TRIGGER fail_checkpoint BEFORE UPDATE OF partial_result_json ON tool_executions
+            WHEN NEW.partial_result_json IS NOT NULL
+            BEGIN SELECT RAISE(ABORT, 'checkpoint failure'); END;
+        """)
+    effects = []
+
+    async def execute(call_id, arguments, update, context, invocation):
+        effects.append(call_id)
+        invocation.checkpoint(AgentToolResult(content=[TextContent(text="progress")]))
+        return AgentToolResult(content=[TextContent(text="never reached")])
+
+    adapter = ToolReplyAdapter()
+    models = Models([replace(provider, api=adapter)])
+    try:
+        tool = AgentTool(
+            name="lookup", description="Lookup", parameters={"type": "object"}, execute=execute
+        )
+        harness = AgentHarness(
+            models, provider.get_models()[0], tools=[tool], session=Session(store, saved.id)
+        )
+        with pytest.raises(StorageError, match="checkpoint"):
+            await harness.prompt("Weather")
+        assert effects == ["remote-tool"]
+        assert len(adapter.requests) == 1
+        operation = store.active_operation(saved.id)
+        assert operation.result_status is None
+        assert store.list_tools(operation.id)[0].status == "effect_pending"
+        assert [entry.message.role for entry in store.list_entries(saved.id)] == [
+            "user",
+            "assistant",
+        ]
+    finally:
+        await models.aclose()
+        store.close()

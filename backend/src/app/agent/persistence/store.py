@@ -7,7 +7,10 @@ import time
 from collections.abc import Callable, Sequence
 from decimal import Decimal, localcontext
 from pathlib import Path
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
+
+if TYPE_CHECKING:
+    from app.agent.tools import AgentToolResult
 from uuid import UUID, uuid4, uuid5
 
 from app.agent.persistence.codec import (
@@ -18,6 +21,7 @@ from app.agent.persistence.codec import (
     encode_frame,
     encode_message,
     encode_state,
+    encode_tool_result,
     encode_usage,
     identity,
     json_decode,
@@ -882,3 +886,39 @@ class SQLiteStore:
                     ),
                 )
             return published
+
+    def checkpoint_tool(self, tool_id: str, partial: AgentToolResult) -> None:
+        """Replace the latest explicitly durable partial; ordinary events do not call this."""
+        encoded = encode_tool_result(partial)
+        with self._db.transaction() as conn:
+            self._active_tool(tool_id, ("effect_pending",))
+            conn.execute(
+                "UPDATE tool_executions SET partial_result_json=? WHERE id=?", (encoded, tool_id)
+            )
+
+    def get_tool_memo(self, tool_id: str, name: str) -> JSONValue:
+        """Read a memo only within an active effect's scope."""
+        with self._db.transaction(write=False):
+            _, tool, _ = self._active_tool(tool_id, ("effect_pending",))
+            return tool.memos.get(name)
+
+    def set_tool_memo(self, tool_id: str, name: str, value: JSONValue) -> None:
+        """Read-modify-write the current map inside one transaction."""
+        json_encode(value)
+        with self._db.transaction() as conn:
+            _, tool, _ = self._active_tool(tool_id, ("effect_pending",))
+            tool.memos[name] = value
+            conn.execute(
+                "UPDATE tool_executions SET memos_json=? WHERE id=?",
+                (json_encode(tool.memos), tool_id),
+            )
+
+    def delete_tool_memo(self, tool_id: str, name: str) -> None:
+        """Delete one key without overwriting other saved memo changes."""
+        with self._db.transaction() as conn:
+            _, tool, _ = self._active_tool(tool_id, ("effect_pending",))
+            tool.memos.pop(name, None)
+            conn.execute(
+                "UPDATE tool_executions SET memos_json=? WHERE id=?",
+                (json_encode(tool.memos), tool_id),
+            )
