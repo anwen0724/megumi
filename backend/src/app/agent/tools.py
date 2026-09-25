@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Literal
 
 from app.ai import InputContent, JSONValue, Tool, Usage
 
@@ -39,3 +40,4 @@ class AgentTool(Tool):
 
     execute: ToolExecute
     prepare_arguments: Callable[[JSONValue], JSONValue] | None = None
+    replay_policy: Literal["never", "safe"] = "never"

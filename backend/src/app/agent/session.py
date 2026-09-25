@@ -16,6 +16,9 @@ from app.agent.persistence.operation_state import (
     MayFinish,
     NeedAssistant,
     OperationSettings,
+    OperationState,
+    ToolBatch,
+    ToolsState,
 )
 from app.agent.persistence.records import HistoryEntry, OperationInfo
 from app.ai import AssistantMessage, Context, Message, Model, Tool, UserMessage
@@ -108,13 +111,24 @@ class Session:
         needs_tools: bool,
     ) -> None:
         """Save each assistant exactly once, independently of operation settlement."""
-        next_state = CheckpointState(
+        next_state: OperationState = CheckpointState(
             settings=state.settings,
             control=state.control,
             latest_assistant_entry_id=state.response_entry_id,
             continuation=NeedAssistant() if needs_tools else MayFinish(),
             trigger_entry_id=state.response_entry_id,
         )
+        if needs_tools:
+            next_state = ToolsState(
+                settings=state.settings,
+                control=state.control,
+                latest_assistant_entry_id=state.response_entry_id,
+                batch=ToolBatch(
+                    assistant_entry_id=state.response_entry_id,
+                    configuration=state.generation_context.configuration,
+                    turn_id=state.generation_context.step_id,
+                ),
+            )
         self.store.commit_response(
             record.operation_id,
             expected=state,

@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from decimal import Decimal, localcontext
 from pathlib import Path
 from typing import Literal, cast
-from uuid import uuid4
+from uuid import UUID, uuid4, uuid5
 
 from app.agent.persistence.codec import (
     decode_frame,
@@ -36,9 +36,12 @@ from app.agent.persistence.operation_state import (
     AssistantPendingState,
     AssistantReadyState,
     CheckpointState,
+    MayFinish,
+    NeedAssistant,
     OperationSettings,
     OperationState,
     StartingState,
+    ToolsState,
 )
 from app.agent.persistence.records import (
     HistoryEntry,
@@ -46,10 +49,19 @@ from app.agent.persistence.records import (
     ResultStatus,
     SessionData,
     SessionInfo,
+    ToolExecutionInfo,
     UsageEntry,
     UsageSummary,
 )
-from app.ai import AssistantMessage, JSONValue, Message, Usage, UsageCost
+from app.ai import (
+    AssistantMessage,
+    JSONValue,
+    Message,
+    ToolCall,
+    ToolResultMessage,
+    Usage,
+    UsageCost,
+)
 from app.ai.assistant_message_frames import AssistantMessageFrame
 
 
@@ -362,6 +374,7 @@ class SQLiteStore:
             conn.execute(
                 "DELETE FROM assistant_message_frames WHERE operation_id=?", (operation_id,)
             )
+            conn.execute("DELETE FROM tool_executions WHERE operation_id=?", (operation_id,))
             return self.get_operation(operation_id)
 
     def release_operation(self, operation_id: str) -> OperationInfo:
@@ -397,6 +410,14 @@ class SQLiteStore:
         """Check historical links in the same transaction as the phase write."""
 
         references: list[str] = []
+        if isinstance(state, ToolsState):
+            identity(state.batch.turn_id)
+            source = self.get_entry(state.batch.assistant_entry_id)
+            if source.operation_id != operation.id or not isinstance(
+                source.message, AssistantMessage
+            ):
+                raise InvalidRecordError("Tool batch must originate in this operation")
+            references.append(source.id)
         if isinstance(state, (AssistantReadyState, AssistantPendingState)):
             identity(state.generation_context.step_id)
             if state.generation_context.trigger_entry_id is not None:
@@ -410,8 +431,6 @@ class SQLiteStore:
             if self.get_entry(entry_id).session_id != operation.session_id:
                 raise InvalidRecordError("State history reference crosses sessions")
         if state.latest_assistant_entry_id is not None:
-            from app.ai import AssistantMessage
-
             entry = self.get_entry(state.latest_assistant_entry_id)
             if entry.session_id != operation.session_id or not isinstance(
                 entry.message, AssistantMessage
@@ -610,6 +629,17 @@ class SQLiteStore:
                 operation_id=operation_id,
                 entry_id=entry.id,
             )
+            if isinstance(next_state, ToolsState):
+                if next_state.batch.assistant_entry_id != entry.id:
+                    raise InvalidRecordError("Tool batch must reference this response")
+                for index, block in enumerate(message.content):
+                    if isinstance(block, ToolCall):
+                        self._db.connection.execute(
+                            "INSERT INTO tool_executions(id, session_id, operation_id, "
+                            "assistant_entry_id, source_index, status) "
+                            "VALUES (?, ?, ?, ?, ?, 'planned')",
+                            (str(uuid4()), operation.session_id, operation_id, entry.id, index),
+                        )
             self.transition(operation_id, expected=expected, state=next_state)
             self._db.connection.execute(
                 "DELETE FROM assistant_message_frames WHERE operation_id=? AND response_entry_id=?",
@@ -685,3 +715,170 @@ class SQLiteStore:
                 (operation_id, response_entry_id),
             )
             return [decode_frame(row["frame_json"]) for row in rows]
+
+    def list_tools(
+        self,
+        operation_id: str,
+        *,
+        assistant_entry_id: str | None = None,
+    ) -> list[ToolExecutionInfo]:
+        """Read child states without duplicating them in the Operation JSON."""
+        with self._db.transaction(write=False) as conn:
+            self.get_operation(operation_id)
+            rows = conn.execute(
+                "SELECT * FROM tool_executions WHERE operation_id=? "
+                "AND (? IS NULL OR assistant_entry_id=?) ORDER BY rowid",
+                (operation_id, assistant_entry_id, assistant_entry_id),
+            )
+            return [self._tool(row) for row in rows]
+
+    @staticmethod
+    def _tool(row: sqlite3.Row) -> ToolExecutionInfo:
+        """Decode a tool record; ordinary progress is not a durable partial."""
+        pending = decode_message(row["pending_result_json"]) if row["pending_result_json"] else None
+        if pending is not None and not isinstance(pending, ToolResultMessage):
+            raise InvalidRecordError("Pending tool outcome must be a tool result")
+        return ToolExecutionInfo(
+            row["id"],
+            row["session_id"],
+            row["operation_id"],
+            row["assistant_entry_id"],
+            row["source_index"],
+            row["status"],
+            cast(dict[str, JSONValue], json_decode(row["arguments_json"]))
+            if row["arguments_json"] is not None
+            else None,
+            row["replay_policy"],
+            json_decode(row["partial_result_json"]) if row["partial_result_json"] else None,
+            cast(dict[str, JSONValue], json_decode(row["memos_json"])),
+            pending,
+            bool(row["terminate"]) if row["terminate"] is not None else None,
+        )
+
+    def get_tool(self, tool_id: str) -> ToolExecutionInfo:
+        """Read one saved invocation by its local identity."""
+        with self._db.transaction(write=False) as conn:
+            row = conn.execute("SELECT * FROM tool_executions WHERE id=?", (tool_id,)).fetchone()
+            if row is None:
+                raise NotFoundError(f"Tool invocation not found: {tool_id}")
+            return self._tool(row)
+
+    def _active_tool(
+        self,
+        tool_id: str,
+        statuses: tuple[str, ...],
+    ) -> tuple[OperationInfo, ToolExecutionInfo, ToolCall]:
+        """Validate batch, source and phase before any child mutation."""
+        tool = self.get_tool(tool_id)
+        operation = self.get_operation(tool.operation_id)
+        if not isinstance(operation.state, ToolsState) or (
+            operation.state.batch.assistant_entry_id != tool.assistant_entry_id
+            or tool.status not in statuses
+        ):
+            raise StaleWriteError("Tool invocation no longer accepts this write")
+        source = self.get_entry(tool.assistant_entry_id)
+        if source.session_id != operation.session_id or source.operation_id != operation.id:
+            raise InvalidRecordError("Tool source has a different owner")
+        if not isinstance(source.message, AssistantMessage) or not (
+            0 <= tool.source_index < len(source.message.content)
+        ):
+            raise InvalidRecordError("Invalid tool source position")
+        call = source.message.content[tool.source_index]
+        if not isinstance(call, ToolCall):
+            raise InvalidRecordError("Source content is not a tool call")
+        return operation, tool, call
+
+    def start_tool(
+        self,
+        tool_id: str,
+        arguments: dict[str, JSONValue],
+        replay_policy: Literal["never", "safe"],
+    ) -> None:
+        """Commit actual prepared arguments before invoking an external effect."""
+        encoded = json_encode(arguments)
+        if not isinstance(arguments, dict) or replay_policy not in ("never", "safe"):
+            raise InvalidRecordError("Invalid tool intent")
+        with self._db.transaction() as conn:
+            self._active_tool(tool_id, ("planned",))
+            conn.execute(
+                "UPDATE tool_executions SET arguments_json=?, replay_policy=?, "
+                "status='effect_pending' "
+                "WHERE id=?",
+                (encoded, replay_policy, tool_id),
+            )
+
+    def save_tool_outcome(
+        self,
+        tool_id: str,
+        message: ToolResultMessage,
+        *,
+        terminate: bool,
+    ) -> None:
+        """Save a complete outcome before ordered publication, clearing checkpoints."""
+        encoded = encode_message(message)
+        with self._db.transaction() as conn:
+            _, _, call = self._active_tool(tool_id, ("planned", "effect_pending"))
+            if message.tool_call_id != call.id or message.tool_name != call.name:
+                raise InvalidRecordError("Tool result does not match its source call")
+            conn.execute(
+                "UPDATE tool_executions SET status='outcome_ready', pending_result_json=?, "
+                "terminate=?, partial_result_json=NULL, memos_json='{}' WHERE id=?",
+                (encoded, int(terminate), tool_id),
+            )
+
+    def publish_tool_results(self, operation_id: str) -> list[HistoryEntry]:
+        """Publish only a ready prefix and atomically finish the batch when complete."""
+        with self._db.transaction() as conn:
+            operation = self.get_operation(operation_id)
+            state = operation.state
+            if not isinstance(state, ToolsState) or operation.session_id is None:
+                raise StaleWriteError("Operation has no active dialogue tool batch")
+            tools = self.list_tools(operation_id, assistant_entry_id=state.batch.assistant_entry_id)
+            published: list[HistoryEntry] = []
+            for tool in tools:
+                if tool.status == "completed":
+                    continue
+                if tool.status != "outcome_ready":
+                    break
+                assert tool.pending_result is not None and tool.terminate is not None
+                entry = self._insert_message(
+                    operation.session_id,
+                    tool.pending_result,
+                    entry_id=tool.id,
+                    operation_id=operation_id,
+                    terminate=tool.terminate,
+                )
+                if tool.pending_result.usage is not None:
+                    self.record_usage(
+                        str(uuid5(UUID(tool.id), "usage")),
+                        tool.pending_result.usage,
+                        session_id=operation.session_id,
+                        operation_id=operation_id,
+                        entry_id=tool.id,
+                    )
+                conn.execute(
+                    "UPDATE tool_executions SET status='completed', "
+                    "pending_result_json=NULL WHERE id=?",
+                    (tool.id,),
+                )
+                published.append(entry)
+            saved = self.list_tools(operation_id, assistant_entry_id=state.batch.assistant_entry_id)
+            if saved and all(tool.status == "completed" for tool in saved):
+                conn.execute(
+                    "UPDATE tool_executions SET arguments_json=NULL WHERE assistant_entry_id=?",
+                    (state.batch.assistant_entry_id,),
+                )
+                self.transition(
+                    operation_id,
+                    expected=state,
+                    state=CheckpointState(
+                        settings=state.settings,
+                        control=state.control,
+                        latest_assistant_entry_id=state.latest_assistant_entry_id,
+                        trigger_entry_id=saved[-1].id,
+                        continuation=MayFinish(include_final_assistant=False)
+                        if all(tool.terminate for tool in saved)
+                        else NeedAssistant(),
+                    ),
+                )
+            return published

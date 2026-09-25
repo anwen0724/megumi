@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from app.agent.persistence.operation_state import OperationState
-from app.ai import JSONValue, Message, Usage, UsageCost
+from app.ai import JSONValue, Message, ToolResultMessage, Usage, UsageCost
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,3 +83,21 @@ class SessionData:
     session: SessionInfo
     entries: list[HistoryEntry]
     operations: list[OperationInfo]
+
+
+@dataclass(frozen=True, slots=True)
+class ToolExecutionInfo:
+    """Transient tool state, tied to one source content position and future result ID."""
+
+    id: str
+    session_id: str | None
+    operation_id: str
+    assistant_entry_id: str
+    source_index: int
+    status: Literal["planned", "effect_pending", "outcome_ready", "completed"]
+    arguments: dict[str, JSONValue] | None
+    replay_policy: Literal["never", "safe"] | None
+    partial_result: JSONValue
+    memos: dict[str, JSONValue]
+    pending_result: ToolResultMessage | None
+    terminate: bool | None

@@ -121,7 +121,22 @@ class AssistantPendingState(CommonState):
     context_window: int = Field(gt=0)
 
 
+class ToolBatch(StateValue):
+    """Identify the source message and configuration of an ordered tool batch."""
+
+    assistant_entry_id: str
+    configuration: GenerationConfiguration
+    turn_id: str
+
+
+class ToolsState(CommonState):
+    """A batch whose individual child states live only in tool_executions."""
+
+    at: Literal["tools"] = "tools"
+    batch: ToolBatch
+
+
 type OperationState = Annotated[
-    StartingState | CheckpointState | AssistantReadyState | AssistantPendingState,
+    StartingState | CheckpointState | AssistantReadyState | AssistantPendingState | ToolsState,
     Field(discriminator="at"),
 ]

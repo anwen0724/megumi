@@ -82,3 +82,30 @@ CREATE TABLE assistant_message_frames (
     FOREIGN KEY(session_id, operation_id) REFERENCES operations(session_id, id)
 );
 CREATE INDEX frames_operation ON assistant_message_frames(operation_id);
+
+CREATE TABLE tool_executions (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+    operation_id TEXT NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
+    assistant_entry_id TEXT NOT NULL REFERENCES session_entries(id) ON DELETE CASCADE,
+    source_index INTEGER NOT NULL CHECK(source_index >= 0),
+    status TEXT NOT NULL CHECK(status IN ('planned', 'effect_pending', 'outcome_ready', 'completed')),
+    arguments_json TEXT CHECK(arguments_json IS NULL OR json_valid(arguments_json)),
+    replay_policy TEXT CHECK(replay_policy IN ('never', 'safe')),
+    partial_result_json TEXT CHECK(partial_result_json IS NULL OR json_valid(partial_result_json)),
+    memos_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(memos_json)),
+    pending_result_json TEXT CHECK(pending_result_json IS NULL OR json_valid(pending_result_json)),
+    terminate INTEGER CHECK(terminate IN (0, 1)),
+    UNIQUE(assistant_entry_id, source_index),
+    FOREIGN KEY(session_id, operation_id) REFERENCES operations(session_id, id),
+    FOREIGN KEY(session_id, assistant_entry_id) REFERENCES session_entries(session_id, id),
+    CHECK(status != 'planned' OR (arguments_json IS NULL AND replay_policy IS NULL
+        AND pending_result_json IS NULL AND terminate IS NULL)),
+    CHECK(status != 'effect_pending' OR (arguments_json IS NOT NULL AND replay_policy IS NOT NULL
+        AND pending_result_json IS NULL AND terminate IS NULL)),
+    CHECK(status != 'outcome_ready' OR (pending_result_json IS NOT NULL AND terminate IS NOT NULL
+        AND partial_result_json IS NULL AND memos_json = '{}')),
+    CHECK(status != 'completed' OR (pending_result_json IS NULL AND terminate IS NOT NULL
+        AND partial_result_json IS NULL AND memos_json = '{}'))
+);
+CREATE INDEX tools_operation ON tool_executions(operation_id);

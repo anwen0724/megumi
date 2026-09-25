@@ -10,7 +10,7 @@ from app.agent.events import AgentEvents
 from app.agent.hooks import AgentHooks
 from app.agent.operation import BusyResult, OperationRecord, OperationResult
 from app.agent.persistence.errors import BusyError, StorageError
-from app.agent.persistence.operation_state import OperationSettings
+from app.agent.persistence.operation_state import OperationSettings, ToolsState
 from app.agent.session import Session, SessionSnapshot
 from app.agent.tool_execution import PreparedToolCall, execute_tool_call, prepare_tool_call
 from app.agent.tools import AgentTool, AgentToolResult
@@ -50,6 +50,7 @@ class AgentHarness:
                 constrained_sampling=deepcopy(tool.constrained_sampling),
                 execute=tool.execute,
                 prepare_arguments=tool.prepare_arguments,
+                replay_policy=tool.replay_policy,
             )
             for tool in tools or []
         }
@@ -164,6 +165,12 @@ class AgentHarness:
     ) -> list[AgentToolResult]:
         """Run one batch and place settled results in the model's call order."""
 
+        operation = self._session.store.get_operation(operation_id)
+        assert isinstance(operation.state, ToolsState)
+        invocations = self._session.store.list_tools(
+            operation_id, assistant_entry_id=operation.state.batch.assistant_entry_id
+        )
+
         async def prepare(call: ToolCall) -> PreparedToolCall | AgentToolResult:
             return await prepare_tool_call(
                 call,
@@ -176,9 +183,14 @@ class AgentHarness:
             )
 
         async def run(
-            call: ToolCall, prepared: PreparedToolCall | AgentToolResult
+            index: int, call: ToolCall, prepared: PreparedToolCall | AgentToolResult
         ) -> tuple[AgentToolResult, ToolResultMessage]:
-            return await execute_tool_call(
+            invocation = invocations[index]
+            if isinstance(prepared, PreparedToolCall):
+                self._session.store.start_tool(
+                    invocation.id, prepared.arguments, prepared.tool.replay_policy
+                )
+            result, message = await execute_tool_call(
                 call,
                 prepared,
                 operation_id,
@@ -186,12 +198,16 @@ class AgentHarness:
                 events=self.events,
                 hooks=self.hooks,
             )
+            self._session.store.save_tool_outcome(
+                invocation.id, message, terminate=result.terminate
+            )
+            self._session.store.publish_tool_results(operation_id)
+            return result, message
 
         results: list[AgentToolResult] = []
         if self._tool_execution == "sequential":
-            for call in calls:
-                result, message = await run(call, await prepare(call))
-                self._session.append_message(message)
+            for index, call in enumerate(calls):
+                result, _message = await run(index, call, await prepare(call))
                 results.append(result)
             return results
 
@@ -207,14 +223,13 @@ class AgentHarness:
             nonlocal next_index
             # 通知调度器已进入执行阶段。下一项准备无需等待本次执行完成。
             started.set()
-            settled[index] = await run(call, prepared)
+            settled[index] = await run(index, call, prepared)
             # 后续调用仍在等待前置钩子时。已完成的前缀也可以立即进入历史。
             # 此处没有 await。因此多个任务不会交错修改回填位置。
             while next_index < len(settled) and settled[next_index] is not None:
                 item = settled[next_index]
                 assert item is not None
-                result, message = item
-                self._session.append_message(message)
+                result, _message = item
                 results.append(result)
                 next_index += 1
 
