@@ -3,7 +3,9 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from app.agent.persistence.operation_state import OperationState
+from pydantic import Field
+
+from app.agent.persistence.operation_state import CompactionSettings, OperationState, StateValue
 from app.ai import JSONValue, Message, ToolResultMessage, Usage, UsageCost
 
 
@@ -116,3 +118,45 @@ class PendingInput:
     seq: int
     payload: dict[str, JSONValue]
     queued_at: int
+
+
+class FileOperations(StateValue):
+    """File paths already identified when building the preparation."""
+
+    read: list[str] = Field(default_factory=list)
+    written: list[str] = Field(default_factory=list)
+    edited: list[str] = Field(default_factory=list)
+
+
+class CompactionPreparation(StateValue):
+    """Full immutable input snapshot; no truncation or history-only references."""
+
+    messages_to_summarize: list[Message]
+    turn_prefix_messages: list[Message]
+    retained_tail: list[Message]
+    is_split_turn: bool
+    tokens_before: int = Field(ge=0)
+    previous_summary: str | None = None
+    file_ops: FileOperations = Field(default_factory=FileOperations)
+    settings: CompactionSettings
+
+
+@dataclass(frozen=True, slots=True)
+class PreparationInfo:
+    """Identity and ownership are distinct from the future summary entry."""
+
+    id: str
+    session_id: str | None
+    operation_id: str
+    preparation: CompactionPreparation
+
+
+class CompactionRecord(StateValue):
+    """Permanent summary and retained messages, separate from temporary preparation."""
+
+    summary: str
+    retained_tail: list[Message]
+    tokens_before: int = Field(ge=0)
+    details: JSONValue = None
+    usage: Usage | None = None
+    from_hook: bool

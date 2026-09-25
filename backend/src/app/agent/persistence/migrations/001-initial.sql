@@ -119,3 +119,12 @@ CREATE TABLE session_inputs (
     queued_at INTEGER NOT NULL,
     UNIQUE(session_id, seq)
 );
+
+CREATE TABLE compaction_preparations (
+    id TEXT PRIMARY KEY NOT NULL,
+    session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+    operation_id TEXT NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
+    preparation_json TEXT NOT NULL CHECK(json_valid(preparation_json)),
+    FOREIGN KEY(session_id, operation_id) REFERENCES operations(session_id, id)
+);
+CREATE INDEX preparations_operation ON compaction_preparations(operation_id);

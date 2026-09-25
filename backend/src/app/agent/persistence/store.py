@@ -13,6 +13,8 @@ if TYPE_CHECKING:
     from app.agent.tools import AgentToolResult
 from uuid import UUID, uuid4, uuid5
 
+from pydantic import ValidationError
+
 from app.agent.persistence.codec import (
     decode_frame,
     decode_message,
@@ -39,19 +41,28 @@ from app.agent.persistence.errors import (
 from app.agent.persistence.operation_state import (
     AssistantPendingState,
     AssistantReadyState,
+    AssistantRetryWaitState,
+    CheckpointBoundary,
     CheckpointState,
     MayFinish,
     NeedAssistant,
     OperationSettings,
     OperationState,
     StartingState,
+    SummaryDecidingState,
+    SummaryPendingState,
+    SummaryReadyState,
+    SummaryRetryWaitState,
     ToolsState,
 )
 from app.agent.persistence.records import (
+    CompactionPreparation,
+    CompactionRecord,
     HistoryEntry,
     InputKind,
     OperationInfo,
     PendingInput,
+    PreparationInfo,
     ResultStatus,
     SessionData,
     SessionInfo,
@@ -310,8 +321,13 @@ class SQLiteStore:
         settings: OperationSettings | None = None,
         operation_id: str | None = None,
         input_ids: Sequence[str] = (),
+        custom_instructions: str | None = None,
     ) -> OperationInfo:
         """Atomically claim a session, save direct inputs and establish initial state."""
+        if custom_instructions is not None and (
+            kind != "compaction" or not isinstance(custom_instructions, str)
+        ):
+            raise InvalidRecordError("Custom compaction instructions need a compaction operation")
         operation_id = identity(operation_id or str(uuid4()))
         with self._db.transaction() as conn:
             session = self._require_idle(session_id)
@@ -338,7 +354,9 @@ class SQLiteStore:
                 ).id
                 for message in messages
             ]
-            intent = {"prompt_entry_ids": prompt_ids} if kind == "run" else {}
+            intent: dict[str, JSONValue] = {"prompt_entry_ids": prompt_ids} if kind == "run" else {}
+            if custom_instructions is not None:
+                intent["custom_instructions"] = custom_instructions
             conn.execute(
                 "UPDATE operations SET intent_json = ? WHERE id = ?",
                 (json_encode(intent), operation_id),
@@ -386,6 +404,9 @@ class SQLiteStore:
                 "DELETE FROM assistant_message_frames WHERE operation_id=?", (operation_id,)
             )
             conn.execute("DELETE FROM tool_executions WHERE operation_id=?", (operation_id,))
+            conn.execute(
+                "DELETE FROM compaction_preparations WHERE operation_id=?", (operation_id,)
+            )
             return self.get_operation(operation_id)
 
     def release_operation(self, operation_id: str) -> OperationInfo:
@@ -421,6 +442,35 @@ class SQLiteStore:
         """Check historical links in the same transaction as the phase write."""
 
         references: list[str] = []
+        if isinstance(
+            state,
+            (SummaryDecidingState, SummaryReadyState, SummaryPendingState, SummaryRetryWaitState),
+        ):
+            identity(state.task.task_id)
+            preparation = self.get_preparation(state.task.task_id)
+            if (
+                preparation.operation_id != operation.id
+                or preparation.session_id != operation.session_id
+            ):
+                raise InvalidRecordError("Summary preparation belongs to another operation")
+            if (
+                isinstance(state.task.boundary, CheckpointBoundary)
+                and state.task.boundary.trigger_entry_id is not None
+            ):
+                references.append(state.task.boundary.trigger_entry_id)
+            if not isinstance(state, SummaryDecidingState):
+                identity(state.summary_context.result_entry_id)
+                if state.summary_context.result_entry_id == state.task.task_id:
+                    raise InvalidRecordError("Summary result and preparation need separate IDs")
+            if isinstance(state, SummaryPendingState):
+                if state.request is not None:
+                    identity(state.request.usage_id)
+                if len(set(state.usage_ids)) != len(state.usage_ids):
+                    raise InvalidRecordError("Repeated summary usage identity")
+                saved_usage = {item.id for item in self.list_usage(operation_id=operation.id)}
+                if not set(state.usage_ids) <= saved_usage:
+                    raise InvalidRecordError("Summary usage references an unrecorded fact")
+
         if isinstance(state, ToolsState):
             identity(state.batch.turn_id)
             source = self.get_entry(state.batch.assistant_entry_id)
@@ -429,7 +479,7 @@ class SQLiteStore:
             ):
                 raise InvalidRecordError("Tool batch must originate in this operation")
             references.append(source.id)
-        if isinstance(state, (AssistantReadyState, AssistantPendingState)):
+        if isinstance(state, (AssistantReadyState, AssistantPendingState, AssistantRetryWaitState)):
             identity(state.generation_context.step_id)
             if state.generation_context.trigger_entry_id is not None:
                 references.append(state.generation_context.trigger_entry_id)
@@ -1090,3 +1140,156 @@ class SQLiteStore:
                 "custom",
                 {"custom_type": custom_type, "data": data},
             ).id
+
+    def save_preparation(
+        self,
+        operation_id: str,
+        *,
+        expected: OperationState | None,
+        preparation_id: str,
+        preparation: CompactionPreparation | dict[str, JSONValue],
+        next_state: OperationState,
+    ) -> PreparationInfo:
+        """Commit complete preparation and next phase together, never replace a snapshot."""
+        identity(preparation_id)
+        encoded = (
+            preparation.model_dump_json()
+            if isinstance(preparation, CompactionPreparation)
+            else json_encode(preparation)
+        )
+        parsed = self._decode_preparation(encoded)
+        with self._db.transaction() as conn:
+            operation = self._expect(operation_id, expected)
+            existing = conn.execute(
+                "SELECT id FROM compaction_preparations WHERE id=?", (preparation_id,)
+            ).fetchone()
+            if existing:
+                saved = self.get_preparation(preparation_id)
+                if saved.operation_id != operation_id or saved.preparation != parsed:
+                    raise ConflictError("Preparation identity already contains different materials")
+            else:
+                conn.execute(
+                    "INSERT INTO compaction_preparations VALUES (?, ?, ?, ?)",
+                    (preparation_id, operation.session_id, operation_id, parsed.model_dump_json()),
+                )
+            self.transition(operation_id, expected=expected, state=next_state)
+            return self.get_preparation(preparation_id)
+
+    @staticmethod
+    def _decode_preparation(payload: str) -> CompactionPreparation:
+        try:
+            return CompactionPreparation.model_validate_json(payload, strict=True)
+        except (ValueError, ValidationError) as error:
+            raise InvalidRecordError(str(error)) from error
+
+    def get_preparation(self, preparation_id: str) -> PreparationInfo:
+        """Return an independent typed snapshot without re-reading mutable history."""
+        with self._db.transaction(write=False) as conn:
+            row = conn.execute(
+                "SELECT * FROM compaction_preparations WHERE id=?", (preparation_id,)
+            ).fetchone()
+            if row is None:
+                raise NotFoundError("Compaction preparation not found")
+            return PreparationInfo(
+                row["id"],
+                row["session_id"],
+                row["operation_id"],
+                self._decode_preparation(row["preparation_json"]),
+            )
+
+    def list_preparations(self, operation_id: str) -> list[PreparationInfo]:
+        """List all preparations, including earlier compressions in the same Run."""
+        with self._db.transaction(write=False) as conn:
+            self.get_operation(operation_id)
+            rows = conn.execute(
+                "SELECT id FROM compaction_preparations WHERE operation_id=? ORDER BY rowid",
+                (operation_id,),
+            ).fetchall()
+            return [self.get_preparation(row["id"]) for row in rows]
+
+    def commit_summary_usage(
+        self,
+        operation_id: str,
+        *,
+        expected: SummaryPendingState,
+        usage: Usage,
+    ) -> OperationInfo:
+        """Record one obtained internal request usage together with its saved progress."""
+        if expected.request is None:
+            raise InvalidRecordError("No current summary request to account")
+        with self._db.transaction():
+            operation = self._expect(operation_id, expected)
+            usage_id = expected.request.usage_id
+            self.record_usage(
+                usage_id,
+                usage,
+                session_id=operation.session_id,
+                operation_id=operation_id,
+            )
+            next_state = expected.model_copy(
+                update={
+                    "request": None,
+                    "usage_ids": [*expected.usage_ids, usage_id],
+                }
+            )
+            return self.transition(operation_id, expected=expected, state=next_state)
+
+    def commit_compaction(
+        self,
+        operation_id: str,
+        *,
+        expected: SummaryReadyState | SummaryPendingState,
+        summary: str,
+        retained_tail: list[Message],
+        tokens_before: int,
+        from_hook: bool,
+        next_state: OperationState,
+        details: JSONValue = None,
+        usage: Usage | None = None,
+        direct_usage_id: str | None = None,
+    ) -> HistoryEntry:
+        """Append the summary without replacing history or recounting internal requests."""
+        record = CompactionRecord(
+            summary=summary,
+            retained_tail=retained_tail,
+            tokens_before=tokens_before,
+            from_hook=from_hook,
+            details=details,
+            usage=usage,
+        )
+        payload = cast(dict[str, JSONValue], json_decode(record.model_dump_json()))
+        # Validate again, including dataclass message fields owned by the caller.
+        try:
+            CompactionRecord.model_validate_json(json_encode(payload), strict=True)
+        except ValidationError as error:
+            raise InvalidRecordError(str(error)) from error
+        with self._db.transaction():
+            operation = self._expect(operation_id, expected)
+            if operation.session_id is None:
+                raise InvalidRecordError("Conversation summary needs a session")
+            if isinstance(expected, SummaryPendingState) and expected.request is not None:
+                raise ConflictError("Current summary request is still pending")
+            accounted = isinstance(expected, SummaryPendingState) and bool(expected.usage_ids)
+            if accounted and direct_usage_id is not None:
+                raise InvalidRecordError("Internal requests already account for this summary")
+            if not accounted and usage is not None and direct_usage_id is None:
+                raise InvalidRecordError("Direct summary usage needs a stable identity")
+            if direct_usage_id is not None and usage is None:
+                raise InvalidRecordError("Usage identity requires obtained usage")
+            entry = self._insert_entry(
+                operation.session_id,
+                expected.summary_context.result_entry_id,
+                "compaction",
+                payload,
+                operation_id=operation_id,
+            )
+            if direct_usage_id is not None and usage is not None:
+                self.record_usage(
+                    direct_usage_id,
+                    usage,
+                    session_id=operation.session_id,
+                    operation_id=operation_id,
+                    entry_id=entry.id,
+                )
+            self.transition(operation_id, expected=expected, state=next_state)
+            return entry
