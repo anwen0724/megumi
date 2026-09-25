@@ -20,3 +20,5 @@ pytest-cache-files-*/
 dist/
 build/
 *.egg-info/
+# Host-configured local Agent database example
+.local/
