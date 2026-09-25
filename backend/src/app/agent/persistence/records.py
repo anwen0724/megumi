@@ -160,3 +160,17 @@ class CompactionRecord(StateValue):
     details: JSONValue = None
     usage: Usage | None = None
     from_hook: bool
+
+
+class MessageRecord(StateValue):
+    """Formal message wrapper; termination metadata applies only to tool results."""
+
+    message: Message
+    terminate: bool = False
+
+
+class CustomRecord(StateValue):
+    """Application-owned history which is not implicitly a model message."""
+
+    custom_type: str
+    data: JSONValue = None

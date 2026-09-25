@@ -58,7 +58,10 @@ def decode_message(payload: str) -> Message:
     """Restore the existing AI type, including signatures and precise costs."""
     try:
         data = json.loads(payload)
-        return decode_messages(json_encode([data["message"]]))[0]
+        message = decode_messages(json_encode([data["message"]]))[0]
+        if isinstance(message, AssistantMessage) and message.stop_reason == "pending":
+            raise InvalidRecordError("Pending assistant cannot enter formal history")
+        return message
     except (KeyError, TypeError, ValueError) as error:
         raise InvalidRecordError(str(error)) from error
 
@@ -132,3 +135,14 @@ def encode_tool_result(partial: AgentToolResult) -> str:
     except (ValidationError, ValueError) as error:
         raise InvalidRecordError(str(error)) from error
     return encoded
+
+
+def decode_tool_result(payload: str) -> JSONValue:
+    """Validate full saved checkpoint data before exposing it to a tool or recovery reader."""
+    from app.agent.tools import AgentToolResult
+
+    try:
+        TypeAdapter(AgentToolResult).validate_json(payload, strict=True)
+    except (ValidationError, ValueError) as error:
+        raise InvalidRecordError(str(error)) from error
+    return json_decode(payload)

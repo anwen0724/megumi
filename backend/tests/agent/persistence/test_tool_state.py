@@ -94,3 +94,150 @@ def test_later_outcome_persists_without_publishing_ahead_of_first(tmp_path):
     assert store.list_tools(operation_id) == []
     assert len(store.list_entries(session.id)) == 3
     store.close()
+
+
+@pytest.mark.parametrize("boundary", ["publication", "terminal"])
+def test_failed_tool_publication_or_cleanup_rolls_back_all_facts(tmp_path, boundary):
+    import sqlite3
+
+    from app.agent.persistence.errors import StorageError
+    from app.ai import UserMessage
+
+    path = tmp_path / "agent.sqlite3"
+    store = SQLiteStore(path)
+    session = store.create_session()
+    op_id, tools = setup_batch(store, session.id)
+    store.save_tool_outcome(tools[0].id, outcome("a"), terminate=False)
+    store.save_tool_outcome(tools[1].id, outcome("b"), terminate=False)
+    store.enqueue_input(session.id, "next_run", UserMessage(content="Later", timestamp=3))
+    before = store.get_operation(op_id)
+    if boundary == "publication":
+        trigger = """
+            CREATE TRIGGER fail_write BEFORE UPDATE OF status ON tool_executions
+            WHEN NEW.status='completed'
+            BEGIN SELECT RAISE(ABORT, 'publication failed'); END;
+        """
+    else:
+        trigger = """
+            CREATE TRIGGER fail_write BEFORE DELETE ON tool_executions
+            BEGIN SELECT RAISE(ABORT, 'cleanup failed'); END;
+        """
+    with sqlite3.connect(path) as conn:
+        conn.executescript(trigger)
+    with pytest.raises(StorageError):
+        if boundary == "publication":
+            store.publish_tool_results(op_id)
+        else:
+            store.finish_operation(op_id, expected=before.state, status="completed")
+    store.close()
+    store = SQLiteStore(path)
+    assert store.get_operation(op_id) == before
+    assert [tool.status for tool in store.list_tools(op_id)] == ["outcome_ready", "outcome_ready"]
+    assert len(store.list_entries(session.id)) == 1
+    assert len(store.list_usage(session_id=session.id)) == 1
+    assert len(store.list_inputs(session.id)) == 1
+    with sqlite3.connect(path) as conn:
+        conn.execute("DROP TRIGGER fail_write")
+    store.publish_tool_results(op_id)
+    current = store.get_operation(op_id)
+    store.finish_operation(op_id, expected=current.state, status="completed")
+    assert len(store.list_entries(session.id)) == 3
+    assert len(store.list_usage(session_id=session.id)) == 3
+    assert len(store.list_inputs(session.id)) == 1
+    with pytest.raises(StorageError):
+        store.save_tool_outcome(tools[0].id, outcome("a"), terminate=False)
+    store.close()
+
+
+def test_delete_idle_session_removes_owned_facts_and_preserves_other_owners(tmp_path):
+    import sqlite3
+
+    from app.agent.persistence.errors import BusyError, NotFoundError
+    from app.ai import UserMessage
+
+    path = tmp_path / "agent.sqlite3"
+    store = SQLiteStore(path)
+    session = store.create_session()
+    other = store.create_session("Keep")
+    other_entry = store.append_message(other.id, UserMessage(content="Keep", timestamp=1))
+    op_id, tools = setup_batch(store, session.id)
+    for tool, call_id in zip(tools, ["a", "b"], strict=True):
+        store.save_tool_outcome(tool.id, outcome(call_id), terminate=False)
+    store.publish_tool_results(op_id)
+    state = store.get_operation(op_id).state
+    store.finish_operation(op_id, expected=state, status="completed")
+    with pytest.raises(BusyError):
+        store.delete_session(session.id)
+    store.release_operation(op_id)
+    op2 = store.accept_operation(session.id, [UserMessage(content="Again", timestamp=2)])
+    store.finish_operation(op2.id, expected=op2.state, status="declined")
+    store.release_operation(op2.id)
+    store.enqueue_input(session.id, "next_run", UserMessage(content="Pending", timestamp=3))
+    unbound_id = str(uuid4())
+    with sqlite3.connect(path) as conn:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute(
+            "INSERT INTO operations(id, kind, intent_json, state_json, accepted_at) "
+            "VALUES (?, 'run', ?, ?, 1)",
+            (unbound_id, '{"prompt_entry_ids":[]}', op2.state.model_dump_json()),
+        )
+    store.record_usage(str(uuid4()), Usage(input=7), operation_id=unbound_id)
+    store.delete_session(session.id)
+    store.close()
+    store = SQLiteStore(path)
+    with pytest.raises(NotFoundError):
+        store.get_session(session.id)
+    with pytest.raises(NotFoundError):
+        store.get_operation(op_id)
+    with pytest.raises(NotFoundError):
+        store.get_entry(tools[0].id)
+    assert store.get_entry(other_entry).message.content == "Keep"
+    assert store.get_operation(unbound_id).session_id is None
+    assert store.list_usage(operation_id=unbound_id)[0].usage.input == 7
+    with sqlite3.connect(path) as conn:
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        for table in ["session_inputs", "usage_ledger"]:
+            assert (
+                conn.execute(
+                    f"SELECT COUNT(*) FROM {table} WHERE session_id=?", (session.id,)
+                ).fetchone()[0]
+                == 0
+            )
+    store.close()
+
+
+@pytest.mark.parametrize(
+    "column, payload",
+    [
+        ("memos_json", "[]"),
+        ("partial_result_json", "{}"),
+        ("arguments_json", "[]"),
+    ],
+)
+def test_corrupt_tool_materials_fail_public_reads(tmp_path, column, payload):
+    import sqlite3
+
+    path = tmp_path / "agent.sqlite3"
+    store = SQLiteStore(path)
+    session = store.create_session()
+    op_id, tools = setup_batch(store, session.id)
+    store.start_tool(tools[0].id, {}, "never")
+    with sqlite3.connect(path) as conn:
+        conn.execute(f"UPDATE tool_executions SET {column}=? WHERE id=?", (payload, tools[0].id))
+    with pytest.raises(InvalidRecordError):
+        store.list_tools(op_id)
+    store.close()
+
+
+def test_saved_tool_source_must_still_identify_an_actual_tool_call(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "agent.sqlite3"
+    store = SQLiteStore(path)
+    session = store.create_session()
+    op_id, tools = setup_batch(store, session.id)
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE tool_executions SET source_index=0 WHERE id=?", (tools[0].id,))
+    with pytest.raises(InvalidRecordError):
+        store.list_tools(op_id)
+    store.close()

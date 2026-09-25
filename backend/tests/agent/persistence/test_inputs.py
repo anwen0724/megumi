@@ -73,3 +73,16 @@ def test_busy_append_queues_write_and_failed_consumption_keeps_every_input(tmp_p
     assert store.get_entry(queued_id).message.content == "later"
     assert store.get_session(session.id).last_activity_at > 10
     store.close()
+
+
+def test_custom_input_validation_does_not_leave_an_unreadable_queue_item(tmp_path):
+    import pytest
+
+    from app.agent.persistence.errors import InvalidRecordError
+
+    store = SQLiteStore(tmp_path / "agent.sqlite3")
+    session = store.create_session()
+    with pytest.raises(InvalidRecordError):
+        store.enqueue_custom(session.id, 42, {"data": "invalid type"})
+    assert store.list_inputs(session.id) == []
+    store.close()

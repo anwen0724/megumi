@@ -128,3 +128,45 @@ CREATE TABLE compaction_preparations (
     FOREIGN KEY(session_id, operation_id) REFERENCES operations(session_id, id)
 );
 CREATE INDEX preparations_operation ON compaction_preparations(operation_id);
+
+-- Composite foreign keys skip NULL: explicit checks preserve nullable ownership.
+
+CREATE TRIGGER tool_executions_owner_insert BEFORE INSERT ON tool_executions
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER tool_executions_owner_update BEFORE UPDATE ON tool_executions
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER assistant_message_frames_owner_insert BEFORE INSERT ON assistant_message_frames
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER assistant_message_frames_owner_update BEFORE UPDATE ON assistant_message_frames
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER compaction_preparations_owner_insert BEFORE INSERT ON compaction_preparations
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER compaction_preparations_owner_update BEFORE UPDATE ON compaction_preparations
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER usage_ledger_owner_insert BEFORE INSERT ON usage_ledger
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;
+
+CREATE TRIGGER usage_ledger_owner_update BEFORE UPDATE ON usage_ledger
+WHEN NEW.operation_id IS NOT NULL
+  AND NEW.session_id IS NOT (SELECT session_id FROM operations WHERE id=NEW.operation_id)
+BEGIN SELECT RAISE(ABORT, 'Operation child session mismatch'); END;

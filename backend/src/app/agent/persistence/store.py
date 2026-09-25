@@ -19,6 +19,7 @@ from app.agent.persistence.codec import (
     decode_frame,
     decode_message,
     decode_state,
+    decode_tool_result,
     decode_usage,
     encode_frame,
     encode_message,
@@ -58,8 +59,10 @@ from app.agent.persistence.operation_state import (
 from app.agent.persistence.records import (
     CompactionPreparation,
     CompactionRecord,
+    CustomRecord,
     HistoryEntry,
     InputKind,
+    MessageRecord,
     OperationInfo,
     PendingInput,
     PreparationInfo,
@@ -181,7 +184,46 @@ class SQLiteStore:
             # pop also when NULL; all three SQL columns map to typed public fields.
             for column in ("intent_json", "state_json", "error_json"):
                 data.pop(column, None)
-            return OperationInfo(**data)
+            operation = OperationInfo(**data)
+            self._validate_operation(operation)
+            return operation
+
+    def _validate_operation(self, operation: OperationInfo) -> None:
+        """Validate persisted control data, including historical references, on reads."""
+        identity(operation.id)
+        if operation.intent is not None:
+            intent = operation.intent
+            if not isinstance(intent, dict):
+                raise InvalidRecordError("Operation intent must be an object")
+            if operation.kind == "run":
+                prompt_ids = intent.get("prompt_entry_ids")
+                if set(intent) != {"prompt_entry_ids"} or not isinstance(prompt_ids, list):
+                    raise InvalidRecordError("Run intent requires initial input identities")
+                for entry_id in prompt_ids:
+                    if not isinstance(entry_id, str):
+                        raise InvalidRecordError("Initial input identity must be a string")
+                    entry = self.get_entry(entry_id)
+                    if (
+                        entry.session_id != operation.session_id
+                        or entry.operation_id != operation.id
+                    ):
+                        raise InvalidRecordError("Initial input belongs to another operation")
+            elif set(intent) - {"custom_instructions"} or (
+                "custom_instructions" in intent
+                and not isinstance(intent["custom_instructions"], str)
+            ):
+                raise InvalidRecordError("Invalid compaction intent")
+        if operation.error is not None and not (
+            isinstance(operation.error, dict)
+            and isinstance(operation.error.get("code"), str)
+            and isinstance(operation.error.get("message"), str)
+        ):
+            raise InvalidRecordError("Invalid saved operation error")
+        for entry_id in (operation.base_entry_id, operation.final_entry_id):
+            if entry_id is not None and self.get_entry(entry_id).session_id != operation.session_id:
+                raise InvalidRecordError("Operation history boundary crosses sessions")
+        if operation.state is not None:
+            self._validate_state(operation, operation.state)
 
     def list_operations(self, session_id: str) -> list[OperationInfo]:
         """Read operation history in stable acceptance order."""
@@ -211,6 +253,19 @@ class SQLiteStore:
         payload = json_decode(row["payload_json"])
         if not isinstance(payload, dict):
             raise InvalidRecordError("History payload must be an object")
+        try:
+            if row["type"] == "message":
+                wrapper = MessageRecord.model_validate_json(row["payload_json"], strict=True)
+                if wrapper.terminate and not isinstance(wrapper.message, ToolResultMessage):
+                    raise InvalidRecordError("Only tool results may carry termination metadata")
+            elif row["type"] == "custom":
+                CustomRecord.model_validate_json(row["payload_json"], strict=True)
+            elif row["type"] == "compaction":
+                CompactionRecord.model_validate_json(row["payload_json"], strict=True)
+            else:
+                raise InvalidRecordError("Unsupported history record")
+        except ValidationError as error:
+            raise InvalidRecordError(str(error)) from error
         return HistoryEntry(
             row["id"],
             row["session_id"],
@@ -294,7 +349,9 @@ class SQLiteStore:
             "INSERT INTO session_entries VALUES (?, ?, ?, ?, ?, ?, ?)",
             (entry_id, session_id, operation_id, seq, entry_type, encoded, now),
         )
-        if entry_type == "message":
+        if entry_type == "message" and isinstance(
+            decode_message(encoded), (UserMessage, AssistantMessage, ToolResultMessage)
+        ):
             conn.execute("UPDATE sessions SET last_activity_at = ? WHERE id = ?", (now, session_id))
         return self.get_entry(entry_id)
 
@@ -341,7 +398,7 @@ class SQLiteStore:
                     operation_id,
                     session_id,
                     kind,
-                    "{}",
+                    json_encode({"prompt_entry_ids": []} if kind == "run" else {}),
                     encode_state(state),
                     self._tip(session_id),
                     self._clock(),
@@ -459,7 +516,7 @@ class SQLiteStore:
             ):
                 references.append(state.task.boundary.trigger_entry_id)
             if not isinstance(state, SummaryDecidingState):
-                identity(state.summary_context.result_entry_id)
+                self._reserved_entry(operation, state.summary_context.result_entry_id, "compaction")
                 if state.summary_context.result_entry_id == state.task.task_id:
                     raise InvalidRecordError("Summary result and preparation need separate IDs")
             if isinstance(state, SummaryPendingState):
@@ -467,7 +524,12 @@ class SQLiteStore:
                     identity(state.request.usage_id)
                 if len(set(state.usage_ids)) != len(state.usage_ids):
                     raise InvalidRecordError("Repeated summary usage identity")
-                saved_usage = {item.id for item in self.list_usage(operation_id=operation.id)}
+                saved_usage = {
+                    row["id"]
+                    for row in self._db.connection.execute(
+                        "SELECT id FROM usage_ledger WHERE operation_id=?", (operation.id,)
+                    )
+                }
                 if not set(state.usage_ids) <= saved_usage:
                     raise InvalidRecordError("Summary usage references an unrecorded fact")
 
@@ -484,7 +546,7 @@ class SQLiteStore:
             if state.generation_context.trigger_entry_id is not None:
                 references.append(state.generation_context.trigger_entry_id)
         if isinstance(state, AssistantPendingState):
-            identity(state.response_entry_id)
+            self._reserved_entry(operation, state.response_entry_id, "message")
             identity(state.usage_id)
         if isinstance(state, CheckpointState) and state.trigger_entry_id is not None:
             references.append(state.trigger_entry_id)
@@ -497,6 +559,19 @@ class SQLiteStore:
                 entry.message, AssistantMessage
             ):
                 raise InvalidRecordError("Latest assistant must be an assistant in this session")
+
+    def _reserved_entry(self, operation: OperationInfo, entry_id: str, entry_type: str) -> None:
+        """Future IDs may be absent; an existing fact must belong to this operation."""
+        identity(entry_id)
+        row = self._db.connection.execute(
+            "SELECT session_id, operation_id, type FROM session_entries WHERE id=?", (entry_id,)
+        ).fetchone()
+        if row is not None and (
+            row["session_id"] != operation.session_id
+            or row["operation_id"] != operation.id
+            or row["type"] != entry_type
+        ):
+            raise InvalidRecordError("Reserved result identity conflicts with existing history")
 
     def record_usage(
         self,
@@ -774,12 +849,34 @@ class SQLiteStore:
             )
             return [self._tool(row) for row in rows]
 
-    @staticmethod
-    def _tool(row: sqlite3.Row) -> ToolExecutionInfo:
+    def _tool(self, row: sqlite3.Row) -> ToolExecutionInfo:
         """Decode a tool record; ordinary progress is not a durable partial."""
         pending = decode_message(row["pending_result_json"]) if row["pending_result_json"] else None
         if pending is not None and not isinstance(pending, ToolResultMessage):
             raise InvalidRecordError("Pending tool outcome must be a tool result")
+        source = self.get_entry(row["assistant_entry_id"])
+        if source.session_id != row["session_id"] or source.operation_id != row["operation_id"]:
+            raise InvalidRecordError("Tool source belongs to another owner")
+        if not isinstance(source.message, AssistantMessage) or not (
+            0 <= row["source_index"] < len(source.message.content)
+        ):
+            raise InvalidRecordError("Invalid saved tool source")
+        call = source.message.content[row["source_index"]]
+        if not isinstance(call, ToolCall):
+            raise InvalidRecordError("Saved tool source is not a tool call")
+        if pending is not None and (
+            pending.tool_call_id != call.id or pending.tool_name != call.name
+        ):
+            raise InvalidRecordError("Saved tool result differs from its source call")
+
+        arguments = (
+            json_decode(row["arguments_json"]) if row["arguments_json"] is not None else None
+        )
+        memos = json_decode(row["memos_json"])
+        if (arguments is not None and not isinstance(arguments, dict)) or not isinstance(
+            memos, dict
+        ):
+            raise InvalidRecordError("Tool arguments and memos must be JSON objects")
         return ToolExecutionInfo(
             row["id"],
             row["session_id"],
@@ -787,12 +884,10 @@ class SQLiteStore:
             row["assistant_entry_id"],
             row["source_index"],
             row["status"],
-            cast(dict[str, JSONValue], json_decode(row["arguments_json"]))
-            if row["arguments_json"] is not None
-            else None,
+            arguments,
             row["replay_policy"],
-            json_decode(row["partial_result_json"]) if row["partial_result_json"] else None,
-            cast(dict[str, JSONValue], json_decode(row["memos_json"])),
+            decode_tool_result(row["partial_result_json"]) if row["partial_result_json"] else None,
+            memos,
             pending,
             bool(row["terminate"]) if row["terminate"] is not None else None,
         )
@@ -1002,6 +1097,7 @@ class SQLiteStore:
     ) -> PendingInput:
         if kind not in ("steer", "follow_up", "next_run", "write"):
             raise InvalidRecordError("Unsupported input category")
+        self._validate_input(kind, payload)
         input_id = identity(input_id or str(uuid4()))
         encoded = json_encode(payload)
         with self._db.transaction() as conn:
@@ -1036,14 +1132,27 @@ class SQLiteStore:
             )
 
     @staticmethod
+    def _validate_input(kind: str, payload: dict[str, JSONValue]) -> None:
+        """Validate queue contents before acknowledging receipt and on later reads."""
+        record = dict(payload)
+        record_type = record.pop("type", None)
+        try:
+            if record_type == "message":
+                MessageRecord.model_validate_json(json_encode(record), strict=True)
+                decode_message(json_encode(record))
+            elif record_type == "custom" and kind == "write":
+                CustomRecord.model_validate_json(json_encode(record), strict=True)
+            else:
+                raise InvalidRecordError("Custom history is allowed only in write inputs")
+        except ValidationError as error:
+            raise InvalidRecordError(str(error)) from error
+
+    @staticmethod
     def _input(row: sqlite3.Row) -> PendingInput:
         payload = json_decode(row["payload_json"])
         if not isinstance(payload, dict):
             raise InvalidRecordError("Input payload must be an object")
-        if payload.get("type") == "message":
-            decode_message(row["payload_json"])
-        elif payload.get("type") != "custom" or row["kind"] != "write":
-            raise InvalidRecordError("Custom history is allowed only in write inputs")
+        SQLiteStore._validate_input(row["kind"], payload)
         return PendingInput(
             row["id"], row["session_id"], row["kind"], row["seq"], payload, row["queued_at"]
         )
