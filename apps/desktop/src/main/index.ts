@@ -13,7 +13,6 @@ import { createCharacterWindowController } from './app/character-window-controll
 import { createMegumiTray, type MegumiTray } from './app/create-tray';
 import { registerAppLifecycle } from './app/lifecycle';
 import { registerRuntimeProcessErrorHandlers } from './app/runtime-process-errors';
-import { shouldQuitForSquirrelStartup } from './app/squirrel-startup';
 import { composeDesktopMain } from './shell-composition/desktop-main-composition';
 import type { CharacterWindowController } from './app/character-window-controller';
 import { createFileCharacterWindowStateStore } from './adapters/file-character-window-state-store';
@@ -22,22 +21,18 @@ import { composeApplicationUpdate } from './application-update/application-updat
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
+declare const MEGUMI_APP_ID: string;
 
-// Match Squirrel's installed shortcut identity instead of grouping development windows as Electron.
-if (process.platform === 'win32') app.setAppUserModelId('com.squirrel.Megumi.megumi');
+if (process.platform === 'win32') app.setAppUserModelId(MEGUMI_APP_ID);
 
-if (shouldQuitForSquirrelStartup()) {
-  app.quit();
-} else {
-  loadEnvFile();
-  try {
-    startDesktop(composeDesktopMain());
-  } catch (error) {
-    void stopAfterBootstrapFailure(error).catch((failure: unknown) => {
-      console.error('Megumi Desktop could not present its bootstrap failure.', failure);
-      app.quit();
-    });
-  }
+loadEnvFile();
+try {
+  startDesktop(composeDesktopMain());
+} catch (error) {
+  void stopAfterBootstrapFailure(error).catch((failure: unknown) => {
+    console.error('Megumi Desktop could not present its bootstrap failure.', failure);
+    app.quit();
+  });
 }
 
 /** Composes the Desktop-owned surfaces and their single orderly shutdown boundary. */

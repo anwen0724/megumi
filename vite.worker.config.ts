@@ -17,6 +17,8 @@ export default defineConfig({
     ],
   },
   build: {
+    emptyOutDir: false,
+    target: 'node20',
     outDir: '.vite/build',
     ssr: true,
     rollupOptions: {

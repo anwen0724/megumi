@@ -1,5 +1,4 @@
 /* Describes Product-owned resources copied into packaged host artifacts. */
-import fs from 'node:fs';
 import path from 'node:path';
 import { DATABASE_MIGRATIONS_RESOURCE_PATH } from '@megumi/database';
 
@@ -27,6 +26,7 @@ export function resolveProductInstructionsPath(input: {
     : path.resolve(input.cwd, 'packages/agent/instructions/content');
 }
 
+/** Lists the required runtime resources; the build fails if any source is absent. */
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
   const systemSkillsPath = path.resolve(cwd, 'packages/agent/skills/built-in-skills');
   const instructionsPath = path.resolve(cwd, 'packages/agent/instructions/content');
@@ -37,10 +37,10 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
       source: path.resolve(cwd, 'apps/desktop/assets/app-icon.ico'),
       target: 'desktop/app-icon.ico',
     },
-    ...(fs.existsSync(systemSkillsPath) ? [{
+    {
       source: systemSkillsPath,
       target: PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH,
-    }] : []),
+    },
     {
       source: instructionsPath,
       target: PRODUCT_INSTRUCTIONS_RESOURCE_PATH,
