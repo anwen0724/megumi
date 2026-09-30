@@ -45,6 +45,12 @@ it('discovers a stable release through the updater without downloading its insta
   expect(requests[0]).toMatch(/^\/latest\.yml/);
 });
 
+it('reports missing channel metadata as incomplete release assets', async () => {
+  const session = await createSession();
+  session.source.statusCode = 404;
+  expect(await session.controller.checkNow()).toMatchObject({ status: 'error', error: { code: 'release_assets_incomplete' } });
+});
+
 it('limits a manually selected validation feed to that process without changing preferences', async () => {
   const session = await createSession();
   const validation = await createUpdateSource();

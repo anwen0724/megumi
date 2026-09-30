@@ -48,6 +48,10 @@ export class ElectronUpdaterAdapter {
     } catch (error) {
       const code = error instanceof Error && 'code' in error ? error.code : undefined;
       if (error instanceof ApplicationUpdateFailure) throw error;
+      if (code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' || code === 'ERR_UPDATER_NO_PUBLISHED_VERSIONS'
+        || code === 'ERR_UPDATER_LATEST_VERSION_NOT_FOUND') {
+        throw new ApplicationUpdateFailure('release_assets_incomplete', error);
+      }
       if (typeof code === 'string' && ['ENOTFOUND', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(code)) {
         throw new ApplicationUpdateFailure('network_unavailable', error);
       }

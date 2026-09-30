@@ -1,9 +1,15 @@
 /* Applies Electron's existing fuse policy before the packaged executable is signed. */
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const { execFileSync } = require('node:child_process');
 const { flipFuses, FuseVersion, FuseV1Options } = require('@electron/fuses');
 
 module.exports = async function afterPack(context) {
+  // npm test restores the Node ABI; reject a stale rebuild before it becomes an installer.
+  execFileSync(path.join(context.packager.projectDir, 'node_modules/electron/dist/electron.exe'),
+    ['-e', 'require(process.argv[1])', path.resolve(context.appOutDir,
+      'resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node')],
+    { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, windowsHide: true });
   await flipFuses(path.join(context.appOutDir, 'megumi.exe'), {
     version: FuseVersion.V1,
     [FuseV1Options.RunAsNode]: false,
