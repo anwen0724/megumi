@@ -173,7 +173,7 @@ async function stopAfterBootstrapFailure(error: unknown): Promise<void> {
     await app.whenReady();
     dialog.showErrorBox(
       'Megumi 启动失败',
-      '桌面应用未能完成启动。请退出后重试，并保留日志以便诊断。',
+      `桌面应用未能完成启动。请退出后重试，并保留日志以便诊断。\n\n${error instanceof Error ? error.message : String(error)}`,
     );
   }
   app.quit();
