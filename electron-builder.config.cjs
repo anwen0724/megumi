@@ -3,6 +3,7 @@ module.exports = {
   appId: 'com.megumi.desktop',
   productName: 'Megumi',
   executableName: 'megumi',
+  artifactName: 'Megumi-${version}-win-${arch}-setup.${ext}',
   electronDist: 'node_modules/electron/dist',
   directories: { output: 'out/desktop', buildResources: 'build' },
   files: ['.vite/build/**', '.vite/preload/**', '.vite/renderer/**', 'package.json', '!**/*.{map,ts,tsx}', '!**/test{,s}/**'],
@@ -10,7 +11,11 @@ module.exports = {
   asarUnpack: ['**/*.node', '**/*.dll'],
   extraResources: [{ from: '.vite/resources', to: '.' }],
   afterPack: './scripts/desktop/packaging-hooks.cjs',
-  win: { target: [{ target: 'nsis', arch: ['x64'] }], icon: 'apps/desktop/assets/app-icon.ico' },
+  forceCodeSigning: Boolean(process.env.MEGUMI_SIGNING_PUBLISHER),
+  win: {
+    target: [{ target: 'nsis', arch: ['x64'] }], icon: 'apps/desktop/assets/app-icon.ico',
+    ...(process.env.MEGUMI_SIGNING_PUBLISHER ? { signtoolOptions: { publisherName: process.env.MEGUMI_SIGNING_PUBLISHER } } : {}),
+  },
   nsis: {
     oneClick: false,
     perMachine: false,

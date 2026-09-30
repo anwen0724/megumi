@@ -18,8 +18,9 @@ export class ApplicationUpdateFailure extends Error {
 export class ElectronUpdaterAdapter {
   private readonly updater: AwaitableNsisUpdater;
 
-  constructor() {
+  constructor(validationFeed?: { provider: 'generic'; url: string } | { provider: 'github'; owner: string; repo: string }) {
     this.updater = new AwaitableNsisUpdater();
+    if (validationFeed) this.updater.setFeedURL(validationFeed);
     this.updater.autoDownload = false;
     this.updater.autoInstallOnAppQuit = false;
     this.updater.allowPrerelease = false;

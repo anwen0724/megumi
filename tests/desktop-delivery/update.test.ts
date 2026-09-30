@@ -8,6 +8,7 @@ import { createFileUpdatePreferencesStore } from '@megumi/desktop/main/applicati
 import { composeApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
 import { electronBoundary } from './fixtures/electron-boundary';
 import { createUpdateSession } from './fixtures/update-session';
+import { createUpdateSource } from './fixtures/update-source';
 
 vi.mock('electron', async () => {
   const { electronBoundary } = await import('./fixtures/electron-boundary');
@@ -42,6 +43,24 @@ it('discovers a stable release through the updater without downloading its insta
     release: { version: '0.3.0', title: 'Stable release' } });
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatch(/^\/latest\.yml/);
+});
+
+it('limits a manually selected validation feed to that process without changing preferences', async () => {
+  const session = await createSession();
+  const validation = await createUpdateSource();
+  cleanups.push(validation.close);
+  validation.source.version = '0.4.0';
+  const argv = process.argv;
+  let validating: ReturnType<typeof composeApplicationUpdate> | undefined;
+  try {
+    process.argv = [...argv, '--megumi-delivery-validation', `--megumi-validation-url=${validation.url}`];
+    validating = composeApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
+    expect(await validating.checkNow()).toMatchObject({ status: 'available', release: { version: '0.4.0' } });
+  } finally { process.argv = argv; validating?.dispose(); }
+  expect(validation.requests.length).toBeGreaterThan(0);
+  expect(await session.controller.checkNow()).toMatchObject({ status: 'available', release: { version: '0.3.0' } });
+  const files = await fs.readdir(path.join(session.home, 'desktop')).catch(() => []);
+  expect(files).toEqual([]);
 });
 
 it('downloads the user-selected release and exposes ready only after the real file passes verification', async () => {

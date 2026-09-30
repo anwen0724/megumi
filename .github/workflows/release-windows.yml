@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release-windows-x64:
     # Deleting a tag also emits a push event; only a live release tag may publish artifacts.
@@ -42,10 +46,20 @@ jobs:
       - name: Run release gates
         run: npm run release:verify
 
-      - name: Build and upload Draft Release
-        run: npm run publish -- --arch=x64
+      - name: Build Windows x64 batch once
+        run: npm run make
+        env:
+          MEGUMI_SIGNING_PUBLISHER: ${{ vars.MEGUMI_SIGNING_PUBLISHER }}
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+
+      - name: Verify final artifacts
+        run: npm run release:verify:artifacts -- --directory out/desktop
+        env:
+          MEGUMI_SIGNING_PUBLISHER: ${{ vars.MEGUMI_SIGNING_PUBLISHER }}
+
+      - name: Upload verified batch to Draft and verify remote bytes
+        run: npm run publish -- --directory out/desktop
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify Squirrel.Windows assets
-        run: npm run release:verify:artifacts -- --directory out/make/squirrel.windows/x64
+          MEGUMI_SIGNING_PUBLISHER: ${{ vars.MEGUMI_SIGNING_PUBLISHER }}
