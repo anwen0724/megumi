@@ -3,6 +3,7 @@
  */
 import path from 'node:path';
 import { app, dialog } from 'electron';
+import { InstallationHomeConflictError } from '../installation/installation-environment';
 import {
   DatabaseDowngradeUnsupportedError,
   DatabaseMigrationError,
@@ -36,6 +37,13 @@ export async function showDesktopBootstrapFailure(error: unknown): Promise<boole
 export function describeDesktopBootstrapFailure(
   error: unknown,
 ): DesktopBootstrapFailurePresentation | undefined {
+  if (error instanceof InstallationHomeConflictError) {
+    return {
+      title: 'Megumi 数据目录冲突',
+      message: error.message,
+      detail: `Home：${error.homePath}\n程序目录：${error.programPath}\n请将 MEGUMI_HOME 设置为独立的数据目录后重新启动。当前未初始化数据库。`,
+    };
+  }
   if (error instanceof DatabaseDowngradeUnsupportedError) {
     return {
       title: 'Megumi 无法使用此数据库',

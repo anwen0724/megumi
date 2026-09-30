@@ -41,9 +41,9 @@ export function registerAppLifecycle({
 
   // Every quit path shares one preparation Promise; a failed attempt remains explicitly retryable.
   const beginQuit = (): Promise<void> => {
-    quitting = true;
     disposalPromise ??= Promise.resolve()
       .then(() => dispose?.())
+      .then(() => { quitting = true; })
       .catch((error: unknown) => {
         // A failed preparation must not leave the resident window behaving as if exit succeeded.
         quitting = false;
@@ -86,8 +86,10 @@ export function registerAppLifecycle({
     openMainWindow();
   });
 
-  app.on('before-quit', () => {
-    void beginQuit().catch((error: unknown) => {
+  app.on('before-quit', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    void beginQuit().then(() => app.quit()).catch((error: unknown) => {
       console.error('Desktop shutdown preparation failed.', error);
     });
   });

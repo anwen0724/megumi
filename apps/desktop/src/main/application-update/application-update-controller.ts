@@ -123,8 +123,9 @@ export function createApplicationUpdateController(request: {
     restartAndInstall() {
       if (activeInstall) return activeInstall;
       const updater = request.updater;
-      if (disposed || !updater || snapshot.status !== 'ready') return Promise.resolve();
-      const release = snapshot.release;
+      const canRetry = snapshot.status === 'error' && snapshot.error.code === 'restart_prepare_failed';
+      if (disposed || !updater || !candidate || (snapshot.status !== 'ready' && !canRetry)) return Promise.resolve();
+      const release = candidate;
       publish({ ...common(), status: 'preparing_install', release });
       cancelStartup?.();
       activeInstall = (async () => {

@@ -1,5 +1,7 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
 import { app, BrowserWindow } from 'electron';
+import path from 'node:path';
+import { assertSeparateHome } from '../installation/installation-environment';
 import { resolveMegumiHomePath } from '@megumi/home';
 import { composeApplication } from '@megumi/composition';
 import { nodeObservabilityStorage } from '@megumi/observability';
@@ -31,6 +33,7 @@ import { resolveProductInstructionsPath } from '../packaging/product-resources';
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
   const homePath = resolveMegumiHomePath(home);
+  if (app.isPackaged) assertSeparateHome(homePath, path.dirname(app.getPath('exe')));
   const embeddedBrowser = createElectronEmbeddedBrowser();
   const voiceResources = createElectronVoiceOptions(home);
   // The single Voice Input Adapter: injected into Product/Voice composition

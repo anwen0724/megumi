@@ -26,7 +26,8 @@ export const electronBoundary = {
   autoUpdater: new EventEmitter(),
   shell: { openExternal: async (_url: string) => undefined },
   session: { fromPartition: () => ({}) },
-  net: { request: (options: http.RequestOptions) => http.request(options) },
+  net: { request: (options: http.RequestOptions) => http.request(options), fetch: globalThis.fetch },
+  BrowserWindow: { getAllWindows: () => [] },
   processLaunches: [] as Array<{ file: string; args: string[] }>,
   spawnError: undefined as NodeJS.ErrnoException | undefined,
 };

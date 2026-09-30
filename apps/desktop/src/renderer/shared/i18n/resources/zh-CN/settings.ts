@@ -195,7 +195,7 @@ export const settings = {
       update_not_ready: '当前没有已经下载并可安装的更新。',
       restart_prepare_failed: '退出准备未完成，更新未安装。部分功能可能已停止，请处理当前任务或资源占用后重试。',
       update_verification_failed: '安装包校验失败，未进入安装。请重试下载。',
-      installer_launch_failed: '安装器未能启动，更新未安装。请重新检查更新后重试。',
+      installer_launch_failed: '安装器未能启动，更新未安装。后台服务已停止，请退出并重新启动 Megumi 后重试。',
       preferences_write_failed: '更新设置保存失败，仍保留原设置。请检查用户数据目录是否可写。',
       unknown_update_error: '发生了未预期的更新错误；当前安装仍然可用。',
     },

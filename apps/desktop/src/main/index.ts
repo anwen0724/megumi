@@ -84,8 +84,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
 
   const lifecycle = registerAppLifecycle({
     start: () => {
-      applicationUpdate.start();
-      void desktopMain.start().catch((error: unknown) => {
+      void desktopMain.start().then(() => applicationUpdate.start()).catch((error: unknown) => {
         desktopMain.runtimeLogger.warn('product_background_start_failed', {
           errorMessage: error instanceof Error ? error.message : String(error),
         });
@@ -144,14 +143,16 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
       return mainWindow;
     },
     dispose: async () => {
-      tray?.dispose();
-      characterSubscription.unsubscribe();
       await character.dispose();
       await desktopMain.dispose();
-      // Keep the update observer alive until every fallible resource is released so preparation errors reach the UI.
-      applicationUpdateSubscription();
-      applicationUpdate.dispose();
     },
+  });
+  // Retain the shell and update feedback through preparation and installer launch failures.
+  app.once('will-quit', () => {
+    tray?.dispose();
+    characterSubscription.unsubscribe();
+    applicationUpdateSubscription();
+    applicationUpdate.dispose();
   });
   showMainWindow = () => lifecycle.showMainWindow();
   prepareToQuit = () => lifecycle.prepareToQuit();

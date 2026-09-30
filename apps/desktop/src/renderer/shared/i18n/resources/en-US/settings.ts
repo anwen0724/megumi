@@ -192,7 +192,7 @@ export const settings = {
       update_not_ready: 'There is no downloaded update ready to install.',
       restart_prepare_failed: 'Shutdown preparation failed and no update was installed. Some functions may have stopped. Resolve active work or resource locks before retrying.',
       update_verification_failed: 'Installer verification failed. Nothing was installed. Retry the download.',
-      installer_launch_failed: 'The installer could not start. Check for updates again before retrying.',
+      installer_launch_failed: 'The installer could not start. Background services have stopped. Quit and reopen Megumi before retrying.',
       preferences_write_failed: 'The preference could not be saved. The previous setting remains active. Check whether the data directory is writable.',
       unknown_update_error: 'An unexpected update error occurred. Your current installation remains available.',
     },
