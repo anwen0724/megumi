@@ -26,9 +26,6 @@ export function AboutMegumiPanel() {
   const setAutomaticChecksEnabled = useApplicationUpdateStore(
     (state) => state.setAutomaticChecksEnabled,
   );
-  const setAutomaticDownloadsEnabled = useApplicationUpdateStore(
-    (state) => state.setAutomaticDownloadsEnabled,
-  );
   const downloadUpdate = useApplicationUpdateStore((state) => state.downloadUpdate);
   const restartAndInstall = useApplicationUpdateStore((state) => state.restartAndInstall);
   const openReleasePage = useApplicationUpdateStore((state) => state.openReleasePage);
@@ -50,7 +47,7 @@ export function AboutMegumiPanel() {
     );
   }
 
-  const preferencesDisabled = !snapshot.installation.supported || snapshot.status === 'installing';
+  const preferencesDisabled = snapshot.status === 'unsupported' || snapshot.status === 'preparing_install';
   return (
     <div className="space-y-6">
       <SettingsPageHeader
@@ -100,16 +97,6 @@ export function AboutMegumiPanel() {
               />
             </div>
           </SettingsRow>
-          <SettingsRow title={t('about.automaticDownloads')}>
-            <div className="flex justify-end">
-              <UpdateSwitch
-                checked={snapshot.automaticDownloadsEnabled}
-                disabled={preferencesDisabled || !snapshot.automaticChecksEnabled}
-                label={t('about.automaticDownloads')}
-                onCheckedChange={(enabled) => { void setAutomaticDownloadsEnabled(enabled); }}
-              />
-            </div>
-          </SettingsRow>
         </div>
 
         <UpdateStatusCard
@@ -151,9 +138,8 @@ function UpdateStatusCard({
   const { t } = useTranslation('settings');
   const presentation = statusPresentation(snapshot, t);
   const StatusIcon = presentation.icon;
-  const releaseVisible = snapshot.status === 'unsupported'
-    || ('releasePageUrl' in snapshot && Boolean(snapshot.releasePageUrl));
-  const lastCheckedAt = checkedAt(snapshot);
+  const releaseVisible = snapshot.status === 'unsupported' || 'release' in snapshot;
+  const lastCheckedAt = snapshot.checkedAt;
   return (
     <div className="border-t border-[var(--color-border)] p-5">
       <div
@@ -185,15 +171,20 @@ function UpdateStatusCard({
           </div>
         </div>
 
-        {'notesSummary' in snapshot && snapshot.notesSummary ? (
+        {'release' in snapshot && snapshot.release.notesSummary ? (
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">
               {t('about.releaseNotes')}
             </p>
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-[var(--color-text-muted)]">
-              {snapshot.notesSummary}
+              {snapshot.release.notesSummary}
             </p>
           </div>
+        ) : null}
+
+        {snapshot.status === 'downloading' ? (
+          <progress className="mt-3 w-full" aria-label={t('about.downloading')}
+            max={100} value={snapshot.progress?.percent} />
         ) : null}
 
         {snapshot.status === 'ready' ? (
@@ -235,19 +226,27 @@ function PrimaryUpdateAction({
     case 'up_to_date':
     case 'checking':
     case 'downloading':
-    case 'installing':
+    case 'preparing_install':
+      return null;
     case 'error':
+      if (!snapshot.error.retryable) return null;
+      if (snapshot.error.operation === 'download') {
+        return <Button variant="primary" onClick={onDownload}>{t('about.retryDownload')}</Button>;
+      }
+      if (snapshot.error.operation === 'install' && snapshot.error.code === 'restart_prepare_failed') {
+        return <Button variant="primary" onClick={onRestart}>{t('about.restartAndUpdate')}</Button>;
+      }
       return null;
     case 'available':
       return (
-        <Button variant="primary" disabled={!snapshot.installation.supported} onClick={onDownload}>
+        <Button variant="primary" onClick={onDownload}>
           <Download className="size-4" aria-hidden="true" />
           {t('about.downloadUpdate')}
         </Button>
       );
     case 'ready':
       return (
-        <Button variant="primary" disabled={!snapshot.installation.supported} onClick={onRestart}>
+        <Button variant="primary" onClick={onRestart}>
           <PackageCheck className="size-4" aria-hidden="true" />
           {t('about.restartAndUpdate')}
         </Button>
@@ -264,10 +263,10 @@ function ManualCheckButton({
   readonly onCheck: () => void;
 }) {
   const { t } = useTranslation('settings');
-  const busy = snapshot.status === 'checking'
+  const busy = snapshot.status === 'unsupported' || snapshot.status === 'checking'
     || snapshot.status === 'downloading'
     || snapshot.status === 'ready'
-    || snapshot.status === 'installing';
+    || snapshot.status === 'preparing_install';
   const checking = snapshot.status === 'checking';
   const label = checking
     ? t('about.checking')
@@ -335,7 +334,7 @@ function statusPresentation(
       return {
         icon: AlertCircle,
         title: t('about.status.unsupported'),
-        description: t(`about.unsupported.${snapshot.reason}`),
+        description: t(`about.unsupported.${snapshot.supportReason}`),
       };
     case 'idle':
       return { icon: RefreshCw, title: t('about.status.idle'), description: t('about.status.idleDescription') };
@@ -344,22 +343,16 @@ function statusPresentation(
     case 'up_to_date':
       return { icon: CheckCircle2, title: t('about.status.upToDate'), description: t('about.status.upToDateDescription') };
     case 'available':
-      return { icon: Download, title: t('about.status.available', { version: snapshot.targetVersion }), description: t('about.status.availableDescription') };
+      return { icon: Download, title: t('about.status.available', { version: snapshot.release.version }), description: t('about.status.availableDescription') };
     case 'downloading':
-      return { icon: LoaderCircle, spinning: true, title: t('about.status.downloading', { version: snapshot.targetVersion }), description: t('about.status.downloadingDescription') };
+      return { icon: LoaderCircle, spinning: true, title: t('about.status.downloading', { version: snapshot.release.version }), description: t('about.status.downloadingDescription') };
     case 'ready':
-      return { icon: PackageCheck, title: t('about.status.ready', { version: snapshot.targetVersion }), description: t('about.status.readyDescription') };
-    case 'installing':
+      return { icon: PackageCheck, title: t('about.status.ready', { version: snapshot.release.version }), description: t('about.status.readyDescription') };
+    case 'preparing_install':
       return { icon: LoaderCircle, spinning: true, title: t('about.status.installing'), description: t('about.status.installingDescription') };
     case 'error':
-      return { icon: AlertCircle, title: t('about.status.error'), description: t(`about.errors.${snapshot.errorCode}`) };
+      return { icon: AlertCircle, title: t('about.status.error'), description: t(`about.errors.${snapshot.error.code}`) };
   }
-}
-
-function checkedAt(snapshot: ApplicationUpdateSnapshot): string | undefined {
-  if ('checkedAt' in snapshot) return snapshot.checkedAt;
-  if ('lastCheckedAt' in snapshot) return snapshot.lastCheckedAt;
-  return undefined;
 }
 
 function platformLabel(platform: string, arch: string): string {

@@ -23,7 +23,7 @@ export default defineConfig({
     outDir: '.vite/build',
     lib: { entry: 'apps/desktop/src/main/index.ts', formats: ['cjs'], fileName: () => 'index.js' },
     rollupOptions: {
-      external: [...builtinModules, ...builtinModules.map(name => `node:${name}`), 'better-sqlite3', 'electron', 'sherpa-onnx-node'],
+      external: [...builtinModules, ...builtinModules.map(name => `node:${name}`), 'better-sqlite3', 'electron', 'electron-updater', 'sherpa-onnx-node'],
       output: { entryFileNames: 'index.js' },
     },
   },

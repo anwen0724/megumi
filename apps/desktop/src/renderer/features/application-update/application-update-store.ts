@@ -12,7 +12,6 @@ interface ApplicationUpdateStore {
   readonly aboutRequestId: number;
   checkNow(): Promise<void>;
   setAutomaticChecksEnabled(enabled: boolean): Promise<void>;
-  setAutomaticDownloadsEnabled(enabled: boolean): Promise<void>;
   downloadUpdate(): Promise<void>;
   restartAndInstall(): Promise<void>;
   openReleasePage(): Promise<void>;
@@ -30,9 +29,6 @@ export const useApplicationUpdateStore = create<ApplicationUpdateStore>((set) =>
   checkNow: () => runSnapshotCommand(() => window.megumi.applicationUpdate.checkNow()),
   setAutomaticChecksEnabled: (enabled) => runSnapshotCommand(
     () => window.megumi.applicationUpdate.setAutomaticChecksEnabled(enabled),
-  ),
-  setAutomaticDownloadsEnabled: (enabled) => runSnapshotCommand(
-    () => window.megumi.applicationUpdate.setAutomaticDownloadsEnabled(enabled),
   ),
   downloadUpdate: () => runSnapshotCommand(() => window.megumi.applicationUpdate.downloadUpdate()),
   async restartAndInstall() {
@@ -106,16 +102,16 @@ function showUpdateToast(snapshot: Extract<
   ApplicationUpdateSnapshot,
   { status: 'available' | 'downloading' | 'ready' }
 >): void {
-  const id = `application-update:${snapshot.targetVersion}`;
+  const id = `application-update:${snapshot.release.version}`;
   const existing = useToastStore.getState().toasts.some((toast) => toast.id === id);
-  if (announcedVersion === snapshot.targetVersion && !existing) return;
-  announcedVersion = snapshot.targetVersion;
+  if (announcedVersion === snapshot.release.version && !existing) return;
+  announcedVersion = snapshot.release.version;
   showToast({
     id,
     tone: snapshot.status === 'ready' ? 'success' : 'info',
     title: rendererI18n.t(
       snapshot.status === 'ready' ? 'about.updateToastReady' : 'about.updateToastAvailable',
-      { ns: 'settings', version: snapshot.targetVersion },
+      { ns: 'settings', version: snapshot.release.version },
     ),
     message: rendererI18n.t('about.updateToastDescription', { ns: 'settings' }),
     durationMs: 0,

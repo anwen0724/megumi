@@ -26,9 +26,6 @@ export function registerApplicationUpdateHandlers(options: {
   ipcMain.handle(IPC_CHANNELS.applicationUpdate.automaticChecksSet, (_event, raw: unknown) => (
     options.controller.setAutomaticChecksEnabled(PreferencePayloadSchema.parse(raw).enabled)
   ));
-  ipcMain.handle(IPC_CHANNELS.applicationUpdate.automaticDownloadsSet, (_event, raw: unknown) => (
-    options.controller.setAutomaticDownloadsEnabled(PreferencePayloadSchema.parse(raw).enabled)
-  ));
   ipcMain.handle(IPC_CHANNELS.applicationUpdate.download, (_event, raw: unknown) => {
     EmptyPayloadSchema.parse(raw);
     return options.controller.downloadUpdate();

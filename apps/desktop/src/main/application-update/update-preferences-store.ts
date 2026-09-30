@@ -3,6 +3,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import type { DesktopRuntimeLogger } from '../runtime-logger';
 import {
   ApplicationUpdatePreferencesSchema,
   type ApplicationUpdatePreferences,
@@ -10,19 +11,19 @@ import {
 
 const DEFAULT_PREFERENCES: ApplicationUpdatePreferences = {
   automaticChecksEnabled: true,
-  automaticDownloadsEnabled: false,
 };
 
 export interface UpdatePreferencesStore {
   /** Reads validated preferences or safe defaults. */
   read(): ApplicationUpdatePreferences;
-  /** Atomically persists a normalized preference pair. */
+  /** Atomically persists the user's automatic-check preference. */
   write(preferences: ApplicationUpdatePreferences): void;
 }
 
 /** Creates the atomic JSON store under Megumi Home's Desktop-owned directory. */
 export function createFileUpdatePreferencesStore(request: {
   readonly megumiHomePath: string;
+  readonly logger: DesktopRuntimeLogger;
 }): UpdatePreferencesStore {
   const filePath = path.join(request.megumiHomePath, 'desktop', 'application-update.json');
   return {
@@ -32,17 +33,19 @@ export function createFileUpdatePreferencesStore(request: {
         const parsed = ApplicationUpdatePreferencesSchema.safeParse(
           JSON.parse(fs.readFileSync(filePath, 'utf8')),
         );
-        return parsed.success ? normalizePreferences(parsed.data) : DEFAULT_PREFERENCES;
-      } catch {
+        if (parsed.success) return parsed.data;
+        request.logger.warn('application_update_preferences_invalid');
+        return DEFAULT_PREFERENCES;
+      } catch (error) {
+        request.logger.warn('application_update_preferences_unreadable', { error: String(error) });
         return DEFAULT_PREFERENCES;
       }
     },
     write(preferences) {
-      const normalized = normalizePreferences(ApplicationUpdatePreferencesSchema.parse(preferences));
       fs.mkdirSync(path.dirname(filePath), { recursive: true });
       const temporaryFile = `${filePath}.${process.pid}.tmp`;
       try {
-        fs.writeFileSync(temporaryFile, `${JSON.stringify(normalized, null, 2)}\n`, 'utf8');
+        fs.writeFileSync(temporaryFile, `${JSON.stringify(preferences, null, 2)}\n`, 'utf8');
         fs.renameSync(temporaryFile, filePath);
       } catch (error) {
         try {
@@ -54,10 +57,4 @@ export function createFileUpdatePreferencesStore(request: {
       }
     },
   };
-}
-
-function normalizePreferences(preferences: ApplicationUpdatePreferences): ApplicationUpdatePreferences {
-  return preferences.automaticChecksEnabled
-    ? preferences
-    : { automaticChecksEnabled: false, automaticDownloadsEnabled: false };
 }

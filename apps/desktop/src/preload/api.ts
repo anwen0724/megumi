@@ -204,11 +204,6 @@ export const api = {
         { enabled },
       ))
     ),
-    setAutomaticDownloadsEnabled: async (enabled: boolean): Promise<ApplicationUpdateSnapshot> => (
-      ApplicationUpdateSnapshotSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.automaticDownloadsSet,
-        { enabled },
-      ))
-    ),
     downloadUpdate: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
       await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.download),
     ),
