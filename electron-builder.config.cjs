@@ -15,6 +15,7 @@ module.exports = {
     oneClick: false,
     perMachine: false,
     allowElevation: false,
+    packElevateHelper: false,
     allowToChangeInstallationDirectory: true,
     installerLanguages: ['zh_CN'],
     language: '2052',
