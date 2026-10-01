@@ -1,16 +1,17 @@
 /* Owns update commands, candidate lifetime and the Renderer-facing state for Desktop. */
-import type { ApplicationUpdateSnapshot, ApplicationUpdateRelease } from '../../application-update/application-update-contract';
+import type { ApplicationUpdateSnapshot } from '../../application-update/application-update-contract';
 import type { DesktopRuntimeLogger } from '../runtime-logger';
 import type { UpdateSupportReason } from '../installation/installation-environment';
 import { ApplicationUpdateFailure, type ElectronUpdaterAdapter } from './electron-updater-adapter';
 import type { UpdatePreferencesStore } from './update-preferences-store';
+import type { UpdateState, UpdateStateStore } from './update-state-store';
 
 export interface ApplicationUpdateController {
-  /** Schedules the single startup check after successful application startup. */
+  /** Restores a local download and schedules the optional startup metadata check. */
   start(): void;
   /** Reads the current user-facing projection. */
   getSnapshot(): ApplicationUpdateSnapshot;
-  /** Checks metadata without downloading; concurrent checks share the operation. */
+  /** Checks metadata or retries local cache verification; never downloads. */
   checkNow(): Promise<ApplicationUpdateSnapshot>;
   /** Saves the automatic-check preference. */
   setAutomaticChecksEnabled(enabled: boolean): Promise<ApplicationUpdateSnapshot>;
@@ -29,24 +30,34 @@ export interface ApplicationUpdateController {
 /** Creates the sole command owner used by Main and IPC. */
 export function createApplicationUpdateController(request: {
   currentVersion: string; platform: string; arch: string; supportReason?: UpdateSupportReason;
-  preferences: UpdatePreferencesStore; updater?: ElectronUpdaterAdapter;
+  preferences: UpdatePreferencesStore; stateStore: UpdateStateStore; updater?: ElectronUpdaterAdapter;
   prepareToQuit: () => Promise<void>; openExternal: (url: string) => Promise<void>;
   schedule: (callback: () => void, delayMs: number) => () => void;
   now: () => Date; logger: DesktopRuntimeLogger;
 }): ApplicationUpdateController {
   let preferences = request.preferences.read();
-  let checkedAt: string | undefined;
-  let candidate: ApplicationUpdateRelease | undefined;
+  const saved = request.supportReason ? undefined : request.stateStore.read();
+  let state = saved && saved.sourceKey === request.updater?.sourceKey
+    && isNewer(saved.candidate.release.version, request.currentVersion) ? saved : undefined;
+  if (saved && !state) {
+    try { request.stateStore.write(undefined); }
+    catch (error) { request.logger.warn('application_update_state_reset_failed', { error: String(error) }); }
+  }
+  let checkedAt = state?.checkedAt;
+  let candidate = state?.candidate;
   const common = () => ({ currentVersion: request.currentVersion, platform: request.platform,
     arch: request.arch, automaticChecksEnabled: preferences.automaticChecksEnabled,
     ...(checkedAt ? { checkedAt } : {}) });
   let snapshot: ApplicationUpdateSnapshot = request.supportReason
     ? { ...common(), status: 'unsupported', supportReason: request.supportReason }
-    : { ...common(), status: 'idle' };
+    : candidate ? { ...common(), status: state?.downloadRequested ? 'verifying' : 'available',
+      release: candidate.release, ...(state?.downloadRequested ? {} : { lastKnown: true }) }
+      : { ...common(), status: 'idle' };
   const listeners = new Set<(snapshot: ApplicationUpdateSnapshot) => void>();
   let activeCheck: Promise<ApplicationUpdateSnapshot> | undefined;
   let activeDownload: Promise<ApplicationUpdateSnapshot> | undefined;
   let activeInstall: Promise<void> | undefined;
+  let activeRestore: Promise<ApplicationUpdateSnapshot> | undefined;
   let cancelStartup: (() => void) | undefined;
   let started = false;
   let disposed = false;
@@ -58,25 +69,58 @@ export function createApplicationUpdateController(request: {
     return snapshot;
   }
 
+  function save(next: UpdateState | undefined): void {
+    try { request.stateStore.write(next); }
+    catch (error) { throw new ApplicationUpdateFailure('update_state_write_failed', error); }
+    state = next;
+  }
+
+  function failure(operation: 'check' | 'download' | 'restore', error: unknown): ApplicationUpdateSnapshot {
+    request.logger.warn(`application_update_${operation}_failed`, { error: String(error) });
+    return publish({ ...common(), status: 'error', ...(candidate ? { release: candidate.release } : {}), error: {
+      operation, code: error instanceof ApplicationUpdateFailure ? error.code : 'unknown_update_error',
+      retryable: true, targetVersion: candidate?.release.version,
+    } });
+  }
+
+  function restore(): Promise<ApplicationUpdateSnapshot> {
+    if (activeRestore) return activeRestore;
+    const pending = state;
+    if (!request.updater || !pending?.downloadRequested || disposed) return Promise.resolve(snapshot);
+    publish({ ...common(), status: 'verifying', release: pending.candidate.release });
+    activeRestore = request.updater.restore(pending).then(() => {
+      if (disposed) return snapshot;
+      save({ ...pending, downloadedAt: pending.downloadedAt ?? request.now().toISOString() });
+      return publish({ ...common(), status: 'ready', release: pending.candidate.release });
+    }).catch(error => failure('restore', error)).finally(() => { activeRestore = undefined; });
+    return activeRestore;
+  }
+
+  async function discover(): Promise<ApplicationUpdateSnapshot> {
+    const updater = request.updater;
+    if (!updater) return snapshot;
+    const next = await updater.check();
+    if (disposed) return snapshot;
+    const nextCheckedAt = request.now().toISOString();
+    if (next) {
+      if (!updater.sourceKey) throw new ApplicationUpdateFailure('release_metadata_invalid', 'Missing source configuration');
+      save({ schemaVersion: 1, sourceKey: updater.sourceKey, checkedAt: nextCheckedAt, candidate: next, downloadRequested: false });
+    } else save(undefined);
+    candidate = next;
+    checkedAt = nextCheckedAt;
+    return publish(next ? { ...common(), status: 'available', release: next.release }
+      : { ...common(), status: 'up_to_date' });
+  }
+
   function check(): Promise<ApplicationUpdateSnapshot> {
     if (disposed || !request.updater) return Promise.resolve(snapshot);
     if (activeDownload || activeInstall || snapshot.status === 'ready') {
       return Promise.resolve(snapshot);
     }
+    if (state?.downloadRequested) return restore();
     if (activeCheck) return activeCheck;
-    publish({ ...common(), status: 'checking' });
-    candidate = undefined;
-    activeCheck = request.updater.check().then(release => {
-      candidate = release;
-      checkedAt = request.now().toISOString();
-      return publish(release ? { ...common(), status: 'available', release }
-        : { ...common(), status: 'up_to_date' });
-    }).catch(error => {
-      request.logger.warn('application_update_check_failed', { error: String(error) });
-      return publish({ ...common(), status: 'error', error: {
-        operation: 'check', code: error instanceof ApplicationUpdateFailure ? error.code : 'unknown_update_error', retryable: true,
-      } });
-    }).finally(() => { activeCheck = undefined; });
+    publish({ ...common(), status: 'checking', ...(candidate ? { release: candidate.release } : {}) });
+    activeCheck = discover().catch(error => failure('check', error)).finally(() => { activeCheck = undefined; });
     return activeCheck;
   }
 
@@ -84,6 +128,7 @@ export function createApplicationUpdateController(request: {
     start() {
       if (started || disposed || request.supportReason) return;
       started = true;
+      if (state?.downloadRequested) void restore();
       if (preferences.automaticChecksEnabled) cancelStartup = request.schedule(() => { void check(); }, 30_000);
     },
     getSnapshot: () => snapshot,
@@ -94,7 +139,7 @@ export function createApplicationUpdateController(request: {
         request.preferences.write({ automaticChecksEnabled: enabled });
       } catch (error) {
         request.logger.warn('application_update_preferences_write_failed', { error: String(error) });
-        return publish({ ...common(), status: 'error', error: {
+        return publish({ ...common(), status: 'error', ...(candidate ? { release: candidate.release } : {}), error: {
           operation: 'preferences', code: 'preferences_write_failed', retryable: true,
         } });
       }
@@ -104,20 +149,26 @@ export function createApplicationUpdateController(request: {
     },
     downloadUpdate() {
       if (activeDownload) return activeDownload;
-      const canRetry = snapshot.status === 'error' && snapshot.error.operation === 'download' && snapshot.error.retryable;
-      if (disposed || !request.updater || !candidate || (snapshot.status !== 'available' && !canRetry)) return Promise.resolve(snapshot);
-      const release = candidate;
-      publish({ ...common(), status: 'downloading', release });
-      activeDownload = request.updater.download(progress => {
-        publish({ ...common(), status: 'downloading', release, progress });
-      }).then(() => publish({ ...common(), status: 'ready', release }))
-        .catch(error => {
-          request.logger.warn('application_update_download_failed', { error: String(error) });
-          return publish({ ...common(), status: 'error', error: {
-            operation: 'download', code: error instanceof ApplicationUpdateFailure ? error.code : 'update_download_failed',
-            retryable: true, targetVersion: release.version,
-          } });
-        }).finally(() => { activeDownload = undefined; });
+      const canRetry = snapshot.status === 'error' && snapshot.error.retryable &&
+        (snapshot.error.operation === 'download' || snapshot.error.operation === 'check' ||
+          (snapshot.error.operation === 'restore' && ['update_cache_missing', 'update_verification_failed'].includes(snapshot.error.code)));
+      const updater = request.updater;
+      if (disposed || activeCheck || activeRestore || !updater || !candidate || (snapshot.status !== 'available' && !canRetry)) return Promise.resolve(snapshot);
+      const selected = candidate;
+      const release = selected.release;
+      publish({ ...common(), status: 'checking', release });
+      activeDownload = (async () => {
+        // A user click authorizes only the displayed artifact. A changed release needs another click.
+        await discover();
+        if (disposed || !candidate || !state || candidate.release.version !== selected.release.version
+          || candidate.artifact.sha512 !== selected.artifact.sha512 || candidate.artifact.fileName !== selected.artifact.fileName) return snapshot;
+        save({ ...state, downloadRequested: true });
+        publish({ ...common(), status: 'downloading', release });
+        await updater.download(progress => { publish({ ...common(), status: 'downloading', release, progress }); });
+        if (disposed) return snapshot;
+        save({ ...state, downloadedAt: request.now().toISOString() });
+        return publish({ ...common(), status: 'ready', release });
+      })().catch(error => failure('download', error)).finally(() => { activeDownload = undefined; });
       return activeDownload;
     },
     restartAndInstall() {
@@ -125,7 +176,7 @@ export function createApplicationUpdateController(request: {
       const updater = request.updater;
       const canRetry = snapshot.status === 'error' && snapshot.error.code === 'restart_prepare_failed';
       if (disposed || !updater || !candidate || (snapshot.status !== 'ready' && !canRetry)) return Promise.resolve();
-      const release = candidate;
+      const release = candidate.release;
       publish({ ...common(), status: 'preparing_install', release });
       cancelStartup?.();
       activeInstall = (async () => {
@@ -133,7 +184,7 @@ export function createApplicationUpdateController(request: {
           await request.prepareToQuit();
         } catch (error) {
           request.logger.warn('application_update_prepare_failed', { error: String(error) });
-          publish({ ...common(), status: 'error', error: {
+          publish({ ...common(), status: 'error', release, error: {
             operation: 'install', code: 'restart_prepare_failed', retryable: true, targetVersion: release.version,
           } });
           return;
@@ -142,7 +193,7 @@ export function createApplicationUpdateController(request: {
           await updater.install();
         } catch (error) {
           request.logger.warn('application_update_install_failed', { error: String(error) });
-          publish({ ...common(), status: 'error', error: {
+          publish({ ...common(), status: 'error', release, error: {
             operation: 'install', code: 'installer_launch_failed', retryable: true, targetVersion: release.version,
           } });
         }
@@ -150,10 +201,19 @@ export function createApplicationUpdateController(request: {
       return activeInstall;
     },
     async openReleasePage() {
-      await request.openExternal('release' in snapshot ? snapshot.release.releasePageUrl
+      await request.openExternal('release' in snapshot && snapshot.release ? snapshot.release.releasePageUrl
         : 'https://github.com/anwen0724/megumi/releases');
     },
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     dispose() { disposed = true; cancelStartup?.(); listeners.clear(); },
   };
+}
+
+function isNewer(target: string, current: string): boolean {
+  const left = target.split('.').map(Number);
+  const right = current.split('.').map(Number);
+  for (let index = 0; index < 3; index++) {
+    if (left[index] !== right[index]) return left[index] > right[index];
+  }
+  return false;
 }

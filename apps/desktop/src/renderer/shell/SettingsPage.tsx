@@ -73,9 +73,7 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
   const { t } = useTranslation('settings');
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const updateSnapshot = useApplicationUpdateStore((state) => state.snapshot);
-  const updatePending = updateSnapshot?.status === 'available'
-    || updateSnapshot?.status === 'downloading'
-    || updateSnapshot?.status === 'ready';
+  const updatePending = updateSnapshot && 'release' in updateSnapshot && !!updateSnapshot.release;
   const activeCategory = activeCategoryLabel(category);
 
   useEffect(() => {

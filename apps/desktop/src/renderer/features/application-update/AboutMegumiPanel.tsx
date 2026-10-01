@@ -16,6 +16,7 @@ import appIconUrl from '../../../../assets/app-icon.ico';
 import type { ApplicationUpdateSnapshot } from '../../../application-update/application-update-contract';
 import { Button, SettingsPageHeader, SettingsRow, SettingsSection, cx } from '../../shared/ui';
 import { useApplicationUpdateStore } from './application-update-store';
+import { releaseNotesText } from './release-notes-text';
 
 /** Renders the standalone Settings About Feature. */
 export function AboutMegumiPanel() {
@@ -168,13 +169,16 @@ function UpdateStatusCard({
           </div>
         </div>
 
-        {'release' in snapshot && snapshot.release.notesSummary ? (
+        {'release' in snapshot && snapshot.release ? (
           <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+            {(snapshot.status === 'checking' || snapshot.status === 'error') ? (
+              <p className="mb-2 text-sm text-[var(--color-text-muted)]">{t('about.knownRelease', { version: snapshot.release.version })}</p>
+            ) : null}
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">
               {t('about.releaseNotes')}
             </p>
             <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-[var(--color-text-muted)]">
-              {snapshot.release.notesSummary}
+              {releaseNotesText(snapshot.release.notesSummary ?? '')}
             </p>
           </div>
         ) : null}
@@ -222,13 +226,18 @@ function PrimaryUpdateAction({
     case 'idle':
     case 'up_to_date':
     case 'checking':
+    case 'verifying':
     case 'downloading':
     case 'preparing_install':
       return null;
     case 'error':
       if (!snapshot.error.retryable) return null;
-      if (snapshot.error.operation === 'download') {
+      if (snapshot.error.operation === 'download' || (snapshot.error.operation === 'restore'
+        && ['update_cache_missing', 'update_verification_failed'].includes(snapshot.error.code))) {
         return <Button variant="primary" onClick={onDownload}>{t('about.retryDownload')}</Button>;
+      }
+      if (snapshot.error.operation === 'check' && snapshot.release) {
+        return <Button variant="primary" onClick={onDownload}>{t('about.downloadUpdate')}</Button>;
       }
       if (snapshot.error.operation === 'install' && snapshot.error.code === 'restart_prepare_failed') {
         return <Button variant="primary" onClick={onRestart}>{t('about.restartAndUpdate')}</Button>;
@@ -261,13 +270,15 @@ function ManualCheckButton({
 }) {
   const { t } = useTranslation('settings');
   const busy = snapshot.status === 'unsupported' || snapshot.status === 'checking'
-    || snapshot.status === 'downloading'
+    || snapshot.status === 'downloading' || snapshot.status === 'verifying'
     || snapshot.status === 'ready'
     || snapshot.status === 'preparing_install';
   const checking = snapshot.status === 'checking';
   const label = checking
     ? t('about.checking')
-    : snapshot.status === 'error'
+    : snapshot.status === 'error' && snapshot.error.operation === 'restore'
+      ? t('about.retryVerification')
+      : snapshot.status === 'error'
       ? t('about.retryCheck')
       : t('about.checkNow');
   return (
@@ -340,7 +351,9 @@ function statusPresentation(
     case 'up_to_date':
       return { icon: CheckCircle2, title: t('about.status.upToDate'), description: t('about.status.upToDateDescription') };
     case 'available':
-      return { icon: Download, title: t('about.status.available', { version: snapshot.release.version }), description: t('about.status.availableDescription') };
+      return { icon: Download, title: t('about.status.available', { version: snapshot.release.version }), description: t(snapshot.lastKnown ? 'about.status.lastKnownDescription' : 'about.status.availableDescription') };
+    case 'verifying':
+      return { icon: LoaderCircle, spinning: true, title: t('about.status.verifying', { version: snapshot.release.version }), description: t('about.status.verifyingDescription') };
     case 'downloading':
       return { icon: LoaderCircle, spinning: true, title: t('about.status.downloading', { version: snapshot.release.version }), description: t('about.status.downloadingDescription') };
     case 'ready':

@@ -48,7 +48,7 @@ export function installElectronModuleBoundary(): () => void {
   } });
   Object.defineProperty(childProcess, 'execFileSync', { value: (file: string) => {
     if (!file.endsWith('powershell.exe')) throw new Error(`Unexpected OS command: ${file}`);
-    return JSON.stringify({ AppId: 'com.megumi.desktop', Version: '0.2.0',
+    return JSON.stringify({ AppId: 'com.megumi.desktop', Version: electronBoundary.app.getVersion(),
       InstallLocation: path.dirname(electronBoundary.app.getPath('exe')) });
   } });
   const require = createRequire(import.meta.url);

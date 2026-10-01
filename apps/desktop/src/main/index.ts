@@ -139,6 +139,8 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
         devServerUrl,
         rendererName: MAIN_WINDOW_VITE_NAME,
         dirname: __dirname,
+        stateFilePath: path.join(desktopMain.homePath, 'desktop', 'main-window.json'),
+        logger: desktopMain.runtimeLogger,
       });
       return mainWindow;
     },

@@ -10,6 +10,7 @@ export async function createUpdateSource() {
   const requests: string[] = [];
   const source = {
     version: '0.3.0',
+    releaseNotes: 'Release notes',
     corrupt: false,
     metadata: undefined as string | undefined,
     statusCode: 200,
@@ -19,7 +20,7 @@ export async function createUpdateSource() {
     requests.push(request.url ?? '');
     if (request.url?.startsWith('/latest.yml')) {
       response.statusCode = source.statusCode;
-      response.end(source.metadata ?? `version: ${source.version}\nfiles:\n  - url: Megumi-${source.version}.exe\n    sha512: ${sha512}\n    size: ${installer.length}\nreleaseName: Stable release\nreleaseNotes: Release notes\n`);
+      response.end(source.metadata ?? `version: ${source.version}\nfiles:\n  - url: Megumi-${source.version}.exe\n    sha512: ${sha512}\n    size: ${installer.length}\nreleaseName: Stable release\nreleaseNotes: ${JSON.stringify(source.releaseNotes)}\n`);
     } else if (request.url?.endsWith('.exe')) {
       await source.beforeInstaller();
       const bytes = source.corrupt ? Buffer.from('corrupted download') : installer;

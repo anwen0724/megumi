@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nextProvider } from 'react-i18next';
 import { composeApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
@@ -16,6 +16,7 @@ import { ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { electronBoundary, installElectronModuleBoundary } from './fixtures/electron-boundary';
 import { createUpdateSource } from './fixtures/update-source';
+import { createUpdateSession } from './fixtures/update-session';
 
 vi.mock('electron', async () => {
   const { electronBoundary } = await import('./fixtures/electron-boundary');
@@ -64,6 +65,7 @@ it('shows the unsupported development environment and exposes no automatic-downl
 it('checks and downloads through IPC, shows transfer progress, then offers explicit installation', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-update-ui-'));
   const source = await createUpdateSource();
+  source.source.releaseNotes = '<p>图标 &amp; 界面。</p><h3>更新内容</h3><ul><li>桌面图标</li><li>关于页面</li></ul><script>unexpected()</script>';
   const downloadGate = Promise.withResolvers<void>();
   source.source.beforeInstaller = async () => downloadGate.promise;
   vi.stubGlobal('MEGUMI_APP_ID', 'com.megumi.desktop');
@@ -85,6 +87,9 @@ it('checks and downloads through IPC, shows transfer progress, then offers expli
     render(<I18nextProvider i18n={rendererI18n}><AboutMegumiPanel /></I18nextProvider>);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: '检查更新' }));
+    expect(await screen.findByText('图标 & 界面。\n\n更新内容\n\n- 桌面图标\n- 关于页面', {
+      normalizer: (text) => text,
+    })).toBeInTheDocument();
     await user.click(await screen.findByRole('button', { name: '下载更新' }));
     expect(await screen.findByRole('progressbar')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '检查更新' })).toBeDisabled();
@@ -99,5 +104,31 @@ it('checks and downloads through IPC, shows transfer progress, then offers expli
     if (resourcesBefore) Object.defineProperty(process, 'resourcesPath', resourcesBefore);
     else Reflect.deleteProperty(process, 'resourcesPath');
     await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+it('shows cache verification after restart and offers installation once local verification finishes', async () => {
+  const session = await createUpdateSession();
+  await session.controller.checkNow();
+  await session.controller.downloadUpdate();
+  session.controller.dispose();
+  session.source.statusCode = 503;
+  const before = [...session.requests];
+  const restored = composeApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
+  const unsubscribe = restored.subscribe(snapshot => ipcRenderer.emit(IPC_CHANNELS.applicationUpdate.snapshotChanged, {}, snapshot));
+  try {
+    Object.defineProperty(window, 'megumi', { configurable: true, value: api });
+    registerApplicationUpdateHandlers({ controller: restored });
+    await initializeApplicationUpdateStore();
+    await rendererI18n.changeLanguage('zh-CN');
+    render(<I18nextProvider i18n={rendererI18n}><AboutMegumiPanel /></I18nextProvider>);
+    expect(screen.getByText('正在校验已下载的更新 0.3.0')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重启并更新' })).not.toBeInTheDocument();
+    await act(async () => { restored.start(); await restored.checkNow(); });
+    expect(screen.getByRole('button', { name: '重启并更新' })).toBeEnabled();
+    expect(session.requests).toEqual(before);
+  } finally {
+    unsubscribe(); restored.dispose();
+    await session.close();
   }
 });

@@ -51,6 +51,24 @@ it('reports missing channel metadata as incomplete release assets', async () => 
   expect(await session.controller.checkNow()).toMatchObject({ status: 'error', error: { code: 'release_assets_incomplete' } });
 });
 
+it('keeps a discovered release across restart and a failed recheck without enabling automatic checks', async () => {
+  const { controller, home, source, requests } = await createSession();
+  await controller.setAutomaticChecksEnabled(false);
+  const discovered = await controller.checkNow();
+  controller.dispose();
+  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  expect(restarted.getSnapshot()).toMatchObject({ status: 'available', lastKnown: true,
+    checkedAt: discovered.checkedAt, release: { version: '0.3.0', title: 'Stable release' } });
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  restarted.start();
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(requests).toHaveLength(1);
+  source.statusCode = 503;
+  expect(await restarted.checkNow()).toMatchObject({ status: 'error', release: { version: '0.3.0' },
+    checkedAt: discovered.checkedAt, error: { operation: 'check', code: 'update_service_unavailable' } });
+});
+
 it('limits a manually selected validation feed to that process without changing preferences', async () => {
   const session = await createSession();
   const validation = await createUpdateSource();
@@ -66,7 +84,10 @@ it('limits a manually selected validation feed to that process without changing 
   expect(validation.requests.length).toBeGreaterThan(0);
   expect(await session.controller.checkNow()).toMatchObject({ status: 'available', release: { version: '0.3.0' } });
   const files = await fs.readdir(path.join(session.home, 'desktop')).catch(() => []);
-  expect(files).toEqual([]);
+  expect(files).toEqual(['application-update-state.json']);
+  const restarted = composeApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  expect(restarted.getSnapshot()).toMatchObject({ release: { version: '0.3.0' } });
 });
 
 it('downloads the user-selected release and exposes ready only after the real file passes verification', async () => {
@@ -81,8 +102,8 @@ it('downloads the user-selected release and exposes ready only after the real fi
   expect(await fs.readFile(path.join(home, 'cache/fixture-updater/pending', filename!))).toEqual(installer);
 });
 
-it('does not launch an installer on ordinary quit or restore ready from an old UI state', async () => {
-  const { controller, home, requests } = await createSession();
+it('verifies a completed download locally after restart and installs only on explicit confirmation', async () => {
+  const { controller, home, requests, source } = await createSession();
   await controller.checkNow();
   await controller.downloadUpdate();
   electronBoundary.app.quit();
@@ -90,11 +111,15 @@ it('does not launch an installer on ordinary quit or restore ready from an old U
   controller.dispose();
   const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
-  expect(restarted.getSnapshot().status).toBe('idle');
-  expect((await restarted.checkNow()).status).toBe('available');
-  const downloads = requests.filter(url => url.endsWith('.exe')).length;
-  expect((await restarted.downloadUpdate()).status).toBe('ready');
-  expect(requests.filter(url => url.endsWith('.exe'))).toHaveLength(downloads);
+  expect(restarted.getSnapshot().status).toBe('verifying');
+  source.statusCode = 503;
+  const before = [...requests];
+  restarted.start();
+  expect((await restarted.checkNow()).status).toBe('ready');
+  expect(requests).toEqual(before);
+  expect(electronBoundary.processLaunches).toEqual([]);
+  await restarted.restartAndInstall();
+  expect(electronBoundary.processLaunches).toHaveLength(1);
 });
 it('reports development mode as unsupported without starting an update operation', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-update-'));
@@ -110,6 +135,95 @@ it('reports development mode as unsupported without starting an update operation
   } finally {
     controller.dispose();
   }
+});
+
+it.each(['missing', 'corrupt'] as const)('requires an explicit redownload when the restarted cache is %s', async damage => {
+  const { controller, home, requests } = await createSession();
+  await controller.checkNow();
+  await controller.downloadUpdate();
+  controller.dispose();
+  const cachedFile = path.join(home, 'cache/fixture-updater/pending/Megumi-0.3.0.exe');
+  if (damage === 'missing') await fs.unlink(cachedFile);
+  else await fs.writeFile(cachedFile, 'damaged bytes');
+  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  const before = [...requests];
+  expect(await restarted.checkNow()).toMatchObject({ status: 'error', error: { operation: 'restore',
+    code: damage === 'missing' ? 'update_cache_missing' : 'update_verification_failed' } });
+  await restarted.restartAndInstall();
+  expect(electronBoundary.processLaunches).toEqual([]);
+  expect(requests).toEqual(before);
+  expect((await restarted.downloadUpdate()).status).toBe('ready');
+  expect(requests.filter(url => url.endsWith('.exe'))).toHaveLength(2);
+});
+
+it('keeps a completed target when a newer release appears before restarting', async () => {
+  const { controller, home, source, requests } = await createSession();
+  await controller.checkNow();
+  await controller.downloadUpdate();
+  controller.dispose();
+  source.version = '0.4.0';
+  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  const before = [...requests];
+  restarted.start();
+  expect(await restarted.checkNow()).toMatchObject({ status: 'ready', release: { version: '0.3.0' } });
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(requests).toEqual(before);
+  expect(restarted.getSnapshot()).toMatchObject({ status: 'ready', release: { version: '0.3.0' } });
+});
+
+it('keeps a temporarily unreadable cache pending and allows a local verification retry', async () => {
+  const { controller, home, requests } = await createSession();
+  await controller.checkNow();
+  await controller.downloadUpdate();
+  controller.dispose();
+  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  const before = [...requests];
+  vi.spyOn(fs, 'stat').mockRejectedValueOnce(Object.assign(new Error('File busy'), { code: 'EACCES' }));
+  expect(await restarted.checkNow()).toMatchObject({ status: 'error', error: { code: 'update_cache_unreadable' } });
+  await restarted.restartAndInstall();
+  expect(electronBoundary.processLaunches).toHaveLength(0);
+  expect((await restarted.checkNow()).status).toBe('ready');
+  expect(requests).toEqual(before);
+});
+
+it('refuses to download if the selected update cannot be saved for recovery', async () => {
+  const { controller, home, requests } = await createSession();
+  await controller.checkNow();
+  const record = path.join(home, 'desktop/application-update-state.json');
+  await fs.unlink(record);
+  await fs.mkdir(record);
+  expect(await controller.downloadUpdate()).toMatchObject({ status: 'error', release: { version: '0.3.0' },
+    error: { code: 'update_state_write_failed' } });
+  expect(requests.filter(url => url.endsWith('.exe'))).toHaveLength(0);
+});
+
+it('asks the user to download again when revalidation finds a different version', async () => {
+  const { controller, home, source, requests } = await createSession();
+  await controller.checkNow();
+  controller.dispose();
+  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  source.version = '0.4.0';
+  expect(await restarted.downloadUpdate()).toMatchObject({ status: 'available', release: { version: '0.4.0' } });
+  expect(requests.filter(url => url.endsWith('.exe'))).toHaveLength(0);
+  expect(await restarted.downloadUpdate()).toMatchObject({ status: 'ready', release: { version: '0.4.0' } });
+});
+
+it('discards obsolete update records after upgrading without deleting the installer cache', async () => {
+  const { controller, home } = await createSession();
+  await controller.checkNow();
+  await controller.downloadUpdate();
+  controller.dispose();
+  vi.spyOn(electronBoundary.app, 'getVersion').mockReturnValue('0.3.0');
+  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  cleanups.push(async () => restarted.dispose());
+  expect(restarted.getSnapshot().status).toBe('idle');
+  await expect(fs.stat(path.join(home, 'desktop/application-update-state.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  expect((await fs.stat(path.join(home, 'cache/fixture-updater/pending/Megumi-0.3.0.exe'))).isFile()).toBe(true);
 });
 
 it('rejects a damaged installer and lets the user retry the same candidate', async () => {
@@ -206,7 +320,7 @@ it('keeps one download and its original target when another release appears duri
     expect(results).toEqual([expect.objectContaining({ status: 'ready', release: expect.objectContaining({ version: '0.3.0' }) }),
       expect.objectContaining({ status: 'ready', release: expect.objectContaining({ version: '0.3.0' }) })]);
     expect(requests.filter(url => url.endsWith('.exe'))).toEqual(['/Megumi-0.3.0.exe']);
-    expect(requests.filter(url => url.startsWith('/latest.yml'))).toHaveLength(1);
+    expect(requests.filter(url => url.startsWith('/latest.yml'))).toHaveLength(2);
   } finally {
     continueDownload.resolve();
     await first;

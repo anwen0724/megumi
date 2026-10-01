@@ -5,6 +5,7 @@ import { resolveUpdateSupport } from '../installation/installation-environment';
 import { createApplicationUpdateController, type ApplicationUpdateController } from './application-update-controller';
 import { ElectronUpdaterAdapter } from './electron-updater-adapter';
 import { createFileUpdatePreferencesStore } from './update-preferences-store';
+import { createFileUpdateStateStore } from './update-state-store';
 
 declare const MEGUMI_APP_ID: string;
 
@@ -20,6 +21,7 @@ export function composeApplicationUpdate(request: {
   return createApplicationUpdateController({
     currentVersion: app.getVersion(), platform: process.platform, arch: process.arch, supportReason,
     preferences: createFileUpdatePreferencesStore(request),
+    stateStore: createFileUpdateStateStore(request),
     updater: supportReason ? undefined : new ElectronUpdaterAdapter(manualValidationFeed()),
     prepareToQuit: request.prepareToQuit,
     openExternal: url => shell.openExternal(url),
@@ -28,7 +30,8 @@ export function composeApplicationUpdate(request: {
   });
 }
 
-// Explicit launch flags affect this process only; neither Home nor packaged provider config is written.
+// Source selection affects this process only; recovery records are source-bound,
+// and neither preferences nor packaged provider configuration is changed.
 function manualValidationFeed(): ConstructorParameters<typeof ElectronUpdaterAdapter>[0] {
   if (!process.argv.includes('--megumi-delivery-validation')) return undefined;
   const urlArgument = process.argv.find(value => value.startsWith('--megumi-validation-url='));

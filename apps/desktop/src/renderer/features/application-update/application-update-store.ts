@@ -86,32 +86,22 @@ async function runSnapshotCommand(command: () => Promise<ApplicationUpdateSnapsh
 
 function applySnapshot(snapshot: ApplicationUpdateSnapshot): void {
   useApplicationUpdateStore.setState({ snapshot, loadError: false });
-  if (!isPendingUpdate(snapshot)) return;
-  showUpdateToast(snapshot);
-}
-
-function isPendingUpdate(snapshot: ApplicationUpdateSnapshot): snapshot is Extract<
-  ApplicationUpdateSnapshot,
-  { status: 'available' | 'downloading' | 'ready' }
-> {
-  return snapshot.status === 'available' || snapshot.status === 'downloading' || snapshot.status === 'ready';
+  if (!('release' in snapshot) || !snapshot.release || snapshot.status === 'preparing_install') return;
+  showUpdateToast(snapshot.release.version, snapshot.status === 'ready');
 }
 
 // The same stable id updates an existing toast; a manually dismissed toast stays dismissed for that version.
-function showUpdateToast(snapshot: Extract<
-  ApplicationUpdateSnapshot,
-  { status: 'available' | 'downloading' | 'ready' }
->): void {
-  const id = `application-update:${snapshot.release.version}`;
+function showUpdateToast(version: string, ready: boolean): void {
+  const id = `application-update:${version}`;
   const existing = useToastStore.getState().toasts.some((toast) => toast.id === id);
-  if (announcedVersion === snapshot.release.version && !existing) return;
-  announcedVersion = snapshot.release.version;
+  if (announcedVersion === version && !existing) return;
+  announcedVersion = version;
   showToast({
     id,
-    tone: snapshot.status === 'ready' ? 'success' : 'info',
+    tone: ready ? 'success' : 'info',
     title: rendererI18n.t(
-      snapshot.status === 'ready' ? 'about.updateToastReady' : 'about.updateToastAvailable',
-      { ns: 'settings', version: snapshot.release.version },
+      ready ? 'about.updateToastReady' : 'about.updateToastAvailable',
+      { ns: 'settings', version },
     ),
     message: rendererI18n.t('about.updateToastDescription', { ns: 'settings' }),
     durationMs: 0,

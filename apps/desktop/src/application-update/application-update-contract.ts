@@ -12,7 +12,7 @@ export const ApplicationUpdateErrorCodeSchema = z.enum([
   'network_unavailable', 'update_service_unavailable', 'release_metadata_invalid',
   'release_assets_incomplete', 'update_download_failed', 'update_not_ready',
   'update_verification_failed', 'restart_prepare_failed', 'installer_launch_failed',
-  'preferences_write_failed', 'unknown_update_error',
+  'preferences_write_failed', 'update_state_write_failed', 'update_cache_missing', 'update_cache_unreadable', 'unknown_update_error',
 ]);
 export type ApplicationUpdateErrorCode = z.infer<typeof ApplicationUpdateErrorCodeSchema>;
 const BaseSchema = z.object({
@@ -28,15 +28,16 @@ export const ApplicationUpdateSnapshotSchema = z.discriminatedUnion('status', [
   BaseSchema.extend({ status: z.literal('unsupported'),
     supportReason: z.enum(['development', 'platform', 'not_installed']) }).strict(),
   BaseSchema.extend({ status: z.literal('idle') }).strict(),
-  BaseSchema.extend({ status: z.literal('checking') }).strict(),
+  BaseSchema.extend({ status: z.literal('checking'), release: ApplicationUpdateReleaseSchema.optional() }).strict(),
   BaseSchema.extend({ status: z.literal('up_to_date') }).strict(),
-  BaseSchema.extend({ status: z.literal('available'), release: ApplicationUpdateReleaseSchema }).strict(),
+  BaseSchema.extend({ status: z.literal('available'), release: ApplicationUpdateReleaseSchema, lastKnown: z.boolean().optional() }).strict(),
+  BaseSchema.extend({ status: z.literal('verifying'), release: ApplicationUpdateReleaseSchema }).strict(),
   BaseSchema.extend({ status: z.literal('downloading'), release: ApplicationUpdateReleaseSchema,
     progress: ApplicationUpdateProgressSchema.optional() }).strict(),
   BaseSchema.extend({ status: z.literal('ready'), release: ApplicationUpdateReleaseSchema }).strict(),
   BaseSchema.extend({ status: z.literal('preparing_install'), release: ApplicationUpdateReleaseSchema }).strict(),
-  BaseSchema.extend({ status: z.literal('error'), error: z.object({
-    operation: z.enum(['check', 'download', 'install', 'preferences']),
+  BaseSchema.extend({ status: z.literal('error'), release: ApplicationUpdateReleaseSchema.optional(), error: z.object({
+    operation: z.enum(['check', 'download', 'install', 'preferences', 'restore']),
     code: ApplicationUpdateErrorCodeSchema, retryable: z.boolean(),
     targetVersion: ApplicationUpdateReleaseSchema.shape.version.optional(),
   }).strict() }).strict(),

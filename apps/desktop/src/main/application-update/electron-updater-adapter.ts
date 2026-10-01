@@ -1,11 +1,18 @@
 /* Converts electron-updater provider results into Desktop's stable release contract. */
 import { NsisUpdater } from 'electron-updater';
 import { app } from 'electron';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { load } from 'js-yaml';
+import { DownloadedUpdateHelper } from 'electron-updater/out/DownloadedUpdateHelper';
+import { findFile } from 'electron-updater/out/providers/Provider';
 import type { StdioOptions } from 'node:child_process';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { ApplicationUpdateReleaseSchema, ApplicationUpdateProgressSchema,
-  type ApplicationUpdateRelease, type ApplicationUpdateProgress,
+  type ApplicationUpdateProgress,
   type ApplicationUpdateErrorCode } from '../../application-update/application-update-contract';
+import { UpdateArtifactSchema, type UpdateCandidate, type UpdateState } from './update-state-store';
 
 /** Carries a stable user-facing failure across the library boundary. */
 export class ApplicationUpdateFailure extends Error {
@@ -17,10 +24,13 @@ export class ApplicationUpdateFailure extends Error {
 /** Owns one updater candidate; checking cannot download or arrange an exit-time installation. */
 export class ElectronUpdaterAdapter {
   private readonly updater: AwaitableNsisUpdater;
+  readonly sourceKey: string | undefined;
 
   constructor(validationFeed?: { provider: 'generic'; url: string } | { provider: 'github'; owner: string; repo: string }) {
     this.updater = new AwaitableNsisUpdater();
     if (validationFeed) this.updater.setFeedURL(validationFeed);
+    // Bind recovery to this configured source without persisting provider credentials.
+    this.sourceKey = this.updater.sourceKey(validationFeed);
     this.updater.autoDownload = false;
     this.updater.autoInstallOnAppQuit = false;
     this.updater.allowPrerelease = false;
@@ -31,7 +41,7 @@ export class ElectronUpdaterAdapter {
   }
 
   /** Returns the provider's stable candidate without fetching installer bytes. */
-  async check(): Promise<ApplicationUpdateRelease | undefined> {
+  async check(): Promise<UpdateCandidate | undefined> {
     try {
       const result = await this.updater.checkForUpdates();
       if (!result) throw new ApplicationUpdateFailure('release_metadata_invalid', 'No provider result');
@@ -39,12 +49,13 @@ export class ElectronUpdaterAdapter {
       const info = result.updateInfo;
       const notes = typeof info.releaseNotes === 'string' ? info.releaseNotes
         : info.releaseNotes?.map(item => item.note).join('\n');
-      return ApplicationUpdateReleaseSchema.parse({
+      const release = ApplicationUpdateReleaseSchema.parse({
         version: info.version,
         title: (info.releaseName?.trim() || `Megumi ${info.version}`).slice(0, 160),
         ...(notes ? { notesSummary: notes.slice(0, 1_200) } : {}),
         releasePageUrl: `https://github.com/anwen0724/megumi/releases/tag/v${info.version}`,
       });
+      return { release, artifact: this.updater.candidateArtifact() };
     } catch (error) {
       const code = error instanceof Error && 'code' in error ? error.code : undefined;
       if (error instanceof ApplicationUpdateFailure) throw error;
@@ -63,6 +74,16 @@ export class ElectronUpdaterAdapter {
       }
       throw new ApplicationUpdateFailure(error instanceof ZodError || code === 'ERR_UPDATER_INVALID_UPDATE_INFO'
         || code === 'ERR_UPDATER_INVALID_VERSION' ? 'release_metadata_invalid' : 'unknown_update_error', error);
+    }
+  }
+
+  /** Revalidates only local bytes and restores the library's installation state. */
+  async restore(state: UpdateState): Promise<void> {
+    try {
+      await this.updater.restoreCachedInstaller(state);
+    } catch (error) {
+      if (error instanceof ApplicationUpdateFailure) throw error;
+      throw new ApplicationUpdateFailure('update_cache_unreadable', error);
     }
   }
 
@@ -97,6 +118,57 @@ export class ElectronUpdaterAdapter {
 // process boundary instead of quitAndInstall, which schedules quit before spawn failures arrive.
 class AwaitableNsisUpdater extends NsisUpdater {
   private installerStart: Promise<boolean> | undefined;
+
+  sourceKey(validationFeed: unknown): string | undefined {
+    try {
+      return createHash('sha256').update(fs.readFileSync(this.app.appUpdateConfigPath))
+        .update(JSON.stringify(validationFeed ?? null)).digest('hex');
+    } catch { return undefined; }
+  }
+
+  candidateArtifact(): UpdateCandidate['artifact'] {
+    const checked = this.updateInfoAndProvider;
+    const file = checked && findFile(checked.provider.resolveFiles(checked.info), 'exe');
+    if (!file || file.packageInfo) throw new ApplicationUpdateFailure('release_assets_incomplete', 'Full installer missing');
+    return UpdateArtifactSchema.parse({
+      url: file.url.href, fileName: path.basename(decodeURIComponent(file.url.pathname)),
+      sha512: file.info.sha512, size: file.info.size,
+      isAdminRightsRequired: file.info.isAdminRightsRequired === true,
+    });
+  }
+
+  // electron-updater 6.6.2 has no public cache-only recovery API. Keep its
+  // DownloadedUpdateHelper and protected install state behind this adapter.
+  async restoreCachedInstaller(state: UpdateState): Promise<void> {
+    const config = z.object({ updaterCacheDirName: z.string().regex(/^[\w.-]+$/) })
+      .parse(load(fs.readFileSync(this.app.appUpdateConfigPath, 'utf8')));
+    const helper = new DownloadedUpdateHelper(path.join(this.app.baseCachePath, config.updaterCacheDirName));
+    const artifact = state.candidate.artifact;
+    const filePath = path.join(helper.cacheDirForPendingUpdate, artifact.fileName);
+    let cached: unknown;
+    try {
+      cached = JSON.parse(await fs.promises.readFile(path.join(helper.cacheDirForPendingUpdate, 'update-info.json'), 'utf8'));
+      await fs.promises.stat(filePath);
+    } catch (error) {
+      if (error instanceof SyntaxError || (error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw new ApplicationUpdateFailure('update_cache_missing', error);
+      }
+      throw error;
+    }
+    // The library joins this filename itself; validate it before it can read any path.
+    const cacheInfo = z.object({ fileName: z.literal(artifact.fileName) }).safeParse(cached);
+    if (!cacheInfo.success) throw new ApplicationUpdateFailure('update_cache_missing', 'Cached target changed');
+    const fileInfo = { url: new URL(artifact.url), info: {
+      url: artifact.fileName, sha512: artifact.sha512, size: artifact.size,
+      isAdminRightsRequired: artifact.isAdminRightsRequired,
+    } };
+    const info = { version: state.candidate.release.version, files: [fileInfo.info],
+      path: artifact.fileName, sha512: artifact.sha512, releaseDate: state.checkedAt };
+    const verified = await helper.validateDownloadedPath(filePath, info, fileInfo, this._logger);
+    if (!verified) throw new ApplicationUpdateFailure('update_verification_failed', 'Cached installer failed verification');
+    await helper.setDownloadedFile(verified, null, info, fileInfo, artifact.fileName, false);
+    this.downloadedUpdateHelper = helper;
+  }
 
   /** Waits for OS process creation and leaves failed handoffs retryable. */
   async launchInstaller(): Promise<void> {

@@ -18,12 +18,12 @@ export function createMegumiTray(options: {
   const tray = new Tray(options.iconPath);
   tray.setToolTip('Megumi');
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示 Megumi', click: options.showCharacter },
-    { label: '显示主窗口', click: options.showMainWindow },
-    { label: '隐藏 Megumi', click: options.hideCharacter },
+    { label: '打开主窗口', click: options.showMainWindow },
+    { label: '显示人物窗口', click: options.showCharacter },
+    { label: '隐藏人物窗口', click: options.hideCharacter },
     { type: 'separator' },
     { label: '退出', click: options.quit },
   ]));
-  tray.on('double-click', options.showCharacter);
+  tray.on('double-click', options.showMainWindow);
   return { dispose: () => tray.destroy() };
 }

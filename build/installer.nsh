@@ -148,6 +148,9 @@ Var MegumiEntryKind
   ${If} $MegumiDesktopShortcut == ${BST_CHECKED}
     CreateShortCut "$DESKTOP\${SHORTCUT_NAME}.lnk" "$appExe" "" "$appExe" 0
     WinShell::SetLnkAUMI "$DESKTOP\${SHORTCUT_NAME}.lnk" "${APP_ID}"
+    ; Refresh this item only after the replacement executable and shortcut are in place.
+    ; SHCNE_UPDATEITEM, SHCNF_PATHW | SHCNF_FLUSH.
+    System::Call 'shell32::SHChangeNotify(i 0x2000, i 0x1005, w "$DESKTOP\${SHORTCUT_NAME}.lnk", p 0)'
   ${EndIf}
 !macroend
 
