@@ -132,7 +132,7 @@ export const settings = {
     },
   },
   about: {
-    tagline: 'A personal agent that works with you on real tasks.',
+    tagline: 'Explore your interests and discover content worth your attention, together.',
     version: 'Version {{version}}',
     loading: 'Loading application information…',
     loadFailed: 'Application information is temporarily unavailable.',

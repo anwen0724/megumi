@@ -69,9 +69,6 @@ export function AboutMegumiPanel() {
               <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1">
                 {t('about.version', { version: snapshot.currentVersion })}
               </span>
-              <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-2.5 py-1">
-                {platformLabel(snapshot.platform, snapshot.arch)}
-              </span>
             </div>
           </div>
         </div>
@@ -353,15 +350,4 @@ function statusPresentation(
     case 'error':
       return { icon: AlertCircle, title: t('about.status.error'), description: t(`about.errors.${snapshot.error.code}`) };
   }
-}
-
-function platformLabel(platform: string, arch: string): string {
-  const platformName = platform === 'win32'
-    ? 'Windows'
-    : platform === 'darwin'
-      ? 'macOS'
-      : platform === 'linux'
-        ? 'Linux'
-        : platform;
-  return `${platformName} ${arch}`;
 }

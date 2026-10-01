@@ -135,7 +135,7 @@ export const settings = {
     },
   },
   about: {
-    tagline: '与你一起完成真实任务的个人 Agent。',
+    tagline: '陪你探索感兴趣的事，发现值得关注的内容。',
     version: '版本 {{version}}',
     loading: '正在读取应用信息…',
     loadFailed: '暂时无法读取应用信息。',
