@@ -4,13 +4,6 @@ interface ProviderRetryOptions {
 	maxRetries?: number;
 	maxRetryDelayMs?: number;
 	signal?: AbortSignal;
-	onRetryScheduled?: (event: ProviderRetryScheduledEvent) => void;
-}
-
-export interface ProviderRetryScheduledEvent {
-	readonly currentAttempt: number;
-	readonly nextAttempt: number;
-	readonly reasonCode: string;
 }
 
 interface ProviderError extends Error {
@@ -59,14 +52,14 @@ function getRetryDelayMs(error: ProviderError, retryIndex: number, maxRetryDelay
 	const retryAfterMs = error.headers?.get("retry-after-ms");
 	if (retryAfterMs) {
 		const value = Number.parseFloat(retryAfterMs);
-		if (!Number.isNaN(value)) return validateServerRetryDelayMs(value, maxRetryDelayMs, error.message);
+		if (Number.isFinite(value)) return validateServerRetryDelayMs(value, maxRetryDelayMs, error.message);
 	}
 
 	const retryAfter = error.headers?.get("retry-after");
 	if (retryAfter) {
 		const seconds = Number.parseFloat(retryAfter);
 		const delayMs = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1000;
-		return validateServerRetryDelayMs(delayMs, maxRetryDelayMs, error.message);
+		if (Number.isFinite(delayMs)) return validateServerRetryDelayMs(delayMs, maxRetryDelayMs, error.message);
 	}
 
 	const exponentialDelay = Math.min(0.5 * 2 ** retryIndex, 8) * 1000;
@@ -110,46 +103,23 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
  * disable the limit.
  */
 export async function retryProviderRequest<T>(
-	request: (attempt: number) => Promise<T>,
+	request: () => Promise<T>,
 	options: ProviderRetryOptions = {},
 ): Promise<T> {
 	const maxRetries = options.maxRetries ?? 0;
 	let retriesRemaining = maxRetries;
-	let attempt = 1;
 
 	for (;;) {
 		try {
 			// Each retry is a fresh SDK request, so X-Stainless-Retry-Count remains zero.
-			return await request(attempt);
+			return await request();
 		} catch (error) {
 			if (options.signal?.aborted) throw createAbortError();
 			if (retriesRemaining <= 0 || !isProviderError(error) || !isRetryableProviderError(error)) throw error;
 
 			const retryIndex = maxRetries - retriesRemaining;
-			const delayMs = getRetryDelayMs(error, retryIndex, options.maxRetryDelayMs);
 			retriesRemaining--;
-			notifyRetryScheduled(options.onRetryScheduled, {
-				currentAttempt: attempt,
-				nextAttempt: attempt + 1,
-				reasonCode: providerRetryReasonCode(error),
-			});
-			await abortableSleep(delayMs, options.signal);
-			attempt += 1;
+			await abortableSleep(getRetryDelayMs(error, retryIndex, options.maxRetryDelayMs), options.signal);
 		}
-	}
-}
-
-function providerRetryReasonCode(error: ProviderError): string {
-	return error.status === undefined ? "network_error" : `http_${error.status}`;
-}
-
-function notifyRetryScheduled(
-	listener: ProviderRetryOptions["onRetryScheduled"],
-	event: ProviderRetryScheduledEvent,
-): void {
-	try {
-		listener?.(event);
-	} catch {
-		// Retry scheduling and dispatch are independent of diagnostic callbacks.
 	}
 }

@@ -88,24 +88,4 @@ describe('provider request retry (shared by all retained adapters)', () => {
     expect(calls).toBe(1);
   });
 
-  it('normalizes Google SDK ApiError shapes before classification', async () => {
-    // Google's SDK throws errors without a headers property; the adapter
-    // normalizes them so the shared classifier can retry by status only.
-    const { retryGoogleRequest } = await import('@megumi/ai/api/google-shared');
-    let calls = 0;
-    const result = await retryGoogleRequest(
-      async () => {
-        calls++;
-        if (calls === 1) {
-          const error = new Error('google 503');
-          (error as { status?: number }).status = 503;
-          throw error;
-        }
-        return 'ok';
-      },
-      { maxRetries: 1 },
-    );
-    expect(result).toBe('ok');
-    expect(calls).toBe(2);
-  });
 });

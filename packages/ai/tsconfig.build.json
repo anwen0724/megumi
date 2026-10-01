@@ -4,6 +4,8 @@
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"noEmit": false,
+		"emitDeclarationOnly": false,
+		"tsBuildInfoFile": "./dist/.tsbuildinfo",
 		"rewriteRelativeImportExtensions": true,
 		"declaration": true,
 		"declarationMap": true,
@@ -12,6 +14,6 @@
 		"outDir": "./dist",
 		"rootDir": "./src"
 	},
-	"include": ["src/**/*.ts", "src/**/*.json"],
+	"include": ["src/**/*.ts", "src/**/*.json", "src/providers/data/.manifest.json"],
 	"exclude": ["node_modules", "dist", "**/*.d.ts", "src/**/*.d.ts"]
 }

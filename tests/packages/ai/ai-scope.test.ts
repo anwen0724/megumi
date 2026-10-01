@@ -11,17 +11,15 @@ import { builtinModels, builtinProviders, getBuiltinProviders } from '@megumi/ai
 const EXPECTED_PROVIDERS = [
   'anthropic',
   'deepseek',
-  'google',
-  'huggingface',
+  'kimi-coding',
   'minimax',
   'minimax-cn',
   'moonshotai',
   'moonshotai-cn',
   'openai',
   'openai-codex',
-  'openrouter',
-  'qwen-token-plan',
-  'qwen-token-plan-cn',
+  'zai',
+  'zai-coding-cn',
 ];
 
 describe('AI package trimmed scope', () => {

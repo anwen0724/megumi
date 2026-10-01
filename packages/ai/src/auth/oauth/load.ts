@@ -14,7 +14,8 @@ const importOAuthModule = (specifier: string): Promise<unknown> => {
 type OAuthFlowLoaders = {
 	anthropic: () => OAuthAuth | Promise<OAuthAuth>;
 	openaiCodex: () => OAuthAuth | Promise<OAuthAuth>;
-	openrouter: () => OAuthAuth | Promise<OAuthAuth>;
+	openaiChatGPT: () => OAuthAuth | Promise<OAuthAuth>;
+	kimiCoding: () => OAuthAuth | Promise<OAuthAuth>;
 };
 
 let bundledLoaders: OAuthFlowLoaders | undefined;
@@ -34,7 +35,12 @@ export const loadOpenAICodexOAuth = async (): Promise<OAuthAuth> => {
 	return ((await importOAuthModule("./openai-codex.ts")) as { openaiCodexOAuth: OAuthAuth }).openaiCodexOAuth;
 };
 
-export const loadOpenRouterOAuth = async (): Promise<OAuthAuth> => {
-	if (bundledLoaders) return bundledLoaders.openrouter();
-	return ((await importOAuthModule("./openrouter.ts")) as { openRouterOAuth: OAuthAuth }).openRouterOAuth;
+export const loadOpenAIChatGPTOAuth = async (): Promise<OAuthAuth> => {
+	if (bundledLoaders) return bundledLoaders.openaiChatGPT();
+	return ((await importOAuthModule("./openai-chatgpt.ts")) as { openaiChatGPTOAuth: OAuthAuth }).openaiChatGPTOAuth;
+};
+
+export const loadKimiCodingOAuth = async (): Promise<OAuthAuth> => {
+	if (bundledLoaders) return bundledLoaders.kimiCoding();
+	return ((await importOAuthModule("./kimi-coding.ts")) as { kimiCodingOAuth: OAuthAuth }).kimiCodingOAuth;
 };
