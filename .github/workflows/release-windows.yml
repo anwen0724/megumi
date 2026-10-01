@@ -4,20 +4,33 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Source build run ID (from its summary)'
+        required: true
+        type: string
+      artifact_id:
+        description: 'Saved release artifact ID (from its summary)'
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release-windows-x64:
+  build:
+    name: Build and save Windows installer
     # Deleting a tag also emits a push event; only a live release tag may publish artifacts.
-    if: ${{ github.event.deleted == false }}
+    if: ${{ github.event_name == 'push' && github.event.deleted == false }}
     runs-on: windows-latest
     timeout-minutes: 60
+    outputs:
+      artifact_id: ${{ steps.save.outputs.artifact-id }}
 
     steps:
       - name: Enable long paths for Git checkout
@@ -57,9 +70,75 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
       - name: Verify final artifacts
-        run: npm run release:verify:artifacts -- --directory out/desktop
+        id: batch
+        run: |
+          npm run release:verify:artifacts -- --directory out/desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $manifest = Get-Content -LiteralPath out/desktop/release-manifest.json -Raw | ConvertFrom-Json
+          'paths<<RELEASE_FILES' >> $env:GITHUB_OUTPUT
+          'out/desktop/release-manifest.json' >> $env:GITHUB_OUTPUT
+          $manifest.files | ForEach-Object { "out/desktop/$($_.name)" } >> $env:GITHUB_OUTPUT
+          'RELEASE_FILES' >> $env:GITHUB_OUTPUT
         env:
           MEGUMI_SIGNING_PUBLISHER: ${{ vars.MEGUMI_SIGNING_PUBLISHER }}
+
+      - name: Save verified release batch
+        id: save
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-release-${{ github.run_attempt }}
+          path: ${{ steps.batch.outputs.paths }}
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Show saved batch for upload retries
+        env:
+          ARTIFACT_ID: ${{ steps.save.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.save.outputs.artifact-url }}
+        run: |
+          "Saved release batch: $env:ARTIFACT_URL" >> $env:GITHUB_STEP_SUMMARY
+          "`nSource build run ID: $env:GITHUB_RUN_ID" >> $env:GITHUB_STEP_SUMMARY
+          "`nArtifact ID: $env:ARTIFACT_ID" >> $env:GITHUB_STEP_SUMMARY
+
+  publish:
+    name: Upload saved batch to Draft
+    needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: windows-release-upload-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Enable long paths for Git checkout
+        run: git config --global core.longpaths true
+
+      - name: Check out publishing tools
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: npm
+
+      - name: Pin npm
+        run: npm install --global npm@11.9.0
+
+      - name: Install publishing dependencies without native builds
+        run: npm ci --ignore-scripts
+
+      - name: Download saved release batch
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ inputs.artifact_id || needs.build.outputs.artifact_id }}
+          run-id: ${{ inputs.run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: out/desktop
+          merge-multiple: true
 
       - name: Upload verified batch to Draft and verify remote bytes
         run: npm run publish -- --directory out/desktop

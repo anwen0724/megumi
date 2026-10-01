@@ -12,7 +12,8 @@ export async function createGithubReleaseSource() {
   const server = http.createServer(async (request, response) => {
     const address = new URL(request.url!, url);
     const send = (status: number, body: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(body)); };
-    if (address.pathname === '/repos/anwen0724/megumi') return send(200, { full_name: 'anwen0724/megumi', permissions: { push: true } });
+    // Repository metadata may omit user permissions even when the token can write releases.
+    if (address.pathname === '/repos/anwen0724/megumi') return send(200, { full_name: 'anwen0724/megumi' });
     if (address.pathname.endsWith('/commits/v0.2.0')) return send(200, { sha: state.commit });
     if (address.pathname.endsWith('/releases/tags/v0.2.0')) return send(state.exists ? 200 : 404, release());
     if (address.pathname.endsWith('/releases') && request.method === 'POST') {

@@ -70,7 +70,7 @@ it.each(['missing', 'corrupt', 'version', 'reference'])('rejects an invalid arti
 it('resumes a partial upload with identical bytes and keeps the completed release a Draft', async () => {
   const { directory } = await batch();
   const github = await createGithubReleaseSource();
-  const options = { directory, token: 'local-fixture', apiUrl: github.url, version: '0.2.0' };
+  const options = { directory, token: 'local-fixture', apiUrl: github.url };
   try {
     github.state.failUpload = 'independent.exe';
     await expect(publishDraft(options)).rejects.toThrow(/502/);

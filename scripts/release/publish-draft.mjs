@@ -4,11 +4,15 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { verifyNsisArtifacts, artifactPath } from './verify-nsis-artifacts.mjs';
+import { verifyReleaseVersion } from './verify-release.mjs';
 
 /** apiUrl is an external-service boundary for local protocol tests; CLI always uses GitHub. */
 export async function publishDraft({ directory, token = process.env.GITHUB_TOKEN, apiUrl = 'https://api.github.com', version } = {}) {
   if (!token) throw new Error('GITHUB_TOKEN is required.');
-  const batch = await verifyNsisArtifacts({ directory, version });
+  if (!directory) throw new Error('--directory is required.');
+  // A saved batch keeps its release identity when publishing tools advance on the default branch.
+  const recordedVersion = version ?? verifyReleaseVersion({ packageJsonPath: artifactPath(directory, 'release-manifest.json') });
+  const batch = await verifyNsisArtifacts({ directory, version: recordedVersion });
   if (batch.dirty) throw new Error('Cannot publish a batch built with local changes.');
   const { publish } = createRequire(import.meta.url)('../../electron-builder.config.cjs');
   const repository = `${publish.owner}/${publish.repo}`;
@@ -22,7 +26,8 @@ export async function publishDraft({ directory, token = process.env.GITHUB_TOKEN
     return response;
   }
   const repositoryInfo = await (await request(base)).json();
-  if (repositoryInfo.full_name !== repository || !repositoryInfo.permissions?.push) throw new Error('Publisher lacks write access to the configured repository.');
+  if (repositoryInfo.full_name !== repository) throw new Error('GitHub repository does not match the configured publish target.');
+  // Repository user permissions are not token capabilities; GitHub authorizes each release write.
   const tag = `v${batch.version}`;
   const commit = await (await request(`${base}/commits/${tag}`)).json();
   if (commit.sha !== batch.sourceCommit) throw new Error('Remote release Tag does not match the built source commit.');
