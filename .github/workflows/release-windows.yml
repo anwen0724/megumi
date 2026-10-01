@@ -20,6 +20,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      - name: Enable long paths for Git checkout
+        run: git config --global core.longpaths true
+
       - name: Check out release tag
         uses: actions/checkout@v4
 
