@@ -1,6 +1,6 @@
 {
   "name": "megumi",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Local-first personal Agent for conversation-driven content discovery",
   "repository": {
     "type": "git",
