@@ -158,6 +158,8 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
   prepareToQuit = () => lifecycle.prepareToQuit();
   quitApplication = () => {
     void lifecycle.quit().catch((error: unknown) => {
+      // Product disposal may have already closed the runtime logger.
+      console.error('Desktop shutdown preparation failed.', error);
       desktopMain.runtimeLogger.warn('desktop_quit_failed', {
         errorMessage: error instanceof Error ? error.message : String(error),
       });
