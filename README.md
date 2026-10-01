@@ -192,6 +192,8 @@ npm ci
 npm start
 ```
 
+`npm start` prepares the native SQLite module for Electron, then runs `electron-vite dev --watch`. Renderer changes update in the development window; main-process changes restart Electron.
+
 Run the project checks:
 
 ```bash
@@ -208,7 +210,7 @@ npm run package
 npm run make
 ```
 
-Electron Forge writes build output to `out/`.
+electron-vite builds the application code in `.vite/`; electron-builder writes the unpacked application and installer to `out/desktop/`.
 
 ## Acknowledgements
 

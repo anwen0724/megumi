@@ -19,7 +19,6 @@ import { createFileCharacterWindowStateStore } from './adapters/file-character-w
 import { showDesktopBootstrapFailure } from './app/bootstrap-failure';
 import { composeApplicationUpdate } from './application-update/application-update-composition';
 
-declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
 declare const MEGUMI_APP_ID: string;
 
@@ -37,6 +36,7 @@ try {
 
 /** Composes the Desktop-owned surfaces and their single orderly shutdown boundary. */
 function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void {
+  const devServerUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL;
   let prepareToQuit: () => Promise<void> = async () => {
     throw new Error('Desktop lifecycle is not ready for update installation.');
   };
@@ -60,7 +60,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
   };
   character = createCharacterWindowController({
     createWindow: () => createCharacterWindow({
-      devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+      devServerUrl,
       rendererName: MAIN_WINDOW_VITE_NAME,
       dirname: __dirname,
     }),
@@ -136,7 +136,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
     },
     createWindow: () => {
       mainWindow = createMainWindow({
-        devServerUrl: MAIN_WINDOW_VITE_DEV_SERVER_URL,
+        devServerUrl,
         rendererName: MAIN_WINDOW_VITE_NAME,
         dirname: __dirname,
       });

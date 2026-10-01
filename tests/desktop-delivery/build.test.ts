@@ -18,7 +18,9 @@ afterEach(async () => {
 it('builds all four Desktop entries without losing Main when the Worker is built', async () => {
   const output = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-build-'));
   temporaryDirectories.push(output);
-  await run(process.execPath, ['scripts/desktop/build.mjs', output], { timeout: 120_000, maxBuffer: 8_000_000 });
+  await run(process.execPath, ['node_modules/electron-vite/bin/electron-vite.js', 'build'], {
+    env: { ...process.env, MEGUMI_BUILD_OUTPUT: output }, timeout: 120_000, maxBuffer: 8_000_000,
+  });
   for (const entry of ['build/index.js', 'build/voice-input-worker.js', 'preload/index.js', 'renderer/main_window/index.html']) {
     expect((await fs.stat(path.join(output, entry))).size).toBeGreaterThan(0);
   }
@@ -32,7 +34,9 @@ it('builds all four Desktop entries without losing Main when the Worker is built
 it('ships the instructions, migrations, skills and attributed VAD model needed at runtime', async () => {
   const output = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-resources-'));
   temporaryDirectories.push(output);
-  await run(process.execPath, ['scripts/desktop/build.mjs', output], { timeout: 120_000, maxBuffer: 8_000_000 });
+  await run(process.execPath, ['node_modules/electron-vite/bin/electron-vite.js', 'build'], {
+    env: { ...process.env, MEGUMI_BUILD_OUTPUT: output }, timeout: 120_000, maxBuffer: 8_000_000,
+  });
   for (const directory of ['product/instructions', 'product/system-skills', 'product/database/migrations']) {
     expect((await fs.readdir(path.join(output, 'resources', directory))).length).toBeGreaterThan(0);
   }

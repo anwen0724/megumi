@@ -24,15 +24,6 @@ describe('renderer bootstrap loading', () => {
     expect(source).toContain("classList.add('is-leaving')");
   });
 
-  it('binds the development renderer to the same IPv4 address Electron loads', () => {
-    const source = fs.readFileSync(
-      path.resolve(process.cwd(), 'vite.renderer.config.ts'),
-      'utf8',
-    );
-
-    expect(source).toContain("host: '127.0.0.1'");
-  });
-
   it('limits Tailwind source detection to renderer files', () => {
     const source = fs.readFileSync(
       path.resolve(process.cwd(), 'apps/desktop/src/renderer/shared/styles/globals.css'),

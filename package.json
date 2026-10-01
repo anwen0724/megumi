@@ -15,8 +15,8 @@
   ],
   "main": ".vite/build/index.js",
   "scripts": {
-    "start": "npm run rebuild:native:electron && node scripts/desktop/dev.mjs",
-    "build:desktop": "node scripts/desktop/build.mjs",
+    "start": "npm run rebuild:native:electron && electron-vite dev --watch",
+    "build:desktop": "electron-vite build",
     "package": "npm run rebuild:native:electron && npm run build:desktop && electron-builder --config electron-builder.config.cjs --win --x64 --dir --publish never",
     "make": "npm run rebuild:native:electron && npm run build:desktop && electron-builder --config electron-builder.config.cjs --win --x64 --publish never && node scripts/release/record-artifacts.mjs --directory out/desktop",
     "publish": "node scripts/release/publish-draft.mjs",
@@ -47,6 +47,7 @@
     "drizzle-kit": "^0.31.10",
     "electron": "^33.0.0",
     "electron-builder": "26.0.12",
+    "electron-vite": "5.0.0",
     "js-yaml": "4.3.2",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.14",

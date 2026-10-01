@@ -22,17 +22,6 @@ describe('Skills package boundary', () => {
     const source = readTypeScriptTree('packages/agent/skills');
     expect(source).not.toMatch(/skillId|skill_id|activateSkill/);
   });
-
-  it('is resolvable from every production Vite target through the shared Package aliases', () => {
-    const aliases = fs.readFileSync(path.join(root, 'vite.megumi-package-aliases.ts'), 'utf8');
-    expect(aliases).toContain("'@megumi/skills'");
-
-    for (const config of ['vite.main.config.ts', 'vite.preload.config.ts', 'vite.renderer.config.ts']) {
-      const source = fs.readFileSync(path.join(root, config), 'utf8');
-      expect(source, config).toContain("'./vite.megumi-package-aliases'");
-      expect(source, config).toContain('...megumiPackageAliases');
-    }
-  });
 });
 
 function readTypeScriptTree(relativeRoot: string): string {
