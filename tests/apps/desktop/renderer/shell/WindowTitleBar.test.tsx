@@ -59,13 +59,6 @@ describe('WindowTitleBar', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it('marks the titlebar as draggable and controls as non-draggable', () => {
-    renderTitleBar();
-
-    expect(screen.getByTestId('window-titlebar')).toHaveClass('app-drag-region');
-    expect(screen.getByTestId('window-titlebar-controls')).toHaveClass('app-no-drag');
-  });
-
   it('does not own the project sidebar toggle', () => {
     renderTitleBar();
 

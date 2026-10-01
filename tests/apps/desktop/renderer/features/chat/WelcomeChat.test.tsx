@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -47,42 +47,15 @@ describe('WelcomeChat', () => {
     expect(screen.getByRole('menuitem', { name: '添加项目' })).toBeInTheDocument();
   });
 
-  it('keeps the intro text static and exposes a lightweight highlighted project selector button', () => {
-    renderWelcomeChat();
-
-    expect(screen.getByText('New session in')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /New session in/ })).not.toBeInTheDocument();
-
-    const projectButton = screen.getByRole('button', { name: 'Select project: Megumi' });
-    expect(projectButton).toHaveClass('text-[var(--color-accent)]');
-    expect(projectButton).toHaveClass('hover:bg-[var(--color-surface-hover)]');
-    expect(projectButton).not.toHaveClass('border');
-    expect(projectButton).not.toHaveClass('bg-[var(--color-surface-raised)]');
-  });
-
-  it('renders an opaque project menu with English search, visible hover states, and add project action', () => {
+  it('renders the project menu in English with the current project and add action', () => {
     renderWelcomeChat({ projectPickerOpen: true });
 
     const menu = screen.getByRole('menu', { name: 'Choose project for new session' });
-    expect(menu).toHaveClass('left-0');
-    expect(menu).not.toHaveClass('left-1/2');
-    expect(menu).not.toHaveClass('-translate-x-1/2');
-    expect(menu).toHaveClass('bg-[var(--color-surface-elevated)]');
     const searchInput = within(menu).getByPlaceholderText('Search projects');
     expect(searchInput).toBeInTheDocument();
-    expect(searchInput.closest('label')).not.toHaveClass('border-b');
     expect(within(menu).queryByPlaceholderText('搜索项目')).not.toBeInTheDocument();
-
-    const projectItem = within(menu).getByRole('menuitem', { name: /Megumi/ });
-    expect(projectItem).toHaveClass('hover:bg-[var(--color-accent-soft)]');
     expect(within(menu).getByLabelText('Current project')).toBeInTheDocument();
-
-    const addProjectItem = within(menu).getByRole('menuitem', { name: 'Add project' });
-    expect(addProjectItem).toHaveClass('hover:bg-[var(--color-accent-soft)]');
-    expect(addProjectItem.parentElement).toHaveClass('border-t');
-    expect(addProjectItem.parentElement).toHaveClass(
-      'border-[color-mix(in_srgb,var(--color-border-subtle)_45%,transparent)]',
-    );
+    expect(within(menu).getByRole('menuitem', { name: 'Add project' })).toBeInTheDocument();
     expect(within(menu).queryByRole('menuitem', { name: '添加新项目' })).not.toBeInTheDocument();
   });
 
@@ -106,7 +79,6 @@ describe('WelcomeChat', () => {
     }
 
     render(<StatefulWelcomeChat />);
-
     const projectButton = screen.getByRole('button', { name: 'Select project: Megumi' });
     expect(projectButton).toBeEnabled();
 

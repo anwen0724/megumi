@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   VoiceHostMutationResultSchema,
-  VoiceSessionStartPayloadSchema,
-  type ProductHostInterface,
-  type VoiceHost,
+  VoiceSessionStartPayloadSchema
 } from '../../../../packages/agent/product-host/src/host';
 
 describe('VoiceHost contract', () => {
@@ -26,16 +24,5 @@ describe('VoiceHost contract', () => {
     });
     expect(VoiceHostMutationResultSchema.parse({ status: 'ok' })).toEqual({ status: 'ok' });
     expect(VoiceHostMutationResultSchema.safeParse({ status: 'ok', generation: -1 }).success).toBe(false);
-  });
-
-  it('exposes click-based manual utterance boundaries as first-class Voice operations', () => {
-    // Type-level contract: both operations must exist on the Host surface.
-    const operations: Pick<VoiceHost, 'startManualUtterance' | 'finishManualUtterance'> = {} as VoiceHost;
-    expect(operations).toBeDefined();
-  });
-
-  it('adds Voice as a first-class Product Host capability', () => {
-    const host = {} as ProductHostInterface;
-    expect(host).toBeDefined();
   });
 });

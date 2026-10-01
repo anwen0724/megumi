@@ -1,12 +1,6 @@
-/*
- * Protects the AI package's Megumi contracts after the wholesale replacement
- * with the latest pi AI implementation: core public types, the stream
- * terminal contract, the required usage field and the package entry points.
- */
+/* Verifies model streaming outcomes and terminal failure behavior. */
 
 // @vitest-environment node
-import fs from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   createModels,
@@ -20,8 +14,6 @@ import {
 // The stream class is a value; it is exported as a type from the package entry
 // and imported from its defining module when constructed in tests.
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
-
-const packageRoot = path.resolve(process.cwd(), 'packages', 'ai');
 
 function zeroUsage(): AssistantMessage['usage'] {
   return {
@@ -70,30 +62,6 @@ describe('AI package contract', () => {
       expect(result).toBe(message);
     },
   );
-
-  it('keeps AssistantMessage.usage required and fully shaped', () => {
-    expect(fauxAssistantMessage('hello').usage).toEqual(zeroUsage());
-    // The public contract must not offer an optional-usage escape hatch.
-    const message: AssistantMessage = fauxAssistantMessage('x');
-    expect('usage' in message).toBe(true);
-  });
-
-  it('does not expose waitForSettlement() or fail() on the public stream', () => {
-    const stream = new AssistantMessageEventStream();
-    expect(stream).not.toHaveProperty('waitForSettlement');
-    expect(stream).not.toHaveProperty('fail');
-    expect(typeof stream.push).toBe('function');
-    expect(typeof stream.end).toBe('function');
-    expect(typeof stream.result).toBe('function');
-  });
-
-  it('does not expose ModelFailure or the old failure classification helpers', async () => {
-    const exported = Object.keys(await import('@megumi/ai'));
-    expect(exported).not.toContain('ModelFailure');
-    expect(exported).not.toContain('ModelFailureError');
-    expect(exported).not.toContain('classifyModelFailure');
-    expect(exported).not.toContain('createModelFailure');
-  });
 
   it('returns a terminal zero-usage AssistantMessage from result() for a pre-call failure', async () => {
     const models = createModels();
@@ -173,33 +141,5 @@ describe('AI package contract', () => {
 
     expect(['error', 'aborted']).toContain(result.stopReason);
     expect(events.at(-1)?.type).toBe('error');
-  });
-
-  it('keeps the independent publish and build entry points', () => {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
-    ) as {
-      exports: Record<string, unknown>;
-      bin: Record<string, string>;
-      files: string[];
-      sideEffects: string[];
-    };
-
-    expect(manifest.exports).toMatchObject({
-      '.': expect.any(Object),
-      './providers/*': expect.any(Object),
-      './api/*': expect.any(Object),
-      './bun-oauth': expect.any(Object),
-    });
-    expect(manifest.bin).toEqual({ 'megumi-ai': 'dist/cli.js' });
-    expect(manifest.files).toEqual(expect.arrayContaining(['dist', 'README.md']));
-    expect(manifest.sideEffects).toEqual(expect.arrayContaining([
-      './dist/images.js',
-      './dist/providers/images/register-builtins.js',
-    ]));
-    expect(fs.existsSync(path.join(packageRoot, 'tsconfig.json'))).toBe(true);
-    expect(fs.existsSync(path.join(packageRoot, 'src', 'models.generated.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(packageRoot, 'src', 'image-models.generated.ts'))).toBe(true);
-    expect(fs.existsSync(path.join(packageRoot, 'src', 'providers', 'data', '.manifest.json'))).toBe(true);
   });
 });

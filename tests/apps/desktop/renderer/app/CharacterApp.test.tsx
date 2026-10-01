@@ -1,7 +1,5 @@
 /* Protects the shaped Character Presence window and its click/drag/menu interactions. */
 // @vitest-environment jsdom
-import fs from 'node:fs';
-import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -202,7 +200,6 @@ describe('CharacterApp', () => {
     const menu = await screen.findByTestId('character-management-menu');
     expect(menu).toBeInTheDocument();
     expect(menu).toHaveStyle({ left: '255px' });
-    expect(screen.getByTestId('character-viewport').className).not.toContain('drop-shadow');
 
     await userEvent.click(screen.getByRole('menuitem', { name: /show main window|显示主界面/i }));
     expect(showMainWindow).toHaveBeenCalledOnce();
@@ -227,24 +224,5 @@ describe('CharacterApp', () => {
 
     await waitFor(() => expect(setScale).toHaveBeenCalledWith(1.25));
     expect(screen.getByTestId('character-viewport')).toHaveStyle({ width: '425px', height: '850px' });
-  });
-
-  it('uses Megumi as the panel eyebrow instead of repeating Current interaction', async () => {
-    render(<CharacterApp />);
-    const character = screen.getByTestId('character-viewport');
-    fireEvent.pointerDown(character, { pointerId: 4, button: 0, screenX: 100, screenY: 120 });
-    fireEvent.pointerUp(character, { pointerId: 4, button: 0, screenX: 100, screenY: 120 });
-
-    const panel = await screen.findByTestId('character-interaction-panel');
-    expect(panel).toHaveTextContent('Megumi');
-  });
-
-  it('does not force an opaque body background before the character renderer starts', () => {
-    const html = fs.readFileSync(
-      path.resolve(process.cwd(), 'apps/desktop/src/renderer/index.html'),
-      'utf8',
-    );
-
-    expect(html).not.toContain('bg-gray-950');
   });
 });

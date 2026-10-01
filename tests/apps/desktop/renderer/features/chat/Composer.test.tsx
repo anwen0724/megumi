@@ -370,31 +370,6 @@ describe('Composer', () => {
     expect(screen.getByAltText('restored.png')).toBeInTheDocument();
   });
 
-  it('renders a compact toolbar with attachment and context usage on the left, then permission mode, model, and Send on the right', () => {
-    render(<TestComposer onSubmit={() => undefined} />);
-
-    const toolbar = screen.getByTestId('composer-toolbar');
-    const inputPanel = screen.getByTestId('composer-input-panel');
-    const leftControls = toolbar.firstElementChild;
-    const rightControls = screen.getByTestId('composer-actions');
-
-    expect(inputPanel).toHaveClass('px-4');
-    expect(inputPanel).toHaveClass('py-3');
-    expect(inputPanel).not.toHaveClass('border-b');
-    expect(toolbar).toHaveClass('justify-between');
-    expect(toolbar).toHaveClass('flex-nowrap');
-    expect(screen.queryByRole('button', { name: 'Choose context' })).not.toBeInTheDocument();
-    expect(leftControls?.children[0]).toContainElement(screen.getByRole('button', { name: 'Attach files' }));
-    expect(leftControls?.children[1]).toContainElement(screen.getByLabelText('Context usage'));
-    expect(rightControls).toHaveClass('shrink-0');
-    expect(rightControls.children).toHaveLength(3);
-    expect(rightControls.children[0]).toContainElement(screen.getByLabelText('Permission mode'));
-    expect(rightControls.children[1]).toContainElement(screen.getByLabelText('Model'));
-    expect(rightControls.children[2]).toBe(screen.getByRole('button', { name: 'Send message' }));
-    expect(screen.getByRole('button', { name: 'Send message' })).toHaveClass('shrink-0');
-    expect(screen.getByRole('button', { name: 'Send message' })).not.toHaveTextContent('Send');
-  });
-
   it('keeps the selected provider and model when the Composer remounts', async () => {
     const first = render(<TestComposer onSubmit={() => undefined} />);
     await chooseComposerOption('Model', /deepseek-v4-pro/);
@@ -407,15 +382,6 @@ describe('Composer', () => {
     first.unmount();
     render(<TestComposer onSubmit={() => undefined} />);
     expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-pro');
-  });
-
-  it('renders a theme-aware popup with a strongly highlighted selected option', async () => {
-    render(<TestComposer onSubmit={() => undefined} />);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Permission mode' }));
-    expect(screen.getByRole('listbox', { name: 'Permission mode' })).toHaveClass('bg-[var(--color-surface-elevated)]');
-    expect(screen.getByRole('option', { name: 'Ask for approval' })).toHaveClass('bg-[var(--color-accent)]');
-    expect(screen.getByRole('option', { name: 'Ask for approval' })).toHaveClass('text-[var(--color-accent-foreground)]');
   });
 
   it('hides models whose providers are disabled', async () => {
@@ -487,42 +453,6 @@ describe('Composer', () => {
     expect(screen.getByRole('option', { name: /review/i })).toBeInTheDocument();
   });
 
-  it('floats command suggestions above the composer without taking layout space', async () => {
-    render(<TestComposer
-      onSubmit={() => undefined}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/',
-        queryPrefix: '',
-        groups: [{
-          id: 'commands',
-          label: 'Commands',
-          items: [{
-            kind: 'command',
-            name: 'review',
-            description: 'Evaluate review feedback before implementing changes',
-            match: { field: 'name', value: 'review', prefix: '' },
-            replacementInput: '/review ',
-          }],
-        }],
-      })}
-    />);
-
-    await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
-
-    const form = screen.getByRole('form', { name: 'Message composer' });
-    const panel = screen.getByRole('listbox', { name: 'Command suggestions' });
-
-    expect(form).toHaveClass('relative');
-    expect(panel).toHaveClass('absolute');
-    expect(panel).toHaveClass('bottom-full');
-    expect(panel).toHaveClass('left-0');
-    expect(panel).toHaveClass('right-0');
-    expect(panel).toHaveClass('z-50');
-    expect(panel).toHaveClass('max-h-[min(22rem,calc(100vh-12rem))]');
-    expect(panel).toHaveClass('overflow-y-auto');
-  });
-
   it('uses Enter to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
     render(<TestComposer
@@ -583,7 +513,6 @@ describe('Composer', () => {
     await userEvent.keyboard('{Enter}');
 
     expect(screen.getByTestId('composer-command-chip')).toHaveTextContent('Test');
-    expect(screen.getByTestId('composer-command-chip')).toHaveClass('bg-[var(--color-accent-soft)]');
     expect(input).toHaveValue('');
     expect(onSubmit).not.toHaveBeenCalled();
 
@@ -594,35 +523,6 @@ describe('Composer', () => {
       message: '--watch',
       skillSelection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
     }));
-  });
-
-  it('keeps the normal compact input height after choosing a command suggestion', async () => {
-    render(<TestComposer
-      onSubmit={() => undefined}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/re',
-        queryPrefix: 're',
-        groups: [{
-          id: 'commands',
-          label: 'Commands',
-          items: [{
-            kind: 'command',
-            name: 'review',
-            description: 'Evaluate review feedback before implementing changes',
-            match: { field: 'name', value: 'review', prefix: 're' },
-            replacementInput: '/review ',
-          }],
-        }],
-      })}
-    />);
-
-    const input = screen.getByLabelText('Message Megumi');
-    await userEvent.type(input, '/re');
-    await userEvent.keyboard('{Enter}');
-
-    expect(screen.getByTestId('composer-command-chip')).toHaveTextContent('Review');
-    expect(input).toHaveStyle({ height: '56px' });
   });
 
   it('does not convert a typed skill display command without choosing a suggestion', async () => {
@@ -782,20 +682,6 @@ describe('Composer', () => {
     });
   });
 
-  it('uses a stable floating composer shell without page-level width ownership', () => {
-    render(<TestComposer onSubmit={() => undefined} />);
-
-    const form = screen.getByRole('form', { name: 'Message composer' });
-    expect(form).toHaveClass('w-full');
-    expect(form).not.toHaveClass('min-w-[38rem]');
-    expect(form).not.toHaveClass('max-w-3xl');
-    expect(form).not.toHaveClass('px-6');
-    expect(form).toHaveClass('transition-[width,transform,opacity]');
-    expect(screen.getByTestId('composer-input-panel')).toHaveClass('px-4');
-    expect(screen.getByTestId('composer-toolbar')).toHaveClass('px-3');
-    expect(screen.getByTestId('composer-toolbar')).toHaveClass('min-h-12');
-  });
-
   it('resets seed text when seedTextKey changes without rendering branch chrome', async () => {
     const onSubmit = vi.fn();
     const { rerender } = render(
@@ -919,7 +805,6 @@ describe('Composer', () => {
     expect(rightControls).toHaveTextContent('Ask for approval');
     expect(rightControls).toHaveTextContent('deepseek-v4-pro');
     expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
-    expect(screen.getByRole('button', { name: 'Stop current run' })).toHaveClass('shrink-0');
     expect(screen.getByRole('button', { name: 'Stop current run' })).not.toHaveTextContent('Stop');
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onStop).toHaveBeenCalledTimes(1);

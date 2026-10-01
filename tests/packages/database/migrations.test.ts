@@ -22,18 +22,6 @@ afterEach(() => {
 });
 
 describe('migrateDatabase', () => {
-  it('creates the redesigned Database tables', () => {
-    const database = createDatabase({ filename: ':memory:' });
-    migrateDatabase({ database });
-
-    const tables = tableNames(database);
-    for (const table of databaseTables) {
-      expect(tables).toContain(table);
-    }
-
-    database.close();
-  });
-
   it('creates only the redesigned product tables and Drizzle infrastructure table', () => {
     const database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });

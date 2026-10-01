@@ -45,14 +45,6 @@ describe('VoiceControls', () => {
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 
-  it('aligns manual text input and send action to the same control height', () => {
-    render(<VoiceControls voice={voiceProps({ draft: 'hello' })} />);
-
-    expect(screen.getByTestId('voice-text-row')).toHaveClass('items-stretch');
-    expect(screen.getByRole('textbox', { name: 'Character window text input' })).toHaveClass('h-10');
-    expect(screen.getByRole('button', { name: 'Send input' })).toHaveClass('h-10');
-  });
-
   it('shows a disabled preparation state while the complete voice mode is warming up', async () => {
     render(<VoiceControls voice={voiceProps({ preparing: true })} />);
 

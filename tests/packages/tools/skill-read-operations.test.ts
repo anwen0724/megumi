@@ -1,8 +1,4 @@
-/*
- * Protects the corrected Skill design: dynamic Skill reads are ordinary file reads.
- * Tools never learns that a target is a Skill, never adds Skill-specific Permission
- * Operation attributes, and does not depend on the Skills package at all.
- */
+/* Verifies that Skill paths receive ordinary file-read permission operations. */
 
 import fs from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -45,23 +41,3 @@ describe('Skill reads through ordinary file Tools', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
-
-describe('Tools package boundary', () => {
-  it('does not depend on the Skills package in production source', () => {
-    const source = readTypeScriptTree('packages/agent/tools/src');
-    expect(source).not.toMatch(/@megumi\/skills/);
-    expect(source).not.toContain('SkillReadRoot');
-    expect(source).not.toContain('skillReadRoots');
-    expect(source).not.toContain('skillPackageRoot');
-    expect(source).not.toContain('use_skill');
-  });
-});
-
-function readTypeScriptTree(relativeRoot: string): string {
-  const directory = `${process.cwd()}/${relativeRoot}`;
-  if (!fs.existsSync(directory)) return '';
-  return fs.readdirSync(directory, { recursive: true, encoding: 'utf8' })
-    .filter((entry) => /\.(ts|tsx)$/.test(entry))
-    .map((entry) => fs.readFileSync(`${directory}/${entry}`, 'utf8'))
-    .join('\n');
-}

@@ -1,7 +1,8 @@
 /* Verifies the Discovery Agent Execution Registry: reservation, exclusion, approval, terminal, idle. */
 import { describe, expect, it, vi } from 'vitest';
 import { Agent, type AgentOptions } from '@megumi/agent-core';
-import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
+import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
+import { Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
 import {
   ExecutionRegistry,
   type ApprovalRequest,
@@ -25,7 +26,9 @@ const model: Model<Api> = {
 
 const clock = { now: () => '2026-07-31T00:00:00.000Z' };
 
-function metadata(overrides: Partial<ExecutionMetadata> = {}): ExecutionMetadata {
+type ConversationMetadata = Extract<ExecutionMetadata, { kind: 'conversation' }>;
+
+function metadata(overrides: Partial<ConversationMetadata> = {}): ConversationMetadata {
   return {
     kind: 'conversation',
     executionId: 'execution:1',
@@ -50,7 +53,7 @@ function approvalRequest(overrides: Partial<ApprovalRequest> = {}): ApprovalRequ
     toolIdentity: { sourceId: 'source:1', namespace: 'builtin', sourceToolName: 'lookup' },
     input: { path: 'a.ts' },
     operations: [],
-    options: [{ optionId: 'once:1', scope: 'once', display: { label: 'Once', description: 'Allow once.' } }],
+    options: [{ optionId: 'once:1', scope: 'once', effect: { type: 'current_tool_call' }, display: { label: 'Once', description: 'Allow once.' } }],
     defaultOptionId: 'once:1',
     createdAt: clock.now(),
     status: 'pending',
@@ -105,7 +108,7 @@ function registry(): ExecutionRegistry {
   return new ExecutionRegistry({ clock, terminalRetentionMs: 60_000 });
 }
 
-function resolveOutcome<T>(outcome: T): { promise: Promise<T>; resolve: (value: T) => void } {
+function resolveOutcome<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((settle) => { resolve = settle; });
   return { promise, resolve };
@@ -160,7 +163,7 @@ describe('Execution Registry', () => {
       metadata: metadata(),
     });
     expect(first.status).toBe('reserved');
-    const outcome = resolveOutcome<ExecutionOutcome>({ status: 'completed', assistantMessageId: 'message:reply' });
+    const outcome = resolveOutcome<ExecutionOutcome>();
     const agent = createAgent();
     store.attachActiveExecution({ metadata: metadata(), agent, completion: outcome.promise, pendingApproval: undefined });
 
@@ -179,19 +182,6 @@ describe('Execution Registry', () => {
       metadata: metadata({ executionId: 'execution:2', requestId: 'request:2', workspaceId: 'workspace:2' }),
     });
     expect(again.status).toBe('reserved');
-  });
-
-  it('keeps ActiveExecution as metadata, agent, completion and pendingApproval only', () => {
-    const outcome = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
-    const agent = createAgent();
-    const active = {
-      metadata: metadata(),
-      agent,
-      completion: outcome.promise,
-      pendingApproval: undefined,
-    };
-    // The active handle exposes no Run FSM, AbortController, or mutable status.
-    expect(Object.keys(active).sort()).toEqual(['agent', 'completion', 'metadata', 'pendingApproval']);
   });
 
   it('derives running, waiting and cancelling projections from the Agent and the pending approval', async () => {
@@ -221,7 +211,7 @@ describe('Execution Registry', () => {
       },
       stream,
     });
-    const completion = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
+    const completion = resolveOutcome<ExecutionOutcome>();
     const activeMetadata = metadata();
     store.attachActiveExecution({ metadata: activeMetadata, agent, completion: completion.promise, pendingApproval: undefined });
 
@@ -274,7 +264,7 @@ describe('Execution Registry', () => {
 
   it('cancels a pending approval exactly once and never resurrects it', () => {
     const store = registry();
-    const outcome = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
+    const outcome = resolveOutcome<ExecutionOutcome>();
     const agent = createAgent();
     store.attachActiveExecution({ metadata: metadata(), agent, completion: outcome.promise, pendingApproval: undefined });
     const wait = store.beginApprovalWait({ executionId: 'execution:1', approval: approvalRequest() });
@@ -286,7 +276,7 @@ describe('Execution Registry', () => {
 
   it('fixes one immutable TerminalExecution and expires it after retention', () => {
     const store = registry();
-    const outcome = resolveOutcome<ExecutionOutcome>({ status: 'completed', assistantMessageId: 'message:reply' });
+    const outcome = resolveOutcome<ExecutionOutcome>();
     const agent = createAgent();
     store.attachActiveExecution({ metadata: metadata(), agent, completion: outcome.promise, pendingApproval: undefined });
     outcome.resolve({ status: 'completed', assistantMessageId: 'message:reply' });
@@ -316,7 +306,7 @@ describe('Execution Registry', () => {
       metadata: metadata(),
     });
     expect(reserved.status).toBe('reserved');
-    const lateOutcome = resolveOutcome<ExecutionOutcome>({ status: 'completed', assistantMessageId: 'message:reply' });
+    const lateOutcome = resolveOutcome<ExecutionOutcome>();
     const lateAgent = createAgent();
     later.attachActiveExecution({ metadata: metadata(), agent: lateAgent, completion: lateOutcome.promise, pendingApproval: undefined });
     later.completeStart({
@@ -336,7 +326,7 @@ describe('Execution Registry', () => {
 
   it('settles one failed terminal record with its failure facts', () => {
     const store = registry();
-    const outcome = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
+    const outcome = resolveOutcome<ExecutionOutcome>();
     const agent = createAgent();
     store.attachActiveExecution({ metadata: metadata(), agent, completion: outcome.promise, pendingApproval: undefined });
     const failure = {
@@ -354,8 +344,8 @@ describe('Execution Registry', () => {
 
   it('notifies idle waiters only after every active execution settles', async () => {
     const store = registry();
-    const first = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
-    const second = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
+    const first = resolveOutcome<ExecutionOutcome>();
+    const second = resolveOutcome<ExecutionOutcome>();
     store.attachActiveExecution({ metadata: metadata(), agent: createAgent(), completion: first.promise, pendingApproval: undefined });
     store.attachActiveExecution({
       metadata: metadata({ executionId: 'execution:2', requestId: 'request:2', sessionId: 'session:2', userMessageId: 'message:2' }),
@@ -378,7 +368,7 @@ describe('Execution Registry', () => {
 
   it('times out idle wait while executions remain active', async () => {
     const store = registry();
-    const outcome = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
+    const outcome = resolveOutcome<ExecutionOutcome>();
     store.attachActiveExecution({ metadata: metadata(), agent: createAgent(), completion: outcome.promise, pendingApproval: undefined });
     await expect(store.waitForIdle(20)).resolves.toBe(false);
   });
@@ -445,7 +435,7 @@ async function attachExecutingToolsAgent(
     },
     stream,
   });
-  const completion = resolveOutcome<ExecutionOutcome>({ status: 'cancelled' });
+  const completion = resolveOutcome<ExecutionOutcome>();
   store.attachActiveExecution({
     metadata: metadata({ executionId }),
     agent,

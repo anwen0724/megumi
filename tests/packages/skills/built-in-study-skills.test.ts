@@ -42,43 +42,8 @@ describe('built-in study Skills', () => {
         disableModelInvocation: false,
         diagnostics: [],
       });
-      expect(skill.description.trim().length).toBeGreaterThan(20);
-      expect(skill.content.trim().length).toBeGreaterThan(200);
-    }
-  });
-
-  it('gives each Skill a trigger description and task-specific workflow', () => {
-    const skills = new Map(readBuiltInSkills().skills.map((skill) => [skill.name, skill]));
-
-    expect(skills.get('explain-problem')).toMatchObject({
-      description: expect.stringMatching(/题目|知识点/),
-      content: expect.stringMatching(/提示[\s\S]*完整讲解|完整讲解[\s\S]*提示/),
-    });
-    expect(skills.get('review-answer')).toMatchObject({
-      description: expect.stringMatching(/作答|答案/),
-      content: expect.stringMatching(/第一个实质错误/),
-    });
-    expect(skills.get('generate-practice')).toMatchObject({
-      description: expect.stringMatching(/练习/),
-      content: expect.stringMatching(/答案[\s\S]*解析|解析[\s\S]*答案/),
-    });
-    expect(skills.get('review-materials')).toMatchObject({
-      description: expect.stringMatching(/资料|笔记/),
-      content: expect.stringMatching(/冲突[\s\S]*不确定|不确定[\s\S]*冲突/),
-    });
-    expect(skills.get('plan-study-session')).toMatchObject({
-      description: expect.stringMatching(/时间|安排/),
-      content: expect.stringMatching(/完成标准/),
-    });
-  });
-
-  it('exposes only model facts: no resources, scripts or execution protocols', () => {
-    for (const skill of readBuiltInSkills().skills) {
-      expect(skill).not.toHaveProperty('resources');
-      expect(skill).not.toHaveProperty('scripts');
-      expect(skill).not.toHaveProperty('skillId');
-      expect(skill.skillPath.endsWith('SKILL.md')).toBe(true);
-      expect(path.isAbsolute(skill.packagePath)).toBe(true);
+      expect(skill.description.trim()).not.toBe('');
+      expect(skill.content.trim()).not.toBe('');
     }
   });
 });

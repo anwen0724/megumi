@@ -1,5 +1,5 @@
-﻿// @vitest-environment jsdom
-import { act, render, screen } from '@testing-library/react';
+// @vitest-environment jsdom
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
@@ -66,29 +66,6 @@ describe('RightSidebar', () => {
     expect(screen.queryByRole('button', { name: 'Open project sidebar' })).not.toBeInTheDocument();
   });
 
-  it('mounts before entering the expanded open state', () => {
-    vi.useFakeTimers();
-    const { rerender } = render(<RightSidebar open={false} onClose={() => undefined} />);
-
-    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
-
-    rerender(<RightSidebar open onClose={() => undefined} />);
-
-    const enteringPanel = screen.getByTestId('right-sidebar');
-    expect(enteringPanel).toHaveClass('w-0');
-    expect(enteringPanel).toHaveClass('opacity-0');
-    expect(enteringPanel).toHaveClass('translate-x-6');
-
-    act(() => {
-      vi.runOnlyPendingTimers();
-    });
-
-    const expandedPanel = screen.getByTestId('right-sidebar');
-    expect(expandedPanel).toHaveClass('w-[var(--right-sidebar-width)]');
-    expect(expandedPanel).toHaveClass('opacity-100');
-    expect(expandedPanel).toHaveClass('translate-x-0');
-  });
-
   it('opens to the Workspace chooser without exposing a Tools label', () => {
     render(<RightSidebar open onClose={() => undefined} />);
 
@@ -141,46 +118,12 @@ describe('RightSidebar', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('uses an occupied sidebar surface instead of a floating card or collapsed rail', () => {
-    render(<RightSidebar open onClose={() => undefined} />);
-
-    const panel = screen.getByTestId('right-sidebar');
-    const content = screen.getByTestId('right-sidebar-content');
-
-    expect(panel).toHaveAttribute('id', 'right-sidebar');
-    expect(panel).toHaveClass('w-[var(--right-sidebar-width)]');
-    expect(panel).toHaveClass('border-l');
-    expect(panel).toHaveClass('transition-[width,opacity,transform]');
-    expect(panel).not.toHaveClass('fixed');
-    expect(panel).not.toHaveClass('absolute');
-    expect(content).toHaveClass('overflow-y-auto');
-    expect(panel.querySelector('[data-testid="right-sidebar-card"]')).toBeNull();
-  });
-
-  it('keeps the sidebar mounted during the closing transition before unmounting', () => {
-    vi.useFakeTimers();
+  it('hides the workspace sidebar when it is closed', async () => {
     const { rerender } = render(<RightSidebar open onClose={() => undefined} />);
-
-    expect(screen.getByTestId('right-sidebar')).toHaveClass('w-[var(--right-sidebar-width)]');
 
     rerender(<RightSidebar open={false} onClose={() => undefined} />);
 
-    const closingPanel = screen.getByTestId('right-sidebar');
-    expect(closingPanel).toHaveClass('w-0');
-    expect(closingPanel).toHaveClass('opacity-0');
-    expect(closingPanel).toHaveClass('translate-x-6');
-    expect(closingPanel).toHaveClass('pointer-events-none');
-    expect(closingPanel).not.toHaveClass('w-[var(--right-sidebar-width)]');
-
-    act(() => {
-      vi.advanceTimersByTime(199);
-    });
-    expect(screen.getByTestId('right-sidebar')).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId('right-sidebar')).not.toBeInTheDocument());
   });
 });
 

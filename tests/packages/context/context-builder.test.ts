@@ -1,599 +1,224 @@
-/* Verifies Context.build reads Session History through the fixed ModelCallContext main chain. */
-import { describe, expect, it, vi } from 'vitest';
-import {
-  createContext,
-  type CreateContextOptions,
-  type Prompt,
-} from '../../../packages/agent/context/src/index';
+// @vitest-environment node
+/* Verifies model-facing Context through real Session, Instructions, and Skills. */
+import fs from 'node:fs';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createContext, type CreateContextOptions } from '@megumi/context';
+import { createInstructionReader } from '@megumi/instructions';
 import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import {
-  compactingModel,
-  completedMessage,
-  history,
-  model,
-  modelCall,
-  runHistory,
-  workspaceSource,
-} from './context-test-fixtures';
-import type { SessionHistoryItem } from '@megumi/session';
+import { createContextFixture, contextModel } from './context-behavior-fixture';
+import { savedAt } from '../session/session-test-fixture';
 
-function fixture(tokens = 50): CreateContextOptions {
-  return {
-    sessionHistory: {
-      getActiveHistory: vi.fn(() => ({ status: 'ok' as const, history: history() })),
-      beginCompaction: vi.fn((request) => ({
-        status: 'started' as const,
-        compaction: {
-          compactionId: request.compactionId,
-          sessionId: request.sessionId,
-          anchorEntryId: request.anchorEntryId,
-          trigger: request.trigger,
-          status: 'running' as const,
-          startedAt: request.startedAt,
-        },
-      })),
-      completeCompaction: vi.fn((request) => ({
-        status: 'completed' as const,
-        compaction: {
-          compactionId: request.compactionId,
-          sessionId: request.sessionId,
-          anchorEntryId: request.coveredUntilEntryId,
-          trigger: 'threshold' as const,
-          status: 'completed' as const,
-          startedAt: '2026-07-12T00:00:00.000Z',
-          completedAt: request.completedAt,
-        },
-      })),
-      endCompaction: vi.fn((request) => ({
-        status: 'ended' as const,
-        compaction: {
-          compactionId: request.compactionId,
-          sessionId: request.sessionId,
-          anchorEntryId: 'entry:user:1',
-          trigger: 'threshold' as const,
-          status: request.status,
-          ...(request.error ? { error: request.error } : {}),
-          startedAt: '2026-07-12T00:00:00.000Z',
-          completedAt: request.completedAt,
-        },
-      })),
-    },
-    attachmentReader: {
-      readAttachmentContent: vi.fn(async () => ({
-        status: 'failed' as const,
-        failure: { code: 'attachment_not_found', message: 'not found' },
-      })),
-    },
-    workspaceSource: workspaceSource(),
-    instructionReader: {
-      getSystemInstructions: vi.fn(async () => [
-        { instructionId: 'megumi.common', sourcePath: '/instructions/common.md', content: 'system' },
-      ]),
-      getEffectiveInstructions: vi.fn(async () => ({
-        status: 'ok' as const,
-        instructions: {
-          sources: [{ sourceId: 'agents', sourcePath: '/workspace/AGENTS.md', content: 'rules' }],
-        },
-      })),
-    },
-    skills: {
-      createView: vi.fn(async () => ({ status: 'ok' as const, view: { catalog: [], diagnostics: [] } })),
-    },
-    models: { completeSimple: vi.fn(async () => completedMessage()) },
-    contextTokenEstimator: vi.fn(() => tokens),
-    clock: { now: () => '2026-07-12T00:00:00.000Z' },
-    ids: { compactionId: () => 'compaction:1' },
-  };
+type Fixture = Awaited<ReturnType<typeof createContextFixture>>;
+const fixtures: Fixture[] = [];
+afterEach(() => { for (const item of fixtures.splice(0)) item.cleanup(); });
+
+type Attachments = Parameters<Fixture['history']['saveUserMessage']>[0]['attachments'];
+
+async function fixture(attachments?: Attachments, text = 'Explain the result') {
+  const f = await createContextFixture();
+  fixtures.push(f);
+  await saveUser(f, attachments, text);
+  return f;
 }
 
+async function saveUser(f: Fixture, attachments: Attachments, text: string) {
+  const result = await f.history.saveUserMessage({
+    message_id: 'user', session_id: f.sessionId, execution_id: 'execution',
+    display_content: [{ type: 'text', text }],
+    model_content: [{ type: 'text', text }],
+    attachments, created_at: savedAt,
+  });
+  if (result.status !== 'saved') throw new Error('User message was not saved');
+  return result;
+}
+
+const sourceFailures: Array<{
+  owner: string;
+  code: string;
+  inject: (options: CreateContextOptions) => void;
+}> = [
+  {
+    owner: 'session', code: 'session_history_failed',
+    inject: options => { options.sessionHistory.getActiveHistory = () => ({
+      status: 'failed', failure: { code: 'history_unreadable', message: 'Unreadable history' },
+    }); },
+  },
+  {
+    owner: 'workspace', code: 'workspace_failed',
+    inject: options => { options.workspaceSource.readWorkspace = async () => ({
+      status: 'failed', failure: { code: 'workspace_not_found', message: 'Missing workspace' },
+    }); },
+  },
+  {
+    owner: 'instructions', code: 'effective_instructions_failed',
+    inject: options => { options.instructionReader.getEffectiveInstructions = async () => ({
+      status: 'failed', failure: { code: 'instruction_source_read_failed', message: 'Unreadable instructions', sourcePath: 'AGENTS.md' },
+    }); },
+  },
+  {
+    owner: 'skills', code: 'skill_view_failed',
+    inject: options => { options.skills.createView = async () => ({
+      status: 'failed', failure: { code: 'skills_unavailable', message: 'Unreadable Skills' },
+    }); },
+  },
+];
+
 describe('Context.build', () => {
-  it('keeps fixed and Tool-specific guidelines separate through the public Context seam', async () => {
-    const options = fixture();
-    options.instructionReader.getSystemInstructions = vi.fn(async () => [
-      {
-        instructionId: 'megumi.common',
-        sourcePath: '/instructions/common.md',
-        content: 'Original identity paragraph.',
-      },
-      {
-        instructionId: 'megumi.conversation',
-        sourcePath: '/instructions/conversation.md',
-        content: 'Behavior guidelines:\n- Original fixed guidance.',
-      },
-    ]);
+  it('combines committed messages, instructions, and requested Tool guidance', async () => {
+    const f = await fixture();
+    expect(f.history.saveAssistantReply({
+      message_id: 'reply', session_id: f.sessionId, execution_id: 'execution',
+      status: 'completed', content: [{ type: 'text', text: 'Saved answer' }], completed_at: savedAt,
+    })).toMatchObject({ status: 'saved' });
+    const contentRoot = path.join(f.root, 'instructions');
+    fs.mkdirSync(contentRoot);
+    fs.writeFileSync(path.join(contentRoot, 'common.md'), 'Original identity paragraph.');
+    fs.writeFileSync(path.join(contentRoot, 'conversation.md'), 'Original fixed guidance.');
+    fs.writeFileSync(path.join(f.workspaceRoot, 'AGENTS.md'), 'Project-specific guidance.');
     const tool = {
-      name: 'inspect_result',
-      description: 'Inspect one result.',
-      promptSnippet: 'Inspect result evidence.',
-      promptGuidelines: ['Tool guidance remains in the same list.'],
-      parameters: { type: 'object' as const },
+      name: 'inspect_result', description: 'Inspect one result.', parameters: { type: 'object' as const },
+      promptSnippet: 'Inspect result evidence.', promptGuidelines: ['Check evidence before answering.'],
     };
-    const result = await createContext(options).build({
-      modelCallContext: modelCall({ tools: [tool] }),
-      currentMessages: [],
-    });
-
-    expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    expect(result.prompt.systemPrompt).toBe([
-      'Original identity paragraph.',
-      'Behavior guidelines:\n- Original fixed guidance.',
-      'Tool guidelines:\n- Tool guidance remains in the same list.',
-      '<effective_instructions>\n  User and project-specific instructions and guidelines:\n  <instruction path="/workspace/AGENTS.md">\n    rules\n  </instruction>\n</effective_instructions>',
-      '<available_tools>\n  In addition to the tools above, you may have access to other custom tools depending on the project.\n- inspect_result: Inspect result evidence.\n</available_tools>',
-      '<execution_environment>\n  <working_directory>/workspace/packages/app</working_directory>\n  <operating_system>Linux</operating_system>\n  <shell>POSIX shell</shell>\n</execution_environment>',
-    ].join('\n\n'));
-  });
-
-  it('reads Session History and returns one provider-neutral Prompt', async () => {
-    const options = fixture();
-    const context = createContext(options);
-    const result = await context.build({ modelCallContext: modelCall() });
-
-    expect(options.sessionHistory.getActiveHistory).toHaveBeenCalledWith({
-      session_id: 'session:1',
-    });
-    expect(result).toMatchObject({ status: 'ready' });
-    if (result.status !== 'ready') return;
-    // The systemPrompt follows the fixed order and carries the Execution Environment.
-    const systemPrompt = result.prompt.systemPrompt ?? '';
-    expect(systemPrompt).toContain('system');
-    expect(systemPrompt).toContain('<effective_instructions>');
-    expect(systemPrompt).toContain('/workspace/AGENTS.md');
-    expect(systemPrompt).toContain('<execution_environment>');
-    expect(systemPrompt).toContain('<working_directory>/workspace/packages/app</working_directory>');
-    // No Skill Catalog section when the catalog is empty.
-    expect(systemPrompt).not.toContain('<available_skills>');
-    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
-    expect(result.prompt.tools).toEqual([]);
-  });
-
-  it('writes the Skill Catalog into the System Prompt without re-reading Skill content', async () => {
-    const options = fixture();
-    options.skills.createView = vi.fn(async () => ({
-      status: 'ok' as const,
-      view: {
-        catalog: [{ name: 'review', description: 'Review', skillPath: '/skills/review/SKILL.md' }],
-        diagnostics: [],
-      },
-    }));
-    const result = await createContext(options).build({ modelCallContext: modelCall() });
-    expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    const systemPrompt = result.prompt.systemPrompt ?? '';
-    expect(systemPrompt).toContain('<available_skills>');
-    expect(systemPrompt).toContain('<name>review</name>');
-    expect(systemPrompt).toContain('<location>/skills/review/SKILL.md</location>');
-    // The skill section keeps pi's guidance lines with the Megumi tool name.
-    expect(systemPrompt).toContain('The following skills provide specialized instructions for specific tasks.');
-    expect(systemPrompt).toContain('Use the read_file tool to load a skill\'s file when the task matches its description.');
-    expect(systemPrompt).toContain('resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.');
-    // Explicit Skill body is never re-read by Context; it lives in the saved UserMessage.
-    expect(JSON.stringify(result.prompt.messages)).not.toContain('Selected instructions.');
-  });
-
-  it('distinguishes cancellation, policy failure, and hard Context window exhaustion', async () => {
-    const aborted = new AbortController();
-    aborted.abort();
-    expect(await createContext(fixture()).build({
-      modelCallContext: modelCall(),
-      signal: aborted.signal,
-    })).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
-
-    // An invalid policy for the Model Context Window is a configuration failure.
-    expect(await createContext({ ...fixture(), policy: { reserveTokens: 500 } }).build({
-      modelCallContext: modelCall({
-        run: { ...modelCall().run, model: { ...model, contextWindow: 100 } },
-      }),
-    })).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
-
-    const exhausted: CreateContextOptions = {
-      ...fixture(20_000),
-    };
-    expect(await createContext(exhausted).build({
-      modelCallContext: modelCall(),
-    })).toMatchObject({ status: 'failed', failure: { code: 'context_window_exceeded' } });
-  });
-
-  it('fails on invalid Tool Definitions without a generic build failure', async () => {
-    const options = fixture();
-    expect(await createContext(options).build({
-      modelCallContext: modelCall({
-        tools: [{ name: 'broken' } as never],
-      }),
-    })).toMatchObject({ status: 'failed', failure: { code: 'tool_definitions_invalid' } });
-  });
-
-  it('resolves Workspace, Instructions and Skills sources itself in fixed order', async () => {
-    const options = fixture();
-    const result = await createContext(options).build({ modelCallContext: modelCall() });
-
-    expect(result.status).toBe('ready');
-    expect(options.workspaceSource.readWorkspace).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 'workspace:1' }),
-    );
-    expect(options.instructionReader.getEffectiveInstructions).toHaveBeenCalledWith(
-      { workspaceRoot: '/workspace', workingDirectory: '/workspace/packages/app' },
-      undefined,
-    );
-    expect(options.skills.createView).toHaveBeenCalledWith(
-      expect.objectContaining({ workspaceId: 'workspace:1' }),
-    );
-  });
-
-  it('keeps Workspace, Instructions and Skills failures under their own owners', async () => {
-    const options = fixture();
-    options.workspaceSource.readWorkspace = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: { code: 'workspace_not_found', message: 'missing' },
-    }));
-    expect(await createContext(options).build({
-      modelCallContext: modelCall(),
-    })).toMatchObject({
-      status: 'failed',
-      failure: { code: 'workspace_failed', cause: { owner: 'workspace', code: 'workspace_not_found' } },
-    });
-
-    (options as { workspaceSource: unknown }).workspaceSource = workspaceSource();
-    options.instructionReader.getEffectiveInstructions = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: {
-        code: 'instruction_source_read_failed' as const,
-        message: 'unreadable',
-        sourcePath: '/workspace/AGENTS.md',
-      },
-    }));
-    expect(await createContext(options).build({
-      modelCallContext: modelCall(),
-    })).toMatchObject({
-      status: 'failed',
-      failure: {
-        code: 'effective_instructions_failed',
-        cause: { owner: 'instructions', code: 'instruction_source_read_failed' },
-      },
-    });
-
-    options.instructionReader.getEffectiveInstructions = vi.fn(async () => ({
-      status: 'ok' as const,
-      instructions: { sources: [{ sourceId: 'agents', sourcePath: '/workspace/AGENTS.md', content: 'rules' }] },
-    }));
-    options.skills.createView = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: { code: 'skills_unavailable' as const, message: 'broken view' },
-    }));
-    expect(await createContext(options).build({
-      modelCallContext: modelCall(),
-    })).toMatchObject({
-      status: 'failed',
-      failure: { code: 'skill_view_failed', cause: { owner: 'skills', code: 'skills_unavailable' } },
-    });
-  });
-
-  it('records real resolve and final Prompt checkpoints under the Context build Span', async () => {
-    const records: TraceJournalRecord[] = [];
-    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
-    const options = { ...fixture(50), observability };
-    const result = await observability.withTrace({ kind: 'conversation' }, () => (
-      createContext(options).build({ modelCallContext: modelCall() })
-    ));
-    expect(result.status).toBe('ready');
-    expect(records.filter((record) => record.type === 'span.started').map((record) => record.name))
-      .toEqual(['context.build', 'context.resolve', 'prompt.build']);
-    expect(records.filter((record) => record.type === 'content.recorded').map((record) => record.kind))
-      .toEqual(['context.resolved', 'prompt.final']);
-  });
-
-  it('never degrades known source, attachment, protocol and policy failures into a generic build failure', async () => {
-    // Source failure stays under its owner.
-    const sourceOptions = fixture();
-    sourceOptions.sessionHistory.getActiveHistory = vi.fn(() => ({
-      status: 'failed' as const,
-      failure: { code: 'history_unreadable', message: 'unreadable' },
-    }));
-    expect(await createContext(sourceOptions).build({ modelCallContext: modelCall() })).toMatchObject({
-      status: 'failed',
-      failure: { code: 'session_history_failed' },
-    });
-
-    // Attachment materialization failure keeps its stable code.
-    const imageOptions = fixture();
-    imageOptions.sessionHistory.getActiveHistory = vi.fn(() => ({
-      status: 'ok' as const,
-      history: [{
-        type: 'message' as const,
-        entry: { entry_id: 'entry:user', session_id: 's', entry_type: 'message', message_id: 'm1', created_at: 'now' },
-        message: {
-          message_id: 'm1', session_id: 's', execution_id: 'r1', message_kind: 'user_message',
-          display_content: [{ type: 'text', text: 'look' }],
-          model_content: [{ type: 'text', text: 'look' }],
-          created_at: 'now',
-        },
-        attachments: [{
-          attachment_id: 'att:1', message_id: 'm1', session_id: 's', type: 'image',
-          mime_type: 'image/png', source_type: 'host_reference', source_value: 'stored/x.png',
-          ordinal: 0, created_at: 'now',
-        }],
-      }],
-    }) as never);
-    expect(await createContext(imageOptions).build({ modelCallContext: modelCall() })).toMatchObject({
-      status: 'failed',
-      failure: { code: 'image_materialization_failed' },
-    });
-
-    // Protocol closure failure keeps its stable code.
-    const protocolOptions = fixture();
-    protocolOptions.sessionHistory.getActiveHistory = vi.fn(() => ({
-      status: 'ok' as const,
-      history: [{
-        type: 'message' as const,
-        entry: { entry_id: 'entry:tool', session_id: 's', entry_type: 'message', message_id: 'm2', created_at: 'now' },
-        message: {
-          message_id: 'm2', session_id: 's', execution_id: 'r1', message_kind: 'tool_result',
-          tool_call_id: 'call:missing', tool_name: 'read_file', status: 'success',
-          content: [{ type: 'text', text: 'ok' }], created_at: 'now',
-        },
-        attachments: [],
-      }],
-    }) as never);
-    expect(await createContext(protocolOptions).build({ modelCallContext: modelCall() })).toMatchObject({
-      status: 'failed',
-      failure: { code: 'protocol_closure_failed' },
-    });
-
-    // Policy failure stays a configuration failure.
-    expect(await createContext({ ...fixture(), policy: { reserveTokens: 500 } }).build({
-      modelCallContext: modelCall({ run: { ...modelCall().run, model: { ...model, contextWindow: 100 } } }),
-    })).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
-  });
-
-  it('converts unexpected dependency exceptions into the stable unknown build failure', async () => {
-    const options = fixture();
-    options.sessionHistory.getActiveHistory = vi.fn(() => {
-      throw new Error('database unavailable');
-    });
-
-    await expect(createContext(options).build({ modelCallContext: modelCall() })).resolves.toEqual({
-      status: 'failed',
-      failure: {
-        code: 'context_build_failed',
-        message: 'database unavailable',
-        retryable: false,
-      },
-    });
-  });
-
-  it('keeps the business result when Observability throws', async () => {
-    const throwingObservability = {
-      withTrace: vi.fn(() => { throw new Error('trace broken'); }),
-      withSpan: vi.fn(() => { throw new Error('span broken'); }),
-      recordContent: vi.fn(() => { throw new Error('capture broken'); }),
-      recordEvent: vi.fn(() => { throw new Error('event broken'); }),
-      linkTrace: vi.fn(() => { throw new Error('link broken'); }),
-    } satisfies NonNullable<CreateContextOptions['observability']>;
-    const result = await createContext({ ...fixture(), observability: throwingObservability }).build({
-      modelCallContext: modelCall(),
+    const result = await createContext({
+      ...f.options, instructionReader: createInstructionReader({ megumiHomePath: f.root, systemContentRoot: contentRoot }),
+    }).build({
+      ...f.buildRequest,
+      modelCallContext: { ...f.buildRequest.modelCallContext, tools: [tool] },
     });
     expect(result.status).toBe('ready');
+    if (result.status !== 'ready') throw new Error('Prompt unavailable');
+    expect(result.prompt.messages.map(message => message.role)).toEqual(['user', 'assistant']);
+    expect(JSON.stringify(result.prompt.messages)).toContain('Saved answer');
+    for (const content of ['Original identity paragraph.', 'Original fixed guidance.', 'Project-specific guidance.', 'Check evidence before answering.']) {
+      expect(result.prompt.systemPrompt).toContain(content);
+    }
+    expect(result.prompt.tools).toMatchObject([{ name: 'inspect_result' }]);
   });
 
-  it('executes the business operation exactly once when Observability wraps it and then throws', async () => {
-    const options = fixture();
-    let reads = 0;
-    options.sessionHistory.getActiveHistory = vi.fn(() => {
-      reads += 1;
-      return { status: 'ok' as const, history: history() };
-    });
-    const observability = {
-      withTrace: vi.fn(() => { throw new Error('unused'); }),
-      withSpan: vi.fn(async (_options: unknown, operation: () => Promise<unknown>) => {
-        // The wrapper starts the business operation, then breaks.
-        const started = operation();
-        started.catch(() => undefined);
-        throw new Error('span context broken after starting the operation');
-      }),
-      recordContent: vi.fn(),
-      recordEvent: vi.fn(),
-      linkTrace: vi.fn(),
-    } satisfies NonNullable<CreateContextOptions['observability']>;
-
-    const result = await createContext({ ...options, observability }).build({ modelCallContext: modelCall() });
-    // The first business result wins; the source reads and build ran once.
+  it('offers the Skill catalog without injecting unselected Skill bodies into the prompt', async () => {
+    const f = await fixture();
+    const directory = path.join(f.root, 'skills', 'review');
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'SKILL.md'), '---\nname: review\ndescription: Review source changes carefully\n---\nSelected instructions.');
+    const result = await createContext(f.options).build(f.buildRequest);
     expect(result.status).toBe('ready');
-    expect(reads).toBe(1);
-    expect(options.workspaceSource.readWorkspace).toHaveBeenCalledTimes(1);
+    if (result.status !== 'ready') throw new Error('Prompt unavailable');
+    expect(result.prompt.systemPrompt).toContain('Review source changes carefully');
+    expect(result.prompt.systemPrompt).toContain(path.join(directory, 'SKILL.md'));
+    expect(JSON.stringify(result.prompt)).not.toContain('Selected instructions.');
   });
 
-  it('converges Skills cancellation to the stable cancelled failure', async () => {
-    // createView reports the cancelled code: the failure is a cancellation.
-    const cancelledViewOptions = fixture();
-    cancelledViewOptions.skills.createView = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: { code: 'cancelled' as const },
-    }));
-    expect(await createContext(cancelledViewOptions).build({ modelCallContext: modelCall() }))
-      .toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+  it.each(sourceFailures)('preserves the $owner failure instead of reporting a generic build error', async ({ owner, code, inject }) => {
+    const f = await fixture();
+    inject(f.options); // Inject only the selected fault; other owners still execute normally.
+    expect(await createContext(f.options).build(f.buildRequest))
+      .toMatchObject({ status: 'failed', failure: { code, cause: { owner } } });
+  });
 
-    // The request signal is aborted while the Skills read is in flight.
+  it('reports an unexpected source exception as a stable build failure', async () => {
+    const f = await fixture();
+    f.options.sessionHistory.getActiveHistory = () => { throw new Error('Database unavailable'); };
+    expect(await createContext(f.options).build(f.buildRequest))
+      .toMatchObject({ status: 'failed', failure: { code: 'context_build_failed', retryable: false } });
+  });
+
+  it('returns cancelled before resolution and when Skills reports cancellation', async () => {
+    const f = await fixture();
     const controller = new AbortController();
-    const abortedOptions = fixture();
-    abortedOptions.skills.createView = vi.fn(async () => {
-      controller.abort();
-      return { status: 'ok' as const, view: { catalog: [], diagnostics: [] } };
-    });
-    expect(await createContext(abortedOptions).build({
-      modelCallContext: modelCall(),
-      signal: controller.signal,
-    })).toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
-
-    // Non-cancelled Skills failures keep their owner and original code.
-    const brokenOptions = fixture();
-    brokenOptions.skills.createView = vi.fn(async () => ({
-      status: 'failed' as const,
-      failure: { code: 'skill_unavailable' as const, skillPath: '/skills/review/SKILL.md' },
-    }));
-    expect(await createContext(brokenOptions).build({ modelCallContext: modelCall() })).toMatchObject({
-      status: 'failed',
-      failure: {
-        code: 'skill_view_failed',
-        cause: { owner: 'skills', code: 'skill_unavailable' },
-      },
-    });
+    controller.abort();
+    expect(await createContext(f.options).build({ ...f.buildRequest, signal: controller.signal }))
+      .toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+    f.options.skills.createView = async () => ({ status: 'failed', failure: { code: 'cancelled' } });
+    expect(await createContext(f.options).build(f.buildRequest))
+      .toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
   });
 
-  it('returns policy_invalid for illegal Compaction Policy configurations on build and compact', async () => {
-    const illegalPolicies: Array<Partial<NonNullable<CreateContextOptions['policy']>>> = [
-      { reserveTokens: -1 },
-      { reserveTokens: 1.5 },
-      { keepRecentTokens: Number.NaN },
-      { minimumRecentMessages: -3 },
+  it('honors cancellation requested while a source is resolving', async () => {
+    const f = await fixture();
+    const controller = new AbortController();
+    const read = f.options.workspaceSource.readWorkspace;
+    f.options.workspaceSource.readWorkspace = async request => {
+      const result = await read(request);
+      controller.abort();
+      return result;
+    };
+    expect(await createContext(f.options).build({ ...f.buildRequest, signal: controller.signal }))
+      .toMatchObject({ status: 'failed', failure: { code: 'cancelled' } });
+  });
+
+  it('rejects invalid execution environments and Tool definitions with distinct codes', async () => {
+    const f = await fixture();
+    expect(await createContext(f.options).build({
+      ...f.buildRequest, modelCallContext: { ...f.buildRequest.modelCallContext, tools: [{ name: 'broken' } as never] },
+    })).toMatchObject({ status: 'failed', failure: { code: 'tool_definitions_invalid' } });
+    f.options.workspaceSource.readWorkspace = async () => ({
+      status: 'ok', workspaceRoot: f.workspaceRoot,
+      environment: { workingDirectory: f.workspaceRoot, operatingSystem: '', shell: 'powershell' },
+    });
+    expect(await createContext(f.options).build(f.buildRequest))
+      .toMatchObject({ status: 'failed', failure: { code: 'execution_environment_invalid' } });
+  });
+
+  it('rejects illegal compaction policies before invoking the model', async () => {
+    const f = await fixture();
+    const policies = [
+      { reserveTokens: -1 }, { reserveTokens: 1.5 }, { keepRecentTokens: Number.NaN },
+      { minimumRecentMessages: -3 }, { reserveTokens: contextModel.contextWindow + 1 },
     ];
-    for (const illegal of illegalPolicies) {
-      const options = fixture();
-      (options as { policy: unknown }).policy = illegal;
-      expect(await createContext(options).build({ modelCallContext: modelCall() }), JSON.stringify(illegal))
-        .toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
-      expect(await createContext(options).compact({
-        sessionId: 'session:1',
-        workspaceId: 'workspace:1',
-        model: compactingModel,
-        trigger: 'manual',
-        tools: [],
-      }), JSON.stringify(illegal)).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
-      expect(options.models.completeSimple, JSON.stringify(illegal)).not.toHaveBeenCalled();
+    for (const policy of policies) {
+      const context = createContext({ ...f.options, policy,
+        models: { completeSimple: async () => { throw new Error('Invalid policy must not contact the model'); } } });
+      expect(await context.build(f.buildRequest)).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
     }
   });
 
-  it('classifies failed and cancelled Context build Span outcomes', async () => {
-    const records: TraceJournalRecord[] = [];
-    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
-
-    const failedOptions = { ...fixture(), observability };
-    failedOptions.sessionHistory.getActiveHistory = vi.fn(() => {
-      throw new Error('database unavailable');
-    });
-    await observability.withTrace({ kind: 'conversation' }, () => (
-      createContext(failedOptions).build({ modelCallContext: modelCall() })
-    ));
-
-    const controller = new AbortController();
-    controller.abort();
-    await observability.withTrace({ kind: 'conversation' }, () => (
-      createContext({ ...fixture(), observability }).build({
-        modelCallContext: modelCall(),
-        signal: controller.signal,
-      })
-    ));
-    const contextEnds = records.filter((record): record is Extract<TraceJournalRecord, {
-      readonly type: 'span.ended';
-    }> => record.type === 'span.ended').filter((record) => {
-      const started = records.find((candidate) => (
-        candidate.type === 'span.started' && candidate.spanId === record.spanId
-      ));
-      return started?.type === 'span.started' && started.name === 'context.build';
-    });
-    expect(contextEnds.map((record) => record.outcome.status)).toEqual(['error', 'cancelled']);
+  it('reports window exhaustion when the conversation cannot fit and compaction is disabled', async () => {
+    const f = await fixture(undefined, 'large input '.repeat(30_000));
+    expect(await createContext({ ...f.options, policy: { enabled: false, reserveTokens: 10 } }).build({
+      ...f.buildRequest,
+    })).toMatchObject({ status: 'failed', failure: { code: 'context_window_exceeded' } });
   });
 
-  it('re-reads the authoritative Session after automatic compaction and rebuilds the final Prompt', async () => {
-    const order: string[] = [];
-    let reads = 0;
-    const fullHistory = [...runHistory(1), ...runHistory(2)];
-    const compactedHistory: SessionHistoryItem[] = [
-      {
-        type: 'compaction',
-        entry: {
-          entry_id: 'entry:summary',
-          session_id: 'session:1',
-          parent_entry_id: 'entry:user:1',
-          entry_type: 'compaction',
-          compaction_id: 'compaction:1',
-          created_at: 'now',
-        },
-        compaction: {
-          compaction_id: 'compaction:1',
-          session_id: 'session:1',
-          summary_text: 'replacement summary',
-          covered_until_entry_id: 'entry:user:2',
-          first_kept_entry_id: 'entry:assistant:2',
-          created_at: 'now',
-        },
-      },
-      ...fullHistory.slice(2),
-    ];
-    const options: CreateContextOptions = {
-      ...fixture(),
-      sessionHistory: {
-        getActiveHistory: vi.fn(() => {
-          reads += 1;
-          order.push('resolve');
-          return {
-            status: 'ok' as const,
-            history: reads === 1 ? fullHistory : compactedHistory,
-          };
-        }),
-        beginCompaction: vi.fn((request) => ({
-          status: 'started' as const,
-          compaction: {
-            compactionId: request.compactionId,
-            sessionId: request.sessionId,
-            anchorEntryId: request.anchorEntryId,
-            trigger: request.trigger,
-            status: 'running' as const,
-            startedAt: request.startedAt,
-          },
-        })),
-        completeCompaction: vi.fn((request) => {
-          order.push('save');
-          return {
-            status: 'completed' as const,
-            compaction: {
-              compactionId: request.compactionId,
-              sessionId: request.sessionId,
-              anchorEntryId: request.coveredUntilEntryId,
-              trigger: 'threshold' as const,
-              status: 'completed' as const,
-              startedAt: '2026-07-12T00:00:00.000Z',
-              completedAt: request.completedAt,
-            },
-          };
-        }),
-        endCompaction: vi.fn((request) => ({
-          status: 'ended' as const,
-          compaction: {
-            compactionId: request.compactionId,
-            sessionId: request.sessionId,
-            anchorEntryId: 'entry:user:2',
-            trigger: 'threshold' as const,
-            status: request.status,
-            ...(request.error ? { error: request.error } : {}),
-            startedAt: '2026-07-12T00:00:00.000Z',
-            completedAt: request.completedAt,
-          },
-        })),
-      },
-      contextTokenEstimator: vi.fn((prompt: Prompt) => {
-        order.push('estimate');
-        return prompt.messages.length * 60 + (prompt.systemPrompt ? 10 : 0);
-      }),
-      policy: { enabled: true, reserveTokens: 32, keepRecentTokens: 1, minimumRecentMessages: 1 },
-    };
-    const result = await createContext(options).build({
-      modelCallContext: modelCall({ run: { ...modelCall().run, model: compactingModel } }),
+  it('materializes saved images and degrades unreadable images only for text-only models', async () => {
+    const f = await fixture([{ type: 'image', name: 'image.png', media_type: 'image/png', byte_length: 2, bytes: new Uint8Array([72, 105]) }]);
+    const ready = await createContext(f.options).build(f.buildRequest);
+    expect(ready.status).toBe('ready');
+    if (ready.status !== 'ready') throw new Error('Image prompt unavailable');
+    expect(ready.prompt.messages[0]?.content).toContainEqual({ type: 'image', mimeType: 'image/png', data: 'SGk=' });
+    const saved = f.history.getActiveHistory({ session_id: f.sessionId });
+    if (saved.status !== 'ok' || saved.history[0]?.type !== 'message') throw new Error('Saved image unavailable');
+    await f.contentStore.delete(saved.history[0].attachments[0]!.source_value);
+    expect(await createContext(f.options).build(f.buildRequest))
+      .toMatchObject({ status: 'failed', failure: { code: 'image_materialization_failed' } });
+    const textOnly = await createContext(f.options).build({
+      ...f.buildRequest, modelCallContext: { ...f.buildRequest.modelCallContext,
+        run: { ...f.buildRequest.modelCallContext.run, model: { ...contextModel, input: ['text'] } } },
     });
+    expect(textOnly.status).toBe('ready');
+    if (textOnly.status !== 'ready') throw new Error('Text-only prompt unavailable');
+    expect(JSON.stringify(textOnly.prompt.messages)).toContain('cannot view');
+    expect(JSON.stringify(textOnly.prompt.messages)).not.toContain('"type":"image"');
+  });
+
+  it('rejects a saved tool result with no matching model call', async () => {
+    const f = await fixture();
+    expect(f.history.saveToolResultMessage({
+      message_id: 'orphan-tool', session_id: f.sessionId, execution_id: 'execution',
+      tool_call_id: 'missing-call', tool_name: 'read_file', status: 'success',
+      content: [{ type: 'text', text: 'Result without intent' }], completed_at: savedAt,
+    })).toMatchObject({ status: 'saved' });
+    expect(await createContext(f.options).build(f.buildRequest))
+      .toMatchObject({ status: 'failed', failure: { code: 'protocol_closure_failed' } });
+  });
+
+  it('still returns the saved conversation when diagnostic storage fails', async () => {
+    const f = await fixture();
+    const observability = createTraceRecorder({ enqueue: () => { throw new Error('Trace storage unavailable'); } });
+    const result = await observability.withTrace({ kind: 'conversation' }, () =>
+      createContext({ ...f.options, observability }).build(f.buildRequest));
     expect(result.status).toBe('ready');
-    if (result.status !== 'ready') return;
-    // The fixed rebuild order: Resolver -> Prompt -> Usage -> Policy ->
-    // Compaction -> Resolver -> Prompt -> Usage.
-    expect(order.filter((entry) => entry === 'resolve')).toHaveLength(2);
-    expect(order.indexOf('save')).toBeGreaterThan(order.indexOf('resolve'));
-    expect(order.lastIndexOf('resolve')).toBeGreaterThan(order.indexOf('save'));
-    expect(order.indexOf('estimate')).toBeLessThan(order.indexOf('save'));
-    expect(order.lastIndexOf('estimate')).toBeGreaterThan(order.lastIndexOf('resolve'));
-    // The final Prompt comes from the re-read authoritative history: the
-    // committed Summary plus the genuinely kept messages.
-    expect(result.prompt.messages.map((message) => message.role)).toEqual(['user', 'user', 'assistant']);
-    expect(JSON.stringify(result.prompt.messages)).toContain('replacement summary');
-    expect(JSON.stringify(result.prompt.messages)).toContain('answer 2');
+    if (result.status !== 'ready') throw new Error('Prompt unavailable');
+    expect(JSON.stringify(result.prompt.messages)).toContain('Explain the result');
   });
 });

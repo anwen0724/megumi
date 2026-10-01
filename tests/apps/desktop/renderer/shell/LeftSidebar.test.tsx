@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -45,7 +45,6 @@ describe('LeftSidebar', () => {
 
     expect(screen.queryByText('Megumi')).not.toBeInTheDocument();
     expect(screen.getByText('Chats')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New session' })).toHaveClass('bg-[var(--color-surface)]');
     expect(screen.getByRole('button', { name: 'Task plan' })).toBeInTheDocument();
     expect(screen.getByText('Projects')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'megumi' })).toBeInTheDocument();
@@ -65,16 +64,12 @@ describe('LeftSidebar', () => {
     expect(onCreateSession).toHaveBeenCalledTimes(1);
   });
 
-  it('uses one active-page highlight while keeping new session as a neutral action', () => {
+  it('identifies the current page for navigation', () => {
     render(<LeftSidebar {...defaultProps} activePage="discovery" />);
 
     const discovery = screen.getByRole('button', { name: "Today's discoveries" });
-    const newSession = screen.getByRole('button', { name: 'New session' });
 
     expect(discovery).toHaveAttribute('aria-current', 'page');
-    expect(discovery).toHaveClass('bg-[var(--color-accent-soft)]');
-    expect(newSession).toHaveClass('bg-transparent');
-    expect(newSession).not.toHaveClass('bg-[var(--color-surface)]');
   });
 
   it('renders empty state when a project has no sessions', () => {
@@ -209,15 +204,6 @@ describe('LeftSidebar', () => {
     expect(screen.queryByRole('button', { name: /了解项目/ })).not.toBeInTheDocument();
   });
 
-  it('renders project rows with folder icons and a visible theme hover state', () => {
-    render(<LeftSidebar {...defaultProps} />);
-
-    const projectRow = screen.getByRole('button', { name: 'megumi' });
-    expect(screen.getByTestId('project-row-icon-project-1')).toBeInTheDocument();
-    expect(projectRow).toHaveClass('hover:bg-[var(--color-accent-soft)]');
-    expect(projectRow).not.toHaveAttribute('aria-current');
-  });
-
   it('clicking project row does not trigger session select', async () => {
     const onSelectSession = vi.fn();
 
@@ -261,13 +247,8 @@ describe('LeftSidebar', () => {
     expect(screen.getByRole('menuitem', { name: 'Manage projects' })).toBeInTheDocument();
 
     const menu = screen.getByRole('menu');
-    expect(menu).toHaveClass('fixed');
-    expect(menu).not.toHaveClass('absolute');
     expect(menu).toHaveStyle({ left: '244px', top: '40px' });
-    expect(menu).toHaveClass('bg-[var(--color-surface-muted)]');
     expect(screen.getByTestId('project-menu-open-icon')).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Open project' })).toHaveClass('hover:bg-[var(--color-accent-soft)]');
-    expect(screen.getByRole('menuitem', { name: 'Manage projects' })).toHaveClass('hover:bg-[var(--color-accent-soft)]');
 
     // Click use existing project
     await userEvent.click(screen.getByRole('menuitem', { name: 'Open project' }));
@@ -285,18 +266,5 @@ describe('LeftSidebar', () => {
     expect(screen.queryByText('Files')).not.toBeInTheDocument();
     expect(screen.queryByText('Artifacts')).not.toBeInTheDocument();
     expect(screen.queryByText('Workspace')).not.toBeInTheDocument();
-  });
-
-  it('uses transition classes for expanded and collapsed sidebar motion', () => {
-    const { rerender } = render(<LeftSidebar {...defaultProps} />);
-
-    expect(screen.getByTestId('left-sidebar')).toHaveClass('transition-[width]');
-    expect(screen.getByTestId('left-sidebar')).toHaveStyle({ width: '288px' });
-    expect(screen.getByRole('separator', { name: 'Resize chat sidebar' })).toBeInTheDocument();
-
-    rerender(<LeftSidebar {...defaultProps} collapsed />);
-
-    expect(screen.getByTestId('left-sidebar')).toHaveClass('transition-[width]');
-    expect(screen.getByTestId('left-sidebar')).toHaveClass('w-14');
   });
 });

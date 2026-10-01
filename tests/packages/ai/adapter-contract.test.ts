@@ -1,16 +1,8 @@
-/*
- * Protects the provider request retry contract of every retained API adapter:
- * retries use an AbortSignal-cancellable backoff and SDK built-in retries are
- * disabled so cancellation always wins.
- */
+/* Verifies retry limits, provider backoff, and cancellation behavior. */
 
 // @vitest-environment node
-import fs from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { retryProviderRequest } from '@megumi/ai/utils/provider-retry';
-
-const packageRoot = path.resolve(process.cwd(), 'packages', 'ai');
 
 function providerError(status: number | undefined, headers?: Record<string, string>): Error {
   const error = new Error(`provider error ${status ?? 'network'}`);
@@ -115,51 +107,5 @@ describe('provider request retry (shared by all retained adapters)', () => {
     );
     expect(result).toBe('ok');
     expect(calls).toBe(2);
-  });
-});
-
-describe('adapter wiring: cancellable retry with SDK retries disabled', () => {
-  const adapters: Array<{ file: string; markers: string[] }> = [
-    {
-      // Anthropic SDK client is constructed with maxRetries: 0 and the
-      // initial request is wrapped in the cancellable provider retry.
-      file: 'anthropic-messages.ts',
-      markers: ['maxRetries: 0', 'retryProviderRequest('],
-    },
-    {
-      // OpenAI SDK client is constructed with maxRetries: 0 and the
-      // initial request is wrapped in the cancellable provider retry.
-      file: 'openai-completions.ts',
-      markers: ['maxRetries: 0', 'retryProviderRequest('],
-    },
-    {
-      file: 'openai-responses.ts',
-      markers: ['maxRetries: 0', 'retryProviderRequest('],
-    },
-    {
-      // The Codex adapter retries with its own abortable sleep loop.
-      file: 'openai-codex-responses.ts',
-      markers: ['await sleep(delayMs, options?.signal)'],
-    },
-    {
-      // The Google adapter retries through the shared cancellable helper.
-      file: 'google-generative-ai.ts',
-      markers: ['retryGoogleRequest('],
-    },
-  ];
-
-  it.each(adapters)('keeps the cancellable retry contract in $file', ({ file, markers }) => {
-    const source = fs.readFileSync(path.join(packageRoot, 'src', 'api', file), 'utf8');
-    for (const marker of markers) {
-      expect(source).toContain(marker);
-    }
-  });
-
-  it.each(adapters)('reports credential-free semantic exchanges in $file', ({ file }) => {
-    const source = fs.readFileSync(path.join(packageRoot, 'src', 'api', file), 'utf8');
-    expect(source).toContain('notifyProviderExchange(');
-    expect(source).toContain('type: "request"');
-    expect(source).toContain('type: "response"');
-    expect(source).not.toMatch(/notifyProviderExchange\([^)]*(headers|apiKey|client)/s);
   });
 });

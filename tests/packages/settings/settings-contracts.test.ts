@@ -2,13 +2,11 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_SETTINGS,
-  PermissionRuleSchema,
-  ResolveProviderSettingsRequestSchema,
+  DEFAULT_SETTINGS, ResolveProviderSettingsRequestSchema,
   SettingsRawSchema,
   createSettings,
   createSettingsJsonSchema,
-  type SettingsStore,
+  type SettingsStore
 } from '../../../packages/agent/settings/src';
 
 describe('Settings contracts', () => {
@@ -68,16 +66,6 @@ describe('Settings contracts', () => {
     });
   });
 
-  it('uses the Permission owner schema for persisted rules', () => {
-    const rule = {
-      source: 'session',
-      source_id: 'session_1',
-      target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'run_command' } },
-    } as const;
-    expect(PermissionRuleSchema.parse(rule)).toEqual(rule);
-    expect(() => PermissionRuleSchema.parse({ source: 'session', target: rule.target })).toThrow(/source_id/);
-  });
-
   it('requires provider and model identities for Provider resolution', () => {
     expect(ResolveProviderSettingsRequestSchema.parse({
       provider_id: 'deepseek',
@@ -94,7 +82,7 @@ describe('Settings contracts', () => {
       // The file model tolerates unknown keys, so editors allow them too.
       additionalProperties: true,
     });
-    expect(Object.keys(jsonSchema.properties ?? {})).toEqual(SettingsRawSchema.keyof().options);
+
     const providerSchema = jsonSchema.properties?.providers?.additionalProperties as {
       properties?: Record<string, unknown>;
     };

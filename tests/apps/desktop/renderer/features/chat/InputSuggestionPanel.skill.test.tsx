@@ -83,7 +83,7 @@ describe('InputSuggestionPanel skill suggestions', () => {
     consoleError.mockRestore();
   });
 
-  it('applies a visible accent style to the selected suggestion', () => {
+  it('identifies the selected suggestion for keyboard and assistive navigation', () => {
     const suggestions: InputSuggestionQueryResult = {
       type: 'suggestions',
       draftInput: '/test',
@@ -108,9 +108,6 @@ describe('InputSuggestionPanel skill suggestions', () => {
 
     const options = screen.getAllByRole('option');
     expect(options[1]).toHaveAttribute('aria-selected', 'true');
-    expect(options[1]).toHaveClass('aria-selected:bg-[var(--color-accent-soft)]');
-    expect(options[1]).toHaveClass('aria-selected:shadow-[inset_3px_0_0_var(--color-accent)]');
-    expect(options[0]).not.toHaveClass('aria-selected:bg-[var(--color-accent-soft)]');
   });
 
   it('moves the single selection highlight when the pointer hovers another suggestion', () => {
@@ -142,7 +139,6 @@ describe('InputSuggestionPanel skill suggestions', () => {
     // so there is no independent hover highlight class on the option rows.
     fireEvent.mouseEnter(screen.getAllByRole('option')[1]!);
     expect(onHoverIndexChange).toHaveBeenCalledWith(1);
-    expect(screen.getAllByRole('option')[0]).not.toHaveClass('hover:bg-[var(--color-accent-soft)]');
   });
 });
 

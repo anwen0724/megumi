@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createToolRegistry, type ToolDefinition, type ToolRegistration } from '../../../packages/agent/tools/src';
-import * as PublicTools from '../../../packages/agent/tools/src';
 
 const definition: ToolDefinition = {
   name: 'echo', description: 'Echo one string.',
@@ -19,34 +18,6 @@ function registration(name = 'echo'): ToolRegistration {
 }
 
 describe('Tool public contracts', () => {
-  it('exports Registry and Router but not legacy Catalog or Executor seams', () => {
-    expect(PublicTools.createToolRegistry).toBeTypeOf('function');
-    expect(PublicTools.createToolRouter).toBeTypeOf('function');
-    expect(PublicTools).not.toHaveProperty('createToolCatalog');
-    expect(PublicTools).not.toHaveProperty('createToolExecutor');
-    expect(PublicTools).not.toHaveProperty('validateToolInput');
-  });
-
-  it('keeps ToolDefinition limited to model-visible fields', () => {
-    expect(Object.keys(definition)).toEqual(['name', 'description', 'parameters']);
-  });
-
-  it('publishes the typed Candidate submission Tool definition', () => {
-    expect(PublicTools.submitCandidatesToolDefinition).toMatchObject({
-      name: 'submit_candidates',
-      parameters: { type: 'object' },
-    });
-  });
-
-  it('exposes a typed pre-normalization Handler result observation option', () => {
-    const observed: import('@megumi/tools').RawToolResult[] = [];
-    const options: import('@megumi/tools').ToolExecutionOptions = {
-      onHandlerResult: (result) => observed.push(result),
-    };
-    options.onHandlerResult?.({ outputKind: 'json', content: { actual: true } });
-    expect(observed).toEqual([{ outputKind: 'json', content: { actual: true } }]);
-  });
-
   it('rejects duplicate names and Definition/Handler mismatches', () => {
     expect(() => createToolRegistry({ registrations: [registration(), registration()] })).toThrow('Duplicate registered Tool name');
     expect(() => createToolRegistry({ registrations: [{

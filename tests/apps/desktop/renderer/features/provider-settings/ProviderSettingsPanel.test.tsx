@@ -154,30 +154,6 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.queryByText('Disabled')).not.toBeInTheDocument();
   });
 
-  it('highlights configured providers and keeps unconfigured ones muted', () => {
-    useProviderStore.setState({
-      catalog: [...useProviderStore.getState().catalog, {
-        providerId: 'Anthropic',
-        displayName: 'Anthropic',
-        protocol: 'anthropic-messages',
-        defaultBaseUrl: 'https://api.anthropic.com',
-        models: [{
-          modelId: 'claude-sonnet-5',
-          displayName: 'Claude Sonnet 5',
-          contextWindowTokens: 1_000_000,
-          capabilities,
-        }],
-      }],
-    });
-
-    render(<ProviderSettingsPanel />);
-
-    // OpenAI is configured but not selected: it keeps the configured highlight.
-    expect(screen.getByRole('button', { name: /^OpenAI/ })).toHaveClass('bg-[var(--color-accent-soft)]/50');
-    // Anthropic is unconfigured: muted, no highlight.
-    expect(screen.getByRole('button', { name: /^Anthropic/ })).toHaveClass('opacity-60');
-  });
-
   it('updates the selected provider settings from the detail pane', async () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn();

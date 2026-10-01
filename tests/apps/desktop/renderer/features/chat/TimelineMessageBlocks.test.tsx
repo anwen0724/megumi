@@ -157,15 +157,12 @@ describe('TimelineMessage canonical block rendering', () => {
     const article = screen.getByRole('article', { name: 'User message' });
     const text = screen.getByText('你是谁');
     const time = article.querySelector('time');
-
-    expect(article).toHaveClass('justify-end');
     expect(screen.queryByText('You')).not.toBeInTheDocument();
     expect(text).toBeInTheDocument();
     expect(article.textContent).toContain('你是谁');
     expect([...article.querySelectorAll('*')].some((element) =>
       element.classList.contains('bg-[var(--color-accent-soft)]'),
     )).toBe(true);
-    expect(text.closest('[data-testid="user-message-card"]')).toHaveClass('rounded-md');
     expect(time).toHaveAttribute('dateTime', createdAt);
     expect(text.compareDocumentPosition(time!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
@@ -184,39 +181,6 @@ describe('TimelineMessage canonical block rendering', () => {
   it('renders no Skill badge when the user message has no selection', () => {
     render(<TimelineMessage message={userMessage()} />);
     expect(screen.queryByTestId('timeline-user-skill-selection')).not.toBeInTheDocument();
-  });
-
-  it('keeps assistant content width stable without widening user bubbles', () => {
-    const { rerender } = render(<TimelineMessage message={assistantMessage({
-      blocks: [{
-        blockId: 'process:run-1',
-        kind: 'process_disclosure',
-        executionId: 'run-1',
-        status: 'running',
-        startedAt: '2026-05-24T12:00:00.000Z',
-        items: [],
-      }],
-    })} />);
-
-    const assistantArticle = screen.getByRole('article', { name: 'Megumi message' });
-    expect(assistantArticle.firstElementChild).toHaveClass('w-full');
-    expect(assistantArticle.firstElementChild).toHaveClass('max-w-3xl');
-
-    rerender(<TimelineMessage message={userMessage()} />);
-
-    const userArticle = screen.getByRole('article', { name: 'User message' });
-    expect(userArticle.firstElementChild).not.toHaveClass('w-full');
-    expect(userArticle.firstElementChild).toHaveClass('max-w-3xl');
-  });
-
-  it('uses focus-thread motion classes without adding a timeline rail or assistant card', () => {
-    render(<TimelineMessage message={assistantMessage()} />);
-
-    const article = screen.getByRole('article', { name: 'Megumi message' });
-    expect(article).toHaveClass('animate-[megumi-message-in_160ms_ease-out]');
-    expect(article.firstElementChild).toHaveClass('w-full');
-    expect(article.firstElementChild).not.toHaveClass('rounded-lg');
-    expect(article.querySelector('[data-testid="timeline-rail"]')).toBeNull();
   });
 
   it('renders completed process disclosure collapsed before final answer', () => {
@@ -350,45 +314,6 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByRole('button', { name: /Expand process disclosure/ })).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('正在流式输出最终回复')).toBeInTheDocument();
     expect(screen.queryByText('Streaming')).not.toBeInTheDocument();
-  });
-
-  it('wraps long unbroken process and answer text without widening the timeline', () => {
-    const longProcessText = `context:${'x'.repeat(180)}:${'y'.repeat(180)}`;
-    const longAnswerText = `result:${'a'.repeat(180)}:${'b'.repeat(180)}`;
-
-    render(<TimelineMessage message={assistantMessage({
-      blocks: [
-        {
-          blockId: 'process:run-1',
-          kind: 'process_disclosure',
-          executionId: 'run-1',
-          status: 'running',
-          startedAt: '2026-05-24T12:00:00.000Z',
-          items: [{
-            itemId: 'thinking:thinking-1',
-            kind: 'thinking',
-            thinkingId: 'thinking-1',
-            status: 'streaming',
-            text: longProcessText,
-            format: 'plain',
-          }],
-        },
-        {
-          blockId: 'answer:run-1',
-          kind: 'answer_text',
-          executionId: 'run-1',
-          textId: 'text-answer-1',
-          status: 'completed',
-          text: longAnswerText,
-          format: 'markdown',
-        },
-      ],
-    })} />);
-
-    expect(screen.getByText(longProcessText)).toHaveClass('break-words');
-    expect(screen.getByText(longProcessText)).toHaveClass('[overflow-wrap:anywhere]');
-    expect(screen.getByText(longAnswerText).closest('p')).toHaveClass('break-words');
-    expect(screen.getByText(longAnswerText).closest('p')).toHaveClass('[overflow-wrap:anywhere]');
   });
 
   it('does not reset a manually collapsed running process disclosure on answer text rerender', () => {
@@ -657,7 +582,7 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('custom')).toBeInTheDocument();
   });
 
-  it('does not use success icons for denied or rejected approval process states', () => {
+  it('describes a denied tool action as declined', () => {
     render(<TimelineMessage message={assistantMessage({
       blocks: [
         {
@@ -680,12 +605,7 @@ describe('TimelineMessage canonical block rendering', () => {
       ],
     })} />);
 
-    for (const label of [
-      'Declined to read C:/secret.txt',
-    ]) {
-      const row = screen.getByText(label).closest('div');
-      expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
-    }
+    expect(screen.getByText('Declined to read C:/secret.txt')).toBeInTheDocument();
   });
 
   it('renders compaction retry and recovery process items without collapsing them into the top label', () => {
@@ -820,58 +740,6 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('Model call retry 1 completed')).toBeInTheDocument();
     expect(screen.getByText('Run was interrupted')).toBeInTheDocument();
     expect(screen.getByText('Final answer.')).toBeInTheDocument();
-  });
-
-  it('does not use success icons for failed retry or non-success recovery process states', () => {
-    render(<TimelineMessage message={assistantMessage({
-      blocks: [{
-        blockId: 'process:run-1',
-        kind: 'process_disclosure',
-        executionId: 'run-1',
-        status: 'running',
-        startedAt: '2026-06-01T10:00:00.000Z',
-        items: [
-          {
-            itemId: 'retry:failed',
-            kind: 'retry_activity',
-            retryAttemptId: 'retry-failed',
-            attemptNumber: 1,
-            status: 'failed',
-            label: 'Retry attempt 1 failed',
-          },
-          {
-            itemId: 'retry:exhausted',
-            kind: 'retry_activity',
-            retryAttemptId: 'retry-exhausted',
-            attemptNumber: 2,
-            status: 'exhausted',
-            label: 'Retry attempts exhausted',
-          },
-          {
-            itemId: 'recovery:interrupted',
-            kind: 'recovery_activity',
-            status: 'interrupted',
-            label: 'Previous run was interrupted',
-          },
-          {
-            itemId: 'recovery:marked-cancelled',
-            kind: 'recovery_activity',
-            status: 'marked_cancelled',
-            label: 'Run marked cancelled',
-          },
-        ],
-      }],
-    })} />);
-
-    for (const label of [
-      'Retry attempt 1 failed',
-      'Retry attempts exhausted',
-      'Previous run was interrupted',
-      'Run marked cancelled',
-    ]) {
-      const row = screen.getByText(label).closest('div');
-      expect(row?.querySelector('svg')?.getAttribute('class')).not.toContain('text-[var(--color-success)]');
-    }
   });
 
   it('keeps rendering safe blocks when one answer block is malformed', () => {

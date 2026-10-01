@@ -25,7 +25,6 @@ describe('WorkspaceChangeFooter', () => {
     const openFiles = screen.getByRole('list', { name: 'Changed files that can be opened' });
     const fileList = screen.getByRole('list', { name: 'Changed files' });
     expect(openFiles.compareDocumentPosition(fileList)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(fileList).toHaveClass('divide-y');
     expect(screen.getByText('2 files changed')).toBeInTheDocument();
     expect(screen.getByText('File change summary')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();

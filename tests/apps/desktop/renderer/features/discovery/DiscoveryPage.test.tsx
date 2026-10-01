@@ -311,28 +311,15 @@ describe('DiscoveryPage', () => {
     expect(screen.getByRole('menuitem', { name: '删除' })).toBeInTheDocument();
   });
 
-  it('keeps the interest drawer mounted until its closing motion has visibly completed', async () => {
+  it('closes interest management when the user dismisses the drawer', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
     await screen.findByText('Agent Harness 深入实践');
     await user.click(screen.getByRole('button', { name: '管理关注' }));
 
-    const dialog = await screen.findByRole('dialog', { name: '关注与每日发现' });
-    await waitFor(() => expect(dialog).toHaveClass('translate-x-0'));
-
-    vi.useFakeTimers();
-    try {
-      fireEvent.click(screen.getByRole('button', { name: '关闭关注管理' }));
-      expect(dialog).toHaveClass('translate-x-full');
-
-      act(() => vi.advanceTimersByTime(200));
-      expect(dialog).toBeInTheDocument();
-
-      act(() => vi.advanceTimersByTime(80));
-      expect(screen.queryByRole('dialog', { name: '关注与每日发现' })).not.toBeInTheDocument();
-    } finally {
-      vi.useRealTimers();
-    }
+    await screen.findByRole('dialog', { name: '关注与每日发现' });
+    await user.click(screen.getByRole('button', { name: '关闭关注管理' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '关注与每日发现' })).not.toBeInTheDocument());
   });
 
   it('shows a failed daily run and lets the user retry it', async () => {

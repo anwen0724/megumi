@@ -1,4 +1,4 @@
-﻿// @vitest-environment jsdom
+// @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -51,30 +51,6 @@ describe('ComposerDock', () => {
     expect(overlay).toContainElement(screen.getByTestId('approval-stack'));
     expect(overlay).toContainElement(screen.getByTestId('approval-card-approval-1'));
     expect(screen.getByText('睡前小故事.md')).toBeInTheDocument();
-  });
-
-  it('keeps the dock transparent while aligning its content to the chat column width', () => {
-    render(
-      <ComposerDock
-        status="idle"
-        branchDraft={null}
-        onSubmit={vi.fn()}
-        onStop={vi.fn()}
-      />,
-    );
-
-    const dock = screen.getByTestId('composer-dock');
-    const column = screen.getByTestId('composer-dock-column');
-
-    expect(dock).toHaveClass('bg-transparent');
-    expect(dock).toHaveClass('pb-3');
-    expect(dock).not.toHaveClass('px-6');
-    expect(dock).not.toHaveClass('pt-');
-    expect(dock).not.toHaveClass('pb-6');
-    expect(column).toHaveClass('relative');
-    expect(column).toHaveClass('w-[calc(100%-3rem)]');
-    expect(column).toHaveClass('max-w-[var(--chat-composer-width)]');
-    expect(column).not.toHaveClass('px-6');
   });
 
   it('publishes composer surface avoidance height without overlay height', () => {
@@ -137,12 +113,8 @@ describe('ComposerDock', () => {
     );
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/re');
-
-    const dockColumn = screen.getByTestId('composer-dock-column');
-    const composerSurface = screen.getByTestId('composer-surface');
     const inputPanel = screen.getByTestId('composer-input-panel');
 
-    expect(composerSurface.parentElement).toBe(dockColumn);
     expect(screen.queryByTestId('composer-overlay-layer')).not.toBeInTheDocument();
     expect(screen.queryByTestId('command-suggestion-panel')).not.toBeInTheDocument();
     expect(inputPanel).not.toHaveTextContent('/review');

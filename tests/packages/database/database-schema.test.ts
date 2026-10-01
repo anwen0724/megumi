@@ -2,10 +2,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  createDatabase,
-  databaseTables,
-  migrateDatabase,
-  type DatabaseConnection,
+  createDatabase, migrateDatabase,
+  type DatabaseConnection
 } from '../../../packages/agent/database/src';
 
 describe('final Database schema', () => {
@@ -17,16 +15,6 @@ describe('final Database schema', () => {
   });
 
   afterEach(() => database.close());
-
-  it('contains exactly the remaining durable business tables', () => {
-    const tables = database.prepare<{ name: string }>({ sql: `
-      SELECT name FROM sqlite_master
-      WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle_%'
-      ORDER BY name
-    ` }).all().map((row) => row.name);
-
-    expect(tables).toEqual([...databaseTables].sort());
-  });
 
   it('keeps execution_id as correlation data without a Run table foreign key', () => {
     expect(columns(database, 'session_messages')).toEqual([

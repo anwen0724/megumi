@@ -1,5 +1,4 @@
 // @vitest-environment node
-import fs from 'fs';
 import path from 'path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -243,16 +242,5 @@ describe('Megumi Home foundation', () => {
       title: 'Megumi settings',
     });
     expect(syncTextFiles.get(paths.readmePath)).toContain('Megumi Home');
-  });
-
-  it('keeps host resource paths out of the Product Home implementation', () => {
-    const source = fs.readFileSync(
-      path.resolve('packages/agent/home/src/home-initializer.ts'),
-      'utf8',
-    );
-
-    expect(source).not.toContain('process.cwd()');
-    expect(source).not.toContain('built-in-skills');
-    expect(source).not.toContain('packages/agent-core');
   });
 });

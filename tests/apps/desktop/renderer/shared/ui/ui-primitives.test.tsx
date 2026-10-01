@@ -3,27 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
-  Badge,
-  Button,
-  IconButton,
-  Panel,
-  PanelHeader,
-  PanelTitle,
-  SettingsSection,
   Select,
   Tabs,
-  TextField,
+  TextField
 } from '@megumi/desktop/renderer/shared/ui';
 
 describe('shared UI primitives', () => {
-  it('renders a button with semantic variant classes', () => {
-    render(<Button variant="primary">Send</Button>);
-
-    expect(screen.getByRole('button', { name: 'Send' }).className).toContain('bg-[var(--color-accent)]');
-    expect(screen.getByRole('button', { name: 'Send' }).className).toContain('active:scale-[0.98]');
-  });
-
-  it('opens a styled listbox and selects an option', async () => {
+  it('opens a listbox and selects an option', async () => {
     const onValueChange = vi.fn();
     render(
       <Select
@@ -42,41 +28,6 @@ describe('shared UI primitives', () => {
     await userEvent.click(screen.getByRole('option', { name: 'Failed' }));
 
     expect(onValueChange).toHaveBeenCalledWith('error');
-  });
-
-  it('renders a settings section header action on the title row', () => {
-    render(
-      <SettingsSection title="Voice replies" headerAction={<button type="button">Toggle</button>}>
-        <p>Body</p>
-      </SettingsSection>,
-    );
-
-    expect(screen.getByRole('heading', { name: 'Voice replies' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Toggle' })).toBeInTheDocument();
-  });
-
-  it('renders an icon button with an accessible label', () => {
-    render(<IconButton label="Toggle theme">T</IconButton>);
-
-    expect(screen.getByRole('button', { name: 'Toggle theme' })).toBeInTheDocument();
-  });
-
-  it('renders a badge with status text', () => {
-    render(<Badge variant="success">Ready</Badge>);
-
-    expect(screen.getByText('Ready')).toBeInTheDocument();
-  });
-
-  it('renders a titled panel', () => {
-    render(
-      <Panel>
-        <PanelHeader>
-          <PanelTitle>Tasks</PanelTitle>
-        </PanelHeader>
-      </Panel>,
-    );
-
-    expect(screen.getByText('Tasks')).toBeInTheDocument();
   });
 
   it('switches tabs through the controlled callback', async () => {

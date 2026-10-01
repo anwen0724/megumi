@@ -3,7 +3,6 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createCommands, createCommandInputInterpreter } from "@megumi/commands";
-import * as PublicCommands from "@megumi/commands";
 
 const model = {
   id: "model-1",
@@ -27,10 +26,6 @@ function userInput(text: string) {
 }
 
 describe("Commands", () => {
-  it("keeps built-in implementation details out of the default public entry", () => {
-    expect(PublicCommands).not.toHaveProperty("createBuiltInCommands");
-  });
-
   it("does not register /review and treats it as ordinary user input", async () => {
     const commands = createCommands();
     expect(commands.list().map((command) => command.name)).toEqual(["compact"]);

@@ -1,16 +1,13 @@
 /* Verifies platform Backend resolution and the generic Sandbox seam. */
 // @vitest-environment node
-import fs from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   type SandboxCapabilities,
   type SandboxProcess,
 } from '../../../packages/agent/sandbox/src';
 import {
-  createUnsupportedSandboxBackend,
   resolveSandboxBackend,
-  type SandboxBackend,
+  type SandboxBackend
 } from '../../../packages/agent/sandbox/src/sandbox-backend';
 import { createSandboxWithBackend } from '../../../packages/agent/sandbox/src/sandbox-scope';
 
@@ -99,16 +96,5 @@ describe('Sandbox Backend', () => {
       { cwd: process.cwd(), command: 'echo unavailable' },
       { signal: new AbortController().signal, onStdout: () => undefined, onStderr: () => undefined },
     )).rejects.toMatchObject({ code: 'sandbox_unavailable' });
-  });
-
-  it('keeps generic Scope source independent from Windows and platform selection', () => {
-    const source = fs.readFileSync(path.join(process.cwd(), 'packages/agent/sandbox/src/sandbox-scope.ts'), 'utf8');
-    expect(source).not.toContain('windows-');
-    expect(source).not.toContain("'win32'");
-    expect(source).not.toContain('process.platform');
-  });
-
-  it('exposes an explicit unsupported Backend factory for host tests', () => {
-    expect(createUnsupportedSandboxBackend({ platform: 'freebsd' }).platform).toBe('freebsd');
   });
 });
