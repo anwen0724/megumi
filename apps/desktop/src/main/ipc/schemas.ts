@@ -154,3 +154,5 @@ export const DiscoveryPreferenceDetailsRequestSchema = createRuntimeIpcRequestSc
 export const DiscoveryPreferenceEvidenceRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceEvidence, host.DiscoveryPreferenceEvidencePayloadSchema);
 export const DiscoveryPreferenceEditRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceEdit, host.DiscoveryPreferenceEditPayloadSchema);
 export const DiscoveryPreferenceDeleteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceDelete, host.DiscoveryPreferenceDeletePayloadSchema);
+
+export const SessionModelSelectionRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionModelSelection, host.SessionModelSelectionPayloadSchema);

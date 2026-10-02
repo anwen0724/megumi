@@ -132,6 +132,7 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
 
 export function toSessionDto(session: Session): SessionDto {
   return {
+    modelSelection: session.model_selection,
     id: session.session_id,
     projectId: session.workspace_id,
     title: session.title,

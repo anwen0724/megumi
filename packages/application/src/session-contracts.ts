@@ -1,9 +1,11 @@
 /* Defines the stable, host-neutral Session operations exposed by Product. */
+import { SessionModelSelectionSchema } from '@megumi/agent-runtime/sessions/session';
 import { EventSchema } from '@megumi/agent-runtime/events';
 import { z } from 'zod';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/agent-runtime/runs/input/index';
 
 export interface SessionHost {
+  updateModelSelection(request: SessionModelSelectionPayload): Promise<SessionModelSelectionResult>;
   createSession(request: CreateSessionRequest): Promise<CreateSessionResult>;
   listSessions(request?: ListSessionsRequest): Promise<ListSessionsResult>;
   listUserMessagesByExecutionIds(request: ListUserMessagesByExecutionIdsRequest): Promise<ListUserMessagesByExecutionIdsResult>;
@@ -80,6 +82,7 @@ export const InputSuggestionsPayloadSchema = z.object({
   draftInput: z.string(), workspaceId: z.string().min(1).optional(),
 }).strict();
 export const SessionCreatePayloadSchema = z.object({
+  modelSelection: SessionModelSelectionSchema.optional(),
   projectId: z.string().min(1), title: z.string().min(1).optional(),
 }).strict();
 export const SessionListPayloadSchema = z.object({}).strict();
@@ -204,6 +207,7 @@ export type GetAttachmentFileStatusRequest = z.infer<typeof AttachmentFileStatus
 export type GetAttachmentFileStatusResult = z.infer<typeof AttachmentFileStatusResultSchema>;
 
 export const SessionDtoSchema = z.object({
+  modelSelection: SessionModelSelectionSchema.optional(),
   id: z.string().min(1), projectId: z.string().min(1), title: z.string(),
   status: z.enum(['active', 'archived']), createdAt: z.string().datetime(), updatedAt: z.string().datetime(),
 }).strict();
@@ -560,6 +564,7 @@ export type SessionReadDiagnosticDto = z.infer<typeof SessionReadDiagnosticDtoSc
 export type SessionRuntimeEventRangeDto = z.infer<typeof SessionRuntimeEventRangeDtoSchema>;
 
 export interface CreateSessionRequest {
+  modelSelection?: z.infer<typeof SessionModelSelectionSchema>;
   projectId: string;
   title?: string;
 }
@@ -717,3 +722,14 @@ export type GetContextUsageResult =
   | { status: 'available'; usage: ContextUsageDto }
   | { status: 'not_available' }
   | { status: 'failed'; failure: HostFailure };
+
+export const SessionModelSelectionPayloadSchema = z.object({
+  sessionId: z.string().min(1), modelSelection: SessionModelSelectionSchema,
+}).strict();
+export type SessionModelSelectionPayload = z.infer<typeof SessionModelSelectionPayloadSchema>;
+export const SessionModelSelectionResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('updated'), session: SessionDtoSchema }).strict(),
+  z.object({ status: z.literal('not_found') }).strict(),
+  z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
+]);
+export type SessionModelSelectionResult = z.infer<typeof SessionModelSelectionResultSchema>;

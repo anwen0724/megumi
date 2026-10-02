@@ -121,6 +121,8 @@ export interface CreateSettingsOptions {
   readEnvironment: (name: string) => string | undefined;
 }
 
+export type Settings = ReturnType<typeof createSettings>;
+
 /** Creates file-bound configuration access without creating any files. */
 export function createSettings(options: CreateSettingsOptions) {
   return {

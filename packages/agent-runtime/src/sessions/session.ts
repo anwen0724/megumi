@@ -1,5 +1,10 @@
 /* Defines the durable Session identity, lifecycle facts, and stable failures. */
+import { z } from 'zod';
+export const SessionModelSelectionSchema = z.object({ providerId: z.string().min(1), modelId: z.string().min(1) }).strict();
+export type SessionModelSelection = z.infer<typeof SessionModelSelectionSchema>;
+
 export interface Session {
+  model_selection?: SessionModelSelection;
   session_id: string;
   workspace_id: string;
   title: string;

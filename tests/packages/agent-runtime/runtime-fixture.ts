@@ -106,6 +106,6 @@ export async function createRuntimeFixture(options: { now?: () => string; before
       });
     },
   });
-  return { ...fixture, repository, recommendationAttempts, candidateSupplyAttempts, model, history, runtime, workspaceChanges, async cleanup() { await runtime.stop({ timeoutMs: 5000 }); fixture.cleanup(); } };
+  return { ...fixture, globalSettingsPath, repository, recommendationAttempts, candidateSupplyAttempts, model, history, runtime, workspaceChanges, async cleanup() { await runtime.stop({ timeoutMs: 5000 }); fixture.cleanup(); } };
   } catch (error) { fixture.cleanup(); throw error; }
 }

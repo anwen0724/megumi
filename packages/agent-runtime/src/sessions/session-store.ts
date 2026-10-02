@@ -9,6 +9,11 @@ export interface SessionStore {
   runInTransaction<T>(operation: () => T): T;
 
   insertSession(session: Session): Session;
+  updateSessionModelSelection(input: {
+    session_id: string;
+    model_selection: NonNullable<Session['model_selection']>;
+    updated_at: string;
+  }): Session | undefined;
   findSessionById(sessionId: string): Session | undefined;
   listSessionsByWorkspaceId(workspaceId: string): Session[];
   archiveSession(input: { session_id: string; archived_at: string }): Session | undefined;

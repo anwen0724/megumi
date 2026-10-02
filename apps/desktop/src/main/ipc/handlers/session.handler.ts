@@ -7,6 +7,7 @@ import {
   GetInputSuggestionsResultSchema,
   CreateBranchDraftPayloadSchema,
   CreateSessionResultSchema,
+  SessionModelSelectionResultSchema,
   ReadSessionResultSchema,
   ReadCommittedRunResultSchema,
   GetContextUsageResultSchema,
@@ -33,6 +34,7 @@ import {
   SessionBranchDraftCancelRequestSchema,
   SessionBranchDraftCreateRequestSchema,
   SessionCreateRequestSchema,
+  SessionModelSelectionRequestSchema,
   SessionReadRequestSchema,
   SessionListRequestSchema,
   SessionMessageCancelRequestSchema,
@@ -84,6 +86,15 @@ export function registerSessionHandlers(
     logger: options.logger,
     handle: (request: RuntimeIpcRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.session.inputSuggestions>) =>
       service.host.session.getInputSuggestions(request.payload),
+    mapError: mapSessionIpcError,
+  }));
+
+  ipcMain.handle(IPC_CHANNELS.session.sessionModelSelection, createIpcRequestHandler({
+    channel: IPC_CHANNELS.session.sessionModelSelection,
+    requestSchema: SessionModelSelectionRequestSchema,
+    responseSchema: SessionModelSelectionResultSchema,
+    logger: options.logger,
+    handle: (request) => service.host.session.updateModelSelection(request.payload),
     mapError: mapSessionIpcError,
   }));
 

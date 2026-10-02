@@ -150,6 +150,7 @@ export interface ProductCapabilities {
   readonly logger: ApplicationLogger;
   readonly database: DatabaseConnection;
   readonly settings: ReturnType<typeof createSettings>;
+  readonly settingsForWorkspace: (workspaceId?: string) => ReturnType<typeof createFileSettings>;
   readonly workspaceStore: ReturnType<typeof createWorkspaceStore>;
   readonly workspaceFileSystem: ProductWorkspaceFileSystem;
   readonly workspaces: ReturnType<typeof createWorkspaceCatalog>;
@@ -503,24 +504,22 @@ function composeCapabilitiesWithDatabase(
     createSessionMessageId: () => createId('message'),
   };
   let discovery: Discovery;
+  const settingsForWorkspace = (workspaceId?: string) => {
+    let projectSettingsPath: string | undefined;
+    if (workspaceId) {
+      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
+      if (workspace.status !== 'found') throw new Error('WORKSPACE_UNAVAILABLE');
+      projectSettingsPath = path.join(workspace.workspace.root_path, '.megumi', 'settings.json');
+    }
+    return createFileSettings({
+      globalSettingsPath: homePaths.settingsPath,
+      projectSettingsPath,
+      credentialsPath: homePaths.credentialsPath,
+      readEnvironment: (name) => options.settingsEnvironment?.readVariable(name),
+    });
+  };
   const runtime = createAgentRuntime({
-    modelResolution(workspaceId) {
-      let projectSettingsPath: string | undefined;
-      if (workspaceId) {
-        const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-        if (workspace.status !== 'found') throw new Error('WORKSPACE_UNAVAILABLE');
-        projectSettingsPath = path.join(workspace.workspace.root_path, '.megumi', 'settings.json');
-      }
-      return {
-        settings: createFileSettings({
-          globalSettingsPath: homePaths.settingsPath,
-          projectSettingsPath,
-          credentialsPath: homePaths.credentialsPath,
-          readEnvironment: (name) => options.settingsEnvironment?.readVariable(name),
-        }),
-        apiImplementations: options.modelStreams,
-      };
-    },
+    modelResolution: (workspaceId) => ({ settings: settingsForWorkspace(workspaceId), apiImplementations: options.modelStreams }),
     createRunId: ids.createExecutionId,
     terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
     execution: {
@@ -793,6 +792,7 @@ function composeCapabilitiesWithDatabase(
     logger,
     database,
     settings,
+    settingsForWorkspace,
     workspaceStore,
     workspaceFileSystem,
     workspaces,

@@ -138,6 +138,7 @@ function createApplicationRuntime(
     workspaceChanges,
   });
   const session = createSessionOperations({
+    settingsForWorkspace: capabilities.settingsForWorkspace,
     reader: sessionReader,
     recommendations: discovery,
     runtime,

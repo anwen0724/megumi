@@ -80,6 +80,30 @@ function createService(options: {
 }
 
 describe('Session capabilities', () => {
+  it('updates only the selected session and preserves that choice on later reads', () => {
+    const { service, workspaceId, database } = createService();
+    try {
+      service.createSession({ workspace_id: workspaceId });
+      expect(service.updateModelSelection({ session_id: 'S1', model_selection: { providerId: 'openai', modelId: 'chosen' } })).toMatchObject({ status: 'found' });
+      expect(service.getSession({ session_id: 'S1' })).toMatchObject({ session: { model_selection: { providerId: 'openai', modelId: 'chosen' } } });
+      expect(service.updateModelSelection({ session_id: 'absent', model_selection: { providerId: 'openai', modelId: 'chosen' } })).toEqual({ status: 'not_found' });
+    } finally {
+      database.close();
+    }
+  });
+
+  it('persists an independent model selection when a session is created', () => {
+    const { service, workspaceId, database } = createService();
+    try {
+      service.createSession({ workspace_id: workspaceId, model_selection: { providerId: 'deepseek', modelId: 'deepseek-flash' } });
+      expect(service.getSession({ session_id: 'S1' })).toMatchObject({
+        status: 'found', session: { model_selection: { providerId: 'deepseek', modelId: 'deepseek-flash' } },
+      });
+    } finally {
+      database.close();
+    }
+  });
+
   it('creates, reads, lists, and archives a session', async () => {
     const { service, workspaceId } = createService();
 

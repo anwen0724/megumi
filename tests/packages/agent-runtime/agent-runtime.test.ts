@@ -1,6 +1,6 @@
 /* Verifies admission and cancellation through the shared runtime with real persistence. */
 // @vitest-environment node
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { expect, it, onTestFinished, vi } from 'vitest';
 import { createRuntimeFixture } from './runtime-fixture';
@@ -130,4 +130,30 @@ it('completes a tool run only after the reply and workspace changes are committe
   const changes = fixture.workspaceChanges.listChangeSummaries({ by: 'run', execution_id: result.run.runId });
   expect(changes.summaries).toMatchObject([{ change_set: { status: 'finalized', changed_file_count: 1 } }]);
   expect(fixture.runtime.getRun(result.run.runId)?.status).toBe('completed');
+});
+
+it('initializes a session from the default model and keeps it when the default changes', async () => {
+  const fixture = await createRuntimeFixture();
+  onTestFinished(() => fixture.cleanup());
+  const requested: string[] = [];
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+    const body = JSON.parse(String(init?.body));
+    requested.push(body.model);
+    return new Response('data: ' + JSON.stringify({ id: 'response', object: 'chat.completion.chunk', created: 1,
+      model: body.model, choices: [{ index: 0, delta: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
+    }) + '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+  });
+  onTestFinished(() => fetch.mockRestore());
+  const first = await fixture.runtime.submitInput({ workspaceId: fixture.workspaceId, sessionId: fixture.sessionId, text: 'First' });
+  if (first.status !== 'started') throw new Error('Expected first run');
+  await first.run.completion;
+  const config = JSON.parse(await readFile(fixture.globalSettingsPath, 'utf8'));
+  config.models.defaultModel.modelId = 'other';
+  config.models.customModels[fixture.model.provider].other = { contextWindowTokens: 16000, maxOutputTokens: 512 };
+  await writeFile(fixture.globalSettingsPath, JSON.stringify(config));
+  const second = await fixture.runtime.submitInput({ workspaceId: fixture.workspaceId, sessionId: fixture.sessionId, text: 'Second' });
+  if (second.status !== 'started') throw new Error('Expected second run');
+  await second.run.completion;
+  expect(requested).toEqual([fixture.model.id, fixture.model.id]);
+  expect(fixture.catalog.getSession({ session_id: fixture.sessionId })).toMatchObject({ session: { model_selection: { providerId: fixture.model.provider, modelId: fixture.model.id } } });
 });

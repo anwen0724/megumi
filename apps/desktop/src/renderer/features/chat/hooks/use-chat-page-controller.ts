@@ -68,6 +68,9 @@ export function useChatPageController() {
     session.id === activeSessionId && session.projectId === currentProjectId
   ) ?? null;
   const effectiveActiveSessionId = activeSession?.id ?? null;
+  useEffect(() => {
+    useModelSelectionStore.getState().bindSession(activeSession?.id, activeSession?.modelSelection);
+  }, [activeSession?.id, activeSession?.modelSelection]);
   const isDraftNewSession = !effectiveActiveSessionId;
   const effectiveProjectId = effectiveActiveSessionId
     ? currentProjectId

@@ -21,7 +21,7 @@ import {
   type UserMessage,
 } from '@megumi/agent-runtime/sessions/session-message';
 import { normalizeLegacyAssistantContent, normalizeLegacyUserMessagePayload } from '@megumi/agent-runtime/sessions/legacy-content-normalizer';
-import type { Session } from '@megumi/agent-runtime/sessions/session';
+import { SessionModelSelectionSchema, type Session } from '@megumi/agent-runtime/sessions/session';
 
 type Nullable<T> = T | null;
 
@@ -41,10 +41,10 @@ class DatabaseSessionStore implements SessionStore {
     this.database.prepare({ sql: `
       INSERT INTO sessions (
         session_id, workspace_id, title, status, active_entry_id,
-        created_at, updated_at, archived_at
+        created_at, updated_at, archived_at, model_selection
       ) VALUES (
         @session_id, @workspace_id, @title, @status, @active_entry_id,
-        @created_at, @updated_at, @archived_at
+        @created_at, @updated_at, @archived_at, @model_selection
       )
     ` }).run(toSessionRow(session));
     return session;
@@ -55,6 +55,17 @@ class DatabaseSessionStore implements SessionStore {
       sql: 'SELECT * FROM sessions WHERE session_id = ?',
     }).get([sessionId]);
     return row ? fromSessionRow(row) : undefined;
+  }
+
+  updateSessionModelSelection(input: {
+    session_id: string;
+    model_selection: NonNullable<Session['model_selection']>;
+    updated_at: string;
+  }): Session | undefined {
+    this.database.prepare({
+      sql: 'UPDATE sessions SET model_selection = @model_selection, updated_at = @updated_at WHERE session_id = @session_id',
+    }).run({ ...input, model_selection: JSON.stringify(input.model_selection) });
+    return this.findSessionById(input.session_id);
   }
 
   listSessionsByWorkspaceId(workspaceId: string): Session[] {
@@ -321,6 +332,7 @@ class DatabaseSessionStore implements SessionStore {
 }
 
 type SessionRow = DatabaseRow & {
+  model_selection: string | null;
   session_id: string;
   workspace_id: string;
   title: string;
@@ -383,6 +395,7 @@ type SessionCompactionRow = DatabaseRow & {
 
 function toSessionRow(session: Session): SessionRow {
   return {
+    model_selection: session.model_selection ? JSON.stringify(session.model_selection) : null,
     session_id: session.session_id,
     workspace_id: session.workspace_id,
     title: session.title,
@@ -396,6 +409,7 @@ function toSessionRow(session: Session): SessionRow {
 
 function fromSessionRow(row: SessionRow): Session {
   return {
+    ...(row.model_selection ? { model_selection: SessionModelSelectionSchema.parse(JSON.parse(row.model_selection)) } : {}),
     session_id: row.session_id,
     workspace_id: row.workspace_id,
     title: row.title,

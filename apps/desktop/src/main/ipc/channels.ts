@@ -42,6 +42,7 @@ export const IPC_CHANNELS = {
   session: {
     inputSuggestions: 'input:suggestions',
     sessionCreate: 'session:create',
+    sessionModelSelection: 'session:model-selection:update',
     sessionList: 'session:list',
     sessionMessageList: 'session:message:list',
     sessionMessageSend: 'session:message:send',
@@ -180,6 +181,7 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.settings.discoveryCredentialDelete,
   IPC_CHANNELS.session.inputSuggestions,
   IPC_CHANNELS.session.sessionCreate,
+  IPC_CHANNELS.session.sessionModelSelection,
   IPC_CHANNELS.session.sessionList,
   IPC_CHANNELS.session.sessionMessageList,
   IPC_CHANNELS.session.sessionMessageSend,

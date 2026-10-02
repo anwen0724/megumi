@@ -63,4 +63,3 @@ describe('Runtime model configuration', () => {
     expect(fs.readFileSync(files.globalSettingsPath, 'utf8')).not.toContain('contextWindowTokens');
   });
 });
-

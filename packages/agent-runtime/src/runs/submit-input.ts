@@ -27,7 +27,7 @@ export interface SubmitConversationInputRequest extends RawUserInput {
   readonly recommendationReference?: RecommendationReferenceContent;
   readonly sessionTitle?: string;
   readonly branchMarkerId?: string;
-  readonly modelSelection: {
+  readonly modelSelection?: {
     readonly providerId: string;
     readonly modelId: string;
   };
@@ -78,7 +78,7 @@ export type ConversationModelResolution = ModelPreparationResult;
 
 export interface ConversationSubmissionDependencies {
   readonly input: Pick<InputProcessor<CommandTerminalResult>, 'process'>;
-  readonly sessions: Pick<SessionCatalog, 'getSession' | 'createSession'>;
+  readonly sessions: Pick<SessionCatalog, 'getSession' | 'createSession' | 'updateModelSelection'>;
   readonly history: Pick<SessionHistory, 'getCommittedBranch'>;
   readonly branches: Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>;
   readonly resolveModel: (workspaceId: string, selection?: ModelSelection) => Promise<ConversationModelResolution>;
@@ -195,7 +195,7 @@ async function prepareConversationSubmission(
     'model.resolve',
     { requestId, workspaceId: request.workspaceId },
     classifyModelResolution,
-    () => dependencies.resolveModel(request.workspaceId, request.modelSelection),
+    () => dependencies.resolveModel(request.workspaceId, request.modelSelection ?? existingSession?.session.model_selection),
   );
   if (signal.aborted) return { result: failure(requestId, 'runtime_stopped', 'The runtime has stopped accepting input.', existingSession?.session) };
   if (model.status === 'failed') {
@@ -253,7 +253,7 @@ async function prepareConversationSubmission(
       'session.create',
       { requestId, workspaceId: request.workspaceId },
       classifySessionCreation,
-      () => createAcceptedSession(dependencies.sessions, request, acceptedText),
+      () => createAcceptedSession(dependencies.sessions, request, acceptedText, { providerId: model.model.provider, modelId: model.model.id }),
     );
     if (created.status !== 'created') {
       return { result: failure(requestId, 'session_creation_failed', 'Session could not be created.') };
@@ -261,6 +261,14 @@ async function prepareConversationSubmission(
     activeSession = created.session;
   }
 
+  if (request.modelSelection || !activeSession.model_selection) {
+    const saved = dependencies.sessions.updateModelSelection({
+      session_id: activeSession.session_id,
+      model_selection: { providerId: model.model.provider, modelId: model.model.id },
+    });
+    if (saved.status !== 'found') return { result: failure(requestId, 'session_update_failed', 'Session model selection could not be saved.', activeSession) };
+    activeSession = saved.session;
+  }
   const session = activeSession;
   const requestedBranchMarkerId = request.branchMarkerId;
   const branch = requestedBranchMarkerId
@@ -609,10 +617,12 @@ function createAcceptedSession(
   sessions: Pick<SessionCatalog, 'createSession'>,
   request: SubmitConversationInputRequest,
   acceptedText: string,
+  selection: ModelSelection,
 ): ReturnType<Pick<SessionCatalog, 'createSession'>['createSession']> {
   return sessions.createSession({
     workspace_id: request.workspaceId,
     initial_user_text: acceptedText,
+    model_selection: selection,
     ...(request.sessionTitle ? { title: request.sessionTitle } : {}),
   });
 }

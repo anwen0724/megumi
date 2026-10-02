@@ -264,3 +264,6 @@ export {
 export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './approval-contracts';
 
 export { ObservabilityTraceMeasurementsSchema } from './observability/observability-contracts';
+
+export { SessionModelSelectionPayloadSchema, SessionModelSelectionResultSchema } from './session-contracts';
+export type { SessionModelSelectionPayload, SessionModelSelectionResult } from './session-contracts';

@@ -22,6 +22,7 @@ export const workspaces = sqliteTable('workspaces', {
 ]);
 
 export const sessions = sqliteTable('sessions', {
+  modelSelection: text('model_selection'),
   sessionId: text('session_id').primaryKey(),
   workspaceId: text('workspace_id').notNull().references(() => workspaces.workspaceId),
   title: text('title').notNull(),

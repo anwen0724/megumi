@@ -10,6 +10,8 @@ import type {
   CancelUserInputResult,
   CreateBranchDraftResult,
   CreateSessionResult,
+  SessionModelSelectionPayload,
+  SessionModelSelectionResult,
   ReadSessionResult,
   ReadCommittedRunResult,
   GetInputSuggestionsResult,
@@ -330,6 +332,7 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.skill.refresh, request),
   },
   session: {
+    updateModelSelection: (request: BusinessRequest<SessionModelSelectionPayload, typeof IPC_CHANNELS.session.sessionModelSelection>): Promise<RuntimeIpcResult<SessionModelSelectionResult, typeof IPC_CHANNELS.session.sessionModelSelection>> => invokeRuntimeIpc(IPC_CHANNELS.session.sessionModelSelection, request),
     create: (
       request: BusinessRequest<SessionCreatePayload, typeof IPC_CHANNELS.session.sessionCreate>,
     ): Promise<RuntimeIpcResult<CreateSessionResult, typeof IPC_CHANNELS.session.sessionCreate>> =>

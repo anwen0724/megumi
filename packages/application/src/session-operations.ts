@@ -25,6 +25,7 @@ export type SessionOperations = SessionHost;
 
 /** Creates the concrete Product operations exposed through SessionHost. */
 export function createSessionOperations(options: {
+  settingsForWorkspace: (workspaceId?: string) => Pick<import('./settings/settings-store').Settings, 'readSettings'>;
   reader: SessionReader;
   recommendations: Pick<import('./discovery/discovery').Discovery, 'getRecommendationReference'>;
   runtime: Pick<AgentRuntime, 'cancelRun' | 'submitInput'>;
@@ -49,11 +50,22 @@ export function createSessionOperations(options: {
   localFileAvailability?: LocalFileAvailability;
 }): SessionOperations {
   return {
+    async updateModelSelection(request) {
+      const result = options.sessions.updateModelSelection({ session_id: request.sessionId, model_selection: request.modelSelection });
+      if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
+      return result.status === 'not_found' ? result : { status: 'updated', session: toSessionDto(result.session) };
+    },
     sendUserInput: (request) => submitUserInput(options.runtime, request, options.recommendations),
     readSession: (request) => options.reader.readSession(request),
     readCommittedRun: (request) => options.reader.readCommittedRun(request),
     async createSession(request) {
-      const result = options.sessions.createSession({ workspace_id: request.projectId, ...(request.title ? { title: request.title } : {}) });
+      const read = options.settingsForWorkspace(request.projectId).readSettings();
+      if (read.status === 'rejected') return { status: 'failed', failure: read.error };
+      const result = options.sessions.createSession({
+        workspace_id: request.projectId,
+        title: request.title,
+        model_selection: request.modelSelection ?? read.settings.config.models.defaultModel,
+      });
       return result.status === 'created'
         ? { status: 'created', session: toSessionDto(result.session) }
         : { status: 'failed', failure: toFailure(result.failure) };
