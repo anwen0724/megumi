@@ -1,9 +1,11 @@
 /* Owns settings.json file IO and atomic local file replacement. */
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import path from 'node:path';
-import { ConfigurationFileSchema, ConfigurationSchema, GlobalOnlySettingsFields } from './settings-schema';
-import type { ReadSettingsResult, SettingsSnapshot, SettingsScope } from './settings-contracts';
-import { readJsonFile } from './json-file';
+import { ConfigurationFileSchema, ConfigurationPatchSchema, ConfigurationSchema, GlobalOnlySettingsFields } from './settings-schema';
+import type { ReadSettingsResult, SettingsSnapshot, SettingsScope, UpdateSettingsRequest, UpdateSettingsResult } from './settings-contracts';
+import { readJsonFile, writeJsonFile } from './json-file';
 import { publicRawFromFile, resolvePublicSettings } from './settings-file-model';
 import { settingsLoadIssues, type SettingsLoadIssue } from './settings-failure-factory';
 import {
@@ -123,54 +125,96 @@ export function createSettings(options: CreateSettingsOptions) {
   return {
     /** Reads and validates the latest complete configuration; never writes files. */
     readSettings(): ReadSettingsResult {
-      const global = readJsonFile(options.globalSettingsPath);
-      const project = options.projectSettingsPath
-        ? readJsonFile(options.projectSettingsPath)
-        : { status: 'ok' as const, document: {} };
-      if (global.status === 'invalid' || project.status === 'invalid') {
-        return invalidConfiguration([{ path: [], message: 'Settings must contain a JSON object.' }],
-          global.status === 'invalid' ? 'global' : 'project');
+      const documents = readConfigurationFiles(options);
+      if (documents.status === 'rejected') return documents;
+      return resolveConfiguration(options, documents.global, documents.project);
+    },
+
+    /** Saves explicit edits to the bound file without materializing defaults. */
+    updateSettings(request: UpdateSettingsRequest): UpdateSettingsResult {
+      const patch = ConfigurationPatchSchema.safeParse(request.patch);
+      if (!patch.success) return invalidConfiguration(patch.error.issues);
+      const documents = readConfigurationFiles(options);
+      if (documents.status === 'rejected') return documents;
+      const current = resolveConfiguration(options, documents.global, documents.project);
+      if (current.status === 'rejected') return current;
+      const conflict = configurationConflict(request.expectedRevision, current.settings.revision, patch.data);
+      if (conflict) return conflict;
+      const target = options.projectSettingsPath ? documents.project : documents.global;
+      const next = applyConfigurationPatch(target, patch.data);
+      const result = options.projectSettingsPath
+        ? resolveConfiguration(options, documents.global, next)
+        : resolveConfiguration(options, next, {});
+      if (result.status === 'rejected') return result;
+      if (JSON.stringify(target) === JSON.stringify(next)) {
+        return { status: 'unchanged', settings: result.settings };
       }
-      const scopeIssues = Object.entries(GlobalOnlySettingsFields).flatMap(([group, fields]) => {
-        const values = project.document[group];
-        return isConfigurationObject(values)
-          ? fields.filter((field) => Object.hasOwn(values, field)).map((field) => ({
-            scope: 'project' as const,
-            path: [group, field],
-            message: 'This setting can only be saved globally.',
-          }))
-          : [];
-      });
-      if (scopeIssues.length > 0) {
-        return { status: 'rejected', error: {
-          code: 'SETTINGS_SCOPE_INVALID',
-          message: 'Project settings contain global-only fields.',
-          issues: scopeIssues,
-        } };
-      }
-      const globalValues = ConfigurationFileSchema.safeParse(global.document);
-      const projectValues = ConfigurationFileSchema.safeParse(project.document);
-      if (!globalValues.success) return invalidConfiguration(globalValues.error.issues, 'global');
-      if (!projectValues.success) return invalidConfiguration(projectValues.error.issues, 'project');
-      const combined = ConfigurationSchema.safeParse(mergeConfiguration(globalValues.data, projectValues.data));
-      if (!combined.success) {
-        return invalidConfiguration(combined.error.issues);
-      }
-      return {
-        status: 'ok',
-        settings: {
-          config: combined.data,
-          sources: configurationSources(combined.data, globalValues.data, projectValues.data),
-          revision: '',
-          diagnostics: [
-            ...unknownConfigurationFields(global.document, globalValues.data, 'global'),
-            ...unknownConfigurationFields(project.document, projectValues.data, 'project'),
-          ],
-        },
-      };
+      writeJsonFile(options.projectSettingsPath ?? options.globalSettingsPath, next);
+      return { status: 'updated', settings: result.settings };
     },
   };
 }
+
+/** Reads both documents once so validation and saving use the same input. */
+function readConfigurationFiles(options: CreateSettingsOptions) {
+  const global = readJsonFile(options.globalSettingsPath);
+  const project = options.projectSettingsPath
+    ? readJsonFile(options.projectSettingsPath)
+    : { status: 'ok' as const, document: {} };
+  if (global.status === 'invalid' || project.status === 'invalid') {
+    return invalidConfiguration(
+      [{ path: [], message: 'Settings must contain a JSON object.' }],
+      global.status === 'invalid' ? 'global' : 'project',
+    );
+  }
+  return { status: 'ok' as const, global: global.document, project: project.document };
+}
+
+/** Validates explicit fields before resolving the complete configuration. */
+function resolveConfiguration(
+  options: CreateSettingsOptions,
+  global: Record<string, unknown>,
+  project: Record<string, unknown>,
+): ReadSettingsResult {
+  const scopeIssues = Object.entries(GlobalOnlySettingsFields).flatMap(([group, fields]) => {
+    const values = project[group];
+    return isConfigurationObject(values)
+      ? fields.filter((field) => Object.hasOwn(values, field)).map((field) => ({
+        scope: 'project' as const,
+        path: [group, field],
+        message: 'This setting can only be saved globally.',
+      }))
+      : [];
+  });
+  if (scopeIssues.length > 0) {
+    return { status: 'rejected', error: {
+      code: 'SETTINGS_SCOPE_INVALID',
+      message: 'Project settings contain global-only fields.',
+      issues: scopeIssues,
+    } };
+  }
+  const globalValues = ConfigurationFileSchema.safeParse(global);
+  const projectValues = ConfigurationFileSchema.safeParse(project);
+  if (!globalValues.success) return invalidConfiguration(globalValues.error.issues, 'global');
+  if (!projectValues.success) return invalidConfiguration(projectValues.error.issues, 'project');
+  const combined = ConfigurationSchema.safeParse(mergeConfiguration(globalValues.data, projectValues.data));
+  if (!combined.success) {
+    return invalidConfiguration(combined.error.issues);
+  }
+  return {
+    status: 'ok',
+    settings: {
+      config: combined.data,
+      sources: configurationSources(combined.data, globalValues.data, projectValues.data),
+      revision: configurationRevision(options, combined.data, globalValues.data, projectValues.data),
+      diagnostics: [
+        ...unknownConfigurationFields(global, globalValues.data, 'global'),
+        ...unknownConfigurationFields(project, projectValues.data, 'project'),
+      ],
+    },
+  };
+}
+
 
 /** Converts validation issues without exposing raw files or secret-bearing unknown fields. */
 function invalidConfiguration(
@@ -236,6 +280,32 @@ function isModelReferencePath(fieldPath: readonly string[]): boolean {
   return fieldPath.length === 2 && fieldPath[0] === 'models' && fieldPath[1] === 'defaultModel';
 }
 
+/** Applies only edits: null clears stored fields and empty objects carry no edits. */
+function applyConfigurationPatch(
+  document: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  fieldPath: readonly string[] = [],
+): Record<string, unknown> {
+  const next = { ...document };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) {
+      delete next[key];
+      continue;
+    }
+    const nextPath = [...fieldPath, key];
+    if (isConfigurationObject(value) && !isModelReferencePath(nextPath)) {
+      const previous = isConfigurationObject(next[key]) ? next[key] : {};
+      const changed = applyConfigurationPatch(previous, value, nextPath);
+      if (Object.keys(changed).length === 0) delete next[key];
+      else next[key] = changed;
+    } else {
+      Object.defineProperty(next, key, { value, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  return next;
+}
+
 function isConfigurationObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -257,4 +327,90 @@ function unknownConfigurationFields(
       ? unknownConfigurationFields(value, knownValue, scope, nextPath)
       : [];
   });
+}
+
+const RevisionSchema = z.object({
+  binding: z.string(),
+  fields: z.record(z.string()),
+});
+
+/** Encodes fingerprints of known fields only; no file contents or secrets are included. */
+function configurationRevision(
+  options: CreateSettingsOptions,
+  config: Record<string, unknown>,
+  global: Record<string, unknown>,
+  project: Record<string, unknown>,
+): string {
+  const fields: Record<string, string> = {};
+  function visit(value: Record<string, unknown>, fieldPath: readonly string[] = []): void {
+    for (const [name, field] of Object.entries(value)) {
+      const nextPath = [...fieldPath, name];
+      fields[JSON.stringify(nextPath)] = fingerprint([
+        field, configurationValue(global, nextPath), configurationValue(project, nextPath),
+      ]);
+      if (isConfigurationObject(field) && !isModelReferencePath(nextPath)) visit(field, nextPath);
+    }
+  }
+  visit(config);
+  return Buffer.from(JSON.stringify({
+    binding: fingerprint([options.globalSettingsPath, options.projectSettingsPath]),
+    fields,
+  })).toString('base64url');
+}
+
+/** Detects conflicts at edited fields, not at file or configuration-group boundaries. */
+function configurationConflict(
+  expected: string,
+  actual: string,
+  patch: Record<string, unknown>,
+): Extract<ReadSettingsResult, { status: 'rejected' }> | undefined {
+  let previous: z.infer<typeof RevisionSchema>;
+  try {
+    previous = RevisionSchema.parse(JSON.parse(Buffer.from(expected, 'base64url').toString('utf8')));
+  } catch {
+    return { status: 'rejected', error: { code: 'SETTINGS_CONFLICT', message: 'Read settings before saving changes.' } };
+  }
+  const current = RevisionSchema.parse(JSON.parse(Buffer.from(actual, 'base64url').toString('utf8')));
+  const paths = editedConfigurationPaths(patch);
+  const conflicts = paths.filter((fieldPath) => {
+    const key = JSON.stringify(fieldPath);
+    return previous.fields[key] !== current.fields[key];
+  });
+  if (previous.binding !== current.binding || conflicts.length > 0) {
+    return {
+      status: 'rejected',
+      error: {
+        code: 'SETTINGS_CONFLICT',
+        message: 'Edited configuration changed since it was read.',
+        issues: conflicts.map((fieldPath) => ({ path: fieldPath, message: 'Read the current value before updating it.' })),
+      },
+    };
+  }
+  return undefined;
+}
+
+function editedConfigurationPaths(patch: Record<string, unknown>, fieldPath: readonly string[] = []): string[][] {
+  return Object.entries(patch).flatMap(([name, value]) => {
+    const nextPath = [...fieldPath, name];
+    if (value === undefined) return [];
+    return isConfigurationObject(value) && !isModelReferencePath(nextPath)
+      ? editedConfigurationPaths(value, nextPath)
+      : [nextPath];
+  });
+}
+
+function configurationValue(document: Record<string, unknown>, fieldPath: readonly string[]): unknown {
+  let current: unknown = document;
+  for (const key of fieldPath) {
+    if (!isConfigurationObject(current)) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
+function fingerprint(value: unknown): string {
+  const text = JSON.stringify(value, (_key, item: unknown) => isConfigurationObject(item)
+    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left.localeCompare(right)))
+    : item);
+  return createHash('sha256').update(text).digest('base64url');
 }

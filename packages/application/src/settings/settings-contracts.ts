@@ -36,6 +36,32 @@ export type ReadSettingsResult =
   | { status: 'ok'; settings: SettingsSnapshot }
   | { status: 'rejected'; error: SettingsError };
 
+export interface SettingsModelReference {
+  providerId: string;
+  modelId: string;
+}
+
+export type SettingsFieldPatch<T> = T extends readonly unknown[]
+  ? T | null
+  : T extends SettingsModelReference
+    ? T | null
+    : T extends object
+      ? { [K in keyof T]?: SettingsFieldPatch<NonNullable<T[K]>> } | null
+      : T | null;
+
+export type SettingsPatch = {
+  [K in keyof SettingsConfiguration]?: SettingsFieldPatch<SettingsConfiguration[K]>;
+};
+
+export interface UpdateSettingsRequest {
+  patch: SettingsPatch;
+  expectedRevision: string;
+}
+
+export type UpdateSettingsResult =
+  | { status: 'updated' | 'unchanged'; settings: SettingsSnapshot }
+  | { status: 'rejected'; error: SettingsError };
+
 
 
 export interface SettingsHost {

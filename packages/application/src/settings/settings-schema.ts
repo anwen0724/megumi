@@ -35,8 +35,12 @@ export const ConfigurationFileSchema = z.object(Object.fromEntries(
   Object.entries(ConfigurationSchema.shape).map(([name, schema]) => [name, explicitField(schema)]),
 ));
 
+export const ConfigurationPatchSchema = z.object(Object.fromEntries(
+  Object.entries(ConfigurationSchema.shape).map(([name, schema]) => [name, explicitField(schema, true)]),
+)).strict();
+
 /** File fields stay optional and do not acquire defaults before files are merged. */
-function explicitField(input: z.ZodTypeAny): z.ZodTypeAny {
+function explicitField(input: z.ZodTypeAny, patch = false): z.ZodTypeAny {
   let schema = input;
   while (true) {
     if (schema instanceof z.ZodDefault) schema = schema.removeDefault();
@@ -44,17 +48,16 @@ function explicitField(input: z.ZodTypeAny): z.ZodTypeAny {
     else if (schema instanceof z.ZodEffects && schema.innerType() instanceof z.ZodObject) schema = schema.innerType();
     else break;
   }
-  if (schema === ModelReferenceSchema) return schema.optional();
-  if (schema instanceof z.ZodObject) {
+  if (schema instanceof z.ZodObject && schema !== ModelReferenceSchema) {
     const shape: Record<string, z.ZodTypeAny> = schema.shape;
-    return z.object(Object.fromEntries(
-      Object.entries(shape).map(([name, field]) => [name, explicitField(field)]),
-    )).optional();
+    const object = z.object(Object.fromEntries(
+      Object.entries(shape).map(([name, field]) => [name, explicitField(field, patch)]),
+    ));
+    schema = patch ? object.strict() : object;
+  } else if (schema instanceof z.ZodRecord) {
+    schema = z.record(schema.keySchema, explicitField(schema.valueSchema, patch));
   }
-  if (schema instanceof z.ZodRecord) {
-    return z.record(schema.keySchema, explicitField(schema.valueSchema)).optional();
-  }
-  return schema.optional();
+  return patch ? schema.nullable().optional() : schema.optional();
 }
 import type { SettingsFailureResult } from './settings-failure-factory';
 
