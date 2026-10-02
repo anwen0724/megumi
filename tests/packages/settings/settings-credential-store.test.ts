@@ -1,94 +1,68 @@
+/* Verifies separate credential persistence through the public Settings operations. */
 // @vitest-environment node
-/* Verifies that Settings adapts persisted Provider secrets to AI without exposing them to Product. */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createSettings } from '@megumi/application/settings/settings-store';
 
-import {
-  createSettings,
-  createSettingsCredentialStore,
-  type SettingsStore,
-} from '@megumi/application/settings/index';
-import { describe, expect, it } from 'vitest';
-
-describe('Settings CredentialStore Adapter', () => {
-  it('owns Provider credential reads, writes, metadata listing, and deletion', async () => {
-    const store = memoryStore();
-    const credentials = createSettingsCredentialStore(createSettings({ store }));
-
-    await credentials.modify('deepseek', async (current) => {
-      expect(current).toBeUndefined();
-      return { type: 'api_key', key: 'first-secret' };
-    });
-
-    await expect(credentials.read('deepseek')).resolves.toEqual({
-      type: 'api_key',
-      key: 'first-secret',
-    });
-    await expect(credentials.list()).resolves.toContainEqual({
-      providerId: 'deepseek',
-      type: 'api_key',
-    });
-
-    await credentials.modify('deepseek', async (current) => {
-      expect(current).toEqual({ type: 'api_key', key: 'first-secret' });
-      return { type: 'api_key', key: 'second-secret' };
-    });
-    await expect(credentials.read('deepseek')).resolves.toEqual({
-      type: 'api_key',
-      key: 'second-secret',
-    });
-
-    await credentials.delete('deepseek');
-    await expect(credentials.read('deepseek')).resolves.toBeUndefined();
-  });
-
-  it('serializes concurrent mutations for the same Provider', async () => {
-    const credentials = createSettingsCredentialStore(createSettings({ store: memoryStore() }));
-    let releaseFirst!: () => void;
-    let markFirstStarted!: () => void;
-    const firstStarted = new Promise<void>((resolve) => { markFirstStarted = resolve; });
-    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
-    const calls: string[] = [];
-
-    const first = credentials.modify('deepseek', async (current) => {
-      calls.push('first');
-      expect(current).toBeUndefined();
-      markFirstStarted();
-      await firstGate;
-      return { type: 'api_key', key: 'first-secret' };
-    });
-    await firstStarted;
-    const second = credentials.modify('deepseek', async (current) => {
-      calls.push('second');
-      expect(current).toEqual({ type: 'api_key', key: 'first-secret' });
-      return { type: 'api_key', key: 'second-secret' };
-    });
-
-    await Promise.resolve();
-    expect(calls).toEqual(['first']);
-    releaseFirst();
-    await Promise.all([first, second]);
-    expect(calls).toEqual(['first', 'second']);
-    await expect(credentials.read('deepseek')).resolves.toEqual({
-      type: 'api_key',
-      key: 'second-secret',
-    });
-  });
-
-  it('rejects Credential variants that Settings cannot persist', async () => {
-    const credentials = createSettingsCredentialStore(createSettings({ store: memoryStore() }));
-
-    await expect(credentials.modify('deepseek', async () => ({
-      type: 'api_key',
-      env: { ACCOUNT_ID: 'account' },
-    }))).rejects.toThrow('Settings only supports Provider API-key credentials with a key.');
-  });
+const directories: string[] = [];
+afterEach(() => {
+  for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
 });
 
-function memoryStore(): SettingsStore {
-  let value: Readonly<Record<string, unknown>> = {};
-  return {
-    read: () => value,
-    write: (next) => {
-      value = next;
-    },
-  };
+function fixture(environment: Record<string, string> = {}) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-credentials-'));
+  directories.push(directory);
+  const credentialsPath = path.join(directory, 'credentials.json');
+  const settingsPath = path.join(directory, 'settings.json');
+  const settings = createSettings({
+    globalSettingsPath: settingsPath,
+    credentialsPath,
+    readEnvironment: (name) => environment[name],
+  });
+  return { directory, credentialsPath, settingsPath, settings };
 }
+
+describe('Credentials', () => {
+  it('rejects damaged credentials instead of treating them as missing or overwriting them', () => {
+    const files = fixture({ DEFAULT_KEY: 'available' });
+    const target = { kind: 'provider', providerId: 'deepseek' } as const;
+    const damaged = '{"providers":{"deepseek":42}}';
+    fs.writeFileSync(files.credentialsPath, damaged);
+    expect(files.settings.readCredential({ target, defaultEnvNames: ['DEFAULT_KEY'] })).toMatchObject({ status: 'rejected', error: { code: 'CREDENTIAL_FILE_INVALID' } });
+    expect(files.settings.updateCredential({ target, value: 'replacement' })).toMatchObject({ status: 'rejected', error: { code: 'CREDENTIAL_FILE_INVALID' } });
+    expect(fs.readFileSync(files.credentialsPath, 'utf8')).toBe(damaged);
+    fs.writeFileSync(files.credentialsPath, '{}');
+    expect(files.settings.updateCredential({ target, value: ' ' })).toMatchObject({ status: 'rejected', error: { code: 'CREDENTIAL_INVALID' } });
+    expect(files.settings.readCredential({ target, defaultEnvNames: ['DEFAULT_KEY'] })).toMatchObject({ status: 'found', value: 'available' });
+  });
+
+  it('uses stored values before explicit environment names, and defaults only without an explicit name', () => {
+    const files = fixture({ EXPLICIT_KEY: 'explicit', DEFAULT_KEY: 'default' });
+    const target = { kind: 'provider', providerId: 'deepseek' } as const;
+    expect(files.settings.readCredential({ target, defaultEnvNames: ['ABSENT', 'DEFAULT_KEY'] })).toEqual({ status: 'found', value: 'default', source: 'environment' });
+    expect(files.settings.readCredential({ target, apiKeyEnv: 'EXPLICIT_KEY', defaultEnvNames: ['DEFAULT_KEY'] })).toMatchObject({ status: 'found', value: 'explicit' });
+    expect(files.settings.readCredential({ target, apiKeyEnv: 'ABSENT', defaultEnvNames: ['DEFAULT_KEY'] })).toEqual({ status: 'missing' });
+    files.settings.updateCredential({ target, value: 'stored' });
+    expect(files.settings.readCredential({ target, apiKeyEnv: 'EXPLICIT_KEY' })).toMatchObject({ status: 'found', value: 'stored', source: 'stored' });
+  });
+
+  it('stores and clears separate targets without creating or disclosing settings secrets', () => {
+    const files = fixture();
+    const provider = { kind: 'provider', providerId: 'deepseek' } as const;
+    expect(files.settings.updateCredential({ target: provider, value: null }).status).toBe('unchanged');
+    expect(fs.existsSync(files.credentialsPath)).toBe(false);
+    expect(files.settings.updateCredential({ target: provider, value: ' first-secret ' }).status).toBe('updated');
+    expect(files.settings.updateCredential({ target: { kind: 'webSearch' }, value: 'search-secret' }).status).toBe('updated');
+    expect(files.settings.readCredential({ target: provider })).toEqual({ status: 'found', value: 'first-secret', source: 'stored' });
+    expect(files.settings.updateCredential({ target: provider, value: 'first-secret' }).status).toBe('unchanged');
+    expect(files.settings.updateCredential({ target: provider, value: 'second-secret' }).status).toBe('updated');
+    expect(files.settings.readCredential({ target: provider })).toMatchObject({ status: 'found', value: 'second-secret' });
+    expect(files.settings.updateCredential({ target: provider, value: null }).status).toBe('updated');
+    expect(files.settings.readCredential({ target: provider })).toEqual({ status: 'missing' });
+    expect(files.settings.readCredential({ target: { kind: 'webSearch' } })).toMatchObject({ status: 'found', value: 'search-secret' });
+    expect(JSON.stringify(files.settings.readSettings())).not.toContain('secret');
+    expect(fs.existsSync(files.settingsPath)).toBe(false);
+  });
+});

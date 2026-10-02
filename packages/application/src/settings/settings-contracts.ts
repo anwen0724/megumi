@@ -14,6 +14,37 @@ import {
 } from '@megumi/agent-runtime/permissions/index';
 import { z } from 'zod';
 import type { SettingsConfiguration } from './settings-schema';
+import { EnvironmentVariableSchema } from './definitions/models';
+
+export const CredentialTargetSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('provider'), providerId: z.string().trim().min(1) }).strict(),
+  z.object({ kind: z.literal('webSearch') }).strict(),
+  z.object({ kind: z.literal('voiceTts') }).strict(),
+  z.object({ kind: z.literal('discoverySource'), sourceId: z.enum(['twitter', 'zhihu']) }).strict(),
+]);
+export type CredentialTarget = z.infer<typeof CredentialTargetSchema>;
+export const ReadCredentialRequestSchema = z.object({
+  target: CredentialTargetSchema,
+  apiKeyEnv: EnvironmentVariableSchema.optional(),
+  defaultEnvNames: z.array(EnvironmentVariableSchema).readonly().optional(),
+}).strict();
+export type ReadCredentialRequest = z.infer<typeof ReadCredentialRequestSchema>;
+export const UpdateCredentialRequestSchema = z.object({
+  target: CredentialTargetSchema,
+  value: z.string().trim().min(1).nullable(),
+}).strict();
+export type UpdateCredentialRequest = z.infer<typeof UpdateCredentialRequestSchema>;
+export interface CredentialError {
+  code: 'CREDENTIAL_INVALID' | 'CREDENTIAL_FILE_INVALID';
+  message: string;
+}
+export type ReadCredentialResult =
+  | { status: 'found'; value: string; source: 'stored' | 'environment' }
+  | { status: 'missing' }
+  | { status: 'rejected'; error: CredentialError };
+export type UpdateCredentialResult =
+  | { status: 'updated' | 'unchanged' }
+  | { status: 'rejected'; error: CredentialError };
 
 export type SettingsScope = 'global' | 'project';
 export interface SettingsError {

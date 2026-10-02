@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ConfigurationFileSchema, ConfigurationPatchSchema, ConfigurationSchema, GlobalOnlySettingsFields } from './settings-schema';
 import type { ReadSettingsResult, SettingsSnapshot, SettingsScope, UpdateSettingsRequest, UpdateSettingsResult } from './settings-contracts';
 import { readJsonFile, writeJsonFile } from './json-file';
+import { createCredentialStore } from './credential-store';
 import { publicRawFromFile, resolvePublicSettings } from './settings-file-model';
 import { settingsLoadIssues, type SettingsLoadIssue } from './settings-failure-factory';
 import {
@@ -123,6 +124,7 @@ export interface CreateSettingsOptions {
 /** Creates file-bound configuration access without creating any files. */
 export function createSettings(options: CreateSettingsOptions) {
   return {
+    ...createCredentialStore(options.credentialsPath, options.readEnvironment),
     /** Reads and validates the latest complete configuration; never writes files. */
     readSettings(): ReadSettingsResult {
       const documents = readConfigurationFiles(options);
