@@ -22,28 +22,34 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
   const surfacePromise = isCharacterWindow ? import('./CharacterApp') : import('./App');
 
   try {
-    const result = await window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    );
+    const result = await window.megumi.settings.readSettings();
 
     if (!result.ok) {
-      await applyBootstrapFailure();
-    } else if (result.data.status === 'failed') {
-      await applyBootstrapFailure(result.data.issues);
+      await applyBootstrapFailure(result.data.issues?.map((issue) => ({ path: issue.path.join('.'), message: issue.message })));
     } else {
-      const { language, theme, setup, permissions, modelSelection } = result.data.settings;
+      const { general: { language, theme, setupCompleted }, permissions, models } = result.data.config;
       await initializeLocaleWithFallback(language);
       useThemeStore.getState().applyBootstrapTheme(theme);
       usePermissionModeStore.getState().applyBootstrapMode(permissions.mode);
-      useModelSelectionStore.getState().applyBootstrapSelection(modelSelection);
+      useModelSelectionStore.getState().applyBootstrapSelection(models.defaultModel);
       useSetupWizardStore.getState().applyBootstrapSettings({
         language,
-        setupCompleted: setup.completed,
+        setupCompleted,
       });
     }
   } catch {
     await applyBootstrapFailure();
   }
+
+  window.megumi.settings.onChanged(() => {
+    void window.megumi.settings.readSettings().then(async (result) => {
+      if (!result.ok) return;
+      const { general, permissions } = result.data.config;
+      await initializeLocaleWithFallback(general.language);
+      useThemeStore.getState().applyBootstrapTheme(general.theme);
+      usePermissionModeStore.getState().applyBootstrapMode(permissions.mode);
+    });
+  });
 
   // Character controls must not bypass a failed configuration bootstrap either.
   const Surface = useSetupWizardStore.getState().status === 'load-error'

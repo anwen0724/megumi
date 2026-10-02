@@ -1,212 +1,55 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+/* Exercises setup persistence and retry through real Settings files. */
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createSettings, type Settings } from '@megumi/application/settings/settings-store';
+import { readModelCatalog } from '@megumi/agent-runtime/runs/model-resolution';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
-import { useProviderStore } from '@megumi/desktop/renderer/entities/provider';
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 
-const settingsUpdate = vi.fn();
-const settingsCompleteSetup = vi.fn();
-const providerUpdate = vi.fn();
-const providerSetApiKey = vi.fn();
-const providerList = vi.fn();
-
-function installMegumiMock() {
-  Object.defineProperty(window, 'megumi', {
-    configurable: true,
-    value: {
-      settings: {
-        update: settingsUpdate,
-        completeSetup: settingsCompleteSetup,
-      },
-      provider: {
-        update: providerUpdate,
-        setApiKey: providerSetApiKey,
-        list: providerList,
-      },
+let root: string;
+let settings: Settings;
+beforeEach(() => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-settings-'));
+  settings = createSettings({ globalSettingsPath: path.join(root, 'settings.json'), credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined });
+  Object.defineProperty(window, 'megumi', { configurable: true, value: {
+    settings: {
+      readSettings: async () => { const result = settings.readSettings(); return result.status === 'ok' ? { ok: true, data: result.settings } : { ok: false, data: result.error }; },
+      updateSettings: async (request: Parameters<Settings['updateSettings']>[0]) => { const result = settings.updateSettings(request); return result.status === 'rejected' ? { ok: false, data: result.error } : { ok: true, data: result }; },
+      updateCredential: async (request: Parameters<Settings['updateCredential']>[0]) => { const result = settings.updateCredential(request); return result.status === 'rejected' ? { ok: false, data: result.error } : { ok: true, data: result }; },
     },
+    models: { getCatalog: async () => ({ ok: true, data: readModelCatalog(settings) }) },
+  } });
+  useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
+  useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
+});
+afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+describe('Setup persistence', () => {
+  it('saves completion after configuration and credentials and retains it on a new read', async () => {
+    await useSetupWizardStore.getState().completeSetup({ language: 'zh-CN', theme: 'midnight-blue', providerId: 'deepseek', modelIds: ['deepseek-flash'], apiKey: 'test-key' });
+    expect(useSetupWizardStore.getState()).toMatchObject({ status: 'ready', setupCompleted: true });
+    const reopened = createSettings({ globalSettingsPath: path.join(root, 'settings.json'), credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined });
+    expect(reopened.readSettings()).toMatchObject({ status: 'ok', settings: { config: { general: { setupCompleted: true }, models: { defaultModel: { providerId: 'deepseek', modelId: 'deepseek-flash' } } } } });
+    expect(reopened.readCredential({ target: { kind: 'provider', providerId: 'deepseek' } })).toMatchObject({ status: 'found', value: 'test-key' });
+    expect(fs.readFileSync(path.join(root, 'settings.json'), 'utf8')).not.toContain('test-key');
+    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('test-key');
   });
-}
-
-describe('setup wizard store', () => {
-  beforeEach(() => {
-    installMegumiMock();
-    settingsUpdate.mockReset();
-    settingsCompleteSetup.mockReset();
-    providerUpdate.mockReset();
-    providerSetApiKey.mockReset();
-    providerList.mockReset();
-    useSetupWizardStore.setState(useSetupWizardStore.getInitialState(), true);
-    useProviderStore.setState({ providers: [], catalog: [], status: 'idle', error: null });
-    useModelSelectionStore.setState({ selection: undefined });
-  });
-
-  it('accepts the bootstrap language and setup projection synchronously', () => {
-    useSetupWizardStore.getState().applyBootstrapSettings({ language: 'zh-CN', setupCompleted: false });
-
-    expect(useSetupWizardStore.getState()).toMatchObject({
-      status: 'ready',
-      language: 'zh-CN',
-      setupCompleted: false,
-      error: null,
-    });
-  });
-
-  it('completes setup with one settings update and clears the transient API key from state', async () => {
-    settingsCompleteSetup.mockResolvedValue({
-      ok: true,
-      data: {
-        settings: {
-          language: 'en-US',
-          theme: 'cangming-blue',
-          setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
-          memory: { enabled: false },
-          providers: {},
-          permissions: {},
-        },
-      },
-    });
-    await useSetupWizardStore.getState().completeSetup({
-      language: 'en-US',
-      theme: 'cangming-blue',
-      providerId: 'openai',
-      baseUrl: 'https://api.openai.com/v1',
-      modelIds: ['gpt-5.5'],
-      apiKey: 'TEST_API_KEY_VALUE',
-    });
-
-    expect(providerUpdate).not.toHaveBeenCalled();
-    expect(providerSetApiKey).not.toHaveBeenCalled();
-    expect(settingsUpdate).not.toHaveBeenCalled();
-    expect(settingsCompleteSetup).toHaveBeenCalledWith(expect.objectContaining({
-      payload: {
-        language: 'en-US',
-        theme: 'cangming-blue',
-        provider: {
-          providerId: 'openai',
-            enabled: true,
-            baseUrl: 'https://api.openai.com/v1',
-          modelIds: ['gpt-5.5'],
-            apiKey: 'TEST_API_KEY_VALUE',
-        },
-      },
-    }));
-    expect(settingsCompleteSetup).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('TEST_API_KEY_VALUE');
+  it('retains saved configuration on credential failure and finishes after repair', async () => {
+    fs.writeFileSync(path.join(root, 'credentials.json'), '{');
+    const input = { language: 'en-US' as const, theme: 'rose-moon' as const, providerId: 'deepseek', modelIds: ['deepseek-flash'], apiKey: 'test-key' };
+    await useSetupWizardStore.getState().completeSetup(input);
+    expect(useSetupWizardStore.getState().status).toBe('error');
+    expect(settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { general: { theme: 'rose-moon', setupCompleted: false } } } });
+    fs.rmSync(path.join(root, 'credentials.json'));
+    await useSetupWizardStore.getState().completeSetup(input);
     expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
   });
-
-  it('refreshes provider and model projections after setup completes', async () => {
-    providerList.mockResolvedValue({
-      ok: true,
-      data: {
-        status: 'ok',
-        providers: [{
-          providerId: 'deepseek',
-          displayName: 'DeepSeek',
-          enabled: true,
-          protocol: 'openai-completions',
-          modelIds: ['deepseek-v4-flash'],
-          hasApiKey: true,
-          credentialSource: 'settings',
-        }],
-        catalog: [],
-      },
-    });
-    settingsCompleteSetup.mockResolvedValue({
-      ok: true,
-      data: {
-        status: 'completed',
-        settings: {
-          language: 'zh-CN',
-          theme: 'midnight-blue',
-          setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
-          memory: { enabled: false },
-          modelSelection: { providerId: 'deepseek', modelId: 'deepseek-v4-flash' },
-          providers: {},
-          permissions: {},
-        },
-      },
-    });
-
-    await useSetupWizardStore.getState().completeSetup({
-      language: 'zh-CN',
-      theme: 'midnight-blue',
-      providerId: 'deepseek',
-      modelIds: ['deepseek-v4-flash'],
-      apiKey: 'TEST_API_KEY_VALUE',
-    });
-
-    expect(providerList).toHaveBeenCalledTimes(1);
-    expect(useProviderStore.getState().providers).toEqual([
-      expect.objectContaining({ providerId: 'deepseek' }),
-    ]);
-    expect(useModelSelectionStore.getState().selection).toEqual({
-      providerId: 'deepseek',
-      modelId: 'deepseek-v4-flash',
-    });
-  });
-
-  it('writes setup completion to settings when provider configuration is skipped', async () => {
-    settingsCompleteSetup.mockResolvedValue({
-      ok: true,
-      data: {
-        settings: {
-          language: 'zh-CN',
-          theme: 'verdant-cloud',
-          setup: { completed: true, completedAt: '2026-06-29T12:00:00.000Z' },
-          memory: { enabled: false },
-          providers: {},
-          permissions: {},
-        },
-      },
-    });
-
-    await useSetupWizardStore.getState().completeSetup({
-      language: 'zh-CN',
-      theme: 'verdant-cloud',
-      modelIds: [],
-      skipProvider: true,
-    });
-
-    expect(providerUpdate).not.toHaveBeenCalled();
-    expect(providerSetApiKey).not.toHaveBeenCalled();
-    expect(settingsUpdate).not.toHaveBeenCalled();
-    expect(settingsCompleteSetup).toHaveBeenCalledWith(expect.objectContaining({
-      payload: {
-        language: 'zh-CN',
-        theme: 'verdant-cloud',
-      },
-    }));
-    expect(settingsCompleteSetup).toHaveBeenCalledTimes(1);
-    expect(useSetupWizardStore.getState().setupCompleted).toBe(true);
-  });
-
-  it('does not leave the wizard when settings update does not confirm setup completion', async () => {
-    settingsCompleteSetup.mockResolvedValue({
-      ok: true,
-      data: {
-        settings: {
-          language: 'zh-CN',
-          theme: 'midnight-blue',
-          setup: { completed: false },
-          memory: { enabled: false },
-          providers: {},
-          permissions: {},
-        },
-      },
-    });
-
-    await useSetupWizardStore.getState().completeSetup({
-      language: 'zh-CN',
-      theme: 'midnight-blue',
-      modelIds: ['deepseek-v4-flash'],
-      skipProvider: true,
-    });
-
-    expect(useSetupWizardStore.getState()).toMatchObject({
-      status: 'error',
-      setupCompleted: false,
-      error: { code: 'setup_incomplete' },
-    });
+  it('allows setup to finish without selecting a provider', async () => {
+    await useSetupWizardStore.getState().completeSetup({ language: 'zh-CN', theme: 'midnight-blue', modelIds: [], skipProvider: true });
+    expect(settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { general: { setupCompleted: true }, models: { providers: {}, customModels: {} } } } });
+    expect(fs.existsSync(path.join(root, 'credentials.json'))).toBe(false);
   });
 });

@@ -58,7 +58,7 @@ export async function initializeMegumiHome(
 ): Promise<MegumiHomePaths> {
   const paths = buildMegumiHomePaths(resolveMegumiHomePath(options));
   await ensureMinimalDirectories(options.fileSystem, paths);
-  await writeJsonIfMissing(options.fileSystem, paths.settingsSchemaPath, createMegumiSettingsSchema());
+  await options.fileSystem.writeJson(paths.settingsSchemaPath, createMegumiSettingsSchema(), { spaces: 2 });
   await writeJsonIfMissing(options.fileSystem, paths.versionPath, createMegumiHomeVersion(options.clock.now()));
   await writeTextIfMissing(options.fileSystem, paths.readmePath, createMegumiHomeReadme());
   await installBuiltInSystemSkills(options.fileSystem, paths, options.resourceLocator);
@@ -71,7 +71,7 @@ export function initializeMegumiHomeSync(
 ): MegumiHomePaths {
   const paths = buildMegumiHomePaths(resolveMegumiHomePath(options));
   ensureMinimalDirectoriesSync(options.fileSystem, paths);
-  writeJsonIfMissingSync(options.fileSystem, paths.settingsSchemaPath, createMegumiSettingsSchema());
+  options.fileSystem.writeJsonSync(paths.settingsSchemaPath, createMegumiSettingsSchema(), { spaces: 2 });
   writeJsonIfMissingSync(options.fileSystem, paths.versionPath, createMegumiHomeVersion(options.clock.now()));
   writeTextIfMissingSync(options.fileSystem, paths.readmePath, createMegumiHomeReadme());
   installBuiltInSystemSkillsSync(options.fileSystem, paths, options.resourceLocator);
@@ -98,8 +98,9 @@ export function createMegumiHomeReadme(): string {
     '',
     'Safe to edit:',
     '',
-    '- `settings.json` for app preferences, provider configuration, model defaults, permissions, and intentional plaintext API keys.',
-    '- `language` and `setup` fields in `settings.json` store the first-run setup status and language preference.',
+    '- `settings.json` for explicit application preferences, providers, custom models, and permissions.',
+    '- `credentials.json` stores provider, search, speech, and discovery credentials separately.',
+    '- `general` in `settings.json` stores language, theme, and first-run completion.',
     '- `skills/` for user-installed skills.',
     '',
     'Managed by Megumi:',
