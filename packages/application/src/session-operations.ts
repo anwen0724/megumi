@@ -4,8 +4,19 @@
  */
 import { resolveRecommendationDiscussion } from './discovery/recommendations/recommendation-discussion';
 import type { AgentRuntime, SubmitInputResult } from '@megumi/agent-runtime/agent-runtime';
-import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from '@megumi/agent-runtime/runs/input/index';
-import type { Session, SessionAttachmentReader, SessionBranchDrafts, SessionCatalog, SessionHistory, SessionMessageWithAttachments } from '@megumi/agent-runtime/sessions/index';
+import {
+  DEFAULT_INPUT_POLICY,
+  DOCUMENT_INPUT_POLICY,
+  IMAGE_INPUT_POLICY,
+} from '@megumi/agent-runtime/runs/input/index';
+import type {
+  Session,
+  SessionAttachmentReader,
+  SessionBranchDrafts,
+  SessionCatalog,
+  SessionHistory,
+  SessionMessageWithAttachments,
+} from '@megumi/agent-runtime/sessions/index';
 import { sessionMessageText } from '@megumi/agent-runtime/sessions/index';
 import type { WorkspaceCatalog } from './workspace/index';
 import type {
@@ -25,7 +36,9 @@ export type SessionOperations = SessionHost;
 
 /** Creates the concrete Product operations exposed through SessionHost. */
 export function createSessionOperations(options: {
-  settingsForWorkspace: (workspaceId?: string) => Pick<import('./settings/settings-store').Settings, 'readSettings'>;
+  settingsForWorkspace: (
+    workspaceId?: string,
+  ) => Pick<import('./settings/settings-store').Settings, 'readSettings'>;
   reader: SessionReader;
   recommendations: Pick<import('./discovery/discovery').Discovery, 'getRecommendationReference'>;
   runtime: Pick<AgentRuntime, 'cancelRun' | 'submitInput'>;
@@ -41,18 +54,27 @@ export function createSessionOperations(options: {
       model: import('@megumi/ai').Model<import('@megumi/ai').Api>,
     ): import('@megumi/agent-runtime/context/index').DerivedContextUsage;
   };
-  resolveModel: (request: {
-    provider_id: string;
-    model_id: string;
-  }, workspaceId?: string) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
+  resolveModel: (
+    request: {
+      provider_id: string;
+      model_id: string;
+    },
+    workspaceId?: string,
+  ) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
   attachmentPicker?: AttachmentPicker;
   localFileAvailability?: LocalFileAvailability;
 }): SessionOperations {
   return {
     async updateModelSelection(request) {
-      const result = options.sessions.updateModelSelection({ session_id: request.sessionId, model_selection: request.modelSelection });
-      if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
-      return result.status === 'not_found' ? result : { status: 'updated', session: toSessionDto(result.session) };
+      const result = options.sessions.updateModelSelection({
+        session_id: request.sessionId,
+        model_selection: request.modelSelection,
+      });
+      if (result.status === 'failed')
+        return { status: 'failed', failure: toFailure(result.failure) };
+      return result.status === 'not_found'
+        ? result
+        : { status: 'updated', session: toSessionDto(result.session) };
     },
     sendUserInput: (request) => submitUserInput(options.runtime, request, options.recommendations),
     readSession: (request) => options.reader.readSession(request),
@@ -63,7 +85,7 @@ export function createSessionOperations(options: {
       const result = options.sessions.createSession({
         workspace_id: request.projectId,
         title: request.title,
-        model_selection: request.modelSelection ?? read.settings.config.models.defaultModel,
+        model_selection: request.modelSelection ?? read.settings.config.general.lastSelectedModel,
       });
       return result.status === 'created'
         ? { status: 'created', session: toSessionDto(result.session) }
@@ -74,49 +96,89 @@ export function createSessionOperations(options: {
       const workspaces = await options.workspaces.listWorkspaces();
       for (const workspace of workspaces.workspaces) {
         const result = options.sessions.listSessions({ workspace_id: workspace.workspace_id });
-        if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
+        if (result.status === 'failed')
+          return { status: 'failed', failure: toFailure(result.failure) };
         sessions.push(...result.sessions);
       }
       return { status: 'ok', sessions: sessions.map(toSessionDto) };
     },
     async listUserMessagesByExecutionIds(request) {
-      const result = options.history.listUserMessagesByExecutionIds({ execution_ids: request.executionIds });
-      if (result.status === 'failed') return { status: 'failed', failure: toFailure(result.failure) };
+      const result = options.history.listUserMessagesByExecutionIds({
+        execution_ids: request.executionIds,
+      });
+      if (result.status === 'failed')
+        return { status: 'failed', failure: toFailure(result.failure) };
       return {
         status: 'ok',
-        messages: result.messages.map((message) => toUserMessageSummary({ message, attachments: [] })),
+        messages: result.messages.map((message) =>
+          toUserMessageSummary({ message, attachments: [] }),
+        ),
       };
     },
     async cancelUserInput(request) {
       const result = await options.runtime.cancelRun(request.executionId);
-      if (result.status === 'cancellation_requested') return { payload: { status: 'cancellation_requested', run: toRunDto(result.run) } };
-      if (result.status === 'already_cancelling') return { payload: { status: 'cancelling', run: toRunDto(result.run) } };
-      if (result.status === 'not_found') return { payload: { status: 'not_found', executionId: result.runId } };
-      return { payload: { status: 'not_cancellable', run: toRunDto(result.run), reason: 'already_terminal' } };
+      if (result.status === 'cancellation_requested')
+        return { payload: { status: 'cancellation_requested', run: toRunDto(result.run) } };
+      if (result.status === 'already_cancelling')
+        return { payload: { status: 'cancelling', run: toRunDto(result.run) } };
+      if (result.status === 'not_found')
+        return { payload: { status: 'not_found', executionId: result.runId } };
+      return {
+        payload: {
+          status: 'not_cancellable',
+          run: toRunDto(result.run),
+          reason: 'already_terminal',
+        },
+      };
     },
     createBranchDraft(request) {
-      const result = options.branches.createBranchDraft({ request_id: request.requestId, session_id: request.sessionId, source_message_id: request.messageId });
+      const result = options.branches.createBranchDraft({
+        request_id: request.requestId,
+        session_id: request.sessionId,
+        source_message_id: request.messageId,
+      });
       return {
-        payload: { branchDraft: { branchMarkerId: result.branch_draft.branch_marker_id, sessionId: result.branch_draft.session_id, sourceMessageId: result.branch_draft.source_message_id, createdAt: result.branch_draft.created_at } },
+        payload: {
+          branchDraft: {
+            branchMarkerId: result.branch_draft.branch_marker_id,
+            sessionId: result.branch_draft.session_id,
+            sourceMessageId: result.branch_draft.source_message_id,
+            createdAt: result.branch_draft.created_at,
+          },
+        },
       };
     },
     cancelBranchDraft(request) {
-      const result = options.branches.cancelBranchDraft({ request_id: request.requestId, session_id: request.sessionId, branch_marker_id: request.branchMarkerId });
+      const result = options.branches.cancelBranchDraft({
+        request_id: request.requestId,
+        session_id: request.sessionId,
+        branch_marker_id: request.branchMarkerId,
+      });
       return result.status === 'cancelled'
         ? { payload: { cancelled: true } }
         : { payload: { cancelled: false, reason: result.reason } };
     },
     async getInputSuggestions(request) {
-      return { suggestions: await options.suggestions.getInputSuggestions({ draftInput: request.draftInput, ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}) }) };
+      return {
+        suggestions: await options.suggestions.getInputSuggestions({
+          draftInput: request.draftInput,
+          ...(request.workspaceId ? { workspaceId: request.workspaceId } : {}),
+        }),
+      };
     },
     async getContextUsage(request) {
       const history = options.history.getActiveHistory({ session_id: request.sessionId });
       if (history.status === 'failed') return { status: 'not_available' };
       const session = options.sessions.getSession({ session_id: request.sessionId });
       if (session.status !== 'found') return { status: 'not_available' };
-      const configuration = options.settingsForWorkspace(session.session.workspace_id).readSettings();
+      const configuration = options
+        .settingsForWorkspace(session.session.workspace_id)
+        .readSettings();
       if (configuration.status === 'rejected') return { status: 'not_available' };
-      const model = await options.resolveModel(request.modelSelection, session.session.workspace_id);
+      const model = await options.resolveModel(
+        request.modelSelection,
+        session.session.workspace_id,
+      );
       if (!model) return { status: 'not_available' };
       const usage = options.context.deriveUsage(history.history, model);
       return {
@@ -126,38 +188,92 @@ export function createSessionOperations(options: {
           totalTokens: usage.contextWindowTokens,
           remainingTokens: Math.max(0, usage.contextWindowTokens - usage.totalTokens),
           usedPercent: Math.min(100, Math.round(usage.usedRatio * 100)),
-          autoCompactPercent: Math.round(configuration.settings.config.context.compactionThresholdRatio * 100),
+          autoCompactPercent: Math.round(
+            configuration.settings.config.context.compactionThresholdRatio * 100,
+          ),
           accuracy: usage.accuracy,
         },
       };
     },
     getInputCapabilities() {
-      return { maxTextCharacters: DEFAULT_INPUT_POLICY.maxTextCharacters, allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes], maxImageCount: IMAGE_INPUT_POLICY.maxImageCount, maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes, maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes, allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes], maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount, maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes };
+      return {
+        maxTextCharacters: DEFAULT_INPUT_POLICY.maxTextCharacters,
+        allowedMediaTypes: [...IMAGE_INPUT_POLICY.allowedMediaTypes],
+        maxImageCount: IMAGE_INPUT_POLICY.maxImageCount,
+        maxImageBytes: IMAGE_INPUT_POLICY.maxImageBytes,
+        maxTotalBytes: IMAGE_INPUT_POLICY.maxTotalBytes,
+        allowedDocumentMediaTypes: [...DOCUMENT_INPUT_POLICY.allowedMediaTypes],
+        maxDocumentCount: DOCUMENT_INPUT_POLICY.maxDocumentCount,
+        maxDocumentBytes: DOCUMENT_INPUT_POLICY.maxDocumentBytes,
+      };
     },
     async selectImages() {
-      if (!options.attachmentPicker) return pickerFailure('image_picker_unavailable', 'Image picker is unavailable.');
-      try { return await options.attachmentPicker.selectImages(); } catch { return pickerFailure('image_picker_failed', 'Images could not be selected.'); }
+      if (!options.attachmentPicker)
+        return pickerFailure('image_picker_unavailable', 'Image picker is unavailable.');
+      try {
+        return await options.attachmentPicker.selectImages();
+      } catch {
+        return pickerFailure('image_picker_failed', 'Images could not be selected.');
+      }
     },
     async selectDocuments() {
-      if (!options.attachmentPicker) return pickerFailure('document_picker_unavailable', 'Document picker is unavailable.');
-      try { return await options.attachmentPicker.selectDocuments(); } catch { return pickerFailure('document_picker_failed', 'Documents could not be selected.'); }
+      if (!options.attachmentPicker)
+        return pickerFailure('document_picker_unavailable', 'Document picker is unavailable.');
+      try {
+        return await options.attachmentPicker.selectDocuments();
+      } catch {
+        return pickerFailure('document_picker_failed', 'Documents could not be selected.');
+      }
     },
     async readClipboardImage() {
-      if (!options.attachmentPicker) return pickerFailure('clipboard_image_unavailable', 'Clipboard image input is unavailable.');
-      try { return await options.attachmentPicker.readClipboardImage(); } catch (error) { return pickerFailure('clipboard_image_failed', error instanceof Error ? error.message : 'The clipboard image could not be read.'); }
+      if (!options.attachmentPicker)
+        return pickerFailure(
+          'clipboard_image_unavailable',
+          'Clipboard image input is unavailable.',
+        );
+      try {
+        return await options.attachmentPicker.readClipboardImage();
+      } catch (error) {
+        return pickerFailure(
+          'clipboard_image_failed',
+          error instanceof Error ? error.message : 'The clipboard image could not be read.',
+        );
+      }
     },
     async readAttachmentImage(request) {
-      const result = await options.attachments.readAttachmentContent({ attachment_id: request.attachmentId });
+      const result = await options.attachments.readAttachmentContent({
+        attachment_id: request.attachmentId,
+      });
       return result.status === 'ok'
-        ? { status: 'ok', dataUrl: `data:${result.content.media_type};base64,${Buffer.from(result.content.bytes).toString('base64')}` }
+        ? {
+            status: 'ok',
+            dataUrl: `data:${result.content.media_type};base64,${Buffer.from(result.content.bytes).toString('base64')}`,
+          }
         : { status: 'failed', failure: toFailure(result.failure) };
     },
     async getAttachmentFileStatus(request) {
       const result = options.attachments.getAttachment({ attachment_id: request.attachmentId });
-      if (result.status !== 'found' || result.attachment.type !== 'file' || result.attachment.source_type !== 'local_file') return { status: 'unavailable' };
-      if (!options.localFileAvailability) return { status: 'failed', failure: { code: 'file_status_unavailable', message: 'Local file status is unavailable.' } };
-      try { return await options.localFileAvailability.exists(result.attachment.source_value) ? { status: 'available' } : { status: 'unavailable' }; }
-      catch { return { status: 'unavailable' }; }
+      if (
+        result.status !== 'found' ||
+        result.attachment.type !== 'file' ||
+        result.attachment.source_type !== 'local_file'
+      )
+        return { status: 'unavailable' };
+      if (!options.localFileAvailability)
+        return {
+          status: 'failed',
+          failure: {
+            code: 'file_status_unavailable',
+            message: 'Local file status is unavailable.',
+          },
+        };
+      try {
+        return (await options.localFileAvailability.exists(result.attachment.source_value))
+          ? { status: 'available' }
+          : { status: 'unavailable' };
+      } catch {
+        return { status: 'unavailable' };
+      }
     },
   };
 }
@@ -168,9 +284,19 @@ async function submitUserInput(
   recommendations: Pick<import('./discovery/discovery').Discovery, 'getRecommendationReference'>,
 ): Promise<SendUserInputResult> {
   const reference = request.recommendationId
-    ? resolveRecommendationDiscussion({ recommendationId: request.recommendationId, sessionId: request.sessionId }, recommendations)
+    ? resolveRecommendationDiscussion(
+        { recommendationId: request.recommendationId, sessionId: request.sessionId },
+        recommendations,
+      )
     : undefined;
-  if (reference?.status === 'rejected') return { payload: { type: 'error', requestId: request.requestId ?? crypto.randomUUID(), message: reference.error.message } };
+  if (reference?.status === 'rejected')
+    return {
+      payload: {
+        type: 'error',
+        requestId: request.requestId ?? crypto.randomUUID(),
+        message: reference.error.message,
+      },
+    };
   const result = await runtime.submitInput({
     ...(request.requestId ? { requestId: request.requestId } : {}),
     workspaceId: request.projectId,
@@ -181,10 +307,14 @@ async function submitUserInput(
     text: request.text,
     ...(request.skillSelection ? { skillSelection: request.skillSelection } : {}),
     ...(request.attachments ? { attachments: request.attachments } : {}),
-    ...(request.modelSelection ? { modelSelection: {
-      providerId: request.modelSelection.provider_id,
-      modelId: request.modelSelection.model_id,
-    } } : {}),
+    ...(request.modelSelection
+      ? {
+          modelSelection: {
+            providerId: request.modelSelection.provider_id,
+            modelId: request.modelSelection.model_id,
+          },
+        }
+      : {}),
     ...(request.permissionMode ? { permissionMode: request.permissionMode } : {}),
   });
   return mapConversationSubmission(result);
@@ -194,7 +324,9 @@ function mapConversationSubmission(result: SubmitInputResult): SendUserInputResu
   const session = result.session ? { session: toSessionDto(result.session) } : {};
   if (result.status === 'started') {
     if (result.userMessage.message.message_kind !== 'user_message') {
-      throw new Error('Conversation submission returned a non-user message for a started execution.');
+      throw new Error(
+        'Conversation submission returned a non-user message for a started execution.',
+      );
     }
     return {
       payload: {
@@ -207,18 +339,20 @@ function mapConversationSubmission(result: SubmitInputResult): SendUserInputResu
           attachments: result.userMessage.attachments,
         }),
         run: toRunDto(result.run.snapshot),
-        ...(result.branchCommit ? {
-          branchCommit: {
-            branchMarkerId: result.branchCommit.branchMarkerId,
-            branch: {
-              type: 'branch',
-              branchId: result.branchCommit.branch.branchId,
-              sourceMessageId: result.branchCommit.branch.sourceMessageId,
-              targetMessageId: result.branchCommit.branch.targetMessageId,
-              createdAt: result.branchCommit.branch.createdAt,
-            },
-          },
-        } : {}),
+        ...(result.branchCommit
+          ? {
+              branchCommit: {
+                branchMarkerId: result.branchCommit.branchMarkerId,
+                branch: {
+                  type: 'branch',
+                  branchId: result.branchCommit.branch.branchId,
+                  sourceMessageId: result.branchCommit.branch.sourceMessageId,
+                  targetMessageId: result.branchCommit.branch.targetMessageId,
+                  createdAt: result.branchCommit.branch.createdAt,
+                },
+              },
+            }
+          : {}),
       },
     };
   }
@@ -254,9 +388,27 @@ function mapConversationSubmission(result: SubmitInputResult): SendUserInputResu
 
 function toUserMessageSummary(item: SessionMessageWithAttachments): UserMessageSummaryDto {
   const message = item.message;
-  return { id: message.message_id, sessionId: message.session_id, ...(message.execution_id ? { executionId: message.execution_id } : {}), role: message.message_kind === 'user_message' ? 'user' : message.message_kind === 'tool_result' ? 'toolResult' : 'assistant', text: sessionMessageText(message), createdAt: message.created_at };
+  return {
+    id: message.message_id,
+    sessionId: message.session_id,
+    ...(message.execution_id ? { executionId: message.execution_id } : {}),
+    role:
+      message.message_kind === 'user_message'
+        ? 'user'
+        : message.message_kind === 'tool_result'
+          ? 'toolResult'
+          : 'assistant',
+    text: sessionMessageText(message),
+    createdAt: message.created_at,
+  };
 }
-function pickerFailure(code: string, message: string) { return { status: 'failed' as const, failure: { code, message } }; }
+function pickerFailure(code: string, message: string) {
+  return { status: 'failed' as const, failure: { code, message } };
+}
 function toFailure(failure: { code: string; message: string; retryable?: boolean }): HostFailure {
-  return { code: failure.code, message: failure.message, ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}) };
+  return {
+    code: failure.code,
+    message: failure.message,
+    ...(failure.retryable !== undefined ? { retryable: failure.retryable } : {}),
+  };
 }

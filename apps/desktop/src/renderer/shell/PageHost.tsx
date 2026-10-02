@@ -2,16 +2,27 @@ import { ChatPage } from '../features/chat';
 import { DiscoveryPage } from '../features/discovery';
 import type { DiscoveryRecommendationUiDto } from '@megumi/application/contracts';
 
-export function PageHost({ page, onStartRecommendationConversation, onOpenContentSources }: {
+export function PageHost({
+  page,
+  onStartRecommendationConversation,
+  onOpenContentSources,
+  onOpenModelSettings,
+}: {
   page: 'discovery' | 'chat';
   onStartRecommendationConversation: (recommendation: DiscoveryRecommendationUiDto) => void;
   onOpenContentSources: () => void;
+  onOpenModelSettings?: () => void;
 }) {
   return (
     <div data-testid="page-host" className="relative flex min-h-0 flex-1 overflow-hidden">
-      {page === 'discovery'
-        ? <DiscoveryPage onStartConversation={onStartRecommendationConversation} onOpenContentSources={onOpenContentSources} />
-        : <ChatPage />}
+      {page === 'discovery' ? (
+        <DiscoveryPage
+          onStartConversation={onStartRecommendationConversation}
+          onOpenContentSources={onOpenContentSources}
+        />
+      ) : (
+        <ChatPage onOpenModelSettings={onOpenModelSettings} />
+      )}
     </div>
   );
 }

@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef } from 'react';
-import type { GetContextUsageResult,
-  InputCapabilitiesResult } from '@megumi/application/contracts';
+import type { GetContextUsageResult, InputCapabilitiesResult } from '@megumi/application/contracts';
 import type { ProviderPublicStatusUiDto } from '@megumi/desktop/renderer/entities/provider';
 import type { InputSuggestionQueryResult } from '@megumi/application/contracts';
 import type { ToolActivityItem } from '../../session-timeline';
-import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
+import type {
+  ToolApprovalResolvePayload,
+  ToolApprovalResolveResult,
+} from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';
 import { BranchDraftStack, type ComposerBranchDraftView } from '../components/BranchDraftStack';
 import { ComposerSurface } from '../components/ComposerSurface';
@@ -34,7 +36,11 @@ interface ComposerDockProps {
   onSubmit: (payload: ComposerSubmitPayload) => boolean | void | Promise<boolean | void>;
   onStop: () => void;
   onHeightChange?: (height: number) => void;
-  getInputSuggestions?: (request: { draftInput: string; workspaceId?: string }) => InputSuggestionQueryResult | Promise<InputSuggestionQueryResult>;
+  getInputSuggestions?: (request: {
+    draftInput: string;
+    workspaceId?: string;
+  }) => InputSuggestionQueryResult | Promise<InputSuggestionQueryResult>;
+  onOpenModelSettings?: () => void;
   onSelectImages?: () => Promise<ComposerDraftImage[]>;
   onSelectDocuments?: () => Promise<ComposerDraftDocument[]>;
   onPasteImage?: () => Promise<ComposerDraftImage[]>;
@@ -55,6 +61,7 @@ export function ComposerDock({
   onStop,
   onHeightChange,
   getInputSuggestions,
+  onOpenModelSettings,
   onSelectImages,
   onSelectDocuments,
   onPasteImage,
@@ -72,6 +79,7 @@ export function ComposerDock({
     seedText: null,
     onSubmit,
     onStop,
+    onOpenModelSettings,
     onSelectImages,
     onSelectDocuments,
     onPasteImage,
@@ -86,7 +94,9 @@ export function ComposerDock({
     if (!element || !onHeightChange) return undefined;
 
     const publishHeight = () => {
-      onHeightChange(Math.ceil(element.getBoundingClientRect().height) + COMPOSER_DOCK_BOTTOM_PADDING);
+      onHeightChange(
+        Math.ceil(element.getBoundingClientRect().height) + COMPOSER_DOCK_BOTTOM_PADDING,
+      );
     };
 
     publishHeight();

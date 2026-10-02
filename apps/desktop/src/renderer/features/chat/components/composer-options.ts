@@ -1,5 +1,8 @@
 import type { PermissionMode } from '@megumi/application/contracts';
-import type { ProviderPublicStatusUiDto, ModelSupportLevelUi } from '@megumi/desktop/renderer/entities/provider';
+import type {
+  ProviderPublicStatusUiDto,
+  ModelSupportLevelUi,
+} from '@megumi/desktop/renderer/entities/provider';
 
 export type ComposerPermissionMode = PermissionMode;
 export type ComposerModel = string;
@@ -25,24 +28,31 @@ export const COMPOSER_PERMISSION_MODE_OPTIONS: ComposerOption<ComposerPermission
   { value: 'full_access' },
 ];
 
-export function getComposerModelLabel(model: string, modelOptions: ComposerModelOption[] = []): string {
+export function getComposerModelLabel(
+  model: string,
+  modelOptions: ComposerModelOption[] = [],
+): string {
   return modelOptions.find((option) => option.value === model)?.label ?? model;
 }
 
-export function getComposerModelOptionsForProviders(providers?: ProviderPublicStatusUiDto[]): ComposerModelOption[] {
+export function getComposerModelOptionsForProviders(
+  providers?: ProviderPublicStatusUiDto[],
+): ComposerModelOption[] {
   if (!providers) {
     return [];
   }
 
   return providers
-    .filter((provider) => provider.enabled && provider.hasApiKey)
-    .flatMap((provider) => provider.modelIds.map((modelId) => ({
-      value: modelOptionValue(provider.providerId, String(modelId)),
-      modelId: String(modelId),
-      providerId: provider.providerId,
-      imageInput: provider.modelSettings[modelId]?.capabilities.imageInput ?? 'unknown',
-      label: provider.modelSettings[modelId]?.displayName ?? String(modelId),
-    })));
+    .filter((provider) => provider.enabled)
+    .flatMap((provider) =>
+      provider.modelIds.map((modelId) => ({
+        value: modelOptionValue(provider.providerId, String(modelId)),
+        modelId: String(modelId),
+        providerId: provider.providerId,
+        imageInput: provider.modelSettings[modelId]?.capabilities.imageInput ?? 'unknown',
+        label: provider.modelSettings[modelId]?.displayName ?? String(modelId),
+      })),
+    );
 }
 
 export function modelOptionValue(providerId: string, modelId: string): string {

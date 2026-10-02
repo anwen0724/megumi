@@ -17,8 +17,20 @@ const defaultProviders: ProviderPublicStatusUiDto[] = [
     enabled: true,
     modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
     modelSettings: {
-      'deepseek-v4-flash': { displayName: 'deepseek-v4-flash', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true }, capabilityOverrides: {} },
-      'deepseek-v4-pro': { displayName: 'deepseek-v4-pro', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true }, capabilityOverrides: {} },
+      'deepseek-v4-flash': {
+        displayName: 'deepseek-v4-flash',
+        contextWindowTokens: 1000000,
+        maxOutputTokens: 8192,
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+        capabilityOverrides: {},
+      },
+      'deepseek-v4-pro': {
+        displayName: 'deepseek-v4-pro',
+        contextWindowTokens: 1000000,
+        maxOutputTokens: 8192,
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+        capabilityOverrides: {},
+      },
     },
     hasApiKey: true,
     credentialSource: 'settings' as const,
@@ -30,24 +42,34 @@ const defaultProviders: ProviderPublicStatusUiDto[] = [
     protocol: 'openai-completions' as const,
     enabled: true,
     modelIds: ['gpt-5.5'],
-    modelSettings: { 'gpt-5.5': { displayName: 'gpt-5.5', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true }, capabilityOverrides: {} } },
+    modelSettings: {
+      'gpt-5.5': {
+        displayName: 'gpt-5.5',
+        contextWindowTokens: 1000000,
+        maxOutputTokens: 8192,
+        capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+        capabilityOverrides: {},
+      },
+    },
     hasApiKey: true,
     credentialSource: 'settings' as const,
     envOverrideActive: false,
   },
 ];
 
-const deepseekOnlyProviders = defaultProviders.map((provider) => ({
-  ...provider,
-  enabled: provider.providerId === 'deepseek',
-}));
+const deepseekOnlyProviders = defaultProviders.filter(
+  (provider) => provider.providerId === 'deepseek',
+);
 
 const textOnlyProviders = defaultProviders.map((provider) => ({
   ...provider,
   modelSettings: Object.fromEntries(
     Object.entries(provider.modelSettings ?? {}).map(([modelId, capabilities]) => [
       modelId,
-      { ...capabilities, capabilities: { ...capabilities.capabilities, imageInput: false as const } },
+      {
+        ...capabilities,
+        capabilities: { ...capabilities.capabilities, imageInput: false as const },
+      },
     ]),
   ),
 }));
@@ -88,16 +110,38 @@ async function selectImageFromAttachmentMenu() {
   await userEvent.click(screen.getByRole('menuitem', { name: 'Attach images' }));
 }
 
-async function chooseComposerOption(controlLabel: 'Permission mode' | 'Model', optionName: string | RegExp) {
+async function chooseComposerOption(
+  controlLabel: 'Permission mode' | 'Model',
+  optionName: string | RegExp,
+) {
   await userEvent.click(screen.getByRole('button', { name: controlLabel }));
   await userEvent.click(screen.getByRole('option', { name: optionName }));
 }
 
 describe('Composer', () => {
   beforeEach(() => {
-    Object.defineProperty(window, 'megumi', { configurable: true, value: { ...window.megumi, settings: createSettingsFixture().api.settings } });
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: { ...window.megumi, settings: createSettingsFixture().api.settings },
+    });
     usePermissionModeStore.setState({ mode: 'ask' });
     useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
+    useModelSelectionStore
+      .getState()
+      .applyBootstrapSelection({ providerId: 'deepseek', modelId: 'deepseek-v4-flash' });
+  });
+
+  it('shows an add-model entry when empty and waits for a choice when models exist', async () => {
+    useModelSelectionStore.getState().bindSession('unselected');
+    const openSettings = vi.fn();
+    const view = render(
+      <TestComposer providers={[]} onOpenModelSettings={openSettings} onSubmit={() => undefined} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add model' }));
+    expect(openSettings).toHaveBeenCalledOnce();
+    view.rerender(<TestComposer onSubmit={() => undefined} />);
+    expect(screen.getByText('Select model')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
   });
 
   it('renders permission mode, model, context usage, attachment, and disabled send controls', () => {
@@ -138,12 +182,7 @@ describe('Composer', () => {
   });
 
   it('shows not available when the active session has no completed-run snapshot', () => {
-    render(
-      <TestComposer
-        onSubmit={() => undefined}
-        contextUsage={{ status: 'not_available' }}
-      />,
-    );
+    render(<TestComposer onSubmit={() => undefined} contextUsage={{ status: 'not_available' }} />);
 
     expect(screen.getByText('Usage not available')).toBeInTheDocument();
     expect(screen.queryByText('Calculating usage...')).not.toBeInTheDocument();
@@ -173,10 +212,9 @@ describe('Composer', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Permission mode' }));
 
     expect(
-      screen.getAllByRole('option').map((option) => [
-        option.getAttribute('value'),
-        option.textContent,
-      ]),
+      screen
+        .getAllByRole('option')
+        .map((option) => [option.getAttribute('value'), option.textContent]),
     ).toEqual([
       ['ask', 'Ask for approval'],
       ['auto', 'Approve for me'],
@@ -211,7 +249,9 @@ describe('Composer', () => {
     setTextareaScrollHeight(input, 96);
 
     await userEvent.click(input);
-    await userEvent.keyboard('first line{Shift>}{Enter}{/Shift}second line{Alt>}{Enter}{/Alt}third line');
+    await userEvent.keyboard(
+      'first line{Shift>}{Enter}{/Shift}second line{Alt>}{Enter}{/Alt}third line',
+    );
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(input).toHaveValue('first line\nsecond line\nthird line');
@@ -238,7 +278,19 @@ describe('Composer', () => {
       <TestComposer
         onSubmit={() => undefined}
         onChooseContext={onChooseContext}
-        onSelectImages={async () => { onAttachFiles(); return [{ type: 'image', draftAttachmentId: 'draft-1', name: 'image.png', declaredMimeType: 'image/png', referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,aQ==' }]; }}
+        onSelectImages={async () => {
+          onAttachFiles();
+          return [
+            {
+              type: 'image',
+              draftAttachmentId: 'draft-1',
+              name: 'image.png',
+              declaredMimeType: 'image/png',
+              referenceId: 'ref-1',
+              previewDataUrl: 'data:image/png;base64,aQ==',
+            },
+          ];
+        }}
       />,
     );
 
@@ -260,12 +312,7 @@ describe('Composer', () => {
       sizeBytes: 4096,
       referenceId: 'document-reference-1',
     };
-    render(
-      <TestComposer
-        onSubmit={onSubmit}
-        onSelectDocuments={async () => [document]}
-      />,
-    );
+    render(<TestComposer onSubmit={onSubmit} onSelectDocuments={async () => [document]} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Attach files' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Attach documents' }));
@@ -280,14 +327,16 @@ describe('Composer', () => {
       <TestComposer
         providers={textOnlyProviders}
         onSubmit={onSubmit}
-        onSelectImages={async () => [{
-          type: 'image',
-          draftAttachmentId: 'draft-text-only',
-          name: 'diagram.png',
-          declaredMimeType: 'image/png',
-          referenceId: 'ref-text-only',
-          previewDataUrl: 'data:image/png;base64,AQID',
-        }]}
+        onSelectImages={async () => [
+          {
+            type: 'image',
+            draftAttachmentId: 'draft-text-only',
+            name: 'diagram.png',
+            declaredMimeType: 'image/png',
+            referenceId: 'ref-text-only',
+            previewDataUrl: 'data:image/png;base64,AQID',
+          },
+        ]}
       />,
     );
 
@@ -299,20 +348,24 @@ describe('Composer', () => {
       'This model will receive attachment metadata, but not the image content.',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      attachments: [expect.objectContaining({ name: 'diagram.png' })],
-    }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [expect.objectContaining({ name: 'diagram.png' })],
+      }),
+    );
   });
 
   it('imports a pasted clipboard image without blocking native text paste', async () => {
-    const onPasteImage = vi.fn(async () => [{
-      type: 'image' as const,
-      draftAttachmentId: 'draft-paste',
-      name: 'clipboard-image.png',
-      declaredMimeType: 'image/png',
-      referenceId: 'ref-paste',
-      previewDataUrl: 'data:image/png;base64,AQID',
-    }]);
+    const onPasteImage = vi.fn(async () => [
+      {
+        type: 'image' as const,
+        draftAttachmentId: 'draft-paste',
+        name: 'clipboard-image.png',
+        declaredMimeType: 'image/png',
+        referenceId: 'ref-paste',
+        previewDataUrl: 'data:image/png;base64,AQID',
+      },
+    ]);
     render(<TestComposer onSubmit={() => undefined} onPasteImage={onPasteImage} />);
     const input = screen.getByLabelText('Message Megumi');
 
@@ -356,7 +409,9 @@ describe('Composer', () => {
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'Keep this draft');
     await selectImageFromAttachmentMenu();
-    await waitFor(() => expect(draft).toEqual({ text: 'Keep this draft', attachments: [selectedImage] }));
+    await waitFor(() =>
+      expect(draft).toEqual({ text: 'Keep this draft', attachments: [selectedImage] }),
+    );
     first.unmount();
 
     render(
@@ -386,7 +441,7 @@ describe('Composer', () => {
     expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-pro');
   });
 
-  it('hides models whose providers are disabled', async () => {
+  it('lists only added models', async () => {
     render(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Model' }));
@@ -399,10 +454,8 @@ describe('Composer', () => {
     expect(screen.queryByRole('option', { name: /gpt-5.5/ })).not.toBeInTheDocument();
   });
 
-  it('falls back when the selected model provider becomes disabled', async () => {
-    const { rerender } = render(
-      <TestComposer onSubmit={() => undefined} />,
-    );
+  it('requires reselection when the selected model is removed', async () => {
+    const { rerender } = render(<TestComposer onSubmit={() => undefined} />);
 
     await chooseComposerOption('Model', /gpt-5.5/);
 
@@ -410,7 +463,9 @@ describe('Composer', () => {
 
     rerender(<TestComposer providers={deepseekOnlyProviders} onSubmit={() => undefined} />);
 
-    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-flash');
+    expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'openai:gpt-5.5');
+    expect(screen.getByText('Model unavailable — select another')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Model' }));
     expect(screen.queryByRole('option', { name: /gpt-5.5/ })).not.toBeInTheDocument();
   });
@@ -425,29 +480,36 @@ describe('Composer', () => {
   });
 
   it('renders command suggestions from the provider for slash drafts', async () => {
-    render(<TestComposer
-      onSubmit={() => undefined}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/',
-        queryPrefix: '',
-        groups: [{
-          id: 'commands',
-          label: 'Commands',
-          items: [{
-            kind: 'command',
-            name: 'review',
-            description: 'Evaluate review feedback before implementing changes',
-            match: { field: 'name', value: 'review', prefix: '' },
-            replacementInput: '/review ',
-          }],
-        }, {
-          id: 'skills',
-          label: 'Skills',
-          items: [],
-        }],
-      })}
-    />);
+    render(
+      <TestComposer
+        onSubmit={() => undefined}
+        getInputSuggestions={() => ({
+          type: 'suggestions',
+          draftInput: '/',
+          queryPrefix: '',
+          groups: [
+            {
+              id: 'commands',
+              label: 'Commands',
+              items: [
+                {
+                  kind: 'command',
+                  name: 'review',
+                  description: 'Evaluate review feedback before implementing changes',
+                  match: { field: 'name', value: 'review', prefix: '' },
+                  replacementInput: '/review ',
+                },
+              ],
+            },
+            {
+              id: 'skills',
+              label: 'Skills',
+              items: [],
+            },
+          ],
+        })}
+      />,
+    );
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
 
@@ -457,25 +519,31 @@ describe('Composer', () => {
 
   it('uses Enter to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
-    render(<TestComposer
-      onSubmit={onSubmit}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/re',
-        queryPrefix: 're',
-        groups: [{
-          id: 'commands',
-          label: 'Commands',
-          items: [{
-            kind: 'command',
-            name: 'review',
-            description: 'Evaluate review feedback before implementing changes',
-            match: { field: 'name', value: 'review', prefix: 're' },
-            replacementInput: '/review ',
-          }],
-        }],
-      })}
-    />);
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        getInputSuggestions={() => ({
+          type: 'suggestions',
+          draftInput: '/re',
+          queryPrefix: 're',
+          groups: [
+            {
+              id: 'commands',
+              label: 'Commands',
+              items: [
+                {
+                  kind: 'command',
+                  name: 'review',
+                  description: 'Evaluate review feedback before implementing changes',
+                  match: { field: 'name', value: 'review', prefix: 're' },
+                  replacementInput: '/review ',
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
 
     const input = screen.getByLabelText('Message Megumi');
     await userEvent.type(input, '/re');
@@ -488,27 +556,33 @@ describe('Composer', () => {
 
   it('shows the selected Skill name and submits task text with an exact Skill selection', async () => {
     const onSubmit = vi.fn();
-    render(<TestComposer
-      onSubmit={onSubmit}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/te',
-        queryPrefix: 'te',
-        groups: [{
-          id: 'skills',
-          label: 'Skills',
-          items: [{
-            kind: 'skill',
-            name: 'test',
-            description: 'Run project checks',
-            sourceLabel: 'User',
-            match: { field: 'name', value: 'test', prefix: 'te' },
-            replacementInput: '',
-            selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
-          }],
-        }],
-      })}
-    />);
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        getInputSuggestions={() => ({
+          type: 'suggestions',
+          draftInput: '/te',
+          queryPrefix: 'te',
+          groups: [
+            {
+              id: 'skills',
+              label: 'Skills',
+              items: [
+                {
+                  kind: 'skill',
+                  name: 'test',
+                  description: 'Run project checks',
+                  sourceLabel: 'User',
+                  match: { field: 'name', value: 'test', prefix: 'te' },
+                  replacementInput: '',
+                  selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
 
     const input = screen.getByLabelText('Message Megumi');
     await userEvent.type(input, '/te');
@@ -521,71 +595,91 @@ describe('Composer', () => {
     await userEvent.type(input, '--watch');
     await userEvent.keyboard('{Enter}');
 
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '--watch',
-      skillSelection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
-    }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '--watch',
+        skillSelection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
+      }),
+    );
   });
 
   it('does not convert a typed skill display command without choosing a suggestion', async () => {
     const onSubmit = vi.fn();
-    render(<TestComposer
-      onSubmit={onSubmit}
-      getInputSuggestions={({ draftInput }) => {
-        if (/\s/.test(draftInput.slice(1))) {
-          return { type: 'inactive' };
-        }
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        getInputSuggestions={({ draftInput }) => {
+          if (/\s/.test(draftInput.slice(1))) {
+            return { type: 'inactive' };
+          }
 
-        return {
-          type: 'suggestions',
-          draftInput,
-          queryPrefix: draftInput.slice(1),
-          groups: [{
-            id: 'skills',
-            label: 'Skills',
-            items: [{
-              kind: 'skill',
-              name: 'test',
-              description: 'Run project checks',
-              sourceLabel: 'User',
-              match: { field: 'name', value: 'test', prefix: draftInput.slice(1) },
-              replacementInput: '',
-              selection: { type: 'skill', name: 'test', skillPath: 'C:/user/checks/SKILL.md' },
-            }],
-          }],
-        };
-      }}
-    />);
+          return {
+            type: 'suggestions',
+            draftInput,
+            queryPrefix: draftInput.slice(1),
+            groups: [
+              {
+                id: 'skills',
+                label: 'Skills',
+                items: [
+                  {
+                    kind: 'skill',
+                    name: 'test',
+                    description: 'Run project checks',
+                    sourceLabel: 'User',
+                    match: { field: 'name', value: 'test', prefix: draftInput.slice(1) },
+                    replacementInput: '',
+                    selection: {
+                      type: 'skill',
+                      name: 'test',
+                      skillPath: 'C:/user/checks/SKILL.md',
+                    },
+                  },
+                ],
+              },
+            ],
+          };
+        }}
+      />,
+    );
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/test --watch');
     await userEvent.keyboard('{Enter}');
 
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: '/test --watch',
-    }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: '/test --watch',
+      }),
+    );
   });
 
   it('uses Tab to complete the selected command suggestion without submitting', async () => {
     const onSubmit = vi.fn();
-    render(<TestComposer
-      onSubmit={onSubmit}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/re',
-        queryPrefix: 're',
-        groups: [{
-          id: 'commands',
-          label: 'Commands',
-          items: [{
-            kind: 'command',
-            name: 'review',
-            description: 'Evaluate review feedback before implementing changes',
-            match: { field: 'name', value: 'review', prefix: 're' },
-            replacementInput: '/review ',
-          }],
-        }],
-      })}
-    />);
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        getInputSuggestions={() => ({
+          type: 'suggestions',
+          draftInput: '/re',
+          queryPrefix: 're',
+          groups: [
+            {
+              id: 'commands',
+              label: 'Commands',
+              items: [
+                {
+                  kind: 'command',
+                  name: 'review',
+                  description: 'Evaluate review feedback before implementing changes',
+                  match: { field: 'name', value: 'review', prefix: 're' },
+                  replacementInput: '/review ',
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
 
     const input = screen.getByLabelText('Message Megumi');
     await userEvent.type(input, '/re');
@@ -598,56 +692,65 @@ describe('Composer', () => {
 
   it('keeps Enter submit behavior when suggestions are inactive', async () => {
     const onSubmit = vi.fn();
-    render(<TestComposer
-      onSubmit={onSubmit}
-      getInputSuggestions={() => ({ type: 'inactive' })}
-    />);
+    render(<TestComposer onSubmit={onSubmit} getInputSuggestions={() => ({ type: 'inactive' })} />);
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'hello');
     await userEvent.keyboard('{Enter}');
 
-    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      message: 'hello',
-    }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'hello',
+      }),
+    );
   });
 
   it('moves selected command suggestion with ArrowDown and ArrowUp', async () => {
-    render(<TestComposer
-      onSubmit={() => undefined}
-      getInputSuggestions={() => ({
-        type: 'suggestions',
-        draftInput: '/',
-        queryPrefix: '',
-        groups: [{
-          id: 'commands',
-          label: 'Commands',
-          items: [
+    render(
+      <TestComposer
+        onSubmit={() => undefined}
+        getInputSuggestions={() => ({
+          type: 'suggestions',
+          draftInput: '/',
+          queryPrefix: '',
+          groups: [
             {
-              kind: 'command',
-              name: 'review',
-              description: 'Evaluate review feedback before implementing changes',
-              match: { field: 'name', value: 'review', prefix: '' },
-              replacementInput: '/review ',
-            },
-            {
-              kind: 'command',
-              name: 'status',
-              description: 'Show conversation status',
-              match: { field: 'name', value: 'status', prefix: '' },
-              replacementInput: '/status ',
+              id: 'commands',
+              label: 'Commands',
+              items: [
+                {
+                  kind: 'command',
+                  name: 'review',
+                  description: 'Evaluate review feedback before implementing changes',
+                  match: { field: 'name', value: 'review', prefix: '' },
+                  replacementInput: '/review ',
+                },
+                {
+                  kind: 'command',
+                  name: 'status',
+                  description: 'Show conversation status',
+                  match: { field: 'name', value: 'status', prefix: '' },
+                  replacementInput: '/status ',
+                },
+              ],
             },
           ],
-        }],
-      })}
-    />);
+        })}
+      />,
+    );
 
     await userEvent.type(screen.getByLabelText('Message Megumi'), '/');
     await userEvent.keyboard('{ArrowDown}');
 
-    expect(screen.getByRole('option', { name: /status/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('option', { name: /status/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
 
     await userEvent.keyboard('{ArrowUp}');
-    expect(screen.getByRole('option', { name: /review/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('option', { name: /review/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('submits slash-prefixed text without renderer-owned preprocessing', async () => {
@@ -687,11 +790,7 @@ describe('Composer', () => {
   it('resets seed text when seedTextKey changes without rendering branch chrome', async () => {
     const onSubmit = vi.fn();
     const { rerender } = render(
-      <TestComposer
-        onSubmit={onSubmit}
-        seedTextKey="branch-marker-1"
-        seedText="original prompt"
-      />,
+      <TestComposer onSubmit={onSubmit} seedTextKey="branch-marker-1" seedText="original prompt" />,
     );
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('original prompt');
@@ -701,11 +800,7 @@ describe('Composer', () => {
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'edited prompt');
 
     rerender(
-      <TestComposer
-        onSubmit={onSubmit}
-        seedTextKey="branch-marker-2"
-        seedText="second prompt"
-      />,
+      <TestComposer onSubmit={onSubmit} seedTextKey="branch-marker-2" seedText="second prompt" />,
     );
 
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('second prompt');
@@ -723,7 +818,10 @@ describe('Composer', () => {
     expect(input).toHaveStyle({ height: '112px', overflowY: 'hidden' });
 
     setTextareaScrollHeight(input, 220);
-    await userEvent.type(input, '{Shift>}{Enter}{/Shift}third line{Shift>}{Enter}{/Shift}fourth line');
+    await userEvent.type(
+      input,
+      '{Shift>}{Enter}{/Shift}third line{Shift>}{Enter}{/Shift}fourth line',
+    );
 
     expect(input).toHaveStyle({ height: '160px', overflowY: 'auto' });
   });
@@ -747,13 +845,19 @@ describe('Composer', () => {
 
   it('consumes the shared draft before an asynchronous first send can remount the composer', async () => {
     let resolveSubmit: ((value: boolean) => void) | undefined;
-    let draft: Parameters<NonNullable<ComposerProps['onDraftChange']>>[0] = { text: '', attachments: [] };
+    let draft: Parameters<NonNullable<ComposerProps['onDraftChange']>>[0] = {
+      text: '',
+      attachments: [],
+    };
     const onDraftChange = vi.fn((nextDraft: typeof draft) => {
       draft = nextDraft;
     });
-    const onSubmit = vi.fn(() => new Promise<boolean>((resolve) => {
-      resolveSubmit = resolve;
-    }));
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
 
     render(<TestComposer onSubmit={onSubmit} onDraftChange={onDraftChange} />);
     const input = screen.getByLabelText('Message Megumi');
@@ -772,7 +876,14 @@ describe('Composer', () => {
   it('shows sending status, allows drafting the next message, and shows Stop instead of Send', async () => {
     const onSubmit = vi.fn();
     const onStop = vi.fn();
-    render(<TestComposer status="sending" onSubmit={onSubmit} onStop={onStop} initialValue="Continue this plan" />);
+    render(
+      <TestComposer
+        status="sending"
+        onSubmit={onSubmit}
+        onStop={onStop}
+        initialValue="Continue this plan"
+      />,
+    );
 
     expect(screen.queryByText('Sending')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Message Megumi')).toHaveValue('Continue this plan');
@@ -781,7 +892,9 @@ describe('Composer', () => {
     await userEvent.keyboard('{Enter}');
     await userEvent.click(screen.getByRole('button', { name: 'Stop current run' }));
 
-    expect(screen.getByLabelText('Message Megumi')).toHaveValue('Continue this plan after this run');
+    expect(screen.getByLabelText('Message Megumi')).toHaveValue(
+      'Continue this plan after this run',
+    );
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -806,7 +919,9 @@ describe('Composer', () => {
     expect(screen.getByLabelText('Model')).toHaveAttribute('value', 'deepseek:deepseek-v4-pro');
     expect(rightControls).toHaveTextContent('Ask for approval');
     expect(rightControls).toHaveTextContent('deepseek-v4-pro');
-    expect(rightControls.lastElementChild).toBe(screen.getByRole('button', { name: 'Stop current run' }));
+    expect(rightControls.lastElementChild).toBe(
+      screen.getByRole('button', { name: 'Stop current run' }),
+    );
     expect(screen.getByRole('button', { name: 'Stop current run' })).not.toHaveTextContent('Stop');
     expect(onSubmit).not.toHaveBeenCalled();
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -855,12 +970,7 @@ describe('Composer', () => {
   });
 
   it('does not render run error status inside the composer', () => {
-    render(
-      <TestComposer
-        status="error"
-        onSubmit={() => undefined}
-      />,
-    );
+    render(<TestComposer status="error" onSubmit={() => undefined} />);
 
     expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('The last response failed.')).not.toBeInTheDocument();
@@ -871,12 +981,7 @@ describe('Composer', () => {
   it('does not submit or retry when switching models after an empty error draft', async () => {
     const onSubmit = vi.fn();
 
-    render(
-      <TestComposer
-        status="error"
-        onSubmit={onSubmit}
-      />,
-    );
+    render(<TestComposer status="error" onSubmit={onSubmit} />);
 
     await chooseComposerOption('Model', /deepseek-v4-flash/);
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -887,12 +992,7 @@ describe('Composer', () => {
   it('submits a new draft after an error with the selected model', async () => {
     const onSubmit = vi.fn();
 
-    render(
-      <TestComposer
-        status="error"
-        onSubmit={onSubmit}
-      />,
-    );
+    render(<TestComposer status="error" onSubmit={onSubmit} />);
 
     await chooseComposerOption('Model', /deepseek-v4-flash/);
     await userEvent.type(screen.getByLabelText('Message Megumi'), 'try again normally');
@@ -908,29 +1008,60 @@ describe('Composer', () => {
 
   it('submits an image-only draft and removes the preview after submit', async () => {
     const onSubmit = vi.fn();
-    render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
-      type: 'image', draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
-      referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
-    }]} />);
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        onSelectImages={async () => [
+          {
+            type: 'image',
+            draftAttachmentId: 'draft-1',
+            name: 'diagram.png',
+            declaredMimeType: 'image/png',
+            referenceId: 'ref-1',
+            previewDataUrl: 'data:image/png;base64,AQID',
+          },
+        ]}
+      />,
+    );
     await selectImageFromAttachmentMenu();
     expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
     expect(onSubmit).toHaveBeenCalledWith({
-      message: '', permissionMode: 'ask', providerId: 'deepseek', model: 'deepseek-v4-flash',
-      attachments: [{
-        type: 'image', draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
-        referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
-      }],
+      message: '',
+      permissionMode: 'ask',
+      providerId: 'deepseek',
+      model: 'deepseek-v4-flash',
+      attachments: [
+        {
+          type: 'image',
+          draftAttachmentId: 'draft-1',
+          name: 'diagram.png',
+          declaredMimeType: 'image/png',
+          referenceId: 'ref-1',
+          previewDataUrl: 'data:image/png;base64,AQID',
+        },
+      ],
     });
     expect(screen.queryByAltText('diagram.png')).not.toBeInTheDocument();
   });
 
   it('restores the image draft when the host rejects the consumed submit', async () => {
     const onSubmit = vi.fn().mockResolvedValue(false);
-    render(<TestComposer onSubmit={onSubmit} onSelectImages={async () => [{
-      type: 'image', draftAttachmentId: 'draft-1', name: 'diagram.png', declaredMimeType: 'image/png',
-      referenceId: 'ref-1', previewDataUrl: 'data:image/png;base64,AQID',
-    }]} />);
+    render(
+      <TestComposer
+        onSubmit={onSubmit}
+        onSelectImages={async () => [
+          {
+            type: 'image',
+            draftAttachmentId: 'draft-1',
+            name: 'diagram.png',
+            declaredMimeType: 'image/png',
+            referenceId: 'ref-1',
+            previewDataUrl: 'data:image/png;base64,AQID',
+          },
+        ]}
+      />,
+    );
 
     await selectImageFromAttachmentMenu();
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }));
@@ -938,4 +1069,31 @@ describe('Composer', () => {
     expect(await screen.findByAltText('diagram.png')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
   });
+});
+
+it('persists the recent chat choice and restores it only for new sessions', async () => {
+  const fixture = createSettingsFixture();
+  Object.defineProperty(window, 'megumi', { configurable: true, value: fixture.api });
+  useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
+  const chosen = { providerId: 'deepseek', modelId: 'deepseek-flash' };
+  await useModelSelectionStore.getState().persistSelection(chosen);
+  const saved = fixture.settings.readSettings();
+  expect(saved).toMatchObject({
+    status: 'ok',
+    settings: { config: { general: { lastSelectedModel: chosen } } },
+  });
+  if (saved.status !== 'ok') throw new Error('Expected settings');
+  useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
+  useModelSelectionStore
+    .getState()
+    .applyBootstrapSelection(saved.settings.config.general.lastSelectedModel);
+  useModelSelectionStore
+    .getState()
+    .bindSession('existing', { providerId: 'openai', modelId: 'other' });
+  expect(useModelSelectionStore.getState().selection).toEqual({
+    providerId: 'openai',
+    modelId: 'other',
+  });
+  useModelSelectionStore.getState().bindSession();
+  expect(useModelSelectionStore.getState().selection).toEqual(chosen);
 });

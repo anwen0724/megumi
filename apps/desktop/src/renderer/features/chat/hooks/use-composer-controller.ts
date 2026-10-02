@@ -1,6 +1,18 @@
 // Owns Composer interaction state and builds the host-neutral submit payload.
-import { type FormEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/application/contracts';
+import {
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type {
+  InputSuggestionQueryItem,
+  InputSuggestionQueryResult,
+} from '@megumi/application/contracts';
 import {
   getComposerModelOptionsForProviders,
   modelOptionValue,
@@ -48,12 +60,17 @@ function createComposerSubmitPayload(input: {
   };
 }
 
-function resolveSubmitMessage(rawValue: string, completion: SelectedCommandCompletion | null): string {
+function resolveSubmitMessage(
+  rawValue: string,
+  completion: SelectedCommandCompletion | null,
+): string {
   if (!completion) {
     return rawValue.trim();
   }
 
-  return completion.selection ? rawValue.trim() : `${completion.replacementInput}${rawValue}`.trim();
+  return completion.selection
+    ? rawValue.trim()
+    : `${completion.replacementInput}${rawValue}`.trim();
 }
 
 export function useComposerController({
@@ -67,6 +84,7 @@ export function useComposerController({
   seedText = null,
   onSubmit,
   onStop,
+  onOpenModelSettings,
   onChooseContext,
   onSelectImages,
   onSelectDocuments,
@@ -78,29 +96,27 @@ export function useComposerController({
   const modelId = useId();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [value, setValue] = useState(initialValue);
-  const [selectedCommandCompletion, setSelectedCommandCompletion] = useState<SelectedCommandCompletion | null>(null);
+  const [selectedCommandCompletion, setSelectedCommandCompletion] =
+    useState<SelectedCommandCompletion | null>(null);
   const [selectedInputSuggestionIndex, setSelectedInputSuggestionIndex] = useState(0);
   const permissionMode = usePermissionModeStore((state) => state.mode);
   const persistPermissionMode = usePermissionModeStore((state) => state.persistMode);
   const modelSelection = useModelSelectionStore((state) => state.selection);
   const persistModelSelection = useModelSelectionStore((state) => state.persistSelection);
-  const [selectedAttachments, setSelectedAttachments] = useState<ComposerDraftAttachment[]>(initialAttachments);
+  const [selectedAttachments, setSelectedAttachments] =
+    useState<ComposerDraftAttachment[]>(initialAttachments);
   const valueRef = useRef(value);
   const selectedAttachmentsRef = useRef(selectedAttachments);
   const selectedCommandCompletionRef = useRef(selectedCommandCompletion);
   valueRef.current = value;
   selectedAttachmentsRef.current = selectedAttachments;
   selectedCommandCompletionRef.current = selectedCommandCompletion;
-  const modelOptions = useMemo(
-    () => getComposerModelOptionsForProviders(providers),
-    [providers],
-  );
+  const modelOptions = useMemo(() => getComposerModelOptionsForProviders(providers), [providers]);
   const selectedModelValue = modelSelection
     ? modelOptionValue(modelSelection.providerId, modelSelection.modelId)
     : undefined;
-  const selectedModelOption = modelOptions.find((option) => option.value === selectedModelValue)
-    ?? modelOptions[0];
-  const model = selectedModelOption?.value ?? '';
+  const selectedModelOption = modelOptions.find((option) => option.value === selectedModelValue);
+  const model = selectedModelValue ?? '';
   const maxImageCount = imageInputCapabilities?.maxImageCount ?? 0;
   const maxDocumentCount = imageInputCapabilities?.maxDocumentCount ?? 0;
   const selectedImages = selectedAttachments.filter(
@@ -112,32 +128,37 @@ export function useComposerController({
   const trimmedValue = value.trim();
   const inputLocked = false;
   const sendLocked = status === 'sending' || status === 'running' || status === 'waiting-approval';
-  const imageInputNotice = selectedImages.length > 0 && selectedModelOption?.imageInput === false
-    ? 'This model will receive attachment metadata, but not the image content.'
-    : undefined;
-  const canSend = (
-    trimmedValue.length > 0
-    || selectedAttachments.length > 0
-    || (selectedCommandCompletion !== null && !selectedCommandCompletion.selection)
-  )
-    && !sendLocked && modelOptions.length > 0;
-  const canAttachImages = selectedImages.length < maxImageCount
-    && !sendLocked
-    && selectedCommandCompletion === null;
-  const canAttachDocuments = selectedDocuments.length < maxDocumentCount
-    && !sendLocked
-    && selectedCommandCompletion === null;
+  const imageInputNotice =
+    selectedImages.length > 0 && selectedModelOption?.imageInput === false
+      ? 'This model will receive attachment metadata, but not the image content.'
+      : undefined;
+  const canSend =
+    (trimmedValue.length > 0 ||
+      selectedAttachments.length > 0 ||
+      (selectedCommandCompletion !== null && !selectedCommandCompletion.selection)) &&
+    !sendLocked &&
+    Boolean(selectedModelOption);
+  const canAttachImages =
+    selectedImages.length < maxImageCount && !sendLocked && selectedCommandCompletion === null;
+  const canAttachDocuments =
+    selectedDocuments.length < maxDocumentCount &&
+    !sendLocked &&
+    selectedCommandCompletion === null;
   const showStop = status === 'sending' || status === 'running' || status === 'waiting-approval';
   const canStop = showStop && Boolean(onStop);
-  const [inputSuggestions, setInputSuggestions] = useState<InputSuggestionQueryResult>({ type: 'inactive' });
-  const activeInputSuggestions = inputSuggestions.type === 'suggestions' && inputSuggestions.draftInput === value
-    ? inputSuggestions
-    : { type: 'inactive' as const };
-  const visibleInputSuggestionItems = activeInputSuggestions.type === 'suggestions'
-    ? activeInputSuggestions.groups.flatMap((group) => group.items)
-    : [];
-  const hasInputSuggestionSelection = visibleInputSuggestionItems.length > 0
-    && selectedInputSuggestionIndex >= 0;
+  const [inputSuggestions, setInputSuggestions] = useState<InputSuggestionQueryResult>({
+    type: 'inactive',
+  });
+  const activeInputSuggestions =
+    inputSuggestions.type === 'suggestions' && inputSuggestions.draftInput === value
+      ? inputSuggestions
+      : { type: 'inactive' as const };
+  const visibleInputSuggestionItems =
+    activeInputSuggestions.type === 'suggestions'
+      ? activeInputSuggestions.groups.flatMap((group) => group.items)
+      : [];
+  const hasInputSuggestionSelection =
+    visibleInputSuggestionItems.length > 0 && selectedInputSuggestionIndex >= 0;
 
   useEffect(() => {
     if (seedTextKey && seedText !== null && seedText !== undefined) {
@@ -149,17 +170,6 @@ export function useComposerController({
   useEffect(() => {
     onDraftChange?.({ text: value, attachments: selectedAttachments });
   }, [onDraftChange, selectedAttachments, value]);
-
-  useEffect(() => {
-    if (modelOptions.length === 0) {
-      return;
-    }
-
-    const fallback = modelOptions[0];
-    if (!selectedModelOption || selectedModelValue !== selectedModelOption.value) {
-      void persistModelSelection({ providerId: fallback.providerId, modelId: fallback.modelId });
-    }
-  }, [modelOptions, persistModelSelection, selectedModelOption, selectedModelValue]);
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -215,9 +225,9 @@ export function useComposerController({
       return;
     }
 
-    setSelectedInputSuggestionIndex((index) => (
-      index >= visibleInputSuggestionItems.length ? 0 : Math.max(0, index)
-    ));
+    setSelectedInputSuggestionIndex((index) =>
+      index >= visibleInputSuggestionItems.length ? 0 : Math.max(0, index),
+    );
   }, [visibleInputSuggestionItems.length]);
 
   async function submitDraft() {
@@ -235,7 +245,9 @@ export function useComposerController({
       providerId: selectedModelOption.providerId,
       model: selectedModelOption.modelId,
       attachments: selectedAttachments,
-      ...(selectedCommandCompletion?.selection ? { skillSelection: selectedCommandCompletion.selection } : {}),
+      ...(selectedCommandCompletion?.selection
+        ? { skillSelection: selectedCommandCompletion.selection }
+        : {}),
     });
 
     // Consume the draft before the asynchronous send can create a Session and
@@ -319,7 +331,9 @@ export function useComposerController({
       showToast({
         tone: 'warning',
         title: rendererI18n.t('chat:notifications.documentLimit.title'),
-        message: rendererI18n.t('chat:notifications.documentLimit.message', { count: maxDocumentCount }),
+        message: rendererI18n.t('chat:notifications.documentLimit.message', {
+          count: maxDocumentCount,
+        }),
       });
     }
     setSelectedAttachments((current) => [...current, ...documents.slice(0, remaining)]);
@@ -334,9 +348,9 @@ export function useComposerController({
   }
 
   function removeAttachment(draftAttachmentId: string) {
-    setSelectedAttachments((current) => current.filter(
-      (attachment) => attachment.draftAttachmentId !== draftAttachmentId,
-    ));
+    setSelectedAttachments((current) =>
+      current.filter((attachment) => attachment.draftAttachmentId !== draftAttachmentId),
+    );
   }
 
   function applyInputSuggestion(item: InputSuggestionQueryItem) {
@@ -351,7 +365,8 @@ export function useComposerController({
   }
 
   function handleComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    const isComposing = event.nativeEvent.isComposing || (event as unknown as { isComposing?: boolean }).isComposing;
+    const isComposing =
+      event.nativeEvent.isComposing || (event as unknown as { isComposing?: boolean }).isComposing;
 
     if (selectedCommandCompletion && event.key === 'Backspace' && value.length === 0) {
       event.preventDefault();
@@ -361,21 +376,25 @@ export function useComposerController({
 
     if (event.key === 'ArrowDown' && visibleInputSuggestionItems.length > 0) {
       event.preventDefault();
-      setSelectedInputSuggestionIndex((index) => (
-        index + 1 >= visibleInputSuggestionItems.length ? 0 : index + 1
-      ));
+      setSelectedInputSuggestionIndex((index) =>
+        index + 1 >= visibleInputSuggestionItems.length ? 0 : index + 1,
+      );
       return;
     }
 
     if (event.key === 'ArrowUp' && visibleInputSuggestionItems.length > 0) {
       event.preventDefault();
-      setSelectedInputSuggestionIndex((index) => (
-        index <= 0 ? visibleInputSuggestionItems.length - 1 : index - 1
-      ));
+      setSelectedInputSuggestionIndex((index) =>
+        index <= 0 ? visibleInputSuggestionItems.length - 1 : index - 1,
+      );
       return;
     }
 
-    if (!isComposing && (event.key === 'Enter' || event.key === 'Tab') && hasInputSuggestionSelection) {
+    if (
+      !isComposing &&
+      (event.key === 'Enter' || event.key === 'Tab') &&
+      hasInputSuggestionSelection
+    ) {
       event.preventDefault();
       const item = visibleInputSuggestionItems[selectedInputSuggestionIndex];
       if (item) {
@@ -430,18 +449,28 @@ export function useComposerController({
     imageInputNotice,
     onValueChange: handleValueChange,
     onInputSuggestionChoose: chooseInputSuggestion,
-    onPermissionModeChange: (mode) => { void persistPermissionMode(mode); },
+    onPermissionModeChange: (mode) => {
+      void persistPermissionMode(mode);
+    },
     onModelChange: (nextModel) => {
       const option = modelOptions.find((candidate) => candidate.value === nextModel);
-      if (option) void persistModelSelection({ providerId: option.providerId, modelId: option.modelId });
+      if (option)
+        void persistModelSelection({ providerId: option.providerId, modelId: option.modelId });
     },
     onKeyDown: handleComposerKeyDown,
     onSubmit: handleSubmit,
     onStop,
+    onOpenModelSettings,
     onChooseContext,
-    onAttachImages: () => { void selectImages(); },
-    onAttachDocuments: () => { void selectDocuments(); },
-    onPasteImage: () => { void pasteImage(); },
+    onAttachImages: () => {
+      void selectImages();
+    },
+    onAttachDocuments: () => {
+      void selectDocuments();
+    },
+    onPasteImage: () => {
+      void pasteImage();
+    },
     onRemoveAttachment: removeAttachment,
   };
 

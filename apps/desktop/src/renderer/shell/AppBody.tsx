@@ -13,31 +13,34 @@ export function AppBody() {
   const controller = useAppBodyController();
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(DEFAULT_LEFT_SIDEBAR_WIDTH);
 
-  const startLeftSidebarResize = useCallback((event: ReactPointerEvent) => {
-    event.preventDefault();
-    const startX = event.clientX;
-    const startWidth = leftSidebarWidth;
+  const startLeftSidebarResize = useCallback(
+    (event: ReactPointerEvent) => {
+      event.preventDefault();
+      const startX = event.clientX;
+      const startWidth = leftSidebarWidth;
 
-    function handlePointerMove(moveEvent: PointerEvent) {
-      const next = Math.min(
-        MAX_LEFT_SIDEBAR_WIDTH,
-        Math.max(MIN_LEFT_SIDEBAR_WIDTH, startWidth + moveEvent.clientX - startX),
-      );
-      setLeftSidebarWidth(next);
-    }
+      function handlePointerMove(moveEvent: PointerEvent) {
+        const next = Math.min(
+          MAX_LEFT_SIDEBAR_WIDTH,
+          Math.max(MIN_LEFT_SIDEBAR_WIDTH, startWidth + moveEvent.clientX - startX),
+        );
+        setLeftSidebarWidth(next);
+      }
 
-    function handlePointerUp() {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    }
+      function handlePointerUp() {
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
 
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-  }, [leftSidebarWidth]);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+    },
+    [leftSidebarWidth],
+  );
 
   return (
     <div data-testid="app-body" className="flex min-h-0 flex-1 overflow-hidden">
@@ -77,10 +80,14 @@ export function AppBody() {
             onToggleRightSidebar={controller.toggleRightSidebar}
             page={controller.activePage}
             onStartRecommendationConversation={controller.handleStartRecommendationConversation}
+            onOpenModelSettings={controller.openModelSettings}
             onOpenContentSources={controller.openContentSources}
           />
           {controller.activePage === 'chat' ? (
-            <RightSidebar open={controller.rightSidebarOpen} onClose={() => controller.setRightSidebarOpen(false)} />
+            <RightSidebar
+              open={controller.rightSidebarOpen}
+              onClose={() => controller.setRightSidebarOpen(false)}
+            />
           ) : null}
         </>
       )}

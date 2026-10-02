@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { InputCapabilitiesResult, InputSuggestionQueryResult } from '@megumi/application/contracts';
+import type {
+  InputCapabilitiesResult,
+  InputSuggestionQueryResult,
+} from '@megumi/application/contracts';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import { useProviderStore } from '../../../entities/provider/store';
@@ -20,7 +23,7 @@ import { collectPendingApprovalActivities } from '../approval-overlay';
 
 const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 
-export function ChatPage() {
+export function ChatPage({ onOpenModelSettings }: { onOpenModelSettings?: () => void }) {
   const { t } = useTranslation('chat');
   const controller = useChatPageController();
   const providers = useProviderStore((state) => state.providers);
@@ -31,39 +34,52 @@ export function ChatPage() {
   const draftRecommendation = useSessionStore((state) => state.newSessionDraftRecommendation);
   const [composerHeight, setComposerHeight] = useState(FALLBACK_COMPOSER_SPACER_HEIGHT);
   const [imageInputCapabilities, setImageInputCapabilities] = useState<InputCapabilitiesResult>();
-  const effectiveComposerDockHeight = composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
-  const bottomSpacerHeight = Math.max(effectiveComposerDockHeight + 24, FALLBACK_COMPOSER_SPACER_HEIGHT);
+  const effectiveComposerDockHeight =
+    composerHeight > 0 ? composerHeight : FALLBACK_COMPOSER_SPACER_HEIGHT;
+  const bottomSpacerHeight = Math.max(
+    effectiveComposerDockHeight + 24,
+    FALLBACK_COMPOSER_SPACER_HEIGHT,
+  );
   const pendingApprovals = useMemo(
     () => collectPendingApprovalActivities(controller.timelineMessages),
     [controller.timelineMessages],
   );
-  const getInputSuggestions = useCallback(async (
-    request: { draftInput: string },
-  ): Promise<InputSuggestionQueryResult> => {
-    try {
-      const payload = {
-        ...request,
-        ...(controller.currentProjectId ? { workspaceId: controller.currentProjectId } : {}),
-      };
-      const result = await window.megumi.command.suggestions(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.inputSuggestions, payload),
-      );
+  const getInputSuggestions = useCallback(
+    async (request: { draftInput: string }): Promise<InputSuggestionQueryResult> => {
+      try {
+        const payload = {
+          ...request,
+          ...(controller.currentProjectId ? { workspaceId: controller.currentProjectId } : {}),
+        };
+        const result = await window.megumi.command.suggestions(
+          createRendererRuntimeIpcRequest(IPC_CHANNELS.session.inputSuggestions, payload),
+        );
 
-      return result.ok ? result.data.suggestions : { type: 'inactive' };
-    } catch {
-      return { type: 'inactive' };
-    }
-  }, [controller.currentProjectId]);
+        return result.ok ? result.data.suggestions : { type: 'inactive' };
+      } catch {
+        return { type: 'inactive' };
+      }
+    },
+    [controller.currentProjectId],
+  );
   const selectImages = useCallback(async (): Promise<ComposerDraftImage[]> => {
     const result = await window.megumi.session.imageInput.select(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.session.imageInputSelect, {}),
     );
     if (!result.ok) {
-      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imageSelectFailed.title'), message: rendererI18n.t('chat:notifications.imageSelectFailed.message') });
+      showToast({
+        tone: 'error',
+        title: rendererI18n.t('chat:notifications.imageSelectFailed.title'),
+        message: rendererI18n.t('chat:notifications.imageSelectFailed.message'),
+      });
       return [];
     }
     if (result.data.status === 'failed') {
-      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imageSelectFailed.title'), message: rendererI18n.t('chat:notifications.imageSelectFailed.message') });
+      showToast({
+        tone: 'error',
+        title: rendererI18n.t('chat:notifications.imageSelectFailed.title'),
+        message: rendererI18n.t('chat:notifications.imageSelectFailed.message'),
+      });
       return [];
     }
     return result.data.status === 'selected'
@@ -91,11 +107,19 @@ export function ChatPage() {
       createRendererRuntimeIpcRequest(IPC_CHANNELS.session.imageInputClipboardRead, {}),
     );
     if (!result.ok) {
-      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imagePasteFailed.title'), message: rendererI18n.t('chat:notifications.imagePasteFailed.message') });
+      showToast({
+        tone: 'error',
+        title: rendererI18n.t('chat:notifications.imagePasteFailed.title'),
+        message: rendererI18n.t('chat:notifications.imagePasteFailed.message'),
+      });
       return [];
     }
     if (result.data.status === 'failed') {
-      showToast({ tone: 'error', title: rendererI18n.t('chat:notifications.imagePasteFailed.title'), message: rendererI18n.t('chat:notifications.imagePasteFailed.message') });
+      showToast({
+        tone: 'error',
+        title: rendererI18n.t('chat:notifications.imagePasteFailed.title'),
+        message: rendererI18n.t('chat:notifications.imagePasteFailed.message'),
+      });
       return [];
     }
     return result.data.status === 'selected'
@@ -115,18 +139,26 @@ export function ChatPage() {
     onKeyDown: timelineScroll.onKeyDown,
   };
 
-  const branchDraft = controller.branchDraft ? {
-    key: controller.branchDraft.branchMarkerId,
-    label: t(controller.branchDraft.sourceKind === 'reply' ? 'branches.fromReply' : 'branches.fromInput'),
-    preview: controller.branchDraft.preview,
-    onCancel: () => {
-      void controller.cancelBranchDraft();
-    },
-  } : null;
+  const branchDraft = controller.branchDraft
+    ? {
+        key: controller.branchDraft.branchMarkerId,
+        label: t(
+          controller.branchDraft.sourceKind === 'reply'
+            ? 'branches.fromReply'
+            : 'branches.fromInput',
+        ),
+        preview: controller.branchDraft.preview,
+        onCancel: () => {
+          void controller.cancelBranchDraft();
+        },
+      }
+    : null;
 
   useEffect(() => {
     void loadProviders(controller.currentProjectId ?? undefined);
-    return window.megumi.settings.onChanged(() => { void loadProviders(controller.currentProjectId ?? undefined); });
+    return window.megumi.settings.onChanged(() => {
+      void loadProviders(controller.currentProjectId ?? undefined);
+    });
   }, [loadProviders, controller.currentProjectId]);
 
   useEffect(() => {
@@ -135,11 +167,13 @@ export function ChatPage() {
     if (!capabilities) return undefined;
     void capabilities(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.session.inputCapabilitiesGet, {}),
-    ).then((result) => {
-      if (!cancelled && result.ok) {
-        setImageInputCapabilities(result.data);
-      }
-    }).catch(() => undefined);
+    )
+      .then((result) => {
+        if (!cancelled && result.ok) {
+          setImageInputCapabilities(result.data);
+        }
+      })
+      .catch(() => undefined);
 
     return () => {
       cancelled = true;
@@ -150,12 +184,14 @@ export function ChatPage() {
     <div
       data-testid="chat-page-root"
       className="relative h-full min-h-0 w-full flex-1 overflow-hidden bg-[var(--color-app-bg)] transition-[background-color] duration-200 ease-out"
-      style={{
-        '--chat-column-width': '48rem',
-        '--chat-composer-width': '50rem',
-        '--composer-dock-height': `${effectiveComposerDockHeight}px`,
-        '--composer-dock-bottom-inset': `${bottomSpacerHeight}px`,
-      } as CSSProperties}
+      style={
+        {
+          '--chat-column-width': '48rem',
+          '--chat-composer-width': '50rem',
+          '--composer-dock-height': `${effectiveComposerDockHeight}px`,
+          '--composer-dock-bottom-inset': `${bottomSpacerHeight}px`,
+        } as CSSProperties
+      }
     >
       {controller.hasTimelineContent ? (
         <>
@@ -176,17 +212,25 @@ export function ChatPage() {
                 onSwitchProject: (projectId) => {
                   void controller.switchNewSessionProject(projectId);
                 },
-                recommendationReference: draftRecommendation ? {
-                  recommendationId: draftRecommendation.recommendationId,
-                  sourceName: draftRecommendation.sourceName,
-                  canonicalUrl: draftRecommendation.canonicalUrl,
-                  title: draftRecommendation.title,
-                  ...(draftRecommendation.author ? { author: draftRecommendation.author } : {}),
-                  ...(draftRecommendation.contentPublishedAt ? { publishedAt: draftRecommendation.contentPublishedAt } : {}),
-                  ...(draftRecommendation.description ? { description: draftRecommendation.description } : {}),
-                  ...(draftRecommendation.coverUrl ? { coverUrl: draftRecommendation.coverUrl } : {}),
-                  recommendationReason: draftRecommendation.recommendationReason,
-                } : null,
+                recommendationReference: draftRecommendation
+                  ? {
+                      recommendationId: draftRecommendation.recommendationId,
+                      sourceName: draftRecommendation.sourceName,
+                      canonicalUrl: draftRecommendation.canonicalUrl,
+                      title: draftRecommendation.title,
+                      ...(draftRecommendation.author ? { author: draftRecommendation.author } : {}),
+                      ...(draftRecommendation.contentPublishedAt
+                        ? { publishedAt: draftRecommendation.contentPublishedAt }
+                        : {}),
+                      ...(draftRecommendation.description
+                        ? { description: draftRecommendation.description }
+                        : {}),
+                      ...(draftRecommendation.coverUrl
+                        ? { coverUrl: draftRecommendation.coverUrl }
+                        : {}),
+                      recommendationReason: draftRecommendation.recommendationReason,
+                    }
+                  : null,
               }}
               scrollPanel={scrollPanel}
               messageColumn={{
@@ -194,10 +238,9 @@ export function ChatPage() {
                 bottomSpacerHeight,
                 canShowBranchAction: controller.canShowBranchAction,
                 onBranchFromMessage: (message) => {
-                  void controller.createBranchDraft(createBranchDraftViewInput(
-                    message,
-                    controller.timelineMessages,
-                  ));
+                  void controller.createBranchDraft(
+                    createBranchDraftViewInput(message, controller.timelineMessages),
+                  );
                 },
                 onOpenWorkspaceChangedFile: (projectPath) => {
                   void controller.openWorkspaceChangedFile(projectPath);
@@ -206,6 +249,7 @@ export function ChatPage() {
             />
           </div>
           <ComposerDock
+            onOpenModelSettings={onOpenModelSettings}
             status={controller.composerStatus}
             branchDraft={branchDraft}
             approvalRequests={pendingApprovals}
@@ -226,7 +270,10 @@ export function ChatPage() {
           />
         </>
       ) : (
-        <div data-testid="welcome-chat-layout" className="flex h-full min-h-0 items-center justify-center px-6">
+        <div
+          data-testid="welcome-chat-layout"
+          className="flex h-full min-h-0 items-center justify-center px-6"
+        >
           <div className="w-full max-w-3xl">
             <ChatViewport
               hasTimelineContent={false}
@@ -244,17 +291,25 @@ export function ChatPage() {
                 onSwitchProject: (projectId) => {
                   void controller.switchNewSessionProject(projectId);
                 },
-                recommendationReference: draftRecommendation ? {
-                  recommendationId: draftRecommendation.recommendationId,
-                  sourceName: draftRecommendation.sourceName,
-                  canonicalUrl: draftRecommendation.canonicalUrl,
-                  title: draftRecommendation.title,
-                  ...(draftRecommendation.author ? { author: draftRecommendation.author } : {}),
-                  ...(draftRecommendation.contentPublishedAt ? { publishedAt: draftRecommendation.contentPublishedAt } : {}),
-                  ...(draftRecommendation.description ? { description: draftRecommendation.description } : {}),
-                  ...(draftRecommendation.coverUrl ? { coverUrl: draftRecommendation.coverUrl } : {}),
-                  recommendationReason: draftRecommendation.recommendationReason,
-                } : null,
+                recommendationReference: draftRecommendation
+                  ? {
+                      recommendationId: draftRecommendation.recommendationId,
+                      sourceName: draftRecommendation.sourceName,
+                      canonicalUrl: draftRecommendation.canonicalUrl,
+                      title: draftRecommendation.title,
+                      ...(draftRecommendation.author ? { author: draftRecommendation.author } : {}),
+                      ...(draftRecommendation.contentPublishedAt
+                        ? { publishedAt: draftRecommendation.contentPublishedAt }
+                        : {}),
+                      ...(draftRecommendation.description
+                        ? { description: draftRecommendation.description }
+                        : {}),
+                      ...(draftRecommendation.coverUrl
+                        ? { coverUrl: draftRecommendation.coverUrl }
+                        : {}),
+                      recommendationReason: draftRecommendation.recommendationReason,
+                    }
+                  : null,
               }}
               scrollPanel={scrollPanel}
               messageColumn={{
@@ -267,6 +322,7 @@ export function ChatPage() {
             />
             <div data-testid="welcome-composer-layout" className="mt-10 w-full">
               <Composer
+                onOpenModelSettings={onOpenModelSettings}
                 status={controller.composerStatus}
                 providers={providers}
                 contextUsage={controller.contextUsage}

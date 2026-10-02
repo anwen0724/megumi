@@ -18,7 +18,9 @@ export interface TestApplication {
   cleanup(): Promise<void>;
 }
 
-export function composeTestApplication(responses: readonly string[] = ['Test reply.']): TestApplication {
+export function composeTestApplication(
+  responses: readonly string[] = ['Test reply.'],
+): TestApplication {
   const root = mkdtempSync(path.join(tmpdir(), 'megumi-composition-'));
   const home = path.join(root, 'home');
   const workspace = path.join(root, 'workspace');
@@ -26,13 +28,22 @@ export function composeTestApplication(responses: readonly string[] = ['Test rep
   const scripted = createScriptedStreams(responses);
   fs.ensureDirSync(home);
   fs.writeJsonSync(path.join(home, 'settings.json'), {
-    general: { setupCompleted: true },
-    models: {
-      defaultModel: { providerId: 'test', modelId: 'model' },
-      providers: { test: { api: 'openai-completions', baseUrl: 'https://example.test/v1' } },
-      customModels: { test: { model: { contextWindowTokens: 64000, maxOutputTokens: 2048 } } },
+    general: { setupCompleted: true, lastSelectedModel: { providerId: 'test', modelId: 'model' } },
+    providers: {
+      test: {
+        api: 'openai-completions',
+        baseUrl: 'https://example.test/v1',
+        models: {
+          model: { contextWindowTokens: 64000, maxOutputTokens: 2048 },
+        },
+      },
     },
-    discovery: { conversationRecognitionEnabled: true, enabledSources: ['open_web'] },
+    discovery: {
+      conversationRecognitionEnabled: true,
+      enabledSources: ['open_web'],
+      recommendationModel: { providerId: 'test', modelId: 'model' },
+      candidateSupplyModel: { providerId: 'test', modelId: 'model' },
+    },
   });
   fs.writeJsonSync(path.join(home, 'credentials.json'), { providers: { test: 'test-key' } });
   const runtime = createApplication({

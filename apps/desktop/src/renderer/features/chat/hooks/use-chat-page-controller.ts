@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApprovalResolvePayload } from '@megumi/desktop/main/ipc/schemas';
 import { IPC_CHANNELS } from '@megumi/desktop/renderer/shared/ipc/channels';
 import type { GetContextUsageResult } from '@megumi/application/contracts';
-import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
+import type {
+  ToolApprovalResolvePayload,
+  ToolApprovalResolveResult,
+} from '../../../entities/approval';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
 import { useRunStore } from '../../../entities/run/store';
@@ -36,16 +39,14 @@ function isActiveTimelineAssistantMessage(message: TimelineMessage): boolean {
       return true;
     }
 
-    return block.items.some((item) =>
-      'status' in item && ['running', 'streaming', 'pending'].includes(String(item.status))
+    return block.items.some(
+      (item) =>
+        'status' in item && ['running', 'streaming', 'pending'].includes(String(item.status)),
     );
   });
 }
 
-function canShowBranchAction(
-  message: TimelineMessage,
-  userActionsBlocked: boolean,
-): boolean {
+function canShowBranchAction(message: TimelineMessage, userActionsBlocked: boolean): boolean {
   if (userActionsBlocked || message.role !== 'assistant' || !message.executionId) {
     return false;
   }
@@ -56,7 +57,9 @@ function canShowBranchAction(
 export function useChatPageController() {
   const rawAgentStatus = useChatUiStore((state) => state.agentStatus);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
-  const newSessionDraftTargetProjectId = useSessionStore((state) => state.newSessionDraftTargetProjectId);
+  const newSessionDraftTargetProjectId = useSessionStore(
+    (state) => state.newSessionDraftTargetProjectId,
+  );
   const sessions = useSessionStore((state) => state.sessions);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
@@ -64,23 +67,18 @@ export function useChatPageController() {
   const runs = useRunStore((state) => state.runs);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [contextUsage, setContextUsage] = useState<GetContextUsageResult | undefined>(undefined);
-  const activeSession = sessions.find((session) =>
-    session.id === activeSessionId && session.projectId === currentProjectId
-  ) ?? null;
+  const activeSession =
+    sessions.find(
+      (session) => session.id === activeSessionId && session.projectId === currentProjectId,
+    ) ?? null;
   const effectiveActiveSessionId = activeSession?.id ?? null;
 
   const isDraftNewSession = !effectiveActiveSessionId;
   const effectiveProjectId = effectiveActiveSessionId
     ? currentProjectId
-    : newSessionDraftTargetProjectId ?? currentProjectId;
+    : (newSessionDraftTargetProjectId ?? currentProjectId);
   useEffect(() => {
-    let active = true;
-    void window.megumi.models.getCatalog({ workspaceId: effectiveProjectId ?? undefined }).then((result) => {
-      if (!active || !result.ok || result.data.status !== 'ok') return;
-      useModelSelectionStore.getState().applyBootstrapSelection(result.data.defaultModel);
-      useModelSelectionStore.getState().bindSession(activeSession?.id, activeSession?.modelSelection ?? result.data.defaultModel);
-    });
-    return () => { active = false; };
+    useModelSelectionStore.getState().bindSession(activeSession?.id, activeSession?.modelSelection);
   }, [effectiveProjectId, activeSession?.id, activeSession?.modelSelection]);
   const currentProject = projects.find((p) => p.id === effectiveProjectId) ?? null;
   const agentStatus = isDraftNewSession ? 'idle' : rawAgentStatus;
@@ -91,35 +89,47 @@ export function useChatPageController() {
     createBranchDraft,
     cancelBranchDraft,
   } = useSessionActions();
-  const activeSessionTimelineKey = currentProjectId && effectiveActiveSessionId
-    ? sessionTimelineKey(currentProjectId, effectiveActiveSessionId)
-    : null;
-  const timelineMessages = useSessionTimelineStore((state) => (
+  const activeSessionTimelineKey =
+    currentProjectId && effectiveActiveSessionId
+      ? sessionTimelineKey(currentProjectId, effectiveActiveSessionId)
+      : null;
+  const timelineMessages = useSessionTimelineStore((state) =>
     activeSessionTimelineKey
-      ? state.sessions[activeSessionTimelineKey]?.messages ?? EMPTY_TIMELINE_MESSAGES
-      : EMPTY_TIMELINE_MESSAGES
-  ));
-  const timelineUpdateKey = useMemo(() => JSON.stringify(timelineMessages.map((message) => [
-    message.messageId,
-    message.updatedAt ?? message.createdAt,
-    message.blocks.map((block) => {
-      if (block.kind === 'answer_text') {
-        return `${block.blockId}:${block.text.length}:${block.status}`;
-      }
-      if (block.kind === 'process_disclosure') {
-        return `${block.blockId}:${block.status}:${block.items.length}`;
-      }
-      if (block.kind === 'user_text') {
-        return `${block.blockId}:${block.text.length}`;
-      }
-      return block.blockId;
-    }).join('|'),
-  ])), [timelineMessages]);
+      ? (state.sessions[activeSessionTimelineKey]?.messages ?? EMPTY_TIMELINE_MESSAGES)
+      : EMPTY_TIMELINE_MESSAGES,
+  );
+  const timelineUpdateKey = useMemo(
+    () =>
+      JSON.stringify(
+        timelineMessages.map((message) => [
+          message.messageId,
+          message.updatedAt ?? message.createdAt,
+          message.blocks
+            .map((block) => {
+              if (block.kind === 'answer_text') {
+                return `${block.blockId}:${block.text.length}:${block.status}`;
+              }
+              if (block.kind === 'process_disclosure') {
+                return `${block.blockId}:${block.status}:${block.items.length}`;
+              }
+              if (block.kind === 'user_text') {
+                return `${block.blockId}:${block.text.length}`;
+              }
+              return block.blockId;
+            })
+            .join('|'),
+        ]),
+      ),
+    [timelineMessages],
+  );
 
   const activeRunCandidate = activeExecutionId ? runs[activeExecutionId] : null;
-  const activeRun = activeRunCandidate && !isDraftNewSession && (!activeRunCandidate.sessionId || activeRunCandidate.sessionId === effectiveActiveSessionId)
-    ? activeRunCandidate
-    : null;
+  const activeRun =
+    activeRunCandidate &&
+    !isDraftNewSession &&
+    (!activeRunCandidate.sessionId || activeRunCandidate.sessionId === effectiveActiveSessionId)
+      ? activeRunCandidate
+      : null;
   const userActionsBlocked =
     agentStatus === 'sending' ||
     agentStatus === 'running' ||
@@ -128,9 +138,17 @@ export function useChatPageController() {
     activeRun?.status === 'waiting' ||
     activeRun?.status === 'cancelling';
 
-  const hasPendingApproval = timelineMessages.some((message) => message.role === 'assistant' && message.blocks.some((block) => (
-    block.kind === 'process_disclosure' && block.items.some((item) => item.kind === 'tool_activity' && item.status === 'awaiting_approval')
-  )));
+  const hasPendingApproval = timelineMessages.some(
+    (message) =>
+      message.role === 'assistant' &&
+      message.blocks.some(
+        (block) =>
+          block.kind === 'process_disclosure' &&
+          block.items.some(
+            (item) => item.kind === 'tool_activity' && item.status === 'awaiting_approval',
+          ),
+      ),
+  );
 
   const composerStatus: ComposerStatus = agentStatus;
   const activeEmptyNewSession =
@@ -179,20 +197,24 @@ export function useChatPageController() {
         setContextUsage(undefined);
         return;
       }
-      const result = await window.megumi.session.contextUsage.get(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.session.sessionContextUsageGet,
-        {
+      const result = await window.megumi.session.contextUsage.get(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionContextUsageGet, {
           sessionId: effectiveActiveSessionId,
-          modelSelection: { provider_id: modelSelection.providerId, model_id: modelSelection.modelId },
-        },
-      ));
+          modelSelection: {
+            provider_id: modelSelection.providerId,
+            model_id: modelSelection.modelId,
+          },
+        }),
+      );
       if (cancelled) {
         return;
       }
-      const nextContextUsage: GetContextUsageResult = result.ok ? result.data : {
-        status: 'failed' as const,
-        failure: { code: result.data.code, message: result.data.message },
-      };
+      const nextContextUsage: GetContextUsageResult = result.ok
+        ? result.data
+        : {
+            status: 'failed' as const,
+            failure: { code: result.data.code, message: result.data.message },
+          };
       setContextUsage(nextContextUsage);
     }
 
@@ -201,7 +223,10 @@ export function useChatPageController() {
         if (!cancelled) {
           setContextUsage({
             status: 'failed',
-            failure: { code: 'context_usage_load_failed', message: 'Context usage could not be loaded.' },
+            failure: {
+              code: 'context_usage_load_failed',
+              message: 'Context usage could not be loaded.',
+            },
           });
         }
       });
@@ -242,27 +267,27 @@ export function useChatPageController() {
     }
 
     try {
-      await window.megumi.workspace.files.open(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.workspace.filesOpen,
-        {
+      await window.megumi.workspace.files.open(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.workspace.filesOpen, {
           projectId: currentProject.id,
           filePath: projectPath,
-        },
-      ));
+        }),
+      );
     } catch {
       // Opening a file is best-effort.
     }
   }
 
-  async function resolveApproval(payload: ToolApprovalResolvePayload): Promise<ToolApprovalResolveResult> {
+  async function resolveApproval(
+    payload: ToolApprovalResolvePayload,
+  ): Promise<ToolApprovalResolveResult> {
     const resolvePayload: ApprovalResolvePayload = {
       ...payload,
     };
 
-    const result = await window.megumi.approval.resolve(createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.approval.resolve,
-      resolvePayload,
-    ));
+    const result = await window.megumi.approval.resolve(
+      createRendererRuntimeIpcRequest(IPC_CHANNELS.approval.resolve, resolvePayload),
+    );
     if (!result.ok) {
       showToast({
         tone: 'error',

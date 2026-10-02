@@ -8,11 +8,24 @@ import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permis
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 
 function successfulSettings(language: 'zh-CN' | 'en-US', setupCompleted = true) {
-  return { ok: true as const, data: { config: {
-    general: { language, theme: 'verdant-cloud', setupCompleted },
-    permissions: { mode: 'ask' },
-    models: { defaultModel: { providerId: 'deepseek', modelId: 'deepseek-flash' } },
-  }, revision: 'revision', sources: [], diagnostics: [] }, meta: {} };
+  return {
+    ok: true as const,
+    data: {
+      config: {
+        general: {
+          language,
+          theme: 'verdant-cloud',
+          setupCompleted,
+          lastSelectedModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
+        },
+        permissions: { mode: 'ask' },
+      },
+      revision: 'revision',
+      sources: [],
+      diagnostics: [],
+    },
+    meta: {},
+  };
 }
 
 function installSettingsGet(get: ReturnType<typeof vi.fn>) {
@@ -56,7 +69,12 @@ describe('renderer bootstrap localization', () => {
 
   it('leaves the static HTML startup shell visible while settings are unresolved', async () => {
     let resolveSettings!: (value: ReturnType<typeof successfulSettings>) => void;
-    const get = vi.fn(() => new Promise((resolve) => { resolveSettings = resolve; }));
+    const get = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveSettings = resolve;
+        }),
+    );
     const render = vi.fn();
     installSettingsGet(get);
 
@@ -90,7 +108,9 @@ describe('renderer bootstrap localization', () => {
         code: 'settings_load_failed',
       },
     });
-    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain('private transport detail');
+    expect(JSON.stringify(useSetupWizardStore.getState())).not.toContain(
+      'private transport detail',
+    );
     expect(render).toHaveBeenCalledOnce();
   });
 });

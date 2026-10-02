@@ -24,7 +24,9 @@ export function useAppBodyController() {
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
   const startNewSessionDraft = useSessionStore((state) => state.startNewSessionDraft);
-  const startRecommendationSessionDraft = useSessionStore((state) => state.startRecommendationSessionDraft);
+  const startRecommendationSessionDraft = useSessionStore(
+    (state) => state.startRecommendationSessionDraft,
+  );
   const clearNewSessionDraft = useSessionStore((state) => state.clearNewSessionDraft);
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
@@ -32,8 +34,8 @@ export function useAppBodyController() {
   const pageTitle = settingsOpen
     ? 'Settings'
     : activePage === 'discovery'
-      ? 'Today\'s discoveries'
-      : activeSession?.title ?? 'New session';
+      ? "Today's discoveries"
+      : (activeSession?.title ?? 'New session');
 
   useEffect(() => {
     void (async () => {
@@ -42,26 +44,23 @@ export function useAppBodyController() {
     })();
   }, []);
 
-  const sidebarProjects = useMemo<SidebarProjectItem[]>(
-    () => {
-      const limited = projects.slice(0, 8);
-      return limited.map((project) => ({
-        id: project.id,
-        name: project.name,
-        repoPath: project.repoPath,
-        status: project.status,
-        sessions: sessions
-          .filter((session) => session.projectId === project.id)
-          .map((session) => ({
-            id: session.id,
-            title: session.title,
-            meta: formatSessionUpdatedAt(session.updatedAt),
-            active: session.id === activeSessionId,
-          })),
-      }));
-    },
-    [projects, sessions, activeSessionId],
-  );
+  const sidebarProjects = useMemo<SidebarProjectItem[]>(() => {
+    const limited = projects.slice(0, 8);
+    return limited.map((project) => ({
+      id: project.id,
+      name: project.name,
+      repoPath: project.repoPath,
+      status: project.status,
+      sessions: sessions
+        .filter((session) => session.projectId === project.id)
+        .map((session) => ({
+          id: session.id,
+          title: session.title,
+          meta: formatSessionUpdatedAt(session.updatedAt),
+          active: session.id === activeSessionId,
+        })),
+    }));
+  }, [projects, sessions, activeSessionId]);
 
   const handleCreateSession = useCallback(() => {
     setActivePage('chat');
@@ -75,24 +74,27 @@ export function useAppBodyController() {
     startNewSessionDraft(currentProject.id);
   }, [currentProject, startNewSessionDraft]);
 
-  const handleSelectSession = useCallback((sessionId: string) => {
-    setActivePage('chat');
-    if (sessionId === activeSessionId) {
+  const handleSelectSession = useCallback(
+    (sessionId: string) => {
+      setActivePage('chat');
+      if (sessionId === activeSessionId) {
+        setSettingsOpen(false);
+        return;
+      }
+
+      const selectedSession = sessions.find((session) => session.id === sessionId);
+      if (!selectedSession) {
+        return;
+      }
+
+      if (selectedSession.projectId !== currentProjectId) {
+        useProjectStore.getState().setCurrentProject(selectedSession.projectId);
+      }
       setSettingsOpen(false);
-      return;
-    }
-
-    const selectedSession = sessions.find((session) => session.id === sessionId);
-    if (!selectedSession) {
-      return;
-    }
-
-    if (selectedSession.projectId !== currentProjectId) {
-      useProjectStore.getState().setCurrentProject(selectedSession.projectId);
-    }
-    setSettingsOpen(false);
-    setActiveSession(sessionId);
-  }, [activeSessionId, currentProjectId, sessions, setActiveSession]);
+      setActiveSession(sessionId);
+    },
+    [activeSessionId, currentProjectId, sessions, setActiveSession],
+  );
 
   const handleUseExistingProject = useCallback(() => {
     void useProjectStore.getState().useExistingProject();
@@ -102,17 +104,20 @@ export function useAppBodyController() {
     void useProjectStore.getState().openProject(projectId);
   }, []);
 
-  const handleRemoveProject = useCallback((projectId: string) => {
-    void (async () => {
-      const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
-      const removed = await useProjectStore.getState().removeProject(projectId);
+  const handleRemoveProject = useCallback(
+    (projectId: string) => {
+      void (async () => {
+        const wasCurrent = projectId === useProjectStore.getState().currentProjectId;
+        const removed = await useProjectStore.getState().removeProject(projectId);
 
-      if (removed && wasCurrent) {
-        setActiveSession(null);
-        useWorkspaceFilesStore.getState().reset();
-      }
-    })();
-  }, [setActiveSession]);
+        if (removed && wasCurrent) {
+          setActiveSession(null);
+          useWorkspaceFilesStore.getState().reset();
+        }
+      })();
+    },
+    [setActiveSession],
+  );
 
   const showSettingsCategory = useCallback((category: SettingsCategory) => {
     setRightSidebarOpen(false);
@@ -139,15 +144,18 @@ export function useAppBodyController() {
     clearNewSessionDraft();
   }, [clearNewSessionDraft]);
 
-  const handleStartRecommendationConversation = useCallback((recommendation: DiscoveryRecommendationUiDto) => {
-    void (async () => {
-      const project = currentProject ?? await useProjectStore.getState().useExistingProject();
-      if (!project) return;
-      setSettingsOpen(false);
-      setActivePage('chat');
-      startRecommendationSessionDraft(project.id, recommendation);
-    })();
-  }, [currentProject, startRecommendationSessionDraft]);
+  const handleStartRecommendationConversation = useCallback(
+    (recommendation: DiscoveryRecommendationUiDto) => {
+      void (async () => {
+        const project = currentProject ?? (await useProjectStore.getState().useExistingProject());
+        if (!project) return;
+        setSettingsOpen(false);
+        setActivePage('chat');
+        startRecommendationSessionDraft(project.id, recommendation);
+      })();
+    },
+    [currentProject, startRecommendationSessionDraft],
+  );
 
   useEffect(() => window.megumi.character.onOpenSettingsRequested?.(openSettings), [openSettings]);
 
@@ -177,6 +185,7 @@ export function useAppBodyController() {
     handleOpenProject,
     handleRemoveProject,
     openSettings,
+    openModelSettings: () => showSettingsCategory('models'),
     openContentSources,
     openDiscovery,
     handleStartRecommendationConversation,

@@ -22,7 +22,10 @@ import {
   Terminal,
 } from 'lucide-react';
 import { IconButton } from '../../../shared/ui';
-import type { InputSuggestionQueryItem, InputSuggestionQueryResult } from '@megumi/application/contracts';
+import type {
+  InputSuggestionQueryItem,
+  InputSuggestionQueryResult,
+} from '@megumi/application/contracts';
 import type { GetContextUsageResult } from '@megumi/application/contracts';
 import {
   COMPOSER_PERMISSION_MODE_OPTIONS,
@@ -63,6 +66,7 @@ export interface ComposerSurfaceProps {
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onStop?: () => void;
+  onOpenModelSettings?: () => void;
   onChooseContext?: () => void;
   onAttachImages?: () => void;
   onAttachDocuments?: () => void;
@@ -74,188 +78,257 @@ export type ComposerCommandCompletionUi = {
   sourceKind: 'command' | 'skill';
 };
 
-export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>(function ComposerSurface({
-  value,
-  permissionMode,
-  model,
-  modelOptions,
-  inputLocked,
-  canSend,
-  showStop,
-  canStop,
-  permissionModeId,
-  modelId,
-  textareaRef,
-  inputSuggestions,
-  selectedInputSuggestionIndex,
-  selectedCommandCompletion,
-  contextUsage,
-  selectedAttachments,
-  canAttachImages,
-  canAttachDocuments,
-  imageInputNotice,
-  onValueChange,
-  onInputSuggestionChoose,
-  onInputSuggestionHover,
-  onPermissionModeChange,
-  onModelChange,
-  onKeyDown,
-  onSubmit,
-  onStop,
-  onAttachImages,
-  onAttachDocuments,
-  onPasteImage,
-  onRemoveAttachment,
-}, ref) {
-  const { t } = useTranslation('chat');
+export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>(
+  function ComposerSurface(
+    {
+      value,
+      permissionMode,
+      model,
+      modelOptions,
+      inputLocked,
+      canSend,
+      showStop,
+      canStop,
+      permissionModeId,
+      modelId,
+      textareaRef,
+      inputSuggestions,
+      selectedInputSuggestionIndex,
+      selectedCommandCompletion,
+      contextUsage,
+      selectedAttachments,
+      canAttachImages,
+      canAttachDocuments,
+      imageInputNotice,
+      onValueChange,
+      onInputSuggestionChoose,
+      onInputSuggestionHover,
+      onPermissionModeChange,
+      onModelChange,
+      onOpenModelSettings,
+      onKeyDown,
+      onSubmit,
+      onStop,
+      onAttachImages,
+      onAttachDocuments,
+      onPasteImage,
+      onRemoveAttachment,
+    },
+    ref,
+  ) {
+    const { t } = useTranslation('chat');
 
-  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
-    const hasImage = Array.from(event.clipboardData.items).some(
-      (item) => item.kind === 'file' && item.type.startsWith('image/'),
-    );
-    if (hasImage) onPasteImage?.();
-  }
+    function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+      const hasImage = Array.from(event.clipboardData.items).some(
+        (item) => item.kind === 'file' && item.type.startsWith('image/'),
+      );
+      if (hasImage) onPasteImage?.();
+    }
 
-  return (
-    <form
-      ref={ref}
-      data-testid="composer-surface"
-      aria-label={t('composer.label')}
-      onSubmit={onSubmit}
-      className="pointer-events-auto relative mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
-    >
-      <InputSuggestionPanel
-        suggestions={inputSuggestions}
-        selectedIndex={selectedInputSuggestionIndex}
-        onChoose={onInputSuggestionChoose}
-        onHoverIndexChange={onInputSuggestionHover}
-        className="absolute bottom-full left-0 right-0 z-50 max-h-[min(22rem,calc(100vh-12rem))]"
-      />
-      <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
-        <div data-testid="composer-input-panel" className="px-4 py-3">
-          {selectedAttachments.length > 0 ? (
-            <div className="mb-3 flex flex-wrap gap-2" aria-label={t('composer.selectedAttachments')}>
-              {selectedAttachments.map((attachment) => attachment.type === 'image' ? (
-                <div key={attachment.draftAttachmentId} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
-                  <img src={attachment.previewDataUrl} alt={attachment.name} className="h-full w-full object-cover" />
-                  <button type="button" aria-label={t('composer.removeAttachment', { name: attachment.name })} onClick={() => onRemoveAttachment(attachment.draftAttachmentId)} className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100">×</button>
-                </div>
-              ) : (
-                <div key={attachment.draftAttachmentId} className="group relative flex h-16 max-w-64 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pr-8">
-                  <FileText size={20} className="shrink-0 text-[var(--color-accent)]" aria-hidden="true" />
-                  <span className="truncate text-xs text-[var(--color-text)]">{attachment.name}</span>
-                  <button type="button" aria-label={t('composer.removeAttachment', { name: attachment.name })} onClick={() => onRemoveAttachment(attachment.draftAttachmentId)} className="absolute right-2 top-2 rounded px-1 text-xs text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100">×</button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {imageInputNotice ? (
-            <p role="status" className="mb-2 text-xs text-[var(--color-warning)]">{imageInputNotice}</p>
-          ) : null}
-          <label htmlFor="megumi-composer" className="sr-only">
-            {t('composer.messageLabel')}
-          </label>
-          <div className={selectedCommandCompletion ? 'flex items-start gap-2' : ''}>
-            {selectedCommandCompletion ? (
-              <CommandCompletionChip completion={selectedCommandCompletion} />
+    return (
+      <form
+        ref={ref}
+        data-testid="composer-surface"
+        aria-label={t('composer.label')}
+        onSubmit={onSubmit}
+        className="pointer-events-auto relative mx-auto w-full transition-[width,transform,opacity] duration-200 ease-out"
+      >
+        <InputSuggestionPanel
+          suggestions={inputSuggestions}
+          selectedIndex={selectedInputSuggestionIndex}
+          onChoose={onInputSuggestionChoose}
+          onHoverIndexChange={onInputSuggestionHover}
+          className="absolute bottom-full left-0 right-0 z-50 max-h-[min(22rem,calc(100vh-12rem))]"
+        />
+        <div className="overflow-visible rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-[var(--shadow-soft)] transition-shadow duration-150">
+          <div data-testid="composer-input-panel" className="px-4 py-3">
+            {selectedAttachments.length > 0 ? (
+              <div
+                className="mb-3 flex flex-wrap gap-2"
+                aria-label={t('composer.selectedAttachments')}
+              >
+                {selectedAttachments.map((attachment) =>
+                  attachment.type === 'image' ? (
+                    <div
+                      key={attachment.draftAttachmentId}
+                      className="group relative h-16 w-16 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]"
+                    >
+                      <img
+                        src={attachment.previewDataUrl}
+                        alt={attachment.name}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        aria-label={t('composer.removeAttachment', { name: attachment.name })}
+                        onClick={() => onRemoveAttachment(attachment.draftAttachmentId)}
+                        className="absolute right-1 top-1 rounded bg-black/65 px-1 text-xs text-white opacity-0 group-hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      key={attachment.draftAttachmentId}
+                      className="group relative flex h-16 max-w-64 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 pr-8"
+                    >
+                      <FileText
+                        size={20}
+                        className="shrink-0 text-[var(--color-accent)]"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate text-xs text-[var(--color-text)]">
+                        {attachment.name}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={t('composer.removeAttachment', { name: attachment.name })}
+                        onClick={() => onRemoveAttachment(attachment.draftAttachmentId)}
+                        className="absolute right-2 top-2 rounded px-1 text-xs text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ),
+                )}
+              </div>
             ) : null}
-            <textarea
-              ref={textareaRef}
-              id="megumi-composer"
-              value={value}
-              disabled={inputLocked}
-              onChange={(event) => onValueChange(event.target.value)}
-              onKeyDown={onKeyDown}
-              onPaste={handlePaste}
-              placeholder={selectedCommandCompletion ? t('composer.argumentsPlaceholder') : t('composer.messagePlaceholder')}
-              rows={selectedCommandCompletion ? 1 : 2}
-              className={[
-                'max-h-40 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70',
-                selectedCommandCompletion ? 'min-h-8 flex-1 py-1' : 'min-h-14',
-              ].join(' ')}
-            />
+            {imageInputNotice ? (
+              <p role="status" className="mb-2 text-xs text-[var(--color-warning)]">
+                {imageInputNotice}
+              </p>
+            ) : null}
+            <label htmlFor="megumi-composer" className="sr-only">
+              {t('composer.messageLabel')}
+            </label>
+            <div className={selectedCommandCompletion ? 'flex items-start gap-2' : ''}>
+              {selectedCommandCompletion ? (
+                <CommandCompletionChip completion={selectedCommandCompletion} />
+              ) : null}
+              <textarea
+                ref={textareaRef}
+                id="megumi-composer"
+                value={value}
+                disabled={inputLocked}
+                onChange={(event) => onValueChange(event.target.value)}
+                onKeyDown={onKeyDown}
+                onPaste={handlePaste}
+                placeholder={
+                  selectedCommandCompletion
+                    ? t('composer.argumentsPlaceholder')
+                    : t('composer.messagePlaceholder')
+                }
+                rows={selectedCommandCompletion ? 1 : 2}
+                className={[
+                  'max-h-40 w-full resize-none border-0 bg-transparent text-sm leading-5 text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-subtle)] disabled:cursor-not-allowed disabled:opacity-70',
+                  selectedCommandCompletion ? 'min-h-8 flex-1 py-1' : 'min-h-14',
+                ].join(' ')}
+              />
+            </div>
           </div>
-        </div>
 
-        <div data-testid="composer-toolbar" className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2">
-          <div className="flex shrink-0 items-center gap-1.5">
-            <AttachmentPicker
-              canAttachImages={canAttachImages}
-              canAttachDocuments={canAttachDocuments}
-              onAttachImages={onAttachImages}
-              onAttachDocuments={onAttachDocuments}
-            />
-            <ContextUsageIndicator contextUsage={contextUsage} />
-          </div>
+          <div
+            data-testid="composer-toolbar"
+            className="flex min-h-12 flex-nowrap items-center justify-between gap-2 px-3 py-2"
+          >
+            <div className="flex shrink-0 items-center gap-1.5">
+              <AttachmentPicker
+                canAttachImages={canAttachImages}
+                canAttachDocuments={canAttachDocuments}
+                onAttachImages={onAttachImages}
+                onAttachDocuments={onAttachDocuments}
+              />
+              <ContextUsageIndicator contextUsage={contextUsage} />
+            </div>
 
-          <div data-testid="composer-actions" className="flex min-w-0 shrink-0 items-center justify-end gap-2">
             <div
-              title={permissionMode === 'full_access' ? t('composer.fullAccessWarning') : undefined}
-              className="min-w-0 max-w-52"
+              data-testid="composer-actions"
+              className="flex min-w-0 shrink-0 items-center justify-end gap-2"
             >
-              <ComposerSelect
-                id={permissionModeId}
-                label={t('composer.permissionMode')}
-                value={permissionMode}
-                disabled={inputLocked}
-                icon={permissionMode === 'full_access' ? <ShieldAlert size={14} /> : <Bot size={14} />}
-                warning={permissionMode === 'full_access'}
-                menuClassName="min-w-48"
-                options={COMPOSER_PERMISSION_MODE_OPTIONS.map((option) => ({
-                  value: option.value,
-                  label: t(`composer.permissionModes.${option.value}`),
-                }))}
-                onChange={onPermissionModeChange}
-              />
-            </div>
-
-            <div className="min-w-0 max-w-56">
-              <ComposerSelect
-                id={modelId}
-                label={t('composer.model')}
-                value={model}
-                disabled={inputLocked}
-                icon={<Brain size={14} />}
-                menuClassName="min-w-52"
-                options={modelOptions.map((option) => ({
-                  value: option.value,
-                  label: option.label,
-                  meta: option.providerId,
-                }))}
-                onChange={onModelChange}
-              />
-            </div>
-
-            {showStop ? (
-              <IconButton
-                type="button"
-                label={t('composer.stop')}
-                variant="primary"
-                size="sm"
-                onClick={onStop}
-                disabled={!canStop}
-                className="shrink-0"
+              <div
+                title={
+                  permissionMode === 'full_access' ? t('composer.fullAccessWarning') : undefined
+                }
+                className="min-w-0 max-w-52"
               >
-                <Square size={13} aria-hidden="true" />
-              </IconButton>
-            ) : (
-              <IconButton
-                type="submit"
-                label={t('composer.send')}
-                variant="primary"
-                size="sm"
-                className="shrink-0"
-                disabled={!canSend}
-              >
-                <SendHorizontal size={15} aria-hidden="true" />
-              </IconButton>
-            )}
+                <ComposerSelect
+                  id={permissionModeId}
+                  label={t('composer.permissionMode')}
+                  value={permissionMode}
+                  disabled={inputLocked}
+                  icon={
+                    permissionMode === 'full_access' ? <ShieldAlert size={14} /> : <Bot size={14} />
+                  }
+                  warning={permissionMode === 'full_access'}
+                  menuClassName="min-w-48"
+                  options={COMPOSER_PERMISSION_MODE_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: t(`composer.permissionModes.${option.value}`),
+                  }))}
+                  onChange={onPermissionModeChange}
+                />
+              </div>
+
+              <div className="min-w-0 max-w-56">
+                {modelOptions.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={onOpenModelSettings}
+                    disabled={inputLocked}
+                    className="h-8 px-2 text-sm text-[var(--color-accent)]"
+                  >
+                    {t('composer.addModel')}
+                  </button>
+                ) : (
+                  <ComposerSelect
+                    placeholder={model ? t('composer.modelUnavailable') : t('composer.selectModel')}
+                    id={modelId}
+                    label={t('composer.model')}
+                    value={model}
+                    disabled={inputLocked}
+                    icon={<Brain size={14} />}
+                    menuClassName="min-w-52"
+                    options={modelOptions.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                      meta: option.providerId,
+                    }))}
+                    onChange={onModelChange}
+                  />
+                )}
+              </div>
+
+              {showStop ? (
+                <IconButton
+                  type="button"
+                  label={t('composer.stop')}
+                  variant="primary"
+                  size="sm"
+                  onClick={onStop}
+                  disabled={!canStop}
+                  className="shrink-0"
+                >
+                  <Square size={13} aria-hidden="true" />
+                </IconButton>
+              ) : (
+                <IconButton
+                  type="submit"
+                  label={t('composer.send')}
+                  variant="primary"
+                  size="sm"
+                  className="shrink-0"
+                  disabled={!canSend}
+                >
+                  <SendHorizontal size={15} aria-hidden="true" />
+                </IconButton>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </form>
-  );
-});
+      </form>
+    );
+  },
+);
 
 function AttachmentPicker({
   canAttachImages,
@@ -334,9 +407,11 @@ function CommandCompletionChip({ completion }: { completion: ComposerCommandComp
       data-testid="composer-command-chip"
       className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-[var(--color-accent-soft)] px-2 text-sm font-medium text-[var(--color-accent)]"
     >
-      {completion.sourceKind === 'skill'
-        ? <Package size={14} aria-hidden="true" />
-        : <Terminal size={14} aria-hidden="true" />}
+      {completion.sourceKind === 'skill' ? (
+        <Package size={14} aria-hidden="true" />
+      ) : (
+        <Terminal size={14} aria-hidden="true" />
+      )}
       <span>{completion.label}</span>
     </span>
   );
@@ -357,11 +432,7 @@ function ContextUsageIndicator({ contextUsage }: { contextUsage?: GetContextUsag
       aria-valuenow={usagePercent}
       className="group relative flex h-8 w-8 shrink-0 items-center justify-center"
     >
-      <svg
-        aria-hidden="true"
-        className="h-4 w-4 overflow-visible"
-        viewBox="0 0 16 16"
-      >
+      <svg aria-hidden="true" className="h-4 w-4 overflow-visible" viewBox="0 0 16 16">
         <circle
           cx="8"
           cy="8"
@@ -390,8 +461,15 @@ function ContextUsageIndicator({ contextUsage }: { contextUsage?: GetContextUsag
         <div>{t('composer.contextWindow')}</div>
         {usage ? (
           <>
-            <div className="mt-1 text-[var(--color-text)]">{t('composer.usedPercent', { percent: usage.usedPercent })}</div>
-            <div className="mt-1">{t('composer.tokenUsage', { used: formatTokenCount(usage.usedTokens), total: formatTokenCount(usage.totalTokens) })}</div>
+            <div className="mt-1 text-[var(--color-text)]">
+              {t('composer.usedPercent', { percent: usage.usedPercent })}
+            </div>
+            <div className="mt-1">
+              {t('composer.tokenUsage', {
+                used: formatTokenCount(usage.usedTokens),
+                total: formatTokenCount(usage.totalTokens),
+              })}
+            </div>
           </>
         ) : (
           <>

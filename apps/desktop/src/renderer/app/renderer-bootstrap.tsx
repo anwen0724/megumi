@@ -17,7 +17,8 @@ interface RendererRoot {
 }
 
 export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
-  const isCharacterWindow = new URLSearchParams(window.location.search).get('megumiWindowRole') === 'character';
+  const isCharacterWindow =
+    new URLSearchParams(window.location.search).get('megumiWindowRole') === 'character';
   if (isCharacterWindow) document.documentElement.classList.add('megumi-character-window');
   const surfacePromise = isCharacterWindow ? import('./CharacterApp') : import('./App');
 
@@ -25,13 +26,21 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
     const result = await window.megumi.settings.readSettings();
 
     if (!result.ok) {
-      await applyBootstrapFailure(result.data.issues?.map((issue) => ({ path: issue.path.join('.'), message: issue.message })));
+      await applyBootstrapFailure(
+        result.data.issues?.map((issue) => ({
+          path: issue.path.join('.'),
+          message: issue.message,
+        })),
+      );
     } else {
-      const { general: { language, theme, setupCompleted }, permissions, models } = result.data.config;
+      const {
+        general: { language, theme, setupCompleted, lastSelectedModel },
+        permissions,
+      } = result.data.config;
       await initializeLocaleWithFallback(language);
       useThemeStore.getState().applyBootstrapTheme(theme);
       usePermissionModeStore.getState().applyBootstrapMode(permissions.mode);
-      useModelSelectionStore.getState().applyBootstrapSelection(models.defaultModel);
+      useModelSelectionStore.getState().applyBootstrapSelection(lastSelectedModel);
       useSetupWizardStore.getState().applyBootstrapSettings({
         language,
         setupCompleted,
@@ -52,8 +61,10 @@ export async function bootstrapRenderer(root: RendererRoot): Promise<void> {
   });
 
   // Character controls must not bypass a failed configuration bootstrap either.
-  const Surface = useSetupWizardStore.getState().status === 'load-error'
-    ? (await import('./App')).default : (await surfacePromise).default;
+  const Surface =
+    useSetupWizardStore.getState().status === 'load-error'
+      ? (await import('./App')).default
+      : (await surfacePromise).default;
   root.render(
     <ErrorBoundary>
       <Surface />
@@ -71,8 +82,10 @@ async function initializeLocaleWithFallback(language: 'zh-CN' | 'en-US'): Promis
 }
 
 async function applyBootstrapFailure(issues?: { path: string; message: string }[]): Promise<void> {
-  await initializeLocaleWithFallback(navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US');
-  useSetupWizardStore.getState().applyBootstrapFailure(
-    rendererError('settings_load_failed'), issues,
+  await initializeLocaleWithFallback(
+    navigator.language.toLowerCase().startsWith('zh') ? 'zh-CN' : 'en-US',
   );
+  useSetupWizardStore
+    .getState()
+    .applyBootstrapFailure(rendererError('settings_load_failed'), issues);
 }

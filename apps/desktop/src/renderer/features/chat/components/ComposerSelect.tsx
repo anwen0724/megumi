@@ -1,11 +1,5 @@
 /* Renders the compact, theme-aware listbox controls used by the Composer toolbar. */
-import {
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import { cx } from '../../../shared/ui';
 
@@ -21,6 +15,7 @@ type ComposerSelectProps<TValue extends string> = {
   value: TValue;
   options: ComposerSelectOption<TValue>[];
   disabled?: boolean;
+  placeholder?: string;
   icon: ReactNode;
   warning?: boolean;
   className?: string;
@@ -34,6 +29,7 @@ export function ComposerSelect<TValue extends string>({
   value,
   options,
   disabled = false,
+  placeholder,
   icon,
   warning = false,
   className,
@@ -44,7 +40,7 @@ export function ComposerSelect<TValue extends string>({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = useState(false);
-  const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
+  const selectedIndex = options.findIndex((option) => option.value === value);
   const selectedOption = options[selectedIndex];
 
   useEffect(() => {
@@ -53,7 +49,7 @@ export function ComposerSelect<TValue extends string>({
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener('pointerdown', handlePointerDown);
-    optionRefs.current[selectedIndex]?.focus();
+    optionRefs.current[Math.max(0, selectedIndex)]?.focus();
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [open, selectedIndex]);
 
@@ -116,9 +112,16 @@ export function ComposerSelect<TValue extends string>({
           warning ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-muted)]',
         )}
       >
-        <span className="shrink-0" aria-hidden="true">{icon}</span>
-        <span className={cx('min-w-0 truncate', warning ? 'text-[var(--color-warning)]' : 'text-[var(--color-text)]')}>
-          {selectedOption?.label ?? value}
+        <span className="shrink-0" aria-hidden="true">
+          {icon}
+        </span>
+        <span
+          className={cx(
+            'min-w-0 truncate',
+            warning ? 'text-[var(--color-warning)]' : 'text-[var(--color-text)]',
+          )}
+        >
+          {selectedOption?.label ?? placeholder ?? label}
         </span>
         <ChevronDown
           size={13}
@@ -143,7 +146,9 @@ export function ComposerSelect<TValue extends string>({
             return (
               <button
                 key={option.value}
-                ref={(node) => { optionRefs.current[index] = node; }}
+                ref={(node) => {
+                  optionRefs.current[index] = node;
+                }}
                 type="button"
                 value={option.value}
                 role="option"
@@ -159,9 +164,17 @@ export function ComposerSelect<TValue extends string>({
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{option.label}</span>
-                  {option.meta ? <span className="mt-0.5 block truncate text-[0.68rem] opacity-70">{option.meta}</span> : null}
+                  {option.meta ? (
+                    <span className="mt-0.5 block truncate text-[0.68rem] opacity-70">
+                      {option.meta}
+                    </span>
+                  ) : null}
                 </span>
-                <Check size={14} aria-hidden="true" className={cx('shrink-0', !selected && 'invisible')} />
+                <Check
+                  size={14}
+                  aria-hidden="true"
+                  className={cx('shrink-0', !selected && 'invisible')}
+                />
               </button>
             );
           })}

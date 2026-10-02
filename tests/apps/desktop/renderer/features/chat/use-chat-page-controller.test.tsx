@@ -32,29 +32,34 @@ describe('useChatPageController', () => {
       sessionStates: {},
     });
     useProjectStore.setState({
-      projects: [{
-        id: 'project-1',
-        projectId: 'project-1',
-        name: 'Project',
-        repoPath: 'C:/repo',
-        repoPathKey: 'repo-key',
-        status: 'available',
-        createdAt,
-        lastOpenedAt: createdAt,
-      }],
+      projects: [
+        {
+          id: 'project-1',
+          projectId: 'project-1',
+          name: 'Project',
+          repoPath: 'C:/repo',
+          repoPathKey: 'repo-key',
+          status: 'available',
+          createdAt,
+          lastOpenedAt: createdAt,
+        },
+      ],
       currentProjectId: 'project-1',
       loading: false,
       error: null,
     });
     useSessionStore.setState({
-      sessions: [{
-        id: 'session-1',
-        projectId: 'project-1',
-        title: 'Session',
-        status: 'active',
-        createdAt,
-        updatedAt: createdAt,
-      }],
+      sessions: [
+        {
+          id: 'session-1',
+          projectId: 'project-1',
+          title: 'Session',
+          modelSelection: { providerId: 'provider', modelId: 'model' },
+          status: 'active',
+          createdAt,
+          updatedAt: createdAt,
+        },
+      ],
       activeSessionId: 'session-1',
       newSessionDraftTargetProjectId: null,
     });
@@ -62,7 +67,12 @@ describe('useChatPageController', () => {
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
-        models: { getCatalog: async () => ({ ok: true, data: { status: 'ok', providers: [], defaultModel: { providerId: 'provider', modelId: 'model' } } }) },
+        models: {
+          getCatalog: async () => ({
+            ok: true,
+            data: { status: 'ok', providers: [], catalog: [] },
+          }),
+        },
         runtime: {
           onEvent: vi.fn(() => vi.fn()),
         },
@@ -88,7 +98,9 @@ describe('useChatPageController', () => {
           },
           message: {
             send: vi.fn(),
-            cancel: vi.fn().mockResolvedValue({ ok: true, data: { status: 'cancelled', events: [] } }),
+            cancel: vi
+              .fn()
+              .mockResolvedValue({ ok: true, data: { status: 'cancelled', events: [] } }),
           },
           branchDraft: {
             create: vi.fn(),
@@ -137,12 +149,14 @@ describe('useChatPageController', () => {
     renderHook(() => useChatPageController());
 
     await waitFor(() => {
-      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
-        payload: {
-          sessionId: 'session-1',
-          modelSelection: { provider_id: 'provider', model_id: 'model' },
-        },
-      }));
+      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: {
+            sessionId: 'session-1',
+            modelSelection: { provider_id: 'provider', model_id: 'model' },
+          },
+        }),
+      );
     });
   });
 
@@ -159,6 +173,7 @@ describe('useChatPageController', () => {
           id: 'session-2',
           projectId: 'project-1',
           title: 'Second session',
+          modelSelection: { providerId: 'provider', modelId: 'model' },
           status: 'active',
           createdAt,
           updatedAt: createdAt,
@@ -190,12 +205,14 @@ describe('useChatPageController', () => {
     const { result } = renderHook(() => useChatPageController());
 
     await waitFor(() => {
-      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
-        payload: {
-          sessionId: 'session-1',
-          modelSelection: { provider_id: 'provider', model_id: 'model' },
-        },
-      }));
+      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: {
+            sessionId: 'session-1',
+            modelSelection: { provider_id: 'provider', model_id: 'model' },
+          },
+        }),
+      );
     });
 
     await act(async () => {
@@ -206,12 +223,14 @@ describe('useChatPageController', () => {
     });
 
     await waitFor(() => {
-      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(expect.objectContaining({
-        payload: {
-          sessionId: 'session-2',
-          modelSelection: { provider_id: 'provider', model_id: 'model' },
-        },
-      }));
+      expect(window.megumi.session.contextUsage.get).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: {
+            sessionId: 'session-2',
+            modelSelection: { provider_id: 'provider', model_id: 'model' },
+          },
+        }),
+      );
     });
     expect(result.current.contextUsage).toEqual({ status: 'not_available' });
     expect(window.megumi.session.contextUsage.get).toHaveBeenCalledTimes(2);
@@ -219,8 +238,14 @@ describe('useChatPageController', () => {
 
   it('activates and persists the workspace selected for a new session', async () => {
     const secondProject = {
-      id: 'project-2', projectId: 'project-2', name: 'Math', repoPath: 'C:/math',
-      repoPathKey: 'math-key', status: 'available' as const, createdAt, lastOpenedAt: createdAt,
+      id: 'project-2',
+      projectId: 'project-2',
+      name: 'Math',
+      repoPath: 'C:/math',
+      repoPathKey: 'math-key',
+      status: 'available' as const,
+      createdAt,
+      lastOpenedAt: createdAt,
     };
     useProjectStore.setState((state) => ({ projects: [...state.projects, secondProject] }));
     Object.assign(window.megumi, {
@@ -247,9 +272,11 @@ describe('useChatPageController', () => {
       await result.current.switchNewSessionProject(secondProject.id);
     });
 
-    expect(window.megumi.project.open).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { projectId: secondProject.id },
-    }));
+    expect(window.megumi.project.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: { projectId: secondProject.id },
+      }),
+    );
     expect(useProjectStore.getState().currentProjectId).toBe(secondProject.id);
     expect(useSessionStore.getState()).toMatchObject({
       activeSessionId: null,
