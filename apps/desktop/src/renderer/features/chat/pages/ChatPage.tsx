@@ -125,10 +125,9 @@ export function ChatPage() {
   } : null;
 
   useEffect(() => {
-    if (providerStatus === 'idle') {
-      void loadProviders().catch(() => undefined);
-    }
-  }, [loadProviders, providerStatus]);
+    void loadProviders(controller.currentProjectId ?? undefined);
+    return window.megumi.settings.onChanged(() => { void loadProviders(controller.currentProjectId ?? undefined); });
+  }, [loadProviders, controller.currentProjectId]);
 
   useEffect(() => {
     let cancelled = false;

@@ -53,7 +53,7 @@ export function composeDesktopMain() {
     observabilityStorage: nodeObservabilityStorage,
     productEnvironment: getElectronProductEnvironment(),
     workspaceFileSystem: createDesktopWorkspaceFileSystem(),
-    settingsEnvironment: createDesktopSettingsEnvironment(),
+    readEnvironment: createDesktopSettingsEnvironment(),
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
     embeddedBrowser,

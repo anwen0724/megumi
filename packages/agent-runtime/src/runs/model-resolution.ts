@@ -1,3 +1,4 @@
+import { z } from 'zod';
 /* Resolves the model catalog and prepares an isolated AI client for each task. */
 import { createModels, createProvider, type Api, type Model, type Models, type Provider, type ProviderStreams } from '@megumi/ai';
 import { builtinProviders } from '@megumi/ai/providers/all';
@@ -205,3 +206,16 @@ const defaultApiImplementations: Readonly<Record<string, ProviderStreams>> = {
   'openai-codex-responses': openAICodexResponsesApi(),
   'anthropic-messages': anthropicMessagesApi(),
 };
+
+const SupportSchema = z.union([z.boolean(), z.literal('unknown')]);
+export const ModelCatalogResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('failed'), failure: z.object({ code: z.string(), message: z.string() }) }),
+  z.object({ status: z.literal('ok'), defaultModel: z.object({ providerId: z.string(), modelId: z.string() }).optional(),
+    providers: z.array(z.object({ id: z.string(), name: z.string(), enabled: z.boolean(), api: z.string().optional(), baseUrl: z.string().optional(),
+      models: z.array(z.object({ enabled: z.boolean(), custom: z.boolean(),
+        capabilities: z.object({ streaming: SupportSchema, toolCalls: SupportSchema, thinking: SupportSchema, imageInput: SupportSchema }),
+        model: z.object({ id: z.string(), name: z.string(), provider: z.string(), api: z.string(), baseUrl: z.string(), reasoning: z.boolean(), input: z.array(z.enum(['text', 'image'])), cost: z.object({ input: z.number(), output: z.number(), cacheRead: z.number(), cacheWrite: z.number() }), contextWindow: z.number(), maxTokens: z.number() }).passthrough(),
+      })),
+    })),
+  }),
+]);

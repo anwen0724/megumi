@@ -15,7 +15,8 @@ import {
   Palette,
   Sparkles,
 } from 'lucide-react';
-import type { AppLanguage, ProviderCatalogUiDto } from '@megumi/application/contracts';
+import type { AppLanguage } from '@megumi/application/contracts';
+import type { ProviderCatalogUiDto } from '@megumi/desktop/renderer/entities/provider';
 import { useProviderStore } from '../../entities/provider';
 import { Button, TextField, cx } from '../../shared/ui';
 import { applyRendererLanguage, localizeRendererError } from '../../shared/i18n';

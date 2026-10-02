@@ -1,9 +1,4 @@
-/* Provides named process-environment reads for Settings without passing the full environment object. */
-
-import type { SettingsEnvironment as ProductSettingsEnvironment } from '@megumi/application/settings/index';
-
-export function createDesktopSettingsEnvironment(): ProductSettingsEnvironment {
-  return {
-    readVariable: (name) => process.env[name],
-  };
+/* Provides named environment reads to application configuration. */
+export function createDesktopSettingsEnvironment(): (name: string) => string | undefined {
+  return (name) => process.env[name];
 }

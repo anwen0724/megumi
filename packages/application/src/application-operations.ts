@@ -4,7 +4,9 @@
  */
 import type { ApprovalHost } from './approval-contracts';
 import type { SessionHost } from './session-contracts';
-import type { SettingsHost } from './settings/settings-contracts';
+import type { Settings } from './settings/settings-store';
+import type { AgentRuntime } from '@megumi/agent-runtime/agent-runtime';
+import type { Tools } from '@megumi/agent-runtime/tools';
 import type { SkillHost } from './skill-contracts';
 import type { WorkspaceHost } from './workspace/workspace-contracts';
 import type { ObservabilityHost } from './observability/observability-contracts';
@@ -15,7 +17,9 @@ export interface ApplicationOperations {
   workspace: WorkspaceHost;
   session: SessionHost;
   skill: SkillHost;
-  settings: SettingsHost;
+  settings: Settings;
+  models: Pick<AgentRuntime, 'readModelCatalog'>;
+  tools: Pick<Tools, 'listAvailableTools'>;
   approval: ApprovalHost;
   observability: ObservabilityHost;
   voice: VoiceHost;

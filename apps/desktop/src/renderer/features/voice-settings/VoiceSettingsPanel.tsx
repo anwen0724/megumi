@@ -13,18 +13,7 @@ import {
   type AudioDeviceOption,
 } from './audio-devices';
 
-type VoiceSettings = {
-  readonly inputDeviceId: string;
-  readonly outputDeviceId: string;
-  readonly recognitionLanguage: 'auto' | 'zh' | 'en';
-  readonly readAloudEnabled: boolean;
-  readonly tts: {
-    provider: 'minimax';
-    voiceId: string;
-    hasApiKey: boolean;
-    credentialSource: 'settings' | 'environment' | 'missing';
-  };
-};
+type VoiceSettings = import('@megumi/application/settings/settings-schema').SettingsConfiguration['voice'];
 
 type VoiceSettingsPatch = {
   inputDeviceId?: string;
@@ -49,7 +38,7 @@ export function VoiceSettingsPanel() {
     outputDeviceId: 'default',
     recognitionLanguage: 'auto',
     readAloudEnabled: false,
-    tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' },
+    tts: { provider: 'minimax', voiceId: 'female-shaonv' },
   });
   const [devices, setDevices] = useState<AudioDeviceCatalog>({
     inputs: [{ deviceId: 'default', label: 'System default' }],
@@ -59,28 +48,16 @@ export function VoiceSettingsPanel() {
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [testingMicrophone, setTestingMicrophone] = useState(false);
+  const [revision, setRevision] = useState('');
+  const [ttsCredential, setTtsCredential] = useState<import('@megumi/application/settings/settings-contracts').CredentialValue>({ status: 'missing' });
   const [ttsApiKey, setTtsApiKey] = useState('');
   const [ttsSaving, setTtsSaving] = useState(false);
 
   const refreshVoiceSettings = useCallback(async () => {
-    const result = await window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    );
-    if (result.ok && result.data.status === 'ok') {
-      const { inputDeviceId, outputDeviceId, recognitionLanguage, readAloudEnabled, tts } = result.data.settings.voice;
-      setVoiceSettings({
-        inputDeviceId,
-        outputDeviceId,
-        recognitionLanguage,
-        readAloudEnabled,
-        tts: {
-          provider: tts.provider,
-          voiceId: tts.voiceId,
-          hasApiKey: tts.hasApiKey,
-          credentialSource: tts.credentialSource,
-        },
-      });
-    }
+    const result = await window.megumi.settings.readSettings();
+    if (!result.ok) { setDeviceError(result.data.message); return; }
+    setRevision(result.data.revision);
+    setVoiceSettings(result.data.config.voice);
   }, []);
 
   const refreshDevices = useCallback(async (requestPermission = false) => {
@@ -96,38 +73,18 @@ export function VoiceSettingsPanel() {
   }, [t]);
 
   const refreshTtsApiKey = useCallback(async () => {
-    const result = await window.megumi.settings.getVoiceTtsApiKey(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.voiceTtsGetApiKey, {}),
-    );
-    if (!result.ok || result.data.status === 'failed') {
-      setDeviceError(t('voice.ttsApiKeyLoadError'));
-      return;
-    }
+    const result = await window.megumi.settings.readCredential({ target: { kind: 'voiceTts' } });
+    if (!result.ok) { setDeviceError(result.data.message); return; }
+    setTtsCredential(result.data);
     setTtsApiKey(result.data.status === 'found' ? result.data.value : '');
   }, [t]);
 
   const updateVoiceSettings = async (patch: VoiceSettingsPatch) => {
-    const result = await window.megumi.settings.update(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { voice: patch }),
-    );
-    if (result.ok && result.data.status === 'updated') {
-      const { inputDeviceId, outputDeviceId, recognitionLanguage, readAloudEnabled, tts } = result.data.settings.voice;
-      setVoiceSettings({
-        inputDeviceId,
-        outputDeviceId,
-        recognitionLanguage,
-        readAloudEnabled,
-        tts: {
-          provider: tts.provider,
-          voiceId: tts.voiceId,
-          hasApiKey: tts.hasApiKey,
-          credentialSource: tts.credentialSource,
-        },
-      });
-      setDeviceError(null);
-      return;
-    }
-    setDeviceError(t('voice.devicesSaveError'));
+    const result = await window.megumi.settings.updateSettings({ patch: { voice: patch }, expectedRevision: revision });
+    if (!result.ok) { setDeviceError(result.data.message); return; }
+    setRevision(result.data.settings.revision);
+    setVoiceSettings(result.data.settings.config.voice);
+    setDeviceError(null);
   };
 
   const saveTtsApiKey = async () => {
@@ -135,16 +92,10 @@ export function VoiceSettingsPanel() {
     setTtsSaving(true);
     setDeviceError(null);
     try {
-      const result = await window.megumi.settings.setVoiceTtsApiKey(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.voiceTtsSetApiKey, { apiKey: ttsApiKey.trim() }),
-      );
-      if (!result.ok || result.data.status === 'failed') {
-        setDeviceError(t('voice.ttsApiKeySaveError'));
-        return;
-      }
-      const { tts } = result.data;
-      setVoiceSettings((current) => ({ ...current, tts: { ...current.tts, ...tts } }));
-      setTtsApiKey(ttsApiKey.trim());
+      const result = await window.megumi.settings.updateCredential({ target: { kind: 'voiceTts' }, value: ttsApiKey.trim() });
+      if (!result.ok) { setDeviceError(result.data.message); return; }
+      setTtsApiKey('');
+      await refreshTtsApiKey();
     } catch {
       setDeviceError(t('voice.ttsApiKeySaveError'));
     } finally {
@@ -157,16 +108,10 @@ export function VoiceSettingsPanel() {
     setTtsSaving(true);
     setDeviceError(null);
     try {
-      const result = await window.megumi.settings.deleteVoiceTtsApiKey(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, {}),
-      );
-      if (!result.ok || result.data.status === 'failed') {
-        setDeviceError(t('voice.ttsApiKeyClearError'));
-        return;
-      }
-      const { tts } = result.data;
-      setVoiceSettings((current) => ({ ...current, tts: { ...current.tts, ...tts } }));
+      const result = await window.megumi.settings.updateCredential({ target: { kind: 'voiceTts' }, value: null });
+      if (!result.ok) { setDeviceError(result.data.message); return; }
       setTtsApiKey('');
+      await refreshTtsApiKey();
     } catch {
       setDeviceError(t('voice.ttsApiKeyClearError'));
     } finally {
@@ -437,7 +382,7 @@ export function VoiceSettingsPanel() {
               <Button type="button" disabled={!ttsApiKey.trim() || ttsSaving} onClick={() => { void saveTtsApiKey(); }}>
                 {t('voice.ttsApiKeySave')}
               </Button>
-              {voiceSettings.tts.hasApiKey ? (
+              {(ttsCredential.status === 'found') ? (
                 <Button type="button" disabled={ttsSaving} onClick={() => { void clearTtsApiKey(); }}>
                   {t('voice.ttsApiKeyClear')}
                 </Button>

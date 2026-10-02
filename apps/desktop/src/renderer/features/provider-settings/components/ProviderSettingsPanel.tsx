@@ -16,11 +16,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import type {
-  ModelSupportLevelUi,
-  ProviderCatalogUiDto,
-  ProviderPublicStatusUiDto,
-} from '@megumi/application/contracts';
+import type { ProviderCatalogUiDto, ProviderPublicStatusUiDto, ModelSupportLevelUi } from '@megumi/desktop/renderer/entities/provider';
 import { useProviderStore } from '../../../entities/provider';
 import {
   Badge,
@@ -32,12 +28,13 @@ import {
 } from '../../../shared/ui';
 import { formatNumber, formatTokenCount, localizeRendererError } from '../../../shared/i18n';
 
-type ProviderProtocol = 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages' | 'google-generative-ai';
+type ProviderProtocol = 'openai-completions' | 'openai-responses' | 'openai-codex-responses' | 'anthropic-messages';
 
 interface ProviderModelForm {
   modelId: string;
   displayName: string;
   contextWindowTokens: string;
+  maxOutputTokens: string;
   imageInput: ModelSupportLevelUi;
   imageInputOverride?: ModelSupportLevelUi;
 }
@@ -84,15 +81,15 @@ function createInitialFormState(
       const model = provider.modelSettings?.[modelId];
       const catalogModel = catalogEntry?.models.find((candidate) => candidate.modelId === modelId);
       const imageInput = model?.capabilities.imageInput
-        ?? provider.modelCapabilities?.[modelId]?.imageInput
         ?? catalogModel?.capabilities.imageInput
         ?? 'unknown';
       const imageInputOverride = model?.capabilityOverrides.imageInput
-        ?? provider.modelCapabilityOverrides?.[modelId]?.imageInput;
+;
       return {
         modelId,
         displayName: model?.displayName ?? catalogModel?.displayName ?? modelId,
         contextWindowTokens: String(model?.contextWindowTokens ?? catalogModel?.contextWindowTokens ?? 262_144),
+        maxOutputTokens: String(model?.maxOutputTokens ?? catalogModel?.maxOutputTokens ?? 8192),
         imageInput,
         ...(imageInputOverride !== undefined ? { imageInputOverride } : {}),
       };
@@ -112,6 +109,7 @@ function createQuickProviderFormState(entry: ProviderCatalogUiDto): ProviderForm
       modelId: model.modelId,
       displayName: model.displayName,
       contextWindowTokens: String(model.contextWindowTokens),
+      maxOutputTokens: String(model.maxOutputTokens),
       imageInput: model.capabilities.imageInput,
     })),
     apiKey: '',
@@ -150,6 +148,8 @@ function formatContextWindow(value: string): string {
 
 export function ProviderSettingsPanel() {
   const { t } = useTranslation('settings');
+  const defaultModel = useProviderStore((state) => state.defaultModel);
+  const setDefaultModel = useProviderStore((state) => state.setDefaultModel);
   const providers = useProviderStore((state) => state.providers);
   const catalog = useProviderStore((state) => state.catalog);
   const status = useProviderStore((state) => state.status);
@@ -270,8 +270,8 @@ export function ProviderSettingsPanel() {
         ...current,
         [selectedProvider.providerId]: {
           ...(current[selectedProvider.providerId] ?? createInitialFormState(selectedProvider, selectedCatalogEntry)),
-          apiKey,
-          apiKeyDirty: false,
+          apiKey: current[selectedProvider.providerId]?.apiKeyDirty ? current[selectedProvider.providerId].apiKey : apiKey,
+          apiKeyDirty: current[selectedProvider.providerId]?.apiKeyDirty ?? false,
         },
       }));
     });
@@ -323,6 +323,7 @@ export function ProviderSettingsPanel() {
         modelId: '',
         displayName: '',
         contextWindowTokens: '262144',
+        maxOutputTokens: '8192',
         imageInput: 'unknown',
       },
     });
@@ -332,6 +333,8 @@ export function ProviderSettingsPanel() {
     if (!modelEditor) return;
     const modelId = modelEditor.model.modelId.trim();
     const contextWindowTokens = Number(modelEditor.model.contextWindowTokens);
+    const maxOutputTokens = Number(modelEditor.model.maxOutputTokens);
+    if (!Number.isInteger(maxOutputTokens) || maxOutputTokens <= 0 || maxOutputTokens > contextWindowTokens) return;
     if (!modelId || !Number.isInteger(contextWindowTokens) || contextWindowTokens <= 0) return;
     if (!modelEditor.originalModelId && selectedForm.models.some((model) => model.modelId === modelId)) return;
 
@@ -358,7 +361,7 @@ export function ProviderSettingsPanel() {
     const providerName = selectedForm.provider.trim();
     if (!providerName || selectedForm.models.length === 0) return;
 
-    await updateProvider({
+    const saved = await updateProvider({
       providerId: providerName,
       displayName: selectedEntry?.displayName ?? providerName,
       enabled: selectedForm.enabled,
@@ -368,9 +371,12 @@ export function ProviderSettingsPanel() {
         modelId: model.modelId,
         displayName: model.displayName,
         contextWindowTokens: Number(model.contextWindowTokens),
+        maxOutputTokens: Number(model.maxOutputTokens),
         ...(model.imageInputOverride !== undefined ? { imageInput: model.imageInputOverride } : {}),
       })),
     });
+
+    if (!saved) return;
 
     if (selectedForm.apiKeyDirty && selectedForm.apiKey.trim()) {
       await setApiKey({ providerId: providerName, apiKey: selectedForm.apiKey.trim() });
@@ -404,6 +410,20 @@ export function ProviderSettingsPanel() {
         title={t('provider.title')}
         description={t('provider.description')}
       />
+
+      <label className="space-y-2 text-sm text-[var(--color-text)]">
+        <span>{t('provider.defaultModel')}</span>
+        <select className={fieldClassName} aria-label={t('provider.defaultModel')}
+          value={defaultModel ? JSON.stringify(defaultModel) : ''}
+          onChange={(event) => { if (event.target.value) void setDefaultModel(JSON.parse(event.target.value)); }}>
+          <option value="">{t('provider.selectModel')}</option>
+          {providers.filter((provider) => provider.enabled).flatMap((provider) => provider.modelIds.map((modelId) => (
+            <option key={`${provider.providerId}:${modelId}`} value={JSON.stringify({ providerId: provider.providerId, modelId })}>
+              {provider.displayName} / {provider.modelSettings[modelId].displayName}
+            </option>
+          )))}
+        </select>
+      </label>
 
       {error ? (
         <p className="rounded-md border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
@@ -667,6 +687,14 @@ function ModelEditorDialog({
                 </div>
               ) : null}
             </div>
+          </label>
+
+          <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
+            <span>{t('settings:provider.maxOutputTokens')}</span>
+            <input type="number" min={1} step={1} aria-label={t('settings:provider.maxOutputTokens')}
+              value={editor.model.maxOutputTokens}
+              onChange={(event) => onChange({ ...editor.model, maxOutputTokens: event.target.value })}
+              className={compactFieldClassName} />
           </label>
 
           {editor.originalModelId ? (

@@ -122,7 +122,7 @@ export const SessionMessageSendPayloadSchema = z.object({
   ])).max(IMAGE_INPUT_POLICY.maxImageCount + DOCUMENT_INPUT_POLICY.maxDocumentCount).optional(),
   branchMarkerId: z.string().min(1).optional(),
   clientMessageId: z.string().min(1).optional(), createdAt: IsoDateTimeSchema.optional(),
-  modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict(),
+  modelSelection: z.object({ provider_id: z.string().min(1), model_id: z.string().min(1) }).strict().optional(),
   permissionMode: z.enum(['ask', 'auto', 'full_access']).optional(), permissionSource: z.string().optional(),
 }).strict().superRefine((payload, context) => {
   if (payload.sessionId && payload.recommendationId) {
@@ -613,7 +613,7 @@ export interface SendUserInputRequest {
   }>;
   clientMessageId?: string;
   createdAt?: string;
-  modelSelection: {
+  modelSelection?: {
     provider_id: string;
     model_id: string;
   };

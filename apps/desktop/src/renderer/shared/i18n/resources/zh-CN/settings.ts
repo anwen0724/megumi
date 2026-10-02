@@ -276,6 +276,9 @@ export const settings = {
     },
   },
   provider: {
+    defaultModel: '默认模型',
+    selectModel: '请选择模型',
+    maxOutputTokens: '最大输出 Token',
     title: '模型与供应商',
     description: '连接 AI 供应商，并选择聊天中可用的模型。',
     providers: '供应商',

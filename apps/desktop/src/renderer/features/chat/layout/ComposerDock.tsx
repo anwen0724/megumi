@@ -1,9 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
-import type {
-  GetContextUsageResult,
-  InputCapabilitiesResult,
-  ProviderPublicStatusUiDto,
-} from '@megumi/application/contracts';
+import type { GetContextUsageResult,
+  InputCapabilitiesResult } from '@megumi/application/contracts';
+import type { ProviderPublicStatusUiDto } from '@megumi/desktop/renderer/entities/provider';
 import type { InputSuggestionQueryResult } from '@megumi/application/contracts';
 import type { ToolActivityItem } from '../../session-timeline';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';

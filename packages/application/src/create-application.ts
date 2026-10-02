@@ -26,7 +26,6 @@ import {
   createObservabilityOperations,
   createSessionOperations,
   createSessionReader,
-  createSettingsOperations,
   createSkillOperations,
   createVoiceOperations,
   createWorkspaceOperations,
@@ -271,9 +270,9 @@ function createApplicationRuntime(
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
-    settings: createSettingsOperations(settings, {
-      listAvailableTools: () => [...tools.listAvailableTools().tools],
-    }),
+    settings,
+    models: runtime,
+    tools,
     approval: createApprovalOperations(runtime),
     observability: createObservabilityOperations({
       queries: observability.queries,

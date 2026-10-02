@@ -13,7 +13,7 @@ import {
   type PermissionRule,
 } from '@megumi/agent-runtime/permissions/index';
 import { z } from 'zod';
-import type { SettingsConfiguration } from './settings-schema';
+import { ConfigurationSchema, ConfigurationPatchSchema, type SettingsConfiguration } from './settings-schema';
 import { EnvironmentVariableSchema } from './definitions/models';
 
 export const CredentialTargetSchema = z.discriminatedUnion('kind', [
@@ -967,3 +967,18 @@ export function toProviderSettingsUiDto(provider: {
     ...(provider.api_key_env ? { apiKeyEnv: provider.api_key_env } : {}),
   };
 }
+
+export const SettingsSnapshotSchema = z.object({
+  config: ConfigurationSchema,
+  sources: z.array(z.object({ path: z.array(z.string()), source: z.enum(['default', 'global', 'project']) })),
+  revision: z.string(),
+  diagnostics: z.array(z.object({ code: z.literal('SETTINGS_UNKNOWN_FIELD'), scope: z.enum(['global', 'project']), path: z.array(z.string()), message: z.string() })),
+});
+export const SettingsEditRequestSchema = z.object({ patch: ConfigurationPatchSchema, expectedRevision: z.string() }).strict();
+export const SettingsEditResultSchema = z.object({ status: z.enum(['updated', 'unchanged']), settings: SettingsSnapshotSchema });
+export const CredentialValueSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('found'), value: z.string(), source: z.enum(['stored', 'environment']) }),
+  z.object({ status: z.literal('missing') }),
+]);
+export type CredentialValue = z.infer<typeof CredentialValueSchema>;
+export const CredentialUpdateResultSchema = z.object({ status: z.enum(['updated', 'unchanged']) });

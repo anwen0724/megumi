@@ -1,3 +1,5 @@
+import { registerModelsHandlers } from './handlers/models.handler';
+import { registerToolsHandlers } from './handlers/tools.handler';
 /*
  * Registers Desktop Main IPC channels with host-interface controllers and shell adapters.
  */
@@ -30,7 +32,7 @@ export interface RegisterAllHandlersOptions {
   session?: SessionHandlersService;
   publishSessionMessageEvent?(event: SessionMessagePresentationEvent): void;
   skill?: SkillHandlersService;
-  settings?: SettingsHandlersService;
+  settings?: SettingsHandlersService & { host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'models' | 'tools'> };
   settingsRecovery?: SettingsRecoveryService;
   approval?: ApprovalHandlersService;
   discovery?: DiscoveryHandlersService;
@@ -69,6 +71,8 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.settings) {
     registerSettingsHandlers(options.settings, { logger: options.logger, ipcMain });
+    registerModelsHandlers(options.settings.host, ipcMain);
+    registerToolsHandlers(options.settings.host, ipcMain);
   }
 
   if (options.approval) {

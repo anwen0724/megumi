@@ -6,6 +6,11 @@ export const RUNTIME_IPC_ERROR_CODES = [
   'ipc_handler_failed',
   'ipc_invoke_failed',
   'settings_invalid',
+  'SETTINGS_INVALID',
+  'SETTINGS_SCOPE_INVALID',
+  'SETTINGS_CONFLICT',
+  'CREDENTIAL_INVALID',
+  'CREDENTIAL_FILE_INVALID',
   'provider_disabled',
   'provider_missing_api_key',
   'provider_auth_failed',
@@ -44,6 +49,7 @@ export const RUNTIME_IPC_ERROR_CODES = [
 export const RuntimeIpcErrorSchema = z.object({
   code: z.enum(RUNTIME_IPC_ERROR_CODES),
   message: z.string().min(1),
+  issues: z.array(z.object({ scope: z.enum(['global', 'project']).optional(), path: z.array(z.string()), message: z.string() })).optional(),
   details: z.record(z.string(), z.unknown()).optional(),
 }).strict();
 
@@ -70,6 +76,7 @@ export function sanitizeRuntimeIpcError(error: RuntimeIpcError): RuntimeIpcError
   const details = error.details ? sanitizeDetails(error.details) : undefined;
   return {
     code: error.code,
+    ...(error.issues ? { issues: error.issues } : {}),
     message: SENSITIVE_VALUE.test(error.message) ? 'Unexpected error.' : error.message,
     ...(details ? { details } : {}),
   };

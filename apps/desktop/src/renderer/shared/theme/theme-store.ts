@@ -15,15 +15,11 @@ export const useThemeStore = create<ThemeState>((set) => ({
   setTheme: (theme) => set({ theme }),
   applyBootstrapTheme: (theme) => set({ theme }),
   async persistTheme(theme) {
-    set({ theme });
-    if (!window.megumi?.settings?.update) {
-      return;
-    }
-    const result = await window.megumi.settings.update(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { theme }),
-    );
-    if (result.ok && result.data.status === 'updated') {
-      set({ theme: result.data.settings.theme });
-    }
+    const baseline = await window.megumi.settings.readSettings();
+    if (!baseline.ok) return;
+    const result = await window.megumi.settings.updateSettings({
+      patch: { general: { theme } }, expectedRevision: baseline.data.revision,
+    });
+    if (result.ok) set({ theme: result.data.settings.config.general.theme });
   },
 }));

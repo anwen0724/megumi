@@ -17,10 +17,8 @@ export function useSpeechOutput(): SpeechOutputViewSnapshot {
 
   const resolveOutputDeviceId = useCallback(async (): Promise<string> => {
     try {
-      const result = await window.megumi.settings.get(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-      );
-      if (result.ok && result.data.status === 'ok') return result.data.settings.voice.outputDeviceId;
+      const result = await window.megumi.settings.readSettings();
+      if (result.ok) return result.data.config.voice.outputDeviceId;
     } catch {
       // A settings read failure falls back to the system default device.
     }

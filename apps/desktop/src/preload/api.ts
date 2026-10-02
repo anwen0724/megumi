@@ -1,3 +1,5 @@
+import type { SettingsSnapshot, UpdateSettingsRequest, UpdateSettingsResult, CredentialTarget, CredentialValue, UpdateCredentialRequest } from '@megumi/application/settings/settings-contracts';
+import type { ModelCatalogResult } from '@megumi/agent-runtime/runs/model-resolution';
 /*
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */
@@ -120,7 +122,7 @@ import type {
   DiscoveryRecommendationStatePayload,
   DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
-  DiscoveryCredentialStatusPayload,
+  DiscoveryCredentialValuePayload,
   DiscoveryCredentialSetPayload,
   DiscoverySourceConnectPayload,
   DiscoverySourceRefreshPayload,
@@ -220,32 +222,6 @@ export const api = {
       return () => ipcRenderer.removeListener(IPC_CHANNELS.applicationUpdate.snapshotChanged, listener);
     },
   },
-  provider: {
-    list: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.providerList>,
-    ): Promise<RuntimeIpcResult<ProviderListUiResult, typeof IPC_CHANNELS.settings.providerList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.providerList, request),
-    update: (
-      request: BusinessRequest<ProviderUpdatePayload, typeof IPC_CHANNELS.settings.providerUpdate>,
-    ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerUpdate>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.providerUpdate, request),
-    delete: (
-      request: BusinessRequest<ProviderDeletePayload, typeof IPC_CHANNELS.settings.providerDelete>,
-    ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerDelete>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.providerDelete, request),
-    getApiKey: (
-      request: BusinessRequest<ProviderGetApiKeyPayload, typeof IPC_CHANNELS.settings.providerGetApiKey>,
-    ): Promise<RuntimeIpcResult<CredentialValueUiResult, typeof IPC_CHANNELS.settings.providerGetApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.providerGetApiKey, request),
-    setApiKey: (
-      request: BusinessRequest<ProviderApiKeyPayload, typeof IPC_CHANNELS.settings.providerSetApiKey>,
-    ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerSetApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.providerSetApiKey, request),
-    deleteApiKey: (
-      request: BusinessRequest<ProviderDeleteApiKeyPayload, typeof IPC_CHANNELS.settings.providerDeleteApiKey>,
-    ): Promise<RuntimeIpcResult<EmptyUiResult, typeof IPC_CHANNELS.settings.providerDeleteApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.providerDeleteApiKey, request),
-  },
   settingsRecovery: {
     get: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.get>)
       : Promise<RuntimeIpcResult<{ settingsPath: string }, typeof IPC_CHANNELS.settingsRecovery.get>> =>
@@ -258,46 +234,27 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.restart, request),
   },
   settings: {
-    get: (
-      request: BusinessRequest<SettingsGetPayload, typeof IPC_CHANNELS.settings.get>,
-    ): Promise<RuntimeIpcResult<SettingsData, typeof IPC_CHANNELS.settings.get>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.get, request),
-    update: (
-      request: BusinessRequest<SettingsUpdatePayload, typeof IPC_CHANNELS.settings.update>,
-    ): Promise<RuntimeIpcResult<SettingsUpdateUiResult, typeof IPC_CHANNELS.settings.update>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.update, request),
-    completeSetup: (
-      request: BusinessRequest<SettingsCompleteSetupPayload, typeof IPC_CHANNELS.settings.completeSetup>,
-    ): Promise<RuntimeIpcResult<SettingsCompleteSetupUiResult, typeof IPC_CHANNELS.settings.completeSetup>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.completeSetup, request),
-    getWebSearchApiKey: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.webSearchGetApiKey>,
-    ): Promise<RuntimeIpcResult<CredentialValueUiResult, typeof IPC_CHANNELS.settings.webSearchGetApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.webSearchGetApiKey, request),
-    getVoiceTtsApiKey: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.voiceTtsGetApiKey>,
-    ): Promise<RuntimeIpcResult<CredentialValueUiResult, typeof IPC_CHANNELS.settings.voiceTtsGetApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsGetApiKey, request),
-    setVoiceTtsApiKey: (
-      request: BusinessRequest<VoiceTtsApiKeyUiRequest, typeof IPC_CHANNELS.settings.voiceTtsSetApiKey>,
-    ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsSetApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsSetApiKey, request),
-    deleteVoiceTtsApiKey: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>,
-    ): Promise<RuntimeIpcResult<VoiceTtsKeyUiResult, typeof IPC_CHANNELS.settings.voiceTtsDeleteApiKey>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.voiceTtsDeleteApiKey, request),
-    getDiscoverySourceCredential: (
-      request: BusinessRequest<DiscoveryCredentialStatusPayload, typeof IPC_CHANNELS.settings.discoveryCredentialGet>,
-    ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialGet, request),
-    setDiscoverySourceCredential: (
-      request: BusinessRequest<DiscoveryCredentialSetPayload, typeof IPC_CHANNELS.settings.discoveryCredentialSet>,
-    ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialSet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialSet, request),
-    deleteDiscoverySourceCredential: (
-      request: BusinessRequest<DiscoveryCredentialStatusPayload, typeof IPC_CHANNELS.settings.discoveryCredentialDelete>,
-    ): Promise<RuntimeIpcResult<DiscoverySourceCredentialStatusUiResult, typeof IPC_CHANNELS.settings.discoveryCredentialDelete>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.discoveryCredentialDelete, request),
+    readSettings: (): Promise<RuntimeIpcResult<SettingsSnapshot, typeof IPC_CHANNELS.settings.read>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.read, requestFor(IPC_CHANNELS.settings.read, {})),
+    updateSettings: (request: UpdateSettingsRequest): Promise<RuntimeIpcResult<Extract<UpdateSettingsResult, { settings: SettingsSnapshot }>, typeof IPC_CHANNELS.settings.update>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.settings.update, requestFor(IPC_CHANNELS.settings.update, request)),
+    readCredential: (request: { target: CredentialTarget }): Promise<RuntimeIpcResult<CredentialValue, typeof IPC_CHANNELS.credentials.read>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.credentials.read, requestFor(IPC_CHANNELS.credentials.read, request)),
+    updateCredential: (request: UpdateCredentialRequest): Promise<RuntimeIpcResult<{ status: 'updated' | 'unchanged' }, typeof IPC_CHANNELS.credentials.update>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.credentials.update, requestFor(IPC_CHANNELS.credentials.update, request)),
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = () => callback();
+      ipcRenderer.on(IPC_CHANNELS.settings.changed, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.settings.changed, listener);
+    },
+  },
+  models: {
+    getCatalog: (request: { workspaceId?: string } = {}): Promise<RuntimeIpcResult<ModelCatalogResult, typeof IPC_CHANNELS.models.getCatalog>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.models.getCatalog, requestFor(IPC_CHANNELS.models.getCatalog, request)),
+  },
+  tools: {
+    list: (): Promise<RuntimeIpcResult<{ tools: Array<{ identity: { sourceId: string; namespace: string; sourceToolName: string }; name: string; displayName: string }> }, typeof IPC_CHANNELS.tools.list>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.tools.list, requestFor(IPC_CHANNELS.tools.list, {})),
   },
   command: {
     suggestions: (
@@ -635,3 +592,7 @@ export const api = {
     },
   },
 };
+
+function requestFor<T, C extends BusinessIpcChannel>(channel: C, payload: T): RuntimeIpcRequest<T, C> {
+  return { requestId: crypto.randomUUID(), payload, meta: { channel, source: 'renderer', createdAt: new Date().toISOString() } };
+}

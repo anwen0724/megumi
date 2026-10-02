@@ -68,13 +68,20 @@ export function useChatPageController() {
     session.id === activeSessionId && session.projectId === currentProjectId
   ) ?? null;
   const effectiveActiveSessionId = activeSession?.id ?? null;
-  useEffect(() => {
-    useModelSelectionStore.getState().bindSession(activeSession?.id, activeSession?.modelSelection);
-  }, [activeSession?.id, activeSession?.modelSelection]);
+
   const isDraftNewSession = !effectiveActiveSessionId;
   const effectiveProjectId = effectiveActiveSessionId
     ? currentProjectId
     : newSessionDraftTargetProjectId ?? currentProjectId;
+  useEffect(() => {
+    let active = true;
+    void window.megumi.models.getCatalog({ workspaceId: effectiveProjectId ?? undefined }).then((result) => {
+      if (!active || !result.ok || result.data.status !== 'ok') return;
+      useModelSelectionStore.getState().applyBootstrapSelection(result.data.defaultModel);
+      useModelSelectionStore.getState().bindSession(activeSession?.id, activeSession?.modelSelection ?? result.data.defaultModel);
+    });
+    return () => { active = false; };
+  }, [effectiveProjectId, activeSession?.id, activeSession?.modelSelection]);
   const currentProject = projects.find((p) => p.id === effectiveProjectId) ?? null;
   const agentStatus = isDraftNewSession ? 'idle' : rawAgentStatus;
   const {

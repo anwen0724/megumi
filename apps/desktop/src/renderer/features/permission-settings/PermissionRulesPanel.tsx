@@ -3,14 +3,21 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Plus, ShieldAlert, Trash2 } from 'lucide-react';
-import type { PermissionRuleEffectUi, PermissionRuleUiDto, SettingsUiResolved } from '@megumi/application/contracts';
+import { PERMISSION_RULE_CATALOG, PermissionRuleSchema, type PermissionRule } from '@megumi/agent-runtime/permissions';
+import type { SettingsSnapshot } from '@megumi/application/settings/settings-contracts';
 import { useProjectStore } from '../../entities/project';
 import { useSessionStore } from '../../entities/session';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { Button, SettingsSection, cx } from '../../shared/ui';
 
-type PermissionSettings = SettingsUiResolved['permissions'];
+type PermissionRuleEffectUi = 'allow' | 'ask' | 'deny';
+type PermissionRuleUiDto = PermissionRule & { effect: PermissionRuleEffectUi };
+type ToolOption = { sourceId: string; namespace: string; sourceToolName: string; registeredToolName: string; displayName: string };
+type PermissionSettings = { rules: PermissionRuleUiDto[]; catalog: { operations: Array<{ action: string; resourceType?: string; operators: Array<'any' | 'exact' | 'prefix' | 'glob' | 'hostname'> }>; tools: ToolOption[] } };
+function permissionView(snapshot: SettingsSnapshot, tools: ToolOption[]): PermissionSettings {
+  return { rules: EFFECTS.flatMap((effect) => snapshot.config.permissions[effect].map((rule) => ({ ...rule, effect }))), catalog: { operations: PERMISSION_RULE_CATALOG.map((item) => ({ action: item.action, resourceType: 'resource_type' in item ? item.resource_type : undefined, operators: [...item.operators] })), tools } };
+}
 type RuleTargetKind = PermissionRuleUiDto['target']['kind'];
 type RuleScope = 'user' | 'workspace';
 
@@ -22,6 +29,7 @@ export function PermissionRulesPanel() {
   const workspaceId = useProjectStore((state) => state.currentProjectId);
   const projects = useProjectStore((state) => state.projects);
   const sessions = useSessionStore((state) => state.sessions);
+  const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [permissions, setPermissions] = useState<PermissionSettings>();
   const [status, setStatus] = useState<'loading' | 'ready' | 'saving' | 'failed'>('loading');
   const [error, setError] = useState<string>();
@@ -36,11 +44,21 @@ export function PermissionRulesPanel() {
 
   useEffect(() => {
     let active = true;
-    const settingsApi = window.megumi?.settings;
-    if (!settingsApi?.get) {
-      setError(t('security.rules.unavailable'));
-      setStatus('failed');
-      return () => { active = false; };
+    void Promise.all([window.megumi.settings.readSettings(), window.megumi.tools.list()]).then(([result, tools]) => {
+      if (!active) return;
+      if (!result.ok || !tools.ok) {
+        setError(!result.ok ? result.data.message : !tools.ok ? tools.data.message : '');
+        setStatus('failed');
+        return;
+      }
+      const view = permissionView(result.data, tools.data.tools.map((tool) => ({ ...tool.identity, registeredToolName: tool.name, displayName: tool.displayName })));
+      setSnapshot(result.data);
+      setPermissions(view);
+      selectAction('network.fetch', view);
+      setToolName(view.catalog.tools[0]?.registeredToolName ?? '');
+      setStatus('ready');
+    });
+    return () => { active = false; };
     }
     void settingsApi.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}))
       .then((result) => {
@@ -76,50 +94,31 @@ export function PermissionRulesPanel() {
   }
 
   async function mutate(operationType: 'add' | 'remove', rule: PermissionRuleUiDto) {
+    if (!snapshot || !permissions) return;
     setStatus('saving');
     setError(undefined);
-    if (!window.megumi?.settings?.update) {
-      setError(t('security.rules.unavailable'));
-      setStatus('failed');
-      return;
-    }
-    const result = await window.megumi.settings.update(createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.settings.update,
-      { permissions: { ruleChange: { operation: operationType, rule } } },
-    ));
-    if (result.ok && result.data.status === 'updated') {
-      setPermissions(result.data.settings.permissions);
-      setStatus('ready');
-      setEditing(false);
-      return;
-    }
-    if (!result.ok) setError(result.data.message);
-    else if (result.data.status === 'failed') setError(result.data.failure.message);
-    setStatus('failed');
+    const { effect: group, ...value } = rule;
+    const current = snapshot.config.permissions[group];
+    const rules = operationType === 'add' ? [...current, value]
+      : current.filter((item) => JSON.stringify(item) !== JSON.stringify(value));
+    const result = await window.megumi.settings.updateSettings({ patch: { permissions: { [group]: rules } }, expectedRevision: snapshot.revision });
+    if (!result.ok) { setError(result.data.message); setStatus('failed'); return; }
+    setSnapshot(result.data.settings);
+    setPermissions(permissionView(result.data.settings, permissions.catalog.tools));
+    setStatus('ready');
+    setEditing(false);
   }
 
   async function saveRule() {
     if (!permissions || (scope === 'workspace' && !workspaceId)) return;
-    const source = scope === 'workspace' ? { source: 'workspace' as const, sourceId: workspaceId! } : { source: 'user' as const };
-    let target: PermissionRuleUiDto['target'];
-    if (targetKind === 'tool') {
-      const tool = permissions.catalog.tools.find((item) => item.registeredToolName === toolName);
-      if (!tool) return;
-      target = {
-        kind: 'tool', sourceId: tool.sourceId, namespace: tool.namespace,
-        sourceToolName: tool.sourceToolName, displayName: tool.displayName,
-      };
-    } else {
-      if (!operation) return;
-      target = {
-        kind: 'operation', action: operation.action,
-        ...(operation.resourceType ? { resource: {
-          type: operation.resourceType, operator,
-          ...(requiresValue ? { value: value.trim() } : {}),
-        } } : {}),
-      };
-    }
-    await mutate('add', { effect, ...source, target });
+    const source = scope === 'workspace' ? { source: 'workspace', source_id: workspaceId } : { source: 'user' };
+    const tool = permissions.catalog.tools.find((item) => item.registeredToolName === toolName);
+    if (targetKind === 'tool' && !tool) return;
+    const target = targetKind === 'tool' && tool ? { kind: 'tool', tool_identity: { source_id: tool.sourceId, namespace: tool.namespace, source_tool_name: tool.sourceToolName } }
+      : { kind: 'operation', action, ...(operation?.resourceType ? { resource: { type: operation.resourceType, matcher: operator === 'any' ? { operator } : { operator, value: value.trim() } } } : {}) };
+    const parsed = PermissionRuleSchema.safeParse({ ...source, target });
+    if (!parsed.success) { setError(parsed.error.issues[0].message); return; }
+    await mutate('add', { effect, ...parsed.data });
   }
 
   const canSave = status !== 'saving'
@@ -248,14 +247,11 @@ function actionLabel(action: string, t: TFunction<'settings'>) {
 
 function ruleLabel(rule: PermissionRuleUiDto, permissions?: PermissionSettings): string {
   if (rule.target.kind === 'tool') {
-    const target = rule.target;
-    return target.displayName ?? permissions?.catalog.tools.find((tool) => (
-      tool.sourceId === target.sourceId && tool.namespace === target.namespace && tool.sourceToolName === target.sourceToolName
-    ))?.displayName ?? target.sourceToolName;
+    const target = rule.target.tool_identity;
+    return permissions?.catalog.tools.find((tool) => tool.sourceId === target.source_id && tool.namespace === target.namespace && tool.sourceToolName === target.source_tool_name)?.displayName ?? target.source_tool_name;
   }
-  const matcher = rule.target.resource;
-  if (!matcher || matcher.operator === 'any') return rule.target.action;
-  return matcher.value ?? rule.target.action;
+  const matcher = rule.target.resource?.matcher;
+  return matcher && 'value' in matcher ? matcher.value : rule.target.action;
 }
 
 function sourceLabel(
@@ -266,10 +262,10 @@ function sourceLabel(
 ) {
   if (rule.source === 'user') return t('security.rules.sources.user');
   if (rule.source === 'workspace') {
-    const name = projects.find((project) => project.id === rule.sourceId)?.name;
+    const name = projects.find((project) => project.id === rule.source_id)?.name;
     return name ? `${t('security.rules.sources.workspace')} · ${name}` : t('security.rules.sources.workspace');
   }
-  const title = sessions.find((session) => session.id === rule.sourceId)?.title;
+  const title = sessions.find((session) => session.id === rule.source_id)?.title;
   return title ? `${t('security.rules.sources.session')} · ${title}` : t('security.rules.sources.session');
 }
 

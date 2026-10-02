@@ -3,7 +3,7 @@
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { SettingsUiResolved } from '@megumi/application/contracts';
+import type { SettingsConfiguration } from '@megumi/application/settings/settings-schema';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { localizeRendererError, rendererError, type RendererErrorDescriptor } from '../../../shared/i18n';
@@ -15,7 +15,7 @@ import {
   SettingsSection,
 } from '../../../shared/ui';
 
-type SearchProvider = NonNullable<SettingsUiResolved['web']['search']['provider']>;
+type SearchProvider = NonNullable<SettingsConfiguration['webSearch']['provider']>;
 type Status = 'loading' | 'ready' | 'saving' | 'error';
 
 const providers: Array<{ value: SearchProvider; label: string }> = [
@@ -27,7 +27,9 @@ const providers: Array<{ value: SearchProvider; label: string }> = [
 
 export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean } = {}) {
   const { t } = useTranslation(['settings', 'common']);
-  const [saved, setSaved] = useState<SettingsUiResolved['web']['search']>({ hasApiKey: false, credentialSource: 'missing' });
+  const [saved, setSaved] = useState<SettingsConfiguration['webSearch']>({});
+  const [revision, setRevision] = useState('');
+  const [credential, setCredential] = useState<import('@megumi/application/settings/settings-contracts').CredentialValue>({ status: 'missing' });
   const [provider, setProvider] = useState<SearchProvider | ''>('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -38,15 +40,15 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
-      window.megumi.settings.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {})),
-      window.megumi.settings.getWebSearchApiKey(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.webSearchGetApiKey, {})),
+      window.megumi.settings.readSettings(),
+      window.megumi.settings.readCredential({ target: { kind: 'webSearch' } }),
     ]).then(([result, credentialResult]) => {
         if (cancelled) return;
         if (!result.ok) throw rendererError(result.data.code, result.data.message);
-        if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
         if (!credentialResult.ok) throw rendererError(credentialResult.data.code, credentialResult.data.message);
-        if (credentialResult.data.status === 'failed') throw rendererError(credentialResult.data.failure.code, credentialResult.data.failure.message);
-        const search = result.data.settings.web.search;
+        const search = result.data.config.webSearch;
+        setRevision(result.data.revision);
+        setCredential(credentialResult.data);
         setSaved(search);
         setProvider(search.provider ?? '');
         setBaseUrl(search.baseUrl ?? '');
@@ -73,28 +75,27 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
       setError(rendererError('web_base_url_required'));
       return;
     }
-    if (!apiKey.trim() && !saved.hasApiKey && provider === saved.provider) {
+    if (!apiKey.trim() && credential.status !== 'found' && provider === saved.provider) {
       setError(rendererError('web_api_key_required'));
       return;
     }
     setStatus('saving');
     try {
-      const result = await window.megumi.settings.update(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
-        web: {
-          search: {
-            provider,
-            baseUrl: provider === 'custom' ? baseUrl.trim() : null,
-            ...(apiKeyDirty && apiKey.trim() ? { apiKey: apiKey.trim() } : provider !== saved.provider && !apiKey.trim() ? { apiKey: null } : {}),
-          },
-        },
-      }));
+      const result = await window.megumi.settings.updateSettings({
+        patch: { webSearch: {
+          ...(provider !== saved.provider ? { provider } : {}),
+          ...(baseUrl !== (saved.baseUrl ?? '') ? { baseUrl: baseUrl.trim() || null } : {}),
+        } }, expectedRevision: revision,
+      });
       if (!result.ok) throw rendererError(result.data.code, result.data.message);
-      if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
-      const search = result.data.settings.web.search;
-      setSaved(search);
-      setProvider(search.provider ?? '');
-      setBaseUrl(search.baseUrl ?? '');
-      if (apiKey.trim()) setApiKey(apiKey.trim());
+      setSaved(result.data.settings.config.webSearch);
+      setRevision(result.data.settings.revision);
+      if (apiKeyDirty && apiKey.trim()) {
+        const savedKey = await window.megumi.settings.updateCredential({ target: { kind: 'webSearch' }, value: apiKey.trim() });
+        if (!savedKey.ok) throw rendererError(savedKey.data.code, savedKey.data.message);
+        setCredential({ status: 'found', value: apiKey.trim(), source: 'stored' });
+      }
+      setApiKey(apiKey.trim());
       setApiKeyDirty(false);
       setStatus('ready');
     } catch (reason) {
@@ -107,13 +108,12 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
     setStatus('saving');
     setError(null);
     try {
-      const result = await window.megumi.settings.update(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, {
-        web: { search: { apiKey: null } },
-      }));
+      const result = await window.megumi.settings.updateCredential({ target: { kind: 'webSearch' }, value: null });
       if (!result.ok) throw rendererError(result.data.code, result.data.message);
-      if (result.data.status === 'failed') throw rendererError(result.data.failure.code, result.data.failure.message);
-      setSaved(result.data.settings.web.search);
-      setApiKey('');
+      const current = await window.megumi.settings.readCredential({ target: { kind: 'webSearch' } });
+      if (!current.ok) throw rendererError(current.data.code, current.data.message);
+      setCredential(current.data);
+      setApiKey(current.data.status === 'found' ? current.data.value : '');
       setApiKeyDirty(false);
       setStatus('ready');
     } catch (reason) {
@@ -195,13 +195,13 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-4">
             <p className="text-sm text-[var(--color-text-muted)]">
-              {saved.credentialSource === 'settings' ? t('settings:web.savedCredential')
-                : saved.credentialSource === 'environment' ? t('settings:web.environmentCredential', { name: saved.apiKeyEnv ?? '' })
+              {(credential.status === 'found' ? credential.source : 'missing') === 'settings' ? t('settings:web.savedCredential')
+                : (credential.status === 'found' ? credential.source : 'missing') === 'environment' ? t('settings:web.environmentCredential', { name: saved.apiKeyEnv ?? '' })
                   : t('settings:web.noCredential')}
             </p>
 
             <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" disabled={busy || !saved.hasApiKey} onClick={() => void clearKey()}>
+              <Button type="button" variant="ghost" disabled={busy || credential.status !== 'found'} onClick={() => void clearKey()}>
                 {t('settings:web.clearKey')}
               </Button>
               <Button type="submit" variant="primary" disabled={busy}>

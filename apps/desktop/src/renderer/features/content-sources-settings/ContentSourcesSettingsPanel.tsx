@@ -80,15 +80,10 @@ export function ContentSourcesSettingsPanel() {
     setBusySource(sourceId);
     setError(null);
     try {
-      const result = await window.megumi.settings.setDiscoverySourceCredential(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.settings.discoveryCredentialSet, { sourceId, credential },
-      ));
+      const result = await window.megumi.settings.updateCredential({ target: { kind: 'discoverySource', sourceId }, value: credential });
       if (!result.ok) throw new Error(result.data.message);
-      if (result.data.status === 'failed') throw new Error(result.data.failure.message);
-      const configuredValue = result.data.configured;
-      const storedCredential = result.data.credential ?? credential;
-      setConfigured((current) => ({ ...current, [sourceId]: configuredValue }));
-      setDrafts((current) => ({ ...current, [sourceId]: storedCredential }));
+      setConfigured((current) => ({ ...current, [sourceId]: true }));
+      setDrafts((current) => ({ ...current, [sourceId]: credential }));
       await refreshConfiguration();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('settings:contentSources.saveFailed'));
@@ -101,13 +96,11 @@ export function ContentSourcesSettingsPanel() {
     setBusySource(sourceId);
     setError(null);
     try {
-      const result = await window.megumi.settings.deleteDiscoverySourceCredential(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.settings.discoveryCredentialDelete, { sourceId },
-      ));
+      const result = await window.megumi.settings.updateCredential({ target: { kind: 'discoverySource', sourceId }, value: null });
       if (!result.ok) throw new Error(result.data.message);
-      if (result.data.status === 'failed') throw new Error(result.data.failure.message);
-      setConfigured((current) => ({ ...current, [sourceId]: false }));
-      setDrafts((current) => ({ ...current, [sourceId]: '' }));
+      const current = await readCredential(sourceId);
+      setConfigured((values) => ({ ...values, [sourceId]: current.configured }));
+      setDrafts((values) => ({ ...values, [sourceId]: current.credential }));
       await refreshConfiguration();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('settings:contentSources.clearFailed'));
@@ -227,12 +220,9 @@ async function readConfiguration(): Promise<DiscoveryConfigurationUiDto> {
 
 /** Reads one source secret through the dedicated credential boundary. */
 async function readCredential(sourceId: ProviderSourceId): Promise<{ configured: boolean; credential: string }> {
-  const result = await window.megumi.settings.getDiscoverySourceCredential(createRendererRuntimeIpcRequest(
-    IPC_CHANNELS.settings.discoveryCredentialGet, { sourceId },
-  ));
+  const result = await window.megumi.settings.readCredential({ target: { kind: 'discoverySource', sourceId } });
   if (!result.ok) throw new Error(result.data.message);
-  if (result.data.status === 'failed') throw new Error(result.data.failure.message);
-  return { configured: result.data.configured, credential: result.data.credential ?? '' };
+  return { configured: result.data.status === 'found', credential: result.data.status === 'found' ? result.data.value : '' };
 }
 
 function SourceIdentity({ source }: { source?: SourceView }) {

@@ -3,9 +3,8 @@
  */
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Activity, AudioLines, Bot, BrainCircuit, Boxes, CheckCircle2, Info, Palette, Rss, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Activity, AudioLines, Bot, Boxes, CheckCircle2, Info, Palette, Rss, ShieldCheck } from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
-import { MemorySettingsPanel } from '../features/memory-settings';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ContentSourcesSettingsPanel } from '../features/content-sources-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
@@ -22,7 +21,7 @@ import {
   cx,
 } from '../shared/ui';
 
-export type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'memory' | 'diagnostics' | 'security' | 'about';
+export type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -42,7 +41,6 @@ const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: Set
     items: [
       { id: 'appearance', icon: Palette },
       { id: 'voice', icon: AudioLines },
-      { id: 'memory', icon: BrainCircuit },
     ],
   },
   {
@@ -216,8 +214,6 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
               {category === 'skills' ? <SkillSettingsPanel /> : null}
 
               {category === 'sources' ? <ContentSourcesSettingsPanel /> : null}
-
-              {category === 'memory' ? <MemorySettingsPanel /> : null}
 
               {category === 'diagnostics' ? <DiagnosticsPanel /> : null}
 

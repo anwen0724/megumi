@@ -121,18 +121,6 @@ export function useCharacterVoice(
     const normalized = text.trim();
     if (!normalized || !selectedSessionId) return;
     cancelAutoSubmit();
-    const settings = await window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    );
-    if (!settings.ok || settings.data.status !== 'ok') {
-      setError(t('errors.readSession'));
-      return;
-    }
-    const selection = settings.data.settings.modelSelection;
-    if (!selection) {
-      setError(t('errors.selectModel'));
-      return;
-    }
     const sessions = await window.megumi.session.list(
       createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionList, {}),
     );
@@ -152,8 +140,6 @@ export function useCharacterVoice(
         text: normalized,
         clientMessageId: createVoiceClientMessageId(),
         createdAt: new Date().toISOString(),
-        modelSelection: { provider_id: selection.providerId, model_id: selection.modelId },
-        permissionMode: settings.data.settings.permissions.mode,
       }),
     );
     if (!result.ok) {
@@ -184,14 +170,12 @@ export function useCharacterVoice(
       setError(t('interaction.noSession'));
       return;
     }
-    const settings = await window.megumi.settings.get(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}),
-    );
-    if (!settings.ok || settings.data.status !== 'ok') {
+    const settings = await window.megumi.settings.readSettings();
+    if (!settings.ok) {
       setError(t('errors.readSession'));
       return;
     }
-    const voiceSettings = settings.data.settings.voice;
+    const voiceSettings = settings.data.config.voice;
     // Only the speech input capability (SenseVoice + tokens) gates the
     // microphone and STT.
     const sttStatus = await window.megumi.voice.getModelCapabilityStatus(

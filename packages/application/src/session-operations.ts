@@ -181,10 +181,10 @@ async function submitUserInput(
     text: request.text,
     ...(request.skillSelection ? { skillSelection: request.skillSelection } : {}),
     ...(request.attachments ? { attachments: request.attachments } : {}),
-    modelSelection: {
+    ...(request.modelSelection ? { modelSelection: {
       providerId: request.modelSelection.provider_id,
       modelId: request.modelSelection.model_id,
-    },
+    } } : {}),
     ...(request.permissionMode ? { permissionMode: request.permissionMode } : {}),
   });
   return mapConversationSubmission(result);

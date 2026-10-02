@@ -1,10 +1,8 @@
 // Defines the public Composer payload shape consumed by chat timeline orchestration.
 type PermissionModeSelectionSource = 'user' | 'settings' | 'runtime' | string;
-import type {
-  GetContextUsageResult,
-  InputCapabilitiesResult,
-  ProviderPublicStatusUiDto,
-} from '@megumi/application/contracts';
+import type { GetContextUsageResult,
+  InputCapabilitiesResult } from '@megumi/application/contracts';
+import type { ProviderPublicStatusUiDto } from '@megumi/desktop/renderer/entities/provider';
 import type { InputSuggestionQueryResult } from '@megumi/application/contracts';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 import type {

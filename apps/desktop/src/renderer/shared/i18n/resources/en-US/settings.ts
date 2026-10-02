@@ -273,6 +273,9 @@ export const settings = {
     },
   },
   provider: {
+    defaultModel: 'Default model',
+    selectModel: 'Select a model',
+    maxOutputTokens: 'Maximum output tokens',
     title: 'Models & Providers',
     description: 'Connect AI providers and choose which models are available in chat.',
     providers: 'Providers',

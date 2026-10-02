@@ -14,11 +14,11 @@ export const usePermissionModeStore = create<PermissionModeState>((set) => ({
   mode: 'ask',
   applyBootstrapMode: (mode) => set({ mode }),
   async persistMode(mode) {
-    set({ mode });
-    if (!window.megumi?.settings?.update) return;
-    const result = await window.megumi.settings.update(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { permissions: { mode } }),
-    );
-    if (result.ok && result.data.status === 'updated') set({ mode: result.data.settings.permissions.mode });
+    const baseline = await window.megumi.settings.readSettings();
+    if (!baseline.ok) return;
+    const result = await window.megumi.settings.updateSettings({
+      patch: { permissions: { mode } }, expectedRevision: baseline.data.revision,
+    });
+    if (result.ok) set({ mode: result.data.settings.config.permissions.mode });
   },
 }));

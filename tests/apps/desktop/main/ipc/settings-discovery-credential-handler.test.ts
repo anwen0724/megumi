@@ -1,44 +1,37 @@
-/* Protects the dedicated Desktop IPC boundary for discovery credentials. */
+/* Verifies explicit credential reads and secret-free configuration across desktop IPC. */
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { IpcMainInvokeEvent } from 'electron';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSettings } from '@megumi/application/settings/settings-store';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { registerSettingsHandlers } from '@megumi/desktop/main/ipc/handlers/settings.handler';
+import type { DesktopIpcMain } from '@megumi/desktop/main/adapters/electron-ipc-main-adapter';
 
-describe('discovery credential Settings IPC', () => {
-  it('forwards save and read requests through the dedicated credential channel', async () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const getDiscoverySourceCredential = vi.fn(async () => ({
-      status: 'ok' as const, sourceId: 'twitter' as const, configured: true, credential: 'twitter-secret',
-    }));
-    const setDiscoverySourceCredential = vi.fn(async () => ({
-      status: 'ok' as const, sourceId: 'twitter' as const, configured: true,
-    }));
-    registerSettingsHandlers(
-      { host: { settings: { getDiscoverySourceCredential, setDiscoverySourceCredential } } as never },
-      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
-    );
+const directories: string[] = [];
+afterEach(() => { for (const root of directories.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
-    const saved = await handlers.get(IPC_CHANNELS.settings.discoveryCredentialSet)?.({}, request(
-      IPC_CHANNELS.settings.discoveryCredentialSet,
-      { sourceId: 'twitter', credential: 'twitter-secret' },
-    ));
-    const status = await handlers.get(IPC_CHANNELS.settings.discoveryCredentialGet)?.({}, request(
-      IPC_CHANNELS.settings.discoveryCredentialGet,
-      { sourceId: 'twitter' },
-    ));
-
-    expect(setDiscoverySourceCredential).toHaveBeenCalledWith({
-      sourceId: 'twitter', credential: 'twitter-secret',
+describe('Settings IPC', () => {
+  it('returns the effective secret only through credential reads and preserves field errors', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-ipc-'));
+    directories.push(root);
+    const settings = createSettings({ globalSettingsPath: path.join(root, 'settings.json'), credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined });
+    const handlers = new Map<string, Parameters<DesktopIpcMain['handle']>[1]>();
+    registerSettingsHandlers({ host: { settings } }, { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); }, on: vi.fn() }, notifyChanged: () => undefined });
+    const invoke = (channel: string, payload: unknown) => handlers.get(channel)!({} as IpcMainInvokeEvent, {
+      requestId: 'request:test', payload, meta: { channel, source: 'renderer', createdAt: new Date().toISOString() },
     });
-    expect(JSON.stringify(saved)).not.toContain('twitter-secret');
-    expect(status).toMatchObject({ ok: true, data: { configured: true, credential: 'twitter-secret' } });
+    const target = { kind: 'discoverySource', sourceId: 'twitter' };
+    const saved = await invoke(IPC_CHANNELS.credentials.update, { target, value: 'test-secret' });
+    expect(saved).toMatchObject({ ok: true, data: { status: 'updated' } });
+    expect(JSON.stringify(saved)).not.toContain('test-secret');
+    expect(await invoke(IPC_CHANNELS.credentials.read, { target })).toMatchObject({ ok: true, data: { status: 'found', value: 'test-secret', source: 'stored' } });
+    expect(JSON.stringify(await invoke(IPC_CHANNELS.settings.read, {}))).not.toContain('test-secret');
+    fs.writeFileSync(path.join(root, 'settings.json'), JSON.stringify({ context: { compactionThresholdRatio: 2 } }));
+    expect(await invoke(IPC_CHANNELS.settings.read, {})).toMatchObject({ ok: false, data: { code: 'SETTINGS_INVALID', issues: [{ path: ['context', 'compactionThresholdRatio'] }] } });
+    await invoke(IPC_CHANNELS.credentials.update, { target, value: null });
+    expect(settings.readCredential({ target: { kind: 'discoverySource', sourceId: 'twitter' } })).toEqual({ status: 'missing' });
   });
 });
-
-function request(channel: string, payload: unknown) {
-  return {
-    requestId: `request:${channel}`,
-    payload,
-    meta: { channel, createdAt: '2026-08-22T10:00:00.000Z', source: 'renderer' },
-  };
-}

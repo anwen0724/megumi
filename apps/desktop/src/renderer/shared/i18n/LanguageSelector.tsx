@@ -28,16 +28,13 @@ export function LanguageSelector() {
     await applyRendererLanguage(nextLanguage);
 
     try {
-      const result = await window.megumi.settings.update(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.update, { language: nextLanguage }),
-      );
+      const baseline = await window.megumi.settings.readSettings();
+      if (!baseline.ok) throw rendererError(baseline.data.code, baseline.data.message);
+      const result = await window.megumi.settings.updateSettings({ patch: { general: { language: nextLanguage } }, expectedRevision: baseline.data.revision });
       if (!result.ok) {
         throw rendererError(result.data.code, result.data.message);
       }
-      if (result.data.status === 'failed') {
-        throw rendererError(result.data.failure.code, result.data.failure.message);
-      }
-      await applyRendererLanguage(result.data.settings.language);
+      await applyRendererLanguage(result.data.settings.config.general.language);
     } catch (failure) {
       await applyRendererLanguage(previousLanguage);
       setError(isRendererError(failure) ? failure : rendererError('settings_update_failed'));
