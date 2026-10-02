@@ -55,8 +55,8 @@ export function bindApplicationLifecycle(input: {
       const backgroundTriggers = options.backgroundTriggers ?? 'automatic';
       // The Host remains available for recovery, but no automatic business may use fallback settings.
       startPromise ??= (async () => {
-        const settings = await input.operations.settings.get();
-        if (settings.status === 'failed') throw new Error('Settings are invalid; product background startup was blocked.');
+        const settings = input.operations.settings.readSettings();
+        if (settings.status === 'rejected') throw new Error('Settings are invalid; product background startup was blocked.');
         if (disposePromise || stopPromise) throw new Error('Product runtime has already begun disposal or stopping.');
         await input.start({ backgroundTriggers });
       })();

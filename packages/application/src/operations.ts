@@ -2,7 +2,6 @@
 export * from './approval-operations';
 export * from './discovery/discovery-operations';
 export * from './observability/observability-operations';
-export * from './settings/settings-operations';
 export * from './skill-operations';
 export * from './voice/voice-operations';
 export * from './workspace/workspace-operations';

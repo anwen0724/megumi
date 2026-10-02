@@ -12,7 +12,6 @@ export const settings = {
   categories: {
     appearance: { label: 'Appearance', description: 'Choose how Megumi looks on this device.' },
     voice: { label: 'Voice', description: 'Manage the microphone, speakers, recognition language, and speech output Megumi uses on this device.' },
-    memory: { label: 'Memory', description: 'Control what Megumi may remember across conversations.' },
     models: { label: 'Models & Providers', description: 'Connect providers and choose the models available in chat.' },
     skills: { label: 'Skills', description: 'Review and manage the workflows Megumi can use for a task.' },
     sources: { label: 'Content Sources', description: 'Connect the services Megumi searches for daily discoveries.' },
@@ -204,17 +203,6 @@ export const settings = {
       update_cache_unreadable: 'Unable to read the downloaded installer. Please retry verification.',
       unknown_update_error: 'Something went wrong with the update. Please try again.',
     },
-  },
-  memory: {
-    title: 'Memory',
-    description: 'Control whether Megumi may remember useful information across conversations.',
-    developing: 'In development...',
-    preferences: 'Memory preferences',
-    conversation: 'Conversation memory',
-    conversationDescription: 'Remember useful project context and preferences so future conversations can continue with less repetition.',
-    loading: 'Loading…',
-    on: 'On',
-    off: 'Off',
   },
   web: {
     title: 'Web Access',

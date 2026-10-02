@@ -142,6 +142,12 @@ export interface ToolSettings {
     | { status: 'rejected'; error: { message: string } };
 }
 
+export interface ToolWorkspaceCatalog {
+  getWorkspace(request: { readonly workspace_id: string }):
+    | { readonly status: 'found'; readonly workspace: { readonly root_path: string; readonly status: 'available' | 'missing' } }
+    | { readonly status: 'not_found'; readonly workspace_id: string };
+}
+
 export interface CreateToolsRequest {
   readonly settings: (workspaceId?: string) => ToolSettings;
   readonly workspaces: ToolWorkspaceCatalog;

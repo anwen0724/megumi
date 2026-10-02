@@ -25,8 +25,8 @@ describe('VoiceSettingsPanel', () => {
       readAloudEnabled: false,
       tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' },
     };
-    getSettings.mockReset().mockResolvedValue(success({ status: 'ok', settings: { voice: resolvedVoice } }));
-    updateSettings.mockReset().mockResolvedValue(success({ status: 'updated', settings: { voice: resolvedVoice } }));
+    getSettings.mockReset().mockResolvedValue(success({ config: { voice: resolvedVoice }, revision: 'revision' }));
+    updateSettings.mockReset().mockResolvedValue(success({ status: 'updated', settings: { config: { voice: resolvedVoice }, revision: 'next' } }));
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
@@ -47,10 +47,10 @@ describe('VoiceSettingsPanel', () => {
           cancelModelPreparation,
         },
         settings: {
-          get: getSettings,
-          update: updateSettings,
-          getVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'found', value: 'minimax-secret', source: 'settings' })),
-          setVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'updated', tts: resolvedVoice.tts })),
+          readSettings: getSettings,
+          updateSettings,
+          readCredential: vi.fn().mockResolvedValue(success({ status: 'found', value: 'minimax-secret', source: 'stored' })),
+          updateCredential: vi.fn().mockResolvedValue(success({ status: 'updated', tts: resolvedVoice.tts })),
           deleteVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'deleted', tts: resolvedVoice.tts })),
         },
       },

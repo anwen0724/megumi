@@ -9,21 +9,7 @@ import {
 } from '@megumi/desktop/renderer/shared/i18n';
 
 function settingsResult(language: 'zh-CN' | 'en-US') {
-  return {
-    ok: true,
-    data: {
-      status: 'updated',
-      settings: {
-        language,
-        theme: 'midnight-blue',
-        setup: { completed: true },
-        memory: { enabled: false },
-        web: { search: { enabled: false, providerId: 'tavily', maxResults: 5, timeoutMs: 10_000 } },
-        providers: {},
-      },
-    },
-    meta: {},
-  };
+  return { ok: true, data: { status: 'updated', settings: { config: { general: { language } }, revision: 'next' } } };
 }
 
 describe('LanguageSelector', () => {
@@ -34,7 +20,7 @@ describe('LanguageSelector', () => {
     update.mockReset();
     Object.defineProperty(window, 'megumi', {
       configurable: true,
-      value: { settings: { update } },
+      value: { settings: { updateSettings: update, readSettings: async () => ({ ok: true, data: { revision: 'revision' } }) } },
     });
   });
 

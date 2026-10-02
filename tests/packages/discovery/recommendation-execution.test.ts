@@ -45,15 +45,13 @@ it('rechecks locally when candidates arrive and keeps only one active run', asyn
   expect(http.requests).toHaveLength(1);
 });
 
-it('joins requests while model resolution is still pending', async () => {
-  const gate = Promise.withResolvers<void>();
+it('joins concurrent requests during runtime admission', async () => {
   const { business, fixture } = await setup(1);
   const options = optionsFor(fixture);
-  const joined = createRecommendations({ ...options, resolveModel: async () => { await gate.promise; return { status: 'ok', model: fixture.model }; } });
+  const joined = createRecommendations(options);
   onTestFinished(() => joined.shutdown());
   const first = joined.generate({ trigger: 'manual' });
   const second = joined.generate({ trigger: 'manual' });
-  gate.resolve();
   const accepted = await first;
   expect(accepted.status).toBe('started');
   expect(await second).toMatchObject({ status: 'in_progress', requestId: 'request:1' });
@@ -85,12 +83,10 @@ it('does not restore manual waiting on restart before the scheduled time', async
 });
 
 it('does not launch a model request after shutdown during model resolution', async () => {
-  const gate = Promise.withResolvers<void>();
   const { fixture, http } = await setup(1);
-  const business = createRecommendations({ ...optionsFor(fixture), resolveModel: async () => { await gate.promise; return { status: 'ok', model: fixture.model }; } });
+  const business = createRecommendations(optionsFor(fixture));
   const accepted = business.generate({ trigger: 'manual' });
   await business.shutdown();
-  gate.resolve();
   expect(await accepted).toMatchObject({ status: 'failed' });
   expect(http.requests).toHaveLength(0);
 });
@@ -216,13 +212,14 @@ async function setup(candidates: number, overrides: Partial<CreateRecommendation
 }
 
 function optionsFor(fixture: Awaited<ReturnType<typeof createRuntimeFixture>>): CreateRecommendationsOptions {
+  const baseline = fixture.settings.readSettings();
+  if (baseline.status !== 'ok') throw new Error('Invalid test configuration');
+  fixture.settings.updateSettings({ patch: { discovery: { recommendationTargetCount: 2, recommendationWorkingSetCount: 2, candidatePoolMinimumCount: 1 } }, expectedRevision: baseline.settings.revision });
   let id = 0;
   return {
     repository: fixture.repository, attempts: fixture.recommendationAttempts, runtime: fixture.runtime,
-    sourceRegistry: createSourceRegistry([source()]), resolveModel: async () => ({ status: 'ok', model: fixture.model }),
-    settings: { resolve: () => ({ recommendationGenerationTime: '08:00', recommendationCandidateCheckIntervalSeconds: 60,
-      recommendationTargetCount: 2, recommendationWorkingSetCount: 2, candidatePoolMinimumCount: 1,
-      candidatePoolMaximumCount: 200, candidateValidityDays: 30, candidateContentExcerptMaxCharacters: 8000 }) },
+    sourceRegistry: createSourceRegistry([source()]),
+    settings: fixture.settings,
     clock: { now: () => now }, timezone: { get: () => 'UTC' }, ids: { createRequestId: () => 'request:' + ++id },
   };
 }

@@ -20,7 +20,7 @@ it('learns only on demand and reuses inconclusive historical feedback on the nex
     })) }));
   }) };
   const runtime = createPreferenceLearning({
-    repository, models, resolveModel: async () => model, now: () => now,
+    repository, models, prepareModel: async () => ({ status: 'ok' as const, model, client: models, compactionThresholdRatio: 0.8 }), now: () => now,
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' },
     context: { build: async () => {
       facts = runtime.getActivePreferenceLearningFacts('batch');

@@ -42,6 +42,9 @@ function zodToJsonSchema(schema: z.ZodTypeAny): SettingsJsonSchemaObject {
     return {
       type: 'object',
       additionalProperties: schema._def.unknownKeys !== 'strict',
+      ...(Object.values(schema.shape).some((value) => !(value as z.ZodTypeAny).isOptional()) ? {
+        required: Object.entries(schema.shape).filter(([, value]) => !(value as z.ZodTypeAny).isOptional()).map(([key]) => key),
+      } : {}),
       properties: Object.fromEntries(
         Object.entries(schema.shape).map(([key, value]) => [key, zodToJsonSchema(value as z.ZodTypeAny)]),
       ),

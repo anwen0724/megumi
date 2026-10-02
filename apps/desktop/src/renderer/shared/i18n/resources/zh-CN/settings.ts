@@ -15,7 +15,6 @@ export const settings = {
   categories: {
     appearance: { label: '外观', description: '选择 Megumi 在此设备上的外观。' },
     voice: { label: '语音', description: '管理 Megumi 在此设备上使用的麦克风、扬声器、识别语言和语音回复朗读。' },
-    memory: { label: '记忆', description: '控制 Megumi 可以跨会话记住哪些内容。' },
     models: { label: '模型与供应商', description: '连接模型供应商，并选择聊天中可用的模型。' },
     skills: { label: '技能', description: '查看和管理 Megumi 可用于任务的工作流程。' },
     sources: { label: '内容来源', description: '连接 Megumi 生成每日发现时搜索的服务。' },
@@ -207,17 +206,6 @@ export const settings = {
       update_cache_unreadable: '暂时无法读取已下载的安装包，请重新校验。',
       unknown_update_error: '更新遇到问题，请重试。',
     },
-  },
-  memory: {
-    title: '记忆',
-    description: '控制 Megumi 是否可以跨会话记住有用信息。',
-    developing: '正在开发中...',
-    preferences: '记忆偏好',
-    conversation: '会话记忆',
-    conversationDescription: '记住有用的项目上下文和偏好，让后续会话减少重复说明。',
-    loading: '正在加载…',
-    on: '开启',
-    off: '关闭',
   },
   web: {
     title: '网络访问',

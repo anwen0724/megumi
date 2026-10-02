@@ -12,22 +12,18 @@ describe('ThemeSelector', () => {
       configurable: true,
       value: {
         settings: {
-          get: vi.fn().mockResolvedValue({
+          readSettings: vi.fn().mockResolvedValue({
             ok: true,
             data: {
-              settings: {
-                theme: 'megumi-warm',
-                memory: { enabled: false },
-              },
+              config: { general: { theme: 'megumi-warm' } }, revision: 'revision',
             },
             meta: {},
           }),
-          update: vi.fn().mockResolvedValue({
+          updateSettings: vi.fn().mockResolvedValue({
             ok: true,
             data: {
               settings: {
-                theme: 'rose-moon',
-                memory: { enabled: false },
+                config: { general: { theme: 'rose-moon' } }, revision: 'next',
               },
             },
             meta: {},
@@ -70,11 +66,8 @@ describe('ThemeSelector', () => {
     expect(useThemeStore.getState().theme).toBe('rose-moon');
     expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'rose-moon');
     expect(screen.getByRole('radio', { name: /Rose Moon/ })).toHaveAttribute('aria-checked', 'true');
-    expect(window.megumi.settings.update).toHaveBeenCalledWith(expect.objectContaining({
-      meta: expect.objectContaining({ channel: IPC_CHANNELS.settings.update }),
-      payload: {
-        theme: 'rose-moon',
-      },
-    }));
+    expect(window.megumi.settings.updateSettings).toHaveBeenCalledWith({
+      patch: { general: { theme: 'rose-moon' } }, expectedRevision: 'revision',
+    });
   });
 });

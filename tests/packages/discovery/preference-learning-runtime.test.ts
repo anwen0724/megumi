@@ -24,15 +24,15 @@ function setup() {
         evidence: [{ recommendationId: 'recommendation:1', relation: 'support', explanation: 'The liked item compares measured results.' }] }],
     })) }));
   }) };
-  const resolveModel = vi.fn(async () => model);
+  const prepareModel = vi.fn(async () => ({ status: 'ok' as const, model, client: models, compactionThresholdRatio: 0.8 }));
   const context = { build: vi.fn(async () => {
     facts = runtime.getActivePreferenceLearningFacts('batch');
     return { status: 'ready' as const, prompt: { systemPrompt: 'Learn from feedback.', messages: [], tools: [] } };
   }) };
-  const runtime = createPreferenceLearning({ repository, models, context, resolveModel,
+  const runtime = createPreferenceLearning({ repository, models, context, prepareModel,
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' }, now: () => now });
   resources.push({ database, runtime });
-  return { database, repository, runtime, models, context, resolveModel };
+  return { database, repository, runtime, models, context, prepareModel };
 }
 
 it('commits generated identities and releases the active snapshot', async () => {

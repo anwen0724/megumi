@@ -1,3 +1,4 @@
+import { createSettingsFixture } from '../settings-test-fixture';
 ﻿// @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -19,26 +20,7 @@ describe('SettingsPage provider settings', () => {
           prepareModels: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
           cancelModelPreparation: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
         },
-        settings: {
-          get: vi.fn().mockResolvedValue({
-            ok: true,
-            data: {
-              status: 'ok',
-              settings: {
-                voice: { inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto', readAloudEnabled: false, tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' } },
-                permissions: { mode: 'ask', rules: [], catalog: { operations: [], tools: [] } },
-              },
-            },
-          }),
-          update: vi.fn().mockResolvedValue({
-            ok: true,
-            data: {
-              status: 'updated',
-              settings: { voice: { inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto', readAloudEnabled: false, tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' } } },
-            },
-          }),
-          getVoiceTtsApiKey: vi.fn().mockResolvedValue({ ok: true, data: { status: 'missing' } }),
-        },
+        ...createSettingsFixture().api,
       },
     });
     useProviderStore.setState({
@@ -50,6 +32,7 @@ describe('SettingsPage provider settings', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
+          modelSettings: { 'deepseek-v4-flash': { displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,

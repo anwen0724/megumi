@@ -1,3 +1,4 @@
+import { createSettingsFixture } from '../../settings-test-fixture';
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,7 +7,7 @@ import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permis
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 import { Composer } from '@megumi/desktop/renderer/features/chat/components/Composer';
 import type { ComposerProps } from '@megumi/desktop/renderer/features/chat/components/composer-types';
-import type { ProviderPublicStatusUiDto } from '@megumi/application/contracts';
+import type { ProviderPublicStatusUiDto } from '@megumi/desktop/renderer/entities/provider';
 
 const defaultProviders: ProviderPublicStatusUiDto[] = [
   {
@@ -15,9 +16,9 @@ const defaultProviders: ProviderPublicStatusUiDto[] = [
     protocol: 'openai-completions' as const,
     enabled: true,
     modelIds: ['deepseek-v4-flash', 'deepseek-v4-pro'],
-    modelCapabilities: {
-      'deepseek-v4-flash': { streaming: true, toolCalls: true, thinking: true, imageInput: true },
-      'deepseek-v4-pro': { streaming: true, toolCalls: true, thinking: true, imageInput: true },
+    modelSettings: {
+      'deepseek-v4-flash': { displayName: 'deepseek-v4-flash', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true }, capabilityOverrides: {} },
+      'deepseek-v4-pro': { displayName: 'deepseek-v4-pro', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true }, capabilityOverrides: {} },
     },
     hasApiKey: true,
     credentialSource: 'settings' as const,
@@ -29,7 +30,7 @@ const defaultProviders: ProviderPublicStatusUiDto[] = [
     protocol: 'openai-completions' as const,
     enabled: true,
     modelIds: ['gpt-5.5'],
-    modelCapabilities: { 'gpt-5.5': { streaming: true, toolCalls: true, thinking: true, imageInput: true } },
+    modelSettings: { 'gpt-5.5': { displayName: 'gpt-5.5', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true, thinking: true, imageInput: true }, capabilityOverrides: {} } },
     hasApiKey: true,
     credentialSource: 'settings' as const,
     envOverrideActive: false,
@@ -43,10 +44,10 @@ const deepseekOnlyProviders = defaultProviders.map((provider) => ({
 
 const textOnlyProviders = defaultProviders.map((provider) => ({
   ...provider,
-  modelCapabilities: Object.fromEntries(
-    Object.entries(provider.modelCapabilities ?? {}).map(([modelId, capabilities]) => [
+  modelSettings: Object.fromEntries(
+    Object.entries(provider.modelSettings ?? {}).map(([modelId, capabilities]) => [
       modelId,
-      { ...capabilities, imageInput: false as const },
+      { ...capabilities, capabilities: { ...capabilities.capabilities, imageInput: false as const } },
     ]),
   ),
 }));
@@ -94,6 +95,7 @@ async function chooseComposerOption(controlLabel: 'Permission mode' | 'Model', o
 
 describe('Composer', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'megumi', { configurable: true, value: { ...window.megumi, settings: createSettingsFixture().api.settings } });
     usePermissionModeStore.setState({ mode: 'ask' });
     useModelSelectionStore.setState(useModelSelectionStore.getInitialState(), true);
   });

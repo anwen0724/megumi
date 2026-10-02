@@ -7,11 +7,8 @@ import {
   ListSessionsResultSchema,
   SendUserInputPayloadSchema,
   ListSkillsUiResponseSchema,
-  ProviderListUiResultSchema,
   SessionBranchDraftCancelPayloadSchema,
   SessionBranchDraftCreatePayloadSchema,
-  SettingsCompleteSetupPayloadSchema,
-  SettingsUpdatePayloadSchema,
   SessionMessageSendPayloadSchema,
   SkillDisablePayloadSchema,
   SkillGetPayloadSchema,
@@ -176,16 +173,6 @@ describe('Product Host runtime schemas', () => {
     expect(ListSkillsUiResponseSchema.safeParse({ status: 'failed', message: 'failed' }).success).toBe(false);
   });
 
-  it('validates Settings result payloads', () => {
-    expect(ProviderListUiResultSchema.safeParse({ status: 'ok', providers: [], catalog: [] }).success).toBe(true);
-    expect(ProviderListUiResultSchema.safeParse({
-      status: 'failed',
-      failure: { code: 'settings_invalid', message: 'invalid' },
-    }).success).toBe(true);
-    expect(ProviderListUiResultSchema.safeParse({ providers: [] }).success).toBe(false);
-    expect(ProviderListUiResultSchema.safeParse({ status: 'ok', providers: [{ hasApiKey: 'yes' }] }).success).toBe(false);
-  });
-
   it('validates Approval result payloads and rejects non-serializable details', () => {
     expect(ApprovalResolvePayloadSchema.safeParse({
       approvalRequestId: 'approval:1',
@@ -236,31 +223,4 @@ describe('Product Host runtime schemas', () => {
     }).success).toBe(false);
   });
 
-  it('rejects malformed or unknown Settings update fields', () => {
-    expect(SettingsUpdatePayloadSchema.safeParse({ theme: 123 }).success).toBe(false);
-    expect(SettingsUpdatePayloadSchema.safeParse({ unknownSetting: true }).success).toBe(false);
-    expect(SettingsUpdatePayloadSchema.safeParse({
-      setup: {
-        completed: true,
-        completedAt: '2026-07-10T00:00:00.000Z',
-      },
-    }).success).toBe(false);
-    expect(SettingsCompleteSetupPayloadSchema.safeParse({
-      language: 'zh-CN',
-      theme: 'midnight-blue',
-    }).success).toBe(true);
-    expect(SettingsUpdatePayloadSchema.safeParse({
-      theme: 'midnight-blue',
-      compaction: { enabled: true, reserveTokens: 16_384 },
-    }).success).toBe(false);
-    expect(SettingsUpdatePayloadSchema.safeParse({
-      discovery: {
-        conversationRecognitionEnabled: true,
-        recommendationGenerationTime: '09:30',
-        recommendationTargetCount: 24,
-        recommendationWorkingSetCount: 80,
-        enabledSources: ['bilibili', 'open_web'],
-      },
-    }).success).toBe(false);
-  });
 });

@@ -62,6 +62,7 @@ describe('useChatPageController', () => {
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
+        models: { getCatalog: async () => ({ ok: true, data: { status: 'ok', providers: [], defaultModel: { providerId: 'provider', modelId: 'model' } } }) },
         runtime: {
           onEvent: vi.fn(() => vi.fn()),
         },

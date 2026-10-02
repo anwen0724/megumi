@@ -1,3 +1,4 @@
+import { createSettingsFixture } from '../../settings-test-fixture';
 // @vitest-environment jsdom
 /* Verifies Settings-owned permission rule management without duplicating the Composer mode selector. */
 import { render, screen, waitFor } from '@testing-library/react';
@@ -22,9 +23,13 @@ describe('PermissionRulesPanel', () => {
     useSessionStore.setState({
       sessions: [{ id: 'session_1', projectId: 'workspace_1', title: 'Permission design', status: 'active', createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z' }],
     });
-    get.mockReset().mockResolvedValue(result('ok'));
-    update.mockReset().mockResolvedValue(result('updated'));
-    Object.defineProperty(window, 'megumi', { configurable: true, value: { settings: { get, update } } });
+    const fixture = createSettingsFixture({ permissions: {
+      allow: [{ source: 'user', target: { kind: 'operation', action: 'network.fetch', resource: { type: 'network.url', matcher: { operator: 'hostname', value: 'example.com' } } } }],
+      ask: [{ source: 'workspace', source_id: 'workspace_1', target: { kind: 'operation', action: 'workspace.read', resource: { type: 'workspace.path', matcher: { operator: 'any' } } } }],
+      deny: [{ source: 'session', source_id: 'session_1', target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'read_file' } } }],
+    } });
+    update.mockReset().mockImplementation(fixture.api.settings.updateSettings);
+    Object.defineProperty(window, 'megumi', { configurable: true, value: { ...fixture.api, settings: { ...fixture.api.settings, updateSettings: update } } });
   });
 
   it('lists rule effects and never renders a second permission mode selector', async () => {
@@ -52,41 +57,8 @@ describe('PermissionRulesPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Save rule' }));
 
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
-    expect(update.mock.calls[0][0].payload).toEqual({ permissions: { ruleChange: {
-      operation: 'add',
-      rule: {
-        effect: 'deny', source: 'workspace', sourceId: 'workspace_1',
-        target: { kind: 'operation', action: 'network.fetch', resource: {
-          type: 'network.url', operator: 'hostname', value: '*.example.com',
-        } },
-      },
-    } } });
+    expect(update.mock.calls[0][0].patch.permissions.deny).toContainEqual({
+      source: 'workspace', source_id: 'workspace_1', target: { kind: 'operation', action: 'network.fetch', resource: { type: 'network.url', matcher: { operator: 'hostname', value: '*.example.com' } } },
+    });
   });
 });
-
-function result(status: 'ok' | 'updated') {
-  return { ok: true, data: { status, settings: {
-    language: 'en-US', theme: 'midnight-blue', setup: { completed: true }, memory: { enabled: false },
-    web: { search: { hasApiKey: false, credentialSource: 'missing' } }, providers: {},
-    permissions: {
-      mode: 'ask',
-      rules: [{
-        effect: 'allow', source: 'user',
-        target: { kind: 'operation', action: 'network.fetch', resource: { type: 'network.url', operator: 'hostname', value: 'example.com' } },
-      }, {
-        effect: 'ask', source: 'workspace', sourceId: 'workspace_1',
-        target: { kind: 'operation', action: 'workspace.read', resource: { type: 'workspace.path', operator: 'any' } },
-      }, {
-        effect: 'deny', source: 'session', sourceId: 'session_1',
-        target: { kind: 'tool', sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'read_file', displayName: 'Read file' },
-      }],
-      catalog: {
-        operations: [
-          { action: 'workspace.read', resourceType: 'workspace.path', operators: ['any', 'exact', 'prefix', 'glob'] },
-          { action: 'network.fetch', resourceType: 'network.url', operators: ['any', 'exact', 'hostname'] },
-        ],
-        tools: [{ sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'read_file', registeredToolName: 'read_file', displayName: 'Read file' }],
-      },
-    },
-  } }, meta: {} };
-}

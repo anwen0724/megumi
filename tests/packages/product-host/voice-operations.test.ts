@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { onTestFinished } from 'vitest';
+import { createSettings } from '@megumi/application/settings/settings-store';
 import { describe, expect, it, vi } from 'vitest';
 import { createVoice, type SpeechInputRuntime, type SpeechOutputRuntime } from '@megumi/application/voice/index';
 import { createVoiceOperations } from '@megumi/application/voice/voice-operations';
@@ -44,7 +49,7 @@ describe('Product Voice operations', () => {
         getCapabilityStatus: () => ({ status: 'ready' as const }),
       },
     });
-    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
+    const host = createVoiceOperations({ settings: () => configuration(), voice, speechOutput: noopSpeechOutput() });
 
     expect(await host.getModelStatus()).toEqual({
       status: 'preparing',
@@ -71,7 +76,7 @@ describe('Product Voice operations', () => {
         subscribe() { return () => undefined; },
       },
     });
-    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
+    const host = createVoiceOperations({ settings: () => configuration(), voice, speechOutput: noopSpeechOutput() });
 
     await expect(host.startSession({ boundSessionId: 'session:one' })).resolves.toEqual({
       status: 'ok',
@@ -95,7 +100,7 @@ describe('Product Voice operations', () => {
         getCapabilityStatus: () => ({ status: 'ready' }),
       },
     });
-    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
+    const host = createVoiceOperations({ settings: () => configuration(), voice, speechOutput: noopSpeechOutput() });
 
     expect(await host.getModelCapabilityStatus({ capability: 'stt' })).toEqual({ status: 'ready' });
   });
@@ -114,7 +119,7 @@ describe('Product Voice operations', () => {
         subscribe() { return () => undefined; },
       },
     });
-    const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput() });
+    const host = createVoiceOperations({ settings: () => configuration(), voice, speechOutput: noopSpeechOutput() });
     await host.startSession({ boundSessionId: 'session:one' });
 
     expect(await host.startManualUtterance()).toEqual({ status: 'ok' });
@@ -125,7 +130,7 @@ describe('Product Voice operations', () => {
 
   it('stops speech output for the character-hidden reason', async () => {
     const stop = vi.fn();
-    const host = createVoiceOperations({
+    const host = createVoiceOperations({ settings: () => configuration(),
       voice: createVoice({ speechInput: noopSpeechInput() }),
       speechOutput: { read() {}, stop, subscribe() { return { unsubscribe() {} }; } },
     });
@@ -133,4 +138,23 @@ describe('Product Voice operations', () => {
     expect(await host.stopSpeechOutput()).toEqual({ status: 'ok' });
     expect(stop).toHaveBeenCalledWith('character_hidden');
   });
+});
+
+function configuration() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-settings-'));
+  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const globalSettingsPath = path.join(root, 'settings.json');
+  const projectSettingsPath = path.join(root, 'project.json');
+  fs.writeFileSync(globalSettingsPath, JSON.stringify({ voice: { recognitionLanguage: 'zh' } }));
+  fs.writeFileSync(projectSettingsPath, JSON.stringify({ voice: { recognitionLanguage: 'en' } }));
+  return createSettings({ globalSettingsPath, projectSettingsPath, credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined });
+}
+
+it('uses the bound configuration language for speech input', async () => {
+  const started: unknown[] = [];
+  const voice = createVoice({ speechInput: { ...noopSpeechInput(), async start(request) { started.push(request); return { status: 'started', generation: 1 }; } } });
+  const host = createVoiceOperations({ voice, speechOutput: noopSpeechOutput(), settings: () => configuration() });
+  await host.startSession({ boundSessionId: 'session:one' });
+  expect(started).toContainEqual(expect.objectContaining({ language: 'en' }));
+  await host.endSession();
 });

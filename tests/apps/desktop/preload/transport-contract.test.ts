@@ -18,11 +18,8 @@ const snapshot = { status: 'idle', currentVersion: '0.2.2', platform: 'win32', a
 describe('Desktop Preload transport', () => {
   it('returns a stable failure with the request identity when the main process is unreachable', async () => {
     electron.ipcRenderer.invoke.mockRejectedValueOnce(new Error('Transport closed'));
-    const request = { requestId: 'request-1', payload: {}, meta: {
-      channel: IPC_CHANNELS.settings.providerList, source: 'renderer' as const, createdAt: '2026-10-01T00:00:00.000Z',
-    } };
-    expect(await api.provider.list(request)).toMatchObject({ ok: false,
-      data: { code: 'ipc_invoke_failed' }, meta: { requestId: 'request-1', channel: IPC_CHANNELS.settings.providerList } });
+    expect(await api.tools.list()).toMatchObject({ ok: false,
+      data: { code: 'ipc_invoke_failed' }, meta: { requestId: expect.any(String), channel: IPC_CHANNELS.tools.list } });
   });
 
   it('rejects malformed update snapshots and stops delivery after unsubscribe', async () => {

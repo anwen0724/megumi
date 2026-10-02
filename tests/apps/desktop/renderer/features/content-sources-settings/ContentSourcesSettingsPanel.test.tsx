@@ -1,3 +1,4 @@
+import { createSettingsFixture } from '../../settings-test-fixture';
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -17,22 +18,9 @@ describe('ContentSourcesSettingsPanel', () => {
   const getWebSearchApiKey = vi.fn();
 
   beforeEach(() => {
-    getSettings.mockReset().mockResolvedValue(ok({
-      status: 'ok',
-      settings: settings(),
-      unknownKeys: [],
-    }));
-    updateSettings.mockReset().mockResolvedValue(ok({ status: 'updated', settings: settings() }));
-    getCredential.mockReset().mockImplementation(async (request) => ok({
-      status: 'ok', sourceId: request.payload.sourceId, configured: request.payload.sourceId === 'zhihu',
-      ...(request.payload.sourceId === 'zhihu' ? { credential: 'saved-zhihu-secret' } : {}),
-    }));
-    setCredential.mockReset().mockImplementation(async (request) => ok({
-      status: 'ok', sourceId: request.payload.sourceId, configured: true,
-    }));
-    deleteCredential.mockReset().mockImplementation(async (request) => ok({
-      status: 'ok', sourceId: request.payload.sourceId, configured: false,
-    }));
+    const fixture = createSettingsFixture();
+    fixture.settings.updateCredential({ target: { kind: 'discoverySource', sourceId: 'zhihu' }, value: 'saved-zhihu-secret' });
+    setCredential.mockReset().mockImplementation(fixture.api.settings.updateCredential);
     getConfiguration.mockReset().mockResolvedValue(ok(configuration()));
     connectSource.mockReset().mockImplementation(async (request) => ok(
       configuration().sources.find((source) => source.sourceId === request.payload.sourceId),
@@ -45,14 +33,7 @@ describe('ContentSourcesSettingsPanel', () => {
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
-        settings: {
-          get: getSettings,
-          update: updateSettings,
-          getWebSearchApiKey,
-          getDiscoverySourceCredential: getCredential,
-          setDiscoverySourceCredential: setCredential,
-          deleteDiscoverySourceCredential: deleteCredential,
-        },
+        settings: { ...fixture.api.settings, updateCredential: setCredential },
         discovery: { getConfiguration, connectSource, refreshSource, refreshSources },
       },
     });
@@ -76,7 +57,7 @@ describe('ContentSourcesSettingsPanel', () => {
     await user.click(within(zhihuRow as HTMLElement).getByRole('button', { name: 'Save 知乎 credential' }));
 
     await waitFor(() => expect(setCredential).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { sourceId: 'zhihu', credential: 'zhihu-secret' },
+      target: { kind: 'discoverySource', sourceId: 'zhihu' }, value: 'zhihu-secret',
     })));
     expect(secret).toHaveValue('zhihu-secret');
     expect(screen.getByText('Configured', { selector: '[data-source-id="zhihu"] *' })).toBeInTheDocument();

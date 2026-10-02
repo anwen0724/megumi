@@ -16,8 +16,8 @@ describe('ProviderSettingsPanel', () => {
         protocol: 'openai-completions',
         defaultBaseUrl: 'https://api.deepseek.com',
         models: [
-          { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000, capabilities },
-          { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000, capabilities },
+          { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000, maxOutputTokens: 8192, capabilities },
+          { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000, maxOutputTokens: 8192, capabilities },
         ],
       }, {
         providerId: 'OpenAI',
@@ -25,11 +25,11 @@ describe('ProviderSettingsPanel', () => {
         protocol: 'openai-completions',
         defaultBaseUrl: 'https://api.openai.com/v1',
         models: [
-          { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000, capabilities },
-          { modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', contextWindowTokens: 1_050_000, capabilities },
-          { modelId: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', contextWindowTokens: 1_050_000, capabilities },
-          { modelId: 'gpt-5.5', displayName: 'GPT-5.5', contextWindowTokens: 1_050_000, capabilities },
-          { modelId: 'gpt-5.5-pro', displayName: 'GPT-5.5 Pro', contextWindowTokens: 1_050_000, capabilities },
+          { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
+          { modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
+          { modelId: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
+          { modelId: 'gpt-5.5', displayName: 'GPT-5.5', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
+          { modelId: 'gpt-5.5-pro', displayName: 'GPT-5.5 Pro', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
         ],
       }],
       providers: [
@@ -40,6 +40,7 @@ describe('ProviderSettingsPanel', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
+          modelSettings: { 'deepseek-v4-flash': { displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,
@@ -53,6 +54,7 @@ describe('ProviderSettingsPanel', () => {
           enabled: true,
           baseUrl: 'https://api.openai.com/v1',
           modelIds: ['gpt-5.5'],
+          modelSettings: { 'gpt-5.5': { displayName: 'GPT-5.5', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
           hasApiKey: true,
           credentialSource: 'environment',
           envOverrideActive: true,
@@ -112,6 +114,7 @@ describe('ProviderSettingsPanel', () => {
         enabled: true,
         baseUrl: 'https://api.openai.com/v1',
         modelIds: ['gpt-5.5'],
+          modelSettings: { 'gpt-5.5': { displayName: 'GPT-5.5', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
         hasApiKey: true,
         credentialSource: 'environment',
         envOverrideActive: true,
@@ -156,7 +159,7 @@ describe('ProviderSettingsPanel', () => {
 
   it('updates the selected provider settings from the detail pane', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
+    const updateProvider = vi.fn().mockResolvedValue(true);
     useProviderStore.setState({ updateProvider });
 
     render(<ProviderSettingsPanel />);
@@ -182,14 +185,14 @@ describe('ProviderSettingsPanel', () => {
       models: [{
         modelId: 'deepseek-v4-flash',
         displayName: 'DeepSeek V4 Flash',
-        contextWindowTokens: 131072,
+        contextWindowTokens: 131072, maxOutputTokens: 8192,
       }],
     });
   });
 
   it('saves the image input switch as the only exposed capability override', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
+    const updateProvider = vi.fn().mockResolvedValue(true);
     useProviderStore.setState({ updateProvider });
 
     render(<ProviderSettingsPanel />);
@@ -204,7 +207,7 @@ describe('ProviderSettingsPanel', () => {
       models: [{
         modelId: 'deepseek-v4-flash',
         displayName: 'DeepSeek V4 Flash',
-        contextWindowTokens: 1_000_000,
+        contextWindowTokens: 1_000_000, maxOutputTokens: 8192,
         imageInput: false,
       }],
     }));
@@ -224,7 +227,7 @@ describe('ProviderSettingsPanel', () => {
 
   it('creates a provider from an empty settings state', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
+    const updateProvider = vi.fn().mockResolvedValue(true);
     useProviderStore.setState({
       providers: [],
       updateProvider,
@@ -254,14 +257,14 @@ describe('ProviderSettingsPanel', () => {
       models: [{
         modelId: 'deepseek-chat',
         displayName: 'DeepSeek Chat',
-        contextWindowTokens: 200000,
+        contextWindowTokens: 200000, maxOutputTokens: 8192,
       }],
     });
   });
 
   it('loads a saved API key masked, reveals it on demand, and keeps replacements visible to the form', async () => {
     const user = userEvent.setup();
-    const updateProvider = vi.fn();
+    const updateProvider = vi.fn().mockResolvedValue(true);
     const setApiKey = vi.fn();
     useProviderStore.setState({ updateProvider, setApiKey, getApiKey: vi.fn().mockResolvedValue('sk-stored-key') });
 

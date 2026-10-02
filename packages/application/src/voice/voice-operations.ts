@@ -1,9 +1,11 @@
 /* Implements the host-neutral Voice operations exposed by Product. */
 
+import type { Settings } from '../settings/settings-store';
 import type { SpeechOutputRuntime, Voice } from './index';
 import type { VoiceHost } from './voice-contracts';
 
 export interface CreateVoiceOperationsOptions {
+  readonly settings: (sessionId: string) => Pick<Settings, 'readSettings'>;
   readonly voice: Voice;
   readonly speechOutput: SpeechOutputRuntime;
 }
@@ -41,7 +43,12 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
     },
 
     async startSession(request) {
-      const result = await voice.sessions.start(request);
+      const configuration = options.settings(request.boundSessionId).readSettings();
+      if (configuration.status === 'rejected') return { status: 'failed', failure: configuration.error };
+      const result = await voice.sessions.start({
+        boundSessionId: request.boundSessionId,
+        language: configuration.settings.config.voice.recognitionLanguage,
+      });
       if (result.status === 'started' || result.status === 'already_active') {
         return { status: 'ok', ...(result.generation !== undefined ? { generation: result.generation } : {}) };
       }

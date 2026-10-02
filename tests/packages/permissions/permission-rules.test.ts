@@ -1,6 +1,11 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createSettings } from '@megumi/application/settings/settings-store';
+import { resolveConfiguredPermissionRules, recordConfiguredSessionGrant } from '@megumi/agent-runtime/permissions/permission-rules';
 // @vitest-environment node
 /* Verifies the resource-specific matching semantics kept internal to Permissions. */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import type { PermissionOperation, PermissionRule } from '@megumi/agent-runtime/permissions/index';
 import { matchesPermissionRule } from '@megumi/agent-runtime/permissions/permission-rules';
 
@@ -65,4 +70,25 @@ describe('Permission rules', () => {
     expect(matchesPermissionRule(wildcard, operation('network.fetch', 'network.url', 'https://api.example.com', { hostname: 'api.example.com' }))).toBe(true);
     expect(matchesPermissionRule(wildcard, operation('network.fetch', 'network.url', 'https://example.com', { hostname: 'example.com' }))).toBe(false);
   });
+});
+
+ it.each([false, true])('persists session grants in the effective allow file (project override=%s)', (overridden) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'permission-settings-'));
+  onTestFinished(() => fs.rmSync(root, { recursive: true, force: true }));
+  const globalSettingsPath = path.join(root, 'settings.json');
+  const projectSettingsPath = path.join(root, 'project.json');
+  const options = { globalSettingsPath, credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined };
+  fs.writeFileSync(globalSettingsPath, JSON.stringify({ permissions: { allow: [] } }));
+  if (overridden) fs.writeFileSync(projectSettingsPath, JSON.stringify({ permissions: { allow: [] } }));
+  const globalSettings = createSettings(options);
+  const projectSettings = createSettings({ ...options, projectSettingsPath });
+  const grant: PermissionRule = { source: 'session', source_id: 'session_1', target: { kind: 'operation', action: 'agent.context.activate' } };
+  for (let index = 0; index < 2; index++) {
+    expect(recordConfiguredSessionGrant(projectSettings, globalSettings, { sessionId: 'session_1', rules: [grant] })).toEqual({ status: 'saved' });
+  }
+  expect(resolveConfiguredPermissionRules(projectSettings, { sessionId: 'session_1', workspaceId: 'workspace_1' })).toMatchObject({ permissionSettings: { allow: [grant] } });
+  expect(resolveConfiguredPermissionRules(projectSettings, { sessionId: 'session_2', workspaceId: 'workspace_1' })).toMatchObject({ permissionSettings: { allow: [] } });
+  expect(globalSettings.readSettings()).toMatchObject({ settings: { config: { permissions: { allow: overridden ? [] : [grant] } } } });
+  expect(fs.existsSync(projectSettingsPath)).toBe(overridden);
+  expect(recordConfiguredSessionGrant(projectSettings, globalSettings, { sessionId: 'session_2', rules: [grant] })).toMatchObject({ status: 'failed' });
 });

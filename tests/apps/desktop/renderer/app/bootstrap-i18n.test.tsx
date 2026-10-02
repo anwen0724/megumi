@@ -8,29 +8,17 @@ import { usePermissionModeStore } from '@megumi/desktop/renderer/entities/permis
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 
 function successfulSettings(language: 'zh-CN' | 'en-US', setupCompleted = true) {
-  return {
-    ok: true as const,
-    data: {
-      status: 'ok' as const,
-      settings: {
-        language,
-        theme: 'verdant-cloud' as const,
-        setup: { completed: setupCompleted },
-        permissions: { mode: 'ask' as const, allow: [], ask: [], deny: [] },
-        memory: { enabled: false },
-        modelSelection: { providerId: 'deepseek', modelId: 'deepseek-v4-pro' },
-        web: { search: { enabled: false, providerId: 'tavily', maxResults: 5, timeoutMs: 10_000 } },
-        providers: {},
-      },
-    },
-    meta: {},
-  };
+  return { ok: true as const, data: { config: {
+    general: { language, theme: 'verdant-cloud', setupCompleted },
+    permissions: { mode: 'ask' },
+    models: { defaultModel: { providerId: 'deepseek', modelId: 'deepseek-flash' } },
+  }, revision: 'revision', sources: [], diagnostics: [] }, meta: {} };
 }
 
 function installSettingsGet(get: ReturnType<typeof vi.fn>) {
   Object.defineProperty(window, 'megumi', {
     configurable: true,
-    value: { settings: { get } },
+    value: { settings: { readSettings: get, onChanged: () => () => {} } },
   });
 }
 
@@ -57,7 +45,7 @@ describe('renderer bootstrap localization', () => {
     expect(usePermissionModeStore.getState().mode).toBe('ask');
     expect(useModelSelectionStore.getState().selection).toEqual({
       providerId: 'deepseek',
-      modelId: 'deepseek-v4-pro',
+      modelId: 'deepseek-flash',
     });
     expect(useSetupWizardStore.getState()).toMatchObject({
       status: 'ready',

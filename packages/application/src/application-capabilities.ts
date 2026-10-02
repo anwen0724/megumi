@@ -214,7 +214,7 @@ function composeCapabilitiesWithDatabase(
   logger: ProductCapabilities['logger'],
   database: DatabaseConnection,
 ): ProductCapabilities {
-  const settings = createSettings({ globalSettingsPath: homePaths.settingsPath, credentialsPath: homePaths.credentialsPath, readEnvironment: options.readEnvironment });
+  const settings = createSettings({ globalSettingsPath: homePaths.settingsPath, credentialsPath: homePaths.credentialsPath, readEnvironment: options.readEnvironment ?? ((name) => process.env[name]) });
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = options.workspaceFileSystem;
   const workspacePathPolicy = createWorkspacePathPolicy();
@@ -231,7 +231,7 @@ function composeCapabilitiesWithDatabase(
       globalSettingsPath: homePaths.settingsPath,
       projectSettingsPath,
       credentialsPath: homePaths.credentialsPath,
-      readEnvironment: options.readEnvironment,
+      readEnvironment: options.readEnvironment ?? ((name) => process.env[name]),
     });
   };
   const workspaceFiles = createWorkspaceFiles({

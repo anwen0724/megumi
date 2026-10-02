@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 /* Verifies candidate supply against real runtime, tools and isolated storage. */
 // @vitest-environment node
 import { expect, it, onTestFinished } from 'vitest';
@@ -39,21 +41,19 @@ it('persists confirmation and returns while the actual run is still pending', as
 });
 
 it('does not confirm or run when settings cannot be saved', async () => {
-  const { supply, http, readSettings } = await setup({ confirmed: false, saveSettings: async () => { throw new Error('Settings write failed'); } });
-  await expect(supply.confirm()).rejects.toThrow('Settings write failed');
-  expect(readSettings().candidateSupplyConfirmed).toBe(false);
+  const { supply, http, fixture } = await setup({ confirmed: false });
+  fs.renameSync(fixture.globalSettingsPath, fixture.globalSettingsPath + '.backup');
+  fs.mkdirSync(fixture.globalSettingsPath);
+  await expect(supply.confirm()).rejects.toThrow();
+  expect(JSON.parse(fs.readFileSync(fixture.globalSettingsPath + '.backup', 'utf8')).discovery.candidateSupplyConfirmed).toBe(false);
   expect(http.requests).toHaveLength(0);
 });
 
-it('does not launch when shutdown interrupts confirmation persistence', async () => {
-  const write = Promise.withResolvers<void>();
-  const { supply, http, readSettings } = await setup({ confirmed: false, saveSettings: () => write.promise });
-  const confirmation = supply.confirm();
-  const rejected = expect(confirmation).rejects.toThrow('shutting down');
+it('does not confirm or launch after shutdown', async () => {
+  const { supply, http, readSettings } = await setup({ confirmed: false });
   await supply.shutdown();
-  write.resolve();
-  await rejected;
-  expect(readSettings().candidateSupplyConfirmed).toBe(true);
+  await expect(supply.confirm()).rejects.toThrow('shutting down');
+  expect(readSettings().candidateSupplyConfirmed).toBe(false);
   expect(http.requests).toHaveLength(0);
 });
 
@@ -121,26 +121,30 @@ it('records enabled, unavailable and disabled sources without changing selection
   ] }) }));
 });
 
-async function setup(options: { interest?: boolean; confirmed?: boolean; source?: DiscoverySource; enabledSources?: string[]; saveSettings?: () => Promise<void>; overrides?: Partial<CreateCandidatesOptions> } = {}) {
+async function setup(options: { interest?: boolean; confirmed?: boolean; source?: DiscoverySource; enabledSources?: string[]; overrides?: Partial<CreateCandidatesOptions> } = {}) {
   const fixture = await createRuntimeFixture({ now: () => now });
   if (options.interest !== false) fixture.repository.applyInterestChange({ action: 'create', interestId: 'interest:1', description: 'Agent architecture', now });
   const http = controlModelHttp();
-  let settings = {
+  const discovery = {
     conversationRecognitionEnabled: true, candidateSupplyConfirmed: options.confirmed ?? true,
-    recommendationCandidateCheckIntervalSeconds: 60, recommendationGenerationTime: '08:00', recommendationTargetCount: 20,
-    recommendationWorkingSetCount: 80, enabledSources: options.enabledSources ?? ['source:1'], candidatePoolMinimumCount: 2,
+    recommendationCandidateCheckIntervalSeconds: 60, recommendationGenerationTime: '08:00', recommendationTargetCount: 2,
+    recommendationWorkingSetCount: 2, enabledSources: options.enabledSources ?? ['source:1'], candidatePoolMinimumCount: 2,
     candidatePoolMaximumCount: 5, candidateValidityDays: 30, candidateContentExcerptMaxCharacters: 8000, candidateSupplyCheckIntervalMinutes: 360,
   };
+  const baseline = fixture.settings.readSettings();
+  if (baseline.status !== 'ok') throw new Error('Invalid test configuration');
+  const saved = fixture.settings.updateSettings({ patch: { discovery }, expectedRevision: baseline.settings.revision });
+  if (saved.status === 'rejected') throw new Error(saved.error.message);
   let id = 0;
   const supply = createCandidates({
     repository: fixture.repository, attempts: fixture.candidateSupplyAttempts, runtime: fixture.runtime,
     sourceRegistry: createSourceRegistry([options.source ?? source()]),
-    settings: { read: () => settings, async write(next) { await options.saveSettings?.(); settings = next; } },
+    settings: fixture.settings,
     resolveModel: async () => ({ status: 'ok', model: fixture.model }), now: () => now,
     ids: { createRequestId: () => 'supply:' + ++id }, ...options.overrides,
   });
   onTestFinished(async () => { await fixture.runtime.stop({ timeoutMs: 5000 }); await supply.shutdown(); await fixture.cleanup(); http.restore(); });
-  return { fixture, supply, http, readSettings: () => settings };
+  return { fixture, supply, http, readSettings: () => { const result = fixture.settings.readSettings(); if (result.status !== 'ok') throw new Error(result.error.message); return result.settings.config.discovery; } };
 }
 
 function addCandidate(fixture: Awaited<ReturnType<typeof createRuntimeFixture>>, url: string) {

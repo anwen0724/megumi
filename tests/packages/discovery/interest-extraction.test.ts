@@ -27,9 +27,9 @@ describe('Interest extractor', () => {
         text: '```json\n{"evidence":[{"description":"Agent 工程化","effect":"support","confidence":"high"}]}\n```',
       }],
     } as any));
-    const extractor = createInterestExtractor({ models: { completeSimple } });
+    const extractor = createInterestExtractor({});
 
-    await expect(extractor.extract(input())).resolves.toEqual({
+    await expect(extractor.extract({ ...input(), client: { completeSimple } })).resolves.toEqual({
       evidence: [{ description: 'Agent 工程化', effect: 'support', confidence: 'high' }],
     });
     const context = completeSimple.mock.calls[0]![1];
@@ -39,15 +39,9 @@ describe('Interest extractor', () => {
   });
 
   it('rejects invalid model JSON instead of persisting a partial interpretation', async () => {
-    const extractor = createInterestExtractor({
-      models: {
-        completeSimple: async () => ({
-          stopReason: 'stop',
-          content: [{ type: 'text', text: '{"evidence":[{"confidence":"certain"}]}' }],
-        } as any),
-      },
-    });
-    await expect(extractor.extract(input())).rejects.toThrow();
+    const extractor = createInterestExtractor({});
+    const completeSimple = async () => ({ stopReason: 'stop', content: [{ type: 'text', text: '{"evidence":[{"confidence":"certain"}]}' }] });
+    await expect(extractor.extract({ ...input(), client: { completeSimple } })).rejects.toThrow();
   });
 });
 

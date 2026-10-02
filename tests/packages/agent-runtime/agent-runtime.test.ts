@@ -154,6 +154,13 @@ it('initializes a session from the default model and keeps it when the default c
   const second = await fixture.runtime.submitInput({ workspaceId: fixture.workspaceId, sessionId: fixture.sessionId, text: 'Second' });
   if (second.status !== 'started') throw new Error('Expected second run');
   await second.run.completion;
-  expect(requested).toEqual([fixture.model.id, fixture.model.id]);
+  const direct = await fixture.runtime.startRun({
+    kind: 'conversation', requestId: 'prepared-input', workspaceId: fixture.workspaceId,
+    sessionId: fixture.sessionId, permissionMode: 'ask',
+    input: { displayContent: [{ type: 'text', text: 'Third' }], modelContent: [{ type: 'text', text: 'Third' }], attachments: [] },
+  });
+  if (direct.status === 'rejected') throw new Error(direct.error.message);
+  await direct.run.completion;
+  expect(requested).toEqual([fixture.model.id, fixture.model.id, fixture.model.id]);
   expect(fixture.catalog.getSession({ session_id: fixture.sessionId })).toMatchObject({ session: { model_selection: { providerId: fixture.model.provider, modelId: fixture.model.id } } });
 });

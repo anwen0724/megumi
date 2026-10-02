@@ -40,8 +40,8 @@ export function getComposerModelOptionsForProviders(providers?: ProviderPublicSt
       value: modelOptionValue(provider.providerId, String(modelId)),
       modelId: String(modelId),
       providerId: provider.providerId,
-      imageInput: provider.modelCapabilities?.[modelId]?.imageInput ?? 'unknown',
-      label: String(modelId),
+      imageInput: provider.modelSettings[modelId]?.capabilities.imageInput ?? 'unknown',
+      label: provider.modelSettings[modelId]?.displayName ?? String(modelId),
     })));
 }
 

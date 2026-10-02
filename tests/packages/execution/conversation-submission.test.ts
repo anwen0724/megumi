@@ -102,6 +102,7 @@ describe('Conversation Submission Trace', () => {
       dependencies: dependencies({
         observability,
         sessions: {
+      updateModelSelection: () => ({ status: 'found', session }),
           getSession: vi.fn(),
           createSession: () => ({ status: 'created', session }),
         },
@@ -202,6 +203,7 @@ function dependencies(
   return {
     input: { process: async () => ({ status: 'accepted', input: acceptedInput }) },
     sessions: {
+      updateModelSelection: () => ({ status: 'found', session }),
       getSession: () => ({ status: 'found', session }),
       createSession: () => ({ status: 'created', session }),
     },

@@ -56,7 +56,7 @@ export async function createRuntimeFixture(options: { now?: () => string; before
   const workspaceStore = createWorkspaceStore({ database: fixture.database });
   const workspaceChanges = createWorkspaceChanges({ store: workspaceStore });
   const tools = createTools({
-    settings: { resolveWebSearch: () => ({ status: 'failed' }), readWebSearchApiKey: () => ({ status: 'missing' }) },
+    settings: () => settings,
     workspaces: fixture.workspaceCatalog,
     workspaceChanges,
     recommendationTools: recommendationAttempts,
@@ -106,6 +106,6 @@ export async function createRuntimeFixture(options: { now?: () => string; before
       });
     },
   });
-  return { ...fixture, globalSettingsPath, repository, recommendationAttempts, candidateSupplyAttempts, model, history, runtime, workspaceChanges, async cleanup() { await runtime.stop({ timeoutMs: 5000 }); fixture.cleanup(); } };
+  return { ...fixture, settings, globalSettingsPath, repository, recommendationAttempts, candidateSupplyAttempts, model, history, runtime, workspaceChanges, async cleanup() { await runtime.stop({ timeoutMs: 5000 }); fixture.cleanup(); } };
   } catch (error) { fixture.cleanup(); throw error; }
 }

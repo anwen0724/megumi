@@ -214,7 +214,7 @@ async function runCheck(
   options.attempts.start({
     executionId, startedAt: options.now(), trigger, repository: options.repository,
     sourceRegistry: options.sourceRegistry, enabledSourceIds: readySourceIds,
-    settings: poolSettings, now: options.now,
+    settings: poolSettings, twitterBudget: configuration.twitterBudget, now: options.now,
   });
   try {
     const started = await options.runtime.startRun({

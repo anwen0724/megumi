@@ -251,6 +251,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     });
     const started = await startRun({
       runId: executionId,
+      signal: active?.controller.signal,
       kind: 'recommendation',
       requestId,
       localDate,
@@ -260,7 +261,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       const result = started.error.code === 'MODEL_UNAVAILABLE'
         ? { status: 'model_unavailable' as const, localDate }
         : failureResult(localDate, 'agent_execution_failed', started.error.message, false);
-      active.settle(result);
+      active?.settle(result);
       latest = { requestId, result };
       active = undefined;
       return result;
@@ -498,6 +499,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     });
     const started = await startRun({
       runId: executionId,
+      signal: active?.controller.signal,
       kind: 'recommendation',
       requestId: current.requestId,
       localDate: current.localDate,

@@ -76,6 +76,7 @@ export type PrepareRun = (
 ) => Promise<PreparedRun>;
 
 export interface ConversationExecutionInput {
+  readonly signal?: AbortSignal;
   readonly client: ModelClient;
   readonly compactionThresholdRatio: number;
   readonly kind: 'conversation';
@@ -90,6 +91,7 @@ export interface ConversationExecutionInput {
 }
 
 export interface RecommendationExecutionInput {
+  readonly signal?: AbortSignal;
   readonly client: ModelClient;
   readonly compactionThresholdRatio: number;
   readonly runId?: string;
@@ -100,6 +102,7 @@ export interface RecommendationExecutionInput {
 }
 
 export interface CandidateSupplyExecutionInput {
+  readonly signal?: AbortSignal;
   readonly client: ModelClient;
   readonly compactionThresholdRatio: number;
   readonly runId?: string;
@@ -170,6 +173,7 @@ export interface RunManager {
   start(request: ConversationExecutionInput): Promise<StartExecutionResult>;
   start(request: RecommendationExecutionInput): Promise<StartRecommendationExecutionResult>;
   start(request: CandidateSupplyExecutionInput): Promise<StartCandidateSupplyExecutionResult>;
+  start(request: StartExecutionRequest): Promise<StartExecutionResult | StartRecommendationExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
   get(request: GetExecutionRequest): GetExecutionResult;
@@ -326,7 +330,7 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
         kind: 'conversation',
         client: request.client,
         compactionThresholdRatio: request.compactionThresholdRatio,
-        signal: store.getCancellationSignal(executionId),
+        signal: AbortSignal.any([store.getCancellationSignal(executionId), request.signal].filter((signal) => signal !== undefined)),
         metadata,
         input: request.input,
         ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}),
@@ -383,7 +387,7 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
     store.reserveBackground(launch.metadata);
     let launched: PreparedRun;
     try {
-      launched = await options.launch({ ...launch, signal: store.getCancellationSignal(executionId) });
+      launched = await options.launch({ ...launch, signal: AbortSignal.any([store.getCancellationSignal(executionId), request.signal].filter((signal) => signal !== undefined)) });
     } catch (error) {
       store.failBackgroundStart(executionId);
       return { status: 'failed', failure: launchFailure(error) };

@@ -232,6 +232,7 @@ describe('Agent Executions and conversation submission', () => {
           }),
         },
         sessions: {
+      updateModelSelection: () => ({ status: 'found', session }),
           getSession: vi.fn(),
           createSession,
         },
@@ -280,6 +281,7 @@ describe('Agent Executions and conversation submission', () => {
           },
         },
         sessions: {
+      updateModelSelection: () => ({ status: 'found', session }),
           getSession: vi.fn(),
           createSession: (request) => {
             order.push('session');
@@ -292,7 +294,7 @@ describe('Agent Executions and conversation submission', () => {
           resolveBranchDraft: vi.fn(),
           commitBranchDraft: vi.fn(),
         },
-        resolveModel: async (selection) => {
+        resolveModel: async (_workspaceId, selection) => {
           order.push('model');
           expect(selection).toEqual({ providerId: 'test-provider', modelId: 'test-model' });
           return { status: 'ok', model };
@@ -422,6 +424,7 @@ describe('Agent Executions and conversation submission', () => {
           }),
         },
         sessions: {
+      updateModelSelection: () => ({ status: 'found', session }),
           getSession: () => ({ status: 'found', session }),
           createSession: vi.fn(),
         },
@@ -483,6 +486,7 @@ describe('Agent Executions and conversation submission', () => {
           }),
         },
         sessions: {
+      updateModelSelection: () => ({ status: 'found', session }),
           getSession: () => ({ status: 'found', session }),
           createSession: vi.fn(),
         },

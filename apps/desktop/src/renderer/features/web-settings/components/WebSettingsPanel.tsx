@@ -195,7 +195,7 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-4">
             <p className="text-sm text-[var(--color-text-muted)]">
-              {(credential.status === 'found' ? credential.source : 'missing') === 'settings' ? t('settings:web.savedCredential')
+              {(credential.status === 'found' ? credential.source : 'missing') === 'stored' ? t('settings:web.savedCredential')
                 : (credential.status === 'found' ? credential.source : 'missing') === 'environment' ? t('settings:web.environmentCredential', { name: saved.apiKeyEnv ?? '' })
                   : t('settings:web.noCredential')}
             </p>

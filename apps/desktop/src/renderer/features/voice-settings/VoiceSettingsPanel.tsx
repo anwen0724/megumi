@@ -366,7 +366,7 @@ export function VoiceSettingsPanel() {
                 <Speaker size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
                 {t('voice.ttsApiKey')}
               </span>
-              <span className="text-xs text-[var(--color-text-muted)]">{t(ttsCredentialKey(voiceSettings.tts))}</span>
+              <span className="text-xs text-[var(--color-text-muted)]">{t(ttsCredential.status === 'found' ? ttsCredential.source === 'stored' ? 'voice.ttsCredentialSaved' : 'voice.ttsCredentialEnvironment' : 'voice.ttsCredentialMissing')}</span>
             </div>
             <div className="flex gap-2">
               <SecretInput
@@ -432,12 +432,6 @@ function ensureSelectedDevice(
   return options.some((option) => option.deviceId === selectedDeviceId)
     ? options
     : [...options, { deviceId: selectedDeviceId, label: unavailableLabel }];
-}
-
-function ttsCredentialKey(tts: VoiceSettings['tts']): 'voice.ttsCredentialSaved' | 'voice.ttsCredentialEnvironment' | 'voice.ttsCredentialMissing' {
-  if (tts.credentialSource === 'settings') return 'voice.ttsCredentialSaved';
-  if (tts.credentialSource === 'environment') return 'voice.ttsCredentialEnvironment';
-  return 'voice.ttsCredentialMissing';
 }
 
 function modelStatusKey(status: VoiceHostModelStatus | undefined):

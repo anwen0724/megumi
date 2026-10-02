@@ -59,11 +59,10 @@ describe('useCharacterVoice window lifecycle', () => {
           onEvent: vi.fn(() => vi.fn()),
         },
         settings: {
-          get: vi.fn().mockResolvedValue({
+          readSettings: vi.fn().mockResolvedValue({
             ok: true,
             data: {
-              status: 'ok',
-              settings: {
+              config: {
                 voice: {
                   inputDeviceId: 'default',
                   recognitionLanguage: 'zh',
@@ -152,7 +151,7 @@ describe('useCharacterVoice window lifecycle', () => {
     });
     Object.assign(window.megumi, {
       settings: {
-        get: vi.fn().mockResolvedValue({
+        readSettings: vi.fn().mockResolvedValue({
           ok: true,
           data: {
             status: 'ok',

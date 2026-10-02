@@ -1,5 +1,4 @@
 /* Owns settings.json file IO and atomic local file replacement. */
-import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import path from 'node:path';
@@ -7,113 +6,6 @@ import { ConfigurationFileSchema, ConfigurationPatchSchema, ConfigurationSchema,
 import type { ReadSettingsResult, SettingsSnapshot, SettingsScope, UpdateSettingsRequest, UpdateSettingsResult } from './settings-contracts';
 import { readJsonFile, writeJsonFile } from './json-file';
 import { createCredentialStore } from './credential-store';
-import { publicRawFromFile, resolvePublicSettings } from './settings-file-model';
-import { settingsLoadIssues, type SettingsLoadIssue } from './settings-failure-factory';
-import {
-  SettingsFileRawSchema,
-  type SettingsFileRaw,
-} from './settings-schema';
-import {
-  isLegacyAppSettings,
-  legacyAppSettingsToFileRaw,
-  normalizeSettingsFile,
-} from './settings-migration';
-
-export interface SettingsStore {
-  read(): unknown;
-  write(next: Readonly<Record<string, unknown>>): void;
-}
-
-export interface CreateSettingsStoreRequest {
-  readonly settingsPath: string;
-}
-
-export class SettingsStoreParseError extends Error {
-  readonly code = 'settings_store_parse_error';
-  readonly settingsPath: string;
-  readonly issues: SettingsLoadIssue[];
-
-  constructor(settingsPath: string, issues: SettingsLoadIssue[] = settingsLoadIssues(undefined)) {
-    super('Megumi settings could not be parsed.');
-    this.name = 'SettingsStoreParseError';
-    this.settingsPath = settingsPath;
-    this.issues = issues;
-  }
-}
-
-export function createSettingsStore(request: CreateSettingsStoreRequest): SettingsStore {
-  const settingsPath = path.resolve(request.settingsPath);
-  return {
-    read: () => readSettingsFile(settingsPath),
-    write: (next) => writeSettingsFile(settingsPath, next),
-  };
-}
-
-function readSettingsFile(settingsPath: string): SettingsFileRaw {
-  const text = readFileIfExists(settingsPath);
-  if (text === undefined) return {};
-  try {
-    const parsed = JSON.parse(text) as unknown;
-    // Legacy AppSettings files keep the protocol field and camelCase keys:
-    // detect them before tolerant parsing accepts them as current format.
-    if (isLegacyAppSettings(parsed)) {
-      return SettingsFileRawSchema.parse(legacyAppSettingsToFileRaw(parsed));
-    }
-    const normalized = normalizeSettingsFile(parsed);
-    const current = SettingsFileRawSchema.safeParse(normalized.value);
-    if (current.success) {
-      // Migrated files are written back once so the disk format stays current.
-      if (normalized.changed) {
-        // Never persist a conversion if the resulting runtime configuration is invalid.
-        resolvePublicSettings(publicRawFromFile(current.data));
-        writeSettingsFile(settingsPath, current.data);
-      }
-      return current.data;
-    }
-    return SettingsFileRawSchema.parse(normalized.value);
-  } catch (error) {
-    throw new SettingsStoreParseError(settingsPath, settingsLoadIssues(error));
-  }
-}
-
-function writeSettingsFile(
-  settingsPath: string,
-  next: Readonly<Record<string, unknown>>,
-): void {
-  const parsed = SettingsFileRawSchema.parse(next);
-  writeFileAtomic(settingsPath, `${JSON.stringify(parsed, null, 2)}\n`);
-}
-
-function readFileIfExists(filePath: string): string | undefined {
-  try {
-    return fs.readFileSync(filePath, 'utf8');
-  } catch (error) {
-    if (isNodeError(error) && error.code === 'ENOENT') return undefined;
-    throw error;
-  }
-}
-
-function writeFileAtomic(filePath: string, content: string): void {
-  const directory = path.dirname(filePath);
-  const temporaryPath = path.join(directory, `${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
-  fs.mkdirSync(directory, { recursive: true });
-  try {
-    fs.writeFileSync(temporaryPath, content, 'utf8');
-    fs.renameSync(temporaryPath, filePath);
-  } catch (error) {
-    try {
-      fs.rmSync(temporaryPath, { force: true });
-    } catch {
-      // Preserve the original atomic-write failure.
-    }
-    throw error;
-  }
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && 'code' in error;
-}
-
 export interface CreateSettingsOptions {
   globalSettingsPath: string;
   projectSettingsPath?: string;
@@ -210,7 +102,7 @@ function resolveConfiguration(
     settings: {
       config: combined.data,
       sources: configurationSources(combined.data, globalValues.data, projectValues.data),
-      revision: configurationRevision(options, combined.data, globalValues.data, projectValues.data),
+      revision: configurationRevision(options, combined.data, global, project),
       diagnostics: [
         ...unknownConfigurationFields(global, globalValues.data, 'global'),
         ...unknownConfigurationFields(project, projectValues.data, 'project'),
@@ -301,6 +193,7 @@ function applyConfigurationPatch(
     if (isConfigurationObject(value) && !isModelReferencePath(nextPath)) {
       const previous = isConfigurationObject(next[key]) ? next[key] : {};
       const changed = applyConfigurationPatch(previous, value, nextPath);
+      if (JSON.stringify(previous) === JSON.stringify(changed)) continue;
       if (Object.keys(changed).length === 0) delete next[key];
       else next[key] = changed;
     } else {

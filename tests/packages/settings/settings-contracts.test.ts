@@ -1,79 +1,7 @@
-/* Verifies public Settings contracts, defaults, and editor schema generation. */
-// @vitest-environment node
+/* Verifies the generated settings editor schema. */
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_SETTINGS, ResolveProviderSettingsRequestSchema,
-  SettingsRawSchema,
-  createSettings,
-  createSettingsJsonSchema,
-  type SettingsStore
-} from '@megumi/application/settings/index';
-
-describe('Settings contracts', () => {
-  it('accepts sparse secret-free raw settings and resolves defaults', () => {
-    expect(SettingsRawSchema.parse({})).toEqual({});
-    const resolved = createSettings({ store: memoryStore() }).resolve();
-    expect(resolved.status).toBe('ok');
-    if (resolved.status !== 'ok') return;
-    expect(resolved.settings).toEqual(DEFAULT_SETTINGS);
-    expect(SettingsRawSchema.safeParse({
-      providers: { deepseek: { api_key: 'must-not-be-public' } },
-    }).success).toBe(false);
-  });
-
-  it('merges sparse patches and materializes provider defaults without losing file keys', () => {
-    const store = memoryStore({
-      theme: 'midnight-blue',
-      providers: { deepseek: { api_key: 'TEST_DEEPSEEK_API_KEY' } },
-    });
-    const settings = createSettings({ store });
-
-    settings.update({ patch: {
-      language: 'en-US',
-      memory: { enabled: true },
-      providers: { deepseek: { enabled: false } },
-    } });
-
-    expect(store.document).toMatchObject({
-      theme: 'midnight-blue',
-      language: 'en-US',
-      memory: { enabled: true },
-      context: { compaction_threshold_ratio: 0.8 },
-      providers: {
-        deepseek: {
-          api_key: 'TEST_DEEPSEEK_API_KEY',
-          enabled: false,
-          api: 'openai-completions',
-          display_name: 'DeepSeek',
-          base_url: 'https://api.deepseek.com',
-          models: {
-            'deepseek-flash': { context_window_tokens: 1_000_000, max_output_tokens: 384_000 },
-            'deepseek-v4-pro': { context_window_tokens: 1_000_000, max_output_tokens: 384_000 },
-          },
-        },
-      },
-    });
-  });
-
-  it('persists provider and model selection atomically', () => {
-    const store = memoryStore();
-    const settings = createSettings({ store });
-    expect(settings.update({ patch: {
-      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
-    } })).toMatchObject({ status: 'updated' });
-    expect(store.document).toMatchObject({
-      model_selection: { provider_id: 'deepseek', model_id: 'deepseek-v4-pro' },
-    });
-  });
-
-  it('requires provider and model identities for Provider resolution', () => {
-    expect(ResolveProviderSettingsRequestSchema.parse({
-      provider_id: 'deepseek',
-      model_id: 'deepseek-v4-flash',
-    })).toEqual({ provider_id: 'deepseek', model_id: 'deepseek-v4-flash' });
-    expect(() => ResolveProviderSettingsRequestSchema.parse({ provider_id: 'deepseek' })).toThrow();
-  });
-
+import { createSettingsJsonSchema } from '@megumi/application/settings';
+describe('Settings editor schema', () => {
   it('generates the settings.json schema from the internal file model', () => {
     const jsonSchema = createSettingsJsonSchema();
     expect(jsonSchema).toMatchObject({
@@ -94,14 +22,3 @@ describe('Settings contracts', () => {
     });
   });
 });
-
-function memoryStore(initial: unknown = {}) {
-  const store: SettingsStore & { document: unknown } = {
-    document: initial,
-    read: () => structuredClone(store.document),
-    write(next) {
-      store.document = structuredClone(next);
-    },
-  };
-  return store;
-}

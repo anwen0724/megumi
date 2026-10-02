@@ -52,7 +52,7 @@ export interface AgentRunHandle {
   readonly completion: Promise<AgentRunOutcome>;
 }
 
-export type StartRunRequest = (Omit<ConversationExecutionInput, 'model' | 'client' | 'compactionThresholdRatio'> & { modelSelection?: ModelSelection }) | {
+export type StartRunRequest = ((Omit<ConversationExecutionInput, 'model' | 'client' | 'compactionThresholdRatio'> & { modelSelection?: ModelSelection }) | {
   readonly kind: 'recommendation';
   readonly runId: string;
   readonly requestId: string;
@@ -64,11 +64,11 @@ export type StartRunRequest = (Omit<ConversationExecutionInput, 'model' | 'clien
   readonly requestId: string;
   readonly trigger: string;
   readonly modelSelection?: ModelSelection;
-};
+}) & { readonly signal?: AbortSignal };
 
 export type StartRunResult =
   | { readonly status: 'started' | 'already_started'; readonly run: AgentRunHandle }
-  | { readonly status: 'rejected'; readonly error: { readonly code: RunFailureCode | 'RUN_CONFLICT' | 'RUNTIME_STOPPED' | 'MODEL_UNAVAILABLE'; readonly message: string } };
+  | { readonly status: 'rejected'; readonly error: { readonly code: RunFailureCode | 'RUN_CONFLICT' | 'RUNTIME_STOPPED' | 'RUN_CANCELLED' | 'MODEL_UNAVAILABLE'; readonly message: string } };
 
 export type CancelRunResult =
   | { readonly status: 'cancellation_requested' | 'already_cancelling' | 'already_terminal'; readonly run: AgentRunSnapshot }
@@ -159,7 +159,15 @@ export function createAgentRuntime(options: CreateAgentRuntimeOptions): AgentRun
       if (request.kind !== 'conversation' && runs.get({ executionId: request.runId }).status === 'found') {
         return { status: 'rejected', error: { code: 'RUN_CONFLICT', message: 'A run with this identity already exists.' } };
       }
-      const prepared = await resolveModel(request.kind === 'conversation' ? request.workspaceId : undefined, request.modelSelection);
+      const session = request.kind === 'conversation'
+        ? options.input.sessions.getSession({ session_id: request.sessionId })
+        : undefined;
+      if (session?.status === 'failed') {
+        return { status: 'rejected', error: { code: 'SESSION_FAILED', message: session.failure.message } };
+      }
+      const selection = request.modelSelection ?? (session?.status === 'found' ? session.session.model_selection : undefined);
+      const prepared = await resolveModel(request.kind === 'conversation' ? request.workspaceId : undefined, selection);
+      if (request.signal?.aborted) return { status: 'rejected', error: { code: 'RUN_CANCELLED', message: 'Run was cancelled before admission.' } };
       if (prepared.status === 'failed') return { status: 'rejected', error: { code: 'MODEL_UNAVAILABLE', message: prepared.failure.message } };
       const result = await runs.start({ ...request, model: prepared.model, client: prepared.client, compactionThresholdRatio: prepared.compactionThresholdRatio });
       if (result.status === 'started' || result.status === 'already_started') {

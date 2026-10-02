@@ -52,7 +52,7 @@ export interface PreparedModel {
 }
 export type ModelPreparationResult =
   | ({ status: 'ok' } & PreparedModel)
-  | { status: 'failed'; failure: { code: string; message: string } };
+  | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 
 export interface ConfiguredModel {
   model: Model<Api>;
@@ -70,7 +70,7 @@ export interface ConfiguredProvider {
 }
 export type ModelCatalogResult =
   | { status: 'ok'; providers: ConfiguredProvider[]; defaultModel?: ModelSelection }
-  | { status: 'failed'; failure: { code: string; message: string } };
+  | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 
 export interface ModelResolutionOptions {
   settings: ModelSettingsAccess;
@@ -214,7 +214,7 @@ export const ModelCatalogResultSchema = z.discriminatedUnion('status', [
     providers: z.array(z.object({ id: z.string(), name: z.string(), enabled: z.boolean(), api: z.string().optional(), baseUrl: z.string().optional(),
       models: z.array(z.object({ enabled: z.boolean(), custom: z.boolean(),
         capabilities: z.object({ streaming: SupportSchema, toolCalls: SupportSchema, thinking: SupportSchema, imageInput: SupportSchema }),
-        model: z.object({ id: z.string(), name: z.string(), provider: z.string(), api: z.string(), baseUrl: z.string(), reasoning: z.boolean(), input: z.array(z.enum(['text', 'image'])), cost: z.object({ input: z.number(), output: z.number(), cacheRead: z.number(), cacheWrite: z.number() }), contextWindow: z.number(), maxTokens: z.number() }).passthrough(),
+        model: z.object({ id: z.string(), name: z.string(), provider: z.string(), api: z.string(), baseUrl: z.string(), reasoning: z.boolean(), input: z.array(z.enum(['text', 'image'])), cost: z.object({ input: z.number(), output: z.number(), cacheRead: z.number(), cacheWrite: z.number() }), contextWindow: z.number(), maxTokens: z.number() }),
       })),
     })),
   }),

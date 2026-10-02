@@ -59,24 +59,6 @@ export function PermissionRulesPanel() {
       setStatus('ready');
     });
     return () => { active = false; };
-    }
-    void settingsApi.get(createRendererRuntimeIpcRequest(IPC_CHANNELS.settings.get, {}))
-      .then((result) => {
-        if (!active) return;
-        if (result.ok && result.data.status === 'ok') {
-          setPermissions(result.data.settings.permissions);
-          const firstAction = result.data.settings.permissions.catalog.operations.find((item) => item.action === 'network.fetch')
-            ?? result.data.settings.permissions.catalog.operations[0];
-          if (firstAction) selectAction(firstAction.action, result.data.settings.permissions);
-          setToolName(result.data.settings.permissions.catalog.tools[0]?.registeredToolName ?? '');
-          setStatus('ready');
-          return;
-        }
-        if (!result.ok) setError(result.data.message);
-        else if (result.data.status === 'failed') setError(result.data.failure.message);
-        setStatus('failed');
-      });
-    return () => { active = false; };
   }, [t]);
 
   const operation = useMemo(

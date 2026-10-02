@@ -81,7 +81,7 @@ export const executionPolicy: AgentExecutionPolicy = {
 const NOW = '2026-07-31T00:00:00.000Z';
 
 export interface ExecutionFixture {
-  readonly dependencies: RunDependencies;
+  readonly dependencies: RunDependencies & { models: Models };
   readonly writes: string[];
   readonly contextRuns: unknown[];
   readonly published: AnyEvent[];
@@ -183,7 +183,7 @@ export function createExecutionFixture(input: {
   };
 
   const context: Prompt = { systemPrompt: 'test', messages: [], tools: [] };
-  const dependencies: RunDependencies = {
+  const dependencies: RunDependencies & { models: Models } = {
     models: {
       // Adapter contract wiring: cancellation settles the fake stream with an
       // aborted terminal so the single Agent Loop always converges.
@@ -208,7 +208,7 @@ export function createExecutionFixture(input: {
     } as Models,
     context: {
       build: input.contextBuild ?? (async (request): Promise<import('@megumi/agent-runtime/context/index').BuildContextResult> => {
-        contextRuns.push(structuredClone(request.modelCallContext));
+        contextRuns.push({ ...request.modelCallContext });
         // The built Prompt carries the resolved ModelCall Tool Definitions so
         // Overflow compaction receives the same tools without re-resolution.
         return { status: 'ready', prompt: { ...context, tools: [...request.modelCallContext.tools] } };
@@ -279,6 +279,7 @@ export async function launchedExecution(
   } = {},
 ): Promise<PreparedRun> {
   return prepareRun({
+    client: fixture.dependencies.models, compactionThresholdRatio: 0.8,
     kind: 'conversation',
     metadata: executionMetadata(overrides.metadata),
     input: executionInput,

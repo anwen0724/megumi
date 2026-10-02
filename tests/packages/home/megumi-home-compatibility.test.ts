@@ -132,7 +132,7 @@ describe('Megumi Home foundation', () => {
       type: 'object',
     });
     expect(fileSystem.textFiles.get(paths.readmePath)).toContain('settings.json');
-    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('setup');
+    expect(fileSystem.textFiles.get(paths.readmePath)).toContain('general');
     expect(fileSystem.textFiles.get(paths.readmePath)).toContain('language');
   });
 
@@ -161,49 +161,18 @@ describe('Megumi Home foundation', () => {
     expect(fileSystem.textFiles.get(paths.readmePath)).toBe('User edited README');
   });
 
-  it('exposes optional provider, memory, compaction, and permission rules in the generated settings schema', () => {
+  it('exposes optional configuration groups without embedding model catalogs or credentials', () => {
     const schema = createMegumiSettingsSchema();
-
-    expect(schema).toMatchObject({
-      properties: {
-        language: {
-          enum: ['zh-CN', 'en-US'],
-        },
-        setup: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            completed: { type: 'boolean' },
-          },
-        },
-        providers: {
-          additionalProperties: {
-            type: 'object',
-            // Provider files tolerate user-added fields.
-            additionalProperties: true,
-            properties: {
-              base_url: { type: 'string' },
-              models: {
-                type: 'object',
-              },
-              api_key_env: {
-                type: ['string', 'null'],
-                minLength: 1,
-              },
-            },
-          },
-        },
-        permissions: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            allow: { type: 'array', items: { type: 'object' } },
-            ask: { type: 'array', items: { type: 'object' } },
-            deny: { type: 'array', items: { type: 'object' } },
-          },
-        },
-      },
-    });
+    expect(schema).toMatchObject({ properties: {
+      general: { properties: { language: { enum: ['zh-CN', 'en-US'] }, setupCompleted: { type: 'boolean' } } },
+      models: { properties: { providers: { type: 'object' }, customModels: { type: 'object' } } },
+      context: { properties: { compactionThresholdRatio: { type: 'number' } } },
+      permissions: { properties: { allow: { type: 'array' }, ask: { type: 'array' }, deny: { type: 'array' } } },
+    } });
+    expect(schema.required).toBeUndefined();
+    expect(schema.properties).not.toHaveProperty('memory');
+    expect(JSON.stringify(schema)).not.toContain('deepseek-flash');
+    expect(JSON.stringify(schema)).not.toContain('api_key');
   });
 
   it('supports synchronous initialization for main-process service factories', () => {

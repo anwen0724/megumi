@@ -1,6 +1,7 @@
 /*
  * Owns execution-scoped Candidate Supply Tool state; only explicit submissions reach persistence.
  */
+import type { SettingsConfiguration } from '../../settings/settings-schema';
 import { randomUUID } from 'node:crypto';
 import type { Observability, OperationCompletion, TraceCorrelation } from '../../observability/index';
 import type { RawToolResult } from '@megumi/agent-runtime/tools/index';
@@ -35,9 +36,12 @@ interface CandidateSupplyAttempt {
   readonly sourceRegistry: SourceRegistry;
   readonly enabledSourceIds: ReadonlySet<string>;
   readonly settings: CandidatePoolSettings;
+  readonly twitterBudget: SettingsConfiguration['discovery']['twitterBudget'];
   readonly now: () => string;
   readonly results: Map<string, SourceResult>;
   readonly sourceTails: Map<string, Promise<void>>;
+  twitterSearchCalls: number;
+  twitterResults: number;
   searchesSucceeded: number;
   sourceFailureCount: number;
   searchResultCount: number;
@@ -72,6 +76,7 @@ export interface CandidateSupplyAttempts {
     readonly sourceRegistry: SourceRegistry;
     readonly enabledSourceIds: readonly string[];
     readonly settings: CandidatePoolSettings;
+    readonly twitterBudget: SettingsConfiguration['discovery']['twitterBudget'];
     readonly now: () => string;
   }): void;
   ownsExecution(executionId: string): boolean;
@@ -105,6 +110,8 @@ export function createCandidateSupplyAttempts(options: {
         enabledSourceIds: new Set(input.enabledSourceIds),
         results: new Map(),
         sourceTails: new Map(),
+        twitterSearchCalls: 0,
+        twitterResults: 0,
         searchesSucceeded: 0,
         sourceFailureCount: 0,
         searchResultCount: 0,
@@ -153,10 +160,19 @@ export function createCandidateSupplyAttempts(options: {
         'source.search',
         { executionId: request.executionId, sourceId: source.descriptor.id },
         async () => {
+          let limit = parsed.data.limit;
+          if (source.descriptor.id === 'twitter') {
+            const budget = attempt.twitterBudget;
+            if (attempt.twitterSearchCalls >= budget.maxSearchCalls || attempt.twitterResults >= budget.maxResultsPerAttempt) {
+              return toolError('source_budget_exhausted', 'Twitter search budget has been reached for this attempt.');
+            }
+            limit = Math.min(limit, budget.maxResultsPerSearch, budget.maxResultsPerAttempt - attempt.twitterResults);
+            attempt.twitterSearchCalls += 1;
+          }
           const result = await source.search({
             query: parsed.data.query,
             mode: parsed.data.mode,
-            limit: parsed.data.limit,
+            limit,
             signal: request.signal,
             onProviderResponse: (value) => recordContent(
               options.observability,
@@ -175,7 +191,7 @@ export function createCandidateSupplyAttempts(options: {
             attempt.sourceFailureCount += 1;
             return toolError(result.failure.code, result.failure.message);
           }
-          const results = result.items.flatMap((item) => {
+          const results = result.items.slice(0, limit).flatMap((item) => {
             const validated = SourceContentSchema.safeParse(item);
             if (!validated.success) return [];
             const sourceResult: SourceResult = {
@@ -186,6 +202,7 @@ export function createCandidateSupplyAttempts(options: {
             attempt.results.set(sourceResult.resultId, sourceResult);
             return [{ resultId: sourceResult.resultId, content: sourceResult.content }];
           });
+          if (source.descriptor.id === 'twitter') attempt.twitterResults += results.length;
           attempt.searchesSucceeded += 1;
           attempt.searchResultCount += results.length;
           return toolSuccess({

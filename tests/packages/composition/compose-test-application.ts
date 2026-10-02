@@ -24,25 +24,17 @@ export function composeTestApplication(responses: readonly string[] = ['Test rep
   const workspace = path.join(root, 'workspace');
   mkdirSync(workspace, { recursive: true });
   const scripted = createScriptedStreams(responses);
-  let settings: Readonly<Record<string, unknown>> = {
-    setup: { completed: true, completed_at: '2026-01-01T00:00:00.000Z' },
-    providers: {
-      test: {
-        enabled: true,
-        api: 'openai-completions',
-        base_url: 'https://example.test/v1',
-        models: { model: { context_window_tokens: 64_000, max_output_tokens: 2_048 } },
-      },
+  fs.ensureDirSync(home);
+  fs.writeJsonSync(path.join(home, 'settings.json'), {
+    general: { setupCompleted: true },
+    models: {
+      defaultModel: { providerId: 'test', modelId: 'model' },
+      providers: { test: { api: 'openai-completions', baseUrl: 'https://example.test/v1' } },
+      customModels: { test: { model: { contextWindowTokens: 64000, maxOutputTokens: 2048 } } },
     },
-    model_selection: { provider_id: 'test', model_id: 'model' },
-    discovery: {
-      conversation_recognition_enabled: true,
-      recommendation_generation_time: '08:00',
-      recommendation_target_count: 20,
-      recommendation_working_set_count: 80,
-      enabled_sources: ['open_web'],
-    },
-  };
+    discovery: { conversationRecognitionEnabled: true, enabledSources: ['open_web'] },
+  });
+  fs.writeJsonSync(path.join(home, 'credentials.json'), { providers: { test: 'test-key' } });
   const runtime = createApplication({
     home: {
       env: { MEGUMI_HOME: home },
@@ -59,10 +51,6 @@ export function composeTestApplication(responses: readonly string[] = ['Test rep
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
     observabilityStorage: nodeObservabilityStorage,
     modelStreams: { 'openai-completions': scripted.streams },
-    settingsStorage: {
-      read: () => structuredClone(settings),
-      write: (next) => { settings = structuredClone(next); },
-    },
     directoryPicker: { chooseDirectory: async () => ({ canceled: false, filePaths: [workspace] }) },
     clock: { now: () => '2026-01-01T00:00:00.000Z' },
     createApplicationId: createTestId,

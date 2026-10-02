@@ -89,6 +89,7 @@ describe('Execute Agent', () => {
     try {
       const outcome = await observability.withTrace({ kind: 'conversation' }, async () => {
         const launched = await prepareRun({
+          client: models, compactionThresholdRatio: 0.8,
           kind: 'conversation', metadata: executionMetadata({ model }),
           input: { displayContent: [{ type: 'text', text: 'hello' }], modelContent: [{ type: 'text', text: 'hello' }], attachments: [] },
           awaitApproval: async () => ({ status: 'cancelled' }),
@@ -145,6 +146,7 @@ describe('Execute Agent', () => {
   it('persists a Recommendation reference and presents it to the first model call', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
     const launched = await prepareRun({
+          client: fixture.dependencies.models, compactionThresholdRatio: 0.8,
       kind: 'conversation',
       metadata: executionMetadata(),
       input: {
@@ -618,6 +620,7 @@ function launchWith(
   dependencies: RunDependencies,
 ) {
   return prepareRun({
+    client: dependencies.models ?? fixture.dependencies.models, compactionThresholdRatio: 0.8,
     kind: 'conversation',
     metadata: executionMetadata(),
     input: {

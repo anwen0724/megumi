@@ -20,7 +20,6 @@ import type {
   DiscoveryRecommendationStateResult,
   DiscoveryInterestSessionSettingUiDto,
   DiscoveryConfigurationUiDto,
-  DiscoverySourceCredentialStatusUiResult,
   DiscoverySourceUiDto,
 } from '@megumi/application/contracts';
 import type {
@@ -45,8 +44,6 @@ import type {
   DiscoveryInterestSessionSettingPayload,
   DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
-  DiscoveryCredentialStatusPayload,
-  DiscoveryCredentialSetPayload,
   DiscoverySourceConnectPayload,
   DiscoverySourceRefreshPayload,
 } from '../main/ipc/schemas';
@@ -84,9 +81,6 @@ export type DiscoveryConfigurationGetPreloadPayload = DiscoveryConfigurationGetP
 export type DiscoveryConfigurationGetPreloadData = DiscoveryConfigurationUiDto;
 export type DiscoveryConfigurationUpdatePreloadPayload = DiscoveryConfigurationUpdatePayload;
 export type DiscoveryConfigurationUpdatePreloadData = DiscoveryConfigurationUiDto;
-export type DiscoveryCredentialStatusPreloadPayload = DiscoveryCredentialStatusPayload;
-export type DiscoveryCredentialSetPreloadPayload = DiscoveryCredentialSetPayload;
-export type DiscoveryCredentialStatusPreloadData = DiscoverySourceCredentialStatusUiResult;
 export type DiscoverySourceConnectPreloadPayload = DiscoverySourceConnectPayload;
 export type DiscoverySourceConnectPreloadData = DiscoverySourceUiDto;
 export type DiscoverySourceRefreshPreloadPayload = DiscoverySourceRefreshPayload;

@@ -48,7 +48,7 @@ describe('migrateDatabase', () => {
 
     try {
       const result = migrateDatabase({ database });
-      expect(result.currentMigration).toBe('0026_preference_learning_control');
+      expect(result.currentMigration).toBe('0027_session_model_selection');
       expect(tableNames(database)).toContain('__drizzle_migrations');
       const migrationRows = database.prepare<{ hash: string }>({
         sql: 'SELECT hash FROM __drizzle_migrations',

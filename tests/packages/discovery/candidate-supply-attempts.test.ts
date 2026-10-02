@@ -190,6 +190,30 @@ describe('CandidateSupplyAttempts', () => {
     expect(recordContent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'source.result' }));
   });
 
+  it.each([
+    { budget: { maxSearchCalls: 1, maxResultsPerSearch: 2, maxResultsPerAttempt: 10 }, limits: [2] },
+    { budget: { maxSearchCalls: 5, maxResultsPerSearch: 2, maxResultsPerAttempt: 3 }, limits: [2, 1] },
+  ])('enforces configured Twitter search and result limits: $budget', async ({ budget, limits }) => {
+    const requested: number[] = [];
+    const twitter = source('twitter');
+    twitter.search = async request => {
+      requested.push(request.limit);
+      return { status: 'success', items: Array.from({ length: request.limit }, (_, index) => ({
+        sourceId: 'twitter', sourceName: 'Twitter', sourceContentId: String(index),
+        canonicalUrl: `https://example.com/post/${index}`, contentType: 'post', title: 'Agent', description: 'Details',
+      })) };
+    };
+    const attempts = createCandidateSupplyAttempts();
+    attempts.start({ ...attemptInput(repository, twitter), twitterBudget: budget });
+    for (const limit of limits) {
+      const result = await attempts.searchContent(toolRequest({ sourceId: 'twitter', query: 'Agent', mode: 'recent', limit: 20, targetInterestIds: [] }));
+      expect(result).toMatchObject({ content: { results: expect.any(Array) } });
+      expect((result.content as { results: unknown[] }).results).toHaveLength(limit);
+    }
+    expect(await attempts.searchContent(toolRequest({ sourceId: 'twitter', query: 'More', mode: 'recent', limit: 20, targetInterestIds: [] }))).toMatchObject({ isError: true });
+    expect(requested).toEqual(limits);
+  });
+
   it('does not implement a Candidate Supply search or read budget', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start(attemptInput(repository, source()));
@@ -215,6 +239,7 @@ function attemptInput(repository: CandidateSupplyRepository, discoverySource: Di
     sourceRegistry: createSourceRegistry([discoverySource]),
     enabledSourceIds: [discoverySource.descriptor.id],
     settings,
+    twitterBudget: { maxSearchCalls: 3, maxResultsPerSearch: 20, maxResultsPerAttempt: 40 },
     now: () => now,
   };
 }

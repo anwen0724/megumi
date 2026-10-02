@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 /* Protects idempotent startup and disposal on a real composed Application. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
@@ -16,35 +18,17 @@ describe('Application lifecycle', () => {
       expect((await application.runtime.observability.listTraces({ limit: 1 })).status).not.toBe('failed');
     } finally { await application.cleanup(); }
   });
-  it('does not start business after disposal while settings validation is pending', async () => {
+  it('does not start business after disposal', async () => {
     const application = composeTestApplication();
-    const loaded = await application.runtime.settings.get();
-    let release: (() => void) | undefined;
-    vi.spyOn(application.runtime.settings, 'get').mockImplementation(() => new Promise((resolve) => {
-      release = () => resolve(loaded);
-    }));
-    const start = vi.fn(async () => undefined);
-    const runtime = bindApplicationLifecycle({
-      operations: application.runtime, logger: application.runtime.logger, start,
-      subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
-      subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
-      stop: async () => undefined,
-      dispose: async () => undefined,
-    });
     try {
-      const pending = runtime.start();
-      await runtime.dispose();
-      release?.();
-      await expect(pending).rejects.toThrow('disposal');
-      expect(start).not.toHaveBeenCalled();
+      await application.runtime.dispose();
+      await expect(application.runtime.start()).rejects.toThrow('disposal');
     } finally { await application.cleanup(); }
   });
   it('blocks background startup on invalid settings while retaining the settings host', async () => {
     const application = composeTestApplication();
     const start = vi.fn(async () => undefined);
-    vi.spyOn(application.runtime.settings, 'get').mockResolvedValue({ status: 'failed', failure: {
-      code: 'config_invalid', message: 'Settings could not be resolved.',
-    } });
+    fs.writeFileSync(path.join(application.home, 'settings.json'), '{ invalid');
     const runtime = bindApplicationLifecycle({
       operations: application.runtime, logger: application.runtime.logger, start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
@@ -55,7 +39,7 @@ describe('Application lifecycle', () => {
     try {
       await expect(runtime.start()).rejects.toThrow('Settings');
       expect(start).not.toHaveBeenCalled();
-      expect((await runtime.settings.get()).status).toBe('failed');
+      expect(runtime.settings.readSettings().status).toBe('rejected');
     } finally { await application.cleanup(); }
   });
   it('starts and disposes exactly once', async () => {

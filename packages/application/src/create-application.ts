@@ -165,7 +165,7 @@ function createApplicationRuntime(
       try {
         const result = onRunEndedForSpeechOutput(
           {
-            settings: capabilities.settingsForWorkspace(event.workspaceId),
+            settings: capabilities.settingsForWorkspace(sessionStore.findSessionById(event.sessionId)?.workspace_id),
             findAssistantReplyBySessionIdAndExecutionId: (request) =>
               sessionStore.findAssistantReplyBySessionIdAndExecutionId(request),
             speechOutput,
@@ -279,7 +279,7 @@ function createApplicationRuntime(
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
-    voice: createVoiceOperations({ voice, speechOutput }),
+    voice: createVoiceOperations({ voice, speechOutput, settings: (sessionId) => capabilities.settingsForWorkspace(sessionStore.findSessionById(sessionId)?.workspace_id) }),
   };
 
   return bindApplicationLifecycle({

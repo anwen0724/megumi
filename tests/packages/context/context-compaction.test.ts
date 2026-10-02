@@ -108,7 +108,7 @@ describe('Context compaction', () => {
 
   it('rejects an invalid policy before requesting a summary', async () => {
     const f = await fixture(async () => { throw new Error('Invalid policy must not contact the provider'); });
-    const context = createContext({ ...f.options, policy: { reserveTokens: compactingModel.contextWindow + 1 } });
+    const context = createContext({ ...f.options, policy: { minimumRecentMessages: -1 } });
     expect(await context.compact(f.request)).toMatchObject({ status: 'failed', failure: { code: 'policy_invalid' } });
   });
 

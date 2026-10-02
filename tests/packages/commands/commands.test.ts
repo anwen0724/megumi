@@ -1,9 +1,12 @@
+import { createModels } from '@megumi/ai';
 /*
  * Protects explicit command handling and Input Interpretation integration.
  */
 import { describe, expect, it, vi } from "vitest";
 import { createCommands, createCommandInputInterpreter } from "@megumi/agent-runtime/runs/commands/index";
 
+const client = createModels();
+const compactionThresholdRatio = 0.8;
 const model = {
   id: "model-1",
   name: "Model",
@@ -52,13 +55,13 @@ describe("Commands", () => {
     const commands = createCommands({ compact });
     const result = await commands.handle({
       input: userInput("/compact"),
-      context: { workspaceId: "workspace-1", sessionId: "session-1", model },
+      context: { workspaceId: "workspace-1", sessionId: "session-1", model, client, compactionThresholdRatio },
     });
     expect(result).toEqual({ type: "completed", message: "Context compacted." });
     expect(compact).toHaveBeenCalledWith({
       sessionId: "session-1",
       workspaceId: "workspace-1",
-      model,
+      model, client, compactionThresholdRatio,
     }, {});
   });
 
@@ -85,7 +88,7 @@ describe("Commands", () => {
       context: {
         workspaceId: "workspace-1",
         sessionId: "session-1",
-        model,
+        model, client, compactionThresholdRatio,
       },
     });
     await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce());
@@ -103,7 +106,7 @@ describe("Commands", () => {
       context: {
         workspaceId: "workspace-1",
         sessionId: "session-1",
-        model,
+        model, client, compactionThresholdRatio,
       },
     };
     await expect(createCommands().handle(compactInput)).resolves.toEqual({
@@ -132,7 +135,7 @@ describe("Commands", () => {
     )).resolves.toEqual({ status: "unhandled" });
     await expect(interpreter.interpret(
       userInput("/compact"),
-      { workspaceId: "workspace-1", sessionId: "session-1", model },
+      { workspaceId: "workspace-1", sessionId: "session-1", model, client, compactionThresholdRatio },
     )).resolves.toEqual({
       status: "completed",
       result: { type: "host_interaction_request", request: { kind: "context_compaction" } },

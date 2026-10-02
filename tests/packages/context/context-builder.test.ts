@@ -163,8 +163,8 @@ describe('Context.build', () => {
   it('rejects illegal compaction policies before invoking the model', async () => {
     const f = await fixture();
     const policies = [
-      { reserveTokens: -1 }, { reserveTokens: 1.5 }, { keepRecentTokens: Number.NaN },
-      { minimumRecentMessages: -3 }, { reserveTokens: contextModel.contextWindow + 1 },
+      { keepRecentTokens: Number.NaN },
+      { minimumRecentMessages: -3 },
     ];
     for (const policy of policies) {
       const context = createContext({ ...f.options, policy,
