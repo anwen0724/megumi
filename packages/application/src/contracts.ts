@@ -78,7 +78,6 @@ export type {
   SkillListUiItem,
 } from './skill-contracts';
 
-
 export type {
   ApprovalHost,
   ApprovalHostResult,
@@ -215,7 +214,13 @@ export { ApprovalResolvePayloadSchema, ApprovalResolveResultSchema } from './app
 
 export { ObservabilityTraceMeasurementsSchema } from './observability/observability-contracts';
 
-export { SessionModelSelectionPayloadSchema, SessionModelSelectionResultSchema } from './session-contracts';
-export type { SessionModelSelectionPayload, SessionModelSelectionResult } from './session-contracts';
+export {
+  SessionModelSelectionPayloadSchema,
+  SessionModelSelectionResultSchema,
+} from './session-contracts';
+export type {
+  SessionModelSelectionPayload,
+  SessionModelSelectionResult,
+} from './session-contracts';
 
 export type { AppLanguage, AppThemeName } from './settings/settings-contracts';

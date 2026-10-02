@@ -4,66 +4,246 @@ import * as host from '@megumi/application/contracts';
 import { createRuntimeIpcRequestSchema } from './contracts';
 import { IPC_CHANNELS } from './channels';
 
-export const InputSuggestionsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.inputSuggestions, host.InputSuggestionsPayloadSchema);
-export const SkillListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.list, host.SkillListPayloadSchema);
-export const SkillGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.get, host.SkillGetPayloadSchema);
-export const SkillEnableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.enable, host.SkillEnablePayloadSchema);
-export const SkillDisableRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.disable, host.SkillDisablePayloadSchema);
-export const SkillDeleteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.delete, host.SkillDeletePayloadSchema);
-export const SkillRefreshRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.skill.refresh, host.SkillRefreshPayloadSchema);
-export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionCreate, host.SessionCreatePayloadSchema);
-export const SessionListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionList, host.SessionListPayloadSchema);
-export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionMessageList, host.SessionMessageListPayloadSchema);
-export const SessionReadRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionRead, host.SessionReadPayloadSchema);
-export const CommittedRunReadRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.committedRunRead, host.CommittedRunReadPayloadSchema);
-export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionMessageSend, host.SessionMessageSendPayloadSchema);
-export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionMessageCancel, host.SessionMessageCancelPayloadSchema);
-export const SessionContextUsageGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionContextUsageGet, host.SessionContextUsageGetPayloadSchema);
-export const InputCapabilitiesGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.inputCapabilitiesGet, host.InputCapabilitiesPayloadSchema);
-export const ImageInputSelectRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.imageInputSelect, host.ImageInputSelectPayloadSchema);
-export const DocumentInputSelectRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.documentInputSelect, host.DocumentInputSelectPayloadSchema);
-export const ImageInputClipboardReadRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.imageInputClipboardRead, host.ImageInputClipboardReadPayloadSchema);
-export const AttachmentImageReadRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.attachmentImageRead, host.AttachmentImageReadPayloadSchema);
-export const AttachmentFileStatusRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.attachmentFileStatus, host.AttachmentFileStatusPayloadSchema);
-export const SessionBranchDraftCreateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.branchDraftCreate, host.SessionBranchDraftCreatePayloadSchema);
-export const SessionBranchDraftCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.branchDraftCancel, host.SessionBranchDraftCancelPayloadSchema);
-export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.approval.resolve, host.ApprovalResolvePayloadSchema);
-export const DiscoveryInterestChangeRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.interestChange, host.DiscoveryInterestChangePayloadSchema);
-export const DiscoveryConfigurationGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.configurationGet, host.DiscoveryConfigurationGetPayloadSchema);
-export const DiscoveryConfigurationUpdateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.configurationUpdate, host.DiscoveryConfigurationUpdatePayloadSchema);
-export const DiscoverySourceConnectRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourceConnect, host.DiscoverySourceConnectPayloadSchema);
-export const DiscoverySourceRefreshRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourceRefresh, host.DiscoverySourceRefreshPayloadSchema);
-export const DiscoverySourcesRefreshRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourcesRefresh, host.DiscoverySourcesRefreshPayloadSchema);
-export const DiscoveryInterestSessionSettingRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sessionParticipationSet, host.DiscoveryInterestSessionSettingPayloadSchema);
-export const DiscoveryRecommendationRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.recommendationRequest, host.DiscoveryRecommendationRequestPayloadSchema);
-export const DiscoveryCandidateSupplyConfirmRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.candidateSupplyConfirm, host.DiscoveryCandidateSupplyConfirmPayloadSchema);
-export const DiscoveryHomeRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.homeGet, host.DiscoveryHomePayloadSchema);
-export const DiscoveryRecommendationSearchRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.recommendationsSearch, host.DiscoveryRecommendationSearchPayloadSchema);
-export const DiscoveryRecommendationStateRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.recommendationStateUpdate, host.DiscoveryRecommendationStatePayloadSchema);
-export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.snapshot, host.VoiceEmptyPayloadSchema);
-export const VoiceModelStatusRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelStatus, host.VoiceEmptyPayloadSchema);
-export const VoiceModelCapabilityRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelCapability, host.VoiceModelCapabilityPayloadSchema);
-export const VoiceModelsCheckUpdatesRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsCheckUpdates, host.VoiceEmptyPayloadSchema);
-export const VoiceModelsPrepareRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsPrepare, z.object({ repair: z.boolean().optional() }).strict());
-export const VoiceModelsCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.modelsCancel, host.VoiceEmptyPayloadSchema);
-export const VoiceSessionStartRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.sessionStart, host.VoiceSessionStartPayloadSchema);
-export const VoiceSessionManualStartRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.sessionManualStart, host.VoiceEmptyPayloadSchema);
-export const VoiceSessionManualFinishRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.sessionManualFinish, host.VoiceEmptyPayloadSchema);
-export const VoiceSessionMuteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.sessionMute, host.VoiceSessionMutedPayloadSchema);
-export const VoiceSessionEndRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.sessionEnd, host.VoiceEmptyPayloadSchema);
-export const VoiceSpeechOutputStopRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.voice.speechOutputStop, host.VoiceEmptyPayloadSchema);
-export const ProjectListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.projectList, host.WorkspaceListProjectsPayloadSchema);
-export const ProjectUseExistingRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.projectUseExisting, host.WorkspaceUseExistingProjectPayloadSchema);
-export const ProjectOpenRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.projectOpen, host.ProjectOpenPayloadSchema);
-export const ProjectRemoveRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.projectRemove, host.ProjectRemovePayloadSchema);
-export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesList, host.WorkspaceFilesListPayloadSchema);
-export const WorkspaceFileOpenRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.workspace.filesOpen, host.WorkspaceFileOpenPayloadSchema);
-export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.list, host.ObservabilityListPayloadSchema);
-export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.get, host.ObservabilityTracePayloadSchema);
-export const ObservabilityContentRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.content, host.ObservabilityContentPayloadSchema);
-export const ObservabilityHealthRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.health, host.ObservabilityEmptyPayloadSchema);
-export const ObservabilityRebuildIndexRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.rebuildIndex, host.ObservabilityEmptyPayloadSchema);
-export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.observability.bundle, host.ObservabilityTracePayloadSchema);
+export const InputSuggestionsRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.inputSuggestions,
+  host.InputSuggestionsPayloadSchema,
+);
+export const SkillListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.skill.list,
+  host.SkillListPayloadSchema,
+);
+export const SkillGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.skill.get,
+  host.SkillGetPayloadSchema,
+);
+export const SkillEnableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.skill.enable,
+  host.SkillEnablePayloadSchema,
+);
+export const SkillDisableRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.skill.disable,
+  host.SkillDisablePayloadSchema,
+);
+export const SkillDeleteRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.skill.delete,
+  host.SkillDeletePayloadSchema,
+);
+export const SkillRefreshRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.skill.refresh,
+  host.SkillRefreshPayloadSchema,
+);
+export const SessionCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionCreate,
+  host.SessionCreatePayloadSchema,
+);
+export const SessionListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionList,
+  host.SessionListPayloadSchema,
+);
+export const SessionMessageListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionMessageList,
+  host.SessionMessageListPayloadSchema,
+);
+export const SessionReadRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionRead,
+  host.SessionReadPayloadSchema,
+);
+export const CommittedRunReadRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.committedRunRead,
+  host.CommittedRunReadPayloadSchema,
+);
+export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionMessageSend,
+  host.SessionMessageSendPayloadSchema,
+);
+export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionMessageCancel,
+  host.SessionMessageCancelPayloadSchema,
+);
+export const SessionContextUsageGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionContextUsageGet,
+  host.SessionContextUsageGetPayloadSchema,
+);
+export const InputCapabilitiesGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.inputCapabilitiesGet,
+  host.InputCapabilitiesPayloadSchema,
+);
+export const ImageInputSelectRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.imageInputSelect,
+  host.ImageInputSelectPayloadSchema,
+);
+export const DocumentInputSelectRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.documentInputSelect,
+  host.DocumentInputSelectPayloadSchema,
+);
+export const ImageInputClipboardReadRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.imageInputClipboardRead,
+  host.ImageInputClipboardReadPayloadSchema,
+);
+export const AttachmentImageReadRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.attachmentImageRead,
+  host.AttachmentImageReadPayloadSchema,
+);
+export const AttachmentFileStatusRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.attachmentFileStatus,
+  host.AttachmentFileStatusPayloadSchema,
+);
+export const SessionBranchDraftCreateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.branchDraftCreate,
+  host.SessionBranchDraftCreatePayloadSchema,
+);
+export const SessionBranchDraftCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.branchDraftCancel,
+  host.SessionBranchDraftCancelPayloadSchema,
+);
+export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.approval.resolve,
+  host.ApprovalResolvePayloadSchema,
+);
+export const DiscoveryInterestChangeRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.interestChange,
+  host.DiscoveryInterestChangePayloadSchema,
+);
+export const DiscoveryConfigurationGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.configurationGet,
+  host.DiscoveryConfigurationGetPayloadSchema,
+);
+export const DiscoveryConfigurationUpdateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.configurationUpdate,
+  host.DiscoveryConfigurationUpdatePayloadSchema,
+);
+export const DiscoverySourceConnectRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.sourceConnect,
+  host.DiscoverySourceConnectPayloadSchema,
+);
+export const DiscoverySourceRefreshRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.sourceRefresh,
+  host.DiscoverySourceRefreshPayloadSchema,
+);
+export const DiscoverySourcesRefreshRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.sourcesRefresh,
+  host.DiscoverySourcesRefreshPayloadSchema,
+);
+export const DiscoveryInterestSessionSettingRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.sessionParticipationSet,
+  host.DiscoveryInterestSessionSettingPayloadSchema,
+);
+export const DiscoveryRecommendationRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.recommendationRequest,
+  host.DiscoveryRecommendationRequestPayloadSchema,
+);
+export const DiscoveryCandidateSupplyConfirmRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.candidateSupplyConfirm,
+  host.DiscoveryCandidateSupplyConfirmPayloadSchema,
+);
+export const DiscoveryHomeRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.homeGet,
+  host.DiscoveryHomePayloadSchema,
+);
+export const DiscoveryRecommendationSearchRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.recommendationsSearch,
+  host.DiscoveryRecommendationSearchPayloadSchema,
+);
+export const DiscoveryRecommendationStateRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.recommendationStateUpdate,
+  host.DiscoveryRecommendationStatePayloadSchema,
+);
+export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.snapshot,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceModelStatusRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.modelStatus,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceModelCapabilityRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.modelCapability,
+  host.VoiceModelCapabilityPayloadSchema,
+);
+export const VoiceModelsCheckUpdatesRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.modelsCheckUpdates,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceModelsPrepareRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.modelsPrepare,
+  z.object({ repair: z.boolean().optional() }).strict(),
+);
+export const VoiceModelsCancelRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.modelsCancel,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceSessionStartRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.sessionStart,
+  host.VoiceSessionStartPayloadSchema,
+);
+export const VoiceSessionManualStartRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.sessionManualStart,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceSessionManualFinishRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.sessionManualFinish,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceSessionMuteRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.sessionMute,
+  host.VoiceSessionMutedPayloadSchema,
+);
+export const VoiceSessionEndRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.sessionEnd,
+  host.VoiceEmptyPayloadSchema,
+);
+export const VoiceSpeechOutputStopRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.voice.speechOutputStop,
+  host.VoiceEmptyPayloadSchema,
+);
+export const ProjectListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.projectList,
+  host.WorkspaceListProjectsPayloadSchema,
+);
+export const ProjectUseExistingRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.projectUseExisting,
+  host.WorkspaceUseExistingProjectPayloadSchema,
+);
+export const ProjectOpenRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.projectOpen,
+  host.ProjectOpenPayloadSchema,
+);
+export const ProjectRemoveRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.projectRemove,
+  host.ProjectRemovePayloadSchema,
+);
+export const WorkspaceFilesListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.filesList,
+  host.WorkspaceFilesListPayloadSchema,
+);
+export const WorkspaceFileOpenRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.workspace.filesOpen,
+  host.WorkspaceFileOpenPayloadSchema,
+);
+export const ObservabilityListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.observability.list,
+  host.ObservabilityListPayloadSchema,
+);
+export const ObservabilityGetRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.observability.get,
+  host.ObservabilityTracePayloadSchema,
+);
+export const ObservabilityContentRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.observability.content,
+  host.ObservabilityContentPayloadSchema,
+);
+export const ObservabilityHealthRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.observability.health,
+  host.ObservabilityEmptyPayloadSchema,
+);
+export const ObservabilityRebuildIndexRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.observability.rebuildIndex,
+  host.ObservabilityEmptyPayloadSchema,
+);
+export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.observability.bundle,
+  host.ObservabilityTracePayloadSchema,
+);
 
 /** Dedicated PCM frame payload on the Renderer MessagePort; travels on a bounded
  *  channel, not the business envelope. The Float32Array arrives via structured
@@ -90,29 +270,57 @@ export type SessionCreatePayload = z.infer<typeof host.SessionCreatePayloadSchem
 export type SessionMessageListPayload = z.infer<typeof host.SessionMessageListPayloadSchema>;
 export type SessionReadPayload = z.infer<typeof host.SessionReadPayloadSchema>;
 export type CommittedRunReadPayload = z.infer<typeof host.CommittedRunReadPayloadSchema>;
-export type SessionContextUsageGetPayload = z.infer<typeof host.SessionContextUsageGetPayloadSchema>;
+export type SessionContextUsageGetPayload = z.infer<
+  typeof host.SessionContextUsageGetPayloadSchema
+>;
 export type ImageInputCapabilitiesPayload = z.infer<typeof host.InputCapabilitiesPayloadSchema>;
 export type ImageInputSelectPayload = z.infer<typeof host.ImageInputSelectPayloadSchema>;
 export type DocumentInputSelectPayload = z.infer<typeof host.DocumentInputSelectPayloadSchema>;
-export type ImageInputClipboardReadPayload = z.infer<typeof host.ImageInputClipboardReadPayloadSchema>;
+export type ImageInputClipboardReadPayload = z.infer<
+  typeof host.ImageInputClipboardReadPayloadSchema
+>;
 export type AttachmentImageReadPayload = z.infer<typeof host.AttachmentImageReadPayloadSchema>;
 export type AttachmentFileStatusPayload = z.infer<typeof host.AttachmentFileStatusPayloadSchema>;
 export type SessionMessageSendPayload = z.infer<typeof host.SessionMessageSendPayloadSchema>;
 export type SessionMessageCancelPayload = z.infer<typeof host.SessionMessageCancelPayloadSchema>;
-export type SessionBranchDraftCreatePayload = z.infer<typeof host.SessionBranchDraftCreatePayloadSchema>;
-export type SessionBranchDraftCancelPayload = z.infer<typeof host.SessionBranchDraftCancelPayloadSchema>;
+export type SessionBranchDraftCreatePayload = z.infer<
+  typeof host.SessionBranchDraftCreatePayloadSchema
+>;
+export type SessionBranchDraftCancelPayload = z.infer<
+  typeof host.SessionBranchDraftCancelPayloadSchema
+>;
 export type ApprovalResolvePayload = z.infer<typeof host.ApprovalResolvePayloadSchema>;
-export type DiscoveryInterestChangePayload = z.infer<typeof host.DiscoveryInterestChangePayloadSchema>;
-export type DiscoveryConfigurationGetPayload = z.infer<typeof host.DiscoveryConfigurationGetPayloadSchema>;
-export type DiscoveryConfigurationUpdatePayload = z.infer<typeof host.DiscoveryConfigurationUpdatePayloadSchema>;
-export type DiscoverySourceConnectPayload = z.infer<typeof host.DiscoverySourceConnectPayloadSchema>;
-export type DiscoverySourceRefreshPayload = z.infer<typeof host.DiscoverySourceRefreshPayloadSchema>;
-export type DiscoverySourcesRefreshPayload = z.infer<typeof host.DiscoverySourcesRefreshPayloadSchema>;
-export type DiscoveryInterestSessionSettingPayload = z.infer<typeof host.DiscoveryInterestSessionSettingPayloadSchema>;
-export type DiscoveryRecommendationRequestPayload = z.infer<typeof host.DiscoveryRecommendationRequestPayloadSchema>;
+export type DiscoveryInterestChangePayload = z.infer<
+  typeof host.DiscoveryInterestChangePayloadSchema
+>;
+export type DiscoveryConfigurationGetPayload = z.infer<
+  typeof host.DiscoveryConfigurationGetPayloadSchema
+>;
+export type DiscoveryConfigurationUpdatePayload = z.infer<
+  typeof host.DiscoveryConfigurationUpdatePayloadSchema
+>;
+export type DiscoverySourceConnectPayload = z.infer<
+  typeof host.DiscoverySourceConnectPayloadSchema
+>;
+export type DiscoverySourceRefreshPayload = z.infer<
+  typeof host.DiscoverySourceRefreshPayloadSchema
+>;
+export type DiscoverySourcesRefreshPayload = z.infer<
+  typeof host.DiscoverySourcesRefreshPayloadSchema
+>;
+export type DiscoveryInterestSessionSettingPayload = z.infer<
+  typeof host.DiscoveryInterestSessionSettingPayloadSchema
+>;
+export type DiscoveryRecommendationRequestPayload = z.infer<
+  typeof host.DiscoveryRecommendationRequestPayloadSchema
+>;
 export type DiscoveryHomePayload = z.infer<typeof host.DiscoveryHomePayloadSchema>;
-export type DiscoveryRecommendationSearchPayload = z.infer<typeof host.DiscoveryRecommendationSearchPayloadSchema>;
-export type DiscoveryRecommendationStatePayload = z.infer<typeof host.DiscoveryRecommendationStatePayloadSchema>;
+export type DiscoveryRecommendationSearchPayload = z.infer<
+  typeof host.DiscoveryRecommendationSearchPayloadSchema
+>;
+export type DiscoveryRecommendationStatePayload = z.infer<
+  typeof host.DiscoveryRecommendationStatePayloadSchema
+>;
 export type VoiceSessionStartPayload = z.infer<typeof host.VoiceSessionStartPayloadSchema>;
 export type VoiceModelCapabilityPayload = z.infer<typeof host.VoiceModelCapabilityPayloadSchema>;
 export type VoiceSessionMutedPayload = z.infer<typeof host.VoiceSessionMutedPayloadSchema>;
@@ -125,9 +333,24 @@ export type ObservabilityTracePayload = z.infer<typeof host.ObservabilityTracePa
 export type ObservabilityContentPayload = z.infer<typeof host.ObservabilityContentPayloadSchema>;
 export type ObservabilityEmptyPayload = z.infer<typeof host.ObservabilityEmptyPayloadSchema>;
 
-export const DiscoveryPreferenceDetailsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceDetails, host.DiscoveryPreferenceDetailsPayloadSchema);
-export const DiscoveryPreferenceEvidenceRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceEvidence, host.DiscoveryPreferenceEvidencePayloadSchema);
-export const DiscoveryPreferenceEditRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceEdit, host.DiscoveryPreferenceEditPayloadSchema);
-export const DiscoveryPreferenceDeleteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.preferenceDelete, host.DiscoveryPreferenceDeletePayloadSchema);
+export const DiscoveryPreferenceDetailsRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.preferenceDetails,
+  host.DiscoveryPreferenceDetailsPayloadSchema,
+);
+export const DiscoveryPreferenceEvidenceRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.preferenceEvidence,
+  host.DiscoveryPreferenceEvidencePayloadSchema,
+);
+export const DiscoveryPreferenceEditRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.preferenceEdit,
+  host.DiscoveryPreferenceEditPayloadSchema,
+);
+export const DiscoveryPreferenceDeleteRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.preferenceDelete,
+  host.DiscoveryPreferenceDeletePayloadSchema,
+);
 
-export const SessionModelSelectionRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.session.sessionModelSelection, host.SessionModelSelectionPayloadSchema);
+export const SessionModelSelectionRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.session.sessionModelSelection,
+  host.SessionModelSelectionPayloadSchema,
+);

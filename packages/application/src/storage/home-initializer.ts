@@ -58,8 +58,14 @@ export async function initializeMegumiHome(
 ): Promise<MegumiHomePaths> {
   const paths = buildMegumiHomePaths(resolveMegumiHomePath(options));
   await ensureMinimalDirectories(options.fileSystem, paths);
-  await options.fileSystem.writeJson(paths.settingsSchemaPath, createMegumiSettingsSchema(), { spaces: 2 });
-  await writeJsonIfMissing(options.fileSystem, paths.versionPath, createMegumiHomeVersion(options.clock.now()));
+  await options.fileSystem.writeJson(paths.settingsSchemaPath, createMegumiSettingsSchema(), {
+    spaces: 2,
+  });
+  await writeJsonIfMissing(
+    options.fileSystem,
+    paths.versionPath,
+    createMegumiHomeVersion(options.clock.now()),
+  );
   await writeTextIfMissing(options.fileSystem, paths.readmePath, createMegumiHomeReadme());
   await installBuiltInSystemSkills(options.fileSystem, paths, options.resourceLocator);
   return paths;
@@ -71,8 +77,14 @@ export function initializeMegumiHomeSync(
 ): MegumiHomePaths {
   const paths = buildMegumiHomePaths(resolveMegumiHomePath(options));
   ensureMinimalDirectoriesSync(options.fileSystem, paths);
-  options.fileSystem.writeJsonSync(paths.settingsSchemaPath, createMegumiSettingsSchema(), { spaces: 2 });
-  writeJsonIfMissingSync(options.fileSystem, paths.versionPath, createMegumiHomeVersion(options.clock.now()));
+  options.fileSystem.writeJsonSync(paths.settingsSchemaPath, createMegumiSettingsSchema(), {
+    spaces: 2,
+  });
+  writeJsonIfMissingSync(
+    options.fileSystem,
+    paths.versionPath,
+    createMegumiHomeVersion(options.clock.now()),
+  );
   writeTextIfMissingSync(options.fileSystem, paths.readmePath, createMegumiHomeReadme());
   installBuiltInSystemSkillsSync(options.fileSystem, paths, options.resourceLocator);
   return paths;

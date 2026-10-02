@@ -46,23 +46,32 @@ export const RUNTIME_IPC_ERROR_CODES = [
   'unknown',
 ] as const;
 
-export const RuntimeIpcErrorSchema = z.object({
-  code: z.enum(RUNTIME_IPC_ERROR_CODES),
-  message: z.string().min(1),
-  issues: z.array(z.object({ scope: z.enum(['global', 'project']).optional(), path: z.array(z.string()), message: z.string() })).optional(),
-  details: z.record(z.string(), z.unknown()).optional(),
-}).strict();
+export const RuntimeIpcErrorSchema = z
+  .object({
+    code: z.enum(RUNTIME_IPC_ERROR_CODES),
+    message: z.string().min(1),
+    issues: z
+      .array(
+        z.object({
+          scope: z.enum(['global', 'project']).optional(),
+          path: z.array(z.string()),
+          message: z.string(),
+        }),
+      )
+      .optional(),
+    details: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
 
 export type RuntimeIpcError = z.infer<typeof RuntimeIpcErrorSchema>;
 
-const SENSITIVE_KEY = /(?:api.?key|authorization|credential|password|secret|token|provider.?body|prompt|raw.?stack|stack|file.?content|full.?text)/i;
-const SENSITIVE_VALUE = /(?:api[_-]?key\s*[=:]|authorization\s*[=:]|bearer\s+[A-Za-z0-9._-]+|password\s*[=:]|secret\s*[=:]|sk-[A-Za-z0-9_-]{8,})/i;
+const SENSITIVE_KEY =
+  /(?:api.?key|authorization|credential|password|secret|token|provider.?body|prompt|raw.?stack|stack|file.?content|full.?text)/i;
+const SENSITIVE_VALUE =
+  /(?:api[_-]?key\s*[=:]|authorization\s*[=:]|bearer\s+[A-Za-z0-9._-]+|password\s*[=:]|secret\s*[=:]|sk-[A-Za-z0-9_-]{8,})/i;
 
 /** Normalizes any thrown value into the Desktop IPC failure contract. */
-export function normalizeRuntimeIpcError(
-  error: unknown,
-  fallbackMessage: string,
-): RuntimeIpcError {
+export function normalizeRuntimeIpcError(error: unknown, fallbackMessage: string): RuntimeIpcError {
   const parsed = RuntimeIpcErrorSchema.safeParse(error);
   if (parsed.success) return sanitizeRuntimeIpcError(parsed.data);
   return {

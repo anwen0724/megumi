@@ -20,11 +20,7 @@ import {
 import { materializeRecommendationReference, type ContextCapabilities } from '../context/index';
 import type { EventBus } from '../events';
 import type { UserInput } from './input/index';
-import type {
-  Observability,
-  OperationCompletion,
-  StructuredRuntimeLogger,
-} from '../diagnostics';
+import type { Observability, OperationCompletion, StructuredRuntimeLogger } from '../diagnostics';
 
 import type { Permissions } from '../permissions/index';
 import type { SessionHistory } from '../sessions/index';
@@ -82,13 +78,13 @@ export interface AgentExecutionPolicy {
 }
 
 export interface RunDependencies {
-  readonly createProviderCapture?: (input: { correlation: import('../diagnostics').TraceCorrelation; fetch?: typeof globalThis.fetch }) => import('../diagnostics').ProviderCapture;
+  readonly createProviderCapture?: (input: {
+    correlation: import('../diagnostics').TraceCorrelation;
+    fetch?: typeof globalThis.fetch;
+  }) => import('../diagnostics').ProviderCapture;
   readonly createContentDigest?: (value: unknown) => string | undefined;
   readonly context: ContextCapabilities;
-  readonly tools: Pick<
-    Tools,
-    'bindExecution'
-  >;
+  readonly tools: Pick<Tools, 'bindExecution'>;
   readonly permissions: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly session: Pick<
     SessionHistory,
@@ -118,7 +114,10 @@ export class LaunchExecutionError extends Error {
   }
 }
 
-type ExecutionDependencies = RunDependencies & { readonly models: ModelClient; readonly compactionThresholdRatio: number };
+type ExecutionDependencies = RunDependencies & {
+  readonly models: ModelClient;
+  readonly compactionThresholdRatio: number;
+};
 
 interface ExecutionRuntime extends ExecutionProjectionRuntime, ContextAdapterRuntime {
   readonly committer: SessionMessageCommitter;
@@ -134,14 +133,16 @@ export async function prepareRun(
   input: LaunchAgentExecutionInput,
   baseDependencies: RunDependencies,
 ): Promise<PreparedRun> {
-  const dependencies = { ...baseDependencies, models: input.client, compactionThresholdRatio: input.compactionThresholdRatio };
+  const dependencies = {
+    ...baseDependencies,
+    models: input.client,
+    compactionThresholdRatio: input.compactionThresholdRatio,
+  };
   if (input.kind !== 'conversation') {
     return launchBackgroundExecution(input, dependencies);
   }
   const { metadata } = input;
-  const referenceContent = input.recommendationReference
-    ? [input.recommendationReference]
-    : [];
+  const referenceContent = input.recommendationReference ? [input.recommendationReference] : [];
   const referenceModelContent = input.recommendationReference
     ? [materializeRecommendationReference(input.recommendationReference)]
     : [];
@@ -153,13 +154,15 @@ export async function prepareRun(
     execution_id: metadata.executionId,
     display_content: [...referenceContent, ...input.input.displayContent],
     model_content: [...referenceContent, ...input.input.modelContent],
-    ...(input.input.skillSelection ? {
-      skill_selection: {
-        name: input.input.skillSelection.name,
-        skill_path: input.input.skillSelection.skillPath,
-      },
-    } : {}),
-    attachments: input.input.attachments.map((attachment) => (
+    ...(input.input.skillSelection
+      ? {
+          skill_selection: {
+            name: input.input.skillSelection.name,
+            skill_path: input.input.skillSelection.skillPath,
+          },
+        }
+      : {}),
+    attachments: input.input.attachments.map((attachment) =>
       attachment.type === 'image'
         ? {
             type: 'image' as const,
@@ -174,8 +177,8 @@ export async function prepareRun(
             media_type: attachment.mediaType,
             local_path: attachment.localPath,
             size_bytes: attachment.sizeBytes,
-          }
-    )),
+          },
+    ),
     ...(metadata.parentEntryId ? { parent_entry_id: metadata.parentEntryId } : {}),
     created_at: metadata.createdAt,
   };
@@ -277,11 +280,13 @@ export async function prepareRun(
         thinkingLevel: metadata.model.reasoning ? 'high' : 'minimal',
         tools: [],
       },
-      messages: [{
-        role: 'user',
-        content: [...referenceModelContent, ...input.input.modelContent],
-        timestamp: timestampFrom(metadata.createdAt),
-      }],
+      messages: [
+        {
+          role: 'user',
+          content: [...referenceModelContent, ...input.input.modelContent],
+          timestamp: timestampFrom(metadata.createdAt),
+        },
+      ],
     },
     stream: createStreamAdapter(dependencies, metadata, runtime),
     context: contextProvider,
@@ -294,11 +299,17 @@ export async function prepareRun(
     agent,
     userMessage: saved.message,
     userEntry: saved.entry,
-    execute: () => observeAgentExecution(
-      dependencies.observability,
-      metadata,
-      () => executeAgentExecution(agent, runtime, contextDependencies, metadata, toolExecution, input.signal),
-    ),
+    execute: () =>
+      observeAgentExecution(dependencies.observability, metadata, () =>
+        executeAgentExecution(
+          agent,
+          runtime,
+          contextDependencies,
+          metadata,
+          toolExecution,
+          input.signal,
+        ),
+      ),
   };
 }
 
@@ -331,12 +342,14 @@ async function launchBackgroundExecution(
     toolExecution,
     ids: dependencies.ids,
     ...(dependencies.runtimeLogger ? { runtimeLogger: dependencies.runtimeLogger } : {}),
-    createAgentTool: (definition: import('../tools/index').ToolDefinition, scope: import('./context-adapter').ToolScope) => (
+    createAgentTool: (
+      definition: import('../tools/index').ToolDefinition,
+      scope: import('./context-adapter').ToolScope,
+    ) =>
       createUnprotectedAgentTool(definition, scope.binding, {
         metadata,
         ...(dependencies.observability ? { observability: dependencies.observability } : {}),
-      })
-    ),
+      }),
   };
   const contextProvider = createContextAdapter(contextDependencies, runtime);
   const agent = new RunLoopController({
@@ -347,13 +360,16 @@ async function launchBackgroundExecution(
         thinkingLevel: metadata.model.reasoning ? 'high' : 'minimal',
         tools: [],
       },
-      messages: [{
-        role: 'user',
-        content: input.kind === 'recommendation'
-          ? '开始本次 Recommendation 执行。'
-          : '开始本次 Candidate Supply 执行。',
-        timestamp: timestampFrom(metadata.createdAt),
-      }],
+      messages: [
+        {
+          role: 'user',
+          content:
+            input.kind === 'recommendation'
+              ? '开始本次 Recommendation 执行。'
+              : '开始本次 Candidate Supply 执行。',
+          timestamp: timestampFrom(metadata.createdAt),
+        },
+      ],
     },
     stream: createStreamAdapter(dependencies, metadata, runtime),
     context: contextProvider,
@@ -362,27 +378,36 @@ async function launchBackgroundExecution(
 
   return {
     agent,
-    execute: () => observeAgentExecution(dependencies.observability, metadata, async () => {
-      let outcome: ExecutionOutcome | undefined;
-      try {
-        const result = await agent.continue({
-          executionId: metadata.executionId, signal: input.signal,
-          ...(input.kind === 'recommendation' ? { completeAfterTool: 'submit_recommendations' } : {}),
-        });
-        outcome = result.status === 'completed'
-          ? { status: 'completed' }
-          : result.status === 'cancelled'
-            ? { status: 'cancelled' }
-            : { status: 'failed', failure: outcomeFromFailedError(result.error) };
-        return outcome;
-      } catch (error) {
-        outcome = { status: 'failed', failure: internalFailure(error) };
-        return outcome;
-      } finally {
-        await drainModelPumps(runtime);
-        try { releaseActiveScope(contextDependencies, runtime); } finally { toolExecution.close(); }
-      }
-    }),
+    execute: () =>
+      observeAgentExecution(dependencies.observability, metadata, async () => {
+        let outcome: ExecutionOutcome | undefined;
+        try {
+          const result = await agent.continue({
+            executionId: metadata.executionId,
+            signal: input.signal,
+            ...(input.kind === 'recommendation'
+              ? { completeAfterTool: 'submit_recommendations' }
+              : {}),
+          });
+          outcome =
+            result.status === 'completed'
+              ? { status: 'completed' }
+              : result.status === 'cancelled'
+                ? { status: 'cancelled' }
+                : { status: 'failed', failure: outcomeFromFailedError(result.error) };
+          return outcome;
+        } catch (error) {
+          outcome = { status: 'failed', failure: internalFailure(error) };
+          return outcome;
+        } finally {
+          await drainModelPumps(runtime);
+          try {
+            releaseActiveScope(contextDependencies, runtime);
+          } finally {
+            toolExecution.close();
+          }
+        }
+      }),
   };
 }
 
@@ -407,7 +432,11 @@ async function executeAgentExecution(
     return final;
   } finally {
     await drainModelPumps(runtime);
-    try { releaseActiveScope(contextDependencies, runtime); } finally { toolExecution.close(); }
+    try {
+      releaseActiveScope(contextDependencies, runtime);
+    } finally {
+      toolExecution.close();
+    }
   }
 }
 
@@ -424,11 +453,14 @@ async function observeAgentExecution(
   };
   if (!observability) return runOnce();
   try {
-    return await observability.withSpan({
-      name: 'agent.execution',
-      correlation: executionCorrelation(metadata),
-      classifyResult: classifyExecutionOutcome,
-    }, runOnce);
+    return await observability.withSpan(
+      {
+        name: 'agent.execution',
+        correlation: executionCorrelation(metadata),
+        classifyResult: classifyExecutionOutcome,
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }
@@ -459,7 +491,10 @@ function classifyExecutionOutcome(outcome: ExecutionOutcome): OperationCompletio
   };
 }
 
-function contentDigestCorrelation(dependencies: ExecutionDependencies, value: unknown): { readonly contentDigest?: string } {
+function contentDigestCorrelation(
+  dependencies: ExecutionDependencies,
+  value: unknown,
+): { readonly contentDigest?: string } {
   const contentDigest = dependencies.createContentDigest?.(value);
   return contentDigest ? { contentDigest } : {};
 }
@@ -482,11 +517,14 @@ async function observeSessionMessageCommit<T extends SessionMessageSaveResult>(
   };
   if (!observability) return runOnce();
   try {
-    return await observability.withSpan({
-      name: 'session.message.commit',
-      ...(correlation ? { correlation } : {}),
-      classifyResult: classifySessionMessageSave,
-    }, runOnce);
+    return await observability.withSpan(
+      {
+        name: 'session.message.commit',
+        ...(correlation ? { correlation } : {}),
+        classifyResult: classifySessionMessageSave,
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }
@@ -514,11 +552,12 @@ function createFinalReplySettlement(
 ): AgentSettlement {
   return async (result) => {
     const turn = runtime.pendingFinalTurn ?? runtime.activeTurn;
-    const message = result.status === 'completed'
-      ? result.finalMessage
-      : result.status === 'cancelled'
-        ? lastAssistant(result.newMessages)
-        : undefined;
+    const message =
+      result.status === 'completed'
+        ? result.finalMessage
+        : result.status === 'cancelled'
+          ? lastAssistant(result.newMessages)
+          : undefined;
     const failure = result.status === 'failed' ? outcomeFromFailedError(result.error) : undefined;
     if (failure?.code === 'session_failed') {
       // The Session itself failed: no reply can be committed, and the execution
@@ -529,16 +568,18 @@ function createFinalReplySettlement(
       sessionId: options.metadata.sessionId,
       executionId: options.metadata.executionId,
       status: result.status,
-      content: result.status === 'completed'
-        ? toSettlementContent(message)
-        : result.status === 'cancelled' && message
+      content:
+        result.status === 'completed'
           ? toSettlementContent(message)
-          : [],
-      reasonCode: result.status === 'completed'
-        ? 'normal_completion'
-        : result.status === 'cancelled'
-          ? 'user_cancelled'
-          : failureReason(failure!.code),
+          : result.status === 'cancelled' && message
+            ? toSettlementContent(message)
+            : [],
+      reasonCode:
+        result.status === 'completed'
+          ? 'normal_completion'
+          : result.status === 'cancelled'
+            ? 'user_cancelled'
+            : failureReason(failure!.code),
       ...(turn ? { messageId: turn.messageId } : {}),
       ...(message ? { metadata: assistantMetadata(message) } : {}),
       completedAt: options.clock.now(),
@@ -564,7 +605,12 @@ function createFinalReplySettlement(
     emitMessageEnded(options, reply.messageId, settlementText(result));
     if (turn) {
       publishTurnEndedProjection(options, {
-        stopReason: result.status === 'completed' ? 'completed' : result.status === 'cancelled' ? 'cancelled' : 'error',
+        stopReason:
+          result.status === 'completed'
+            ? 'completed'
+            : result.status === 'cancelled'
+              ? 'cancelled'
+              : 'error',
         messageId: reply.messageId,
         toolCallIds: message ? toolCallIdsOf(message) : [],
       });
@@ -574,7 +620,10 @@ function createFinalReplySettlement(
   };
 }
 
-function outcomeFromResult(result: AgentExecutionResult, runtime: ExecutionRuntime): ExecutionOutcome {
+function outcomeFromResult(
+  result: AgentExecutionResult,
+  runtime: ExecutionRuntime,
+): ExecutionOutcome {
   if (result.status === 'completed') {
     const assistantMessageId = runtime.assistantMessageId;
     if (!assistantMessageId) {
@@ -648,9 +697,20 @@ function agentCause(value: unknown): ExecutionFailure['cause'] {
   const owner = (value as { owner?: unknown }).owner;
   const code = (value as { code?: unknown }).code;
   const owners: NonNullable<ExecutionFailure['cause']>['owner'][] = [
-    'agent', 'ai', 'context', 'permissions', 'tools', 'session', 'skills', 'workspace', 'instructions', 'discovery-agent',
+    'agent',
+    'ai',
+    'context',
+    'permissions',
+    'tools',
+    'session',
+    'skills',
+    'workspace',
+    'instructions',
+    'discovery-agent',
   ];
-  return typeof owner === 'string' && owners.includes(owner as NonNullable<ExecutionFailure['cause']>['owner']) && typeof code === 'string'
+  return typeof owner === 'string' &&
+    owners.includes(owner as NonNullable<ExecutionFailure['cause']>['owner']) &&
+    typeof code === 'string'
     ? { owner: owner as NonNullable<ExecutionFailure['cause']>['owner'], code }
     : undefined;
 }
@@ -671,7 +731,9 @@ function createStreamAdapter(
       context,
       options,
       wrapped,
-    ).finally(() => { runtime.modelPumps.delete(tracked); });
+    ).finally(() => {
+      runtime.modelPumps.delete(tracked);
+    });
     runtime.modelPumps.add(tracked);
     return wrapped;
   };
@@ -716,7 +778,12 @@ async function observeModelCall(
       maxRetries: dependencies.policy.providerRequestMaxRetries,
       maxRetryDelayMs: dependencies.policy.providerRequestMaxRetryDelayMs,
     });
-    const terminal = await pumpStream(source, target, metadata.model, capture?.observe ?? (() => undefined));
+    const terminal = await pumpStream(
+      source,
+      target,
+      metadata.model,
+      capture?.observe ?? (() => undefined),
+    );
     capture?.complete(terminal);
     if (terminal) {
       safeRecordContent(dependencies.observability, {
@@ -737,11 +804,14 @@ async function observeModelCall(
     return;
   }
   try {
-    await dependencies.observability.withSpan({
-      name: 'model.call',
-      correlation: modelCallCorrelation(metadata, modelCallId),
-      classifyResult: classifyModelResponse,
-    }, runOnce);
+    await dependencies.observability.withSpan(
+      {
+        name: 'model.call',
+        correlation: modelCallCorrelation(metadata, modelCallId),
+        classifyResult: classifyModelResponse,
+      },
+      runOnce,
+    );
   } catch {
     await runOnce();
   }
@@ -752,16 +822,18 @@ function modelRequestContext(context: Parameters<AgentStreamFunction>[1]) {
   return {
     ...(context.systemPrompt === undefined ? {} : { systemPrompt: context.systemPrompt }),
     messages: context.messages,
-    ...(context.tools === undefined ? {} : {
-      tools: context.tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-        ...(tool.constrainedSampling === undefined
-          ? {}
-          : { constrainedSampling: tool.constrainedSampling }),
-      })),
-    }),
+    ...(context.tools === undefined
+      ? {}
+      : {
+          tools: context.tools.map((tool) => ({
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+            ...(tool.constrainedSampling === undefined
+              ? {}
+              : { constrainedSampling: tool.constrainedSampling }),
+          })),
+        }),
   };
 }
 
@@ -827,7 +899,10 @@ async function pumpStream(
       if (event.type === 'error') terminal = event.error;
     }
   } catch (error) {
-    terminal = failedAssistantMessage(model, error instanceof Error ? error.message : 'Model stream failed.');
+    terminal = failedAssistantMessage(
+      model,
+      error instanceof Error ? error.message : 'Model stream failed.',
+    );
     target.push({ type: 'error', reason: 'error', error: terminal });
   } finally {
     target.end(terminal);
@@ -850,30 +925,38 @@ function toAgentPolicy(policy: AgentExecutionPolicy): Partial<AgentPolicy> {
   };
 }
 
-function failureReason(code: ExecutionFailure['code']): import('../sessions/index').AssistantReplyReasonCode {
+function failureReason(
+  code: ExecutionFailure['code'],
+): import('../sessions/index').AssistantReplyReasonCode {
   if (
-    code === 'session_failed'
-    || code === 'context_failed'
-    || code === 'model_call_failed'
-    || code === 'loop_limit_exceeded'
-    || code === 'runtime_protocol_violation'
-  ) return code;
+    code === 'session_failed' ||
+    code === 'context_failed' ||
+    code === 'model_call_failed' ||
+    code === 'loop_limit_exceeded' ||
+    code === 'runtime_protocol_violation'
+  )
+    return code;
   if (code === 'permission_failed') return 'approval_failed';
   if (code === 'tool_system_failed') return 'tool_call_failed';
   return 'internal_error';
 }
 
-function toSettlementContent(message: AssistantMessage | undefined): import('../sessions/index').SessionAssistantContent[] {
-  return message ? message.content.map((block) => {
-    if (block.type === 'text') return { type: 'text' as const, text: block.text };
-    if (block.type === 'thinking') return { type: 'thinking' as const, thinking: block.thinking };
-    return {
-      type: 'toolCall' as const,
-      id: block.id,
-      name: block.name,
-      arguments: block.arguments,
-    };
-  }) : [];
+function toSettlementContent(
+  message: AssistantMessage | undefined,
+): import('../sessions/index').SessionAssistantContent[] {
+  return message
+    ? message.content.map((block) => {
+        if (block.type === 'text') return { type: 'text' as const, text: block.text };
+        if (block.type === 'thinking')
+          return { type: 'thinking' as const, thinking: block.thinking };
+        return {
+          type: 'toolCall' as const,
+          id: block.id,
+          name: block.name,
+          arguments: block.arguments,
+        };
+      })
+    : [];
 }
 
 function settlementText(result: AgentExecutionResult): string {
@@ -885,7 +968,10 @@ function settlementText(result: AgentExecutionResult): string {
   }
   const partial = lastAssistant(result.newMessages);
   return partial
-    ? partial.content.filter((block) => block.type === 'text').map((block) => block.text).join('')
+    ? partial.content
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text)
+        .join('')
     : '';
 }
 
@@ -902,7 +988,9 @@ function assistantMetadata(message: AssistantMessage): AssistantReplyMetadata {
 }
 
 function lastAssistant(messages: readonly AgentMessage[]): AssistantMessage | undefined {
-  return [...messages].reverse().find((message): message is AssistantMessage => message.role === 'assistant');
+  return [...messages]
+    .reverse()
+    .find((message): message is AssistantMessage => message.role === 'assistant');
 }
 
 function toolCallIdsOf(message: AssistantMessage): string[] {
@@ -960,7 +1048,11 @@ function emitMessageStarted(options: CreateAgentEventListenerOptions, messageId:
   }
 }
 
-function emitMessageEnded(options: CreateAgentEventListenerOptions, messageId: string, content: string): void {
+function emitMessageEnded(
+  options: CreateAgentEventListenerOptions,
+  messageId: string,
+  content: string,
+): void {
   try {
     options.events.publish({
       type: 'message.ended',

@@ -16,14 +16,24 @@ import { createTraceRecorder } from '@megumi/application/observability/trace/tra
 
 const NOW = '2026-08-26T00:00:00.000Z';
 const model: Model<Api> = {
-  id: 'model:1', name: 'Test', api: 'test-api', provider: 'provider:1',
-  baseUrl: 'https://example.invalid', reasoning: false, input: ['text'],
+  id: 'model:1',
+  name: 'Test',
+  api: 'test-api',
+  provider: 'provider:1',
+  baseUrl: 'https://example.invalid',
+  reasoning: false,
+  input: ['text'],
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 8_192, maxTokens: 1_024,
+  contextWindow: 8_192,
+  maxTokens: 1_024,
 };
 const session = {
-  session_id: 'session:1', workspace_id: 'workspace:1', title: 'Test', status: 'active',
-  created_at: NOW, updated_at: NOW,
+  session_id: 'session:1',
+  workspace_id: 'workspace:1',
+  title: 'Test',
+  status: 'active',
+  created_at: NOW,
+  updated_at: NOW,
 } as const;
 const acceptedInput = {
   displayContent: [{ type: 'text' as const, text: 'hello' }],
@@ -39,9 +49,12 @@ describe('Conversation Submission Trace', () => {
     const conversation = createConversationSubmission({
       dependencies: dependencies({
         observability,
-        input: { process: async () => ({
-          status: 'completed', result: { type: 'completed', message: 'handled' },
-        }) },
+        input: {
+          process: async () => ({
+            status: 'completed',
+            result: { type: 'completed', message: 'handled' },
+          }),
+        },
       }),
       startExecution,
     });
@@ -51,10 +64,15 @@ describe('Conversation Submission Trace', () => {
 
     expect(result).toMatchObject({ status: 'completed', message: 'handled' });
     expect(startExecution).not.toHaveBeenCalled();
-    expect(records.filter(isSpanStarted).map((record) => record.name))
-      .toEqual(['session.resolve', 'model.resolve', 'input.process']);
-    expect(records.filter(isContent).map((record) => record.kind))
-      .toEqual(['input.received', 'input.processed']);
+    expect(records.filter(isSpanStarted).map((record) => record.name)).toEqual([
+      'session.resolve',
+      'model.resolve',
+      'input.process',
+    ]);
+    expect(records.filter(isContent).map((record) => record.kind)).toEqual([
+      'input.received',
+      'input.processed',
+    ]);
     expect(records.find(isTraceEnded)?.outcome).toEqual({ status: 'ok', code: 'completed' });
   });
 
@@ -62,12 +80,21 @@ describe('Conversation Submission Trace', () => {
     const records: TraceJournalRecord[] = [];
     const observability = recorder(records);
     const completion = deferred<ExecutionOutcome>();
-    const startExecution = vi.fn(async () => startedExecution(
-      observability.withSpan({
-        name: 'agent.execution',
-        correlation: { requestId: 'request:running', executionId: 'execution:1', sessionId: 'session:1' },
-      }, () => completion.promise),
-    ));
+    const startExecution = vi.fn(async () =>
+      startedExecution(
+        observability.withSpan(
+          {
+            name: 'agent.execution',
+            correlation: {
+              requestId: 'request:running',
+              executionId: 'execution:1',
+              sessionId: 'session:1',
+            },
+          },
+          () => completion.promise,
+        ),
+      ),
+    );
     const conversation = createConversationSubmission({
       dependencies: dependencies({ observability }),
       startExecution,
@@ -79,7 +106,9 @@ describe('Conversation Submission Trace', () => {
     expect(records.some(isTraceEnded)).toBe(false);
     const shutdown = conversation.shutdown();
     let drained = false;
-    void shutdown.then(() => { drained = true; });
+    void shutdown.then(() => {
+      drained = true;
+    });
     await Promise.resolve();
     expect(drained).toBe(false);
 
@@ -87,8 +116,12 @@ describe('Conversation Submission Trace', () => {
     await shutdown;
 
     expect(startExecution).toHaveBeenCalledOnce();
-    expect(records.filter(isSpanStarted).map((record) => record.name))
-      .toEqual(['session.resolve', 'model.resolve', 'input.process', 'agent.execution']);
+    expect(records.filter(isSpanStarted).map((record) => record.name)).toEqual([
+      'session.resolve',
+      'model.resolve',
+      'input.process',
+      'agent.execution',
+    ]);
     expect(records.find(isTraceEnded)?.outcome).toEqual({ status: 'cancelled', code: 'cancelled' });
   });
 
@@ -96,40 +129,68 @@ describe('Conversation Submission Trace', () => {
     const records: TraceJournalRecord[] = [];
     const observability = recorder(records);
     const completion = Promise.resolve<ExecutionOutcome>({
-      status: 'completed', assistantMessageId: 'message:assistant',
+      status: 'completed',
+      assistantMessageId: 'message:assistant',
     });
     const conversation = createConversationSubmission({
       dependencies: dependencies({
         observability,
         sessions: {
-      updateModelSelection: () => ({ status: 'found', session }),
+          updateModelSelection: () => ({ status: 'found', session }),
           getSession: vi.fn(),
           createSession: () => ({ status: 'created', session }),
         },
         branches: {
-          resolveBranchDraft: () => ({ status: 'resolved', branch_draft: {
-            branch_marker_id: 'branch:1', session_id: 'session:1', source_message_id: 'message:source',
-            source_entry_id: 'entry:source', created_at: NOW,
-          } }),
-          commitBranchDraft: () => ({ status: 'committed', branch_draft: {
-            branch_marker_id: 'branch:1', session_id: 'session:1', source_message_id: 'message:source',
-            source_entry_id: 'entry:source', created_at: NOW,
-          } }),
+          resolveBranchDraft: () => ({
+            status: 'resolved',
+            branch_draft: {
+              branch_marker_id: 'branch:1',
+              session_id: 'session:1',
+              source_message_id: 'message:source',
+              source_entry_id: 'entry:source',
+              created_at: NOW,
+            },
+          }),
+          commitBranchDraft: () => ({
+            status: 'committed',
+            branch_draft: {
+              branch_marker_id: 'branch:1',
+              session_id: 'session:1',
+              source_message_id: 'message:source',
+              source_entry_id: 'entry:source',
+              created_at: NOW,
+            },
+          }),
         },
-        history: { getCommittedBranch: () => ({ status: 'found', branch: {
-          type: 'branch', branchId: 'branch:committed', sourceEntryId: 'entry:source',
-          sourceMessageId: 'message:source', targetEntryId: 'entry:user',
-          targetMessageId: 'message:user', createdAt: NOW,
-        } }) },
+        history: {
+          getCommittedBranch: () => ({
+            status: 'found',
+            branch: {
+              type: 'branch',
+              branchId: 'branch:committed',
+              sourceEntryId: 'entry:source',
+              sourceMessageId: 'message:source',
+              targetEntryId: 'entry:user',
+              targetMessageId: 'message:user',
+              createdAt: NOW,
+            },
+          }),
+        },
       }),
       startExecution: async () => startedExecution(completion),
     });
 
     const result = await conversation.submit({
-      ...request('request:full'), sessionId: undefined, recommendationReference: {
-        type: 'recommendation_reference', recommendationId: 'recommendation:1',
-        sourceName: 'Source', canonicalUrl: 'https://example.com/item', title: 'Item',
-        description: 'Description', recommendationReason: 'Relevant',
+      ...request('request:full'),
+      sessionId: undefined,
+      recommendationReference: {
+        type: 'recommendation_reference',
+        recommendationId: 'recommendation:1',
+        sourceName: 'Source',
+        canonicalUrl: 'https://example.com/item',
+        title: 'Item',
+        description: 'Description',
+        recommendationReason: 'Relevant',
       },
       branchMarkerId: 'branch:1',
     });
@@ -156,10 +217,17 @@ describe('Conversation Submission Trace', () => {
       dependencies: dependencies({ observability }),
       startExecution: async () => {
         calls += 1;
-        observedCompletion ??= observability.withSpan({
-          name: 'agent.execution',
-          correlation: { requestId: 'request:duplicate', executionId: 'execution:1', sessionId: 'session:1' },
-        }, () => completion.promise);
+        observedCompletion ??= observability.withSpan(
+          {
+            name: 'agent.execution',
+            correlation: {
+              requestId: 'request:duplicate',
+              executionId: 'execution:1',
+              sessionId: 'session:1',
+            },
+          },
+          () => completion.promise,
+        );
         return startedExecution(observedCompletion, calls === 1 ? 'started' : 'already_started');
       },
     });
@@ -181,9 +249,14 @@ describe('Conversation Submission Trace', () => {
   });
 
   it('preserves the business result and single dispatch when Observability fails', async () => {
-    const startExecution = vi.fn(async () => startedExecution(Promise.resolve({
-      status: 'completed', assistantMessageId: 'message:assistant',
-    })));
+    const startExecution = vi.fn(async () =>
+      startedExecution(
+        Promise.resolve({
+          status: 'completed',
+          assistantMessageId: 'message:assistant',
+        }),
+      ),
+    );
     const conversation = createConversationSubmission({
       dependencies: dependencies({ observability: throwingObservability() }),
       startExecution,
@@ -232,18 +305,37 @@ function startedExecution(
     status,
     completion,
     execution: {
-      kind: 'conversation', executionId: 'execution:1', requestId: 'request:1',
-      workspaceId: 'workspace:1', sessionId: 'session:1', userMessageId: 'message:user',
-      status: 'running', phase: 'preparing_context', model, permissionMode: 'ask',
-      createdAt: NOW, startedAt: NOW,
+      kind: 'conversation',
+      executionId: 'execution:1',
+      requestId: 'request:1',
+      workspaceId: 'workspace:1',
+      sessionId: 'session:1',
+      userMessageId: 'message:user',
+      status: 'running',
+      phase: 'preparing_context',
+      model,
+      permissionMode: 'ask',
+      createdAt: NOW,
+      startedAt: NOW,
     },
-    userMessage: { message: {
-      message_id: 'message:user', session_id: 'session:1', execution_id: 'execution:1',
-      message_kind: 'user_message', role: 'user', content: acceptedInput.displayContent, created_at: NOW,
-    }, attachments: [] },
+    userMessage: {
+      message: {
+        message_id: 'message:user',
+        session_id: 'session:1',
+        execution_id: 'execution:1',
+        message_kind: 'user_message',
+        role: 'user',
+        content: acceptedInput.displayContent,
+        created_at: NOW,
+      },
+      attachments: [],
+    },
     userEntry: {
-      entry_id: 'entry:user', session_id: 'session:1', entry_type: 'message',
-      message_id: 'message:user', created_at: NOW,
+      entry_id: 'entry:user',
+      session_id: 'session:1',
+      entry_type: 'message',
+      message_id: 'message:user',
+      created_at: NOW,
     },
   };
 }
@@ -251,7 +343,9 @@ function startedExecution(
 function recorder(records: TraceJournalRecord[]) {
   let id = 0;
   return createTraceRecorder({
-    enqueue: (record) => { records.push(record); },
+    enqueue: (record) => {
+      records.push(record);
+    },
     createId: () => `00000000-0000-4000-8000-${String(++id).padStart(12, '0')}`,
     now: () => new Date(NOW),
   });
@@ -259,12 +353,16 @@ function recorder(records: TraceJournalRecord[]) {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((accept) => { resolve = accept; });
+  const promise = new Promise<T>((accept) => {
+    resolve = accept;
+  });
   return { promise, resolve };
 }
 
 function throwingObservability(): Observability {
-  const failure = () => { throw new Error('observability unavailable'); };
+  const failure = () => {
+    throw new Error('observability unavailable');
+  };
   return {
     withTrace: failure,
     withSpan: failure,
@@ -274,14 +372,20 @@ function throwingObservability(): Observability {
   } as Observability;
 }
 
-function isSpanStarted(record: TraceJournalRecord): record is Extract<TraceJournalRecord, { type: 'span.started' }> {
+function isSpanStarted(
+  record: TraceJournalRecord,
+): record is Extract<TraceJournalRecord, { type: 'span.started' }> {
   return record.type === 'span.started';
 }
 
-function isContent(record: TraceJournalRecord): record is Extract<TraceJournalRecord, { type: 'content.recorded' }> {
+function isContent(
+  record: TraceJournalRecord,
+): record is Extract<TraceJournalRecord, { type: 'content.recorded' }> {
   return record.type === 'content.recorded';
 }
 
-function isTraceEnded(record: TraceJournalRecord): record is Extract<TraceJournalRecord, { type: 'trace.ended' }> {
+function isTraceEnded(
+  record: TraceJournalRecord,
+): record is Extract<TraceJournalRecord, { type: 'trace.ended' }> {
   return record.type === 'trace.ended';
 }

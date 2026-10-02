@@ -1,13 +1,11 @@
-import { createContentDigest, createProviderCapture } from '@megumi/application/observability/index';
+import {
+  createContentDigest,
+  createProviderCapture,
+} from '@megumi/application/observability/index';
 /*
  * Supplies typed in-memory collaborators for Discovery Agent execution tests.
  */
-import type {
-  Api,
-  AssistantMessage,
-  Model,
-  Models,
-} from '@megumi/ai';
+import type { Api, AssistantMessage, Model, Models } from '@megumi/ai';
 import type { ContextCapabilities, Prompt } from '@megumi/agent-runtime/context/index';
 import { createEventBus, type AnyEvent, type EventBus } from '@megumi/agent-runtime/events';
 import type { Permissions } from '@megumi/agent-runtime/permissions/index';
@@ -27,9 +25,7 @@ import {
   type RunDependencies,
 } from '@megumi/agent-runtime/runs/index';
 import type { PreparedRun } from '@megumi/agent-runtime/runs/index';
-import type {
-  ExecutionMetadata,
-} from '@megumi/agent-runtime/runs/index';
+import type { ExecutionMetadata } from '@megumi/agent-runtime/runs/index';
 import {
   allowDecision,
   approvalSubjectFor,
@@ -91,22 +87,26 @@ export interface ExecutionFixture {
   readonly events: EventBus;
 }
 
-export function createExecutionFixture(input: {
-  readonly streams?: AssistantMessageEventStream[];
-  readonly tools?: ReturnType<typeof registeredTool>[];
-  readonly permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
-  readonly executeTool?: TestToolExecute;
-  readonly policy?: Partial<AgentExecutionPolicy>;
-  readonly contextBuild?: RunDependencies['context']['build'];
-  readonly contextCompact?: RunDependencies['context']['compact'];
-  readonly failUserMessageSave?: boolean;
-  readonly observability?: Observability;
-} = {}): ExecutionFixture {
+export function createExecutionFixture(
+  input: {
+    readonly streams?: AssistantMessageEventStream[];
+    readonly tools?: ReturnType<typeof registeredTool>[];
+    readonly permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
+    readonly executeTool?: TestToolExecute;
+    readonly policy?: Partial<AgentExecutionPolicy>;
+    readonly contextBuild?: RunDependencies['context']['build'];
+    readonly contextCompact?: RunDependencies['context']['compact'];
+    readonly failUserMessageSave?: boolean;
+    readonly observability?: Observability;
+  } = {},
+): ExecutionFixture {
   const writes: string[] = [];
   const contextRuns: unknown[] = [];
   const published: AnyEvent[] = [];
   const eventsBus = createEventBus();
-  eventsBus.subscribe({}, (event) => { published.push(event); });
+  eventsBus.subscribe({}, (event) => {
+    published.push(event);
+  });
   const assistantReplies: SaveAssistantReplyRequest[] = [];
   const userMessages: SaveUserMessageRequest[] = [];
   const toolResults: SaveToolResultMessageRequest[] = [];
@@ -121,7 +121,10 @@ export function createExecutionFixture(input: {
     writes.push('user');
     userMessages.push(structuredClone(request));
     if (input.failUserMessageSave) {
-      return { status: 'failed' as const, failure: { code: 'session_error', message: 'User message save failed.' } };
+      return {
+        status: 'failed' as const,
+        failure: { code: 'session_error', message: 'User message save failed.' },
+      };
     }
     return {
       status: 'saved' as const,
@@ -207,27 +210,46 @@ export function createExecutionFixture(input: {
       }) as Models['streamSimple'],
     } as Models,
     context: {
-      build: input.contextBuild ?? (async (request): Promise<import('@megumi/agent-runtime/context/index').BuildContextResult> => {
-        contextRuns.push({ ...request.modelCallContext });
-        // The built Prompt carries the resolved ModelCall Tool Definitions so
-        // Overflow compaction receives the same tools without re-resolution.
-        return { status: 'ready', prompt: { ...context, tools: [...request.modelCallContext.tools] } };
-      }),
-      compact: input.contextCompact ?? (async () => ({
-        status: 'nothing_to_compact' as const,
-        reason: 'no_historical_messages',
-      })),
+      build:
+        input.contextBuild ??
+        (async (
+          request,
+        ): Promise<import('@megumi/agent-runtime/context/index').BuildContextResult> => {
+          contextRuns.push({ ...request.modelCallContext });
+          // The built Prompt carries the resolved ModelCall Tool Definitions so
+          // Overflow compaction receives the same tools without re-resolution.
+          return {
+            status: 'ready',
+            prompt: { ...context, tools: [...request.modelCallContext.tools] },
+          };
+        }),
+      compact:
+        input.contextCompact ??
+        (async () => ({
+          status: 'nothing_to_compact' as const,
+          reason: 'no_historical_messages',
+        })),
     } as ContextCapabilities,
     session: {
       saveUserMessage,
       saveModelResponse,
       saveToolResultMessage,
       saveAssistantReply,
-    } as Pick<SessionHistory, 'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'>,
+    } as Pick<
+      SessionHistory,
+      'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
+    >,
     tools: toolsForRun(input.tools ?? [], input.executeTool),
     permissions: input.permissions ?? defaultPermissions,
     events: eventsBus,
-    ...(input.observability ? { observability: input.observability, createContentDigest, createProviderCapture: request => createProviderCapture({ ...request, observability: input.observability }) } : {}),
+    ...(input.observability
+      ? {
+          observability: input.observability,
+          createContentDigest,
+          createProviderCapture: (request) =>
+            createProviderCapture({ ...request, observability: input.observability }),
+        }
+      : {}),
     ids: {
       createModelCallId: () => `model-call:${++modelCallNumber}`,
       createToolExecutionId: () => `tool-execution:${++executionNumber}`,
@@ -275,16 +297,22 @@ export async function launchedExecution(
   fixture: ExecutionFixture,
   overrides: {
     readonly metadata?: Partial<ExecutionMetadata>;
-    readonly awaitApproval?: (request: { readonly approval: import('@megumi/agent-runtime/runs/index').ApprovalRequest }) => Promise<import('@megumi/agent-runtime/runs/index').ApprovalResolution>;
+    readonly awaitApproval?: (request: {
+      readonly approval: import('@megumi/agent-runtime/runs/index').ApprovalRequest;
+    }) => Promise<import('@megumi/agent-runtime/runs/index').ApprovalResolution>;
   } = {},
 ): Promise<PreparedRun> {
-  return prepareRun({
-    client: fixture.dependencies.models, compactionThresholdRatio: 0.8,
-    kind: 'conversation',
-    metadata: executionMetadata(overrides.metadata),
-    input: executionInput,
-    awaitApproval: overrides.awaitApproval ?? (async () => ({ status: 'cancelled' as const })),
-  }, fixture.dependencies);
+  return prepareRun(
+    {
+      client: fixture.dependencies.models,
+      compactionThresholdRatio: 0.8,
+      kind: 'conversation',
+      metadata: executionMetadata(overrides.metadata),
+      input: executionInput,
+      awaitApproval: overrides.awaitApproval ?? (async () => ({ status: 'cancelled' as const })),
+    },
+    fixture.dependencies,
+  );
 }
 
 /** All events published for one execution, in bus order. */
@@ -343,20 +371,17 @@ export function assistantStream(
   toolCall?: { readonly id: string; readonly name: string; readonly arguments: unknown },
 ): AssistantMessageEventStream {
   const stream = new AssistantMessageEventStream();
-  const toolCallBlock: Extract<AssistantMessage['content'][number], { type: 'toolCall' }> | undefined
-    = toolCall
-      ? {
-          type: 'toolCall',
-          id: toolCall.id,
-          name: toolCall.name,
-          arguments: toolCall.arguments as Record<string, unknown>,
-        }
-      : undefined;
+  const toolCallBlock:
+    Extract<AssistantMessage['content'][number], { type: 'toolCall' }> | undefined = toolCall
+    ? {
+        type: 'toolCall',
+        id: toolCall.id,
+        name: toolCall.name,
+        arguments: toolCall.arguments as Record<string, unknown>,
+      }
+    : undefined;
   const message = baseMessage({
-    content: [
-      { type: 'text', text },
-      ...(toolCallBlock ? [toolCallBlock] : []),
-    ],
+    content: [{ type: 'text', text }, ...(toolCallBlock ? [toolCallBlock] : [])],
     stopReason: toolCall ? 'toolUse' : 'stop',
   });
   pushAssistantStream(stream, message, {
@@ -454,37 +479,38 @@ function savedMessage(
     created_at: request.completed_at,
     completed_at: request.completed_at,
   };
-  const message = kind === 'model_response'
-    ? {
-        ...shared,
-        message_kind: kind,
-        content: (request as SaveModelResponseRequest).content,
-        outcome_status: (request as SaveModelResponseRequest).outcome_status,
-        ...((request as SaveModelResponseRequest).stop_reason
-          ? { stop_reason: (request as SaveModelResponseRequest).stop_reason }
-          : {}),
-      }
-    : kind === 'tool_result'
+  const message =
+    kind === 'model_response'
       ? {
           ...shared,
           message_kind: kind,
-          tool_call_id: (request as SaveToolResultMessageRequest).tool_call_id,
-          tool_name: (request as SaveToolResultMessageRequest).tool_name,
-          status: (request as SaveToolResultMessageRequest).status,
-          content: (request as SaveToolResultMessageRequest).content,
-          ...((request as SaveToolResultMessageRequest).error
-            ? { error: (request as SaveToolResultMessageRequest).error }
+          content: (request as SaveModelResponseRequest).content,
+          outcome_status: (request as SaveModelResponseRequest).outcome_status,
+          ...((request as SaveModelResponseRequest).stop_reason
+            ? { stop_reason: (request as SaveModelResponseRequest).stop_reason }
             : {}),
         }
-      : {
-          ...shared,
-          message_kind: kind,
-          status: (request as SaveAssistantReplyRequest).status,
-          content: (request as SaveAssistantReplyRequest).content,
-          ...((request as SaveAssistantReplyRequest).reason_code
-            ? { reason_code: (request as SaveAssistantReplyRequest).reason_code }
-            : {}),
-        };
+      : kind === 'tool_result'
+        ? {
+            ...shared,
+            message_kind: kind,
+            tool_call_id: (request as SaveToolResultMessageRequest).tool_call_id,
+            tool_name: (request as SaveToolResultMessageRequest).tool_name,
+            status: (request as SaveToolResultMessageRequest).status,
+            content: (request as SaveToolResultMessageRequest).content,
+            ...((request as SaveToolResultMessageRequest).error
+              ? { error: (request as SaveToolResultMessageRequest).error }
+              : {}),
+          }
+        : {
+            ...shared,
+            message_kind: kind,
+            status: (request as SaveAssistantReplyRequest).status,
+            content: (request as SaveAssistantReplyRequest).content,
+            ...((request as SaveAssistantReplyRequest).reason_code
+              ? { reason_code: (request as SaveAssistantReplyRequest).reason_code }
+              : {}),
+          };
   return {
     status: 'saved' as const,
     message,

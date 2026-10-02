@@ -26,12 +26,16 @@ export interface ExecutionEnvironment {
 
 /** Assembly-time Workspace seam: Context resolves Workspace facts itself. */
 export interface ContextWorkspaceSource {
-  readWorkspace(request: {
-    readonly workspaceId: string;
-    readonly signal?: AbortSignal;
-  }): Promise<
-    | { readonly status: 'ok'; readonly workspaceRoot: string; readonly environment: ExecutionEnvironment }
-    | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string } }
+  readWorkspace(request: { readonly workspaceId: string; readonly signal?: AbortSignal }): Promise<
+    | {
+        readonly status: 'ok';
+        readonly workspaceRoot: string;
+        readonly environment: ExecutionEnvironment;
+      }
+    | {
+        readonly status: 'failed';
+        readonly failure: { readonly code: string; readonly message: string };
+      }
     | { readonly status: 'cancelled' }
   >;
 }
@@ -75,8 +79,11 @@ export interface PreferenceLearningRunContext extends BaseRunContext {
   readonly startedAt: string;
 }
 
-export type RunContext = ConversationRunContext | RecommendationRunContext
-  | CandidateSupplyRunContext | PreferenceLearningRunContext;
+export type RunContext =
+  | ConversationRunContext
+  | RecommendationRunContext
+  | CandidateSupplyRunContext
+  | PreferenceLearningRunContext;
 
 /** Facts fixed before one model call; never persisted. */
 export interface ModelCallContext {
@@ -125,7 +132,8 @@ export interface ContextFailure {
   readonly message: string;
   readonly retryable: boolean;
   readonly cause?: {
-    readonly owner: 'session' | 'workspace' | 'instructions' | 'skills' | 'tools' | 'ai' | 'discovery';
+    readonly owner:
+      'session' | 'workspace' | 'instructions' | 'skills' | 'tools' | 'ai' | 'discovery';
     readonly code?: string;
   };
 }

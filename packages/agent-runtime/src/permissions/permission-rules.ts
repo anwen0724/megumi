@@ -33,20 +33,38 @@ export const PermissionResourceTypeSchema = z.enum([
 export type PermissionResourceType = z.infer<typeof PermissionResourceTypeSchema>;
 
 export const PERMISSION_RULE_CATALOG = [
-  { action: 'workspace.read', resource_type: 'workspace.path', operators: ['any', 'exact', 'prefix', 'glob'] },
-  { action: 'workspace.write', resource_type: 'workspace.path', operators: ['any', 'exact', 'prefix', 'glob'] },
-  { action: 'process.execute', resource_type: 'process.command', operators: ['any', 'exact', 'prefix', 'glob'] },
+  {
+    action: 'workspace.read',
+    resource_type: 'workspace.path',
+    operators: ['any', 'exact', 'prefix', 'glob'],
+  },
+  {
+    action: 'workspace.write',
+    resource_type: 'workspace.path',
+    operators: ['any', 'exact', 'prefix', 'glob'],
+  },
+  {
+    action: 'process.execute',
+    resource_type: 'process.command',
+    operators: ['any', 'exact', 'prefix', 'glob'],
+  },
   { action: 'network.search', resource_type: 'network.public_web', operators: ['any'] },
-  { action: 'network.fetch', resource_type: 'network.url', operators: ['any', 'exact', 'hostname'] },
+  {
+    action: 'network.fetch',
+    resource_type: 'network.url',
+    operators: ['any', 'exact', 'hostname'],
+  },
   { action: 'agent.context.activate', operators: [] },
   { action: 'external.invoke', resource_type: 'tool.identity', operators: ['any', 'exact'] },
 ] as const;
 
-export const StableToolIdentitySchema = z.object({
-  source_id: z.string().min(1),
-  namespace: z.string().min(1),
-  source_tool_name: z.string().min(1),
-}).strict();
+export const StableToolIdentitySchema = z
+  .object({
+    source_id: z.string().min(1),
+    namespace: z.string().min(1),
+    source_tool_name: z.string().min(1),
+  })
+  .strict();
 export type StableToolIdentity = z.infer<typeof StableToolIdentitySchema>;
 
 export const PermissionResourceMatcherSchema = z.discriminatedUnion('operator', [
@@ -54,67 +72,90 @@ export const PermissionResourceMatcherSchema = z.discriminatedUnion('operator', 
   z.object({ operator: z.literal('exact'), value: z.string().min(1) }).strict(),
   z.object({ operator: z.literal('prefix'), value: z.string().min(1) }).strict(),
   z.object({ operator: z.literal('glob'), value: z.string().min(1) }).strict(),
-  z.object({
-    operator: z.literal('hostname'),
-    value: z.string().trim().min(1).refine(isHostnamePattern, 'Invalid hostname pattern'),
-  }).strict(),
+  z
+    .object({
+      operator: z.literal('hostname'),
+      value: z.string().trim().min(1).refine(isHostnamePattern, 'Invalid hostname pattern'),
+    })
+    .strict(),
 ]);
 
-export const PermissionRuleSchema = z.object({
-  source: z.enum(['user', 'workspace', 'session']),
-  source_id: z.string().min(1).optional(),
-  target: z.discriminatedUnion('kind', [
-    z.object({
-      kind: z.literal('operation'),
-      action: PermissionActionIdSchema,
-      resource: z.object({
-        type: PermissionResourceTypeSchema,
-        matcher: PermissionResourceMatcherSchema,
-      }).strict().optional(),
-    }).strict(),
-    z.object({
-      kind: z.literal('tool'),
-      tool_identity: StableToolIdentitySchema,
-    }).strict(),
-  ]),
-  reason: z.string().min(1).optional(),
-}).strict().superRefine((rule, context) => {
-  if ((rule.source === 'workspace' || rule.source === 'session') && !rule.source_id) {
-    context.addIssue({
-      code: 'custom', path: ['source_id'], message: `${rule.source} permission rule requires source_id`,
-    });
-  }
-  if (rule.source === 'user' && rule.source_id) {
-    context.addIssue({
-      code: 'custom', path: ['source_id'], message: 'user permission rules must not define source_id',
-    });
-  }
-  if (rule.target.kind !== 'operation') return;
-  validateActionResource(rule.target.action, rule.target.resource, context, ['target', 'resource']);
-  const resource = rule.target.resource;
-  if (resource && !matcherAllowed(resource.type, resource.matcher.operator)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['target', 'resource', 'matcher', 'operator'],
-      message: `${resource.type} does not support ${resource.matcher.operator} matcher`,
-    });
-  }
-});
+export const PermissionRuleSchema = z
+  .object({
+    source: z.enum(['user', 'workspace', 'session']),
+    source_id: z.string().min(1).optional(),
+    target: z.discriminatedUnion('kind', [
+      z
+        .object({
+          kind: z.literal('operation'),
+          action: PermissionActionIdSchema,
+          resource: z
+            .object({
+              type: PermissionResourceTypeSchema,
+              matcher: PermissionResourceMatcherSchema,
+            })
+            .strict()
+            .optional(),
+        })
+        .strict(),
+      z
+        .object({
+          kind: z.literal('tool'),
+          tool_identity: StableToolIdentitySchema,
+        })
+        .strict(),
+    ]),
+    reason: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine((rule, context) => {
+    if ((rule.source === 'workspace' || rule.source === 'session') && !rule.source_id) {
+      context.addIssue({
+        code: 'custom',
+        path: ['source_id'],
+        message: `${rule.source} permission rule requires source_id`,
+      });
+    }
+    if (rule.source === 'user' && rule.source_id) {
+      context.addIssue({
+        code: 'custom',
+        path: ['source_id'],
+        message: 'user permission rules must not define source_id',
+      });
+    }
+    if (rule.target.kind !== 'operation') return;
+    validateActionResource(rule.target.action, rule.target.resource, context, [
+      'target',
+      'resource',
+    ]);
+    const resource = rule.target.resource;
+    if (resource && !matcherAllowed(resource.type, resource.matcher.operator)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['target', 'resource', 'matcher', 'operator'],
+        message: `${resource.type} does not support ${resource.matcher.operator} matcher`,
+      });
+    }
+  });
 export type PermissionRule = z.infer<typeof PermissionRuleSchema>;
 
-export const PermissionSettingsSchema = z.object({
-  mode: PermissionModeSchema,
-  allow: z.array(PermissionRuleSchema),
-  ask: z.array(PermissionRuleSchema),
-  deny: z.array(PermissionRuleSchema),
-}).strict();
+export const PermissionSettingsSchema = z
+  .object({
+    mode: PermissionModeSchema,
+    allow: z.array(PermissionRuleSchema),
+    ask: z.array(PermissionRuleSchema),
+    deny: z.array(PermissionRuleSchema),
+  })
+  .strict();
 export type PermissionSettings = z.infer<typeof PermissionSettingsSchema>;
 
-export const PermissionFailureSchema = z.object({
-  code: z.string().min(1),
-  message: z.string().min(1),
-  details: z.record(z.string(), JsonValueSchema).optional(),
-}).strict();
+export const PermissionFailureSchema = z
+  .object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    details: z.record(z.string(), JsonValueSchema).optional(),
+  })
+  .strict();
 export type PermissionFailure = z.infer<typeof PermissionFailureSchema>;
 
 export type ResolvePermissionRulesResult =
@@ -129,8 +170,7 @@ export interface PermissionRuleReader {
 }
 
 export type AddPermissionRulesResult =
-  | { readonly status: 'saved' }
-  | { readonly status: 'failed'; readonly failure: PermissionFailure };
+  { readonly status: 'saved' } | { readonly status: 'failed'; readonly failure: PermissionFailure };
 
 export interface PermissionRuleWriter {
   recordSessionPermissionGrant(request: {
@@ -163,9 +203,11 @@ export function matchesPermissionRule(
 ): boolean {
   if (rule.target.kind === 'tool') {
     if (rule.source === 'session') return false;
-    return rule.target.tool_identity.source_id === operation.context.toolIdentity.sourceId
-      && rule.target.tool_identity.namespace === operation.context.toolIdentity.namespace
-      && rule.target.tool_identity.source_tool_name === operation.context.toolIdentity.sourceToolName;
+    return (
+      rule.target.tool_identity.source_id === operation.context.toolIdentity.sourceId &&
+      rule.target.tool_identity.namespace === operation.context.toolIdentity.namespace &&
+      rule.target.tool_identity.source_tool_name === operation.context.toolIdentity.sourceToolName
+    );
   }
   if (rule.target.action !== operation.action) return false;
   if (!rule.target.resource) return true;
@@ -175,17 +217,22 @@ export function matchesPermissionRule(
   const id = operation.resource.id;
   if (!id) return false;
   if (matcher.operator === 'exact') {
-    return normalizeForResource(id, operation.resource.type)
-      === normalizeForResource(matcher.value, operation.resource.type);
+    return (
+      normalizeForResource(id, operation.resource.type) ===
+      normalizeForResource(matcher.value, operation.resource.type)
+    );
   }
-  if (matcher.operator === 'prefix') return prefixMatches(id, matcher.value, operation.resource.type);
+  if (matcher.operator === 'prefix')
+    return prefixMatches(id, matcher.value, operation.resource.type);
   if (matcher.operator === 'glob') {
-    return globToRegExp(normalizeForResource(matcher.value, operation.resource.type))
-      .test(normalizeForResource(id, operation.resource.type));
+    return globToRegExp(normalizeForResource(matcher.value, operation.resource.type)).test(
+      normalizeForResource(id, operation.resource.type),
+    );
   }
-  const hostname = typeof operation.resource.attributes?.hostname === 'string'
-    ? operation.resource.attributes.hostname.toLowerCase().replace(/\.$/, '')
-    : safeHostname(id);
+  const hostname =
+    typeof operation.resource.attributes?.hostname === 'string'
+      ? operation.resource.attributes.hostname.toLowerCase().replace(/\.$/, '')
+      : safeHostname(id);
   const pattern = matcher.value.toLowerCase().replace(/\.$/, '');
   if (pattern === '*') return Boolean(hostname);
   if (pattern.startsWith('*.')) {
@@ -211,7 +258,11 @@ function validateActionResource(
     'external.invoke': 'tool.identity',
   };
   if (resource && resource.type !== expected[action]) {
-    context.addIssue({ code: 'custom', path, message: `${action} only supports ${expected[action] ?? 'no resource'}` });
+    context.addIssue({
+      code: 'custom',
+      path,
+      message: `${action} only supports ${expected[action] ?? 'no resource'}`,
+    });
   }
 }
 
@@ -232,17 +283,19 @@ function matcherAllowed(
 function isHostnamePattern(value: string): boolean {
   if (value === '*') return true;
   const hostname = value.startsWith('*.') ? value.slice(2) : value;
-  return hostname.length > 0
-    && !hostname.includes('/')
-    && !hostname.includes(':')
-    && !hostname.includes('*')
-    && /^[a-z0-9.-]+$/i.test(hostname);
+  return (
+    hostname.length > 0 &&
+    !hostname.includes('/') &&
+    !hostname.includes(':') &&
+    !hostname.includes('*') &&
+    /^[a-z0-9.-]+$/i.test(hostname)
+  );
 }
 
 function normalizeForResource(value: string, resourceType: PermissionResourceType): string {
   const normalized = value.replace(/\\/g, '/').trim();
-  return resourceType === 'workspace.path'
-    && (/^[a-z]:\//i.test(normalized) || normalized.startsWith('//'))
+  return resourceType === 'workspace.path' &&
+    (/^[a-z]:\//i.test(normalized) || normalized.startsWith('//'))
     ? normalized.toLowerCase()
     : normalized;
 }
@@ -253,19 +306,24 @@ function prefixMatches(id: string, value: string, resourceType: PermissionResour
   if (candidate === prefix) return true;
   if (resourceType === 'workspace.path') return candidate.startsWith(`${prefix}/`);
   if (resourceType === 'process.command') {
-    return candidate.startsWith(prefix) && /^\s/.test(candidate.slice(prefix.length, prefix.length + 1));
+    return (
+      candidate.startsWith(prefix) && /^\s/.test(candidate.slice(prefix.length, prefix.length + 1))
+    );
   }
   return candidate.startsWith(prefix);
 }
 
 function globToRegExp(pattern: string): RegExp {
-  const source = pattern.split('').map((character, index) => {
-    if (character === '*' && pattern[index + 1] === '*') {
-      return index > 0 && pattern[index - 1] === '*' ? '' : '.*';
-    }
-    if (character === '*') return '[^/]*';
-    return character.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
-  }).join('');
+  const source = pattern
+    .split('')
+    .map((character, index) => {
+      if (character === '*' && pattern[index + 1] === '*') {
+        return index > 0 && pattern[index - 1] === '*' ? '' : '.*';
+      }
+      if (character === '*') return '[^/]*';
+      return character.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+    })
+    .join('');
   return new RegExp(`^${source}$`);
 }
 
@@ -279,9 +337,19 @@ function safeHostname(value: string): string | undefined {
 
 export interface PermissionSettingsAccess {
   readSettings():
-    | { status: 'ok'; settings: { config: { permissions: PermissionSettings }; revision: string; sources: readonly { path: readonly string[]; source: string }[] } }
+    | {
+        status: 'ok';
+        settings: {
+          config: { permissions: PermissionSettings };
+          revision: string;
+          sources: readonly { path: readonly string[]; source: string }[];
+        };
+      }
     | { status: 'rejected'; error: { code: string; message: string } };
-  updateSettings(request: { patch: { permissions: { allow: PermissionRule[] } }; expectedRevision: string }):
+  updateSettings(request: {
+    patch: { permissions: { allow: PermissionRule[] } };
+    expectedRevision: string;
+  }):
     | { status: 'updated' | 'unchanged' }
     | { status: 'rejected'; error: { code: string; message: string } };
 }
@@ -294,12 +362,19 @@ export function resolveConfiguredPermissionRules(
   const result = settings.readSettings();
   if (result.status === 'rejected') return { status: 'failed', failure: result.error };
   const config = result.settings.config.permissions;
-  const applies = (rule: PermissionRule) => rule.source === 'user'
-    || (rule.source === 'workspace' && rule.source_id === request.workspaceId)
-    || (rule.source === 'session' && rule.source_id === request.sessionId);
-  return { status: 'resolved', permissionSettings: {
-    mode: config.mode, allow: config.allow.filter(applies), ask: config.ask.filter(applies), deny: config.deny.filter(applies),
-  } };
+  const applies = (rule: PermissionRule) =>
+    rule.source === 'user' ||
+    (rule.source === 'workspace' && rule.source_id === request.workspaceId) ||
+    (rule.source === 'session' && rule.source_id === request.sessionId);
+  return {
+    status: 'resolved',
+    permissionSettings: {
+      mode: config.mode,
+      allow: config.allow.filter(applies),
+      ask: config.ask.filter(applies),
+      deny: config.deny.filter(applies),
+    },
+  };
 }
 
 /** Saves session grants in the file supplying the effective allow array. */
@@ -310,17 +385,33 @@ export function recordConfiguredSessionGrant(
 ): AddPermissionRulesResult {
   const current = settings.readSettings();
   if (current.status === 'rejected') return { status: 'failed', failure: current.error };
-  if (request.rules.some((rule) => rule.source !== 'session' || rule.source_id !== request.sessionId)) {
-    return { status: 'failed', failure: { code: 'permission_rule_invalid', message: 'Session grants must belong to the current session.' } };
+  if (
+    request.rules.some((rule) => rule.source !== 'session' || rule.source_id !== request.sessionId)
+  ) {
+    return {
+      status: 'failed',
+      failure: {
+        code: 'permission_rule_invalid',
+        message: 'Session grants must belong to the current session.',
+      },
+    };
   }
-  const source = current.settings.sources.find((item) => item.path.join('.') === 'permissions.allow');
+  const source = current.settings.sources.find(
+    (item) => item.path.join('.') === 'permissions.allow',
+  );
   const target = source?.source === 'project' ? settings : globalSettings;
   const snapshot = target === settings ? current : target.readSettings();
   if (snapshot.status === 'rejected') return { status: 'failed', failure: snapshot.error };
   const allow = [...snapshot.settings.config.permissions.allow];
   for (const rule of request.rules) {
-    if (!allow.some((existing) => JSON.stringify(existing) === JSON.stringify(rule))) allow.push(rule);
+    if (!allow.some((existing) => JSON.stringify(existing) === JSON.stringify(rule)))
+      allow.push(rule);
   }
-  const saved = target.updateSettings({ patch: { permissions: { allow } }, expectedRevision: snapshot.settings.revision });
-  return saved.status === 'rejected' ? { status: 'failed', failure: saved.error } : { status: 'saved' };
+  const saved = target.updateSettings({
+    patch: { permissions: { allow } },
+    expectedRevision: snapshot.settings.revision,
+  });
+  return saved.status === 'rejected'
+    ? { status: 'failed', failure: saved.error }
+    : { status: 'saved' };
 }

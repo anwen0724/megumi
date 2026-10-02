@@ -4,12 +4,24 @@ import { registerToolsHandlers } from './handlers/tools.handler';
  * Registers Desktop Main IPC channels with host-interface controllers and shell adapters.
  */
 import { registerWindowHandlers } from './handlers/window.handler';
-import { registerWorkspaceHandlers, type WorkspaceHandlersService } from './handlers/workspace.handler';
+import {
+  registerWorkspaceHandlers,
+  type WorkspaceHandlersService,
+} from './handlers/workspace.handler';
 import { registerSessionHandlers, type SessionHandlersService } from './handlers/session.handler';
 import { registerSkillHandlers, type SkillHandlersService } from './handlers/skill.handler';
-import { registerSettingsHandlers, type SettingsHandlersService } from './handlers/settings.handler';
-import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
-import { registerDiscoveryHandlers, type DiscoveryHandlersService } from './handlers/discovery.handler';
+import {
+  registerSettingsHandlers,
+  type SettingsHandlersService,
+} from './handlers/settings.handler';
+import {
+  registerApprovalHandlers,
+  type ApprovalHandlersService,
+} from './handlers/approval.handler';
+import {
+  registerDiscoveryHandlers,
+  type DiscoveryHandlersService,
+} from './handlers/discovery.handler';
 import type { DesktopRuntimeLogger as ApplicationLogger } from '../runtime-logger';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
 import { registerVoiceHandlers, type VoiceHandlersService } from './handlers/voice.handler';
@@ -19,11 +31,12 @@ import { registerVoiceInputHandler } from './handlers/voice-input.handler';
 import type { ElectronVoiceInputAdapter } from '../adapters/voice-input/electron-voice-input-adapter';
 import { electronIpcMain, type DesktopIpcMain } from '../adapters/electron-ipc-main-adapter';
 import type { SessionMessagePresentationEvent } from './session-message-presentation';
-import {
-  registerApplicationUpdateHandlers,
-} from './handlers/application-update.handler';
+import { registerApplicationUpdateHandlers } from './handlers/application-update.handler';
 import type { ApplicationUpdateController } from '../application-update/application-update-controller';
-import { registerSettingsRecoveryHandlers, type SettingsRecoveryService } from './handlers/settings-recovery.handler';
+import {
+  registerSettingsRecoveryHandlers,
+  type SettingsRecoveryService,
+} from './handlers/settings-recovery.handler';
 
 export interface RegisterAllHandlersOptions {
   logger?: ApplicationLogger;
@@ -32,11 +45,15 @@ export interface RegisterAllHandlersOptions {
   session?: SessionHandlersService;
   publishSessionMessageEvent?(event: SessionMessagePresentationEvent): void;
   skill?: SkillHandlersService;
-  settings?: SettingsHandlersService & { host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'models' | 'tools'> };
+  settings?: SettingsHandlersService & {
+    host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'models' | 'tools'>;
+  };
   settingsRecovery?: SettingsRecoveryService;
   approval?: ApprovalHandlersService;
   discovery?: DiscoveryHandlersService;
-  observability?: { host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'observability'> };
+  observability?: {
+    host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'observability'>;
+  };
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
   voiceInput?: { adapter: ElectronVoiceInputAdapter };
@@ -47,7 +64,8 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
   registerWindowHandlers({ ipcMain });
-  if (options.settingsRecovery) registerSettingsRecoveryHandlers(options.settingsRecovery, { ipcMain });
+  if (options.settingsRecovery)
+    registerSettingsRecoveryHandlers(options.settingsRecovery, { ipcMain });
 
   if (options.applicationUpdate) {
     registerApplicationUpdateHandlers({ controller: options.applicationUpdate, ipcMain });
@@ -98,5 +116,4 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
   if (options.voiceInput) {
     registerVoiceInputHandler({ adapter: options.voiceInput.adapter }, { ipcMain });
   }
-
 }

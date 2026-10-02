@@ -7,19 +7,34 @@ import { api } from '@megumi/desktop/preload/api';
 
 const electron = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events');
-  return { ipcRenderer: Object.assign(new EventEmitter(), { invoke: vi.fn(), postMessage: vi.fn() }) };
+  return {
+    ipcRenderer: Object.assign(new EventEmitter(), { invoke: vi.fn(), postMessage: vi.fn() }),
+  };
 });
 vi.mock('electron', () => electron);
-beforeEach(() => { vi.clearAllMocks(); });
-afterEach(() => { electron.ipcRenderer.removeAllListeners(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+afterEach(() => {
+  electron.ipcRenderer.removeAllListeners();
+});
 
-const snapshot = { status: 'idle', currentVersion: '0.2.2', platform: 'win32', arch: 'x64', automaticChecksEnabled: false };
+const snapshot = {
+  status: 'idle',
+  currentVersion: '0.2.2',
+  platform: 'win32',
+  arch: 'x64',
+  automaticChecksEnabled: false,
+};
 
 describe('Desktop Preload transport', () => {
   it('returns a stable failure with the request identity when the main process is unreachable', async () => {
     electron.ipcRenderer.invoke.mockRejectedValueOnce(new Error('Transport closed'));
-    expect(await api.tools.list()).toMatchObject({ ok: false,
-      data: { code: 'ipc_invoke_failed' }, meta: { requestId: expect.any(String), channel: IPC_CHANNELS.tools.list } });
+    expect(await api.tools.list()).toMatchObject({
+      ok: false,
+      data: { code: 'ipc_invoke_failed' },
+      meta: { requestId: expect.any(String), channel: IPC_CHANNELS.tools.list },
+    });
   });
 
   it('rejects malformed update snapshots and stops delivery after unsubscribe', async () => {
@@ -28,11 +43,19 @@ describe('Desktop Preload transport', () => {
     electron.ipcRenderer.invoke.mockResolvedValueOnce(snapshot);
     expect(await api.applicationUpdate.getSnapshot()).toEqual(snapshot);
     const received: unknown[] = [];
-    const unsubscribe = api.applicationUpdate.onSnapshot(value => received.push(value));
-    electron.ipcRenderer.emit(IPC_CHANNELS.applicationUpdate.snapshotChanged, {}, { ...snapshot, assetPath: 'private' });
+    const unsubscribe = api.applicationUpdate.onSnapshot((value) => received.push(value));
+    electron.ipcRenderer.emit(
+      IPC_CHANNELS.applicationUpdate.snapshotChanged,
+      {},
+      { ...snapshot, assetPath: 'private' },
+    );
     electron.ipcRenderer.emit(IPC_CHANNELS.applicationUpdate.snapshotChanged, {}, snapshot);
     unsubscribe();
-    electron.ipcRenderer.emit(IPC_CHANNELS.applicationUpdate.snapshotChanged, {}, { ...snapshot, status: 'checking' });
+    electron.ipcRenderer.emit(
+      IPC_CHANNELS.applicationUpdate.snapshotChanged,
+      {},
+      { ...snapshot, status: 'checking' },
+    );
     expect(received).toEqual([snapshot]);
   });
 
@@ -55,6 +78,9 @@ describe('Desktop Preload transport', () => {
       expect(payload).toBeNull();
       expect(transferred).toHaveLength(1);
       expect(transferred[0]).toBe(port1);
-    } finally { port1.close(); port2.close(); }
+    } finally {
+      port1.close();
+      port2.close();
+    }
   });
 });

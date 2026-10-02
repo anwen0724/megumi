@@ -35,17 +35,12 @@ import {
   type ProductCapabilities,
   type ProductCapabilitiesOptions,
 } from './application-capabilities';
-import {
-  PRODUCT_SHUTDOWN_TIMEOUT_MS,
-} from './application-policy';
+import { PRODUCT_SHUTDOWN_TIMEOUT_MS } from './application-policy';
 import {
   createApplicationResourceManager,
   type ApplicationResourceManager,
 } from './application-resource-manager';
-import {
-  bindApplicationLifecycle,
-  type Application,
-} from './application';
+import { bindApplicationLifecycle, type Application } from './application';
 
 export interface ApplicationVoiceOptions {
   /** A host injects the single Voice Input Adapter that owns its speech resource. */
@@ -67,8 +62,12 @@ interface ApplicationPlatformOptions {
 export type CreateApplicationOptions = ProductCapabilitiesOptions & ApplicationPlatformOptions;
 export type ProductCapabilitiesInput = ProductCapabilitiesOptions;
 export type ProductInputSourceAccess = NonNullable<ProductCapabilitiesOptions['inputSourceAccess']>;
-export type ProductSessionAttachmentFileSystem = NonNullable<ProductCapabilitiesOptions['sessionAttachmentFileSystem']>;
-export type ProductObservabilityStorage = NonNullable<ProductCapabilitiesOptions['observabilityStorage']>;
+export type ProductSessionAttachmentFileSystem = NonNullable<
+  ProductCapabilitiesOptions['sessionAttachmentFileSystem']
+>;
+export type ProductObservabilityStorage = NonNullable<
+  ProductCapabilitiesOptions['observabilityStorage']
+>;
 export type ProductEnvironment = NonNullable<ProductCapabilitiesOptions['productEnvironment']>;
 export type ProductSettingsEnvironment = NonNullable<ProductCapabilitiesOptions['readEnvironment']>;
 
@@ -144,11 +143,16 @@ function createApplicationRuntime(
       deriveUsage: (historyItems, model) => deriveContextUsage({ history: historyItems, model }),
     },
     resolveModel: async (selection, workspaceId) => {
-      const resolved = await runtime.prepareModel({ workspaceId, selection: { providerId: selection.provider_id, modelId: selection.model_id } });
+      const resolved = await runtime.prepareModel({
+        workspaceId,
+        selection: { providerId: selection.provider_id, modelId: selection.model_id },
+      });
       return resolved.status === 'ok' ? resolved.model : undefined;
     },
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
-    ...(options.localFileAvailability ? { localFileAvailability: options.localFileAvailability } : {}),
+    ...(options.localFileAvailability
+      ? { localFileAvailability: options.localFileAvailability }
+      : {}),
   });
   const voice = createVoice({
     speechInput: options.voice?.speechInput ?? unavailableSpeechInput,
@@ -165,7 +169,9 @@ function createApplicationRuntime(
       try {
         const result = onRunEndedForSpeechOutput(
           {
-            settings: capabilities.settingsForWorkspace(sessionStore.findSessionById(event.sessionId)?.workspace_id),
+            settings: capabilities.settingsForWorkspace(
+              sessionStore.findSessionById(event.sessionId)?.workspace_id,
+            ),
             findAssistantReplyBySessionIdAndExecutionId: (request) =>
               sessionStore.findAssistantReplyBySessionIdAndExecutionId(request),
             speechOutput,
@@ -279,25 +285,32 @@ function createApplicationRuntime(
       flush: observability.flush,
       ...(options.diagnosticBundleSave ? { save: options.diagnosticBundleSave } : {}),
     }),
-    voice: createVoiceOperations({ voice, speechOutput, settings: (sessionId) => capabilities.settingsForWorkspace(sessionStore.findSessionById(sessionId)?.workspace_id) }),
+    voice: createVoiceOperations({
+      voice,
+      speechOutput,
+      settings: (sessionId) =>
+        capabilities.settingsForWorkspace(sessionStore.findSessionById(sessionId)?.workspace_id),
+    }),
   };
 
   return bindApplicationLifecycle({
     operations,
     logger,
-    start: ({ backgroundTriggers }) => discovery.startBackground({
-      automaticTriggers: backgroundTriggers === 'automatic',
-    }),
+    start: ({ backgroundTriggers }) =>
+      discovery.startBackground({
+        automaticTriggers: backgroundTriggers === 'automatic',
+      }),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
     stop: () => resources.stop({ discovery, runtime }),
-    dispose: () => resources.dispose({
-      discovery,
-      runtime,
-      voice,
-      speechOutput,
-      observability,
-    }),
+    dispose: () =>
+      resources.dispose({
+        discovery,
+        runtime,
+        voice,
+        speechOutput,
+        observability,
+      }),
   });
 }
 
@@ -306,7 +319,10 @@ const unavailableSpeechInput: SpeechInputRuntime = {
   async start() {
     return {
       status: 'failed',
-      failure: { code: 'voice_speech_input_unavailable', message: 'Speech input is not configured.' },
+      failure: {
+        code: 'voice_speech_input_unavailable',
+        message: 'Speech input is not configured.',
+      },
     };
   },
   acceptFrame() {},
@@ -314,7 +330,9 @@ const unavailableSpeechInput: SpeechInputRuntime = {
   startManualUtterance() {},
   finishManualUtterance() {},
   async stop() {},
-  subscribe() { return () => {}; },
+  subscribe() {
+    return () => {};
+  },
 };
 
 /** Hosts that do not inject a Speech Synthesizer still expose an honest failure. */

@@ -133,9 +133,7 @@ export const IPC_CHANNELS = {
 } as const;
 
 type ValueOf<T> = T[keyof T];
-type NestedValueOf<T> = T extends string
-  ? T
-  : ValueOf<{ [K in keyof T]: NestedValueOf<T[K]> }>;
+type NestedValueOf<T> = T extends string ? T : ValueOf<{ [K in keyof T]: NestedValueOf<T[K]> }>;
 
 export type IpcChannel = NestedValueOf<typeof IPC_CHANNELS>;
 

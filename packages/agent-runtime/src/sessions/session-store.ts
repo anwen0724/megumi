@@ -44,7 +44,10 @@ export interface SessionStore {
     message_id: string;
   }): SessionEntry | undefined;
   listEntriesBySessionId(sessionId: string): SessionEntry[];
-  updateEntryParent(input: { entry_id: string; parent_entry_id?: string }): SessionEntry | undefined;
+  updateEntryParent(input: {
+    entry_id: string;
+    parent_entry_id?: string;
+  }): SessionEntry | undefined;
 
   insertCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord;
   updateCompaction(compaction: SessionCompactionRecord): SessionCompactionRecord | undefined;

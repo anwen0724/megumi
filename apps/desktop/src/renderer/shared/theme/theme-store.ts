@@ -18,7 +18,8 @@ export const useThemeStore = create<ThemeState>((set) => ({
     const baseline = await window.megumi.settings.readSettings();
     if (!baseline.ok) return;
     const result = await window.megumi.settings.updateSettings({
-      patch: { general: { theme } }, expectedRevision: baseline.data.revision,
+      patch: { general: { theme } },
+      expectedRevision: baseline.data.revision,
     });
     if (result.ok) set({ theme: result.data.settings.config.general.theme });
   },

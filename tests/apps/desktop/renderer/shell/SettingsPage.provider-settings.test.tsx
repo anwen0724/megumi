@@ -1,5 +1,4 @@
-import { createSettingsFixture } from '../settings-test-fixture';
-﻿// @vitest-environment jsdom
+import { createSettingsFixture } from '../settings-test-fixture'; // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,9 +13,16 @@ describe('SettingsPage provider settings', () => {
         voice: {
           getModelStatus: vi.fn().mockResolvedValue({
             ok: true,
-            data: { status: 'not_prepared', bundleVersion: 'voice-v1', downloadedBytes: 0, totalBytes: 1 },
+            data: {
+              status: 'not_prepared',
+              bundleVersion: 'voice-v1',
+              downloadedBytes: 0,
+              totalBytes: 1,
+            },
           }),
-          checkModelUpdates: vi.fn().mockResolvedValue({ ok: true, data: { status: 'unavailable' } }),
+          checkModelUpdates: vi
+            .fn()
+            .mockResolvedValue({ ok: true, data: { status: 'unavailable' } }),
           prepareModels: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
           cancelModelPreparation: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
         },
@@ -32,7 +38,15 @@ describe('SettingsPage provider settings', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
-          modelSettings: { 'deepseek-v4-flash': { displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
+          modelSettings: {
+            'deepseek-v4-flash': {
+              displayName: 'DeepSeek V4 Flash',
+              contextWindowTokens: 1000000,
+              maxOutputTokens: 8192,
+              capabilities: { imageInput: true },
+              capabilityOverrides: {},
+            },
+          },
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,

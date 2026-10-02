@@ -20,10 +20,7 @@ import {
   createVoiceInputController,
   type VoiceInputSnapshot,
 } from '../voice-input/voice-input-controller';
-import {
-  createMicrophoneCapture,
-  type MicrophoneCapture,
-} from '../voice-input/microphone-capture';
+import { createMicrophoneCapture, type MicrophoneCapture } from '../voice-input/microphone-capture';
 import {
   openVoiceInputFrameSender,
   type VoiceInputFrameSender,
@@ -59,18 +56,24 @@ export function useCharacterVoice(
   // The capture factory is pinned once per mount; recreating the controller
   // on every render would tear down and reopen the microphone lifecycle.
   const createCaptureRef = useRef(options.createCapture);
-  const audio = useMemo(() => createVoiceInputController({
-    capture: createCaptureRef.current ? createCaptureRef.current() : createMicrophoneCapture(),
-    sendFrame: (frame) => frameSenderRef.current?.sendFrame(frame),
-    subscribeEvents: (listener) => window.megumi.voiceInput.onEvent(listener),
-    onTranscript: (transcript) => {
-      cancelAutoSubmit();
-      setDraftState(transcript.text);
-      autoSubmitTimer.current = setTimeout(() => { void submitRef.current(transcript.text); }, 3_000);
-    },
-    // The frame sender is replaced per capture run; see start below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), []);
+  const audio = useMemo(
+    () =>
+      createVoiceInputController({
+        capture: createCaptureRef.current ? createCaptureRef.current() : createMicrophoneCapture(),
+        sendFrame: (frame) => frameSenderRef.current?.sendFrame(frame),
+        subscribeEvents: (listener) => window.megumi.voiceInput.onEvent(listener),
+        onTranscript: (transcript) => {
+          cancelAutoSubmit();
+          setDraftState(transcript.text);
+          autoSubmitTimer.current = setTimeout(() => {
+            void submitRef.current(transcript.text);
+          }, 3_000);
+        },
+        // The frame sender is replaced per capture run; see start below.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }),
+    [],
+  );
 
   const refreshVoiceSnapshot = useCallback(async () => {
     const result = await window.megumi.voice.getSnapshot(
@@ -117,52 +120,60 @@ export function useCharacterVoice(
     };
   }, [audio, refreshVoiceSnapshot, stopInput, releaseFrameSender]);
 
-  const sendNormalText = useCallback(async (text: string) => {
-    const normalized = text.trim();
-    if (!normalized || !selectedSessionId) return;
-    cancelAutoSubmit();
-    const sessions = await window.megumi.session.list(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionList, {}),
-    );
-    if (!sessions.ok || sessions.data.status !== 'ok') {
-      setError(t('errors.readSession'));
-      return;
-    }
-    const session = sessions.data.sessions.find((candidate) => candidate.id === selectedSessionId);
-    if (!session) {
-      setError(t('errors.missingSession'));
-      return;
-    }
-    const result = await window.megumi.session.message.send(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionMessageSend, {
-        sessionId: selectedSessionId,
-        projectId: session.projectId,
-        text: normalized,
-        clientMessageId: createVoiceClientMessageId(),
-        createdAt: new Date().toISOString(),
-      }),
-    );
-    if (!result.ok) {
-      setError(result.data.message);
-      return;
-    }
-    if (result.data.type === 'error') {
-      setError(result.data.message);
-      return;
-    }
-    setDraftState('');
-    setError(null);
-  }, [selectedSessionId, t]);
+  const sendNormalText = useCallback(
+    async (text: string) => {
+      const normalized = text.trim();
+      if (!normalized || !selectedSessionId) return;
+      cancelAutoSubmit();
+      const sessions = await window.megumi.session.list(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionList, {}),
+      );
+      if (!sessions.ok || sessions.data.status !== 'ok') {
+        setError(t('errors.readSession'));
+        return;
+      }
+      const session = sessions.data.sessions.find(
+        (candidate) => candidate.id === selectedSessionId,
+      );
+      if (!session) {
+        setError(t('errors.missingSession'));
+        return;
+      }
+      const result = await window.megumi.session.message.send(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionMessageSend, {
+          sessionId: selectedSessionId,
+          projectId: session.projectId,
+          text: normalized,
+          clientMessageId: createVoiceClientMessageId(),
+          createdAt: new Date().toISOString(),
+        }),
+      );
+      if (!result.ok) {
+        setError(result.data.message);
+        return;
+      }
+      if (result.data.type === 'error') {
+        setError(result.data.message);
+        return;
+      }
+      setDraftState('');
+      setError(null);
+    },
+    [selectedSessionId, t],
+  );
 
-  const submitText = useCallback(async (text: string) => {
-    const normalized = text.trim();
-    if (!normalized) return;
-    if (findActiveExecutionId(selectedSessionId)) {
-      setError(t('errors.runActive'));
-      return;
-    }
-    await sendNormalText(normalized);
-  }, [selectedSessionId, sendNormalText, t]);
+  const submitText = useCallback(
+    async (text: string) => {
+      const normalized = text.trim();
+      if (!normalized) return;
+      if (findActiveExecutionId(selectedSessionId)) {
+        setError(t('errors.runActive'));
+        return;
+      }
+      await sendNormalText(normalized);
+    },
+    [selectedSessionId, sendNormalText, t],
+  );
   submitRef.current = submitText;
 
   const start = useCallback(async () => {
@@ -197,9 +208,11 @@ export function useCharacterVoice(
       );
       if (generation !== startGeneration.current) return;
       if (!result.ok || result.data.status !== 'ok') {
-        setError(result.ok && result.data.status === 'failed'
-          ? t('errors.voicePreparationFailed')
-          : t('errors.startSession'));
+        setError(
+          result.ok && result.data.status === 'failed'
+            ? t('errors.voicePreparationFailed')
+            : t('errors.startSession'),
+        );
         return;
       }
       const runtimeGeneration = result.data.generation;
@@ -214,11 +227,8 @@ export function useCharacterVoice(
         // A MessagePort is not a supported contextBridge argument. Transfer it
         // to the isolated Preload world through the DOM, where Preload forwards
         // the same port to Electron Main.
-        postFramePort: (port) => window.postMessage(
-          { type: IPC_CHANNELS.voice.inputPort },
-          '*',
-          [port],
-        ),
+        postFramePort: (port) =>
+          window.postMessage({ type: IPC_CHANNELS.voice.inputPort }, '*', [port]),
       });
       // Only after the Voice Session (and the Speech Worker) is running does
       // the microphone open; frames are tagged with the worker's generation.
@@ -257,15 +267,18 @@ export function useCharacterVoice(
     await refreshVoiceSnapshot();
   }, [refreshVoiceSnapshot, stopInput]);
 
-  const setMuted = useCallback(async (muted: boolean) => {
-    const result = await window.megumi.voice.setMuted(
-      createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionMute, { muted }),
-    );
-    if (!result.ok || result.data.status !== 'ok') return;
-    // The stream stays open; the Feature stops forwarding frames while muted.
-    audio.setMuted(muted);
-    await refreshVoiceSnapshot();
-  }, [audio, refreshVoiceSnapshot]);
+  const setMuted = useCallback(
+    async (muted: boolean) => {
+      const result = await window.megumi.voice.setMuted(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.voice.sessionMute, { muted }),
+      );
+      if (!result.ok || result.data.status !== 'ok') return;
+      // The stream stays open; the Feature stops forwarding frames while muted.
+      audio.setMuted(muted);
+      await refreshVoiceSnapshot();
+    },
+    [audio, refreshVoiceSnapshot],
+  );
 
   const beginManual = useCallback(async () => {
     await window.megumi.voice.startManualUtterance(
@@ -297,7 +310,10 @@ export function useCharacterVoice(
     submitText,
     beginManual,
     finishManual,
-    discardDraft: () => { cancelAutoSubmit(); setDraftState(''); },
+    discardDraft: () => {
+      cancelAutoSubmit();
+      setDraftState('');
+    },
   };
 }
 
@@ -313,8 +329,10 @@ function createVoiceClientMessageId(): string {
 function findActiveExecutionId(sessionId: string | null): string | undefined {
   if (!sessionId) return undefined;
   return Object.values(useRunStore.getState().runs)
-    .filter((run) => run.sessionId === sessionId && (
-      run.status === 'running' || run.status === 'waiting' || run.status === 'cancelling'
-    ))
+    .filter(
+      (run) =>
+        run.sessionId === sessionId &&
+        (run.status === 'running' || run.status === 'waiting' || run.status === 'cancelling'),
+    )
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.executionId;
 }

@@ -122,9 +122,9 @@ export function createContextAdapter(
         tools: [],
         released: false,
       };
-      scope.tools = resolution.binding.definitions.map((definition) => (
-        dependencies.createAgentTool(definition, scope)
-      ));
+      scope.tools = resolution.binding.definitions.map((definition) =>
+        dependencies.createAgentTool(definition, scope),
+      );
       runtime.activeScope = scope;
       const result = await build(scope, context.messages, signal);
       if (result.status !== 'ready') releaseActiveScope(dependencies, runtime);
@@ -161,7 +161,10 @@ export function createContextAdapter(
         trigger: 'overflow',
         signal,
       });
-      if (signal.aborted || (compacted.status === 'failed' && compacted.failure.code === 'cancelled')) {
+      if (
+        signal.aborted ||
+        (compacted.status === 'failed' && compacted.failure.code === 'cancelled')
+      ) {
         return { status: 'cancelled' };
       }
       if (compacted.status !== 'compacted') {
@@ -195,8 +198,8 @@ function conversationRunContext(dependencies: ContextAdapterDependencies): RunCo
     workspaceId: dependencies.metadata.workspaceId,
     userInput: dependencies.userInput,
     model: dependencies.metadata.model,
-        client: dependencies.client,
-        compactionThresholdRatio: dependencies.compactionThresholdRatio,
+    client: dependencies.client,
+    compactionThresholdRatio: dependencies.compactionThresholdRatio,
   };
 }
 

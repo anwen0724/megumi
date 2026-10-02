@@ -7,9 +7,17 @@ import { IPC_CHANNELS } from '../ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../ipc';
 import { cx } from '../ui';
 import { applyRendererLanguage, getRendererLanguage } from './locale';
-import { localizeRendererError, rendererError, type RendererErrorDescriptor } from './error-localization';
+import {
+  localizeRendererError,
+  rendererError,
+  type RendererErrorDescriptor,
+} from './error-localization';
 
-const languageOptions: Array<{ id: AppLanguage; labelKey: 'language.chinese' | 'language.english'; detailKey: 'language.chineseDetail' | 'language.englishDetail' }> = [
+const languageOptions: Array<{
+  id: AppLanguage;
+  labelKey: 'language.chinese' | 'language.english';
+  detailKey: 'language.chineseDetail' | 'language.englishDetail';
+}> = [
   { id: 'zh-CN', labelKey: 'language.chinese', detailKey: 'language.chineseDetail' },
   { id: 'en-US', labelKey: 'language.english', detailKey: 'language.englishDetail' },
 ];
@@ -30,7 +38,10 @@ export function LanguageSelector() {
     try {
       const baseline = await window.megumi.settings.readSettings();
       if (!baseline.ok) throw rendererError(baseline.data.code, baseline.data.message);
-      const result = await window.megumi.settings.updateSettings({ patch: { general: { language: nextLanguage } }, expectedRevision: baseline.data.revision });
+      const result = await window.megumi.settings.updateSettings({
+        patch: { general: { language: nextLanguage } },
+        expectedRevision: baseline.data.revision,
+      });
       if (!result.ok) {
         throw rendererError(result.data.code, result.data.message);
       }
@@ -64,10 +75,16 @@ export function LanguageSelector() {
               )}
             >
               <span>
-                <span className="block text-sm font-semibold text-[var(--color-text)]">{t(option.labelKey)}</span>
-                <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">{t(option.detailKey)}</span>
+                <span className="block text-sm font-semibold text-[var(--color-text)]">
+                  {t(option.labelKey)}
+                </span>
+                <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                  {t(option.detailKey)}
+                </span>
               </span>
-              {selected ? <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" /> : null}
+              {selected ? (
+                <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
+              ) : null}
             </button>
           );
         })}

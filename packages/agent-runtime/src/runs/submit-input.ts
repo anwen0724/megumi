@@ -81,7 +81,10 @@ export interface ConversationSubmissionDependencies {
   readonly sessions: Pick<SessionCatalog, 'getSession' | 'createSession' | 'updateModelSelection'>;
   readonly history: Pick<SessionHistory, 'getCommittedBranch'>;
   readonly branches: Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>;
-  readonly resolveModel: (workspaceId: string, selection?: ModelSelection) => Promise<ConversationModelResolution>;
+  readonly resolveModel: (
+    workspaceId: string,
+    selection?: ModelSelection,
+  ) => Promise<ConversationModelResolution>;
   readonly observability?: Observability;
 }
 
@@ -125,11 +128,18 @@ export function createConversationSubmission(options: {
           requestId,
           workspaceId: request.workspaceId,
           ...(request.sessionId ? { sessionId: request.sessionId } : {}),
-          ...(request.recommendationReference ? { recommendationId: request.recommendationReference.recommendationId } : {}),
+          ...(request.recommendationReference
+            ? { recommendationId: request.recommendationReference.recommendationId }
+            : {}),
         },
         async () => {
           try {
-            const prepared = await prepareConversationSubmission(options, request, requestId, preparation.signal);
+            const prepared = await prepareConversationSubmission(
+              options,
+              request,
+              requestId,
+              preparation.signal,
+            );
             if (prepared.started?.status === 'already_started') {
               safeLinkDuplicate(options.dependencies.observability, requestId, prepared.started);
             }
@@ -183,7 +193,8 @@ async function prepareConversationSubmission(
         'session.resolve',
         { requestId, sessionId: requestedSessionId, workspaceId: request.workspaceId },
         classifySessionResolution,
-        () => resolveExistingSession(dependencies.sessions, requestedSessionId, request.workspaceId),
+        () =>
+          resolveExistingSession(dependencies.sessions, requestedSessionId, request.workspaceId),
       )
     : undefined;
   if (existingSession?.status === 'failed') {
@@ -195,17 +206,31 @@ async function prepareConversationSubmission(
     'model.resolve',
     { requestId, workspaceId: request.workspaceId },
     classifyModelResolution,
-    () => dependencies.resolveModel(request.workspaceId, request.modelSelection ?? existingSession?.session.model_selection),
+    () =>
+      dependencies.resolveModel(
+        request.workspaceId,
+        request.modelSelection ?? existingSession?.session.model_selection,
+      ),
   );
-  if (signal.aborted) return { result: failure(requestId, 'runtime_stopped', 'The runtime has stopped accepting input.', existingSession?.session) };
+  if (signal.aborted)
+    return {
+      result: failure(
+        requestId,
+        'runtime_stopped',
+        'The runtime has stopped accepting input.',
+        existingSession?.session,
+      ),
+    };
   if (model.status === 'failed') {
-    return { result: failure(
-      requestId,
-      model.failure.code,
-      model.failure.message,
-      existingSession?.session,
-      model.failure.retryable,
-    ) };
+    return {
+      result: failure(
+        requestId,
+        model.failure.code,
+        model.failure.message,
+        existingSession?.session,
+        model.failure.retryable,
+      ),
+    };
   }
 
   const processed = await observeOperation(
@@ -218,28 +243,41 @@ async function prepareConversationSubmission(
     },
     classifyProcessedInput,
     async () => {
-      const result = await dependencies.input.process({
-        input: toRawUserInput(request),
-        context: {
-          workspaceId: request.workspaceId,
-          ...(existingSession ? { sessionId: existingSession.session.session_id } : {}),
-          model: model.model,
-          client: model.client,
-          compactionThresholdRatio: model.compactionThresholdRatio,
+      const result = await dependencies.input.process(
+        {
+          input: toRawUserInput(request),
+          context: {
+            workspaceId: request.workspaceId,
+            ...(existingSession ? { sessionId: existingSession.session.session_id } : {}),
+            model: model.model,
+            client: model.client,
+            compactionThresholdRatio: model.compactionThresholdRatio,
+          },
         },
-      }, { signal });
+        { signal },
+      );
       safeRecordContent(dependencies.observability, 'input.processed', result, { requestId });
       return result;
     },
   );
-  if (signal.aborted) return { result: failure(requestId, 'runtime_stopped', 'The runtime has stopped accepting input.', existingSession?.session) };
+  if (signal.aborted)
+    return {
+      result: failure(
+        requestId,
+        'runtime_stopped',
+        'The runtime has stopped accepting input.',
+        existingSession?.session,
+      ),
+    };
   if (processed.status === 'failed') {
-    return { result: failure(
-      requestId,
-      processed.failure.code,
-      processed.failure.message,
-      existingSession?.session,
-    ) };
+    return {
+      result: failure(
+        requestId,
+        processed.failure.code,
+        processed.failure.message,
+        existingSession?.session,
+      ),
+    };
   }
   if (processed.status === 'completed') {
     return { result: terminalResult(requestId, processed.result, existingSession?.session) };
@@ -253,10 +291,16 @@ async function prepareConversationSubmission(
       'session.create',
       { requestId, workspaceId: request.workspaceId },
       classifySessionCreation,
-      () => createAcceptedSession(dependencies.sessions, request, acceptedText, { providerId: model.model.provider, modelId: model.model.id }),
+      () =>
+        createAcceptedSession(dependencies.sessions, request, acceptedText, {
+          providerId: model.model.provider,
+          modelId: model.model.id,
+        }),
     );
     if (created.status !== 'created') {
-      return { result: failure(requestId, 'session_creation_failed', 'Session could not be created.') };
+      return {
+        result: failure(requestId, 'session_creation_failed', 'Session could not be created.'),
+      };
     }
     activeSession = created.session;
   }
@@ -266,7 +310,15 @@ async function prepareConversationSubmission(
       session_id: activeSession.session_id,
       model_selection: { providerId: model.model.provider, modelId: model.model.id },
     });
-    if (saved.status !== 'found') return { result: failure(requestId, 'session_update_failed', 'Session model selection could not be saved.', activeSession) };
+    if (saved.status !== 'found')
+      return {
+        result: failure(
+          requestId,
+          'session_update_failed',
+          'Session model selection could not be saved.',
+          activeSession,
+        ),
+      };
     activeSession = saved.session;
   }
   const session = activeSession;
@@ -291,27 +343,32 @@ async function prepareConversationSubmission(
     sessionId: session.session_id,
     ...(branch.parentEntryId ? { parentEntryId: branch.parentEntryId } : {}),
     input: processed.input,
-    ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}),
+    ...(request.recommendationReference
+      ? { recommendationReference: request.recommendationReference }
+      : {}),
     model: model.model,
-          client: model.client,
-          compactionThresholdRatio: model.compactionThresholdRatio,
+    client: model.client,
+    compactionThresholdRatio: model.compactionThresholdRatio,
     permissionMode: request.permissionMode ?? 'ask',
   });
   if (started.status !== 'started' && started.status !== 'already_started') {
-    return { result: started.status === 'session_busy'
-      ? failure(
-          requestId,
-          'session_busy',
-          'The session already has an active execution.',
-          session,
-          true,
-        )
-      : {
-          status: 'failed',
-          requestId,
-          session,
-          failure: started.failure,
-        } };
+    return {
+      result:
+        started.status === 'session_busy'
+          ? failure(
+              requestId,
+              'session_busy',
+              'The session already has an active execution.',
+              session,
+              true,
+            )
+          : {
+              status: 'failed',
+              requestId,
+              session,
+              failure: started.failure,
+            },
+    };
   }
 
   const branchCommit = requestedBranchMarkerId
@@ -325,13 +382,7 @@ async function prepareConversationSubmission(
           workspaceId: session.workspace_id,
         },
         classifyBranchCommit,
-        () => commitBranch(
-          dependencies,
-          requestedBranchMarkerId,
-          requestId,
-          session,
-          started,
-        ),
+        () => commitBranch(dependencies, requestedBranchMarkerId, requestId, session, started),
       )
     : undefined;
   return {
@@ -361,9 +412,7 @@ function lifecycleResult(
       requestId: result.requestId,
       workspaceId: request.workspaceId,
       ...(result.session ? { sessionId: result.session.session_id } : {}),
-      ...(result.status === 'agent_started'
-        ? { executionId: result.execution.executionId }
-        : {}),
+      ...(result.status === 'agent_started' ? { executionId: result.execution.executionId } : {}),
     },
     ...(outcome ? { outcome } : {}),
   };
@@ -425,11 +474,14 @@ async function observeConversationTrace(
   };
   if (!observability) return runOnce();
   try {
-    return await observability.withTrace({
-      kind: 'conversation',
-      correlation,
-      classifyResult: classifyConversationLifecycle,
-    }, runOnce);
+    return await observability.withTrace(
+      {
+        kind: 'conversation',
+        correlation,
+        classifyResult: classifyConversationLifecycle,
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }
@@ -457,10 +509,14 @@ async function observeOperation<T>(
 
 function trackLifecycle(active: Set<Promise<void>>, lifecycle: Promise<unknown>): void {
   let tracked: Promise<void>;
-  tracked = lifecycle.then(
-    () => undefined,
-    () => undefined,
-  ).finally(() => { active.delete(tracked); });
+  tracked = lifecycle
+    .then(
+      () => undefined,
+      () => undefined,
+    )
+    .finally(() => {
+      active.delete(tracked);
+    });
   active.add(tracked);
 }
 
@@ -502,12 +558,16 @@ function safeLinkDuplicate(
 function classifyModelResolution(result: ConversationModelResolution): OperationCompletion {
   return result.status === 'ok'
     ? { outcome: { status: 'ok', code: 'resolved' } }
-    : { outcome: {
-        status: 'error',
-        code: result.failure.code,
-        message: result.failure.message,
-        ...(result.failure.retryable === undefined ? {} : { retryable: result.failure.retryable }),
-      } };
+    : {
+        outcome: {
+          status: 'error',
+          code: result.failure.code,
+          message: result.failure.message,
+          ...(result.failure.retryable === undefined
+            ? {}
+            : { retryable: result.failure.retryable }),
+        },
+      };
 }
 
 type SessionResolution = ReturnType<typeof resolveExistingSession>;
@@ -524,27 +584,29 @@ function classifySessionResolution(result: SessionResolution): OperationCompleti
     : { outcome: { status: 'error', code: 'session_resolution_failed', message: result.message } };
 }
 
-type ProcessedInput = Awaited<
-  ReturnType<ConversationSubmissionDependencies['input']['process']>
->;
+type ProcessedInput = Awaited<ReturnType<ConversationSubmissionDependencies['input']['process']>>;
 
 function classifyProcessedInput(result: ProcessedInput): OperationCompletion {
   if (result.status === 'failed') {
-    return { outcome: {
-      status: 'error',
-      code: result.failure.code,
-      message: result.failure.message,
-    } };
+    return {
+      outcome: {
+        status: 'error',
+        code: result.failure.code,
+        message: result.failure.message,
+      },
+    };
   }
   if (result.status === 'completed' && result.result.type === 'cancelled') {
     return { outcome: { status: 'cancelled', code: 'input_cancelled' } };
   }
   if (result.status === 'completed' && result.result.type === 'error') {
-    return { outcome: {
-      status: 'error',
-      code: 'input_processing_failed',
-      message: result.result.message,
-    } };
+    return {
+      outcome: {
+        status: 'error',
+        code: 'input_processing_failed',
+        message: result.result.message,
+      },
+    };
   }
   return { outcome: { status: 'ok', code: result.status } };
 }
@@ -560,11 +622,13 @@ function classifySessionCreation(result: SessionCreation): OperationCompletion {
           workspaceId: result.session.workspace_id,
         },
       }
-    : { outcome: {
-        status: 'error',
-        code: result.failure.code,
-        message: result.failure.message,
-      } };
+    : {
+        outcome: {
+          status: 'error',
+          code: result.failure.code,
+          message: result.failure.message,
+        },
+      };
 }
 
 type BranchResolution = ReturnType<typeof resolveBranch>;
@@ -599,7 +663,8 @@ function resolveExistingSession(
   sessions: Pick<SessionCatalog, 'getSession'>,
   sessionId: string,
   workspaceId: string,
-): { readonly status: 'ok'; readonly session: Session }
+):
+  | { readonly status: 'ok'; readonly session: Session }
   | { readonly status: 'failed'; readonly message: string } {
   const result = sessions.getSession({ session_id: sessionId });
   if (result.status !== 'found') {
@@ -632,7 +697,8 @@ function resolveBranch(
   session: Session,
   branchMarkerId: string | undefined,
   requestId: string,
-): { readonly status: 'ok'; readonly parentEntryId?: string }
+):
+  | { readonly status: 'ok'; readonly parentEntryId?: string }
   | { readonly status: 'failed'; readonly message: string } {
   if (!branchMarkerId) return { status: 'ok' };
   const result = branches.resolveBranchDraft({
@@ -645,11 +711,12 @@ function resolveBranch(
   }
   return {
     status: 'failed',
-    message: result.reason === 'branch_marker_not_found'
-      ? 'Branch draft was not found.'
-      : result.reason === 'branch_marker_already_committed'
-        ? 'Branch draft has already been committed by another request.'
-        : 'Branch draft does not belong to the active session.',
+    message:
+      result.reason === 'branch_marker_not_found'
+        ? 'Branch draft was not found.'
+        : result.reason === 'branch_marker_already_committed'
+          ? 'Branch draft has already been committed by another request.'
+          : 'Branch draft does not belong to the active session.',
   };
 }
 
@@ -669,9 +736,7 @@ function commitBranch(
     sessionId: session.session_id,
     targetEntryId: started.userEntry.entry_id,
   });
-  return committed.status === 'found'
-    ? { branchMarkerId, branch: committed.branch }
-    : undefined;
+  return committed.status === 'found' ? { branchMarkerId, branch: committed.branch } : undefined;
 }
 
 function terminalResult(

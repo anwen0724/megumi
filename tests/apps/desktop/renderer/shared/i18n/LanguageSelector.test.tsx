@@ -9,7 +9,10 @@ import {
 } from '@megumi/desktop/renderer/shared/i18n';
 
 function settingsResult(language: 'zh-CN' | 'en-US') {
-  return { ok: true, data: { status: 'updated', settings: { config: { general: { language } }, revision: 'next' } } };
+  return {
+    ok: true,
+    data: { status: 'updated', settings: { config: { general: { language } }, revision: 'next' } },
+  };
 }
 
 describe('LanguageSelector', () => {
@@ -20,7 +23,12 @@ describe('LanguageSelector', () => {
     update.mockReset();
     Object.defineProperty(window, 'megumi', {
       configurable: true,
-      value: { settings: { updateSettings: update, readSettings: async () => ({ ok: true, data: { revision: 'revision' } }) } },
+      value: {
+        settings: {
+          updateSettings: update,
+          readSettings: async () => ({ ok: true, data: { revision: 'revision' } }),
+        },
+      },
     });
   });
 
@@ -45,7 +53,9 @@ describe('LanguageSelector', () => {
 
     await userEvent.click(screen.getByRole('radio', { name: /简体中文/ }));
 
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Settings could not be saved.'));
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Settings could not be saved.'),
+    );
     expect(getRendererLanguage()).toBe('en-US');
     expect(document.documentElement.lang).toBe('en-US');
   });

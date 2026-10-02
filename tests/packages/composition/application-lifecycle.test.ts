@@ -15,22 +15,30 @@ describe('Application lifecycle', () => {
       expect(application.runtime.stop()).toBe(first);
       await first;
       expect(await application.runtime.discovery.getCandidatePool()).toBeDefined();
-      expect((await application.runtime.observability.listTraces({ limit: 1 })).status).not.toBe('failed');
-    } finally { await application.cleanup(); }
+      expect((await application.runtime.observability.listTraces({ limit: 1 })).status).not.toBe(
+        'failed',
+      );
+    } finally {
+      await application.cleanup();
+    }
   });
   it('does not start business after disposal', async () => {
     const application = composeTestApplication();
     try {
       await application.runtime.dispose();
       await expect(application.runtime.start()).rejects.toThrow('disposal');
-    } finally { await application.cleanup(); }
+    } finally {
+      await application.cleanup();
+    }
   });
   it('blocks background startup on invalid settings while retaining the settings host', async () => {
     const application = composeTestApplication();
     const start = vi.fn(async () => undefined);
     fs.writeFileSync(path.join(application.home, 'settings.json'), '{ invalid');
     const runtime = bindApplicationLifecycle({
-      operations: application.runtime, logger: application.runtime.logger, start,
+      operations: application.runtime,
+      logger: application.runtime.logger,
+      start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
       subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
       stop: async () => undefined,
@@ -40,7 +48,9 @@ describe('Application lifecycle', () => {
       await expect(runtime.start()).rejects.toThrow('Settings');
       expect(start).not.toHaveBeenCalled();
       expect(runtime.settings.readSettings().status).toBe('rejected');
-    } finally { await application.cleanup(); }
+    } finally {
+      await application.cleanup();
+    }
   });
   it('starts and disposes exactly once', async () => {
     const application = composeTestApplication();

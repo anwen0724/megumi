@@ -6,7 +6,11 @@ import { useTranslation } from 'react-i18next';
 import type { SettingsConfiguration } from '@megumi/application/settings/settings-schema';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
-import { localizeRendererError, rendererError, type RendererErrorDescriptor } from '../../../shared/i18n';
+import {
+  localizeRendererError,
+  rendererError,
+  type RendererErrorDescriptor,
+} from '../../../shared/i18n';
 import {
   Button,
   SecretInput,
@@ -29,7 +33,9 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
   const { t } = useTranslation(['settings', 'common']);
   const [saved, setSaved] = useState<SettingsConfiguration['webSearch']>({});
   const [revision, setRevision] = useState('');
-  const [credential, setCredential] = useState<import('@megumi/application/settings/settings-contracts').CredentialValue>({ status: 'missing' });
+  const [credential, setCredential] = useState<
+    import('@megumi/application/settings/settings-contracts').CredentialValue
+  >({ status: 'missing' });
   const [provider, setProvider] = useState<SearchProvider | ''>('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -42,10 +48,12 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
     void Promise.all([
       window.megumi.settings.readSettings(),
       window.megumi.settings.readCredential({ target: { kind: 'webSearch' } }),
-    ]).then(([result, credentialResult]) => {
+    ])
+      .then(([result, credentialResult]) => {
         if (cancelled) return;
         if (!result.ok) throw rendererError(result.data.code, result.data.message);
-        if (!credentialResult.ok) throw rendererError(credentialResult.data.code, credentialResult.data.message);
+        if (!credentialResult.ok)
+          throw rendererError(credentialResult.data.code, credentialResult.data.message);
         const search = result.data.config.webSearch;
         setRevision(result.data.revision);
         setCredential(credentialResult.data);
@@ -55,13 +63,16 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
         setApiKey(credentialResult.data.status === 'found' ? credentialResult.data.value : '');
         setApiKeyDirty(false);
         setStatus('ready');
-      }).catch((reason: unknown) => {
+      })
+      .catch((reason: unknown) => {
         if (!cancelled) {
           setError(asRendererError(reason, 'settings_load_failed'));
           setStatus('error');
         }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function save(event: FormEvent) {
@@ -82,16 +93,22 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
     setStatus('saving');
     try {
       const result = await window.megumi.settings.updateSettings({
-        patch: { webSearch: {
-          ...(provider !== saved.provider ? { provider } : {}),
-          ...(baseUrl !== (saved.baseUrl ?? '') ? { baseUrl: baseUrl.trim() || null } : {}),
-        } }, expectedRevision: revision,
+        patch: {
+          webSearch: {
+            ...(provider !== saved.provider ? { provider } : {}),
+            ...(baseUrl !== (saved.baseUrl ?? '') ? { baseUrl: baseUrl.trim() || null } : {}),
+          },
+        },
+        expectedRevision: revision,
       });
       if (!result.ok) throw rendererError(result.data.code, result.data.message);
       setSaved(result.data.settings.config.webSearch);
       setRevision(result.data.settings.revision);
       if (apiKeyDirty && apiKey.trim()) {
-        const savedKey = await window.megumi.settings.updateCredential({ target: { kind: 'webSearch' }, value: apiKey.trim() });
+        const savedKey = await window.megumi.settings.updateCredential({
+          target: { kind: 'webSearch' },
+          value: apiKey.trim(),
+        });
         if (!savedKey.ok) throw rendererError(savedKey.data.code, savedKey.data.message);
         setCredential({ status: 'found', value: apiKey.trim(), source: 'stored' });
       }
@@ -108,9 +125,14 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
     setStatus('saving');
     setError(null);
     try {
-      const result = await window.megumi.settings.updateCredential({ target: { kind: 'webSearch' }, value: null });
+      const result = await window.megumi.settings.updateCredential({
+        target: { kind: 'webSearch' },
+        value: null,
+      });
       if (!result.ok) throw rendererError(result.data.code, result.data.message);
-      const current = await window.megumi.settings.readCredential({ target: { kind: 'webSearch' } });
+      const current = await window.megumi.settings.readCredential({
+        target: { kind: 'webSearch' },
+      });
       if (!current.ok) throw rendererError(current.data.code, current.data.message);
       setCredential(current.data);
       setApiKey(current.data.status === 'found' ? current.data.value : '');
@@ -123,14 +145,17 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
   }
 
   const busy = status === 'loading' || status === 'saving';
-  const fieldClass = 'h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20 disabled:cursor-not-allowed disabled:opacity-60';
+  const fieldClass =
+    'h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20 disabled:cursor-not-allowed disabled:opacity-60';
 
   return (
     <div className="space-y-6">
-      {showHeader ? <SettingsPageHeader
-        title={t('settings:web.title')}
-        description={t('settings:web.description')}
-      /> : null}
+      {showHeader ? (
+        <SettingsPageHeader
+          title={t('settings:web.title')}
+          description={t('settings:web.description')}
+        />
+      ) : null}
       <form onSubmit={(event) => void save(event)}>
         <SettingsSection
           title={t('settings:web.search')}
@@ -140,18 +165,24 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
             title={t('settings:web.provider')}
             description={t('settings:web.providerDescription')}
           >
-            <label className="sr-only" htmlFor="web-search-provider">{t('settings:web.provider')}</label>
-          <select
-            id="web-search-provider"
-            aria-label={t('settings:web.provider')}
-            className={fieldClass}
-            value={provider}
-            disabled={busy}
-            onChange={(event) => setProvider(event.target.value as SearchProvider | '')}
-          >
-            <option value="">{t('settings:web.selectProvider')}</option>
-            {providers.map((item) => <option key={item.value} value={item.value}>{item.value === 'custom' ? t('settings:web.customProvider') : item.label}</option>)}
-          </select>
+            <label className="sr-only" htmlFor="web-search-provider">
+              {t('settings:web.provider')}
+            </label>
+            <select
+              id="web-search-provider"
+              aria-label={t('settings:web.provider')}
+              className={fieldClass}
+              value={provider}
+              disabled={busy}
+              onChange={(event) => setProvider(event.target.value as SearchProvider | '')}
+            >
+              <option value="">{t('settings:web.selectProvider')}</option>
+              {providers.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.value === 'custom' ? t('settings:web.customProvider') : item.label}
+                </option>
+              ))}
+            </select>
           </SettingsRow>
 
           {provider === 'custom' ? (
@@ -195,13 +226,20 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-4">
             <p className="text-sm text-[var(--color-text-muted)]">
-              {(credential.status === 'found' ? credential.source : 'missing') === 'stored' ? t('settings:web.savedCredential')
-                : (credential.status === 'found' ? credential.source : 'missing') === 'environment' ? t('settings:web.environmentCredential', { name: saved.apiKeyEnv ?? '' })
+              {(credential.status === 'found' ? credential.source : 'missing') === 'stored'
+                ? t('settings:web.savedCredential')
+                : (credential.status === 'found' ? credential.source : 'missing') === 'environment'
+                  ? t('settings:web.environmentCredential', { name: saved.apiKeyEnv ?? '' })
                   : t('settings:web.noCredential')}
             </p>
 
             <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" disabled={busy || credential.status !== 'found'} onClick={() => void clearKey()}>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={busy || credential.status !== 'found'}
+                onClick={() => void clearKey()}
+              >
                 {t('settings:web.clearKey')}
               </Button>
               <Button type="submit" variant="primary" disabled={busy}>
@@ -211,7 +249,10 @@ export function WebSettingsPanel({ showHeader = true }: { showHeader?: boolean }
           </div>
 
           {error ? (
-            <p role="alert" className="border-t border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-5 py-3 text-sm text-[var(--color-danger)]">
+            <p
+              role="alert"
+              className="border-t border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-5 py-3 text-sm text-[var(--color-danger)]"
+            >
               {localizeRendererError(error)}
             </p>
           ) : null}

@@ -15,21 +15,78 @@ describe('PermissionRulesPanel', () => {
   beforeEach(() => {
     useProjectStore.setState({
       currentProjectId: 'workspace_1',
-      projects: [{
-        id: 'workspace_1', projectId: 'workspace_1', name: 'Megumi', repoPath: 'C:/megumi', repoPathKey: 'workspace_1',
-        status: 'available', createdAt: '2026-07-20T00:00:00.000Z', lastOpenedAt: '2026-07-20T00:00:00.000Z',
-      }],
+      projects: [
+        {
+          id: 'workspace_1',
+          projectId: 'workspace_1',
+          name: 'Megumi',
+          repoPath: 'C:/megumi',
+          repoPathKey: 'workspace_1',
+          status: 'available',
+          createdAt: '2026-07-20T00:00:00.000Z',
+          lastOpenedAt: '2026-07-20T00:00:00.000Z',
+        },
+      ],
     });
     useSessionStore.setState({
-      sessions: [{ id: 'session_1', projectId: 'workspace_1', title: 'Permission design', status: 'active', createdAt: '2026-07-20T00:00:00.000Z', updatedAt: '2026-07-20T00:00:00.000Z' }],
+      sessions: [
+        {
+          id: 'session_1',
+          projectId: 'workspace_1',
+          title: 'Permission design',
+          status: 'active',
+          createdAt: '2026-07-20T00:00:00.000Z',
+          updatedAt: '2026-07-20T00:00:00.000Z',
+        },
+      ],
     });
-    const fixture = createSettingsFixture({ permissions: {
-      allow: [{ source: 'user', target: { kind: 'operation', action: 'network.fetch', resource: { type: 'network.url', matcher: { operator: 'hostname', value: 'example.com' } } } }],
-      ask: [{ source: 'workspace', source_id: 'workspace_1', target: { kind: 'operation', action: 'workspace.read', resource: { type: 'workspace.path', matcher: { operator: 'any' } } } }],
-      deny: [{ source: 'session', source_id: 'session_1', target: { kind: 'tool', tool_identity: { source_id: 'built_in', namespace: 'megumi', source_tool_name: 'read_file' } } }],
-    } });
+    const fixture = createSettingsFixture({
+      permissions: {
+        allow: [
+          {
+            source: 'user',
+            target: {
+              kind: 'operation',
+              action: 'network.fetch',
+              resource: {
+                type: 'network.url',
+                matcher: { operator: 'hostname', value: 'example.com' },
+              },
+            },
+          },
+        ],
+        ask: [
+          {
+            source: 'workspace',
+            source_id: 'workspace_1',
+            target: {
+              kind: 'operation',
+              action: 'workspace.read',
+              resource: { type: 'workspace.path', matcher: { operator: 'any' } },
+            },
+          },
+        ],
+        deny: [
+          {
+            source: 'session',
+            source_id: 'session_1',
+            target: {
+              kind: 'tool',
+              tool_identity: {
+                source_id: 'built_in',
+                namespace: 'megumi',
+                source_tool_name: 'read_file',
+              },
+            },
+          },
+        ],
+      },
+    });
     update.mockReset().mockImplementation(fixture.api.settings.updateSettings);
-    Object.defineProperty(window, 'megumi', { configurable: true, value: { ...fixture.api, settings: { ...fixture.api.settings, updateSettings: update } } });
+    Object.defineProperty(window, 'megumi', {
+      configurable: true,
+      value: { ...fixture.api, settings: { ...fixture.api.settings, updateSettings: update } },
+    });
   });
 
   it('lists rule effects and never renders a second permission mode selector', async () => {
@@ -58,7 +115,16 @@ describe('PermissionRulesPanel', () => {
 
     await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
     expect(update.mock.calls[0][0].patch.permissions.deny).toContainEqual({
-      source: 'workspace', source_id: 'workspace_1', target: { kind: 'operation', action: 'network.fetch', resource: { type: 'network.url', matcher: { operator: 'hostname', value: '*.example.com' } } },
+      source: 'workspace',
+      source_id: 'workspace_1',
+      target: {
+        kind: 'operation',
+        action: 'network.fetch',
+        resource: {
+          type: 'network.url',
+          matcher: { operator: 'hostname', value: '*.example.com' },
+        },
+      },
     });
   });
 });

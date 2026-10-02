@@ -1,5 +1,12 @@
 /* Owns the shared run entrypoint, input preparation and shutdown of one AgentRuntime. */
-import { prepareModel, readModelCatalog, type ModelResolutionOptions, type ModelSelection, type ModelPreparationResult, type ModelCatalogResult } from './runs/model-resolution';
+import {
+  prepareModel,
+  readModelCatalog,
+  type ModelResolutionOptions,
+  type ModelSelection,
+  type ModelPreparationResult,
+  type ModelCatalogResult,
+} from './runs/model-resolution';
 import {
   createRunManager,
   type ConversationExecutionInput,
@@ -17,9 +24,15 @@ import type { ExecutionFailure, ExecutionOutcome, ExecutionSnapshot } from './ru
 export type { ApprovalDecisionRequest } from './runs/run-manager';
 
 export type RunFailureCode =
-  | 'SESSION_FAILED' | 'CONTEXT_FAILED' | 'MODEL_CALL_FAILED' | 'PERMISSION_FAILED'
-  | 'TOOL_SYSTEM_FAILED' | 'LOOP_LIMIT_EXCEEDED' | 'RUNTIME_PROTOCOL_VIOLATION'
-  | 'CANCELLATION_FAILED' | 'INTERNAL_ERROR';
+  | 'SESSION_FAILED'
+  | 'CONTEXT_FAILED'
+  | 'MODEL_CALL_FAILED'
+  | 'PERMISSION_FAILED'
+  | 'TOOL_SYSTEM_FAILED'
+  | 'LOOP_LIMIT_EXCEEDED'
+  | 'RUNTIME_PROTOCOL_VIOLATION'
+  | 'CANCELLATION_FAILED'
+  | 'INTERNAL_ERROR';
 
 export interface RunError {
   readonly code: RunFailureCode;
@@ -52,42 +65,75 @@ export interface AgentRunHandle {
   readonly completion: Promise<AgentRunOutcome>;
 }
 
-export type StartRunRequest = ((Omit<ConversationExecutionInput, 'model' | 'client' | 'compactionThresholdRatio'> & { modelSelection?: ModelSelection }) | {
-  readonly kind: 'recommendation';
-  readonly runId: string;
-  readonly requestId: string;
-  readonly localDate: string;
-  readonly modelSelection?: ModelSelection;
-} | {
-  readonly kind: 'candidate_supply';
-  readonly runId: string;
-  readonly requestId: string;
-  readonly trigger: string;
-  readonly modelSelection?: ModelSelection;
-}) & { readonly signal?: AbortSignal };
+export type StartRunRequest = (
+  | (Omit<ConversationExecutionInput, 'model' | 'client' | 'compactionThresholdRatio'> & {
+      modelSelection?: ModelSelection;
+    })
+  | {
+      readonly kind: 'recommendation';
+      readonly runId: string;
+      readonly requestId: string;
+      readonly localDate: string;
+      readonly modelSelection?: ModelSelection;
+    }
+  | {
+      readonly kind: 'candidate_supply';
+      readonly runId: string;
+      readonly requestId: string;
+      readonly trigger: string;
+      readonly modelSelection?: ModelSelection;
+    }
+) & { readonly signal?: AbortSignal };
 
 export type StartRunResult =
   | { readonly status: 'started' | 'already_started'; readonly run: AgentRunHandle }
-  | { readonly status: 'rejected'; readonly error: { readonly code: RunFailureCode | 'RUN_CONFLICT' | 'RUNTIME_STOPPED' | 'RUN_CANCELLED' | 'MODEL_UNAVAILABLE'; readonly message: string } };
+  | {
+      readonly status: 'rejected';
+      readonly error: {
+        readonly code:
+          | RunFailureCode
+          | 'RUN_CONFLICT'
+          | 'RUNTIME_STOPPED'
+          | 'RUN_CANCELLED'
+          | 'MODEL_UNAVAILABLE';
+        readonly message: string;
+      };
+    };
 
 export type CancelRunResult =
-  | { readonly status: 'cancellation_requested' | 'already_cancelling' | 'already_terminal'; readonly run: AgentRunSnapshot }
+  | {
+      readonly status: 'cancellation_requested' | 'already_cancelling' | 'already_terminal';
+      readonly run: AgentRunSnapshot;
+    }
   | { readonly status: 'not_found'; readonly runId: string };
 
 export type RuntimeApprovalResult =
-  | { readonly status: 'accepted' | 'not_waiting' | 'already_resolved'; readonly run: AgentRunSnapshot }
+  | {
+      readonly status: 'accepted' | 'not_waiting' | 'already_resolved';
+      readonly run: AgentRunSnapshot;
+    }
   | { readonly status: 'not_found'; readonly approvalId: string }
   | { readonly status: 'failed'; readonly error: RunError };
 
-export type InputFailureCode = 'INPUT_REJECTED' | 'MODEL_UNAVAILABLE' | 'RUN_CONFLICT' | 'RUNTIME_STOPPED';
+export type InputFailureCode =
+  'INPUT_REJECTED' | 'MODEL_UNAVAILABLE' | 'RUN_CONFLICT' | 'RUNTIME_STOPPED';
 
 export type SubmitInputResult =
   | {
       readonly status: 'started';
       readonly requestId: string;
-      readonly session: Extract<SubmitConversationInputResult, { status: 'agent_started' }>['session'];
-      readonly userMessage: Extract<SubmitConversationInputResult, { status: 'agent_started' }>['userMessage'];
-      readonly branchCommit?: Extract<SubmitConversationInputResult, { status: 'agent_started' }>['branchCommit'];
+      readonly session: Extract<
+        SubmitConversationInputResult,
+        { status: 'agent_started' }
+      >['session'];
+      readonly userMessage: Extract<
+        SubmitConversationInputResult,
+        { status: 'agent_started' }
+      >['userMessage'];
+      readonly branchCommit?: Extract<
+        SubmitConversationInputResult,
+        { status: 'agent_started' }
+      >['branchCommit'];
       readonly run: AgentRunHandle;
     }
   | Extract<SubmitConversationInputResult, { status: 'completed' | 'host_interaction_requested' }>
@@ -102,7 +148,10 @@ export interface AgentRuntime {
   /** Reads the current model catalog through the bound configuration access. */
   readModelCatalog(request?: { workspaceId?: string }): ModelCatalogResult;
   /** Prepares a model and client for a run or a single AI completion. */
-  prepareModel(request?: { workspaceId?: string; selection?: ModelSelection }): Promise<ModelPreparationResult>;
+  prepareModel(request?: {
+    workspaceId?: string;
+    selection?: ModelSelection;
+  }): Promise<ModelPreparationResult>;
   /** Starts a prepared task; the handle separately represents its final completion. */
   startRun(request: StartRunRequest): Promise<StartRunResult>;
   /** Returns an isolated snapshot, or undefined when no retained run exists. */
@@ -116,7 +165,9 @@ export interface AgentRuntime {
   /** Prepares user input, including pure commands, before admitting a conversation run. */
   submitInput(request: SubmitConversationInputRequest): Promise<SubmitInputResult>;
   /** Stops admission, requests cancellation and waits up to timeoutMs for active runs. */
-  stop(request: { readonly timeoutMs: number }): Promise<
+  stop(request: {
+    readonly timeoutMs: number;
+  }): Promise<
     | { readonly status: 'stopped' }
     | { readonly status: 'timed_out'; readonly runs: readonly AgentRunSnapshot[] }
   >;
@@ -129,7 +180,9 @@ export interface CreateAgentRuntimeOptions {
   readonly createRunId: () => string;
   readonly terminalRetentionMs: number;
   /** Commits application-owned execution records before completion and session release. */
-  readonly finalizeRun?: (run: Pick<AgentRunSnapshot, 'runId' | 'kind' | 'sessionId' | 'workspaceId'>) => void | Promise<void>;
+  readonly finalizeRun?: (
+    run: Pick<AgentRunSnapshot, 'runId' | 'kind' | 'sessionId' | 'workspaceId'>,
+  ) => void | Promise<void>;
   /** Receives the completed fact; business work must observe its own completion. */
   readonly onSettled?: CreateRunManagerOptions['onSettled'];
 }
@@ -137,51 +190,106 @@ export interface CreateAgentRuntimeOptions {
 /** Connects input, sessions, context, tools and the single run manager for all task sources. */
 export function createAgentRuntime(options: CreateAgentRuntimeOptions): AgentRuntime {
   const runs = createRunManager({
-    ids: { createExecutionId: options.createRunId, createSessionMessageId: options.execution.ids.createSessionMessageId },
+    ids: {
+      createExecutionId: options.createRunId,
+      createSessionMessageId: options.execution.ids.createSessionMessageId,
+    },
     clock: options.execution.clock,
     terminalRetentionMs: options.terminalRetentionMs,
     events: options.execution.events,
     launch: (request) => prepareRun(request, options.execution),
     onSettled: options.onSettled,
-    beforeComplete: metadata => options.finalizeRun?.({
-      runId: metadata.executionId, kind: metadata.kind,
-      ...(metadata.kind === 'conversation' ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId } : {}),
-    }),
+    beforeComplete: (metadata) =>
+      options.finalizeRun?.({
+        runId: metadata.executionId,
+        kind: metadata.kind,
+        ...(metadata.kind === 'conversation'
+          ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId }
+          : {}),
+      }),
   });
-  const resolveModel = (workspaceId?: string, selection?: ModelSelection) => prepareModel(options.modelResolution(workspaceId), selection);
-  const input = createConversationSubmission({ dependencies: { ...options.input, resolveModel }, startExecution: runs.start });
+  const resolveModel = (workspaceId?: string, selection?: ModelSelection) =>
+    prepareModel(options.modelResolution(workspaceId), selection);
+  const input = createConversationSubmission({
+    dependencies: { ...options.input, resolveModel },
+    startExecution: runs.start,
+  });
   let accepting = true;
   return {
-    readModelCatalog: (request) => readModelCatalog(options.modelResolution(request?.workspaceId).settings),
+    readModelCatalog: (request) =>
+      readModelCatalog(options.modelResolution(request?.workspaceId).settings),
     prepareModel: (request) => resolveModel(request?.workspaceId, request?.selection),
     async startRun(request) {
-      if (!accepting) return { status: 'rejected', error: { code: 'RUNTIME_STOPPED', message: 'The runtime has stopped accepting runs.' } };
-      if (request.kind !== 'conversation' && runs.get({ executionId: request.runId }).status === 'found') {
-        return { status: 'rejected', error: { code: 'RUN_CONFLICT', message: 'A run with this identity already exists.' } };
+      if (!accepting)
+        return {
+          status: 'rejected',
+          error: { code: 'RUNTIME_STOPPED', message: 'The runtime has stopped accepting runs.' },
+        };
+      if (
+        request.kind !== 'conversation' &&
+        runs.get({ executionId: request.runId }).status === 'found'
+      ) {
+        return {
+          status: 'rejected',
+          error: { code: 'RUN_CONFLICT', message: 'A run with this identity already exists.' },
+        };
       }
-      const session = request.kind === 'conversation'
-        ? options.input.sessions.getSession({ session_id: request.sessionId })
-        : undefined;
+      const session =
+        request.kind === 'conversation'
+          ? options.input.sessions.getSession({ session_id: request.sessionId })
+          : undefined;
       if (session?.status === 'failed') {
-        return { status: 'rejected', error: { code: 'SESSION_FAILED', message: session.failure.message } };
+        return {
+          status: 'rejected',
+          error: { code: 'SESSION_FAILED', message: session.failure.message },
+        };
       }
-      const selection = request.modelSelection ?? (session?.status === 'found' ? session.session.model_selection : undefined);
-      const prepared = await resolveModel(request.kind === 'conversation' ? request.workspaceId : undefined, selection);
-      if (request.signal?.aborted) return { status: 'rejected', error: { code: 'RUN_CANCELLED', message: 'Run was cancelled before admission.' } };
-      if (prepared.status === 'failed') return { status: 'rejected', error: { code: 'MODEL_UNAVAILABLE', message: prepared.failure.message } };
-      const result = await runs.start({ ...request, model: prepared.model, client: prepared.client, compactionThresholdRatio: prepared.compactionThresholdRatio });
+      const selection =
+        request.modelSelection ??
+        (session?.status === 'found' ? session.session.model_selection : undefined);
+      const prepared = await resolveModel(
+        request.kind === 'conversation' ? request.workspaceId : undefined,
+        selection,
+      );
+      if (request.signal?.aborted)
+        return {
+          status: 'rejected',
+          error: { code: 'RUN_CANCELLED', message: 'Run was cancelled before admission.' },
+        };
+      if (prepared.status === 'failed')
+        return {
+          status: 'rejected',
+          error: { code: 'MODEL_UNAVAILABLE', message: prepared.failure.message },
+        };
+      const result = await runs.start({
+        ...request,
+        model: prepared.model,
+        client: prepared.client,
+        compactionThresholdRatio: prepared.compactionThresholdRatio,
+      });
       if (result.status === 'started' || result.status === 'already_started') {
-        return { status: result.status, run: {
-          runId: result.execution.executionId, snapshot: toRunSnapshot(result.execution),
-          completion: result.completion.then(toRunOutcome),
-        } };
+        return {
+          status: result.status,
+          run: {
+            runId: result.execution.executionId,
+            snapshot: toRunSnapshot(result.execution),
+            completion: result.completion.then(toRunOutcome),
+          },
+        };
       }
       if (result.status === 'session_busy') {
-        return { status: 'rejected', error: { code: 'RUN_CONFLICT', message: 'The session already has an active run.' } };
+        return {
+          status: 'rejected',
+          error: { code: 'RUN_CONFLICT', message: 'The session already has an active run.' },
+        };
       }
-      return { status: 'rejected', error: result.status === 'failed'
-        ? toRunError(result.failure)
-        : { code: 'INTERNAL_ERROR', message: 'Run admission failed.' } };
+      return {
+        status: 'rejected',
+        error:
+          result.status === 'failed'
+            ? toRunError(result.failure)
+            : { code: 'INTERNAL_ERROR', message: 'Run admission failed.' },
+      };
     },
     getRun(runId) {
       const result = runs.get({ executionId: runId });
@@ -193,37 +301,55 @@ export function createAgentRuntime(options: CreateAgentRuntimeOptions): AgentRun
     },
     async cancelRun(runId) {
       const result = await runs.cancel({ executionId: runId });
-      return result.status === 'not_found' ? { status: 'not_found', runId }
+      return result.status === 'not_found'
+        ? { status: 'not_found', runId }
         : { status: result.status, run: toRunSnapshot(result.execution) };
     },
     async resolveApproval(request) {
       const result = await runs.resolveApproval(request);
-      if (result.status === 'failed') return { status: 'failed', error: toRunError(result.failure) };
+      if (result.status === 'failed')
+        return { status: 'failed', error: toRunError(result.failure) };
       if (result.status === 'not_found') return result;
       return { status: result.status, run: toRunSnapshot(result.execution) };
     },
     async submitInput(request) {
-      if (!accepting) return {
-        status: 'rejected', requestId: request.requestId ?? crypto.randomUUID(),
-        error: { code: 'RUNTIME_STOPPED', message: 'The runtime has stopped accepting input.' },
-      };
-      const occupying = request.sessionId ? runs.getActive({ sessionId: request.sessionId }) : undefined;
-      if (occupying?.status === 'found' && occupying.execution.requestId !== request.requestId) return {
-        status: 'rejected', requestId: request.requestId ?? crypto.randomUUID(),
-        error: { code: 'RUN_CONFLICT', message: 'The session already has an active run.' },
-      };
+      if (!accepting)
+        return {
+          status: 'rejected',
+          requestId: request.requestId ?? crypto.randomUUID(),
+          error: { code: 'RUNTIME_STOPPED', message: 'The runtime has stopped accepting input.' },
+        };
+      const occupying = request.sessionId
+        ? runs.getActive({ sessionId: request.sessionId })
+        : undefined;
+      if (occupying?.status === 'found' && occupying.execution.requestId !== request.requestId)
+        return {
+          status: 'rejected',
+          requestId: request.requestId ?? crypto.randomUUID(),
+          error: { code: 'RUN_CONFLICT', message: 'The session already has an active run.' },
+        };
       const result = await input.submit(request);
-      if (result.status === 'failed') return {
-        status: 'rejected', requestId: result.requestId, ...(result.session ? { session: result.session } : {}),
-        error: { code: inputFailureCode(result.failure.code), message: result.failure.message },
-      };
+      if (result.status === 'failed')
+        return {
+          status: 'rejected',
+          requestId: result.requestId,
+          ...(result.session ? { session: result.session } : {}),
+          error: { code: inputFailureCode(result.failure.code), message: result.failure.message },
+        };
       if (result.status !== 'agent_started') return result;
       const completion = runs.wait(result.execution.executionId);
       if (!completion) throw new Error('An accepted run must have a retained completion.');
       return {
-        status: 'started', requestId: result.requestId, session: result.session, userMessage: result.userMessage,
+        status: 'started',
+        requestId: result.requestId,
+        session: result.session,
+        userMessage: result.userMessage,
         ...(result.branchCommit ? { branchCommit: result.branchCommit } : {}),
-        run: { runId: result.execution.executionId, snapshot: toRunSnapshot(result.execution), completion: completion.then(toRunOutcome) },
+        run: {
+          runId: result.execution.executionId,
+          snapshot: toRunSnapshot(result.execution),
+          completion: completion.then(toRunOutcome),
+        },
       };
     },
     async stop(request) {
@@ -235,10 +361,13 @@ export function createAgentRuntime(options: CreateAgentRuntimeOptions): AgentRun
           runs.shutdown(request),
           Promise.race([
             input.shutdown().then(() => true),
-            new Promise<false>(resolve => { timer = setTimeout(() => resolve(false), Math.max(0, request.timeoutMs)); }),
+            new Promise<false>((resolve) => {
+              timer = setTimeout(() => resolve(false), Math.max(0, request.timeoutMs));
+            }),
           ]),
         ]);
-        if (result.status === 'timed_out') return { status: 'timed_out', runs: result.activeExecutions.map(toRunSnapshot) };
+        if (result.status === 'timed_out')
+          return { status: 'timed_out', runs: result.activeExecutions.map(toRunSnapshot) };
         return inputStopped ? { status: 'stopped' } : { status: 'timed_out', runs: [] };
       } finally {
         if (timer !== undefined) clearTimeout(timer);
@@ -248,31 +377,50 @@ export function createAgentRuntime(options: CreateAgentRuntimeOptions): AgentRun
 }
 
 const RUN_ERROR_CODES: Readonly<Record<ExecutionFailure['code'], RunFailureCode>> = {
-  session_failed: 'SESSION_FAILED', context_failed: 'CONTEXT_FAILED', model_call_failed: 'MODEL_CALL_FAILED',
-  permission_failed: 'PERMISSION_FAILED', tool_system_failed: 'TOOL_SYSTEM_FAILED', loop_limit_exceeded: 'LOOP_LIMIT_EXCEEDED',
-  runtime_protocol_violation: 'RUNTIME_PROTOCOL_VIOLATION', cancellation_failed: 'CANCELLATION_FAILED', internal_error: 'INTERNAL_ERROR',
+  session_failed: 'SESSION_FAILED',
+  context_failed: 'CONTEXT_FAILED',
+  model_call_failed: 'MODEL_CALL_FAILED',
+  permission_failed: 'PERMISSION_FAILED',
+  tool_system_failed: 'TOOL_SYSTEM_FAILED',
+  loop_limit_exceeded: 'LOOP_LIMIT_EXCEEDED',
+  runtime_protocol_violation: 'RUNTIME_PROTOCOL_VIOLATION',
+  cancellation_failed: 'CANCELLATION_FAILED',
+  internal_error: 'INTERNAL_ERROR',
 };
 
 function toRunError(failure: ExecutionFailure): RunError {
-  return { code: RUN_ERROR_CODES[failure.code], message: failure.message, retryable: failure.retryable };
+  return {
+    code: RUN_ERROR_CODES[failure.code],
+    message: failure.message,
+    retryable: failure.retryable,
+  };
 }
 
 function inputFailureCode(code: string): InputFailureCode {
   if (code === 'runtime_stopped') return 'RUNTIME_STOPPED';
   if (code === 'session_busy') return 'RUN_CONFLICT';
-  if (code === 'model_not_found' || code === 'model_unavailable' || code === 'model_not_configured') return 'MODEL_UNAVAILABLE';
+  if (code === 'model_not_found' || code === 'model_unavailable' || code === 'model_not_configured')
+    return 'MODEL_UNAVAILABLE';
   return 'INPUT_REJECTED';
 }
 
 function toRunOutcome(outcome: ExecutionOutcome): AgentRunOutcome {
-  return outcome.status === 'failed' ? { status: 'failed', error: toRunError(outcome.failure) } : { ...outcome };
+  return outcome.status === 'failed'
+    ? { status: 'failed', error: toRunError(outcome.failure) }
+    : { ...outcome };
 }
 
 function toRunSnapshot(run: ExecutionSnapshot): AgentRunSnapshot {
   return {
-    runId: run.executionId, requestId: run.requestId, kind: run.kind,
-    ...(run.kind === 'conversation' ? { sessionId: run.sessionId, workspaceId: run.workspaceId } : {}),
-    status: run.status, createdAt: run.createdAt, startedAt: run.startedAt,
+    runId: run.executionId,
+    requestId: run.requestId,
+    kind: run.kind,
+    ...(run.kind === 'conversation'
+      ? { sessionId: run.sessionId, workspaceId: run.workspaceId }
+      : {}),
+    status: run.status,
+    createdAt: run.createdAt,
+    startedAt: run.startedAt,
     ...(run.completedAt ? { completedAt: run.completedAt } : {}),
     ...(run.failure ? { error: toRunError(run.failure) } : {}),
   };

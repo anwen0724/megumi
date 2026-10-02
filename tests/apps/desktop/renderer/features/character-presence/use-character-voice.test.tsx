@@ -13,14 +13,20 @@ vi.mock('@megumi/desktop/renderer/features/voice-input/frame-channel', () => ({
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((settle) => { resolve = settle; });
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
   return { promise, resolve };
 }
 
 function fakeCapture(): MicrophoneCapture & { close: ReturnType<typeof vi.fn> } {
   const close = vi.fn(async () => undefined);
   return {
-    open: vi.fn(async () => ({ status: 'opened' as const, sampleRate: 16_000 as const, fallbackToDefault: false })),
+    open: vi.fn(async () => ({
+      status: 'opened' as const,
+      sampleRate: 16_000 as const,
+      fallbackToDefault: false,
+    })),
     close,
     setMuted: vi.fn(),
     setFrameHandler: vi.fn(),
@@ -51,8 +57,12 @@ describe('useCharacterVoice window lifecycle', () => {
         },
         voice: {
           getSnapshot: vi.fn().mockResolvedValue({ ok: true, data: { status: 'idle' } }),
-          getModelCapabilityStatus: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ready' } }),
-          startSession: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok', generation: 1 } }),
+          getModelCapabilityStatus: vi
+            .fn()
+            .mockResolvedValue({ ok: true, data: { status: 'ready' } }),
+          startSession: vi
+            .fn()
+            .mockResolvedValue({ ok: true, data: { status: 'ok', generation: 1 } }),
           endSession: vi.fn().mockResolvedValue({ ok: true, data: { status: 'ok' } }),
         },
         voiceInput: {
@@ -123,20 +133,34 @@ describe('useCharacterVoice window lifecycle', () => {
     }>();
     const capture = fakeCapture();
     vi.mocked(capture.open).mockImplementation(() => opening.promise);
-    const { result } = renderHook(() => useCharacterVoice('session-1', { createCapture: () => capture }));
-    await waitFor(() => { expect(characterSnapshots).toHaveLength(1); });
+    const { result } = renderHook(() =>
+      useCharacterVoice('session-1', { createCapture: () => capture }),
+    );
+    await waitFor(() => {
+      expect(characterSnapshots).toHaveLength(1);
+    });
 
-    act(() => { void result.current.start(); });
-    await waitFor(() => { expect(capture.open).toHaveBeenCalledTimes(1); });
+    act(() => {
+      void result.current.start();
+    });
+    await waitFor(() => {
+      expect(capture.open).toHaveBeenCalledTimes(1);
+    });
 
-    act(() => { characterSnapshots[0]!({ visible: false }); });
-    await waitFor(() => { expect(capture.close).toHaveBeenCalledTimes(1); });
+    act(() => {
+      characterSnapshots[0]!({ visible: false });
+    });
+    await waitFor(() => {
+      expect(capture.close).toHaveBeenCalledTimes(1);
+    });
 
     await act(async () => {
       opening.resolve({ status: 'opened', sampleRate: 16_000, fallbackToDefault: false });
       await opening.promise;
     });
-    await waitFor(() => { expect(capture.close).toHaveBeenCalledTimes(2); });
+    await waitFor(() => {
+      expect(capture.close).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('submits recognized text with a stable optimistic message identity', async () => {
@@ -174,18 +198,24 @@ describe('useCharacterVoice window lifecycle', () => {
         message: { send },
       },
     });
-    const { result } = renderHook(() => useCharacterVoice('session-1', {
-      createCapture: () => fakeCapture(),
-    }));
-
-    await act(async () => { await result.current.submitText('语音输入'); });
-
-    expect(send).toHaveBeenCalledWith(expect.objectContaining({
-      payload: expect.objectContaining({
-        text: '语音输入',
-        clientMessageId: expect.any(String),
-        createdAt: expect.any(String),
+    const { result } = renderHook(() =>
+      useCharacterVoice('session-1', {
+        createCapture: () => fakeCapture(),
       }),
-    }));
+    );
+
+    await act(async () => {
+      await result.current.submitText('语音输入');
+    });
+
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          text: '语音输入',
+          clientMessageId: expect.any(String),
+          createdAt: expect.any(String),
+        }),
+      }),
+    );
   });
 });

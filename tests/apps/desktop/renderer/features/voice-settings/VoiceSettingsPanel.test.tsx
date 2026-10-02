@@ -14,19 +14,38 @@ describe('VoiceSettingsPanel', () => {
   const updateSettings = vi.fn();
 
   beforeEach(() => {
-    getModelStatus.mockReset().mockResolvedValue(success({
-      status: 'not_prepared', bundleVersion: 'voice-v1', downloadedBytes: 0, totalBytes: 926_208_003,
-    }));
+    getModelStatus.mockReset().mockResolvedValue(
+      success({
+        status: 'not_prepared',
+        bundleVersion: 'voice-v1',
+        downloadedBytes: 0,
+        totalBytes: 926_208_003,
+      }),
+    );
     checkModelUpdates.mockReset().mockResolvedValue(success({ status: 'unavailable' }));
     prepareModels.mockReset().mockResolvedValue(success({ status: 'ok' }));
     cancelModelPreparation.mockReset().mockResolvedValue(success({ status: 'ok' }));
     const resolvedVoice = {
-      inputDeviceId: 'mic-1', outputDeviceId: 'speaker-1', recognitionLanguage: 'auto' as const,
+      inputDeviceId: 'mic-1',
+      outputDeviceId: 'speaker-1',
+      recognitionLanguage: 'auto' as const,
       readAloudEnabled: false,
-      tts: { provider: 'minimax', voiceId: 'female-shaonv', hasApiKey: false, credentialSource: 'missing' },
+      tts: {
+        provider: 'minimax',
+        voiceId: 'female-shaonv',
+        hasApiKey: false,
+        credentialSource: 'missing',
+      },
     };
-    getSettings.mockReset().mockResolvedValue(success({ config: { voice: resolvedVoice }, revision: 'revision' }));
-    updateSettings.mockReset().mockResolvedValue(success({ status: 'updated', settings: { config: { voice: resolvedVoice }, revision: 'next' } }));
+    getSettings
+      .mockReset()
+      .mockResolvedValue(success({ config: { voice: resolvedVoice }, revision: 'revision' }));
+    updateSettings.mockReset().mockResolvedValue(
+      success({
+        status: 'updated',
+        settings: { config: { voice: resolvedVoice }, revision: 'next' },
+      }),
+    );
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
@@ -49,9 +68,17 @@ describe('VoiceSettingsPanel', () => {
         settings: {
           readSettings: getSettings,
           updateSettings,
-          readCredential: vi.fn().mockResolvedValue(success({ status: 'found', value: 'minimax-secret', source: 'stored' })),
-          updateCredential: vi.fn().mockResolvedValue(success({ status: 'updated', tts: resolvedVoice.tts })),
-          deleteVoiceTtsApiKey: vi.fn().mockResolvedValue(success({ status: 'deleted', tts: resolvedVoice.tts })),
+          readCredential: vi
+            .fn()
+            .mockResolvedValue(
+              success({ status: 'found', value: 'minimax-secret', source: 'stored' }),
+            ),
+          updateCredential: vi
+            .fn()
+            .mockResolvedValue(success({ status: 'updated', tts: resolvedVoice.tts })),
+          deleteVoiceTtsApiKey: vi
+            .fn()
+            .mockResolvedValue(success({ status: 'deleted', tts: resolvedVoice.tts })),
         },
       },
     });
@@ -88,15 +115,17 @@ describe('VoiceSettingsPanel', () => {
   });
 
   it('shows byte progress and cancellation while the model is downloading', async () => {
-    getModelStatus.mockResolvedValue(success({
-      status: 'preparing',
-      phase: 'downloading',
-      bundleVersion: 'voice-v1',
-      downloadedBytes: 231_552_000,
-      totalBytes: 926_208_000,
-      progress: 0.25,
-      bytesPerSecond: 10_485_760,
-    }));
+    getModelStatus.mockResolvedValue(
+      success({
+        status: 'preparing',
+        phase: 'downloading',
+        bundleVersion: 'voice-v1',
+        downloadedBytes: 231_552_000,
+        totalBytes: 926_208_000,
+        progress: 0.25,
+        bytesPerSecond: 10_485_760,
+      }),
+    );
     render(<VoiceSettingsPanel />);
 
     expect(await screen.findByText('25%')).toBeInTheDocument();

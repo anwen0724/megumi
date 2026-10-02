@@ -19,17 +19,26 @@ describe('ContentSourcesSettingsPanel', () => {
 
   beforeEach(() => {
     const fixture = createSettingsFixture();
-    fixture.settings.updateCredential({ target: { kind: 'discoverySource', sourceId: 'zhihu' }, value: 'saved-zhihu-secret' });
+    fixture.settings.updateCredential({
+      target: { kind: 'discoverySource', sourceId: 'zhihu' },
+      value: 'saved-zhihu-secret',
+    });
     setCredential.mockReset().mockImplementation(fixture.api.settings.updateCredential);
     getConfiguration.mockReset().mockResolvedValue(ok(configuration()));
-    connectSource.mockReset().mockImplementation(async (request) => ok(
-      configuration().sources.find((source) => source.sourceId === request.payload.sourceId),
-    ));
-    refreshSource.mockReset().mockImplementation(async (request) => ok(
-      configuration().sources.find((source) => source.sourceId === request.payload.sourceId),
-    ));
+    connectSource
+      .mockReset()
+      .mockImplementation(async (request) =>
+        ok(configuration().sources.find((source) => source.sourceId === request.payload.sourceId)),
+      );
+    refreshSource
+      .mockReset()
+      .mockImplementation(async (request) =>
+        ok(configuration().sources.find((source) => source.sourceId === request.payload.sourceId)),
+      );
     refreshSources.mockReset().mockResolvedValue(ok(configuration()));
-    getWebSearchApiKey.mockReset().mockResolvedValue(ok({ status: 'found', value: 'web-secret', source: 'settings' }));
+    getWebSearchApiKey
+      .mockReset()
+      .mockResolvedValue(ok({ status: 'found', value: 'web-secret', source: 'settings' }));
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
@@ -54,18 +63,29 @@ describe('ContentSourcesSettingsPanel', () => {
     expect(secret).toHaveAttribute('type', 'text');
     await user.clear(secret);
     await user.type(secret, 'zhihu-secret');
-    await user.click(within(zhihuRow as HTMLElement).getByRole('button', { name: 'Save 知乎 credential' }));
+    await user.click(
+      within(zhihuRow as HTMLElement).getByRole('button', { name: 'Save 知乎 credential' }),
+    );
 
-    await waitFor(() => expect(setCredential).toHaveBeenCalledWith(expect.objectContaining({
-      target: { kind: 'discoverySource', sourceId: 'zhihu' }, value: 'zhihu-secret',
-    })));
+    await waitFor(() =>
+      expect(setCredential).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: { kind: 'discoverySource', sourceId: 'zhihu' },
+          value: 'zhihu-secret',
+        }),
+      ),
+    );
     expect(secret).toHaveValue('zhihu-secret');
-    expect(screen.getByText('Configured', { selector: '[data-source-id="zhihu"] *' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Configured', { selector: '[data-source-id="zhihu"] *' }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Log in to 小红书' }));
-    expect(connectSource).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { sourceId: 'xiaohongshu' },
-    }));
+    expect(connectSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: { sourceId: 'xiaohongshu' },
+      }),
+    );
 
     await user.click(screen.getByRole('button', { name: 'Check all sources' }));
     expect(refreshSources).toHaveBeenCalledWith(expect.objectContaining({ payload: {} }));
@@ -75,14 +95,25 @@ describe('ContentSourcesSettingsPanel', () => {
 
 function settings() {
   return {
-    language: 'zh-CN', theme: 'midnight-blue', setup: { completed: true }, memory: { enabled: false },
+    language: 'zh-CN',
+    theme: 'midnight-blue',
+    setup: { completed: true },
+    memory: { enabled: false },
     voice: {
-      inputDeviceId: 'default', outputDeviceId: 'default', recognitionLanguage: 'auto',
+      inputDeviceId: 'default',
+      outputDeviceId: 'default',
+      recognitionLanguage: 'auto',
       readAloudEnabled: false,
-      tts: { provider: 'minimax', voiceId: 'default', hasApiKey: false, credentialSource: 'missing' },
+      tts: {
+        provider: 'minimax',
+        voiceId: 'default',
+        hasApiKey: false,
+        credentialSource: 'missing',
+      },
     },
     web: { search: { provider: 'brave', hasApiKey: true, credentialSource: 'settings' } },
-    providers: {}, permissions: { mode: 'ask', rules: [], catalog: { operations: [], tools: [] } },
+    providers: {},
+    permissions: { mode: 'ask', rules: [], catalog: { operations: [], tools: [] } },
   };
 }
 
@@ -105,8 +136,13 @@ function configuration() {
 
 function source(sourceId: string, name: string, access: string, connectionState: string) {
   return {
-    sourceId, name, access, connectionState, enabled: true,
-    supportedModes: ['relevance'], supportsRead: false,
+    sourceId,
+    name,
+    access,
+    connectionState,
+    enabled: true,
+    supportedModes: ['relevance'],
+    supportsRead: false,
   };
 }
 

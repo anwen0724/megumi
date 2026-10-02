@@ -1,7 +1,13 @@
 /* Verifies shared Agent Execution and conversation-submission operations. */
 import { describe, expect, it, vi } from 'vitest';
 import { RunLoopController } from '@megumi/agent-runtime/runs/loop';
-import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
+import {
+  AssistantMessageEventStream,
+  Type,
+  type Api,
+  type AssistantMessage,
+  type Model,
+} from '@megumi/ai';
 import { createEventBus, type AnyEvent } from '@megumi/agent-runtime/events';
 import type { CommandTerminalResult } from '@megumi/agent-runtime/runs/commands/index';
 import type { InputProcessor } from '@megumi/agent-runtime/runs/input/index';
@@ -101,7 +107,9 @@ function createTestLaunch(): TestLaunch {
   const handles: LaunchHandle[] = [];
   const launch = async (input: LaunchAgentExecutionInput): Promise<PreparedRun> => {
     let resolveOutcome!: (outcome: ExecutionOutcome) => void;
-    const outcome = new Promise<ExecutionOutcome>((resolve) => { resolveOutcome = resolve; });
+    const outcome = new Promise<ExecutionOutcome>((resolve) => {
+      resolveOutcome = resolve;
+    });
     // The control Agent parks in executing_tools so approval waits derive as waiting.
     const hangingTool = {
       name: 'hang',
@@ -123,14 +131,24 @@ function createTestLaunch(): TestLaunch {
     };
     const agent = new RunLoopController({
       initialState: {
-        configuration: { systemPrompt: 'test', model, thinkingLevel: 'minimal', tools: [hangingTool] },
-        messages: [{ role: 'user', content: input.input.modelContent[0]?.text ?? '', timestamp: 1 }],
+        configuration: {
+          systemPrompt: 'test',
+          model,
+          thinkingLevel: 'minimal',
+          tools: [hangingTool],
+        },
+        messages: [
+          { role: 'user', content: input.input.modelContent[0]?.text ?? '', timestamp: 1 },
+        ],
       },
       stream,
     });
     void agent.continue();
     await vi.waitFor(() => {
-      expect(agent.state.execution).toMatchObject({ status: 'executing', phase: 'executing_tools' });
+      expect(agent.state.execution).toMatchObject({
+        status: 'executing',
+        phase: 'executing_tools',
+      });
     });
     const handle: LaunchHandle = {
       agent,
@@ -150,7 +168,9 @@ function createTestLaunch(): TestLaunch {
 }
 
 interface TestRuntime extends RunManager {
-  submitConversationInput(request: SubmitConversationInputRequest): Promise<SubmitConversationInputResult>;
+  submitConversationInput(
+    request: SubmitConversationInputRequest,
+  ): Promise<SubmitConversationInputResult>;
 }
 
 interface TestRuntimeOptions {
@@ -165,7 +185,9 @@ function fixture(overrides: Partial<TestRuntimeOptions> = {}): {
 } {
   const eventsBus = createEventBus();
   const published: AnyEvent[] = [];
-  eventsBus.subscribe({}, (event) => { published.push(event); });
+  eventsBus.subscribe({}, (event) => {
+    published.push(event);
+  });
   const testLaunch = createTestLaunch();
   let executionNumber = 0;
   let messageNumber = 0;
@@ -213,7 +235,9 @@ function approvalRequest(executionId: string, approvalId: string): ApprovalReque
     toolIdentity: { sourceId: 'source:1', namespace: 'builtin', sourceToolName: 'lookup' },
     input: { path: 'a.ts' },
     operations: [],
-    options: [{ optionId: 'once:1', scope: 'once', display: { label: 'Once', description: 'Allow once.' } }],
+    options: [
+      { optionId: 'once:1', scope: 'once', display: { label: 'Once', description: 'Allow once.' } },
+    ],
     defaultOptionId: 'once:1',
     createdAt: clock.now(),
     status: 'pending',
@@ -232,7 +256,7 @@ describe('Agent Executions and conversation submission', () => {
           }),
         },
         sessions: {
-      updateModelSelection: () => ({ status: 'found', session }),
+          updateModelSelection: () => ({ status: 'found', session }),
           getSession: vi.fn(),
           createSession,
         },
@@ -281,11 +305,14 @@ describe('Agent Executions and conversation submission', () => {
           },
         },
         sessions: {
-      updateModelSelection: () => ({ status: 'found', session }),
+          updateModelSelection: () => ({ status: 'found', session }),
           getSession: vi.fn(),
           createSession: (request) => {
             order.push('session');
-            expect(request).toMatchObject({ workspace_id: 'workspace:1', initial_user_text: 'hello' });
+            expect(request).toMatchObject({
+              workspace_id: 'workspace:1',
+              initial_user_text: 'hello',
+            });
             return { status: 'created', session };
           },
         },
@@ -424,7 +451,7 @@ describe('Agent Executions and conversation submission', () => {
           }),
         },
         sessions: {
-      updateModelSelection: () => ({ status: 'found', session }),
+          updateModelSelection: () => ({ status: 'found', session }),
           getSession: () => ({ status: 'found', session }),
           createSession: vi.fn(),
         },
@@ -486,7 +513,7 @@ describe('Agent Executions and conversation submission', () => {
           }),
         },
         sessions: {
-      updateModelSelection: () => ({ status: 'found', session }),
+          updateModelSelection: () => ({ status: 'found', session }),
           getSession: () => ({ status: 'found', session }),
           createSession: vi.fn(),
         },
@@ -535,9 +562,14 @@ describe('Agent Executions and conversation submission', () => {
     expect(testLaunch.handles).toHaveLength(1);
     // The user message precedes run.started and carries no executionId (ordering contract).
     expect(published.map((event) => event.type)).toEqual([
-      'message.started', 'message.ended', 'run.started',
+      'message.started',
+      'message.ended',
+      'run.started',
     ]);
-    expect(published[0]).toMatchObject({ type: 'message.started', payload: { role: 'user', messageId: 'message:1' } });
+    expect(published[0]).toMatchObject({
+      type: 'message.started',
+      payload: { role: 'user', messageId: 'message:1' },
+    });
     expect(published[0].executionId).toBeUndefined();
     const executionEvents = collect(published, 'execution:1');
     expect(executionEvents.map((event) => event.type)).toEqual(['run.started']);
@@ -556,7 +588,8 @@ describe('Agent Executions and conversation submission', () => {
     expect(firstResult.status).toBe('started');
     expect(duplicateResult.status).toBe('already_started');
     expect(testLaunch.handles).toHaveLength(1);
-    if (firstResult.status !== 'started' || duplicateResult.status !== 'already_started') throw new Error('unreachable');
+    if (firstResult.status !== 'started' || duplicateResult.status !== 'already_started')
+      throw new Error('unreachable');
     expect(duplicateResult.execution.executionId).toBe(firstResult.execution.executionId);
 
     const conflict = await runtime.start({
@@ -580,7 +613,10 @@ describe('Agent Executions and conversation submission', () => {
     });
     expect(busy.status).toBe('session_busy');
     if (busy.status !== 'session_busy') throw new Error('unreachable');
-    expect(busy.activeExecution).toMatchObject({ executionId: 'execution:1', sessionId: 'session:1' });
+    expect(busy.activeExecution).toMatchObject({
+      executionId: 'execution:1',
+      sessionId: 'session:1',
+    });
     expect(testLaunch.handles).toHaveLength(1);
   });
 
@@ -604,7 +640,10 @@ describe('Agent Executions and conversation submission', () => {
     expect(started.status).toBe('started');
     if (started.status !== 'started') throw new Error('unreachable');
 
-    testLaunch.handles[0]!.resolveOutcome({ status: 'completed', assistantMessageId: 'message:reply' });
+    testLaunch.handles[0]!.resolveOutcome({
+      status: 'completed',
+      assistantMessageId: 'message:reply',
+    });
     await vi.waitFor(() => {
       expect(collect(published, 'execution:1').map((event) => event.type)).toContain('run.ended');
     });
@@ -630,7 +669,9 @@ describe('Agent Executions and conversation submission', () => {
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
     // The launch registers its pending approval through the real wait seam.
-    const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
+    const wait = handle.input.awaitApproval({
+      approval: approvalRequest('execution:1', 'approval:1'),
+    });
 
     const resolved = await runtime.resolveApproval({
       approvalId: 'approval:1',
@@ -661,7 +702,9 @@ describe('Agent Executions and conversation submission', () => {
     const handle = testLaunch.handles[0]!;
     const abortSpy = vi.spyOn(handle.agent, 'abort');
     const approvalOrder: string[] = [];
-    const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
+    const wait = handle.input.awaitApproval({
+      approval: approvalRequest('execution:1', 'approval:1'),
+    });
     void wait.then((resolution) => {
       approvalOrder.push(`settled:${resolution.status}`);
       handle.resolveOutcome({ status: 'cancelled' });
@@ -674,7 +717,9 @@ describe('Agent Executions and conversation submission', () => {
     // The pending approval settles before the Agent abort fires.
     expect(abortSpy).toHaveBeenCalledTimes(1);
     expect(approvalOrder).toEqual(['settled:cancelled']);
-    expect(collect(published, 'execution:1').map((event) => event.type)).toContain('run.cancel.requested');
+    expect(collect(published, 'execution:1').map((event) => event.type)).toContain(
+      'run.cancel.requested',
+    );
 
     await vi.waitFor(() => {
       expect(collect(published, 'execution:1').map((event) => event.type)).toContain('run.ended');
@@ -690,7 +735,9 @@ describe('Agent Executions and conversation submission', () => {
     const started = await runtime.start(startRequest);
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
-    const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
+    const wait = handle.input.awaitApproval({
+      approval: approvalRequest('execution:1', 'approval:1'),
+    });
 
     const first = await runtime.cancel({ executionId: 'execution:1' });
     expect(first.status).toBe('cancellation_requested');
@@ -717,7 +764,9 @@ describe('Agent Executions and conversation submission', () => {
     expect(started.status).toBe('started');
     const handle = testLaunch.handles[0]!;
     const abortSpy = vi.spyOn(handle.agent, 'abort');
-    const wait = handle.input.awaitApproval({ approval: approvalRequest('execution:1', 'approval:1') });
+    const wait = handle.input.awaitApproval({
+      approval: approvalRequest('execution:1', 'approval:1'),
+    });
     void wait.then(() => handle.resolveOutcome({ status: 'cancelled' }));
 
     const shutdown = await runtime.shutdown({ timeoutMs: 2_000 });

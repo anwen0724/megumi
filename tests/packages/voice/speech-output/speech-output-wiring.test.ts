@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { createSettings } from '@megumi/application/settings/settings-store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { onRunEndedForSpeechOutput, type SpeechOutputWiringDeps } from '@megumi/application/voice/index';
+import {
+  onRunEndedForSpeechOutput,
+  type SpeechOutputWiringDeps,
+} from '@megumi/application/voice/index';
 import type { ReadSpeechOutputRequest, SpeechOutputRuntime } from '@megumi/application/voice/index';
 
 function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiringDeps & {
@@ -14,7 +17,9 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
 } {
   const reads: ReadSpeechOutputRequest[] = [];
   const speechOutput = {
-    read: (request: ReadSpeechOutputRequest) => { reads.push(request); },
+    read: (request: ReadSpeechOutputRequest) => {
+      reads.push(request);
+    },
     stop: vi.fn(),
     subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
     reads,
@@ -38,7 +43,12 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
 }
 
 function completedEvent() {
-  return { type: 'run.ended', executionId: 'run-1', sessionId: 'session-1', payload: { status: 'completed' } };
+  return {
+    type: 'run.ended',
+    executionId: 'run-1',
+    sessionId: 'session-1',
+    payload: { status: 'completed' },
+  };
 }
 
 describe('onRunEndedForSpeechOutput', () => {
@@ -47,17 +57,22 @@ describe('onRunEndedForSpeechOutput', () => {
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'read' });
-    expect(wiring.speechOutput.reads).toEqual([{
-      executionId: 'run-1',
-      sessionId: 'session-1',
-      text: '# 你好，世界。',
-      config: { provider: 'minimax', apiKey: 'sk-test', voiceId: 'female-shaonv' },
-    }]);
+    expect(wiring.speechOutput.reads).toEqual([
+      {
+        executionId: 'run-1',
+        sessionId: 'session-1',
+        text: '# 你好，世界。',
+        config: { provider: 'minimax', apiKey: 'sk-test', voiceId: 'female-shaonv' },
+      },
+    ]);
   });
 
   it('ignores non-completed runs without touching the reply lookup', () => {
     const wiring = deps();
-    const failed = onRunEndedForSpeechOutput(wiring, { ...completedEvent(), payload: { status: 'failed' } });
+    const failed = onRunEndedForSpeechOutput(wiring, {
+      ...completedEvent(),
+      payload: { status: 'failed' },
+    });
 
     expect(failed).toEqual({ status: 'ignored' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
@@ -66,7 +81,10 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('stops the read-aloud when the run is cancelled', () => {
     const wiring = deps();
-    const result = onRunEndedForSpeechOutput(wiring, { ...completedEvent(), payload: { status: 'cancelled' } });
+    const result = onRunEndedForSpeechOutput(wiring, {
+      ...completedEvent(),
+      payload: { status: 'cancelled' },
+    });
 
     expect(result).toEqual({ status: 'stopped', reason: 'run_cancelled' });
     expect(wiring.speechOutput.stop).toHaveBeenCalledWith('run_cancelled');
@@ -88,12 +106,14 @@ describe('onRunEndedForSpeechOutput', () => {
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'read' });
-    expect(wiring.speechOutput.reads).toEqual([{
-      executionId: 'run-1',
-      sessionId: 'session-1',
-      text: '# 你好，世界。',
-      config: { provider: 'minimax', apiKey: '', voiceId: 'female-shaonv' },
-    }]);
+    expect(wiring.speechOutput.reads).toEqual([
+      {
+        executionId: 'run-1',
+        sessionId: 'session-1',
+        text: '# 你好，世界。',
+        config: { provider: 'minimax', apiKey: '', voiceId: 'female-shaonv' },
+      },
+    ]);
   });
 
   it('skips runs without an assistant reply', () => {
@@ -137,13 +157,20 @@ describe('onRunEndedForSpeechOutput', () => {
 });
 
 const directories: string[] = [];
-afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const directory of directories.splice(0))
+    fs.rmSync(directory, { recursive: true, force: true });
+});
 function fileSettings(config: unknown = { voice: { readAloudEnabled: true } }, credential = true) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-config-'));
   directories.push(root);
   const globalSettingsPath = path.join(root, 'settings.json');
   fs.writeFileSync(globalSettingsPath, JSON.stringify(config));
-  const settings = createSettings({ globalSettingsPath, credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined });
+  const settings = createSettings({
+    globalSettingsPath,
+    credentialsPath: path.join(root, 'credentials.json'),
+    readEnvironment: () => undefined,
+  });
   if (credential) settings.updateCredential({ target: { kind: 'voiceTts' }, value: 'sk-test' });
   return settings;
 }

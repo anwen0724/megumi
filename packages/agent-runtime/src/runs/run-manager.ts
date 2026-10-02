@@ -2,10 +2,7 @@
 import type { RunLoopController } from './loop';
 import type { Api, Model } from '@megumi/ai';
 import type { ModelClient } from './model-resolution';
-import type {
-  CandidateSupplyRunContext,
-  RecommendationRunContext,
-} from '../context/index';
+import type { CandidateSupplyRunContext, RecommendationRunContext } from '../context/index';
 import type { EventBus, EventPayloadByType, EventType } from '../events';
 import type { UserInput } from './input/index';
 import type { ApprovalDecision, PermissionMode } from '../permissions/index';
@@ -71,9 +68,7 @@ export interface PreparedRun {
   readonly execute: () => Promise<ExecutionOutcome>;
 }
 
-export type PrepareRun = (
-  input: LaunchAgentExecutionInput,
-) => Promise<PreparedRun>;
+export type PrepareRun = (input: LaunchAgentExecutionInput) => Promise<PreparedRun>;
 
 export interface ConversationExecutionInput {
   readonly signal?: AbortSignal;
@@ -112,22 +107,41 @@ export interface CandidateSupplyExecutionInput {
   readonly model: Model<Api>;
 }
 
-export type StartExecutionRequest = ConversationExecutionInput | RecommendationExecutionInput
-  | CandidateSupplyExecutionInput;
+export type StartExecutionRequest =
+  ConversationExecutionInput | RecommendationExecutionInput | CandidateSupplyExecutionInput;
 
 export type StartExecutionResult =
-  | { readonly status: 'started'; readonly execution: ConversationExecutionSnapshot; readonly completion: Promise<ExecutionOutcome>; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
-  | { readonly status: 'already_started'; readonly execution: ConversationExecutionSnapshot; readonly completion: Promise<ExecutionOutcome>; readonly userMessage: SessionMessageWithAttachments; readonly userEntry: SessionEntry }
+  | {
+      readonly status: 'started';
+      readonly execution: ConversationExecutionSnapshot;
+      readonly completion: Promise<ExecutionOutcome>;
+      readonly userMessage: SessionMessageWithAttachments;
+      readonly userEntry: SessionEntry;
+    }
+  | {
+      readonly status: 'already_started';
+      readonly execution: ConversationExecutionSnapshot;
+      readonly completion: Promise<ExecutionOutcome>;
+      readonly userMessage: SessionMessageWithAttachments;
+      readonly userEntry: SessionEntry;
+    }
   | { readonly status: 'session_busy'; readonly activeExecution: ConversationExecutionSnapshot }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
 
 export type StartRecommendationExecutionResult =
-  | { readonly status: 'started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
-  | { readonly status: 'already_started'; readonly execution: ExecutionSnapshot; readonly completion: Promise<ExecutionOutcome> }
+  | {
+      readonly status: 'started';
+      readonly execution: ExecutionSnapshot;
+      readonly completion: Promise<ExecutionOutcome>;
+    }
+  | {
+      readonly status: 'already_started';
+      readonly execution: ExecutionSnapshot;
+      readonly completion: Promise<ExecutionOutcome>;
+    }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
 
-export type StartCandidateSupplyExecutionResult =
-  StartRecommendationExecutionResult;
+export type StartCandidateSupplyExecutionResult = StartRecommendationExecutionResult;
 
 export interface ResolveApprovalRequest {
   readonly approvalId: string;
@@ -141,28 +155,44 @@ export type ApprovalDecisionRequest =
 export type ResolveApprovalResult =
   | { readonly status: 'accepted'; readonly execution: ExecutionSnapshot }
   | { readonly status: 'not_found'; readonly approvalId: string }
-  | { readonly status: 'not_waiting'; readonly approvalId: string; readonly execution: ExecutionSnapshot }
-  | { readonly status: 'already_resolved'; readonly approvalId: string; readonly execution: ExecutionSnapshot }
+  | {
+      readonly status: 'not_waiting';
+      readonly approvalId: string;
+      readonly execution: ExecutionSnapshot;
+    }
+  | {
+      readonly status: 'already_resolved';
+      readonly approvalId: string;
+      readonly execution: ExecutionSnapshot;
+    }
   | { readonly status: 'failed'; readonly failure: ExecutionFailure };
 
-export interface CancelExecutionRequest { readonly executionId: string }
+export interface CancelExecutionRequest {
+  readonly executionId: string;
+}
 export type CancelExecutionResult =
   | { readonly status: 'cancellation_requested'; readonly execution: ExecutionSnapshot }
   | { readonly status: 'already_cancelling'; readonly execution: ExecutionSnapshot }
   | { readonly status: 'already_terminal'; readonly execution: ExecutionSnapshot }
   | { readonly status: 'not_found'; readonly executionId: string };
 
-export interface GetExecutionRequest { readonly executionId: string }
+export interface GetExecutionRequest {
+  readonly executionId: string;
+}
 export type GetExecutionResult =
   | { readonly status: 'found'; readonly execution: ExecutionSnapshot }
   | { readonly status: 'not_found'; readonly executionId: string };
 
-export interface GetActiveExecutionRequest { readonly sessionId: string }
+export interface GetActiveExecutionRequest {
+  readonly sessionId: string;
+}
 export type GetActiveExecutionResult =
   | { readonly status: 'found'; readonly execution: ConversationExecutionSnapshot }
   | { readonly status: 'not_found'; readonly sessionId: string };
 
-export interface ShutdownRequest { readonly timeoutMs: number }
+export interface ShutdownRequest {
+  readonly timeoutMs: number;
+}
 export type ShutdownResult =
   | { readonly status: 'shut_down' }
   | { readonly status: 'timed_out'; readonly activeExecutions: readonly ExecutionSnapshot[] };
@@ -173,7 +203,9 @@ export interface RunManager {
   start(request: ConversationExecutionInput): Promise<StartExecutionResult>;
   start(request: RecommendationExecutionInput): Promise<StartRecommendationExecutionResult>;
   start(request: CandidateSupplyExecutionInput): Promise<StartCandidateSupplyExecutionResult>;
-  start(request: StartExecutionRequest): Promise<StartExecutionResult | StartRecommendationExecutionResult>;
+  start(
+    request: StartExecutionRequest,
+  ): Promise<StartExecutionResult | StartRecommendationExecutionResult>;
   resolveApproval(request: ResolveApprovalRequest): Promise<ResolveApprovalResult>;
   cancel(request: CancelExecutionRequest): Promise<CancelExecutionResult>;
   get(request: GetExecutionRequest): GetExecutionResult;
@@ -191,11 +223,17 @@ export interface CreateRunManagerOptions {
   readonly launch: PrepareRun;
   /** Awaits required application records before releasing the run and its session. */
   readonly beforeComplete?: (metadata: ExecutionMetadata) => void | Promise<void>;
-  readonly onSettled?: (execution: ExecutionSnapshot, outcome: ExecutionOutcome) => void | Promise<void>;
+  readonly onSettled?: (
+    execution: ExecutionSnapshot,
+    outcome: ExecutionOutcome,
+  ) => void | Promise<void>;
 }
 
 export function createRunManager(options: CreateRunManagerOptions): RunManager {
-  const store = new RunRegistry({ clock: options.clock, terminalRetentionMs: options.terminalRetentionMs });
+  const store = new RunRegistry({
+    clock: options.clock,
+    terminalRetentionMs: options.terminalRetentionMs,
+  });
   let accepting = true;
 
   const publish = <TType extends EventType>(
@@ -217,7 +255,10 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
     if (execution.kind !== 'conversation') return;
     if (outcome.status === 'completed') {
       if (!outcome.assistantMessageId) return;
-      publish(execution, 'run.ended', { status: 'completed', assistantMessageId: outcome.assistantMessageId });
+      publish(execution, 'run.ended', {
+        status: 'completed',
+        assistantMessageId: outcome.assistantMessageId,
+      });
       return;
     }
     if (outcome.status === 'failed') {
@@ -250,10 +291,15 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
   const requestCancellation = async (executionId: string): Promise<CancelExecutionResult> => {
     const current = store.getExecution(executionId);
     if (!current) return { status: 'not_found', executionId };
-    if (current.status === 'completed' || current.status === 'failed' || current.status === 'cancelled') {
+    if (
+      current.status === 'completed' ||
+      current.status === 'failed' ||
+      current.status === 'cancelled'
+    ) {
       return { status: 'already_terminal', execution: current };
     }
-    if (current.status === 'cancelling') return { status: 'already_cancelling', execution: current };
+    if (current.status === 'cancelling')
+      return { status: 'already_cancelling', execution: current };
     store.requestCancellation(executionId);
     if (current.kind === 'conversation') {
       publish(current, 'run.cancel.requested', {
@@ -262,20 +308,34 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
         scope: 'run',
       });
     }
-    return { status: 'cancellation_requested', execution: store.getExecution(executionId) ?? current };
+    return {
+      status: 'cancellation_requested',
+      execution: store.getExecution(executionId) ?? current,
+    };
   };
 
   const startExecution = async (
-    request: ConversationExecutionInput | RecommendationExecutionInput | CandidateSupplyExecutionInput,
-  ): Promise<StartExecutionResult | StartRecommendationExecutionResult | StartCandidateSupplyExecutionResult> => {
+    request:
+      ConversationExecutionInput | RecommendationExecutionInput | CandidateSupplyExecutionInput,
+  ): Promise<
+    StartExecutionResult | StartRecommendationExecutionResult | StartCandidateSupplyExecutionResult
+  > => {
     if (!accepting) {
-      return { status: 'failed', failure: executionFailure('Agent execution service is shutting down.', 'execution_shutting_down') };
+      return {
+        status: 'failed',
+        failure: executionFailure(
+          'Agent execution service is shutting down.',
+          'execution_shutting_down',
+        ),
+      };
     }
     if (request.kind === 'conversation') return startConversationExecution(request);
     return startBackgroundRun(request);
   };
 
-  async function startConversationExecution(request: ConversationExecutionInput): Promise<StartExecutionResult> {
+  async function startConversationExecution(
+    request: ConversationExecutionInput,
+  ): Promise<StartExecutionResult> {
     const createdAt = options.clock.now();
     const executionId = options.ids.createExecutionId();
     const userMessageId = options.ids.createSessionMessageId();
@@ -298,14 +358,20 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
         workspaceId: request.workspaceId,
         sessionId: request.sessionId,
         ...(request.parentEntryId ? { parentEntryId: request.parentEntryId } : {}),
-        inputDigest: canonicalJson({ input: request.input, ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}) }),
+        inputDigest: canonicalJson({
+          input: request.input,
+          ...(request.recommendationReference
+            ? { recommendationReference: request.recommendationReference }
+            : {}),
+        }),
       },
       metadata,
     });
 
     if (reserved.status === 'pending') {
       const established = await reserved.completion;
-      if (established.status === 'failed') return { status: 'failed', failure: established.failure };
+      if (established.status === 'failed')
+        return { status: 'failed', failure: established.failure };
       return {
         status: 'already_started',
         ...established.result,
@@ -320,9 +386,16 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
       };
     }
     if (reserved.status === 'request_conflict') {
-      return { status: 'failed', failure: executionFailure('requestId was reused with different execution input.', 'request_id_conflict') };
+      return {
+        status: 'failed',
+        failure: executionFailure(
+          'requestId was reused with different execution input.',
+          'request_id_conflict',
+        ),
+      };
     }
-    if (reserved.status === 'session_busy') return { status: 'session_busy', activeExecution: reserved.activeExecution };
+    if (reserved.status === 'session_busy')
+      return { status: 'session_busy', activeExecution: reserved.activeExecution };
 
     let launched: PreparedRun;
     try {
@@ -330,10 +403,16 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
         kind: 'conversation',
         client: request.client,
         compactionThresholdRatio: request.compactionThresholdRatio,
-        signal: AbortSignal.any([store.getCancellationSignal(executionId), request.signal].filter((signal) => signal !== undefined)),
+        signal: AbortSignal.any(
+          [store.getCancellationSignal(executionId), request.signal].filter(
+            (signal) => signal !== undefined,
+          ),
+        ),
         metadata,
         input: request.input,
-        ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}),
+        ...(request.recommendationReference
+          ? { recommendationReference: request.recommendationReference }
+          : {}),
         awaitApproval: ({ approval }) => store.beginApprovalWait({ executionId, approval }),
       });
     } catch (error) {
@@ -342,7 +421,10 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
       return { status: 'failed', failure };
     }
     if (!launched.userMessage || !launched.userEntry) {
-      const failure = executionFailure('Conversation launch did not commit its user message.', 'conversation_acceptance_missing');
+      const failure = executionFailure(
+        'Conversation launch did not commit its user message.',
+        'conversation_acceptance_missing',
+      );
       store.failStart({ requestId: request.requestId, failure });
       return { status: 'failed', failure };
     }
@@ -359,35 +441,83 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
       throw new Error('Conversation start produced a non-conversation execution.');
     }
     publish(execution, 'message.started', { role: 'user', messageId: userMessageId }, true);
-    publish(execution, 'message.ended', { role: 'user', messageId: userMessageId, content: userMessageText(request.input) }, true);
+    publish(
+      execution,
+      'message.ended',
+      { role: 'user', messageId: userMessageId, content: userMessageText(request.input) },
+      true,
+    );
     publish(execution, 'run.started', {
       requestId: execution.requestId,
       providerId: String(execution.model.provider),
       modelId: execution.model.id,
     });
-    return { status: 'started', execution, completion, userMessage: launched.userMessage, userEntry: launched.userEntry };
+    return {
+      status: 'started',
+      execution,
+      completion,
+      userMessage: launched.userMessage,
+      userEntry: launched.userEntry,
+    };
   }
 
   /** Reserves and starts any background run with the same admission and cleanup sequence. */
-  async function startBackgroundRun(request: RecommendationExecutionInput | CandidateSupplyExecutionInput): Promise<StartRecommendationExecutionResult> {
+  async function startBackgroundRun(
+    request: RecommendationExecutionInput | CandidateSupplyExecutionInput,
+  ): Promise<StartRecommendationExecutionResult> {
     const createdAt = options.clock.now();
     const executionId = request.runId ?? options.ids.createExecutionId();
-    const base = { executionId, requestId: request.requestId, model: request.model, createdAt, startedAt: createdAt };
-    const launch: LaunchRecommendationExecutionInput | LaunchCandidateSupplyExecutionInput = request.kind === 'recommendation'
-      ? {
-          client: request.client, compactionThresholdRatio: request.compactionThresholdRatio,
-          kind: 'recommendation', metadata: { ...base, kind: 'recommendation', localDate: request.localDate },
-          runContext: { kind: 'recommendation', executionId, requestId: request.requestId, localDate: request.localDate, model: request.model, client: request.client, compactionThresholdRatio: request.compactionThresholdRatio },
-        }
-      : {
-          client: request.client, compactionThresholdRatio: request.compactionThresholdRatio,
-          kind: 'candidate_supply', metadata: { ...base, kind: 'candidate_supply' },
-          runContext: { kind: 'candidate_supply', executionId, requestId: request.requestId, startedAt: createdAt, trigger: request.trigger, model: request.model, client: request.client, compactionThresholdRatio: request.compactionThresholdRatio },
-        };
+    const base = {
+      executionId,
+      requestId: request.requestId,
+      model: request.model,
+      createdAt,
+      startedAt: createdAt,
+    };
+    const launch: LaunchRecommendationExecutionInput | LaunchCandidateSupplyExecutionInput =
+      request.kind === 'recommendation'
+        ? {
+            client: request.client,
+            compactionThresholdRatio: request.compactionThresholdRatio,
+            kind: 'recommendation',
+            metadata: { ...base, kind: 'recommendation', localDate: request.localDate },
+            runContext: {
+              kind: 'recommendation',
+              executionId,
+              requestId: request.requestId,
+              localDate: request.localDate,
+              model: request.model,
+              client: request.client,
+              compactionThresholdRatio: request.compactionThresholdRatio,
+            },
+          }
+        : {
+            client: request.client,
+            compactionThresholdRatio: request.compactionThresholdRatio,
+            kind: 'candidate_supply',
+            metadata: { ...base, kind: 'candidate_supply' },
+            runContext: {
+              kind: 'candidate_supply',
+              executionId,
+              requestId: request.requestId,
+              startedAt: createdAt,
+              trigger: request.trigger,
+              model: request.model,
+              client: request.client,
+              compactionThresholdRatio: request.compactionThresholdRatio,
+            },
+          };
     store.reserveBackground(launch.metadata);
     let launched: PreparedRun;
     try {
-      launched = await options.launch({ ...launch, signal: AbortSignal.any([store.getCancellationSignal(executionId), request.signal].filter((signal) => signal !== undefined)) });
+      launched = await options.launch({
+        ...launch,
+        signal: AbortSignal.any(
+          [store.getCancellationSignal(executionId), request.signal].filter(
+            (signal) => signal !== undefined,
+          ),
+        ),
+      });
     } catch (error) {
       store.failBackgroundStart(executionId);
       return { status: 'failed', failure: launchFailure(error) };
@@ -398,28 +528,47 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
     return { status: 'started', execution, completion };
   }
 
-  function attachExecution(metadata: ExecutionMetadata, launched: PreparedRun): Promise<ExecutionOutcome> {
+  function attachExecution(
+    metadata: ExecutionMetadata,
+    launched: PreparedRun,
+  ): Promise<ExecutionOutcome> {
     let resolveCompletion!: (outcome: ExecutionOutcome) => void;
-    const completion = new Promise<ExecutionOutcome>((resolve) => { resolveCompletion = resolve; });
-    store.attachActiveExecution({ metadata, agent: launched.agent, completion, pendingApproval: undefined });
+    const completion = new Promise<ExecutionOutcome>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    store.attachActiveExecution({
+      metadata,
+      agent: launched.agent,
+      completion,
+      pendingApproval: undefined,
+    });
     const finish = async (outcome: ExecutionOutcome) => {
       let final = outcome;
       try {
         await options.beforeComplete?.(metadata);
       } catch (error) {
-        final = { status: 'failed', failure: executionFailure(
-          error instanceof Error ? error.message : 'Required run finalization failed.', 'run_finalization_failed',
-        ) };
+        final = {
+          status: 'failed',
+          failure: executionFailure(
+            error instanceof Error ? error.message : 'Required run finalization failed.',
+            'run_finalization_failed',
+          ),
+        };
       }
-      if (final.status === 'completed' && store.getCancellationSignal(metadata.executionId)?.aborted) {
+      if (
+        final.status === 'completed' &&
+        store.getCancellationSignal(metadata.executionId)?.aborted
+      ) {
         final = { status: 'cancelled' };
       }
       settleCompletion(metadata.executionId, final);
       resolveCompletion(final);
     };
-    void launched.execute().then(
-      finish,
-      () => finish({ status: 'failed', failure: executionFailure('Execution failed unexpectedly.', 'unexpected_exception') }),
+    void launched.execute().then(finish, () =>
+      finish({
+        status: 'failed',
+        failure: executionFailure('Execution failed unexpectedly.', 'unexpected_exception'),
+      }),
     );
     return completion;
   }
@@ -433,10 +582,21 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
         approvalId: request.approvalId,
         decision: toApprovalDecision(request.decision, request.approvalId, options.clock.now()),
       });
-      if (resolved.status === 'accepted') return { status: 'accepted', execution: resolved.execution };
-      if (resolved.status === 'not_found') return { status: 'not_found', approvalId: request.approvalId };
-      if (resolved.status === 'not_waiting') return { status: 'not_waiting', approvalId: request.approvalId, execution: resolved.execution };
-      return { status: 'already_resolved', approvalId: request.approvalId, execution: resolved.execution };
+      if (resolved.status === 'accepted')
+        return { status: 'accepted', execution: resolved.execution };
+      if (resolved.status === 'not_found')
+        return { status: 'not_found', approvalId: request.approvalId };
+      if (resolved.status === 'not_waiting')
+        return {
+          status: 'not_waiting',
+          approvalId: request.approvalId,
+          execution: resolved.execution,
+        };
+      return {
+        status: 'already_resolved',
+        approvalId: request.approvalId,
+        execution: resolved.execution,
+      };
     },
 
     cancel: ({ executionId }) => requestCancellation(executionId),
@@ -452,21 +612,42 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
     },
     async shutdown({ timeoutMs }): Promise<ShutdownResult> {
       accepting = false;
-      await Promise.allSettled(store.listActiveExecutions().map(({ executionId }) => requestCancellation(executionId)));
+      await Promise.allSettled(
+        store.listActiveExecutions().map(({ executionId }) => requestCancellation(executionId)),
+      );
       const idle = await store.waitForIdle(timeoutMs);
-      return idle ? { status: 'shut_down' } : { status: 'timed_out', activeExecutions: store.listActiveExecutions() };
+      return idle
+        ? { status: 'shut_down' }
+        : { status: 'timed_out', activeExecutions: store.listActiveExecutions() };
     },
   };
 }
 
-function toApprovalDecision(decision: ApprovalDecisionRequest, approvalId: string, decidedAt: string): ApprovalDecision {
+function toApprovalDecision(
+  decision: ApprovalDecisionRequest,
+  approvalId: string,
+  decidedAt: string,
+): ApprovalDecision {
   return decision.decision === 'approved'
-    ? { approvalRequestId: approvalId, decision: 'approved', optionId: decision.optionId, decidedBy: 'user', decidedAt, ...(decision.reason ? { reason: decision.reason } : {}) }
-    : { approvalRequestId: approvalId, decision: 'denied', decidedBy: 'user', decidedAt, ...(decision.reason ? { reason: decision.reason } : {}) };
+    ? {
+        approvalRequestId: approvalId,
+        decision: 'approved',
+        optionId: decision.optionId,
+        decidedBy: 'user',
+        decidedAt,
+        ...(decision.reason ? { reason: decision.reason } : {}),
+      }
+    : {
+        approvalRequestId: approvalId,
+        decision: 'denied',
+        decidedBy: 'user',
+        decidedAt,
+        ...(decision.reason ? { reason: decision.reason } : {}),
+      };
 }
 
 function userMessageText(input: UserInput): string {
-  return input.displayContent.map((block) => block.type === 'text' ? block.text : '').join('');
+  return input.displayContent.map((block) => (block.type === 'text' ? block.text : '')).join('');
 }
 
 function canonicalJson(value: unknown): string {
@@ -490,7 +671,10 @@ function launchFailure(error: unknown): ExecutionFailure {
   if (typeof error === 'object' && error !== null && 'failure' in error) {
     return (error as { readonly failure: ExecutionFailure }).failure;
   }
-  return executionFailure(error instanceof Error ? error.message : 'Execution launch failed.', 'launch_failed');
+  return executionFailure(
+    error instanceof Error ? error.message : 'Execution launch failed.',
+    'launch_failed',
+  );
 }
 
 function executionFailure(message: string, code: string): ExecutionFailure {

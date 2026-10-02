@@ -16,8 +16,7 @@ export interface CreateSessionRequest {
 }
 
 export type CreateSessionResult =
-  | { status: 'created'; session: Session }
-  | { status: 'failed'; failure: SessionFailure };
+  { status: 'created'; session: Session } | { status: 'failed'; failure: SessionFailure };
 
 export interface GetSessionRequest {
   session_id: string;
@@ -33,8 +32,7 @@ export interface ListSessionsRequest {
 }
 
 export type ListSessionsResult =
-  | { status: 'ok'; sessions: Session[] }
-  | { status: 'failed'; failure: SessionFailure };
+  { status: 'ok'; sessions: Session[] } | { status: 'failed'; failure: SessionFailure };
 
 export interface ArchiveSessionRequest {
   session_id: string;
@@ -47,7 +45,10 @@ export type ArchiveSessionResult =
   | { status: 'failed'; failure: SessionFailure };
 
 export interface SessionCatalog {
-  updateModelSelection(request: { session_id: string; model_selection: NonNullable<Session['model_selection']> }): GetSessionResult;
+  updateModelSelection(request: {
+    session_id: string;
+    model_selection: NonNullable<Session['model_selection']>;
+  }): GetSessionResult;
   createSession(request: CreateSessionRequest): CreateSessionResult;
   getSession(request: GetSessionRequest): GetSessionResult;
   listSessions(request: ListSessionsRequest): ListSessionsResult;
@@ -80,7 +81,9 @@ export function createSessionCatalog(options: CreateSessionCatalogOptions): Sess
         const session = options.store.insertSession({
           session_id: options.ids?.sessionId?.() ?? `session:${crypto.randomUUID()}`,
           workspace_id: request.workspace_id,
-          model_selection: request.model_selection ? SessionModelSelectionSchema.parse(request.model_selection) : undefined,
+          model_selection: request.model_selection
+            ? SessionModelSelectionSchema.parse(request.model_selection)
+            : undefined,
           title: request.title?.trim() || deriveInitialSessionTitle(request.initial_user_text),
           status: 'active',
           active_entry_id: undefined,

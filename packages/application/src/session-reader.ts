@@ -90,8 +90,12 @@ export function createSessionReader(options: CreateSessionReaderOptions): Sessio
           ...(activeRunResult ? { activeRun: toRunDto(activeRunResult) } : {}),
           runtimeEvents: [...eventResult.events],
           eventRange: {
-            ...(eventResult.firstSequence === undefined ? {} : { firstSequence: eventResult.firstSequence }),
-            ...(eventResult.lastSequence === undefined ? {} : { lastSequence: eventResult.lastSequence }),
+            ...(eventResult.firstSequence === undefined
+              ? {}
+              : { firstSequence: eventResult.firstSequence }),
+            ...(eventResult.lastSequence === undefined
+              ? {}
+              : { lastSequence: eventResult.lastSequence }),
             truncated: eventResult.truncated,
           },
           workspaceChanges: workspace.summaries,
@@ -164,12 +168,14 @@ export function toUserMessageDto(input: {
     ...messageIdentity(message),
     kind: 'user',
     displayContent: message.display_content.map(copyUserContent),
-    ...(message.skill_selection ? {
-      skillSelection: {
-        name: message.skill_selection.name,
-        skillPath: message.skill_selection.skill_path,
-      },
-    } : {}),
+    ...(message.skill_selection
+      ? {
+          skillSelection: {
+            name: message.skill_selection.name,
+            skillPath: message.skill_selection.skill_path,
+          },
+        }
+      : {}),
     attachments: input.attachments.map((attachment) => ({
       attachmentId: attachment.attachment_id,
       type: attachment.type,
@@ -199,12 +205,14 @@ function toConversationItemDto(item: SessionConversationItem): SessionConversati
     compactionId: item.compactionId,
     trigger: item.trigger,
     status: item.status,
-    ...(item.error ? {
-      error: {
-        ...(item.error.code ? { code: item.error.code } : {}),
-        message: item.error.message,
-      },
-    } : {}),
+    ...(item.error
+      ? {
+          error: {
+            ...(item.error.code ? { code: item.error.code } : {}),
+            message: item.error.message,
+          },
+        }
+      : {}),
     startedAt: item.startedAt,
     ...(item.completedAt ? { completedAt: item.completedAt } : {}),
   };
@@ -251,13 +259,15 @@ function toMessageDto(
       status: message.status,
       content: message.content.map(copyUserContent),
       ...(message.usage ? { usage: copyUsage(message.usage) } : {}),
-      ...(message.error ? {
-        error: {
-          code: message.error.code,
-          message: message.error.message,
-          ...(message.error.details ? { details: structuredClone(message.error.details) } : {}),
-        },
-      } : {}),
+      ...(message.error
+        ? {
+            error: {
+              code: message.error.code,
+              message: message.error.message,
+              ...(message.error.details ? { details: structuredClone(message.error.details) } : {}),
+            },
+          }
+        : {}),
     };
   }
   return {
@@ -282,9 +292,14 @@ function messageIdentity(message: SessionMessage) {
   };
 }
 
-function modelFacts(message: Extract<SessionMessage, {
-  message_kind: 'model_response' | 'assistant_reply';
-}>) {
+function modelFacts(
+  message: Extract<
+    SessionMessage,
+    {
+      message_kind: 'model_response' | 'assistant_reply';
+    }
+  >,
+) {
   return {
     ...(message.api ? { api: message.api } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
@@ -314,7 +329,8 @@ function collectExecutionIds(
 ): string[] {
   const executionIds = new Set<string>();
   for (const item of conversation) {
-    if (item.type === 'message' && item.message.execution_id) executionIds.add(item.message.execution_id);
+    if (item.type === 'message' && item.message.execution_id)
+      executionIds.add(item.message.execution_id);
   }
   if (activeExecutionId) executionIds.add(activeExecutionId);
   return [...executionIds];
@@ -332,8 +348,11 @@ function readWorkspaceChanges(
   const diagnostics: SessionReadDiagnosticDto[] = [];
   for (const executionId of executionIds) {
     try {
-      summaries.push(...workspaceChanges.listChangeSummaries({ by: 'run', execution_id: executionId })
-        .summaries.map(toWorkspaceChangeSummaryDto));
+      summaries.push(
+        ...workspaceChanges
+          .listChangeSummaries({ by: 'run', execution_id: executionId })
+          .summaries.map(toWorkspaceChangeSummaryDto),
+      );
     } catch (error) {
       diagnostics.push({
         code: 'workspace_changes_unavailable',

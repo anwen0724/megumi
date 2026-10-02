@@ -6,12 +6,7 @@ import {
   createBuiltInToolRegistry,
   type BuiltInToolName,
 } from './tool-catalog';
-import type {
-  ToolDefinition,
-  ToolExecutionOptions,
-  ToolExecutionResult,
-  ToolSource,
-} from './tool';
+import type { ToolDefinition, ToolExecutionOptions, ToolExecutionResult, ToolSource } from './tool';
 import type {
   RouteToolCallResult,
   ToolInvocation,
@@ -45,7 +40,11 @@ import {
 export interface ModelCallToolScope extends ToolRouteScope {}
 
 export type ToolResolutionFailure = {
-  readonly code: 'workspace_not_found' | 'workspace_unavailable' | 'tool_unavailable' | 'model_call_scope_conflict';
+  readonly code:
+    | 'workspace_not_found'
+    | 'workspace_unavailable'
+    | 'tool_unavailable'
+    | 'model_call_scope_conflict';
   readonly message: string;
 };
 
@@ -54,14 +53,22 @@ export type ResolveModelCallToolsResult =
   | { readonly status: 'failed'; readonly failure: ToolResolutionFailure };
 
 export interface AvailableTool {
-  readonly identity: { readonly sourceId: string; readonly namespace: string; readonly sourceToolName: string };
+  readonly identity: {
+    readonly sourceId: string;
+    readonly namespace: string;
+    readonly sourceToolName: string;
+  };
   readonly registeredToolName: string;
   readonly source: ToolSource;
   readonly definition: ToolDefinition;
 }
 
-export interface ListAvailableToolsRequest { readonly includeDisabled?: boolean }
-export interface ListAvailableToolsResult { readonly tools: readonly AvailableTool[] }
+export interface ListAvailableToolsRequest {
+  readonly includeDisabled?: boolean;
+}
+export interface ListAvailableToolsResult {
+  readonly tools: readonly AvailableTool[];
+}
 
 export interface RouteModelCallToolRequest extends ModelCallToolScope {
   readonly toolCallId: string;
@@ -88,7 +95,10 @@ export interface Tools {
 
 interface InternalTools extends Tools {
   routeToolCall(request: RouteModelCallToolRequest): RouteToolCallResult;
-  executeToolInvocation(request: ExecuteToolInvocationRequest, options?: ToolExecutionOptions): Promise<ToolExecutionResult>;
+  executeToolInvocation(
+    request: ExecuteToolInvocationRequest,
+    options?: ToolExecutionOptions,
+  ): Promise<ToolExecutionResult>;
   releaseModelCallTools(request: { readonly modelCallId: string }): void;
 }
 
@@ -134,9 +144,20 @@ export interface ModelCallToolBinding {
 
 export interface ToolSettings {
   readSettings():
-    | { status: 'ok'; settings: { config: { webSearch: { provider?: WebSearchProvider; baseUrl?: string; apiKeyEnv?: string } } } }
+    | {
+        status: 'ok';
+        settings: {
+          config: {
+            webSearch: { provider?: WebSearchProvider; baseUrl?: string; apiKeyEnv?: string };
+          };
+        };
+      }
     | { status: 'rejected'; error: { message: string } };
-  readCredential(request: { target: { kind: 'webSearch' }; apiKeyEnv?: string; defaultEnvNames?: readonly string[] }):
+  readCredential(request: {
+    target: { kind: 'webSearch' };
+    apiKeyEnv?: string;
+    defaultEnvNames?: readonly string[];
+  }):
     | { status: 'found'; value: string }
     | { status: 'missing' }
     | { status: 'rejected'; error: { message: string } };
@@ -144,7 +165,13 @@ export interface ToolSettings {
 
 export interface ToolWorkspaceCatalog {
   getWorkspace(request: { readonly workspace_id: string }):
-    | { readonly status: 'found'; readonly workspace: { readonly root_path: string; readonly status: 'available' | 'missing' } }
+    | {
+        readonly status: 'found';
+        readonly workspace: {
+          readonly root_path: string;
+          readonly status: 'available' | 'missing';
+        };
+      }
     | { readonly status: 'not_found'; readonly workspace_id: string };
 }
 
@@ -163,13 +190,13 @@ export interface CreateToolsRequest {
   readonly webFetch?: WebFetch;
 }
 
-export type CandidateSupplyToolOperations = SearchContentOperation
-  & ReadSourceCandidateOperation
-  & SubmitCandidatesOperation
-  & { ownsExecution(executionId: string): boolean };
+export type CandidateSupplyToolOperations = SearchContentOperation &
+  ReadSourceCandidateOperation &
+  SubmitCandidatesOperation & { ownsExecution(executionId: string): boolean };
 
-export type RecommendationToolOperations = ReadRecommendationCandidateOperation
-  & ExpandRecommendationWorkingSetOperation & SubmitRecommendationsOperation;
+export type RecommendationToolOperations = ReadRecommendationCandidateOperation &
+  ExpandRecommendationWorkingSetOperation &
+  SubmitRecommendationsOperation;
 
 interface ModelCallRegistration {
   readonly scope: ModelCallToolScope;
@@ -194,7 +221,10 @@ export function createTools(request: CreateToolsRequest): Tools {
   const runtime: InternalTools = {
     bindExecution(bindingRequest) {
       if (executions.has(bindingRequest.executionId)) {
-        return failedBinding('model_call_scope_conflict', `Tool execution is already bound: ${bindingRequest.executionId}`);
+        return failedBinding(
+          'model_call_scope_conflict',
+          `Tool execution is already bound: ${bindingRequest.executionId}`,
+        );
       }
       const toolNames = new Set(bindingRequest.toolNames);
       let closed = false;
@@ -202,14 +232,20 @@ export function createTools(request: CreateToolsRequest): Tools {
       const binding: ToolExecutionBinding = {
         executionId: bindingRequest.executionId,
         prepareModelCall({ modelCallId }) {
-          if (closed) return failedPreparation('model_call_scope_conflict', 'Tool execution binding is closed.');
+          if (closed)
+            return failedPreparation(
+              'model_call_scope_conflict',
+              'Tool execution binding is closed.',
+            );
           const scope: ModelCallToolScope = {
             executionId: bindingRequest.executionId,
             modelCallId,
-            ...(bindingRequest.subject.kind === 'session' ? {
-              sessionId: bindingRequest.subject.sessionId,
-              workspaceId: bindingRequest.subject.workspaceId,
-            } : {}),
+            ...(bindingRequest.subject.kind === 'session'
+              ? {
+                  sessionId: bindingRequest.subject.sessionId,
+                  workspaceId: bindingRequest.subject.workspaceId,
+                }
+              : {}),
           };
           const prepared = prepareModelCall(scope, toolNames);
           if (prepared.status === 'failed') return prepared;
@@ -224,11 +260,13 @@ export function createTools(request: CreateToolsRequest): Tools {
             },
             executeToolInvocation(execution, options) {
               if (modelCallClosed || closed) {
-                return Promise.resolve(createFailedToolResult({
-                  toolName: execution.invocation.toolName,
-                  code: 'unknown_tool',
-                  message: `ModelCall Tool Router was not found: ${modelCallId}`,
-                }));
+                return Promise.resolve(
+                  createFailedToolResult({
+                    toolName: execution.invocation.toolName,
+                    code: 'unknown_tool',
+                    message: `ModelCall Tool Router was not found: ${modelCallId}`,
+                  }),
+                );
               }
               return runtime.executeToolInvocation(execution, options);
             },
@@ -255,12 +293,17 @@ export function createTools(request: CreateToolsRequest): Tools {
 
     listAvailableTools(input = {}) {
       return {
-        tools: registry.list()
-          .filter((tool) => input.includeDisabled || isSelected(tool.registeredToolName, {
-            availability: request.builtInToolAvailability,
-            processAvailable: process !== undefined,
-            webSearchAvailable: resolveWebSearch(request) !== undefined,
-          }))
+        tools: registry
+          .list()
+          .filter(
+            (tool) =>
+              input.includeDisabled ||
+              isSelected(tool.registeredToolName, {
+                availability: request.builtInToolAvailability,
+                processAvailable: process !== undefined,
+                webSearchAvailable: resolveWebSearch(request) !== undefined,
+              }),
+          )
           .map((tool) => ({
             identity: tool.identity,
             registeredToolName: tool.registeredToolName,
@@ -273,10 +316,13 @@ export function createTools(request: CreateToolsRequest): Tools {
     routeToolCall(input) {
       const registration = routers.get(input.modelCallId);
       if (!registration || !sameScope(registration.scope, input)) {
-        return { status: 'failed', error: {
-          code: 'unknown_tool',
-          message: `ModelCall Tool Router was not found: ${input.modelCallId}`,
-        } };
+        return {
+          status: 'failed',
+          error: {
+            code: 'unknown_tool',
+            message: `ModelCall Tool Router was not found: ${input.modelCallId}`,
+          },
+        };
       }
       return registration.router.route({
         toolCallId: input.toolCallId,
@@ -296,7 +342,8 @@ export function createTools(request: CreateToolsRequest): Tools {
         });
       }
       const { registered, operations, invocation } = retained;
-      if (options.signal?.aborted) return createCancelledToolResult({ toolName: invocation.toolName });
+      if (options.signal?.aborted)
+        return createCancelledToolResult({ toolName: invocation.toolName });
       if (operations.length === 0) {
         return executeHandler(registered.handler, {} as BuiltInToolContext, invocation, options);
       }
@@ -329,7 +376,9 @@ export function createTools(request: CreateToolsRequest): Tools {
       });
     },
 
-    releaseModelCallTools(input) { routers.delete(input.modelCallId); },
+    releaseModelCallTools(input) {
+      routers.delete(input.modelCallId);
+    },
   };
   return {
     bindExecution: runtime.bindExecution,
@@ -353,16 +402,28 @@ export function createTools(request: CreateToolsRequest): Tools {
     let webSearch: WebSearch | undefined;
     if (scope.workspaceId) {
       const workspace = request.workspaces.getWorkspace({ workspace_id: scope.workspaceId });
-      if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
-      if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
+      if (workspace.status === 'not_found')
+        return failedResolution(
+          'workspace_not_found',
+          `Workspace was not found: ${scope.workspaceId}`,
+        );
+      if (workspace.workspace.status !== 'available')
+        return failedResolution(
+          'workspace_unavailable',
+          `Workspace is unavailable: ${scope.workspaceId}`,
+        );
       workspaceRoot = workspace.workspace.root_path;
       webSearch = resolveWebSearch(request, scope.workspaceId);
     }
-    const selected = registry.list().filter((tool) => toolNames.has(tool.registeredToolName) && isSelected(tool.registeredToolName, {
-      availability: request.builtInToolAvailability,
-      processAvailable: process !== undefined,
-      webSearchAvailable: webSearch !== undefined,
-    }));
+    const selected = registry.list().filter(
+      (tool) =>
+        toolNames.has(tool.registeredToolName) &&
+        isSelected(tool.registeredToolName, {
+          availability: request.builtInToolAvailability,
+          processAvailable: process !== undefined,
+          webSearchAvailable: webSearch !== undefined,
+        }),
+    );
     try {
       const combined = createToolRegistry({
         registrations: [
@@ -375,7 +436,9 @@ export function createTools(request: CreateToolsRequest): Tools {
             executionMode: tool.executionMode,
           })),
         ],
-      }).list().filter((tool) => tool.availability.status === 'available');
+      })
+        .list()
+        .filter((tool) => tool.availability.status === 'available');
       const router = createToolRouter({ scope, tools: combined });
       routers.set(scope.modelCallId, {
         scope: { ...scope },
@@ -405,14 +468,27 @@ async function executeHandler(
     notifyHandlerResult(options.onHandlerResult, rawResult);
     return normalizeRawToolResult({ toolName: invocation.toolName, rawResult });
   } catch (error) {
-    const terminationUnconfirmed = error instanceof ToolExecutionFailure && error.code === 'termination_unconfirmed';
-    const cancelled = !terminationUnconfirmed && (options.signal?.aborted
-      || (error instanceof ToolExecutionFailure && error.code === 'tool_cancelled'));
+    const terminationUnconfirmed =
+      error instanceof ToolExecutionFailure && error.code === 'termination_unconfirmed';
+    const cancelled =
+      !terminationUnconfirmed &&
+      (options.signal?.aborted ||
+        (error instanceof ToolExecutionFailure && error.code === 'tool_cancelled'));
     return createFailedToolResult({
       toolName: invocation.toolName,
-      code: cancelled ? 'tool_cancelled' : error instanceof ToolExecutionFailure ? error.code : 'tool_execution_failed',
-      message: cancelled ? 'Tool execution was cancelled' : error instanceof ToolExecutionFailure ? error.message : 'Tool execution failed',
-      ...(!cancelled && error instanceof ToolExecutionFailure && error.details ? { details: error.details } : {}),
+      code: cancelled
+        ? 'tool_cancelled'
+        : error instanceof ToolExecutionFailure
+          ? error.code
+          : 'tool_execution_failed',
+      message: cancelled
+        ? 'Tool execution was cancelled'
+        : error instanceof ToolExecutionFailure
+          ? error.message
+          : 'Tool execution failed',
+      ...(!cancelled && error instanceof ToolExecutionFailure && error.details
+        ? { details: error.details }
+        : {}),
     });
   }
 }
@@ -431,11 +507,18 @@ function notifyHandlerResult(
 function toolProcessDescriptor(sandbox: Sandbox): ToolProcessDescriptor | undefined {
   const capabilities = sandbox.capabilities();
   return capabilities.shellKind && capabilities.shellName
-    ? { shellKind: capabilities.shellKind, shellName: capabilities.shellName, executionMethod: 'shell' }
+    ? {
+        shellKind: capabilities.shellKind,
+        shellName: capabilities.shellName,
+        executionMethod: 'shell',
+      }
     : undefined;
 }
 
-function resolveWebSearch(request: CreateToolsRequest, workspaceId?: string): WebSearch | undefined {
+function resolveWebSearch(
+  request: CreateToolsRequest,
+  workspaceId?: string,
+): WebSearch | undefined {
   return request.webSearch ?? resolveConfiguredWebSearch(request.settings(workspaceId));
 }
 
@@ -444,7 +527,11 @@ export function resolveConfiguredWebSearch(settings: ToolSettings): WebSearch | 
   if (resolved.status === 'rejected') throw new Error(resolved.error.message);
   const config = resolved.settings.config.webSearch;
   if (!config.provider) return undefined;
-  const environmentNames = { brave: 'BRAVE_SEARCH_API_KEY', tavily: 'TAVILY_API_KEY', exa: 'EXA_API_KEY' };
+  const environmentNames = {
+    brave: 'BRAVE_SEARCH_API_KEY',
+    tavily: 'TAVILY_API_KEY',
+    exa: 'EXA_API_KEY',
+  };
   const credential = settings.readCredential({
     target: { kind: 'webSearch' },
     apiKeyEnv: config.apiKeyEnv,
@@ -452,39 +539,67 @@ export function resolveConfiguredWebSearch(settings: ToolSettings): WebSearch | 
   });
   if (credential.status === 'rejected') throw new Error(credential.error.message);
   if (credential.status === 'missing') return undefined;
-  return createWebSearch({ provider: config.provider, apiKey: credential.value, baseUrl: config.baseUrl });
+  return createWebSearch({
+    provider: config.provider,
+    apiKey: credential.value,
+    baseUrl: config.baseUrl,
+  });
 }
 
-function isSelected(toolName: string, facts: {
-  readonly availability?: BuiltInToolAvailability;
-  readonly processAvailable: boolean;
-  readonly webSearchAvailable: boolean;
-}): boolean {
-  if (facts.availability && !facts.availability.isAvailable({ toolName: toolName as BuiltInToolName })) return false;
+function isSelected(
+  toolName: string,
+  facts: {
+    readonly availability?: BuiltInToolAvailability;
+    readonly processAvailable: boolean;
+    readonly webSearchAvailable: boolean;
+  },
+): boolean {
+  if (
+    facts.availability &&
+    !facts.availability.isAvailable({ toolName: toolName as BuiltInToolName })
+  )
+    return false;
   if (toolName === 'run_command') return facts.processAvailable;
   if (toolName === 'web_search') return facts.webSearchAvailable;
   return BUILT_IN_TOOL_NAMES.includes(toolName as BuiltInToolName);
 }
 
 function sameScope(left: ModelCallToolScope, right: ModelCallToolScope): boolean {
-  return left.executionId === right.executionId && left.sessionId === right.sessionId
-    && left.workspaceId === right.workspaceId && left.modelCallId === right.modelCallId;
+  return (
+    left.executionId === right.executionId &&
+    left.sessionId === right.sessionId &&
+    left.workspaceId === right.workspaceId &&
+    left.modelCallId === right.modelCallId
+  );
 }
 
 function unknownModelCall(modelCallId: string): RouteToolCallResult {
-  return { status: 'failed', error: {
-    code: 'unknown_tool', message: `ModelCall Tool Router was not found: ${modelCallId}`,
-  } };
+  return {
+    status: 'failed',
+    error: {
+      code: 'unknown_tool',
+      message: `ModelCall Tool Router was not found: ${modelCallId}`,
+    },
+  };
 }
 
-function failedBinding(code: ToolResolutionFailure['code'], message: string): BindToolExecutionResult {
+function failedBinding(
+  code: ToolResolutionFailure['code'],
+  message: string,
+): BindToolExecutionResult {
   return { status: 'failed', failure: { code, message } };
 }
 
-function failedPreparation(code: ToolResolutionFailure['code'], message: string): PrepareModelCallToolsResult {
+function failedPreparation(
+  code: ToolResolutionFailure['code'],
+  message: string,
+): PrepareModelCallToolsResult {
   return { status: 'failed', failure: { code, message } };
 }
 
-function failedResolution(code: ToolResolutionFailure['code'], message: string): ResolveModelCallToolsResult {
+function failedResolution(
+  code: ToolResolutionFailure['code'],
+  message: string,
+): ResolveModelCallToolsResult {
   return { status: 'failed', failure: { code, message } };
 }

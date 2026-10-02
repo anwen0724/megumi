@@ -50,9 +50,11 @@ describe('migrateDatabase', () => {
       const result = migrateDatabase({ database });
       expect(result.currentMigration).toBe('0027_session_model_selection');
       expect(tableNames(database)).toContain('__drizzle_migrations');
-      const migrationRows = database.prepare<{ hash: string }>({
-        sql: 'SELECT hash FROM __drizzle_migrations',
-      }).all();
+      const migrationRows = database
+        .prepare<{ hash: string }>({
+          sql: 'SELECT hash FROM __drizzle_migrations',
+        })
+        .all();
       expect(migrationRows.length).toBeGreaterThan(0);
     } finally {
       database.close();
@@ -61,10 +63,15 @@ describe('migrateDatabase', () => {
 });
 
 function tableNames(database: DatabaseConnection): string[] {
-  return database.prepare<{ name: string }>({ sql: `
+  return database
+    .prepare<{ name: string }>({
+      sql: `
     SELECT name
     FROM sqlite_master
     WHERE type = 'table'
     ORDER BY name ASC
-  ` }).all().map((row) => row.name);
+  `,
+    })
+    .all()
+    .map((row) => row.name);
 }

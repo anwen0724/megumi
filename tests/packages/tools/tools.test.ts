@@ -11,27 +11,49 @@ describe('Tools ModelCall routing', () => {
     const calls: string[] = [];
     const tools = createTools({
       settings: fileSettings,
-      workspaces: { getWorkspace: () => { throw new Error('not used'); } },
+      workspaces: {
+        getWorkspace: () => {
+          throw new Error('not used');
+        },
+      },
       workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
       sandbox: {
         capabilities: () => ({
-          platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,
-          fileWriteBoundary: true, environmentIsolation: true, networkIsolation: true,
-          processTreeTermination: true, timeLimit: true, outputLimit: true,
-          processCountLimit: true, cpuLimit: false, memoryLimit: false,
+          platform: 'win32',
+          workspaceEffectObservation: true,
+          fileReadBoundary: true,
+          fileWriteBoundary: true,
+          environmentIsolation: true,
+          networkIsolation: true,
+          processTreeTermination: true,
+          timeLimit: true,
+          outputLimit: true,
+          processCountLimit: true,
+          cpuLimit: false,
+          memoryLimit: false,
         }),
         open: async () => ({ status: 'unavailable', reason: 'not used' }),
       },
       executionPolicy: { maxExecutionTimeMs: 1_000, maxOutputBytes: 20_000, maxProcessCount: 4 },
       candidateSupplyTools: {
         ownsExecution: (executionId) => executionId === 'execution:supply',
-        async searchContent() { calls.push('search'); return { outputKind: 'json', content: { status: 'ok' } }; },
-        async readSourceCandidate() { calls.push('read'); return { outputKind: 'json', content: { status: 'ok' } }; },
-        async submitCandidates() { calls.push('submit'); return { outputKind: 'json', content: { status: 'ok' } }; },
+        async searchContent() {
+          calls.push('search');
+          return { outputKind: 'json', content: { status: 'ok' } };
+        },
+        async readSourceCandidate() {
+          calls.push('read');
+          return { outputKind: 'json', content: { status: 'ok' } };
+        },
+        async submitCandidates() {
+          calls.push('submit');
+          return { outputKind: 'json', content: { status: 'ok' } };
+        },
       },
     });
     const execution = tools.bindExecution({
-      executionId: 'execution:supply', subject: { kind: 'background' },
+      executionId: 'execution:supply',
+      subject: { kind: 'background' },
       toolNames: ['update_plan', 'search_content', 'read_source_candidate', 'submit_candidates'],
     });
     expect(execution.status).toBe('bound');
@@ -40,36 +62,61 @@ describe('Tools ModelCall routing', () => {
     expect(modelCall.status).toBe('prepared');
     if (modelCall.status !== 'prepared') return;
     expect(modelCall.binding.definitions.map((definition) => definition.name)).toEqual([
-      'update_plan', 'search_content', 'read_source_candidate', 'submit_candidates',
+      'update_plan',
+      'search_content',
+      'read_source_candidate',
+      'submit_candidates',
     ]);
     const invocations = [
-      { toolName: 'search_content', input: { sourceId: 'open_web', query: 'Agent', mode: 'recent', limit: 10, targetInterestIds: [] } },
+      {
+        toolName: 'search_content',
+        input: {
+          sourceId: 'open_web',
+          query: 'Agent',
+          mode: 'recent',
+          limit: 10,
+          targetInterestIds: [],
+        },
+      },
       { toolName: 'read_source_candidate', input: { resultId: 'result:1' } },
       {
         toolName: 'submit_candidates',
         input: {
-          items: [{
-            resultId: 'result:1',
-            contentSummary: 'A grounded Candidate summary.',
-            matches: [{
-              interestId: 'interest:1', relevance: 'direct',
-              matchReason: 'Related to the active Interest.',
-            }],
-          }],
+          items: [
+            {
+              resultId: 'result:1',
+              contentSummary: 'A grounded Candidate summary.',
+              matches: [
+                {
+                  interestId: 'interest:1',
+                  relevance: 'direct',
+                  matchReason: 'Related to the active Interest.',
+                },
+              ],
+            },
+          ],
         },
       },
     ];
     for (const { toolName, input } of invocations) {
-      const routed = modelCall.binding.routeToolCall({ toolCallId: `call:${toolName}`, toolName, input });
+      const routed = modelCall.binding.routeToolCall({
+        toolCallId: `call:${toolName}`,
+        toolName,
+        input,
+      });
       expect(routed.status).toBe('routed');
-      if (routed.status === 'routed') await modelCall.binding.executeToolInvocation({ invocation: routed.invocation });
+      if (routed.status === 'routed')
+        await modelCall.binding.executeToolInvocation({ invocation: routed.invocation });
     }
     expect(calls).toEqual(['search', 'read', 'submit']);
   });
 
   it('keeps one ModelCall view stable while a later ModelCall sees new availability', async () => {
     const disabled = new Set<BuiltInToolName>();
-    const openSandbox = vi.fn(async () => ({ status: 'unavailable' as const, reason: 'Not used.' }));
+    const openSandbox = vi.fn(async () => ({
+      status: 'unavailable' as const,
+      reason: 'Not used.',
+    }));
     const tools = createTools({
       settings: fileSettings,
       workspaces: {
@@ -127,28 +174,33 @@ describe('Tools ModelCall routing', () => {
     });
     expect(routed.status).toBe('routed');
     if (routed.status !== 'routed') throw new Error('Expected routed read_file');
-    await expect(first.binding.executeToolInvocation({
-      invocation: structuredClone(routed.invocation),
-    })).resolves.toMatchObject({
-      type: 'failed', error: { code: 'sandbox_denied' },
+    await expect(
+      first.binding.executeToolInvocation({
+        invocation: structuredClone(routed.invocation),
+      }),
+    ).resolves.toMatchObject({
+      type: 'failed',
+      error: { code: 'sandbox_denied' },
     });
     expect(openSandbox).not.toHaveBeenCalled();
-    expect(tools.listAvailableTools().tools.map((tool) => tool.registeredToolName))
-      .not.toContain('read_file');
+    expect(tools.listAvailableTools().tools.map((tool) => tool.registeredToolName)).not.toContain(
+      'read_file',
+    );
 
     const second = execution.binding.prepareModelCall({ modelCallId: 'model-call:2' });
     expect(second.status).toBe('prepared');
     if (second.status === 'prepared') {
-      expect(second.binding.definitions.map((tool) => tool.name))
-        .not.toContain('read_file');
+      expect(second.binding.definitions.map((tool) => tool.name)).not.toContain('read_file');
     }
 
     first.binding.close();
-    expect(first.binding.routeToolCall({
-      toolCallId: 'call:2',
-      toolName: 'read_file',
-      input: { path: 'notes.md' },
-    })).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
+    expect(
+      first.binding.routeToolCall({
+        toolCallId: 'call:2',
+        toolName: 'read_file',
+        input: { path: 'notes.md' },
+      }),
+    ).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
     execution.binding.close();
   });
 
@@ -156,15 +208,26 @@ describe('Tools ModelCall routing', () => {
     const tools = createTools({
       settings: fileSettings,
       workspaces: {
-        getWorkspace: () => ({ status: 'found', workspace: { root_path: 'C:/workspace', status: 'available' } }),
+        getWorkspace: () => ({
+          status: 'found',
+          workspace: { root_path: 'C:/workspace', status: 'available' },
+        }),
       },
       workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
       sandbox: {
         capabilities: () => ({
-          platform: 'win32', workspaceEffectObservation: true, fileReadBoundary: true,
-          fileWriteBoundary: true, environmentIsolation: true, networkIsolation: true,
-          processTreeTermination: true, timeLimit: true, outputLimit: true,
-          processCountLimit: true, cpuLimit: false, memoryLimit: false,
+          platform: 'win32',
+          workspaceEffectObservation: true,
+          fileReadBoundary: true,
+          fileWriteBoundary: true,
+          environmentIsolation: true,
+          networkIsolation: true,
+          processTreeTermination: true,
+          timeLimit: true,
+          outputLimit: true,
+          processCountLimit: true,
+          cpuLimit: false,
+          memoryLimit: false,
         }),
         open: async () => ({ status: 'unavailable', reason: 'update_plan must not open Sandbox.' }),
       },
@@ -180,9 +243,13 @@ describe('Tools ModelCall routing', () => {
     const modelCall = execution.binding.prepareModelCall({ modelCallId: 'model-call:plan' });
     if (modelCall.status !== 'prepared') throw new Error('Expected ModelCall binding.');
     expect(modelCall.binding.definitions.map((tool) => tool.name)).toEqual(['update_plan']);
-    expect(modelCall.binding.routeToolCall({
-      toolCallId: 'tool-call:unselected', toolName: 'read_file', input: { path: 'notes.md' },
-    })).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
+    expect(
+      modelCall.binding.routeToolCall({
+        toolCallId: 'tool-call:unselected',
+        toolName: 'read_file',
+        input: { path: 'notes.md' },
+      }),
+    ).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
     const routed = modelCall.binding.routeToolCall({
       toolCallId: 'tool-call:plan',
       toolName: 'update_plan',
@@ -200,23 +267,32 @@ describe('Tools ModelCall routing', () => {
       },
     );
     expect(result).toMatchObject({ type: 'succeeded', toolName: 'update_plan' });
-    expect(notifications).toEqual([{
-      type: 'plan_updated',
-      plan: [{ step: 'Implement', status: 'in_progress' }],
-    }]);
-    expect(handlerResults).toEqual([{
-      outputKind: 'text',
-      content: 'Plan updated',
-    }]);
+    expect(notifications).toEqual([
+      {
+        type: 'plan_updated',
+        plan: [{ step: 'Implement', status: 'in_progress' }],
+      },
+    ]);
+    expect(handlerResults).toEqual([
+      {
+        outputKind: 'text',
+        content: 'Plan updated',
+      },
+    ]);
     execution.binding.close();
   });
-
 });
 
 const directories: string[] = [];
-afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const directory of directories.splice(0))
+    fs.rmSync(directory, { recursive: true, force: true });
+});
 function fileSettings() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-config-'));
   directories.push(root);
-  return createSettings({ globalSettingsPath: path.join(root, 'settings.json'), credentialsPath: path.join(root, 'credentials.json') });
+  return createSettings({
+    globalSettingsPath: path.join(root, 'settings.json'),
+    credentialsPath: path.join(root, 'credentials.json'),
+  });
 }

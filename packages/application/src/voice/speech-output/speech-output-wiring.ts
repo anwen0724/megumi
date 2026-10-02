@@ -7,7 +7,10 @@
  * whole trigger chain is testable without a database.
  */
 
-import { sessionMessageText, type SessionAssistantReplyMessage } from '@megumi/agent-runtime/sessions/index';
+import {
+  sessionMessageText,
+  type SessionAssistantReplyMessage,
+} from '@megumi/agent-runtime/sessions/index';
 import type { Settings } from '../../settings/settings-store';
 import type { SpeechOutputRuntime } from './speech-output-runtime';
 
@@ -28,11 +31,7 @@ export interface RunEndedEnvelopeLike {
 }
 
 export type SpeechOutputSkipReason =
-  | 'read_aloud_disabled'
-  | 'settings_failed'
-  | 'tts_resolution_failed'
-  | 'no_reply'
-  | 'empty_text';
+  'read_aloud_disabled' | 'settings_failed' | 'tts_resolution_failed' | 'no_reply' | 'empty_text';
 
 export type SpeechOutputReadResult =
   | { readonly status: 'read' }
@@ -56,16 +55,20 @@ export function onRunEndedForSpeechOutput(
   if (event.payload?.status !== 'completed') return { status: 'ignored' };
 
   const resolvedSettings = deps.settings.readSettings();
-  if (resolvedSettings.status === 'rejected') return { status: 'skipped', reason: 'settings_failed' };
+  if (resolvedSettings.status === 'rejected')
+    return { status: 'skipped', reason: 'settings_failed' };
   if (!resolvedSettings.settings.config.voice.readAloudEnabled) {
     return { status: 'skipped', reason: 'read_aloud_disabled' };
   }
 
   const tts = resolvedSettings.settings.config.voice.tts;
   const credential = deps.settings.readCredential({
-    target: { kind: 'voiceTts' }, apiKeyEnv: tts.apiKeyEnv, defaultEnvNames: ['MINIMAX_API_KEY'],
+    target: { kind: 'voiceTts' },
+    apiKeyEnv: tts.apiKeyEnv,
+    defaultEnvNames: ['MINIMAX_API_KEY'],
   });
-  if (credential.status === 'rejected') return { status: 'skipped', reason: 'tts_resolution_failed' };
+  if (credential.status === 'rejected')
+    return { status: 'skipped', reason: 'tts_resolution_failed' };
   const reply = deps.findAssistantReplyBySessionIdAndExecutionId({
     session_id: event.sessionId,
     execution_id: event.executionId,

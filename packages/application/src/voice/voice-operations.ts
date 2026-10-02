@@ -44,13 +44,17 @@ export function createVoiceOperations(options: CreateVoiceOperationsOptions): Vo
 
     async startSession(request) {
       const configuration = options.settings(request.boundSessionId).readSettings();
-      if (configuration.status === 'rejected') return { status: 'failed', failure: configuration.error };
+      if (configuration.status === 'rejected')
+        return { status: 'failed', failure: configuration.error };
       const result = await voice.sessions.start({
         boundSessionId: request.boundSessionId,
         language: configuration.settings.config.voice.recognitionLanguage,
       });
       if (result.status === 'started' || result.status === 'already_active') {
-        return { status: 'ok', ...(result.generation !== undefined ? { generation: result.generation } : {}) };
+        return {
+          status: 'ok',
+          ...(result.generation !== undefined ? { generation: result.generation } : {}),
+        };
       }
       if (result.status === 'cancelled') return { status: 'cancelled' };
       return { status: 'failed', failure: result.failure };

@@ -2,10 +2,7 @@
  * Protects the Execute Agent boundary: Agent construction, Session settlement,
  * approval waits inside the original ToolCall Promise, and outcome mapping.
  */
-import {
-  prepareRun,
-  type RunDependencies,
-} from '@megumi/agent-runtime/runs/index';
+import { prepareRun, type RunDependencies } from '@megumi/agent-runtime/runs/index';
 import { describe, expect, it, vi } from 'vitest';
 import { createModels, createProvider } from '@megumi/ai';
 import { openAICompletionsApi } from '@megumi/ai/api/openai-completions.lazy';
@@ -34,7 +31,11 @@ const NOW = '2026-07-31T00:00:00.000Z';
 describe('Execute Agent', () => {
   it('traces the accepted User Message commit and the real Agent execution without duplicating message bodies', async () => {
     const records: TraceJournalRecord[] = [];
-    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const observability = createTraceRecorder({
+      enqueue: (record) => {
+        records.push(record);
+      },
+    });
     const fixture = createExecutionFixture({
       streams: [assistantStream('done')],
       observability,
@@ -59,43 +60,90 @@ describe('Execute Agent', () => {
       messageId: 'message:user',
       contentDigest: expect.stringMatching(/^[a-f0-9]{64}$/),
     });
-    expect(records.some((record) => (
-      record.type === 'content.recorded' && record.kind === 'session.message.committed'
-    ))).toBe(false);
+    expect(
+      records.some(
+        (record) =>
+          record.type === 'content.recorded' && record.kind === 'session.message.committed',
+      ),
+    ).toBe(false);
   });
 
   it('keeps one model.call span and records actual provider retries and the final response', async () => {
     const records: TraceJournalRecord[] = [];
-    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
+    const observability = createTraceRecorder({
+      enqueue: (record) => {
+        records.push(record);
+      },
+    });
     const fixture = createExecutionFixture({ observability });
     const model = { ...executionMetadata().model, api: 'openai-completions' as const };
     const models = createModels();
-    models.setProvider(createProvider({
-      id: model.provider, name: 'Test provider', baseUrl: model.baseUrl, models: [model],
-      auth: { apiKey: { name: 'Test key', resolve: async () => ({ auth: { apiKey: 'test' }, source: 'test' }) } },
-      api: openAICompletionsApi(),
-    }));
+    models.setProvider(
+      createProvider({
+        id: model.provider,
+        name: 'Test provider',
+        baseUrl: model.baseUrl,
+        models: [model],
+        auth: {
+          apiKey: {
+            name: 'Test key',
+            resolve: async () => ({ auth: { apiKey: 'test' }, source: 'test' }),
+          },
+        },
+        api: openAICompletionsApi(),
+      }),
+    );
     let requests = 0;
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
       requests++;
-      if (requests === 1) return new Response('{"error":{"message":"Rate limited"}}', {
-        status: 429, headers: { 'content-type': 'application/json', 'retry-after-ms': '1' },
-      });
-      return new Response('data: ' + JSON.stringify({
-        id: 'response:1', object: 'chat.completion.chunk', created: 1, model: model.id,
-        choices: [{ index: 0, delta: { role: 'assistant', content: 'provider final' }, finish_reason: 'stop' }],
-      }) + '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+      if (requests === 1)
+        return new Response('{"error":{"message":"Rate limited"}}', {
+          status: 429,
+          headers: { 'content-type': 'application/json', 'retry-after-ms': '1' },
+        });
+      return new Response(
+        'data: ' +
+          JSON.stringify({
+            id: 'response:1',
+            object: 'chat.completion.chunk',
+            created: 1,
+            model: model.id,
+            choices: [
+              {
+                index: 0,
+                delta: { role: 'assistant', content: 'provider final' },
+                finish_reason: 'stop',
+              },
+            ],
+          }) +
+          '\n\ndata: [DONE]\n\n',
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
     });
     try {
       const outcome = await observability.withTrace({ kind: 'conversation' }, async () => {
-        const launched = await prepareRun({
-          client: models, compactionThresholdRatio: 0.8,
-          kind: 'conversation', metadata: executionMetadata({ model }),
-          input: { displayContent: [{ type: 'text', text: 'hello' }], modelContent: [{ type: 'text', text: 'hello' }], attachments: [] },
-          awaitApproval: async () => ({ status: 'cancelled' }),
-        }, dependenciesFrom(fixture, {
-          models, policy: { ...fixture.dependencies.policy, providerRequestMaxRetries: 1, modelCallTimeoutMs: 5000 },
-        }));
+        const launched = await prepareRun(
+          {
+            client: models,
+            compactionThresholdRatio: 0.8,
+            kind: 'conversation',
+            metadata: executionMetadata({ model }),
+            input: {
+              displayContent: [{ type: 'text', text: 'hello' }],
+              modelContent: [{ type: 'text', text: 'hello' }],
+              attachments: [],
+            },
+            awaitApproval: async () => ({ status: 'cancelled' }),
+          },
+          dependenciesFrom(fixture, {
+            models,
+            policy: {
+              ...fixture.dependencies.policy,
+              providerRequestMaxRetries: 1,
+              modelCallTimeoutMs: 5000,
+            },
+          }),
+        );
         return launched.execute();
       });
       expect(outcome.status).toBe('completed');
@@ -103,18 +151,39 @@ describe('Execute Agent', () => {
       fetch.mockRestore();
     }
     expect(requests).toBe(2);
-    const modelSpans = records.filter((record) => record.type === 'span.started' && record.name === 'model.call');
+    const modelSpans = records.filter(
+      (record) => record.type === 'span.started' && record.name === 'model.call',
+    );
     expect(modelSpans).toHaveLength(1);
     const content = records.filter((record) => record.type === 'content.recorded');
-    expect(content.filter((record) => record.kind === 'model.provider_request'
-      && record.correlation.providerAttempt !== undefined).map((record) => record.correlation.providerAttempt)).toEqual([1, 2]);
-    expect(content.filter((record) => record.kind.startsWith('model.')).every((record) =>
-      record.correlation.modelCallId === modelSpans[0]?.correlation.modelCallId,
-    )).toBe(true);
+    expect(
+      content
+        .filter(
+          (record) =>
+            record.kind === 'model.provider_request' &&
+            record.correlation.providerAttempt !== undefined,
+        )
+        .map((record) => record.correlation.providerAttempt),
+    ).toEqual([1, 2]);
+    expect(
+      content
+        .filter((record) => record.kind.startsWith('model.'))
+        .every(
+          (record) => record.correlation.modelCallId === modelSpans[0]?.correlation.modelCallId,
+        ),
+    ).toBe(true);
     expect(content.some((record) => record.kind === 'model.provider_event')).toBe(true);
-    expect(content.some((record) => record.kind === 'model.response'
-      && record.content.mode === 'inline' && JSON.stringify(record.content.value).includes('provider final'))).toBe(true);
-    expect(records.filter((record) => record.type === 'span.event').map((record) => record.event)).toEqual([
+    expect(
+      content.some(
+        (record) =>
+          record.kind === 'model.response' &&
+          record.content.mode === 'inline' &&
+          JSON.stringify(record.content.value).includes('provider final'),
+      ),
+    ).toBe(true);
+    expect(
+      records.filter((record) => record.type === 'span.event').map((record) => record.event),
+    ).toEqual([
       { type: 'model.retry.started', currentAttempt: 1, nextAttempt: 2, reasonCode: 'http_429' },
       { type: 'model.output.started', providerAttempt: 2 },
     ]);
@@ -126,7 +195,9 @@ describe('Execute Agent', () => {
 
   it('executes the Model once and preserves its outcome when Observability fails', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
-    const streamSimple = vi.fn(fixture.dependencies.models.streamSimple.bind(fixture.dependencies.models));
+    const streamSimple = vi.fn(
+      fixture.dependencies.models.streamSimple.bind(fixture.dependencies.models),
+    );
     const dependencies = dependenciesFrom(fixture, {
       observability: throwingObservability(),
       models: {
@@ -145,30 +216,46 @@ describe('Execute Agent', () => {
 
   it('persists a Recommendation reference and presents it to the first model call', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
-    const launched = await prepareRun({
-          client: fixture.dependencies.models, compactionThresholdRatio: 0.8,
-      kind: 'conversation',
-      metadata: executionMetadata(),
-      input: {
-        displayContent: [{ type: 'text', text: '聊聊它的架构' }],
-        modelContent: [{ type: 'text', text: '聊聊它的架构' }],
-        attachments: [],
+    const launched = await prepareRun(
+      {
+        client: fixture.dependencies.models,
+        compactionThresholdRatio: 0.8,
+        kind: 'conversation',
+        metadata: executionMetadata(),
+        input: {
+          displayContent: [{ type: 'text', text: '聊聊它的架构' }],
+          modelContent: [{ type: 'text', text: '聊聊它的架构' }],
+          attachments: [],
+        },
+        recommendationReference: {
+          type: 'recommendation_reference',
+          recommendationId: 'recommendation:1',
+          sourceName: 'GitHub',
+          canonicalUrl: 'https://example.com/agent',
+          title: 'Agent runtime',
+          description: 'A concrete implementation.',
+          recommendationReason: 'Relevant to your interests.',
+        },
+        awaitApproval: async () => ({ status: 'cancelled' as const }),
       },
-      recommendationReference: {
-        type: 'recommendation_reference', recommendationId: 'recommendation:1', sourceName: 'GitHub',
-        canonicalUrl: 'https://example.com/agent', title: 'Agent runtime',
-        description: 'A concrete implementation.', recommendationReason: 'Relevant to your interests.',
-      },
-      awaitApproval: async () => ({ status: 'cancelled' as const }),
-    }, fixture.dependencies);
+      fixture.dependencies,
+    );
 
     expect(fixture.userMessages[0]?.display_content).toEqual([
-      expect.objectContaining({ type: 'recommendation_reference', recommendationId: 'recommendation:1' }),
+      expect.objectContaining({
+        type: 'recommendation_reference',
+        recommendationId: 'recommendation:1',
+      }),
       { type: 'text', text: '聊聊它的架构' },
     ]);
-    expect(fixture.userMessages[0]?.model_content).toEqual(fixture.userMessages[0]?.display_content);
+    expect(fixture.userMessages[0]?.model_content).toEqual(
+      fixture.userMessages[0]?.display_content,
+    );
     expect(launched.agent.state.messages[0]?.content).toEqual([
-      expect.objectContaining({ type: 'text', text: expect.stringContaining('<recommended_content') }),
+      expect.objectContaining({
+        type: 'text',
+        text: expect.stringContaining('<recommended_content'),
+      }),
       { type: 'text', text: '聊聊它的架构' },
     ]);
   });
@@ -286,13 +373,14 @@ describe('Execute Agent', () => {
 
   it('keeps Session commit failure owned by Session without claiming a terminal reply was persisted', async () => {
     const fixture = createExecutionFixture({
-      streams: [
-        assistantStream('using tool', { id: 'call:1', name: 'lookup', arguments: {} }),
-      ],
+      streams: [assistantStream('using tool', { id: 'call:1', name: 'lookup', arguments: {} })],
       tools: [registeredTool('lookup')],
     });
     const saveAssistantReply = vi.fn(fixture.dependencies.session.saveAssistantReply);
-    const session: Pick<SessionHistory, 'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'> = {
+    const session: Pick<
+      SessionHistory,
+      'saveUserMessage' | 'saveModelResponse' | 'saveAssistantReply' | 'saveToolResultMessage'
+    > = {
       ...fixture.dependencies.session,
       saveModelResponse: vi.fn(async () => ({
         status: 'failed' as const,
@@ -369,33 +457,37 @@ describe('Execute Agent', () => {
 
   it('commits a cancelled ToolResult before the one cancelled reply', async () => {
     const tool = registeredTool('slow-tool');
-    const executeTool = vi.fn(async (
-      request: { readonly toolName: string },
-      options?: { readonly signal?: AbortSignal },
-    ) => {
-      await new Promise<void>((resolve) => {
-        options?.signal?.addEventListener('abort', () => resolve(), { once: true });
-      });
-      return {
-        type: 'failed' as const,
-        toolName: request.toolName,
-        error: { code: 'tool_cancelled', message: 'cancelled' },
-        normalizedResult: {
-          kind: 'text' as const,
-          content: 'cancelled',
-          isError: true,
-          truncated: false,
-        },
-      };
-    });
+    const executeTool = vi.fn(
+      async (
+        request: { readonly toolName: string },
+        options?: { readonly signal?: AbortSignal },
+      ) => {
+        await new Promise<void>((resolve) => {
+          options?.signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+        return {
+          type: 'failed' as const,
+          toolName: request.toolName,
+          error: { code: 'tool_cancelled', message: 'cancelled' },
+          normalizedResult: {
+            kind: 'text' as const,
+            content: 'cancelled',
+            isError: true,
+            truncated: false,
+          },
+        };
+      },
+    );
     const fixture = createExecutionFixture({
       tools: [tool],
       executeTool,
-      streams: [assistantStream('using tool', {
-        id: 'provider-call:1',
-        name: tool.registeredToolName,
-        arguments: { value: 'x' },
-      })],
+      streams: [
+        assistantStream('using tool', {
+          id: 'provider-call:1',
+          name: tool.registeredToolName,
+          arguments: { value: 'x' },
+        }),
+      ],
     });
     const launched = await launchedExecution(fixture);
 
@@ -450,16 +542,20 @@ describe('Execute Agent', () => {
       tools: [registeredTool('protected')],
       permissions: permissionService(approvalDecisionFor),
     });
-    const awaitApproval = vi.fn(async ({ approval }: Parameters<Parameters<typeof launchedExecution>[1]['awaitApproval']>[0]) => ({
-      status: 'approved' as const,
-      decision: {
-        approvalRequestId: approval.approvalId,
-        decision: 'approved' as const,
-        optionId: approval.defaultOptionId,
-        decidedBy: 'user' as const,
-        decidedAt: NOW,
-      },
-    }));
+    const awaitApproval = vi.fn(
+      async ({
+        approval,
+      }: Parameters<Parameters<typeof launchedExecution>[1]['awaitApproval']>[0]) => ({
+        status: 'approved' as const,
+        decision: {
+          approvalRequestId: approval.approvalId,
+          decision: 'approved' as const,
+          optionId: approval.defaultOptionId,
+          decidedBy: 'user' as const,
+          decidedAt: NOW,
+        },
+      }),
+    );
     const launched = await launchedExecution(fixture, { awaitApproval });
     const outcome = await launched.execute();
 
@@ -474,10 +570,9 @@ describe('Execute Agent', () => {
       },
     });
     expect(fixture.toolResults[0]?.status).toBe('success');
-    expect(fixture.published.map((event) => event.type)).toEqual(expect.arrayContaining([
-      'approval.requested',
-      'approval.resolved',
-    ]));
+    expect(fixture.published.map((event) => event.type)).toEqual(
+      expect.arrayContaining(['approval.requested', 'approval.resolved']),
+    );
   });
 
   it('settles a denied approval as a model-visible rejection', async () => {
@@ -530,7 +625,11 @@ describe('Execute Agent', () => {
 
   it('treats Runtime Event publication as best-effort', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
-    const events = { publish: () => { throw new Error('event sink unavailable'); } } as EventBus;
+    const events = {
+      publish: () => {
+        throw new Error('event sink unavailable');
+      },
+    } as EventBus;
     const launched = await launchWith(fixture, dependenciesFrom(fixture, { events }));
     const outcome = await launched.execute();
 
@@ -579,7 +678,9 @@ describe('Execute Agent', () => {
     expect(types.filter((type) => type === 'turn.ended')).toHaveLength(2);
     expect(types.at(-1)).toBe('turn.ended');
     expect(types.indexOf('message.started')).toBeLessThan(types.indexOf('message.update'));
-    expect(types.indexOf('tool_execution.requested')).toBeLessThan(types.indexOf('tool_execution.ended'));
+    expect(types.indexOf('tool_execution.requested')).toBeLessThan(
+      types.indexOf('tool_execution.ended'),
+    );
     expect(types).toContain('message.ended');
     // Each turn's lifecycle closes before the next turn starts.
     const secondTurnIndex = types.lastIndexOf('turn.started');
@@ -598,38 +699,44 @@ function approvalDecisionFor(
     reason: 'Allowed in test.',
   };
   const identity = request.operations[0]?.context.toolIdentity ?? {
-    sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'internal', registeredToolName: 'internal',
+    sourceId: 'built_in',
+    namespace: 'megumi',
+    sourceToolName: 'internal',
+    registeredToolName: 'internal',
   };
   return {
     ...allowed,
     type: 'requires_approval',
     reason: 'Approval required.',
-    options: [{
-      optionId: `once:${request.toolCallId}`,
-      scope: 'once',
-      display: { label: 'Once', description: 'Allow once.' },
-      effect: { type: 'current_tool_call' },
-    }],
+    options: [
+      {
+        optionId: `once:${request.toolCallId}`,
+        scope: 'once',
+        display: { label: 'Once', description: 'Allow once.' },
+        effect: { type: 'current_tool_call' },
+      },
+    ],
     defaultOptionId: `once:${request.toolCallId}`,
     subjectFingerprint: `test-subject:${request.toolCallId}:${identity.registeredToolName}`,
   };
 }
 
-function launchWith(
-  fixture: ExecutionFixture,
-  dependencies: RunDependencies,
-) {
-  return prepareRun({
-    client: dependencies.models ?? fixture.dependencies.models, compactionThresholdRatio: 0.8,
-    kind: 'conversation',
-    metadata: executionMetadata(),
-    input: {
-      displayContent: [{ type: 'text', text: 'hello' }],
-      modelContent: [{ type: 'text', text: 'hello' }],
-      attachments: [],
+function launchWith(fixture: ExecutionFixture, dependencies: RunDependencies) {
+  return prepareRun(
+    {
+      client: dependencies.models ?? fixture.dependencies.models,
+      compactionThresholdRatio: 0.8,
+      kind: 'conversation',
+      metadata: executionMetadata(),
+      input: {
+        displayContent: [{ type: 'text', text: 'hello' }],
+        modelContent: [{ type: 'text', text: 'hello' }],
+        attachments: [],
+      },
+      awaitApproval: async () => ({ status: 'cancelled' as const }),
     },
-    awaitApproval: async () => ({ status: 'cancelled' as const }),
-  }, dependencies);
+    dependencies,
+  );
 }
 
 function dependenciesFrom(
@@ -678,7 +785,10 @@ function captureReleases(
   };
 }
 
-function captureModelContexts(models: import('@megumi/ai').Models, captured: unknown[]): import('@megumi/ai').Models {
+function captureModelContexts(
+  models: import('@megumi/ai').Models,
+  captured: unknown[],
+): import('@megumi/ai').Models {
   return {
     ...models,
     streamSimple(modelInput, context, options) {
@@ -689,7 +799,9 @@ function captureModelContexts(models: import('@megumi/ai').Models, captured: unk
 }
 
 function throwingObservability(): Observability {
-  const failure = () => { throw new Error('observability unavailable'); };
+  const failure = () => {
+    throw new Error('observability unavailable');
+  };
   return {
     withTrace: failure,
     withSpan: failure,

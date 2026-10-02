@@ -61,14 +61,7 @@ export type {
   PermissionDecision,
   PermissionDenialCode,
 } from './approval';
-export {
-  EvaluateToolCallResultSchema,
-  createPermissions,
-} from './permissions';
-export type {
-  CreatePermissionsRequest,
-  EvaluateToolCallResult,
-  Permissions,
-} from './permissions';
+export { EvaluateToolCallResultSchema, createPermissions } from './permissions';
+export type { CreatePermissionsRequest, EvaluateToolCallResult, Permissions } from './permissions';
 
 export { resolveConfiguredPermissionRules, recordConfiguredSessionGrant } from './permission-rules';

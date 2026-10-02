@@ -2,10 +2,7 @@
  * Defines the runtime value held by a concrete Host process after composition.
  */
 import type { EventFilter, EventHandler, EventSubscription } from '@megumi/agent-runtime/events';
-import type {
-  SpeechOutputEventListener,
-  SpeechOutputSubscription,
-} from './voice/index';
+import type { SpeechOutputEventListener, SpeechOutputSubscription } from './voice/index';
 import type { ApplicationOperations } from './contracts';
 
 export interface ApplicationLogger {
@@ -56,8 +53,10 @@ export function bindApplicationLifecycle(input: {
       // The Host remains available for recovery, but no automatic business may use fallback settings.
       startPromise ??= (async () => {
         const settings = input.operations.settings.readSettings();
-        if (settings.status === 'rejected') throw new Error('Settings are invalid; product background startup was blocked.');
-        if (disposePromise || stopPromise) throw new Error('Product runtime has already begun disposal or stopping.');
+        if (settings.status === 'rejected')
+          throw new Error('Settings are invalid; product background startup was blocked.');
+        if (disposePromise || stopPromise)
+          throw new Error('Product runtime has already begun disposal or stopping.');
         await input.start({ backgroundTriggers });
       })();
       return startPromise;

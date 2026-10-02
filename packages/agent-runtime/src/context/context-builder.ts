@@ -133,21 +133,23 @@ class DefaultContext implements ContextCapabilities {
     const operation = async (): Promise<BuildContextResult> => {
       let result: BuildContextResult;
       try {
-        result = run.kind === 'conversation'
-          ? await this.withSessionOperation(
-              run.sessionId,
-              () => this.buildExclusive(request, run),
-            )
-          : run.kind === 'recommendation'
-            ? await this.buildRecommendation(request, run)
-            : run.kind === 'candidate_supply'
-              ? await this.buildCandidateSupply(request, run)
-              : await this.buildPreferenceLearning(request, run);
+        result =
+          run.kind === 'conversation'
+            ? await this.withSessionOperation(run.sessionId, () =>
+                this.buildExclusive(request, run),
+              )
+            : run.kind === 'recommendation'
+              ? await this.buildRecommendation(request, run)
+              : run.kind === 'candidate_supply'
+                ? await this.buildCandidateSupply(request, run)
+                : await this.buildPreferenceLearning(request, run);
       } catch (error) {
-        result = buildFailedContextResult(buildUnexpectedContextFailure({
-          code: 'context_build_failed',
-          message: error instanceof Error ? error.message : 'Context build failed.',
-        }));
+        result = buildFailedContextResult(
+          buildUnexpectedContextFailure({
+            code: 'context_build_failed',
+            message: error instanceof Error ? error.message : 'Context build failed.',
+          }),
+        );
       }
       if (result.status === 'ready') {
         recordContent(this.options.observability, {
@@ -158,11 +160,15 @@ class DefaultContext implements ContextCapabilities {
       }
       return result;
     };
-    return observeSpan(this.options.observability, {
-      name: 'context.build',
-      correlation,
-      classifyResult: classifyBuildResult,
-    }, operation);
+    return observeSpan(
+      this.options.observability,
+      {
+        name: 'context.build',
+        correlation,
+        classifyResult: classifyBuildResult,
+      },
+      operation,
+    );
   }
 
   async compact(request: CompactContextRequest): Promise<CompactContextResult> {
@@ -203,12 +209,16 @@ class DefaultContext implements ContextCapabilities {
       });
     } catch (error) {
       if (request.signal?.aborted || isAbortError(error)) {
-        return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+        return buildFailedContextResult(
+          buildCancelledContextFailure('Context operation was cancelled.'),
+        );
       }
-      return buildFailedContextResult(buildUnexpectedContextFailure({
-        code: 'compaction_failed',
-        message: error instanceof Error ? error.message : 'Context compaction failed.',
-      }));
+      return buildFailedContextResult(
+        buildUnexpectedContextFailure({
+          code: 'compaction_failed',
+          message: error instanceof Error ? error.message : 'Context compaction failed.',
+        }),
+      );
     }
   }
 
@@ -230,11 +240,13 @@ class DefaultContext implements ContextCapabilities {
     if (prepared.status === 'failed') return prepared;
 
     let estimate = prepared.estimate;
-    if (shouldAutoCompact({
-      policy: prepared.policy,
-      promptTokens: estimate.tokens,
-      contextWindowTokens: prepared.capacity.contextWindowTokens,
-    })) {
+    if (
+      shouldAutoCompact({
+        policy: prepared.policy,
+        promptTokens: estimate.tokens,
+        contextWindowTokens: prepared.capacity.contextWindowTokens,
+      })
+    ) {
       const compacted = await this.executeCompaction({
         sessionId: run.sessionId,
         context: prepared.resolved,
@@ -242,8 +254,8 @@ class DefaultContext implements ContextCapabilities {
         prompt: prepared.prompt,
         policy: prepared.policy,
         model: run.model,
-      client: run.client,
-      compactionThresholdRatio: run.compactionThresholdRatio,
+        client: run.client,
+        compactionThresholdRatio: run.compactionThresholdRatio,
         trigger: 'threshold',
         signal: request.signal,
       });
@@ -256,8 +268,8 @@ class DefaultContext implements ContextCapabilities {
           sessionId: run.sessionId,
           workspaceId: run.workspaceId,
           model: run.model,
-      client: run.client,
-      compactionThresholdRatio: run.compactionThresholdRatio,
+          client: run.client,
+          compactionThresholdRatio: run.compactionThresholdRatio,
           tools: modelCall.tools,
           signal: request.signal,
         });
@@ -274,31 +286,48 @@ class DefaultContext implements ContextCapabilities {
     run: RecommendationRunContext,
   ): Promise<BuildContextResult> {
     if (request.signal?.aborted) {
-      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+      return buildFailedContextResult(
+        buildCancelledContextFailure('Context operation was cancelled.'),
+      );
     }
     const correlation = {
       executionId: run.executionId,
       requestId: run.requestId,
       modelCallId: request.modelCallContext.modelCallId,
     };
-    const resolved = await observeSpan(this.options.observability, {
-      name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
-    }, () => this.resolver.resolve({
-      kind: 'recommendation',
-      executionId: run.executionId,
-      requestId: run.requestId,
-      localDate: run.localDate,
-      currentMessages: request.currentMessages,
-      tools: request.modelCallContext.tools,
-      signal: request.signal,
-    }));
+    const resolved = await observeSpan(
+      this.options.observability,
+      {
+        name: 'context.resolve',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () =>
+        this.resolver.resolve({
+          kind: 'recommendation',
+          executionId: run.executionId,
+          requestId: run.requestId,
+          localDate: run.localDate,
+          currentMessages: request.currentMessages,
+          tools: request.modelCallContext.tools,
+          signal: request.signal,
+        }),
+    );
     if (resolved.status === 'failed') return resolved;
     recordContent(this.options.observability, {
-      kind: 'context.resolved', value: resolved.context, correlation,
+      kind: 'context.resolved',
+      value: resolved.context,
+      correlation,
     });
-    const built = await observeSpan(this.options.observability, {
-      name: 'prompt.build', correlation, classifyResult: classifyFallibleResult,
-    }, () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }));
+    const built = await observeSpan(
+      this.options.observability,
+      {
+        name: 'prompt.build',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }),
+    );
     if (built.status === 'failed') return built;
     const capacity = contextCapacityFromModel(run.model);
     return this.finalizePrompt(built.prompt, capacity, this.countUsage(built.prompt));
@@ -309,30 +338,47 @@ class DefaultContext implements ContextCapabilities {
     run: CandidateSupplyRunContext,
   ): Promise<BuildContextResult> {
     if (request.signal?.aborted) {
-      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+      return buildFailedContextResult(
+        buildCancelledContextFailure('Context operation was cancelled.'),
+      );
     }
     const correlation = {
       executionId: run.executionId,
       modelCallId: request.modelCallContext.modelCallId,
     };
-    const resolved = await observeSpan(this.options.observability, {
-      name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
-    }, () => this.resolver.resolve({
-      kind: 'candidate_supply',
-      executionId: run.executionId,
-      startedAt: run.startedAt,
-      trigger: run.trigger,
-      currentMessages: request.currentMessages,
-      tools: request.modelCallContext.tools,
-      signal: request.signal,
-    }));
+    const resolved = await observeSpan(
+      this.options.observability,
+      {
+        name: 'context.resolve',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () =>
+        this.resolver.resolve({
+          kind: 'candidate_supply',
+          executionId: run.executionId,
+          startedAt: run.startedAt,
+          trigger: run.trigger,
+          currentMessages: request.currentMessages,
+          tools: request.modelCallContext.tools,
+          signal: request.signal,
+        }),
+    );
     if (resolved.status === 'failed') return resolved;
     recordContent(this.options.observability, {
-      kind: 'context.resolved', value: resolved.context, correlation,
+      kind: 'context.resolved',
+      value: resolved.context,
+      correlation,
     });
-    const built = await observeSpan(this.options.observability, {
-      name: 'prompt.build', correlation, classifyResult: classifyFallibleResult,
-    }, () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }));
+    const built = await observeSpan(
+      this.options.observability,
+      {
+        name: 'prompt.build',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }),
+    );
     if (built.status === 'failed') return built;
     const capacity = contextCapacityFromModel(run.model);
     return this.finalizePrompt(built.prompt, capacity, this.countUsage(built.prompt));
@@ -343,28 +389,45 @@ class DefaultContext implements ContextCapabilities {
     run: PreferenceLearningRunContext,
   ): Promise<BuildContextResult> {
     if (request.signal?.aborted) {
-      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+      return buildFailedContextResult(
+        buildCancelledContextFailure('Context operation was cancelled.'),
+      );
     }
     const correlation = {
       batchId: run.batchId,
       modelCallId: request.modelCallContext.modelCallId,
     };
-    const resolved = await observeSpan(this.options.observability, {
-      name: 'context.resolve', correlation, classifyResult: classifyFallibleResult,
-    }, () => this.resolver.resolve({
-      kind: 'preference_learning',
-      batchId: run.batchId,
-      startedAt: run.startedAt,
-      currentMessages: request.currentMessages,
-      signal: request.signal,
-    }));
+    const resolved = await observeSpan(
+      this.options.observability,
+      {
+        name: 'context.resolve',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () =>
+        this.resolver.resolve({
+          kind: 'preference_learning',
+          batchId: run.batchId,
+          startedAt: run.startedAt,
+          currentMessages: request.currentMessages,
+          signal: request.signal,
+        }),
+    );
     if (resolved.status === 'failed') return resolved;
     recordContent(this.options.observability, {
-      kind: 'context.resolved', value: resolved.context, correlation,
+      kind: 'context.resolved',
+      value: resolved.context,
+      correlation,
     });
-    const built = await observeSpan(this.options.observability, {
-      name: 'prompt.build', correlation, classifyResult: classifyFallibleResult,
-    }, () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }));
+    const built = await observeSpan(
+      this.options.observability,
+      {
+        name: 'prompt.build',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () => this.promptBuilder.build({ context: resolved.context, signal: request.signal }),
+    );
     if (built.status === 'failed') return built;
     return this.finalizePrompt(
       built.prompt,
@@ -403,32 +466,44 @@ class DefaultContext implements ContextCapabilities {
     | { readonly status: 'failed'; readonly failure: ContextFailure }
   > {
     if (input.signal?.aborted) {
-      return buildFailedContextResult(buildCancelledContextFailure('Context operation was cancelled.'));
+      return buildFailedContextResult(
+        buildCancelledContextFailure('Context operation was cancelled.'),
+      );
     }
     const correlation = { sessionId: input.sessionId };
-    const resolved = await observeSpan(this.options.observability, {
-      name: 'context.resolve',
-      correlation,
-      classifyResult: classifyFallibleResult,
-    }, () => this.resolver.resolve({
-        kind: 'conversation',
-        sessionId: input.sessionId,
-        workspaceId: input.workspaceId,
-        model: input.model,
-        tools: input.tools,
-        signal: input.signal,
-      }));
+    const resolved = await observeSpan(
+      this.options.observability,
+      {
+        name: 'context.resolve',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () =>
+        this.resolver.resolve({
+          kind: 'conversation',
+          sessionId: input.sessionId,
+          workspaceId: input.workspaceId,
+          model: input.model,
+          tools: input.tools,
+          signal: input.signal,
+        }),
+    );
     if (resolved.status === 'failed') return resolved;
     if (resolved.context.kind !== 'conversation') {
-      return buildFailedContextResult(buildUnexpectedContextFailure({
-        code: 'context_build_failed',
-        message: 'Conversation Context resolved to an incompatible profile.',
-      }));
+      return buildFailedContextResult(
+        buildUnexpectedContextFailure({
+          code: 'context_build_failed',
+          message: 'Conversation Context resolved to an incompatible profile.',
+        }),
+      );
     }
     const capacity = contextCapacityFromModel(input.model);
     const policyResult = resolveCompactionPolicyProblem({
       defaults: this.options.policy,
-      configured: { ...this.options.policyProvider?.getPolicy(), reserveTokens: Math.floor(input.model.contextWindow * (1 - input.compactionThresholdRatio)) },
+      configured: {
+        ...this.options.policyProvider?.getPolicy(),
+        reserveTokens: Math.floor(input.model.contextWindow * (1 - input.compactionThresholdRatio)),
+      },
       capacity,
     });
     if (policyResult.status === 'invalid') {
@@ -439,17 +514,23 @@ class DefaultContext implements ContextCapabilities {
       value: resolved.context,
       correlation,
     });
-    const built = await observeSpan(this.options.observability, {
-      name: 'prompt.build',
-      correlation,
-      classifyResult: classifyFallibleResult,
-    }, () => this.promptBuilder.build({ context: resolved.context, signal: input.signal }));
+    const built = await observeSpan(
+      this.options.observability,
+      {
+        name: 'prompt.build',
+        correlation,
+        classifyResult: classifyFallibleResult,
+      },
+      () => this.promptBuilder.build({ context: resolved.context, signal: input.signal }),
+    );
     if (built.status === 'failed') return built;
     if (built.kind !== 'conversation') {
-      return buildFailedContextResult(buildUnexpectedContextFailure({
-        code: 'context_build_failed',
-        message: 'Conversation Prompt built with an incompatible profile.',
-      }));
+      return buildFailedContextResult(
+        buildUnexpectedContextFailure({
+          code: 'context_build_failed',
+          message: 'Conversation Prompt built with an incompatible profile.',
+        }),
+      );
     }
     return {
       status: 'ok',
@@ -498,29 +579,34 @@ class DefaultContext implements ContextCapabilities {
     readonly onProgress?: (progress: ContextCompactionProgress) => void;
     readonly signal?: AbortSignal;
   }): Promise<ExecuteCompactionResult> {
-    return observeSpan(this.options.observability, {
-      name: 'context.compact',
-      correlation: { sessionId: input.sessionId },
-      classifyResult: classifyCompactionResult,
-    }, () => executeContextCompaction({
-      sessionId: input.sessionId,
-      trigger: input.trigger,
-      context: input.context,
-      prompt: input.prompt,
-      materialized: input.materialized,
-      policy: input.policy,
-      model: input.model,
-      models: input.client,
-      sessionHistory: this.options.sessionHistory,
-      promptBuilder: this.promptBuilder,
-      calculatePromptUsage: (prompt) => this.countUsage(prompt),
-      observability: this.options.observability,
-      now: () => this.clock.now(),
-      createCompactionId: () => this.ids.compactionId(),
-      events: this.options.events,
-      onProgress: input.onProgress,
-      signal: input.signal,
-    }));
+    return observeSpan(
+      this.options.observability,
+      {
+        name: 'context.compact',
+        correlation: { sessionId: input.sessionId },
+        classifyResult: classifyCompactionResult,
+      },
+      () =>
+        executeContextCompaction({
+          sessionId: input.sessionId,
+          trigger: input.trigger,
+          context: input.context,
+          prompt: input.prompt,
+          materialized: input.materialized,
+          policy: input.policy,
+          model: input.model,
+          models: input.client,
+          sessionHistory: this.options.sessionHistory,
+          promptBuilder: this.promptBuilder,
+          calculatePromptUsage: (prompt) => this.countUsage(prompt),
+          observability: this.options.observability,
+          now: () => this.clock.now(),
+          createCompactionId: () => this.ids.compactionId(),
+          events: this.options.events,
+          onProgress: input.onProgress,
+          signal: input.signal,
+        }),
+    );
   }
 
   private async withSessionOperation<T>(
@@ -529,7 +615,9 @@ class DefaultContext implements ContextCapabilities {
   ): Promise<T> {
     const previous = this.sessionOperationTails.get(sessionId) ?? Promise.resolve();
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const tail = previous.catch(() => undefined).then(() => gate);
     this.sessionOperationTails.set(sessionId, tail);
     await previous.catch(() => undefined);
@@ -568,9 +656,10 @@ function classifyBuildResult(result: BuildContextResult): OperationCompletion {
     : completionFromFailure(result.failure);
 }
 
-function classifyFallibleResult(
-  result: { readonly status: string; readonly failure?: ContextFailure },
-): OperationCompletion {
+function classifyFallibleResult(result: {
+  readonly status: string;
+  readonly failure?: ContextFailure;
+}): OperationCompletion {
   return result.status !== 'failed' || !result.failure
     ? { outcome: { status: 'ok' } }
     : completionFromFailure(result.failure);
@@ -611,13 +700,14 @@ function isAbortError(error: unknown): boolean {
 }
 
 function unavailableDiscoveryFactsReader(): DiscoveryFactsReader {
-  const unavailable = <T>(): Promise<ReadDiscoveryFactsResult<T>> => Promise.resolve({
-    status: 'failed',
-    failure: {
-      code: 'discovery_context_not_configured',
-      message: 'Discovery Context sources are not configured.',
-    },
-  });
+  const unavailable = <T>(): Promise<ReadDiscoveryFactsResult<T>> =>
+    Promise.resolve({
+      status: 'failed',
+      failure: {
+        code: 'discovery_context_not_configured',
+        message: 'Discovery Context sources are not configured.',
+      },
+    });
   return {
     readCandidateSupplyFacts: unavailable,
     readRecommendationFacts: unavailable,

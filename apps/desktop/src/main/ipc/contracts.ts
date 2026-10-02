@@ -108,7 +108,10 @@ export const RuntimeIpcResponseMetaSchema = z
   })
   .strict();
 
-export interface RuntimeIpcRequest<TPayload, TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
+export interface RuntimeIpcRequest<
+  TPayload,
+  TChannel extends BusinessIpcChannel = BusinessIpcChannel,
+> {
   requestId: string;
   payload: TPayload;
   meta: {
@@ -118,7 +121,10 @@ export interface RuntimeIpcRequest<TPayload, TChannel extends BusinessIpcChannel
   };
 }
 
-export interface RuntimeIpcSuccess<TData extends object, TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
+export interface RuntimeIpcSuccess<
+  TData extends object,
+  TChannel extends BusinessIpcChannel = BusinessIpcChannel,
+> {
   ok: true;
   data: TData;
   meta: z.infer<typeof RuntimeIpcResponseMetaSchema> & { channel: TChannel };
@@ -135,10 +141,10 @@ export type RuntimeIpcResult<
   TChannel extends BusinessIpcChannel = BusinessIpcChannel,
 > = RuntimeIpcSuccess<TData, TChannel> | RuntimeIpcFailure<TChannel>;
 
-export function createRuntimeIpcRequestSchema<TPayload extends z.ZodTypeAny, TChannel extends BusinessIpcChannel>(
-  channel: TChannel,
-  payloadSchema: TPayload,
-) {
+export function createRuntimeIpcRequestSchema<
+  TPayload extends z.ZodTypeAny,
+  TChannel extends BusinessIpcChannel,
+>(channel: TChannel, payloadSchema: TPayload) {
   return z
     .object({
       requestId: RuntimeIpcRequestIdSchema,
@@ -150,10 +156,10 @@ export function createRuntimeIpcRequestSchema<TPayload extends z.ZodTypeAny, TCh
     .strict();
 }
 
-export function createRuntimeIpcResultSchema<TData extends z.ZodTypeAny, TChannel extends BusinessIpcChannel>(
-  dataSchema: TData,
-  channel?: TChannel,
-) {
+export function createRuntimeIpcResultSchema<
+  TData extends z.ZodTypeAny,
+  TChannel extends BusinessIpcChannel,
+>(dataSchema: TData, channel?: TChannel) {
   const metaSchema = channel
     ? RuntimeIpcResponseMetaSchema.extend({ channel: z.literal(channel) }).strict()
     : RuntimeIpcResponseMetaSchema;

@@ -5,21 +5,30 @@ import type { ModelClient } from '../model-resolution';
  * final displayContent/modelContent/skillSelection formation.
  */
 
-import type { Api, Model, TextContent } from "@megumi/ai";
+import type { Api, Model, TextContent } from '@megumi/ai';
 import type {
   ResolveSkillSelectionRequest,
   ResolveSkillSelectionResult,
   SelectedSkillContent,
   SkillSelection,
-} from "../../resources/skills/index";
-import { processInputAttachments, type InputAttachment } from "./attachment-input";
-import { createInputInterpreterPipeline, InputInterpretationError, type InputInterpreter } from "./input-interpreter";
-import { DEFAULT_INPUT_POLICY, InputPolicyConfigurationError, validateInputPolicy, type InputPolicy } from "./input-policy";
-import type { InputSourceAccess, RawDocumentSource, RawImageSource } from "./input-source";
+} from '../../resources/skills/index';
+import { processInputAttachments, type InputAttachment } from './attachment-input';
+import {
+  createInputInterpreterPipeline,
+  InputInterpretationError,
+  type InputInterpreter,
+} from './input-interpreter';
+import {
+  DEFAULT_INPUT_POLICY,
+  InputPolicyConfigurationError,
+  validateInputPolicy,
+  type InputPolicy,
+} from './input-policy';
+import type { InputSourceAccess, RawDocumentSource, RawImageSource } from './input-source';
 
 export interface RawImageInput {
   readonly draftAttachmentId: string;
-  readonly type: "image";
+  readonly type: 'image';
   readonly name?: string;
   readonly declaredMimeType?: string;
   readonly source: RawImageSource;
@@ -27,7 +36,7 @@ export interface RawImageInput {
 
 export interface RawDocumentInput {
   readonly draftAttachmentId: string;
-  readonly type: "file";
+  readonly type: 'file';
   readonly name?: string;
   readonly declaredMimeType?: string;
   readonly source: RawDocumentSource;
@@ -69,15 +78,15 @@ export interface InputOperationOptions {
 
 export type ProcessInputResult<TCompletedResult> =
   | {
-      readonly status: "accepted";
+      readonly status: 'accepted';
       readonly input: UserInput;
     }
   | {
-      readonly status: "completed";
+      readonly status: 'completed';
       readonly result: TCompletedResult;
     }
   | {
-      readonly status: "failed";
+      readonly status: 'failed';
       readonly failure: InputFailure;
     };
 
@@ -98,24 +107,24 @@ export interface SkillSelectionResolver {
 
 export interface InputFailure {
   readonly code:
-    | "input_processing_failed"
-    | "input_cancelled"
-    | "input_empty"
-    | "text_length_exceeded"
-    | "attachment_identity_conflict"
-    | "image_count_exceeded"
-    | "image_too_large"
-    | "image_total_size_exceeded"
-    | "image_format_unsupported"
-    | "image_mime_mismatch"
-    | "image_read_failed"
-    | "document_count_exceeded"
-    | "document_too_large"
-    | "document_format_unsupported"
-    | "document_mime_mismatch"
-    | "document_reference_unavailable"
-    | "input_interpretation_failed"
-    | "skill_selection_failed";
+    | 'input_processing_failed'
+    | 'input_cancelled'
+    | 'input_empty'
+    | 'text_length_exceeded'
+    | 'attachment_identity_conflict'
+    | 'image_count_exceeded'
+    | 'image_too_large'
+    | 'image_total_size_exceeded'
+    | 'image_format_unsupported'
+    | 'image_mime_mismatch'
+    | 'image_read_failed'
+    | 'document_count_exceeded'
+    | 'document_too_large'
+    | 'document_format_unsupported'
+    | 'document_mime_mismatch'
+    | 'document_reference_unavailable'
+    | 'input_interpretation_failed'
+    | 'skill_selection_failed';
   readonly message: string;
   readonly details?: Readonly<Record<string, unknown>>;
 }
@@ -140,7 +149,7 @@ export function createInputProcessor<TCompletedResult>(options: {
         const text = normalizeInputText(request.input.text);
         if (codePointLength(text) > policy.maxTextCharacters) {
           return failure(
-            "text_length_exceeded",
+            'text_length_exceeded',
             `Text exceeds the ${policy.maxTextCharacters} character limit.`,
           );
         }
@@ -150,10 +159,10 @@ export function createInputProcessor<TCompletedResult>(options: {
           policy,
           ...(signal ? { signal } : {}),
         });
-        if (attachmentResult.status === "failed") return attachmentResult;
+        if (attachmentResult.status === 'failed') return attachmentResult;
         const attachments = attachmentResult.attachments;
         if (!text && attachments.length === 0) {
-          return failure("input_empty", "Enter a message or select a file.");
+          return failure('input_empty', 'Enter a message or select a file.');
         }
 
         const textBlocks = text ? [textBlock(text)] : [];
@@ -163,12 +172,16 @@ export function createInputProcessor<TCompletedResult>(options: {
           attachments,
           ...(request.input.skillSelection ? { skillSelection: request.input.skillSelection } : {}),
         };
-        const interpretation = await pipeline.run(input, request.context, signal ? { signal } : undefined);
+        const interpretation = await pipeline.run(
+          input,
+          request.context,
+          signal ? { signal } : undefined,
+        );
         if (signal?.aborted) return cancelledFailure();
-        if (interpretation.status === "completed") {
-          return { status: "completed", result: interpretation.result };
+        if (interpretation.status === 'completed') {
+          return { status: 'completed', result: interpretation.result };
         }
-        if (interpretation.status === "accepted") {
+        if (interpretation.status === 'accepted') {
           input = interpretation.input;
         }
 
@@ -180,18 +193,18 @@ export function createInputProcessor<TCompletedResult>(options: {
             input,
             options: operationOptions,
           });
-          if (expanded.status === "failed") return expanded;
+          if (expanded.status === 'failed') return expanded;
           input = expanded.input;
         }
-        return { status: "accepted", input };
+        return { status: 'accepted', input };
       } catch (error) {
         if (signal?.aborted || isAbortError(error)) return cancelledFailure();
         if (error instanceof InputInterpretationError) {
-          return { status: "failed", failure: error.failure };
+          return { status: 'failed', failure: error.failure };
         }
         return failure(
-          "input_processing_failed",
-          error instanceof Error ? error.message : "Input processing failed.",
+          'input_processing_failed',
+          error instanceof Error ? error.message : 'Input processing failed.',
         );
       }
     },
@@ -204,14 +217,16 @@ async function expandSkillSelection(input: {
   readonly resolver: SkillSelectionResolver | undefined;
   readonly input: UserInput;
   readonly options: InputOperationOptions;
-}): Promise<{ status: "accepted"; input: UserInput } | { status: "failed"; failure: InputFailure }> {
+}): Promise<
+  { status: 'accepted'; input: UserInput } | { status: 'failed'; failure: InputFailure }
+> {
   const resolver = input.resolver;
   if (!resolver) {
     return {
-      status: "failed",
+      status: 'failed',
       failure: {
-        code: "skill_selection_failed",
-        message: "Skill resolution is not configured for this input.",
+        code: 'skill_selection_failed',
+        message: 'Skill resolution is not configured for this input.',
         details: { skillPath: input.skillSelection.skillPath },
       },
     };
@@ -223,11 +238,11 @@ async function expandSkillSelection(input: {
     },
     input.options,
   );
-  if (resolved.status === "failed") {
+  if (resolved.status === 'failed') {
     return {
-      status: "failed",
+      status: 'failed',
       failure: {
-        code: "skill_selection_failed",
+        code: 'skill_selection_failed',
         message: `Selected Skill could not be resolved: ${resolved.failure.code}`,
         details: { skillPath: input.skillSelection.skillPath, reason: resolved.failure.code },
       },
@@ -235,10 +250,10 @@ async function expandSkillSelection(input: {
   }
   const block = skillBlock(resolved.content);
   return {
-    status: "accepted",
+    status: 'accepted',
     input: {
       ...input.input,
-      modelContent: [{ type: "text", text: block }, ...input.input.modelContent],
+      modelContent: [{ type: 'text', text: block }, ...input.input.modelContent],
     },
   };
 }
@@ -247,28 +262,28 @@ function skillBlock(content: SelectedSkillContent): string {
   return [
     `<skill name="${escapeXmlAttribute(content.name)}" location="${escapeXmlAttribute(content.skillPath)}">`,
     `References are relative to ${escapeXmlAttribute(content.packagePath)}.`,
-    "",
+    '',
     content.content,
-    "</skill>",
-    "",
-  ].join("\n");
+    '</skill>',
+    '',
+  ].join('\n');
 }
 
 function escapeXmlAttribute(value: string): string {
   return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 function textBlock(text: string): TextContent {
-  return { type: "text", text };
+  return { type: 'text', text };
 }
 
 function normalizeInputText(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
 }
 
 function codePointLength(value: string): number {
@@ -276,15 +291,15 @@ function codePointLength(value: string): number {
 }
 
 function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
 function cancelledFailure() {
-  return failure("input_cancelled", "Input processing was cancelled.");
+  return failure('input_cancelled', 'Input processing was cancelled.');
 }
 
-function failure(code: InputFailure["code"], message: string) {
-  return { status: "failed" as const, failure: { code, message } };
+function failure(code: InputFailure['code'], message: string) {
+  return { status: 'failed' as const, failure: { code, message } };
 }
 
-export type { RawImageSource, RawDocumentSource } from "./input-source";
+export type { RawImageSource, RawDocumentSource } from './input-source';

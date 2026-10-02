@@ -15,7 +15,8 @@ describe('ThemeSelector', () => {
           readSettings: vi.fn().mockResolvedValue({
             ok: true,
             data: {
-              config: { general: { theme: 'megumi-warm' } }, revision: 'revision',
+              config: { general: { theme: 'megumi-warm' } },
+              revision: 'revision',
             },
             meta: {},
           }),
@@ -23,7 +24,8 @@ describe('ThemeSelector', () => {
             ok: true,
             data: {
               settings: {
-                config: { general: { theme: 'rose-moon' } }, revision: 'next',
+                config: { general: { theme: 'rose-moon' } },
+                revision: 'next',
               },
             },
             meta: {},
@@ -40,7 +42,10 @@ describe('ThemeSelector', () => {
       </ThemeProvider>,
     );
 
-    expect(screen.getByRole('radio', { name: /Megumi Warm/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /Megumi Warm/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(screen.getByRole('radio', { name: /Neutral Light/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Sunlit Sky/ })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Rose Moon/ })).toBeInTheDocument();
@@ -65,9 +70,13 @@ describe('ThemeSelector', () => {
 
     expect(useThemeStore.getState().theme).toBe('rose-moon');
     expect(screen.getByTestId('megumi-theme-root')).toHaveAttribute('data-theme', 'rose-moon');
-    expect(screen.getByRole('radio', { name: /Rose Moon/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: /Rose Moon/ })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(window.megumi.settings.updateSettings).toHaveBeenCalledWith({
-      patch: { general: { theme: 'rose-moon' } }, expectedRevision: 'revision',
+      patch: { general: { theme: 'rose-moon' } },
+      expectedRevision: 'revision',
     });
   });
 });

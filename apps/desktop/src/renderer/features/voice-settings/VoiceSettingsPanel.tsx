@@ -1,6 +1,15 @@
 /* Owns Voice model resources, audio devices, and speech output configuration in the main Settings surface. */
 import type { VoiceHostModelStatus } from '@megumi/application/contracts';
-import { Activity, CircleCheck, Download, LoaderCircle, Mic2, RefreshCw, Speaker, X } from 'lucide-react';
+import {
+  Activity,
+  CircleCheck,
+  Download,
+  LoaderCircle,
+  Mic2,
+  RefreshCw,
+  Speaker,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
@@ -13,7 +22,8 @@ import {
   type AudioDeviceOption,
 } from './audio-devices';
 
-type VoiceSettings = import('@megumi/application/settings/settings-schema').SettingsConfiguration['voice'];
+type VoiceSettings =
+  import('@megumi/application/settings/settings-schema').SettingsConfiguration['voice'];
 
 type VoiceSettingsPatch = {
   inputDeviceId?: string;
@@ -49,39 +59,56 @@ export function VoiceSettingsPanel() {
   const [microphoneLevel, setMicrophoneLevel] = useState(0);
   const [testingMicrophone, setTestingMicrophone] = useState(false);
   const [revision, setRevision] = useState('');
-  const [ttsCredential, setTtsCredential] = useState<import('@megumi/application/settings/settings-contracts').CredentialValue>({ status: 'missing' });
+  const [ttsCredential, setTtsCredential] = useState<
+    import('@megumi/application/settings/settings-contracts').CredentialValue
+  >({ status: 'missing' });
   const [ttsApiKey, setTtsApiKey] = useState('');
   const [ttsSaving, setTtsSaving] = useState(false);
 
   const refreshVoiceSettings = useCallback(async () => {
     const result = await window.megumi.settings.readSettings();
-    if (!result.ok) { setDeviceError(result.data.message); return; }
+    if (!result.ok) {
+      setDeviceError(result.data.message);
+      return;
+    }
     setRevision(result.data.revision);
     setVoiceSettings(result.data.config.voice);
   }, []);
 
-  const refreshDevices = useCallback(async (requestPermission = false) => {
-    setDevicesBusy(true);
-    setDeviceError(null);
-    try {
-      setDevices(await enumerateAudioDevices({ requestPermission }));
-    } catch {
-      setDeviceError(t('voice.devicesError'));
-    } finally {
-      setDevicesBusy(false);
-    }
-  }, [t]);
+  const refreshDevices = useCallback(
+    async (requestPermission = false) => {
+      setDevicesBusy(true);
+      setDeviceError(null);
+      try {
+        setDevices(await enumerateAudioDevices({ requestPermission }));
+      } catch {
+        setDeviceError(t('voice.devicesError'));
+      } finally {
+        setDevicesBusy(false);
+      }
+    },
+    [t],
+  );
 
   const refreshTtsApiKey = useCallback(async () => {
     const result = await window.megumi.settings.readCredential({ target: { kind: 'voiceTts' } });
-    if (!result.ok) { setDeviceError(result.data.message); return; }
+    if (!result.ok) {
+      setDeviceError(result.data.message);
+      return;
+    }
     setTtsCredential(result.data);
     setTtsApiKey(result.data.status === 'found' ? result.data.value : '');
   }, [t]);
 
   const updateVoiceSettings = async (patch: VoiceSettingsPatch) => {
-    const result = await window.megumi.settings.updateSettings({ patch: { voice: patch }, expectedRevision: revision });
-    if (!result.ok) { setDeviceError(result.data.message); return; }
+    const result = await window.megumi.settings.updateSettings({
+      patch: { voice: patch },
+      expectedRevision: revision,
+    });
+    if (!result.ok) {
+      setDeviceError(result.data.message);
+      return;
+    }
     setRevision(result.data.settings.revision);
     setVoiceSettings(result.data.settings.config.voice);
     setDeviceError(null);
@@ -92,8 +119,14 @@ export function VoiceSettingsPanel() {
     setTtsSaving(true);
     setDeviceError(null);
     try {
-      const result = await window.megumi.settings.updateCredential({ target: { kind: 'voiceTts' }, value: ttsApiKey.trim() });
-      if (!result.ok) { setDeviceError(result.data.message); return; }
+      const result = await window.megumi.settings.updateCredential({
+        target: { kind: 'voiceTts' },
+        value: ttsApiKey.trim(),
+      });
+      if (!result.ok) {
+        setDeviceError(result.data.message);
+        return;
+      }
       setTtsApiKey('');
       await refreshTtsApiKey();
     } catch {
@@ -108,8 +141,14 @@ export function VoiceSettingsPanel() {
     setTtsSaving(true);
     setDeviceError(null);
     try {
-      const result = await window.megumi.settings.updateCredential({ target: { kind: 'voiceTts' }, value: null });
-      if (!result.ok) { setDeviceError(result.data.message); return; }
+      const result = await window.megumi.settings.updateCredential({
+        target: { kind: 'voiceTts' },
+        value: null,
+      });
+      if (!result.ok) {
+        setDeviceError(result.data.message);
+        return;
+      }
       setTtsApiKey('');
       await refreshTtsApiKey();
     } catch {
@@ -126,9 +165,15 @@ export function VoiceSettingsPanel() {
     if (result.ok) setModelStatus(result.data);
   }, []);
 
-  useEffect(() => { void refreshVoiceSettings(); }, [refreshVoiceSettings]);
-  useEffect(() => { void refreshTtsApiKey(); }, [refreshTtsApiKey]);
-  useEffect(() => { void refreshDevices(false); }, [refreshDevices]);
+  useEffect(() => {
+    void refreshVoiceSettings();
+  }, [refreshVoiceSettings]);
+  useEffect(() => {
+    void refreshTtsApiKey();
+  }, [refreshTtsApiKey]);
+  useEffect(() => {
+    void refreshDevices(false);
+  }, [refreshDevices]);
   useEffect(() => {
     void (async () => {
       await window.megumi.voice.checkModelUpdates(
@@ -139,7 +184,9 @@ export function VoiceSettingsPanel() {
   }, [refreshModelStatus]);
   useEffect(() => {
     if (modelStatus?.status !== 'preparing') return undefined;
-    const timer = window.setInterval(() => { void refreshModelStatus(); }, 500);
+    const timer = window.setInterval(() => {
+      void refreshModelStatus();
+    }, 500);
     return () => window.clearInterval(timer);
   }, [modelStatus?.status, refreshModelStatus]);
 
@@ -193,17 +240,29 @@ export function VoiceSettingsPanel() {
             icon={<Mic2 size={18} aria-hidden="true" />}
             label={t('voice.inputDevice')}
             value={voiceSettings.inputDeviceId}
-            options={ensureSelectedDevice(devices.inputs, voiceSettings.inputDeviceId, t('voice.deviceUnavailable'))}
+            options={ensureSelectedDevice(
+              devices.inputs,
+              voiceSettings.inputDeviceId,
+              t('voice.deviceUnavailable'),
+            )}
             defaultLabel={t('voice.systemDefault')}
-            onChange={(inputDeviceId) => { void updateVoiceSettings({ inputDeviceId }); }}
+            onChange={(inputDeviceId) => {
+              void updateVoiceSettings({ inputDeviceId });
+            }}
           />
           <DeviceSelect
             icon={<Speaker size={18} aria-hidden="true" />}
             label={t('voice.outputDevice')}
             value={voiceSettings.outputDeviceId}
-            options={ensureSelectedDevice(devices.outputs, voiceSettings.outputDeviceId, t('voice.deviceUnavailable'))}
+            options={ensureSelectedDevice(
+              devices.outputs,
+              voiceSettings.outputDeviceId,
+              t('voice.deviceUnavailable'),
+            )}
             defaultLabel={t('voice.systemDefault')}
-            onChange={(outputDeviceId) => { void updateVoiceSettings({ outputDeviceId }); }}
+            onChange={(outputDeviceId) => {
+              void updateVoiceSettings({ outputDeviceId });
+            }}
           />
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-muted)]">
@@ -212,7 +271,11 @@ export function VoiceSettingsPanel() {
             <select
               className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
               value={voiceSettings.recognitionLanguage}
-              onChange={(event) => { void updateVoiceSettings({ recognitionLanguage: event.target.value as VoiceSettings['recognitionLanguage'] }); }}
+              onChange={(event) => {
+                void updateVoiceSettings({
+                  recognitionLanguage: event.target.value as VoiceSettings['recognitionLanguage'],
+                });
+              }}
             >
               <option value="auto">{t('voice.languageAuto')}</option>
               <option value="zh">{t('voice.languageChinese')}</option>
@@ -225,12 +288,25 @@ export function VoiceSettingsPanel() {
                 <Activity size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
                 {t('voice.microphoneTest')}
               </span>
-              <Button type="button" disabled={testingMicrophone} onClick={() => { void runMicrophoneTest(); }}>
-                {testingMicrophone ? <LoaderCircle className="animate-spin" size={15} /> : <Mic2 size={15} />}
+              <Button
+                type="button"
+                disabled={testingMicrophone}
+                onClick={() => {
+                  void runMicrophoneTest();
+                }}
+              >
+                {testingMicrophone ? (
+                  <LoaderCircle className="animate-spin" size={15} />
+                ) : (
+                  <Mic2 size={15} />
+                )}
                 {t(testingMicrophone ? 'voice.testingMicrophone' : 'voice.startMicrophoneTest')}
               </Button>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-[var(--color-surface-muted)]" aria-label={t('voice.microphoneLevel')}>
+            <div
+              className="h-2 overflow-hidden rounded-full bg-[var(--color-surface-muted)]"
+              aria-label={t('voice.microphoneLevel')}
+            >
               <div
                 className="h-full rounded-full bg-[var(--color-accent)] transition-[width] duration-75"
                 style={{ width: `${Math.round(microphoneLevel * 100)}%` }}
@@ -239,8 +315,16 @@ export function VoiceSettingsPanel() {
           </div>
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] px-5 py-3">
-          <p className="text-xs text-[var(--color-text-muted)]">{deviceError ?? t('voice.devicesApplyNextSession')}</p>
-          <Button type="button" disabled={devicesBusy} onClick={() => { void refreshDevices(true); }}>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {deviceError ?? t('voice.devicesApplyNextSession')}
+          </p>
+          <Button
+            type="button"
+            disabled={devicesBusy}
+            onClick={() => {
+              void refreshDevices(true);
+            }}
+          >
             <RefreshCw className={devicesBusy ? 'animate-spin' : ''} size={15} aria-hidden="true" />
             {t('voice.refreshDevices')}
           </Button>
@@ -250,15 +334,19 @@ export function VoiceSettingsPanel() {
       <SettingsSection title={t('voice.modelsTitle')} description={t('voice.modelsDescription')}>
         <div className="flex items-center gap-4 p-5">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--color-accent-soft)] text-[var(--color-accent)]">
-            {modelStatus?.status === 'ready'
-              ? <CircleCheck size={19} aria-hidden="true" />
-              : modelStatus?.status === 'preparing'
-                ? <LoaderCircle className="animate-spin" size={19} aria-hidden="true" />
-                : <Download size={19} aria-hidden="true" />}
+            {modelStatus?.status === 'ready' ? (
+              <CircleCheck size={19} aria-hidden="true" />
+            ) : modelStatus?.status === 'preparing' ? (
+              <LoaderCircle className="animate-spin" size={19} aria-hidden="true" />
+            ) : (
+              <Download size={19} aria-hidden="true" />
+            )}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-[var(--color-text)]">{t(modelStatusKey(modelStatus))}</p>
+              <p className="text-sm font-medium text-[var(--color-text)]">
+                {t(modelStatusKey(modelStatus))}
+              </p>
               {modelStatus?.status === 'preparing' && modelStatus.phase === 'downloading' ? (
                 <span className="text-xs font-semibold tabular-nums text-[var(--color-text)]">
                   {Math.round(modelStatus.progress * 100)}%
@@ -268,7 +356,9 @@ export function VoiceSettingsPanel() {
             {modelStatus && 'totalBytes' in modelStatus ? (
               <p className="mt-1 text-xs tabular-nums text-[var(--color-text-muted)]">
                 {formatBytes(modelStatus.downloadedBytes)} / {formatBytes(modelStatus.totalBytes)}
-                {modelStatus.status === 'preparing' && modelStatus.phase === 'downloading' && modelStatus.bytesPerSecond
+                {modelStatus.status === 'preparing' &&
+                modelStatus.phase === 'downloading' &&
+                modelStatus.bytesPerSecond
                   ? ` · ${formatBytes(modelStatus.bytesPerSecond)}/s`
                   : ''}
               </p>
@@ -283,19 +373,29 @@ export function VoiceSettingsPanel() {
             ) : null}
           </div>
           {modelStatus?.status === 'preparing' ? (
-            <Button type="button" onClick={() => { void cancelModelPreparation(); }}>
-              <X size={15} aria-hidden="true" />{t('voice.modelsCancel')}
+            <Button
+              type="button"
+              onClick={() => {
+                void cancelModelPreparation();
+              }}
+            >
+              <X size={15} aria-hidden="true" />
+              {t('voice.modelsCancel')}
             </Button>
           ) : modelStatus ? (
             <Button
               type="button"
               disabled={modelStatus.status === 'ready' && !modelStatus.availableBundleVersion}
-              onClick={() => { void prepareModels(); }}
+              onClick={() => {
+                void prepareModels();
+              }}
             >
               <Download size={15} aria-hidden="true" />
               {modelStatus.status === 'ready'
                 ? t(modelStatus.availableBundleVersion ? 'voice.modelsUpdate' : 'voice.modelsReady')
-                : t(modelStatus.downloadedBytes > 0 ? 'voice.modelsResume' : 'voice.modelsDownload')}
+                : t(
+                    modelStatus.downloadedBytes > 0 ? 'voice.modelsResume' : 'voice.modelsDownload',
+                  )}
             </Button>
           ) : null}
         </div>
@@ -303,7 +403,7 @@ export function VoiceSettingsPanel() {
       <SettingsSection
         title={t('voice.ttsTitle')}
         description={t('voice.ttsDescription')}
-        headerAction={(
+        headerAction={
           <div className="flex items-center gap-3">
             <span className="text-sm text-[var(--color-text-muted)]">
               {voiceSettings.readAloudEnabled ? t('voice.readAloudOn') : t('voice.readAloudOff')}
@@ -313,7 +413,9 @@ export function VoiceSettingsPanel() {
               role="switch"
               aria-label={t('voice.readAloud')}
               aria-checked={voiceSettings.readAloudEnabled}
-              onClick={() => { void updateVoiceSettings({ readAloudEnabled: !voiceSettings.readAloudEnabled }); }}
+              onClick={() => {
+                void updateVoiceSettings({ readAloudEnabled: !voiceSettings.readAloudEnabled });
+              }}
               className={cx(
                 'relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border transition-colors duration-150',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-focus)]',
@@ -331,7 +433,7 @@ export function VoiceSettingsPanel() {
               />
             </button>
           </div>
-        )}
+        }
       >
         <div className="grid gap-4 p-5 lg:grid-cols-2">
           <label className="rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] p-4">
@@ -341,7 +443,11 @@ export function VoiceSettingsPanel() {
             <select
               className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
               value={voiceSettings.tts.provider}
-              onChange={(event) => { void updateVoiceSettings({ tts: { provider: event.target.value as VoiceSettings['tts']['provider'] } }); }}
+              onChange={(event) => {
+                void updateVoiceSettings({
+                  tts: { provider: event.target.value as VoiceSettings['tts']['provider'] },
+                });
+              }}
             >
               <option value="minimax">{t('voice.ttsProviderMinimax')}</option>
             </select>
@@ -353,10 +459,14 @@ export function VoiceSettingsPanel() {
             <select
               className="h-10 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
               value={voiceSettings.tts.voiceId}
-              onChange={(event) => { void updateVoiceSettings({ tts: { voiceId: event.target.value } }); }}
+              onChange={(event) => {
+                void updateVoiceSettings({ tts: { voiceId: event.target.value } });
+              }}
             >
               {TTS_VOICE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{t(option.labelKey)}</option>
+                <option key={option.value} value={option.value}>
+                  {t(option.labelKey)}
+                </option>
               ))}
             </select>
           </label>
@@ -366,7 +476,15 @@ export function VoiceSettingsPanel() {
                 <Speaker size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
                 {t('voice.ttsApiKey')}
               </span>
-              <span className="text-xs text-[var(--color-text-muted)]">{t(ttsCredential.status === 'found' ? ttsCredential.source === 'stored' ? 'voice.ttsCredentialSaved' : 'voice.ttsCredentialEnvironment' : 'voice.ttsCredentialMissing')}</span>
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {t(
+                  ttsCredential.status === 'found'
+                    ? ttsCredential.source === 'stored'
+                      ? 'voice.ttsCredentialSaved'
+                      : 'voice.ttsCredentialEnvironment'
+                    : 'voice.ttsCredentialMissing',
+                )}
+              </span>
             </div>
             <div className="flex gap-2">
               <SecretInput
@@ -379,11 +497,23 @@ export function VoiceSettingsPanel() {
                 className="min-w-0 flex-1"
                 inputClassName="h-10 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)]"
               />
-              <Button type="button" disabled={!ttsApiKey.trim() || ttsSaving} onClick={() => { void saveTtsApiKey(); }}>
+              <Button
+                type="button"
+                disabled={!ttsApiKey.trim() || ttsSaving}
+                onClick={() => {
+                  void saveTtsApiKey();
+                }}
+              >
                 {t('voice.ttsApiKeySave')}
               </Button>
-              {(ttsCredential.status === 'found') ? (
-                <Button type="button" disabled={ttsSaving} onClick={() => { void clearTtsApiKey(); }}>
+              {ttsCredential.status === 'found' ? (
+                <Button
+                  type="button"
+                  disabled={ttsSaving}
+                  onClick={() => {
+                    void clearTtsApiKey();
+                  }}
+                >
                   {t('voice.ttsApiKeyClear')}
                 </Button>
               ) : null}
@@ -434,7 +564,9 @@ function ensureSelectedDevice(
     : [...options, { deviceId: selectedDeviceId, label: unavailableLabel }];
 }
 
-function modelStatusKey(status: VoiceHostModelStatus | undefined):
+function modelStatusKey(
+  status: VoiceHostModelStatus | undefined,
+):
   | 'voice.modelsChecking'
   | 'voice.modelsUpdateAvailable'
   | 'voice.modelsInstalled'
@@ -445,9 +577,11 @@ function modelStatusKey(status: VoiceHostModelStatus | undefined):
   | 'voice.modelsInstalling'
   | 'voice.modelsDownloading' {
   if (!status) return 'voice.modelsChecking';
-  if (status.status === 'ready') return status.availableBundleVersion ? 'voice.modelsUpdateAvailable' : 'voice.modelsInstalled';
+  if (status.status === 'ready')
+    return status.availableBundleVersion ? 'voice.modelsUpdateAvailable' : 'voice.modelsInstalled';
   if (status.status === 'failed') return 'voice.modelsFailed';
-  if (status.status === 'not_prepared') return status.downloadedBytes > 0 ? 'voice.modelsPaused' : 'voice.modelsNotInstalled';
+  if (status.status === 'not_prepared')
+    return status.downloadedBytes > 0 ? 'voice.modelsPaused' : 'voice.modelsNotInstalled';
   if (status.phase === 'verifying') return 'voice.modelsVerifying';
   if (status.phase === 'installing') return 'voice.modelsInstalling';
   return 'voice.modelsDownloading';
