@@ -83,10 +83,11 @@ describe('Settings contracts', () => {
       additionalProperties: true,
     });
 
-    const providerSchema = jsonSchema.properties?.providers?.additionalProperties as {
+    const providerSchema = jsonSchema.properties?.models?.properties?.providers?.additionalProperties as {
       properties?: Record<string, unknown>;
     };
-    expect(providerSchema.properties).toHaveProperty('api_key');
+    expect(providerSchema?.properties).toHaveProperty('apiKeyEnv');
+    expect(providerSchema?.properties).not.toHaveProperty('api_key');
     expect(jsonSchema.properties?.permissions).toMatchObject({
       type: 'object',
       properties: { allow: { type: 'array' } },

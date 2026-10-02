@@ -13,6 +13,28 @@ import {
   type PermissionRule,
 } from '@megumi/agent-runtime/permissions/index';
 import { z } from 'zod';
+import type { SettingsConfiguration } from './settings-schema';
+
+export type SettingsScope = 'global' | 'project';
+export interface SettingsError {
+  code: 'SETTINGS_INVALID' | 'SETTINGS_SCOPE_INVALID' | 'SETTINGS_CONFLICT';
+  message: string;
+  issues?: readonly { scope?: SettingsScope; path: readonly string[]; message: string }[];
+}
+export interface SettingsSnapshot {
+  config: SettingsConfiguration;
+  sources: readonly { path: readonly string[]; source: 'default' | SettingsScope }[];
+  revision: string;
+  diagnostics: readonly {
+    code: 'SETTINGS_UNKNOWN_FIELD';
+    scope: SettingsScope;
+    path: readonly string[];
+    message: string;
+  }[];
+}
+export type ReadSettingsResult =
+  | { status: 'ok'; settings: SettingsSnapshot }
+  | { status: 'rejected'; error: SettingsError };
 
 
 

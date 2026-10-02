@@ -1,6 +1,10 @@
 /* Verifies the unified Settings capability across Provider, Model, Permission, and Web Search facts. */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createSettings as createFileSettings } from '@megumi/application/settings/settings-store';
 import {
   DEFAULT_SETTINGS,
   createSettings,
@@ -21,6 +25,183 @@ class MemorySettingsStore implements SettingsStore {
     this.document = structuredClone(next);
   }
 }
+
+const configurationDirectories: string[] = [];
+
+afterEach(() => {
+  for (const directory of configurationDirectories.splice(0)) {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+/** Creates real, isolated files for the public configuration operations. */
+function configurationFiles() {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-settings-'));
+  configurationDirectories.push(directory);
+  const globalSettingsPath = path.join(directory, 'settings.json');
+  const projectSettingsPath = path.join(directory, 'project', '.megumi', 'settings.json');
+  const credentialsPath = path.join(directory, 'credentials.json');
+  return {
+    directory,
+    globalSettingsPath,
+    projectSettingsPath,
+    credentialsPath,
+    settings: createFileSettings({
+      globalSettingsPath,
+      projectSettingsPath,
+      credentialsPath,
+      readEnvironment: () => undefined,
+    }),
+  };
+}
+
+describe('Configuration files', () => {
+  it('requires an API URL for a custom search provider', () => {
+    const files = configurationFiles();
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ webSearch: { provider: 'custom' } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ webSearch: { provider: 'custom', baseUrl: 'https://search.example/v1' } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'ok' });
+  });
+
+  it('requires complete custom definitions and validates model capacity after project overrides', () => {
+    const files = configurationFiles();
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ models: { providers: { local: {} } } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ models: {
+      providers: { local: { api: 'openai-completions', baseUrl: 'http://localhost:9999/v1' } },
+      customModels: { local: { small: { contextWindowTokens: 8192, maxOutputTokens: 1024 } } },
+    } }));
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ models: { customModels: { local: { small: { maxOutputTokens: 16384 } } } } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ models: { customModels: { local: { small: { maxOutputTokens: 2048 } } } } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { models: {
+      customModels: { local: { small: { contextWindowTokens: 8192, maxOutputTokens: 2048, enabled: true, capabilities: { toolCalls: 'unknown' } } } },
+    } } } });
+  });
+
+  it('validates relationships after combining files rather than filling each file with defaults', () => {
+    const files = configurationFiles();
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ discovery: {
+      recommendationTargetCount: 20, recommendationWorkingSetCount: 40,
+      candidatePoolMinimumCount: 20, candidatePoolMaximumCount: 60,
+    } }));
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ discovery: { recommendationTargetCount: 50 } }));
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected', error: { code: 'SETTINGS_INVALID', issues: expect.arrayContaining([
+        { path: ['discovery', 'recommendationTargetCount'], message: expect.any(String) },
+      ]) },
+    });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ discovery: { recommendationTargetCount: 35 } }));
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'ok', settings: { config: { discovery: { recommendationTargetCount: 35, recommendationWorkingSetCount: 40 } } },
+    });
+  });
+
+  it('diagnoses unknown fields without disclosing or rewriting their contents', () => {
+    const files = configurationFiles();
+    const content = JSON.stringify({ general: { setupCompleted: true, token: 'private-value' }, future: { secret: 'another-value' } });
+    fs.writeFileSync(files.globalSettingsPath, content);
+    const read = files.settings.readSettings();
+    expect(read).toMatchObject({
+      status: 'ok',
+      settings: { diagnostics: [
+        { code: 'SETTINGS_UNKNOWN_FIELD', scope: 'global', path: ['general', 'token'] },
+        { code: 'SETTINGS_UNKNOWN_FIELD', scope: 'global', path: ['future'] },
+      ] },
+    });
+    expect(JSON.stringify(read)).not.toContain('private-value');
+    expect(JSON.stringify(read)).not.toContain('another-value');
+    expect(fs.readFileSync(files.globalSettingsPath, 'utf8')).toBe(content);
+  });
+
+  it('reports invalid fields and can reread a manually repaired file without rewriting it', () => {
+    const files = configurationFiles();
+    const invalid = '{ "context": { "compactionThresholdRatio": 0 } }';
+    fs.writeFileSync(files.globalSettingsPath, invalid);
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected',
+      error: { code: 'SETTINGS_INVALID', issues: [{ scope: 'global', path: ['context', 'compactionThresholdRatio'] }] },
+    });
+    expect(fs.readFileSync(files.globalSettingsPath, 'utf8')).toBe(invalid);
+    fs.writeFileSync(files.globalSettingsPath, '{ broken');
+    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
+    fs.writeFileSync(files.globalSettingsPath, '{ "context": { "compactionThresholdRatio": 0.65 } }');
+    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { context: { compactionThresholdRatio: 0.65 } } } });
+  });
+
+  it('rejects forbidden project fields with their location', () => {
+    const files = configurationFiles();
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ general: { language: 'en-US' } }));
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected',
+      error: {
+        code: 'SETTINGS_SCOPE_INVALID',
+        issues: [{ scope: 'project', path: ['general', 'language'] }],
+      },
+    });
+  });
+
+  it('merges project fields over the latest global file while keeping each source', () => {
+    const files = configurationFiles();
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({
+      general: { setupCompleted: true },
+      models: {
+        defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+        providers: { deepseek: { baseUrl: 'https://global.example/v1' } },
+      },
+      discovery: { enabledSources: ['bilibili'] },
+    }));
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({
+      models: { providers: { deepseek: { baseUrl: 'https://project.example/v1', enabled: false } } },
+      discovery: { enabledSources: [] },
+    }));
+    const read = files.settings.readSettings();
+    expect(read).toMatchObject({
+      status: 'ok',
+      settings: {
+        config: {
+          general: { setupCompleted: true },
+          models: {
+            defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+            providers: { deepseek: { baseUrl: 'https://project.example/v1', enabled: false } },
+          },
+          discovery: { enabledSources: [] },
+        },
+        sources: expect.arrayContaining([
+          { path: ['general', 'setupCompleted'], source: 'global' },
+          { path: ['models', 'providers', 'deepseek', 'baseUrl'], source: 'project' },
+          { path: ['context', 'compactionThresholdRatio'], source: 'default' },
+        ]),
+      },
+    });
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ general: { setupCompleted: false } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { general: { setupCompleted: false } } } });
+  });
+
+  it('reads complete defaults without creating missing configuration files', () => {
+    const files = configurationFiles();
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'ok',
+      settings: {
+        config: {
+          general: { language: 'zh-CN', theme: 'midnight-blue', setupCompleted: false },
+          models: { providers: {}, customModels: {}, modelOverrides: {} },
+          context: { compactionThresholdRatio: 0.8 },
+          discovery: { recommendationTargetCount: 20, enabledSources: ['bilibili', 'open_web'] },
+          voice: { inputDeviceId: 'default', outputDeviceId: 'default', readAloudEnabled: false },
+          webSearch: {},
+          permissions: { mode: 'ask', allow: [], ask: [], deny: [] },
+        },
+      },
+    });
+    expect(fs.readdirSync(files.directory)).toEqual([]);
+  });
+});
 
 describe('Settings', () => {
   it('resolves Web Search public settings and environment credentials separately', () => {

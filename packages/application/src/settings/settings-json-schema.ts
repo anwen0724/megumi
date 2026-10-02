@@ -1,6 +1,6 @@
 /* Generates a JSON Schema for the settings file model for editor tooling. */
 import { z } from 'zod';
-import { SettingsFileRawSchema } from './settings-schema';
+import { ConfigurationFileSchema } from './settings-schema';
 
 export type SettingsJsonSchemaObject = Record<string, unknown> & {
   title?: string;
@@ -13,7 +13,7 @@ export function createSettingsJsonSchema(): SettingsJsonSchemaObject {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     title: 'Megumi settings',
-    ...zodToJsonSchema(SettingsFileRawSchema),
+    ...zodToJsonSchema(ConfigurationFileSchema),
   };
 }
 
