@@ -12,16 +12,23 @@ import {
 import { readJsonFile, writeJsonFile } from './json-file';
 
 const SecretSchema = z.string().trim().min(1);
-const CredentialFileSchema = z.object({
-  providers: z.record(SecretSchema).optional(),
-  webSearch: SecretSchema.optional(),
-  voiceTts: SecretSchema.optional(),
-  discoverySources: z.object({ twitter: SecretSchema.optional(), zhihu: SecretSchema.optional() }).optional(),
-}).passthrough();
+const CredentialFileSchema = z
+  .object({
+    providers: z.record(SecretSchema).optional(),
+    webSearch: SecretSchema.optional(),
+    voiceTts: SecretSchema.optional(),
+    discoverySources: z
+      .object({ twitter: SecretSchema.optional(), zhihu: SecretSchema.optional() })
+      .optional(),
+  })
+  .passthrough();
 type CredentialFile = z.infer<typeof CredentialFileSchema>;
 
 /** Binds the two credential operations to one global file. */
-export function createCredentialStore(filePath: string, readEnvironment: (name: string) => string | undefined) {
+export function createCredentialStore(
+  filePath: string,
+  readEnvironment: (name: string) => string | undefined,
+) {
   return {
     /** Reads current credentials without exposing them through configuration snapshots. */
     readCredential(request: ReadCredentialRequest): ReadCredentialResult {
@@ -31,10 +38,13 @@ export function createCredentialStore(filePath: string, readEnvironment: (name: 
       if (file.status === 'rejected') return file;
       const value = storedCredential(file.document, parsed.data.target);
       if (value) return { status: 'found', value, source: 'stored' };
-      const names = parsed.data.apiKeyEnv ? [parsed.data.apiKeyEnv] : parsed.data.defaultEnvNames ?? [];
+      const names = parsed.data.apiKeyEnv
+        ? [parsed.data.apiKeyEnv]
+        : (parsed.data.defaultEnvNames ?? []);
       for (const name of names) {
         const environmentValue = readEnvironment(name)?.trim();
-        if (environmentValue) return { status: 'found', value: environmentValue, source: 'environment' };
+        if (environmentValue)
+          return { status: 'found', value: environmentValue, source: 'environment' };
       }
       return { status: 'missing' };
     },
@@ -46,12 +56,19 @@ export function createCredentialStore(filePath: string, readEnvironment: (name: 
       const file = readCredentialFile(filePath);
       if (file.status === 'rejected') return file;
       const { target, value } = parsed.data;
-      if ((storedCredential(file.document, target) ?? null) === value) return { status: 'unchanged' };
+      if ((storedCredential(file.document, target) ?? null) === value)
+        return { status: 'unchanged' };
       const next = { ...file.document };
       if (target.kind === 'provider') {
         const providers = { ...next.providers };
         if (value === null) delete providers[target.providerId];
-        else Object.defineProperty(providers, target.providerId, { value, enumerable: true, writable: true, configurable: true });
+        else
+          Object.defineProperty(providers, target.providerId, {
+            value,
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
         next.providers = providers;
       } else if (target.kind === 'discoverySource') {
         const sources = { ...next.discoverySources };
@@ -84,9 +101,17 @@ function storedCredential(file: CredentialFile, target: CredentialTarget): strin
   return file[target.kind];
 }
 
-function invalidCredential(code: 'CREDENTIAL_INVALID' | 'CREDENTIAL_FILE_INVALID'): Extract<ReadCredentialResult, { status: 'rejected' }> {
+function invalidCredential(
+  code: 'CREDENTIAL_INVALID' | 'CREDENTIAL_FILE_INVALID',
+): Extract<ReadCredentialResult, { status: 'rejected' }> {
   return {
     status: 'rejected',
-    error: { code, message: code === 'CREDENTIAL_INVALID' ? 'Invalid credential request.' : 'The credential file is invalid.' },
+    error: {
+      code,
+      message:
+        code === 'CREDENTIAL_INVALID'
+          ? 'Invalid credential request.'
+          : 'The credential file is invalid.',
+    },
   };
 }

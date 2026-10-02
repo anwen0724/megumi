@@ -11,7 +11,7 @@ describe('Settings editor schema', () => {
       additionalProperties: true,
     });
 
-    const providerSchema = jsonSchema.properties?.models?.properties?.providers?.additionalProperties as {
+    const providerSchema = jsonSchema.properties?.providers?.additionalProperties as {
       properties?: Record<string, unknown>;
     };
     expect(providerSchema?.properties).toHaveProperty('apiKeyEnv');

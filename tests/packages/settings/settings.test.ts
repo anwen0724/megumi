@@ -36,31 +36,74 @@ function configurationFiles() {
 }
 
 describe('Configuration files', () => {
+  it('persists explicitly added builtin models without copying their catalog parameters', () => {
+    const files = configurationFiles();
+    const read = files.settings.readSettings();
+    if (read.status !== 'ok') throw new Error('Expected configuration');
+    const result = files.settings.updateSettings({
+      patch: { providers: { deepseek: { name: 'DeepSeek', models: { 'deepseek-flash': {} } } } },
+      expectedRevision: read.settings.revision,
+    });
+    expect(result.status).toBe('updated');
+    expect(JSON.parse(fs.readFileSync(files.projectSettingsPath, 'utf8'))).toEqual({
+      providers: { deepseek: { name: 'DeepSeek', models: { 'deepseek-flash': {} } } },
+    });
+  });
+
+  it('keeps an added builtin model when its last parameter override is cleared', () => {
+    const files = configurationFiles();
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({
+        providers: { deepseek: { models: { 'deepseek-flash': { name: 'Quick' } } } },
+      }),
+    );
+    const read = files.settings.readSettings();
+    if (read.status !== 'ok') throw new Error('Expected configuration');
+    const result = files.settings.updateSettings({
+      patch: { providers: { deepseek: { models: { 'deepseek-flash': { name: null } } } } },
+      expectedRevision: read.settings.revision,
+    });
+    expect(result).toMatchObject({
+      status: 'updated',
+      settings: { config: { providers: { deepseek: { models: { 'deepseek-flash': {} } } } } },
+    });
+  });
+
   it('preserves external additions when clearing a whole configuration group conflicts', () => {
     const files = configurationFiles();
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(files.projectSettingsPath, '{ "context": { "compactionThresholdRatio": 0.6 } }');
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      '{ "context": { "compactionThresholdRatio": 0.6 } }',
+    );
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
     const edited = '{ "context": { "compactionThresholdRatio": 0.6, "futureOption": true } }';
     fs.writeFileSync(files.projectSettingsPath, edited);
-    expect(files.settings.updateSettings({
-      patch: { context: null }, expectedRevision: read.settings.revision,
-    })).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
+    expect(
+      files.settings.updateSettings({
+        patch: { context: null },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
     expect(fs.readFileSync(files.projectSettingsPath, 'utf8')).toBe(edited);
   });
 
   it('does not rewrite existing empty groups when an update contains no field edits', () => {
     const files = configurationFiles();
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    const original = '{ "context": {}, "models": { "providers": {} } }';
+    const original = '{ "context": {}, "providers": {} }';
     fs.writeFileSync(files.projectSettingsPath, original);
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
-    expect(files.settings.updateSettings({
-      patch: { context: {}, models: { providers: {} } },
-      expectedRevision: read.settings.revision,
-    }).status).toBe('unchanged');
+    expect(
+      files.settings.updateSettings({
+        patch: { context: {}, providers: {} },
+        expectedRevision: read.settings.revision,
+      }).status,
+    ).toBe('unchanged');
     expect(fs.readFileSync(files.projectSettingsPath, 'utf8')).toBe(original);
   });
 
@@ -71,31 +114,43 @@ describe('Configuration files', () => {
     fs.writeFileSync(files.projectSettingsPath, original);
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
-    vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw new Error('Disk unavailable'); });
-    expect(() => files.settings.updateSettings({
-      patch: { context: { compactionThresholdRatio: 0.7 } }, expectedRevision: read.settings.revision,
-    })).toThrow('Disk unavailable');
+    vi.spyOn(fs, 'renameSync').mockImplementation(() => {
+      throw new Error('Disk unavailable');
+    });
+    expect(() =>
+      files.settings.updateSettings({
+        patch: { context: { compactionThresholdRatio: 0.7 } },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toThrow('Disk unavailable');
     expect(fs.readFileSync(files.projectSettingsPath, 'utf8')).toBe(original);
     expect(fs.readdirSync(path.dirname(files.projectSettingsPath))).toEqual(['settings.json']);
   });
 
-  it('treats default model selection as one value and binds revisions to the configured files', () => {
+  it('treats task model selection as one value and binds revisions to the configured files', () => {
     const files = configurationFiles();
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
     const first = files.settings.updateSettings({
-      patch: { models: { defaultModel: { providerId: 'deepseek', modelId: 'first' } } },
+      patch: { discovery: { recommendationModel: { providerId: 'deepseek', modelId: 'first' } } },
       expectedRevision: read.settings.revision,
     });
     expect(first.status).toBe('updated');
-    expect(files.settings.updateSettings({
-      patch: { models: { defaultModel: { providerId: 'deepseek', modelId: 'second' } } },
-      expectedRevision: read.settings.revision,
-    })).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
+    expect(
+      files.settings.updateSettings({
+        patch: {
+          discovery: { recommendationModel: { providerId: 'deepseek', modelId: 'second' } },
+        },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
     const other = configurationFiles();
-    expect(other.settings.updateSettings({
-      patch: { context: { compactionThresholdRatio: 0.6 } }, expectedRevision: read.settings.revision,
-    })).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
+    expect(
+      other.settings.updateSettings({
+        patch: { context: { compactionThresholdRatio: 0.6 } },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
   });
 
   it('preserves independent external edits but rejects changes to the same edited value', () => {
@@ -103,16 +158,28 @@ describe('Configuration files', () => {
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ discovery: { recommendationTargetCount: 30 } }));
-    expect(files.settings.updateSettings({
-      patch: { discovery: { recommendationWorkingSetCount: 90 } },
-      expectedRevision: read.settings.revision,
-    })).toMatchObject({ status: 'updated', settings: { config: { discovery: { recommendationTargetCount: 30, recommendationWorkingSetCount: 90 } } } });
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({ discovery: { recommendationTargetCount: 30 } }),
+    );
+    expect(
+      files.settings.updateSettings({
+        patch: { discovery: { recommendationWorkingSetCount: 90 } },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      settings: {
+        config: { discovery: { recommendationTargetCount: 30, recommendationWorkingSetCount: 90 } },
+      },
+    });
     const preserved = fs.readFileSync(files.projectSettingsPath, 'utf8');
-    expect(files.settings.updateSettings({
-      patch: { discovery: { recommendationTargetCount: 40 } },
-      expectedRevision: read.settings.revision,
-    })).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
+    expect(
+      files.settings.updateSettings({
+        patch: { discovery: { recommendationTargetCount: 40 } },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
     expect(fs.readFileSync(files.projectSettingsPath, 'utf8')).toBe(preserved);
   });
 
@@ -122,8 +189,13 @@ describe('Configuration files', () => {
     if (read.status !== 'ok') throw new Error('Expected configuration');
     const request = JSON.parse('{"patch":{"context":{"undeclared":true}}}');
     request.expectedRevision = read.settings.revision;
-    expect(files.settings.updateSettings(request)).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
-    const incomplete = JSON.parse('{"patch":{"models":{"defaultModel":{"providerId":"deepseek"}}}}');
+    expect(files.settings.updateSettings(request)).toMatchObject({
+      status: 'rejected',
+      error: { code: 'SETTINGS_INVALID' },
+    });
+    const incomplete = JSON.parse(
+      '{"patch":{"discovery":{"recommendationModel":{"providerId":"deepseek"}}}}',
+    );
     incomplete.expectedRevision = read.settings.revision;
     expect(files.settings.updateSettings(incomplete).status).toBe('rejected');
     expect(fs.existsSync(files.projectSettingsPath)).toBe(false);
@@ -131,87 +203,167 @@ describe('Configuration files', () => {
 
   it('clears an explicit override through update while preserving unrelated unknown data', () => {
     const files = configurationFiles();
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ context: { compactionThresholdRatio: 0.6 } }));
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({ context: { compactionThresholdRatio: 0.6 } }),
+    );
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ context: { compactionThresholdRatio: 0.7, future: 42 } }));
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({ context: { compactionThresholdRatio: 0.7, future: 42 } }),
+    );
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
-    expect(files.settings.updateSettings({
-      patch: { context: { compactionThresholdRatio: null } },
-      expectedRevision: read.settings.revision,
-    })).toMatchObject({ status: 'updated', settings: { config: { context: { compactionThresholdRatio: 0.6 } } } });
-    expect(JSON.parse(fs.readFileSync(files.projectSettingsPath, 'utf8'))).toEqual({ context: { future: 42 } });
+    expect(
+      files.settings.updateSettings({
+        patch: { context: { compactionThresholdRatio: null } },
+        expectedRevision: read.settings.revision,
+      }),
+    ).toMatchObject({
+      status: 'updated',
+      settings: { config: { context: { compactionThresholdRatio: 0.6 } } },
+    });
+    expect(JSON.parse(fs.readFileSync(files.projectSettingsPath, 'utf8'))).toEqual({
+      context: { future: 42 },
+    });
   });
 
   it('saves only explicit changes to the bound file, including explicit defaults', () => {
     const files = configurationFiles();
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
-    expect(files.settings.updateSettings({ patch: {}, expectedRevision: read.settings.revision }).status).toBe('unchanged');
+    expect(
+      files.settings.updateSettings({ patch: {}, expectedRevision: read.settings.revision }).status,
+    ).toBe('unchanged');
     expect(fs.existsSync(files.projectSettingsPath)).toBe(false);
-    expect(files.settings.updateSettings({
-      patch: { context: { compactionThresholdRatio: 0.8 } },
-      expectedRevision: read.settings.revision,
-    }).status).toBe('updated');
-    expect(JSON.parse(fs.readFileSync(files.projectSettingsPath, 'utf8'))).toEqual({ context: { compactionThresholdRatio: 0.8 } });
+    expect(
+      files.settings.updateSettings({
+        patch: { context: { compactionThresholdRatio: 0.8 } },
+        expectedRevision: read.settings.revision,
+      }).status,
+    ).toBe('updated');
+    expect(JSON.parse(fs.readFileSync(files.projectSettingsPath, 'utf8'))).toEqual({
+      context: { compactionThresholdRatio: 0.8 },
+    });
     expect(fs.existsSync(files.globalSettingsPath)).toBe(false);
   });
 
   it('requires an API URL for a custom search provider', () => {
     const files = configurationFiles();
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ webSearch: { provider: 'custom' } }));
-    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ webSearch: { provider: 'custom', baseUrl: 'https://search.example/v1' } }));
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({ webSearch: { provider: 'custom' } }),
+    );
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected',
+      error: { code: 'SETTINGS_INVALID' },
+    });
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({ webSearch: { provider: 'custom', baseUrl: 'https://search.example/v1' } }),
+    );
     expect(files.settings.readSettings()).toMatchObject({ status: 'ok' });
   });
 
   it('requires complete custom definitions and validates model capacity after project overrides', () => {
     const files = configurationFiles();
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ models: { providers: { local: {} } } }));
-    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ models: {
-      providers: { local: { api: 'openai-completions', baseUrl: 'http://localhost:9999/v1' } },
-      customModels: { local: { small: { contextWindowTokens: 8192, maxOutputTokens: 1024 } } },
-    } }));
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ providers: { local: {} } }));
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected',
+      error: { code: 'SETTINGS_INVALID' },
+    });
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({
+        providers: {
+          local: {
+            api: 'openai-completions',
+            baseUrl: 'http://localhost:9999/v1',
+            models: { small: { contextWindowTokens: 8192, maxOutputTokens: 1024 } },
+          },
+        },
+      }),
+    );
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ models: { customModels: { local: { small: { maxOutputTokens: 16384 } } } } }));
-    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ models: { customModels: { local: { small: { maxOutputTokens: 2048 } } } } }));
-    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { models: {
-      customModels: { local: { small: { contextWindowTokens: 8192, maxOutputTokens: 2048, enabled: true, capabilities: { toolCalls: 'unknown' } } } },
-    } } } });
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({ providers: { local: { models: { small: { maxOutputTokens: 16384 } } } } }),
+    );
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected',
+      error: { code: 'SETTINGS_INVALID' },
+    });
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({ providers: { local: { models: { small: { maxOutputTokens: 2048 } } } } }),
+    );
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'ok',
+      settings: {
+        config: {
+          providers: {
+            local: { models: { small: { contextWindowTokens: 8192, maxOutputTokens: 2048 } } },
+          },
+        },
+      },
+    });
   });
 
   it('validates relationships after combining files rather than filling each file with defaults', () => {
     const files = configurationFiles();
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ discovery: {
-      recommendationTargetCount: 20, recommendationWorkingSetCount: 40,
-      candidatePoolMinimumCount: 20, candidatePoolMaximumCount: 60,
-    } }));
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({
+        discovery: {
+          recommendationTargetCount: 20,
+          recommendationWorkingSetCount: 40,
+          candidatePoolMinimumCount: 20,
+          candidatePoolMaximumCount: 60,
+        },
+      }),
+    );
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ discovery: { recommendationTargetCount: 50 } }));
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({ discovery: { recommendationTargetCount: 50 } }),
+    );
     expect(files.settings.readSettings()).toMatchObject({
-      status: 'rejected', error: { code: 'SETTINGS_INVALID', issues: expect.arrayContaining([
-        { path: ['discovery', 'recommendationTargetCount'], message: expect.any(String) },
-      ]) },
+      status: 'rejected',
+      error: {
+        code: 'SETTINGS_INVALID',
+        issues: expect.arrayContaining([
+          { path: ['discovery', 'recommendationTargetCount'], message: expect.any(String) },
+        ]),
+      },
     });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ discovery: { recommendationTargetCount: 35 } }));
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({ discovery: { recommendationTargetCount: 35 } }),
+    );
     expect(files.settings.readSettings()).toMatchObject({
-      status: 'ok', settings: { config: { discovery: { recommendationTargetCount: 35, recommendationWorkingSetCount: 40 } } },
+      status: 'ok',
+      settings: {
+        config: { discovery: { recommendationTargetCount: 35, recommendationWorkingSetCount: 40 } },
+      },
     });
   });
 
   it('diagnoses unknown fields without disclosing or rewriting their contents', () => {
     const files = configurationFiles();
-    const content = JSON.stringify({ general: { setupCompleted: true, token: 'private-value' }, future: { secret: 'another-value' } });
+    const content = JSON.stringify({
+      general: { setupCompleted: true, token: 'private-value' },
+      future: { secret: 'another-value' },
+    });
     fs.writeFileSync(files.globalSettingsPath, content);
     const read = files.settings.readSettings();
     expect(read).toMatchObject({
       status: 'ok',
-      settings: { diagnostics: [
-        { code: 'SETTINGS_UNKNOWN_FIELD', scope: 'global', path: ['general', 'token'] },
-        { code: 'SETTINGS_UNKNOWN_FIELD', scope: 'global', path: ['future'] },
-      ] },
+      settings: {
+        diagnostics: [
+          { code: 'SETTINGS_UNKNOWN_FIELD', scope: 'global', path: ['general', 'token'] },
+          { code: 'SETTINGS_UNKNOWN_FIELD', scope: 'global', path: ['future'] },
+        ],
+      },
     });
     expect(JSON.stringify(read)).not.toContain('private-value');
     expect(JSON.stringify(read)).not.toContain('another-value');
@@ -224,13 +376,25 @@ describe('Configuration files', () => {
     fs.writeFileSync(files.globalSettingsPath, invalid);
     expect(files.settings.readSettings()).toMatchObject({
       status: 'rejected',
-      error: { code: 'SETTINGS_INVALID', issues: [{ scope: 'global', path: ['context', 'compactionThresholdRatio'] }] },
+      error: {
+        code: 'SETTINGS_INVALID',
+        issues: [{ scope: 'global', path: ['context', 'compactionThresholdRatio'] }],
+      },
     });
     expect(fs.readFileSync(files.globalSettingsPath, 'utf8')).toBe(invalid);
     fs.writeFileSync(files.globalSettingsPath, '{ broken');
-    expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
-    fs.writeFileSync(files.globalSettingsPath, '{ "context": { "compactionThresholdRatio": 0.65 } }');
-    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { context: { compactionThresholdRatio: 0.65 } } } });
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected',
+      error: { code: 'SETTINGS_INVALID' },
+    });
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      '{ "context": { "compactionThresholdRatio": 0.65 } }',
+    );
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'ok',
+      settings: { config: { context: { compactionThresholdRatio: 0.65 } } },
+    });
   });
 
   it('rejects forbidden project fields with their location', () => {
@@ -248,40 +412,46 @@ describe('Configuration files', () => {
 
   it('merges project fields over the latest global file while keeping each source', () => {
     const files = configurationFiles();
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({
-      general: { setupCompleted: true },
-      models: {
-        defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({
+        general: { setupCompleted: true },
         providers: { deepseek: { baseUrl: 'https://global.example/v1' } },
-      },
-      discovery: { enabledSources: ['bilibili'] },
-    }));
+        discovery: { enabledSources: ['bilibili'] },
+      }),
+    );
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({
-      models: { providers: { deepseek: { baseUrl: 'https://project.example/v1', enabled: false } } },
-      discovery: { enabledSources: [] },
-    }));
+    fs.writeFileSync(
+      files.projectSettingsPath,
+      JSON.stringify({
+        providers: { deepseek: { baseUrl: 'https://project.example/v1' } },
+        discovery: { enabledSources: [] },
+      }),
+    );
     const read = files.settings.readSettings();
     expect(read).toMatchObject({
       status: 'ok',
       settings: {
         config: {
           general: { setupCompleted: true },
-          models: {
-            defaultModel: { providerId: 'deepseek', modelId: 'deepseek-chat' },
-            providers: { deepseek: { baseUrl: 'https://project.example/v1', enabled: false } },
-          },
+          providers: { deepseek: { baseUrl: 'https://project.example/v1' } },
           discovery: { enabledSources: [] },
         },
         sources: expect.arrayContaining([
           { path: ['general', 'setupCompleted'], source: 'global' },
-          { path: ['models', 'providers', 'deepseek', 'baseUrl'], source: 'project' },
+          { path: ['providers', 'deepseek', 'baseUrl'], source: 'project' },
           { path: ['context', 'compactionThresholdRatio'], source: 'default' },
         ]),
       },
     });
-    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ general: { setupCompleted: false } }));
-    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { general: { setupCompleted: false } } } });
+    fs.writeFileSync(
+      files.globalSettingsPath,
+      JSON.stringify({ general: { setupCompleted: false } }),
+    );
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'ok',
+      settings: { config: { general: { setupCompleted: false } } },
+    });
   });
 
   it('reads complete defaults without creating missing configuration files', () => {
@@ -291,7 +461,7 @@ describe('Configuration files', () => {
       settings: {
         config: {
           general: { language: 'zh-CN', theme: 'midnight-blue', setupCompleted: false },
-          models: { providers: {}, customModels: {}, modelOverrides: {} },
+          providers: {},
           context: { compactionThresholdRatio: 0.8 },
           discovery: { recommendationTargetCount: 20, enabledSources: ['bilibili', 'open_web'] },
           voice: { inputDeviceId: 'default', outputDeviceId: 'default', readAloudEnabled: false },

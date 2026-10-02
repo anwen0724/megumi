@@ -13,19 +13,21 @@ export const setup = {
   preferences: {
     eyebrow: 'Welcome',
     title: 'Make Megumi yours',
-    description: 'Choose how Megumi looks and feels. You can change these preferences later in Settings.',
+    description:
+      'Choose how Megumi looks and feels. You can change these preferences later in Settings.',
     languageHint: 'Choose the language used by the interface.',
     appearance: 'Appearance',
   },
   provider: {
     eyebrow: 'AI provider',
     title: 'Connect your model',
-    description: 'Choose a supported provider and enter your API key. Megumi will use the catalog defaults for the connection.',
+    description:
+      'Choose a supported provider and enter your API key. Megumi will use the catalog defaults for the connection.',
     label: 'Provider',
     loading: 'Loading supported providers…',
     modelCount_one: '{{count}} available model',
     modelCount_other: '{{count}} available models',
-    defaultModel: 'Default model',
+    modelToAdd: 'Model to add',
     apiKey: 'API key',
     apiKeyPlaceholder: 'Enter API key',
     showApiKey: 'Show API key',
@@ -37,11 +39,12 @@ export const setup = {
   ready: {
     eyebrow: 'All set',
     title: 'You’re ready to build',
-    description: 'Review your setup, then open Megumi. These settings remain available from the Settings page.',
+    description:
+      'Review your setup, then open Megumi. These settings remain available from the Settings page.',
     setupComplete: 'Setup complete',
     changeLater: 'Everything can be changed later.',
     provider: 'Provider',
-    defaultModel: 'Default model',
+    addedModel: 'Model to add',
     notConfigured: 'Not configured',
     configureLater: 'Configure later in Settings',
   },

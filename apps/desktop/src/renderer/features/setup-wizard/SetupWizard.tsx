@@ -55,13 +55,33 @@ export function SetupWizard() {
   const saving = status === 'saving';
   const providerComplete = Boolean(providerId && modelId && apiKey.trim());
   const steps: Array<{ id: Step; label: string; description: string }> = [
-    { id: 'preferences', label: t('setup:steps.preferences.label'), description: t('setup:steps.preferences.description') },
-    { id: 'provider', label: t('setup:steps.provider.label'), description: t('setup:steps.provider.description') },
-    { id: 'ready', label: t('setup:steps.ready.label'), description: t('setup:steps.ready.description') },
+    {
+      id: 'preferences',
+      label: t('setup:steps.preferences.label'),
+      description: t('setup:steps.preferences.description'),
+    },
+    {
+      id: 'provider',
+      label: t('setup:steps.provider.label'),
+      description: t('setup:steps.provider.description'),
+    },
+    {
+      id: 'ready',
+      label: t('setup:steps.ready.label'),
+      description: t('setup:steps.ready.description'),
+    },
   ];
   const languageOptions: Array<{ id: AppLanguage; label: string; detail: string }> = [
-    { id: 'zh-CN', label: t('common:language.chinese'), detail: t('common:language.chineseDetail') },
-    { id: 'en-US', label: t('common:language.english'), detail: t('common:language.englishDetail') },
+    {
+      id: 'zh-CN',
+      label: t('common:language.chinese'),
+      detail: t('common:language.chineseDetail'),
+    },
+    {
+      id: 'en-US',
+      label: t('common:language.english'),
+      detail: t('common:language.englishDetail'),
+    },
   ];
 
   useEffect(() => {
@@ -150,7 +170,14 @@ export function SetupWizard() {
                   {complete ? <Check size={13} aria-hidden="true" /> : index + 1}
                 </span>
                 <span>
-                  <span className={cx('block text-sm font-medium', active && 'text-[var(--color-text)]')}>{item.label}</span>
+                  <span
+                    className={cx(
+                      'block text-sm font-medium',
+                      active && 'text-[var(--color-text)]',
+                    )}
+                  >
+                    {item.label}
+                  </span>
                   <span className="mt-0.5 block text-xs">{item.description}</span>
                 </span>
               </div>
@@ -173,7 +200,8 @@ export function SetupWizard() {
                   key={item.id}
                   className={cx(
                     'h-1 flex-1 rounded-full',
-                    steps.findIndex((candidate) => candidate.id === item.id) <= steps.findIndex((candidate) => candidate.id === step)
+                    steps.findIndex((candidate) => candidate.id === item.id) <=
+                      steps.findIndex((candidate) => candidate.id === step)
                       ? 'bg-[var(--color-accent)]'
                       : 'bg-[var(--color-border)]',
                   )}
@@ -211,22 +239,31 @@ export function SetupWizard() {
             ) : null}
             {step === 'ready' ? (
               <ReadyStep
-                language={languageOptions.find((option) => option.id === language)?.label ?? t('common:language.english')}
+                language={
+                  languageOptions.find((option) => option.id === language)?.label ??
+                  t('common:language.english')
+                }
                 theme={t(`common:theme.names.${theme}`)}
                 provider={skipProvider ? undefined : selectedProvider?.displayName}
-                model={skipProvider ? undefined : selectedModel?.displayName ?? modelId}
+                model={skipProvider ? undefined : (selectedModel?.displayName ?? modelId)}
               />
             ) : null}
           </div>
 
-          {(error || (providerError && step === 'provider')) ? (
+          {error || (providerError && step === 'provider') ? (
             <p className="mt-6 rounded-xl border border-[var(--color-danger)]/60 bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
-              {error ? localizeRendererError(error) : providerError ? localizeRendererError(providerError) : null}
+              {error
+                ? localizeRendererError(error)
+                : providerError
+                  ? localizeRendererError(providerError)
+                  : null}
             </p>
           ) : null}
 
           <div className="mt-8 flex items-center justify-between border-t border-[var(--color-border)] pt-6">
-            {step === 'preferences' ? <span /> : (
+            {step === 'preferences' ? (
+              <span />
+            ) : (
               <Button
                 variant="ghost"
                 className="h-11"
@@ -238,7 +275,11 @@ export function SetupWizard() {
             )}
 
             {step === 'preferences' ? (
-              <Button variant="primary" className="h-11 min-w-28" onClick={() => setStep('provider')}>
+              <Button
+                variant="primary"
+                className="h-11 min-w-28"
+                onClick={() => setStep('provider')}
+              >
                 {t('common:actions.continue')} <ChevronRight size={15} aria-hidden="true" />
               </Button>
             ) : null}
@@ -271,7 +312,12 @@ export function SetupWizard() {
             ) : null}
 
             {step === 'ready' ? (
-              <Button variant="primary" className="h-11 min-w-40" disabled={saving} onClick={() => void handleFinish()}>
+              <Button
+                variant="primary"
+                className="h-11 min-w-40"
+                disabled={saving}
+                onClick={() => void handleFinish()}
+              >
                 {saving ? t('setup:actions.saving') : t('setup:actions.start')}
               </Button>
             ) : null}
@@ -282,11 +328,23 @@ export function SetupWizard() {
   );
 }
 
-function StepHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+function StepHeading({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
   return (
     <header className="mb-7 max-w-2xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-accent)]">{eyebrow}</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--color-text)]">{title}</h1>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-accent)]">
+        {eyebrow}
+      </p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--color-text)]">
+        {title}
+      </h1>
       <p className="mt-2 text-sm leading-6 text-[var(--color-text-muted)]">{description}</p>
     </header>
   );
@@ -317,8 +375,12 @@ function PreferencesStep({
       <div className="space-y-7">
         <div>
           <div className="mb-3 flex items-center gap-2">
-            <span className="text-sm font-semibold text-[var(--color-text)]">{t('common:language.label')}</span>
-            <span className="text-xs text-[var(--color-text-muted)]">{t('setup:preferences.languageHint')}</span>
+            <span className="text-sm font-semibold text-[var(--color-text)]">
+              {t('common:language.label')}
+            </span>
+            <span className="text-xs text-[var(--color-text-muted)]">
+              {t('setup:preferences.languageHint')}
+            </span>
           </div>
           <div className="max-w-sm">
             {languageOptions.map((option) => {
@@ -337,10 +399,16 @@ function PreferencesStep({
                   )}
                 >
                   <span>
-                    <span className="block text-sm font-semibold text-[var(--color-text)]">{option.label}</span>
-                    <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">{option.detail}</span>
+                    <span className="block text-sm font-semibold text-[var(--color-text)]">
+                      {option.label}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                      {option.detail}
+                    </span>
                   </span>
-                  {selected ? <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" /> : null}
+                  {selected ? (
+                    <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
+                  ) : null}
                 </button>
               );
             })}
@@ -377,11 +445,19 @@ function PreferencesStep({
                   )}
                 >
                   <span className="flex h-7 overflow-hidden rounded-md border border-black/10">
-                    {colors.map((color, index) => <span key={`${color}-${index}`} className="flex-1" style={{ backgroundColor: color }} />)}
+                    {colors.map((color, index) => (
+                      <span
+                        key={`${color}-${index}`}
+                        className="flex-1"
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
                   </span>
                   <span className="mt-2 flex items-center justify-between text-xs font-medium text-[var(--color-text)]">
                     {themeLabel}
-                    {selected ? <Check size={15} className="text-[var(--color-accent)]" aria-hidden="true" /> : null}
+                    {selected ? (
+                      <Check size={15} className="text-[var(--color-accent)]" aria-hidden="true" />
+                    ) : null}
                   </span>
                 </button>
               );
@@ -434,7 +510,9 @@ function ProviderStep({
 
       <div className="space-y-6">
         <div>
-          <p className="mb-3 text-sm font-semibold text-[var(--color-text)]">{t('provider.label')}</p>
+          <p className="mb-3 text-sm font-semibold text-[var(--color-text)]">
+            {t('provider.label')}
+          </p>
           {loading ? (
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-5 text-sm text-[var(--color-text-muted)]">
               {t('provider.loading')}
@@ -451,8 +529,8 @@ function ProviderStep({
                     aria-pressed={selected}
                     onClick={() => onProviderChange(candidate)}
                     className={cx(
-                    'flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
-                    selected
+                      'flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]',
+                      selected
                         ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)]'
                         : 'border-[var(--color-border)] bg-[var(--color-surface)] hover:border-[var(--color-border-strong)]',
                     )}
@@ -461,10 +539,16 @@ function ProviderStep({
                       <Bot size={19} aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-[var(--color-text)]">{candidate.displayName}</span>
-                      <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">{t('provider.modelCount', { count: candidate.models.length })}</span>
+                      <span className="block text-sm font-semibold text-[var(--color-text)]">
+                        {candidate.displayName}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-[var(--color-text-muted)]">
+                        {t('provider.modelCount', { count: candidate.models.length })}
+                      </span>
                     </span>
-                    {selected ? <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" /> : null}
+                    {selected ? (
+                      <Check size={17} className="text-[var(--color-accent)]" aria-hidden="true" />
+                    ) : null}
                   </button>
                 );
               })}
@@ -476,24 +560,41 @@ function ProviderStep({
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="space-y-1.5 text-xs font-medium text-[var(--color-text-muted)]">
-                {t('provider.defaultModel')}
+                {t('provider.modelToAdd')}
                 <span className="relative block">
                   <select
-                    aria-label={t('provider.defaultModel')}
+                    aria-label={t('provider.modelToAdd')}
                     value={modelId}
                     onChange={(event) => onModelChange(event.target.value)}
                     className="h-11 w-full appearance-none rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 pr-9 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
                   >
-                    {provider.models.map((model) => <option key={model.modelId} value={model.modelId}>{model.displayName}</option>)}
+                    {provider.models.map((model) => (
+                      <option key={model.modelId} value={model.modelId}>
+                        {model.displayName}
+                      </option>
+                    ))}
                   </select>
-                  <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" aria-hidden="true" />
+                  <ChevronDown
+                    size={15}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]"
+                    aria-hidden="true"
+                  />
                 </span>
               </label>
 
               <div className="space-y-1.5">
-                <label htmlFor="setup-api-key" className="text-xs font-medium text-[var(--color-text-muted)]">{t('provider.apiKey')}</label>
+                <label
+                  htmlFor="setup-api-key"
+                  className="text-xs font-medium text-[var(--color-text-muted)]"
+                >
+                  {t('provider.apiKey')}
+                </label>
                 <span className="relative block">
-                  <KeyRound size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)]" aria-hidden="true" />
+                  <KeyRound
+                    size={15}
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-subtle)]"
+                    aria-hidden="true"
+                  />
                   <input
                     id="setup-api-key"
                     type={showApiKey ? 'text' : 'password'}
@@ -509,17 +610,29 @@ function ProviderStep({
                     onClick={onToggleApiKey}
                     className="absolute right-1 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-md text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]"
                   >
-                    {showApiKey ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                    {showApiKey ? (
+                      <EyeOff size={16} aria-hidden="true" />
+                    ) : (
+                      <Eye size={16} aria-hidden="true" />
+                    )}
                   </button>
                 </span>
               </div>
             </div>
 
             <details className="mt-5 border-t border-[var(--color-border)] pt-4">
-              <summary className="cursor-pointer select-none text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]">{t('provider.advanced')}</summary>
+              <summary className="cursor-pointer select-none text-xs font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]">
+                {t('provider.advanced')}
+              </summary>
               <div className="mt-4">
-                <TextField label={t('provider.baseUrl')} value={baseUrl} onChange={(event) => onBaseUrlChange(event.target.value)} />
-                <p className="mt-2 text-xs text-[var(--color-text-subtle)]">{t('provider.protocol', { protocol: provider.protocol })}</p>
+                <TextField
+                  label={t('provider.baseUrl')}
+                  value={baseUrl}
+                  onChange={(event) => onBaseUrlChange(event.target.value)}
+                />
+                <p className="mt-2 text-xs text-[var(--color-text-subtle)]">
+                  {t('provider.protocol', { protocol: provider.protocol })}
+                </p>
               </div>
             </details>
           </div>
@@ -529,13 +642,23 @@ function ProviderStep({
   );
 }
 
-function ReadyStep({ language, theme, provider, model }: { language: string; theme: string; provider?: string; model?: string }) {
+function ReadyStep({
+  language,
+  theme,
+  provider,
+  model,
+}: {
+  language: string;
+  theme: string;
+  provider?: string;
+  model?: string;
+}) {
   const { t } = useTranslation(['setup', 'common']);
   const rows = [
     { label: t('common:language.label'), value: language },
     { label: t('setup:preferences.appearance'), value: theme },
     { label: t('setup:ready.provider'), value: provider ?? t('setup:ready.notConfigured') },
-    { label: t('setup:ready.defaultModel'), value: model ?? t('setup:ready.configureLater') },
+    { label: t('setup:ready.addedModel'), value: model ?? t('setup:ready.configureLater') },
   ];
   return (
     <div>
@@ -550,8 +673,12 @@ function ReadyStep({ language, theme, provider, model }: { language: string; the
             <Check size={19} aria-hidden="true" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-[var(--color-text)]">{t('setup:ready.setupComplete')}</p>
-            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{t('setup:ready.changeLater')}</p>
+            <p className="text-sm font-semibold text-[var(--color-text)]">
+              {t('setup:ready.setupComplete')}
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              {t('setup:ready.changeLater')}
+            </p>
           </div>
         </div>
         <dl className="divide-y divide-[var(--color-border)]">

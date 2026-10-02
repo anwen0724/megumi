@@ -2,8 +2,19 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import path from 'node:path';
-import { ConfigurationFileSchema, ConfigurationPatchSchema, ConfigurationSchema, GlobalOnlySettingsFields } from './settings-schema';
-import type { ReadSettingsResult, SettingsSnapshot, SettingsScope, UpdateSettingsRequest, UpdateSettingsResult } from './settings-contracts';
+import {
+  ConfigurationFileSchema,
+  ConfigurationPatchSchema,
+  ConfigurationSchema,
+  GlobalOnlySettingsFields,
+} from './settings-schema';
+import type {
+  ReadSettingsResult,
+  SettingsSnapshot,
+  SettingsScope,
+  UpdateSettingsRequest,
+  UpdateSettingsResult,
+} from './settings-contracts';
 import { readJsonFile, writeJsonFile } from './json-file';
 import { createCredentialStore } from './credential-store';
 export interface CreateSettingsOptions {
@@ -34,7 +45,11 @@ export function createSettings(options: CreateSettingsOptions) {
       if (documents.status === 'rejected') return documents;
       const current = resolveConfiguration(options, documents.global, documents.project);
       if (current.status === 'rejected') return current;
-      const conflict = configurationConflict(request.expectedRevision, current.settings.revision, patch.data);
+      const conflict = configurationConflict(
+        request.expectedRevision,
+        current.settings.revision,
+        patch.data,
+      );
       if (conflict) return conflict;
       const target = options.projectSettingsPath ? documents.project : documents.global;
       const next = applyConfigurationPatch(target, patch.data);
@@ -75,25 +90,32 @@ function resolveConfiguration(
   const scopeIssues = Object.entries(GlobalOnlySettingsFields).flatMap(([group, fields]) => {
     const values = project[group];
     return isConfigurationObject(values)
-      ? fields.filter((field) => Object.hasOwn(values, field)).map((field) => ({
-        scope: 'project' as const,
-        path: [group, field],
-        message: 'This setting can only be saved globally.',
-      }))
+      ? fields
+          .filter((field) => Object.hasOwn(values, field))
+          .map((field) => ({
+            scope: 'project' as const,
+            path: [group, field],
+            message: 'This setting can only be saved globally.',
+          }))
       : [];
   });
   if (scopeIssues.length > 0) {
-    return { status: 'rejected', error: {
-      code: 'SETTINGS_SCOPE_INVALID',
-      message: 'Project settings contain global-only fields.',
-      issues: scopeIssues,
-    } };
+    return {
+      status: 'rejected',
+      error: {
+        code: 'SETTINGS_SCOPE_INVALID',
+        message: 'Project settings contain global-only fields.',
+        issues: scopeIssues,
+      },
+    };
   }
   const globalValues = ConfigurationFileSchema.safeParse(global);
   const projectValues = ConfigurationFileSchema.safeParse(project);
   if (!globalValues.success) return invalidConfiguration(globalValues.error.issues, 'global');
   if (!projectValues.success) return invalidConfiguration(projectValues.error.issues, 'project');
-  const combined = ConfigurationSchema.safeParse(mergeConfiguration(globalValues.data, projectValues.data));
+  const combined = ConfigurationSchema.safeParse(
+    mergeConfiguration(globalValues.data, projectValues.data),
+  );
   if (!combined.success) {
     return invalidConfiguration(combined.error.issues);
   }
@@ -110,7 +132,6 @@ function resolveConfiguration(
     },
   };
 }
-
 
 /** Converts validation issues without exposing raw files or secret-bearing unknown fields. */
 function invalidConfiguration(
@@ -137,15 +158,23 @@ function mergeConfiguration(
   higher: Record<string, unknown>,
   fieldPath: readonly string[] = [],
 ): Record<string, unknown> {
-  return Object.fromEntries([...new Set([...Object.keys(lower), ...Object.keys(higher)])].map((key) => {
-    const nextPath = [...fieldPath, key];
-    const before = lower[key];
-    const after = higher[key];
-    return [key, after === undefined ? before
-      : isConfigurationObject(before) && isConfigurationObject(after) && !isModelReferencePath(nextPath)
-        ? mergeConfiguration(before, after, nextPath)
-        : after];
-  }));
+  return Object.fromEntries(
+    [...new Set([...Object.keys(lower), ...Object.keys(higher)])].map((key) => {
+      const nextPath = [...fieldPath, key];
+      const before = lower[key];
+      const after = higher[key];
+      return [
+        key,
+        after === undefined
+          ? before
+          : isConfigurationObject(before) &&
+              isConfigurationObject(after) &&
+              !isModelReferencePath(nextPath)
+            ? mergeConfiguration(before, after, nextPath)
+            : after,
+      ];
+    }),
+  );
 }
 
 /** Attributes effective value fields without returning unknown file contents. */
@@ -167,16 +196,30 @@ function configurationSources(
         nextPath,
       );
     }
-    return [{ path: nextPath, source: projectValue !== undefined ? 'project' as const
-      : globalValue !== undefined ? 'global' as const : 'default' as const }];
+    return [
+      {
+        path: nextPath,
+        source:
+          projectValue !== undefined
+            ? ('project' as const)
+            : globalValue !== undefined
+              ? ('global' as const)
+              : ('default' as const),
+      },
+    ];
   });
 }
 
 function isModelReferencePath(fieldPath: readonly string[]): boolean {
-  return fieldPath.length === 2 && fieldPath[0] === 'models' && fieldPath[1] === 'defaultModel';
+  return (
+    fieldPath.length === 2 &&
+    ((fieldPath[0] === 'general' && fieldPath[1] === 'lastSelectedModel') ||
+      (fieldPath[0] === 'discovery' &&
+        ['recommendationModel', 'candidateSupplyModel'].includes(fieldPath[1])))
+  );
 }
 
-/** Applies only edits: null clears stored fields and empty objects carry no edits. */
+/** Applies edits while preserving empty model entries that represent an added builtin. */
 function applyConfigurationPatch(
   document: Record<string, unknown>,
   patch: Record<string, unknown>,
@@ -193,11 +236,21 @@ function applyConfigurationPatch(
     if (isConfigurationObject(value) && !isModelReferencePath(nextPath)) {
       const previous = isConfigurationObject(next[key]) ? next[key] : {};
       const changed = applyConfigurationPatch(previous, value, nextPath);
-      if (JSON.stringify(previous) === JSON.stringify(changed)) continue;
-      if (Object.keys(changed).length === 0) delete next[key];
+      const modelEntry =
+        nextPath.length === 4 && nextPath[0] === 'providers' && nextPath[2] === 'models';
+      if (JSON.stringify(previous) === JSON.stringify(changed)) {
+        if (modelEntry && !Object.hasOwn(next, key)) next[key] = changed;
+        continue;
+      }
+      if (Object.keys(changed).length === 0 && !modelEntry) delete next[key];
       else next[key] = changed;
     } else {
-      Object.defineProperty(next, key, { value, enumerable: true, writable: true, configurable: true });
+      Object.defineProperty(next, key, {
+        value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
   }
   return next;
@@ -217,7 +270,14 @@ function unknownConfigurationFields(
   return Object.entries(document).flatMap(([name, value]) => {
     const nextPath = [...fieldPath, name];
     if (!Object.hasOwn(known, name)) {
-      return [{ code: 'SETTINGS_UNKNOWN_FIELD' as const, scope, path: nextPath, message: 'This field is not declared.' }];
+      return [
+        {
+          code: 'SETTINGS_UNKNOWN_FIELD' as const,
+          scope,
+          path: nextPath,
+          message: 'This field is not declared.',
+        },
+      ];
     }
     const knownValue = known[name];
     return isConfigurationObject(value) && isConfigurationObject(knownValue)
@@ -243,16 +303,20 @@ function configurationRevision(
     for (const [name, field] of Object.entries(value)) {
       const nextPath = [...fieldPath, name];
       fields[JSON.stringify(nextPath)] = fingerprint([
-        field, configurationValue(global, nextPath), configurationValue(project, nextPath),
+        field,
+        configurationValue(global, nextPath),
+        configurationValue(project, nextPath),
       ]);
       if (isConfigurationObject(field) && !isModelReferencePath(nextPath)) visit(field, nextPath);
     }
   }
   visit(config);
-  return Buffer.from(JSON.stringify({
-    binding: fingerprint([options.globalSettingsPath, options.projectSettingsPath]),
-    fields,
-  })).toString('base64url');
+  return Buffer.from(
+    JSON.stringify({
+      binding: fingerprint([options.globalSettingsPath, options.projectSettingsPath]),
+      fields,
+    }),
+  ).toString('base64url');
 }
 
 /** Detects conflicts at edited fields, not at file or configuration-group boundaries. */
@@ -263,11 +327,18 @@ function configurationConflict(
 ): Extract<ReadSettingsResult, { status: 'rejected' }> | undefined {
   let previous: z.infer<typeof RevisionSchema>;
   try {
-    previous = RevisionSchema.parse(JSON.parse(Buffer.from(expected, 'base64url').toString('utf8')));
+    previous = RevisionSchema.parse(
+      JSON.parse(Buffer.from(expected, 'base64url').toString('utf8')),
+    );
   } catch {
-    return { status: 'rejected', error: { code: 'SETTINGS_CONFLICT', message: 'Read settings before saving changes.' } };
+    return {
+      status: 'rejected',
+      error: { code: 'SETTINGS_CONFLICT', message: 'Read settings before saving changes.' },
+    };
   }
-  const current = RevisionSchema.parse(JSON.parse(Buffer.from(actual, 'base64url').toString('utf8')));
+  const current = RevisionSchema.parse(
+    JSON.parse(Buffer.from(actual, 'base64url').toString('utf8')),
+  );
   const paths = editedConfigurationPaths(patch);
   const conflicts = paths.filter((fieldPath) => {
     const key = JSON.stringify(fieldPath);
@@ -279,14 +350,20 @@ function configurationConflict(
       error: {
         code: 'SETTINGS_CONFLICT',
         message: 'Edited configuration changed since it was read.',
-        issues: conflicts.map((fieldPath) => ({ path: fieldPath, message: 'Read the current value before updating it.' })),
+        issues: conflicts.map((fieldPath) => ({
+          path: fieldPath,
+          message: 'Read the current value before updating it.',
+        })),
       },
     };
   }
   return undefined;
 }
 
-function editedConfigurationPaths(patch: Record<string, unknown>, fieldPath: readonly string[] = []): string[][] {
+function editedConfigurationPaths(
+  patch: Record<string, unknown>,
+  fieldPath: readonly string[] = [],
+): string[][] {
   return Object.entries(patch).flatMap(([name, value]) => {
     const nextPath = [...fieldPath, name];
     if (value === undefined) return [];
@@ -296,7 +373,10 @@ function editedConfigurationPaths(patch: Record<string, unknown>, fieldPath: rea
   });
 }
 
-function configurationValue(document: Record<string, unknown>, fieldPath: readonly string[]): unknown {
+function configurationValue(
+  document: Record<string, unknown>,
+  fieldPath: readonly string[],
+): unknown {
   let current: unknown = document;
   for (const key of fieldPath) {
     if (!isConfigurationObject(current)) return undefined;
@@ -306,8 +386,12 @@ function configurationValue(document: Record<string, unknown>, fieldPath: readon
 }
 
 function fingerprint(value: unknown): string {
-  const text = JSON.stringify(value, (_key, item: unknown) => isConfigurationObject(item)
-    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left.localeCompare(right)))
-    : item);
+  const text = JSON.stringify(value, (_key, item: unknown) =>
+    isConfigurationObject(item)
+      ? Object.fromEntries(
+          Object.entries(item).sort(([left], [right]) => left.localeCompare(right)),
+        )
+      : item,
+  );
   return createHash('sha256').update(text).digest('base64url');
 }

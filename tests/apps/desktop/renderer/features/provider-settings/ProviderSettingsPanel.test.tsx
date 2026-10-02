@@ -1,37 +1,88 @@
 // @vitest-environment jsdom
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
+import { createSettingsFixture } from '../../settings-test-fixture';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProviderStore } from '@megumi/desktop/renderer/entities/provider/store';
 import { ProviderSettingsPanel } from '@megumi/desktop/renderer/features/provider-settings';
 
-const capabilities = { streaming: true, toolCalls: true, thinking: true, imageInput: true } as const;
+const capabilities = {
+  streaming: true,
+  toolCalls: true,
+  thinking: true,
+  imageInput: true,
+} as const;
 
 describe('ProviderSettingsPanel', () => {
   beforeEach(() => {
     useProviderStore.setState({
-      catalog: [{
-        providerId: 'DeepSeek',
-        displayName: 'DeepSeek',
-        protocol: 'openai-completions',
-        defaultBaseUrl: 'https://api.deepseek.com',
-        models: [
-          { modelId: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1_000_000, maxOutputTokens: 8192, capabilities },
-          { modelId: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro', contextWindowTokens: 1_000_000, maxOutputTokens: 8192, capabilities },
-        ],
-      }, {
-        providerId: 'OpenAI',
-        displayName: 'OpenAI',
-        protocol: 'openai-completions',
-        defaultBaseUrl: 'https://api.openai.com/v1',
-        models: [
-          { modelId: 'gpt-5.6', displayName: 'GPT-5.6', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
-          { modelId: 'gpt-5.6-terra', displayName: 'GPT-5.6 Terra', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
-          { modelId: 'gpt-5.6-luna', displayName: 'GPT-5.6 Luna', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
-          { modelId: 'gpt-5.5', displayName: 'GPT-5.5', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
-          { modelId: 'gpt-5.5-pro', displayName: 'GPT-5.5 Pro', contextWindowTokens: 1_050_000, maxOutputTokens: 8192, capabilities },
-        ],
-      }],
+      catalog: [
+        {
+          providerId: 'DeepSeek',
+          displayName: 'DeepSeek',
+          protocol: 'openai-completions',
+          defaultBaseUrl: 'https://api.deepseek.com',
+          models: [
+            {
+              modelId: 'deepseek-v4-flash',
+              displayName: 'DeepSeek V4 Flash',
+              contextWindowTokens: 1_000_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+            {
+              modelId: 'deepseek-v4-pro',
+              displayName: 'DeepSeek V4 Pro',
+              contextWindowTokens: 1_000_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+          ],
+        },
+        {
+          providerId: 'OpenAI',
+          displayName: 'OpenAI',
+          protocol: 'openai-completions',
+          defaultBaseUrl: 'https://api.openai.com/v1',
+          models: [
+            {
+              modelId: 'gpt-5.6',
+              displayName: 'GPT-5.6',
+              contextWindowTokens: 1_050_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+            {
+              modelId: 'gpt-5.6-terra',
+              displayName: 'GPT-5.6 Terra',
+              contextWindowTokens: 1_050_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+            {
+              modelId: 'gpt-5.6-luna',
+              displayName: 'GPT-5.6 Luna',
+              contextWindowTokens: 1_050_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+            {
+              modelId: 'gpt-5.5',
+              displayName: 'GPT-5.5',
+              contextWindowTokens: 1_050_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+            {
+              modelId: 'gpt-5.5-pro',
+              displayName: 'GPT-5.5 Pro',
+              contextWindowTokens: 1_050_000,
+              maxOutputTokens: 8192,
+              capabilities,
+            },
+          ],
+        },
+      ],
       providers: [
         {
           providerId: 'DeepSeek',
@@ -40,7 +91,15 @@ describe('ProviderSettingsPanel', () => {
           enabled: true,
           baseUrl: 'https://api.deepseek.com',
           modelIds: ['deepseek-v4-flash'],
-          modelSettings: { 'deepseek-v4-flash': { displayName: 'DeepSeek V4 Flash', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
+          modelSettings: {
+            'deepseek-v4-flash': {
+              displayName: 'DeepSeek V4 Flash',
+              contextWindowTokens: 1000000,
+              maxOutputTokens: 8192,
+              capabilities: { imageInput: true },
+              capabilityOverrides: {},
+            },
+          },
           hasApiKey: false,
           credentialSource: 'missing',
           envOverrideActive: false,
@@ -54,7 +113,15 @@ describe('ProviderSettingsPanel', () => {
           enabled: true,
           baseUrl: 'https://api.openai.com/v1',
           modelIds: ['gpt-5.5'],
-          modelSettings: { 'gpt-5.5': { displayName: 'GPT-5.5', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
+          modelSettings: {
+            'gpt-5.5': {
+              displayName: 'GPT-5.5',
+              contextWindowTokens: 1000000,
+              maxOutputTokens: 8192,
+              capabilities: { imageInput: true },
+              capabilityOverrides: {},
+            },
+          },
           hasApiKey: true,
           credentialSource: 'environment',
           envOverrideActive: true,
@@ -85,7 +152,9 @@ describe('ProviderSettingsPanel', () => {
     expect(screen.queryByLabelText('API Key env')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit DeepSeek V4 Flash' })).toBeInTheDocument();
     expect(screen.queryByText('deepseek-v4-flash')).not.toBeInTheDocument();
-    expect(screen.queryByText('Models configured here appear in the chat composer model picker.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Models configured here appear in the chat composer model picker.'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows the empty selection state until an unconfigured provider is chosen', async () => {
@@ -107,20 +176,30 @@ describe('ProviderSettingsPanel', () => {
 
   it('defaults the selection to the first configured provider, skipping unconfigured ones', () => {
     useProviderStore.setState({
-      providers: [{
-        providerId: 'openai',
-        displayName: 'OpenAI',
-        protocol: 'openai-completions',
-        enabled: true,
-        baseUrl: 'https://api.openai.com/v1',
-        modelIds: ['gpt-5.5'],
-          modelSettings: { 'gpt-5.5': { displayName: 'GPT-5.5', contextWindowTokens: 1000000, maxOutputTokens: 8192, capabilities: { imageInput: true }, capabilityOverrides: {} } },
-        hasApiKey: true,
-        credentialSource: 'environment',
-        envOverrideActive: true,
-        apiKeyEnv: 'OPENAI_API_KEY',
-        apiKeyEnvCustomized: false,
-      }],
+      providers: [
+        {
+          providerId: 'openai',
+          displayName: 'OpenAI',
+          protocol: 'openai-completions',
+          enabled: true,
+          baseUrl: 'https://api.openai.com/v1',
+          modelIds: ['gpt-5.5'],
+          modelSettings: {
+            'gpt-5.5': {
+              displayName: 'GPT-5.5',
+              contextWindowTokens: 1000000,
+              maxOutputTokens: 8192,
+              capabilities: { imageInput: true },
+              capabilityOverrides: {},
+            },
+          },
+          hasApiKey: true,
+          credentialSource: 'environment',
+          envOverrideActive: true,
+          apiKeyEnv: 'OPENAI_API_KEY',
+          apiKeyEnvCustomized: false,
+        },
+      ],
     });
 
     render(<ProviderSettingsPanel />);
@@ -132,18 +211,23 @@ describe('ProviderSettingsPanel', () => {
   it('shows the enabled badge only for configured providers', async () => {
     const user = userEvent.setup();
     useProviderStore.setState({
-      catalog: [...useProviderStore.getState().catalog, {
-        providerId: 'Anthropic',
-        displayName: 'Anthropic',
-        protocol: 'anthropic-messages',
-        defaultBaseUrl: 'https://api.anthropic.com',
-        models: [{
-          modelId: 'claude-sonnet-5',
-          displayName: 'Claude Sonnet 5',
-          contextWindowTokens: 1_000_000,
-          capabilities,
-        }],
-      }],
+      catalog: [
+        ...useProviderStore.getState().catalog,
+        {
+          providerId: 'Anthropic',
+          displayName: 'Anthropic',
+          protocol: 'anthropic-messages',
+          defaultBaseUrl: 'https://api.anthropic.com',
+          models: [
+            {
+              modelId: 'claude-sonnet-5',
+              displayName: 'Claude Sonnet 5',
+              contextWindowTokens: 1_000_000,
+              capabilities,
+            },
+          ],
+        },
+      ],
     });
 
     render(<ProviderSettingsPanel />);
@@ -182,11 +266,14 @@ describe('ProviderSettingsPanel', () => {
       enabled: true,
       protocol: 'anthropic-messages',
       baseUrl: 'https://proxy.local/deepseek',
-      models: [{
-        modelId: 'deepseek-v4-flash',
-        displayName: 'DeepSeek V4 Flash',
-        contextWindowTokens: 131072, maxOutputTokens: 8192,
-      }],
+      models: [
+        {
+          modelId: 'deepseek-v4-flash',
+          displayName: 'DeepSeek V4 Flash',
+          contextWindowTokens: 131072,
+          maxOutputTokens: 8192,
+        },
+      ],
     });
   });
 
@@ -202,15 +289,20 @@ describe('ProviderSettingsPanel', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({
-      providerId: 'DeepSeek',
-      models: [{
-        modelId: 'deepseek-v4-flash',
-        displayName: 'DeepSeek V4 Flash',
-        contextWindowTokens: 1_000_000, maxOutputTokens: 8192,
-        imageInput: false,
-      }],
-    }));
+    expect(updateProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'DeepSeek',
+        models: [
+          {
+            modelId: 'deepseek-v4-flash',
+            displayName: 'DeepSeek V4 Flash',
+            contextWindowTokens: 1_000_000,
+            maxOutputTokens: 8192,
+            imageInput: false,
+          },
+        ],
+      }),
+    );
   });
 
   it('selects providers from the left list', async () => {
@@ -254,11 +346,14 @@ describe('ProviderSettingsPanel', () => {
       enabled: true,
       protocol: 'anthropic-messages',
       baseUrl: 'https://api.deepseek.com/v1',
-      models: [{
-        modelId: 'deepseek-chat',
-        displayName: 'DeepSeek Chat',
-        contextWindowTokens: 200000, maxOutputTokens: 8192,
-      }],
+      models: [
+        {
+          modelId: 'deepseek-chat',
+          displayName: 'DeepSeek Chat',
+          contextWindowTokens: 200000,
+          maxOutputTokens: 8192,
+        },
+      ],
     });
   });
 
@@ -266,7 +361,11 @@ describe('ProviderSettingsPanel', () => {
     const user = userEvent.setup();
     const updateProvider = vi.fn().mockResolvedValue(true);
     const setApiKey = vi.fn();
-    useProviderStore.setState({ updateProvider, setApiKey, getApiKey: vi.fn().mockResolvedValue('sk-stored-key') });
+    useProviderStore.setState({
+      updateProvider,
+      setApiKey,
+      getApiKey: vi.fn().mockResolvedValue('sk-stored-key'),
+    });
 
     render(<ProviderSettingsPanel />);
 
@@ -279,7 +378,9 @@ describe('ProviderSettingsPanel', () => {
     await user.type(screen.getByLabelText('API Key'), 'sk-new-key');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'DeepSeek' }));
+    expect(updateProvider).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'DeepSeek' }),
+    );
     expect(setApiKey).toHaveBeenCalledWith({ providerId: 'DeepSeek', apiKey: 'sk-new-key' });
     expect(screen.getByLabelText('API Key')).toHaveValue('sk-new-key');
   });
@@ -305,5 +406,36 @@ describe('ProviderSettingsPanel', () => {
 
     expect(screen.getByRole('button', { name: /^OpenAI/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^DeepSeek\s/ })).not.toBeInTheDocument();
+  });
+});
+
+it('removes and restores a builtin model through the real settings file', async () => {
+  const fixture = createSettingsFixture({
+    providers: { deepseek: { name: 'DeepSeek', models: { 'deepseek-flash': {} } } },
+  });
+  Object.defineProperty(window, 'megumi', { configurable: true, value: fixture.api });
+  useProviderStore.setState(useProviderStore.getInitialState(), true);
+  const user = userEvent.setup();
+  render(<ProviderSettingsPanel />);
+  await user.click(await screen.findByRole('button', { name: 'Remove DeepSeek V4.1 Flash' }));
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(useProviderStore.getState().status).toBe('ready'));
+  expect(fixture.settings.readSettings()).toMatchObject({
+    status: 'ok',
+    settings: { config: { providers: { deepseek: { models: {} } } } },
+  });
+  await user.selectOptions(
+    screen.getByRole('combobox', { name: 'Add model from built-in catalog' }),
+    'deepseek-flash',
+  );
+  await user.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() =>
+    expect(useProviderStore.getState().configured[0]?.models.map((item) => item.model.id)).toEqual([
+      'deepseek-flash',
+    ]),
+  );
+  expect(fixture.settings.readSettings()).toMatchObject({
+    status: 'ok',
+    settings: { config: { providers: { deepseek: { models: { 'deepseek-flash': {} } } } } },
   });
 });

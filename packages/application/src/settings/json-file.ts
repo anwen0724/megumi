@@ -12,7 +12,10 @@ export function writeJsonFile(filePath: string, document: Record<string, unknown
   const temporaryPath = path.join(directory, `${path.basename(filePath)}.${randomUUID()}.tmp`);
   fs.mkdirSync(directory, { recursive: true });
   try {
-    fs.writeFileSync(temporaryPath, `${JSON.stringify(document, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(temporaryPath, `${JSON.stringify(document, null, 2)}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
     fs.renameSync(temporaryPath, filePath);
   } finally {
     fs.rmSync(temporaryPath, { force: true });
@@ -20,9 +23,9 @@ export function writeJsonFile(filePath: string, document: Record<string, unknown
 }
 
 /** Missing files contribute no explicit values; unexpected IO errors propagate. */
-export function readJsonFile(filePath: string):
-  | { status: 'ok'; document: Record<string, unknown> }
-  | { status: 'invalid' } {
+export function readJsonFile(
+  filePath: string,
+): { status: 'ok'; document: Record<string, unknown> } | { status: 'invalid' } {
   let content: string;
   try {
     content = fs.readFileSync(filePath, 'utf8');

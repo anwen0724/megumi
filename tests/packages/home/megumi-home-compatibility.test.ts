@@ -163,12 +163,21 @@ describe('Megumi Home foundation', () => {
 
   it('exposes optional configuration groups without embedding model catalogs or credentials', () => {
     const schema = createMegumiSettingsSchema();
-    expect(schema).toMatchObject({ properties: {
-      general: { properties: { language: { enum: ['zh-CN', 'en-US'] }, setupCompleted: { type: 'boolean' } } },
-      models: { properties: { providers: { type: 'object' }, customModels: { type: 'object' } } },
-      context: { properties: { compactionThresholdRatio: { type: 'number' } } },
-      permissions: { properties: { allow: { type: 'array' }, ask: { type: 'array' }, deny: { type: 'array' } } },
-    } });
+    expect(schema).toMatchObject({
+      properties: {
+        general: {
+          properties: {
+            language: { enum: ['zh-CN', 'en-US'] },
+            setupCompleted: { type: 'boolean' },
+          },
+        },
+        providers: { type: 'object' },
+        context: { properties: { compactionThresholdRatio: { type: 'number' } } },
+        permissions: {
+          properties: { allow: { type: 'array' }, ask: { type: 'array' }, deny: { type: 'array' } },
+        },
+      },
+    });
     expect(schema.required).toBeUndefined();
     expect(schema.properties).not.toHaveProperty('memory');
     expect(JSON.stringify(schema)).not.toContain('deepseek-flash');
