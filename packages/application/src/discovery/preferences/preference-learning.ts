@@ -2,7 +2,7 @@
  * Owns one ephemeral Preference learning snapshot and bounded in-process retries.
  * Restart recovery uses durable feedback versions, never execution history.
  */
-import type { Api, Model, Models } from '@megumi/ai';
+import type { ModelPreparationResult, PreparedModel } from '@megumi/agent-runtime';
 import { calculatePromptUsage, type ContextBuilder } from '@megumi/agent-runtime/context/index';
 import type { Observability, OperationCompletion, TraceCorrelation } from '../../observability/index';
 import { z } from 'zod';
@@ -47,8 +47,7 @@ export type PreferenceLearningStatus =
 export interface CreatePreferenceLearningOptions {
   readonly repository: PreferenceLearningRepository;
   readonly context: Pick<ContextBuilder, 'build'>;
-  readonly models: Pick<Models, 'completeSimple'>;
-  readonly resolveModel: () => Promise<Model<Api> | undefined>;
+  readonly prepareModel: () => Promise<ModelPreparationResult>;
   readonly ids: { createBatchId(): string; createModelCallId(): string };
   readonly now: () => string;
   readonly observability?: Observability;
@@ -157,8 +156,8 @@ async function processBatch(
 ): Promise<LearningBatchResult> {
   const { batchId, startedAt } = facts.batch;
   try {
-    const model = await abortable(options.resolveModel(), signal);
-    if (!model) throw new LearningFailure('model_unavailable', 'Preference Learning model is unavailable.', false);
+    const model = await abortable(options.prepareModel(), signal);
+    if (model.status !== 'ok') throw new LearningFailure('model_unavailable', 'Preference Learning model is unavailable.', false);
     if (signal.aborted) throw new LearningFailure('cancelled', 'Preference Learning was cancelled.', false);
     const proposals = await proposeGroup(options, facts, model, signal, setActive, true);
     if (signal.aborted) throw new LearningFailure('cancelled', 'Preference Learning was cancelled.', false);
@@ -189,14 +188,15 @@ async function processBatch(
 }
 /** Splits only independent review targets; every group retains user requirements and deletion facts. */
 async function proposeGroup(
-  options: CreatePreferenceLearningOptions, facts: PreferenceLearningFacts, model: Model<Api>,
+  options: CreatePreferenceLearningOptions, facts: PreferenceLearningFacts, prepared: PreparedModel,
   signal: AbortSignal, setActive: (facts: PreferenceLearningFacts) => void, allowAdd: boolean,
 ): Promise<LearnedScopeInput[]> {
+  const { model, client, compactionThresholdRatio } = prepared;
   const group = { ...facts, allowAdd };
   setActive(group);
   const modelCallId = options.ids.createModelCallId();
   const built = await abortable(options.context.build({
-    modelCallContext: { modelCallId, run: { kind: 'preference_learning', batchId: facts.batch.batchId, startedAt: facts.batch.startedAt, model }, tools: [] },
+    modelCallContext: { modelCallId, run: { kind: 'preference_learning', batchId: facts.batch.batchId, startedAt: facts.batch.startedAt, model, client, compactionThresholdRatio }, tools: [] },
     currentMessages: [], signal,
   }), signal);
   if (built.status === 'failed') throw new LearningFailure(built.failure.code, built.failure.message, false);
@@ -205,13 +205,13 @@ async function proposeGroup(
   if (calculatePromptUsage({ prompt: built.prompt }).tokens > budget) {
     if (facts.reviewedPreferenceIds.length < 2) throw new LearningFailure('input_too_large', 'Required preference evidence exceeds the input budget.', false);
     const middle = Math.ceil(facts.reviewedPreferenceIds.length / 2);
-    const left = await proposeGroup(options, reviewGroup(facts, facts.reviewedPreferenceIds.slice(0, middle)), model, signal, setActive, allowAdd);
-    const right = await proposeGroup(options, reviewGroup(facts, facts.reviewedPreferenceIds.slice(middle)), model, signal, setActive, false);
+    const left = await proposeGroup(options, reviewGroup(facts, facts.reviewedPreferenceIds.slice(0, middle)), prepared, signal, setActive, allowAdd);
+    const right = await proposeGroup(options, reviewGroup(facts, facts.reviewedPreferenceIds.slice(middle)), prepared, signal, setActive, false);
     return [...left, ...right];
   }
   const correlation = { preferenceLearningBatchId: facts.batch.batchId, modelCallId };
   safeRecordContent(options.observability, 'model.request', { model: { providerId: model.provider, modelId: model.id }, prompt: built.prompt }, correlation);
-  const response = await observeSpan(options.observability, 'model.call', correlation, () => abortable(options.models.completeSimple(model,
+  const response = await observeSpan(options.observability, 'model.call', correlation, () => abortable(client.completeSimple(model,
     { systemPrompt: built.prompt.systemPrompt, messages: [...built.prompt.messages] },
     { sessionId: `preference-learning:${facts.batch.batchId}`, signal, maxTokens: outputTokens }), signal));
   safeRecordContent(options.observability, 'model.response', response, correlation);

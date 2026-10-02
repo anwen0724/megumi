@@ -1,3 +1,4 @@
+import type { ModelClient } from '../../runs/model-resolution';
 /*
  * Creates the built-in commands with explicit composition-time dependencies.
  */
@@ -10,6 +11,8 @@ export interface ContextCompactor {
       readonly sessionId: string;
       readonly workspaceId: string;
       readonly model: Model<Api>;
+      readonly client: ModelClient;
+      readonly compactionThresholdRatio: number;
     },
     options?: { readonly signal?: AbortSignal },
   ): Promise<
@@ -32,7 +35,7 @@ export function createBuiltInCommands(options: {
       requiresSession: true,
       async handle({ context }, operationOptions) {
         if (operationOptions?.signal?.aborted) return { type: "cancelled" };
-        if (!context.sessionId || !context.model || !options.compact) {
+        if (!context.sessionId || !context.model || !context.client || context.compactionThresholdRatio === undefined || !options.compact) {
           return {
             type: "host_interaction_request",
             request: { kind: "context_compaction" },
@@ -42,6 +45,8 @@ export function createBuiltInCommands(options: {
           sessionId: context.sessionId,
           workspaceId: context.workspaceId,
           model: context.model,
+          client: context.client,
+          compactionThresholdRatio: context.compactionThresholdRatio,
         }, operationOptions);
         if (operationOptions?.signal?.aborted) return { type: "cancelled" };
         if (result.status === "failed") {

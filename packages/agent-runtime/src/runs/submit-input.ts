@@ -3,7 +3,7 @@
  * most one Agent Execution. Product adapts Host DTOs at the outer boundary;
  * this module owns when Input, Session, branch, and execution operations occur.
  */
-import type { Api, Model } from '@megumi/ai';
+import type { ModelPreparationResult, ModelSelection } from './model-resolution';
 import type { CommandTerminalResult } from './commands/index';
 import type { InputProcessor, RawUserInput } from './input/index';
 import type { Observability, OperationCompletion, TraceCorrelation } from '../diagnostics';
@@ -74,26 +74,14 @@ export type SubmitConversationInputResult =
       readonly failure: ConversationSubmissionFailure;
     };
 
-export type ConversationModelResolution =
-  | { readonly status: 'ok'; readonly model: Model<Api> }
-  | {
-      readonly status: 'failed';
-      readonly failure: {
-        readonly code: string;
-        readonly message: string;
-        readonly retryable?: boolean;
-      };
-    };
+export type ConversationModelResolution = ModelPreparationResult;
 
 export interface ConversationSubmissionDependencies {
   readonly input: Pick<InputProcessor<CommandTerminalResult>, 'process'>;
   readonly sessions: Pick<SessionCatalog, 'getSession' | 'createSession'>;
   readonly history: Pick<SessionHistory, 'getCommittedBranch'>;
   readonly branches: Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>;
-  readonly resolveModel: (selection: {
-    readonly providerId: string;
-    readonly modelId: string;
-  }) => Promise<ConversationModelResolution>;
+  readonly resolveModel: (workspaceId: string, selection?: ModelSelection) => Promise<ConversationModelResolution>;
   readonly observability?: Observability;
 }
 
@@ -207,7 +195,7 @@ async function prepareConversationSubmission(
     'model.resolve',
     { requestId, workspaceId: request.workspaceId },
     classifyModelResolution,
-    () => dependencies.resolveModel(request.modelSelection),
+    () => dependencies.resolveModel(request.workspaceId, request.modelSelection),
   );
   if (signal.aborted) return { result: failure(requestId, 'runtime_stopped', 'The runtime has stopped accepting input.', existingSession?.session) };
   if (model.status === 'failed') {
@@ -236,6 +224,8 @@ async function prepareConversationSubmission(
           workspaceId: request.workspaceId,
           ...(existingSession ? { sessionId: existingSession.session.session_id } : {}),
           model: model.model,
+          client: model.client,
+          compactionThresholdRatio: model.compactionThresholdRatio,
         },
       }, { signal });
       safeRecordContent(dependencies.observability, 'input.processed', result, { requestId });
@@ -295,6 +285,8 @@ async function prepareConversationSubmission(
     input: processed.input,
     ...(request.recommendationReference ? { recommendationReference: request.recommendationReference } : {}),
     model: model.model,
+          client: model.client,
+          compactionThresholdRatio: model.compactionThresholdRatio,
     permissionMode: request.permissionMode ?? 'ask',
   });
   if (started.status !== 'started' && started.status !== 'already_started') {

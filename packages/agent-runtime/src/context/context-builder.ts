@@ -7,7 +7,8 @@
  */
 
 import crypto from 'node:crypto';
-import type { Api, Model, Models } from '@megumi/ai';
+import type { ModelClient } from '../runs/model-resolution';
+import type { Api, Model } from '@megumi/ai';
 import type { EventBus } from '../events';
 import type {
   Observability,
@@ -75,7 +76,6 @@ export interface CreateContextOptions {
   readonly instructionReader: import('../resources/instructions/index').InstructionReader;
   /** Skills seam: Context creates the SkillView it needs for one build. */
   readonly skills: Pick<Skills, 'createView'>;
-  readonly models: Pick<Models, 'completeSimple'>;
   readonly contextTokenEstimator?: (prompt: Prompt) => number;
   readonly observability?: Observability;
   readonly policy?: Partial<CompactionPolicy>;
@@ -173,6 +173,8 @@ class DefaultContext implements ContextCapabilities {
           sessionId: request.sessionId,
           workspaceId: request.workspaceId,
           model: request.model,
+          client: request.client,
+          compactionThresholdRatio: request.compactionThresholdRatio,
           tools: request.tools,
           signal: request.signal,
         });
@@ -184,6 +186,8 @@ class DefaultContext implements ContextCapabilities {
           prompt: prepared.prompt,
           policy: prepared.policy,
           model: request.model,
+          client: request.client,
+          compactionThresholdRatio: request.compactionThresholdRatio,
           trigger: request.trigger,
           onProgress: request.onProgress,
           signal: request.signal,
@@ -218,6 +222,8 @@ class DefaultContext implements ContextCapabilities {
       sessionId: run.sessionId,
       workspaceId: run.workspaceId,
       model: run.model,
+      client: run.client,
+      compactionThresholdRatio: run.compactionThresholdRatio,
       tools: modelCall.tools,
       signal: request.signal,
     });
@@ -236,6 +242,8 @@ class DefaultContext implements ContextCapabilities {
         prompt: prepared.prompt,
         policy: prepared.policy,
         model: run.model,
+      client: run.client,
+      compactionThresholdRatio: run.compactionThresholdRatio,
         trigger: 'threshold',
         signal: request.signal,
       });
@@ -248,6 +256,8 @@ class DefaultContext implements ContextCapabilities {
           sessionId: run.sessionId,
           workspaceId: run.workspaceId,
           model: run.model,
+      client: run.client,
+      compactionThresholdRatio: run.compactionThresholdRatio,
           tools: modelCall.tools,
           signal: request.signal,
         });
@@ -376,6 +386,8 @@ class DefaultContext implements ContextCapabilities {
     readonly sessionId: string;
     readonly workspaceId: string;
     readonly model: Model<Api>;
+    readonly client: Pick<ModelClient, 'completeSimple'>;
+    readonly compactionThresholdRatio: number;
     readonly tools: readonly ToolDefinition[];
     readonly signal?: AbortSignal;
   }): Promise<
@@ -416,7 +428,7 @@ class DefaultContext implements ContextCapabilities {
     const capacity = contextCapacityFromModel(input.model);
     const policyResult = resolveCompactionPolicyProblem({
       defaults: this.options.policy,
-      configured: this.options.policyProvider?.getPolicy(),
+      configured: { ...this.options.policyProvider?.getPolicy(), reserveTokens: Math.floor(input.model.contextWindow * (1 - input.compactionThresholdRatio)) },
       capacity,
     });
     if (policyResult.status === 'invalid') {
@@ -480,6 +492,8 @@ class DefaultContext implements ContextCapabilities {
     readonly prompt: Prompt;
     readonly policy: CompactionPolicy;
     readonly model: Model<Api>;
+    readonly client: Pick<ModelClient, 'completeSimple'>;
+    readonly compactionThresholdRatio: number;
     readonly trigger: CompactionTrigger;
     readonly onProgress?: (progress: ContextCompactionProgress) => void;
     readonly signal?: AbortSignal;
@@ -496,7 +510,7 @@ class DefaultContext implements ContextCapabilities {
       materialized: input.materialized,
       policy: input.policy,
       model: input.model,
-      models: this.options.models,
+      models: input.client,
       sessionHistory: this.options.sessionHistory,
       promptBuilder: this.promptBuilder,
       calculatePromptUsage: (prompt) => this.countUsage(prompt),

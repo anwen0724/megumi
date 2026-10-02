@@ -1,5 +1,5 @@
 /* Owns the shared run entrypoint, input preparation and shutdown of one AgentRuntime. */
-import type { Api, Model } from '@megumi/ai';
+import { prepareModel, readModelCatalog, type ModelResolutionOptions, type ModelSelection, type ModelPreparationResult, type ModelCatalogResult } from './runs/model-resolution';
 import {
   createRunManager,
   type ConversationExecutionInput,
@@ -52,23 +52,23 @@ export interface AgentRunHandle {
   readonly completion: Promise<AgentRunOutcome>;
 }
 
-export type StartRunRequest = ConversationExecutionInput | {
+export type StartRunRequest = (Omit<ConversationExecutionInput, 'model' | 'client' | 'compactionThresholdRatio'> & { modelSelection?: ModelSelection }) | {
   readonly kind: 'recommendation';
   readonly runId: string;
   readonly requestId: string;
   readonly localDate: string;
-  readonly model: Model<Api>;
+  readonly modelSelection?: ModelSelection;
 } | {
   readonly kind: 'candidate_supply';
   readonly runId: string;
   readonly requestId: string;
   readonly trigger: string;
-  readonly model: Model<Api>;
+  readonly modelSelection?: ModelSelection;
 };
 
 export type StartRunResult =
   | { readonly status: 'started' | 'already_started'; readonly run: AgentRunHandle }
-  | { readonly status: 'rejected'; readonly error: { readonly code: RunFailureCode | 'RUN_CONFLICT' | 'RUNTIME_STOPPED'; readonly message: string } };
+  | { readonly status: 'rejected'; readonly error: { readonly code: RunFailureCode | 'RUN_CONFLICT' | 'RUNTIME_STOPPED' | 'MODEL_UNAVAILABLE'; readonly message: string } };
 
 export type CancelRunResult =
   | { readonly status: 'cancellation_requested' | 'already_cancelling' | 'already_terminal'; readonly run: AgentRunSnapshot }
@@ -99,6 +99,10 @@ export type SubmitInputResult =
     };
 
 export interface AgentRuntime {
+  /** Reads the current model catalog through the bound configuration access. */
+  readModelCatalog(request?: { workspaceId?: string }): ModelCatalogResult;
+  /** Prepares a model and client for a run or a single AI completion. */
+  prepareModel(request?: { workspaceId?: string; selection?: ModelSelection }): Promise<ModelPreparationResult>;
   /** Starts a prepared task; the handle separately represents its final completion. */
   startRun(request: StartRunRequest): Promise<StartRunResult>;
   /** Returns an isolated snapshot, or undefined when no retained run exists. */
@@ -120,7 +124,8 @@ export interface AgentRuntime {
 
 export interface CreateAgentRuntimeOptions {
   readonly execution: RunDependencies;
-  readonly input: ConversationSubmissionDependencies;
+  readonly input: Omit<ConversationSubmissionDependencies, 'resolveModel'>;
+  readonly modelResolution: (workspaceId?: string) => ModelResolutionOptions;
   readonly createRunId: () => string;
   readonly terminalRetentionMs: number;
   /** Commits application-owned execution records before completion and session release. */
@@ -143,19 +148,20 @@ export function createAgentRuntime(options: CreateAgentRuntimeOptions): AgentRun
       ...(metadata.kind === 'conversation' ? { sessionId: metadata.sessionId, workspaceId: metadata.workspaceId } : {}),
     }),
   });
-  const input = createConversationSubmission({ dependencies: options.input, startExecution: runs.start });
+  const resolveModel = (workspaceId?: string, selection?: ModelSelection) => prepareModel(options.modelResolution(workspaceId), selection);
+  const input = createConversationSubmission({ dependencies: { ...options.input, resolveModel }, startExecution: runs.start });
   let accepting = true;
   return {
+    readModelCatalog: (request) => readModelCatalog(options.modelResolution(request?.workspaceId).settings),
+    prepareModel: (request) => resolveModel(request?.workspaceId, request?.selection),
     async startRun(request) {
       if (!accepting) return { status: 'rejected', error: { code: 'RUNTIME_STOPPED', message: 'The runtime has stopped accepting runs.' } };
       if (request.kind !== 'conversation' && runs.get({ executionId: request.runId }).status === 'found') {
         return { status: 'rejected', error: { code: 'RUN_CONFLICT', message: 'A run with this identity already exists.' } };
       }
-      const result = request.kind === 'conversation'
-        ? await runs.start(request)
-        : request.kind === 'recommendation'
-          ? await runs.start(request)
-          : await runs.start(request);
+      const prepared = await resolveModel(request.kind === 'conversation' ? request.workspaceId : undefined, request.modelSelection);
+      if (prepared.status === 'failed') return { status: 'rejected', error: { code: 'MODEL_UNAVAILABLE', message: prepared.failure.message } };
+      const result = await runs.start({ ...request, model: prepared.model, client: prepared.client, compactionThresholdRatio: prepared.compactionThresholdRatio });
       if (result.status === 'started' || result.status === 'already_started') {
         return { status: result.status, run: {
           runId: result.execution.executionId, snapshot: toRunSnapshot(result.execution),

@@ -98,7 +98,7 @@ import {
   type InitializeMegumiHomeSyncOptions,
   type MegumiHomePaths,
 } from './storage/home';
-import { composeModels } from './settings/model-composer';
+import { createSettings as createFileSettings } from './settings/settings-store';
 import {
   PRODUCT_EXECUTION_POLICY,
   PRODUCT_RECENT_EVENT_BUFFER,
@@ -150,7 +150,6 @@ export interface ProductCapabilities {
   readonly logger: ApplicationLogger;
   readonly database: DatabaseConnection;
   readonly settings: ReturnType<typeof createSettings>;
-  readonly models: import('@megumi/ai').Models;
   readonly workspaceStore: ReturnType<typeof createWorkspaceStore>;
   readonly workspaceFileSystem: ProductWorkspaceFileSystem;
   readonly workspaces: ReturnType<typeof createWorkspaceCatalog>;
@@ -168,15 +167,11 @@ export interface ProductCapabilities {
   readonly commands: Commands;
   readonly tools: Tools;
   readonly branches: ReturnType<typeof createSessionBranchDrafts>;
-  readonly resolveModel: ProductModelResolver;
   readonly runtime: AgentRuntime;
   readonly discovery: Discovery;
   readonly discoveryFactsReader: DiscoveryFactsReader;
 }
 
-export type ProductModelResolver = (
-  request: { provider_id: string; model_id: string },
-) => Promise<ProductModelResolutionResult>;
 
 export type ProductModelResolutionResult =
   | { status: 'ok'; model: Model<Api> }
@@ -234,10 +229,6 @@ function composeCapabilitiesWithDatabase(
   const settings = createSettings({
     store: options.settingsStorage ?? createSettingsStore({ settingsPath: homePaths.settingsPath }),
     ...(options.settingsEnvironment ? { environment: options.settingsEnvironment } : {}),
-  });
-  const modelComposition = composeModels({
-    credentials: createSettingsCredentialStore(settings),
-    ...(options.modelStreams ? { apiImplementations: options.modelStreams } : {}),
   });
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = options.workspaceFileSystem;
@@ -349,7 +340,6 @@ function composeCapabilitiesWithDatabase(
     workspaceSource,
     instructionReader: instructions,
     skills,
-    models: modelComposition.models,
     observability: observability.observability,
     events,
     discoveryFactsReader,
@@ -412,6 +402,8 @@ function composeCapabilitiesWithDatabase(
         sessionId: request.sessionId,
         workspaceId: request.workspaceId,
         model: request.model,
+        client: request.client,
+        compactionThresholdRatio: request.compactionThresholdRatio,
         trigger: 'manual',
         tools: [],
         ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
@@ -430,22 +422,6 @@ function composeCapabilitiesWithDatabase(
       },
     },
   });
-  const resolveModel: ProductModelResolver = async (request) => {
-    const resolved = settings.resolveProvider(request);
-    if (resolved.status === 'failed') return { status: 'failed', failure: resolved.failure };
-    try {
-      return {
-        status: 'ok',
-        model: await modelComposition.resolveModel(resolved.config),
-      };
-    } catch {
-      return {
-        status: 'failed',
-        failure: { code: 'model_resolution_failed', message: 'The selected model could not be prepared.' },
-      };
-    }
-  };
-
   const recommendationAttempts = createRecommendationAttempts({
     observability: observability.observability,
   });
@@ -491,7 +467,6 @@ function composeCapabilitiesWithDatabase(
     },
   });
   const interestExtractor = createInterestExtractor({
-    models: modelComposition.models,
     observability: observability.observability,
   });
   const discoverySources = options.discoverySourceRegistry ?? createDiscoverySourceRegistry({
@@ -529,6 +504,23 @@ function composeCapabilitiesWithDatabase(
   };
   let discovery: Discovery;
   const runtime = createAgentRuntime({
+    modelResolution(workspaceId) {
+      let projectSettingsPath: string | undefined;
+      if (workspaceId) {
+        const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
+        if (workspace.status !== 'found') throw new Error('WORKSPACE_UNAVAILABLE');
+        projectSettingsPath = path.join(workspace.workspace.root_path, '.megumi', 'settings.json');
+      }
+      return {
+        settings: createFileSettings({
+          globalSettingsPath: homePaths.settingsPath,
+          projectSettingsPath,
+          credentialsPath: homePaths.credentialsPath,
+          readEnvironment: (name) => options.settingsEnvironment?.readVariable(name),
+        }),
+        apiImplementations: options.modelStreams,
+      };
+    },
     createRunId: ids.createExecutionId,
     terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
     execution: {
@@ -537,8 +529,7 @@ function composeCapabilitiesWithDatabase(
       ids,
       clock,
       events,
-      models: modelComposition.models,
-      context,
+        context,
       tools,
       permissions,
       session: history,
@@ -574,10 +565,6 @@ function composeCapabilitiesWithDatabase(
       history,
       branches,
       observability: observability.observability,
-      resolveModel: ({ providerId, modelId }) => resolveModel({
-        provider_id: providerId,
-        model_id: modelId,
-      }),
     },
   });
   discoveryFactsReaderDelegate = createDiscoveryFactsReader({
@@ -672,19 +659,7 @@ function composeCapabilitiesWithDatabase(
       },
       sessions,
       history,
-      async resolveModel() {
-        const resolved = settings.resolve();
-        const selection = resolved.status === 'ok'
-          ? resolved.settings.model_selection
-          : undefined;
-        if (!selection) {
-          return {
-            status: 'failed',
-            failure: { message: 'The default model is not configured.' },
-          };
-        }
-        return resolveModel(selection);
-      },
+      prepareModel: () => runtime.prepareModel(),
       extractor: (input) => interestExtractor.extract(input),
       ids: {
         createInterestId: () => crypto.randomUUID(),
@@ -742,17 +717,6 @@ function composeCapabilitiesWithDatabase(
       },
       clock,
       timezone: { get: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
-      async resolveModel() {
-        const resolved = settings.resolve();
-        const selection = resolved.status === 'ok'
-          ? resolved.settings.model_selection
-          : undefined;
-        if (!selection) return { status: 'unavailable' };
-        const result = await resolveModel(selection);
-        return result.status === 'ok'
-          ? { status: 'ok', model: result.model }
-          : { status: 'unavailable' };
-      },
       ids: {
         createRequestId: () => createId('recommendation-request'),
       },
@@ -779,16 +743,9 @@ function composeCapabilitiesWithDatabase(
     preferenceLearning: {
       repository: discoveryRepository,
       context,
-      models: modelComposition.models,
-      now: clock.now,
+        now: clock.now,
       observability: observability.observability,
-      async resolveModel() {
-        const resolved = settings.resolve();
-        const selection = resolved.status === 'ok' ? resolved.settings.model_selection : undefined;
-        if (!selection) return undefined;
-        const result = await resolveModel(selection);
-        return result.status === 'ok' ? result.model : undefined;
-      },
+      prepareModel: () => runtime.prepareModel(),
       ids: {
         createBatchId: () => createId('preference-batch'),
         createModelCallId: ids.createModelCallId,
@@ -816,17 +773,6 @@ function composeCapabilitiesWithDatabase(
           clear: (handle: unknown) => options.timers!.clearTimeout(handle),
         },
       } : {}),
-      async resolveModel() {
-        const resolved = settings.resolve();
-        const selection = resolved.status === 'ok' ? resolved.settings.model_selection : undefined;
-        if (!selection) {
-          return { status: 'failed', code: 'model_not_configured', message: 'The default model is not configured.' };
-        }
-        const result = await resolveModel(selection);
-        return result.status === 'ok'
-          ? result
-          : { status: 'failed', code: result.failure.code, message: result.failure.message };
-      },
       onBackgroundError(error) {
         observability.runtimeLogger.write({
           level: 'warn', module: 'discovery', code: 'candidate_supply_background_failed',
@@ -847,7 +793,6 @@ function composeCapabilitiesWithDatabase(
     logger,
     database,
     settings,
-    models: modelComposition.models,
     workspaceStore,
     workspaceFileSystem,
     workspaces,
@@ -865,7 +810,6 @@ function composeCapabilitiesWithDatabase(
     commands,
     tools,
     branches,
-    resolveModel,
     runtime,
     discovery,
     discoveryFactsReader,

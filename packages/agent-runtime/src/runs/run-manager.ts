@@ -1,6 +1,7 @@
 /* Owns admission, identity, registry state, approvals, cancellation, and settlement for Agent executions. */
 import type { RunLoopController } from './loop';
 import type { Api, Model } from '@megumi/ai';
+import type { ModelClient } from './model-resolution';
 import type {
   CandidateSupplyRunContext,
   RecommendationRunContext,
@@ -28,6 +29,8 @@ import {
 } from './run-registry';
 
 export interface LaunchConversationAgentExecutionInput {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly signal?: AbortSignal;
   readonly kind: 'conversation';
   readonly metadata: ConversationExecutionMetadata;
@@ -39,6 +42,8 @@ export interface LaunchConversationAgentExecutionInput {
 }
 
 export interface LaunchRecommendationExecutionInput {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly signal?: AbortSignal;
   readonly kind: 'recommendation';
   readonly metadata: RecommendationExecutionMetadata;
@@ -46,6 +51,8 @@ export interface LaunchRecommendationExecutionInput {
 }
 
 export interface LaunchCandidateSupplyExecutionInput {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly signal?: AbortSignal;
   readonly kind: 'candidate_supply';
   readonly metadata: CandidateSupplyExecutionMetadata;
@@ -69,6 +76,8 @@ export type PrepareRun = (
 ) => Promise<PreparedRun>;
 
 export interface ConversationExecutionInput {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly kind: 'conversation';
   readonly requestId: string;
   readonly workspaceId: string;
@@ -81,6 +90,8 @@ export interface ConversationExecutionInput {
 }
 
 export interface RecommendationExecutionInput {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly runId?: string;
   readonly kind: 'recommendation';
   readonly requestId: string;
@@ -89,6 +100,8 @@ export interface RecommendationExecutionInput {
 }
 
 export interface CandidateSupplyExecutionInput {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly runId?: string;
   readonly kind: 'candidate_supply';
   readonly requestId: string;
@@ -311,6 +324,8 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
     try {
       launched = await options.launch({
         kind: 'conversation',
+        client: request.client,
+        compactionThresholdRatio: request.compactionThresholdRatio,
         signal: store.getCancellationSignal(executionId),
         metadata,
         input: request.input,
@@ -356,12 +371,14 @@ export function createRunManager(options: CreateRunManagerOptions): RunManager {
     const base = { executionId, requestId: request.requestId, model: request.model, createdAt, startedAt: createdAt };
     const launch: LaunchRecommendationExecutionInput | LaunchCandidateSupplyExecutionInput = request.kind === 'recommendation'
       ? {
+          client: request.client, compactionThresholdRatio: request.compactionThresholdRatio,
           kind: 'recommendation', metadata: { ...base, kind: 'recommendation', localDate: request.localDate },
-          runContext: { kind: 'recommendation', executionId, requestId: request.requestId, localDate: request.localDate, model: request.model },
+          runContext: { kind: 'recommendation', executionId, requestId: request.requestId, localDate: request.localDate, model: request.model, client: request.client, compactionThresholdRatio: request.compactionThresholdRatio },
         }
       : {
+          client: request.client, compactionThresholdRatio: request.compactionThresholdRatio,
           kind: 'candidate_supply', metadata: { ...base, kind: 'candidate_supply' },
-          runContext: { kind: 'candidate_supply', executionId, requestId: request.requestId, startedAt: createdAt, trigger: request.trigger, model: request.model },
+          runContext: { kind: 'candidate_supply', executionId, requestId: request.requestId, startedAt: createdAt, trigger: request.trigger, model: request.model, client: request.client, compactionThresholdRatio: request.compactionThresholdRatio },
         };
     store.reserveBackground(launch.metadata);
     let launched: PreparedRun;

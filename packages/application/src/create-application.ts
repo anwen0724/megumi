@@ -152,7 +152,7 @@ function createApplicationRuntime(
       autoCompactPercent: resolveAutoCompactPercent(settings),
     },
     resolveModel: async (selection) => {
-      const resolved = await capabilities.resolveModel(selection);
+      const resolved = await runtime.prepareModel({ selection: { providerId: selection.provider_id, modelId: selection.model_id } });
       return resolved.status === 'ok' ? resolved.model : undefined;
     },
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),

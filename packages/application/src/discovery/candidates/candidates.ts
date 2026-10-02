@@ -36,10 +36,6 @@ export interface CreateCandidatesOptions {
   readonly sourceRegistry: SourceRegistry;
   readonly settings: DiscoveryConfigurationStore;
   readonly runtime: Pick<AgentRuntime, 'startRun'>;
-  readonly resolveModel: () => Promise<
-    | { readonly status: 'ok'; readonly model: Model<Api> }
-    | { readonly status: 'failed'; readonly code: string; readonly message: string }
-  >;
   readonly now: () => string;
   readonly ids: { createRequestId(): string };
   readonly observability?: Observability;
@@ -210,21 +206,6 @@ async function runCheck(
       reason: 'no_available_source',
     };
   }
-  const resolvedModel = await options.resolveModel();
-  if (resolvedModel.status === 'failed') {
-    return {
-      ...baseResult(requestId, trigger, requestedAt, options.now(), 0, 0),
-      status: 'failed',
-      availableCount: before.availableCount,
-      remainingReplenishmentCount: before.targetShortfall,
-      failure: {
-        code: 'model_unavailable',
-        message: resolvedModel.message,
-        retryable: true,
-      },
-    };
-  }
-
   const executionId = randomUUID();
   options.attempts.start({
     executionId, startedAt: options.now(), trigger, repository: options.repository,
@@ -233,11 +214,12 @@ async function runCheck(
   });
   try {
     const started = await options.runtime.startRun({
-      kind: 'candidate_supply', runId: executionId, requestId, trigger, model: resolvedModel.model,
+      kind: 'candidate_supply', runId: executionId, requestId, trigger,
     });
     if (started.status === 'rejected') {
       return failureResult(requestId, trigger, requestedAt, options.now(), before, {
-        code: started.error.code, message: started.error.message, retryable: false,
+        code: started.error.code === 'MODEL_UNAVAILABLE' ? 'model_unavailable' : started.error.code,
+        message: started.error.message, retryable: started.error.code === 'MODEL_UNAVAILABLE',
       });
     }
     const outcome = await started.run.completion;

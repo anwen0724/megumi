@@ -29,6 +29,7 @@ import type {
 import type { Permissions } from '../permissions/index';
 import type { SessionHistory } from '../sessions/index';
 import type { Tools } from '../tools/index';
+import type { ModelClient } from './model-resolution';
 import { selectRunTools } from './tool-selection';
 import type {
   PreparedRun,
@@ -83,7 +84,6 @@ export interface AgentExecutionPolicy {
 export interface RunDependencies {
   readonly createProviderCapture?: (input: { correlation: import('../diagnostics').TraceCorrelation; fetch?: typeof globalThis.fetch }) => import('../diagnostics').ProviderCapture;
   readonly createContentDigest?: (value: unknown) => string | undefined;
-  readonly models: Models;
   readonly context: ContextCapabilities;
   readonly tools: Pick<
     Tools,
@@ -118,6 +118,8 @@ export class LaunchExecutionError extends Error {
   }
 }
 
+type ExecutionDependencies = RunDependencies & { readonly models: ModelClient; readonly compactionThresholdRatio: number };
+
 interface ExecutionRuntime extends ExecutionProjectionRuntime, ContextAdapterRuntime {
   readonly committer: SessionMessageCommitter;
   readonly modelPumps: Set<Promise<void>>;
@@ -130,8 +132,9 @@ interface ModelTraceRuntime extends ContextAdapterRuntime {
 
 export async function prepareRun(
   input: LaunchAgentExecutionInput,
-  dependencies: RunDependencies,
+  baseDependencies: RunDependencies,
 ): Promise<PreparedRun> {
+  const dependencies = { ...baseDependencies, models: input.client, compactionThresholdRatio: input.compactionThresholdRatio };
   if (input.kind !== 'conversation') {
     return launchBackgroundExecution(input, dependencies);
   }
@@ -244,6 +247,8 @@ export async function prepareRun(
     ...(dependencies.observability ? { observability: dependencies.observability } : {}),
   });
   const contextDependencies = {
+    client: dependencies.models,
+    compactionThresholdRatio: dependencies.compactionThresholdRatio,
     metadata,
     userInput: input.input,
     context: dependencies.context,
@@ -299,7 +304,7 @@ export async function prepareRun(
 
 async function launchBackgroundExecution(
   input: LaunchRecommendationExecutionInput | LaunchCandidateSupplyExecutionInput,
-  dependencies: RunDependencies,
+  dependencies: ExecutionDependencies,
 ): Promise<PreparedRun> {
   const { metadata } = input;
   const runtime: ModelTraceRuntime = { modelPumps: new Set() };
@@ -318,6 +323,8 @@ async function launchBackgroundExecution(
   }
   const toolExecution = toolExecutionResult.binding;
   const contextDependencies = {
+    client: dependencies.models,
+    compactionThresholdRatio: dependencies.compactionThresholdRatio,
     metadata,
     runContext: input.runContext,
     context: dependencies.context,
@@ -452,7 +459,7 @@ function classifyExecutionOutcome(outcome: ExecutionOutcome): OperationCompletio
   };
 }
 
-function contentDigestCorrelation(dependencies: RunDependencies, value: unknown): { readonly contentDigest?: string } {
+function contentDigestCorrelation(dependencies: ExecutionDependencies, value: unknown): { readonly contentDigest?: string } {
   const contentDigest = dependencies.createContentDigest?.(value);
   return contentDigest ? { contentDigest } : {};
 }
@@ -649,7 +656,7 @@ function agentCause(value: unknown): ExecutionFailure['cause'] {
 }
 
 function createStreamAdapter(
-  dependencies: RunDependencies,
+  dependencies: ExecutionDependencies,
   metadata: ExecutionMetadata,
   runtime: ModelTraceRuntime,
 ): AgentStreamFunction {
@@ -671,7 +678,7 @@ function createStreamAdapter(
 }
 
 async function observeModelCall(
-  dependencies: RunDependencies,
+  dependencies: ExecutionDependencies,
   metadata: ExecutionMetadata,
   modelCallId: string | undefined,
   model: Parameters<AgentStreamFunction>[0],

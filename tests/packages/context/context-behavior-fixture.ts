@@ -1,3 +1,4 @@
+import type { ModelClient } from '@megumi/agent-runtime';
 /* Assembles Context with real Session, Instructions, Skills, and file storage. */
 import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
 import { type BuildContextRequest, type CompactContextRequest, type CreateContextOptions } from '@megumi/agent-runtime/context/index';
@@ -12,7 +13,7 @@ export const contextModel = { ...model, contextWindow: 16_000, maxTokens: 512 };
 
 /** Replaces only the external model service; all owner capabilities run normally. */
 export async function createContextFixture(
-  completeSimple: CreateContextOptions['models']['completeSimple'] = async () => completedMessage('Earlier conversation summary'),
+  completeSimple: ModelClient['completeSimple'] = async () => completedMessage('Earlier conversation summary'),
 ) {
   const storage = await createSessionFixture();
   const { root, store, history, database, workspaceId, workspaceRoot, sessionId, workspaceCatalog, contentStore } = storage;
@@ -43,12 +44,12 @@ export async function createContextFixture(
       availabilityStore: createDatabaseSkillAvailabilityStore(database),
       workspaceRootResolver: { resolveWorkspaceRoot: async () => workspaceRoot },
     }),
-    models: { completeSimple },
     events,
     policy: { enabled: true, reserveTokens: 1024, keepRecentTokens: 1, minimumRecentMessages: 3 },
     clock: { now: () => savedAt },
   };
   const request: CompactContextRequest = {
+    client: { completeSimple }, compactionThresholdRatio: 1 - 1024 / contextModel.contextWindow,
     sessionId, workspaceId, model: contextModel, trigger: 'manual', tools: [],
   };
   const buildRequest: BuildContextRequest = {
@@ -58,6 +59,7 @@ export async function createContextFixture(
       tools: [],
       run: {
         kind: 'conversation', executionId: 'current-execution', sessionId, workspaceId,
+        client: { completeSimple }, compactionThresholdRatio: 1 - 1024 / contextModel.contextWindow,
         model: contextModel, userInput: { displayContent: [], modelContent: [], attachments: [] },
       },
     },

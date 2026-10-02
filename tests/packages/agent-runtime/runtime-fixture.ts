@@ -1,3 +1,4 @@
+import { createSettings } from '@megumi/application/settings/settings-store';
 /* Assembles the real runtime over isolated SQLite and filesystem storage. */
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
@@ -30,12 +31,15 @@ export async function createRuntimeFixture(options: { now?: () => string; before
   const candidateSupplyAttempts = createCandidateSupplyAttempts();
   const discoveryFacts = createDiscoveryFactsReader({ repository, recommendationAttempts, candidateSupplyAttempts });
   const model = { ...contextModel, api: 'openai-completions' as const };
-  const models = createModels();
-  models.setProvider(createProvider({
-    id: model.provider, name: 'Test provider', baseUrl: model.baseUrl, models: [model],
-    auth: { apiKey: { name: 'Test key', resolve: async () => ({ auth: { apiKey: 'test' }, source: 'test' }) } },
-    api: openAICompletionsApi(),
-  }));
+  const globalSettingsPath = path.join(fixture.root, 'settings.json');
+  const credentialsPath = path.join(fixture.root, 'credentials.json');
+  await writeFile(globalSettingsPath, JSON.stringify({ models: {
+    defaultModel: { providerId: model.provider, modelId: model.id },
+    providers: { [model.provider]: { api: model.api, baseUrl: model.baseUrl } },
+    customModels: { [model.provider]: { [model.id]: { contextWindowTokens: model.contextWindow, maxOutputTokens: model.maxTokens, capabilities: { imageInput: true } } } },
+  } }));
+  await writeFile(credentialsPath, JSON.stringify({ providers: { [model.provider]: 'test' } }));
+  const settings = createSettings({ globalSettingsPath, credentialsPath, readEnvironment: () => undefined });
   const contentStore = createSessionAttachmentFileStore({
     attachmentsPath: path.join(fixture.root, 'runtime-attachments'),
     fileSystem: {
@@ -46,7 +50,7 @@ export async function createRuntimeFixture(options: { now?: () => string; before
   });
   const history = createSessionHistory({ store: fixture.store, attachmentContentStore: contentStore });
   const context = createContext({
-    ...fixture.options, sessionHistory: history, models, discoveryFactsReader: discoveryFacts,
+    ...fixture.options, sessionHistory: history, discoveryFactsReader: discoveryFacts,
     attachmentReader: createSessionAttachmentReader({ store: fixture.store, contentStore }),
   });
   const workspaceStore = createWorkspaceStore({ database: fixture.database });
@@ -84,15 +88,15 @@ export async function createRuntimeFixture(options: { now?: () => string; before
     interpreters: [createCommandInputInterpreter(commands)],
   });
   const runtime = createAgentRuntime({
+    modelResolution: () => ({ settings }),
     execution: {
-      models, context, tools, permissions, session: history, events: fixture.events,
+      context, tools, permissions, session: history, events: fixture.events,
       clock: { now }, policy: executionPolicy,
       ids: { createModelCallId: randomUUID, createToolExecutionId: randomUUID, createApprovalId: randomUUID, createSessionMessageId: randomUUID },
     },
     input: {
       input, sessions: fixture.catalog, history,
       branches: createSessionBranchDrafts({ events: fixture.events, entries: fixture.store }),
-      resolveModel: async () => ({ status: 'ok', model }),
     },
     createRunId: randomUUID, terminalRetentionMs: 60000,
     finalizeRun(run) {

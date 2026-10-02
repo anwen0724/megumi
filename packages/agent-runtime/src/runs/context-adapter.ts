@@ -8,6 +8,7 @@ import type { ContextCapabilities, RunContext } from '../context/index';
 import type { UserInput } from './input/index';
 import type { StructuredRuntimeLogger } from '../diagnostics';
 import type { ModelCallToolBinding, ToolDefinition, ToolExecutionBinding } from '../tools/index';
+import type { ModelClient } from './model-resolution';
 import type { ExecutionMetadata } from './run-registry';
 
 /** One ModelCall's fixed Tool Router scope; released exactly once. */
@@ -20,6 +21,8 @@ export interface ToolScope {
 }
 
 export interface ContextAdapterDependencies {
+  readonly client: ModelClient;
+  readonly compactionThresholdRatio: number;
   readonly metadata: ExecutionMetadata;
   readonly userInput?: UserInput;
   readonly runContext?: RunContext;
@@ -152,6 +155,8 @@ export function createContextAdapter(
         sessionId: runContext.sessionId,
         workspaceId: runContext.workspaceId,
         model: dependencies.metadata.model,
+        client: dependencies.client,
+        compactionThresholdRatio: dependencies.compactionThresholdRatio,
         tools: scope.definitions,
         trigger: 'overflow',
         signal,
@@ -190,6 +195,8 @@ function conversationRunContext(dependencies: ContextAdapterDependencies): RunCo
     workspaceId: dependencies.metadata.workspaceId,
     userInput: dependencies.userInput,
     model: dependencies.metadata.model,
+        client: dependencies.client,
+        compactionThresholdRatio: dependencies.compactionThresholdRatio,
   };
 }
 

@@ -1,3 +1,4 @@
+import type { ModelClient } from '../model-resolution';
 /*
  * Owns the single processing path from one raw user submission to UserInput:
  * text normalization, attachment coordination, input interpretation and the
@@ -50,6 +51,8 @@ export interface UserInput {
 }
 
 export interface InputContext {
+  readonly client?: ModelClient;
+  readonly compactionThresholdRatio?: number;
   readonly workspaceId: string;
   readonly sessionId?: string;
   readonly model?: Model<Api>;

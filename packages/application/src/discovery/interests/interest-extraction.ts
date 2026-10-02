@@ -1,7 +1,8 @@
 /*
  * Builds and executes the provider-neutral Interest extraction request for one conversation turn.
  */
-import type { Api, Context, Model, Models } from '@megumi/ai';
+import type { ModelClient } from '@megumi/agent-runtime';
+import type { Api, Context, Model } from '@megumi/ai';
 import type { Observability, OperationCompletion, TraceCorrelation } from '../../observability/index';
 import {
   InterestExtractionResultSchema,
@@ -12,6 +13,7 @@ import {
 import type { InterestExtractionJob } from './interest-extraction-queue';
 
 export interface InterestExtractionInput {
+  readonly client: ModelClient;
   readonly job: InterestExtractionJob;
   readonly userText: string;
   readonly assistantText: string;
@@ -28,7 +30,6 @@ export interface InterestExtractor {
 
 /** Creates the provider-neutral extractor for one completed conversation turn. */
 export function createInterestExtractor(options: {
-  readonly models: Pick<Models, 'completeSimple'>;
   readonly observability?: Observability;
 }): InterestExtractor {
   return {
@@ -58,7 +59,7 @@ export function createInterestExtractor(options: {
         context,
       }, correlation);
       const response = await observeModelCall(options.observability, correlation, () => (
-        options.models.completeSimple(input.model, context, {
+        input.client.completeSimple(input.model, context, {
           sessionId: `interest-extraction:${input.job.sessionId}`,
           signal: input.signal,
         })

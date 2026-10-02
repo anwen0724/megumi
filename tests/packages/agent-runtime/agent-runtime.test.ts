@@ -55,13 +55,13 @@ it('ends a recommendation run after accepting its draft without another model re
   });
   onTestFinished(() => fetch.mockRestore());
   const result = await fixture.runtime.startRun({ kind: 'recommendation', runId: 'recommendation-run',
-    requestId: 'recommendation', localDate: now.slice(0, 10), model: fixture.model });
+    requestId: 'recommendation', localDate: now.slice(0, 10) });
   if (result.status === 'rejected') throw new Error(result.error.message);
   expect(await result.run.completion).toMatchObject({ status: 'completed' });
   expect(requests).toBe(1);
   expect(fixture.repository.getCollection(now.slice(0, 10), true)).toBeUndefined();
   expect(await fixture.runtime.startRun({ kind: 'recommendation', runId: 'recommendation-run',
-    requestId: 'another-request', localDate: now.slice(0, 10), model: fixture.model })).toMatchObject({
+    requestId: 'another-request', localDate: now.slice(0, 10) })).toMatchObject({
     status: 'rejected', error: { code: 'RUN_CONFLICT' },
   });
 });
@@ -72,7 +72,7 @@ it('keeps an admitting session occupied and waits for its cancelled run to finis
   const fixture = await createRuntimeFixture({ beforeAttachmentWrite: async () => { writing.resolve(); await release.promise; } });
   const request = {
     kind: 'conversation' as const, requestId: 'first', workspaceId: fixture.workspaceId, sessionId: fixture.sessionId,
-    model: fixture.model, permissionMode: 'ask' as const,
+    permissionMode: 'ask' as const,
     input: {
       displayContent: [{ type: 'text' as const, text: 'Describe this image' }],
       modelContent: [{ type: 'text' as const, text: 'Describe this image' }],

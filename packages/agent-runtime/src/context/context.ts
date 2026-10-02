@@ -7,6 +7,7 @@
  * algorithms live here.
  */
 
+import type { ModelClient } from '../runs/model-resolution';
 import type { Api, Message, Model } from '@megumi/ai';
 import type { UserInput } from '../runs/input/index';
 import type { ToolDefinition } from '../tools/tool-definition';
@@ -36,6 +37,8 @@ export interface ContextWorkspaceSource {
 }
 
 export interface BaseRunContext {
+  readonly client: Pick<ModelClient, 'completeSimple'>;
+  readonly compactionThresholdRatio: number;
   readonly model: Model<Api>;
 }
 
@@ -180,6 +183,8 @@ export type ContextCompactionProgress =
   | ContextCompactionProgressCancelled;
 
 export interface CompactContextRequest {
+  readonly client: Pick<ModelClient, 'completeSimple'>;
+  readonly compactionThresholdRatio: number;
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly model: Model<Api>;

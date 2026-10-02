@@ -5,7 +5,6 @@
 import type { PreparePreferencesResult } from '../preferences/preference-learning';
 import type { PreferenceSetDetail } from '../preferences/preference';
 import { randomUUID } from 'node:crypto';
-import type { Api, Model } from '@megumi/ai';
 import type { AgentRunOutcome, AgentRuntime, StartRunRequest, StartRunResult } from '@megumi/agent-runtime/agent-runtime';
 import type { Observability, OperationCompletion } from '../../observability/index';
 import { candidatePoolSettings } from '../candidates/candidate-pool';
@@ -77,9 +76,6 @@ export interface CreateRecommendationsOptions {
     get(sourceId: string): { readonly descriptor: { readonly name: string } } | undefined;
   };
   readonly runtime: Pick<AgentRuntime, 'startRun' | 'cancelRun'>;
-  readonly resolveModel: () => Promise<
-    { readonly status: 'ok'; readonly model: Model<Api> } | { readonly status: 'unavailable' }
-  >;
   readonly settings: { readonly resolve: () => RecommendationSettings };
   readonly clock: { readonly now: () => string };
   readonly timezone: { readonly get: () => string };
@@ -224,12 +220,10 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     }
     if (prepared.ranking.actualTargetCount === 0) return { status: 'waiting_for_candidates', localDate };
 
-    const model = await options.resolveModel();
     if (shuttingDown) return failureResult(localDate, 'agent_execution_failed', 'Recommendation is shutting down.', false);
     if (expectedLocalDate && localDateAt(options.clock.now(), options.timezone.get()) !== expectedLocalDate) {
       return { status: 'waiting_for_candidates', localDate: expectedLocalDate };
     }
-    if (model.status === 'unavailable') return { status: 'model_unavailable', localDate };
     clearCandidateWait();
 
     const requestId = observedRequestId ?? ids.createRequestId();
@@ -259,11 +253,12 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       kind: 'recommendation',
       requestId,
       localDate,
-      model: model.model,
     });
     if (started.status === 'rejected') {
       options.attempts.dispose(executionId);
-      const result = failureResult(localDate, 'agent_execution_failed', started.error.message, false);
+      const result = started.error.code === 'MODEL_UNAVAILABLE'
+        ? { status: 'model_unavailable' as const, localDate }
+        : failureResult(localDate, 'agent_execution_failed', started.error.message, false);
       active.settle(result);
       latest = { requestId, result };
       active = undefined;
@@ -457,11 +452,6 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       complete(current, failureResult(current.localDate, 'settings_invalid', 'Recommendation settings are invalid.', false));
       return;
     }
-    const resolvedModel = await options.resolveModel();
-    if (resolvedModel.status === 'unavailable') {
-      complete(current, { status: 'model_unavailable', localDate: current.localDate });
-      return;
-    }
     const admission = prepareSnapshot(options, options.clock.now(), current.localDate, settings);
     if (admission.ranking.actualTargetCount === 0) { complete(current, { status: 'waiting_for_candidates', localDate: current.localDate }); return; }
     current.executionId = undefined;
@@ -510,7 +500,6 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       kind: 'recommendation',
       requestId: current.requestId,
       localDate: current.localDate,
-      model: resolvedModel.model,
     });
     if (started.status === 'started' || started.status === 'already_started') {
       current.markExecutionStarted(started.run.runId);
@@ -519,6 +508,10 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     }
     if (started.status === 'rejected') {
       options.attempts.dispose(executionId);
+      if (started.error.code === 'MODEL_UNAVAILABLE') {
+        complete(current, { status: 'model_unavailable', localDate: current.localDate });
+        return;
+      }
       complete(current, failureResult(
         current.localDate,
         'agent_execution_failed',

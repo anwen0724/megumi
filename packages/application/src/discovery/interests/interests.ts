@@ -1,3 +1,4 @@
+import type { ModelPreparationResult } from '@megumi/agent-runtime';
 /*
  * Coordinates public Interest operations and the post-conversation extraction worker.
  */
@@ -48,10 +49,7 @@ export interface CreateInterestsOptions {
   };
   readonly sessions: Pick<SessionCatalog, 'getSession'>;
   readonly history: Pick<SessionHistory, 'getCommittedRunMessages'>;
-  readonly resolveModel: () => Promise<
-    | { readonly status: 'ok'; readonly model: Model<Api> }
-    | { readonly status: 'failed'; readonly failure: { readonly message: string } }
-  >;
+  readonly prepareModel: () => Promise<ModelPreparationResult>;
   readonly extractor: InterestExtractor['extract'];
   readonly ids: {
     createInterestId(): string;
@@ -214,7 +212,7 @@ async function processJob(
 
   const interests = options.repository.listNonDeletedInterests();
   const pendingEvidence = options.repository.listPendingInterestEvidence();
-  const resolvedModel = await observeInterestSpan(options, 'model.resolve', job, options.resolveModel);
+  const resolvedModel = await observeInterestSpan(options, 'model.resolve', job, options.prepareModel);
   if (resolvedModel.status === 'failed') throw new Error(resolvedModel.failure.message);
   throwIfAborted(signal);
   const extracted = await options.extractor({
@@ -224,6 +222,7 @@ async function processJob(
     interests,
     pendingEvidence,
     model: resolvedModel.model,
+    client: resolvedModel.client,
     signal,
   });
   throwIfAborted(signal);
