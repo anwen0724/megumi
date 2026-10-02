@@ -1,9 +1,7 @@
 /* Verifies Recommendation wall-clock scheduling delegates every trigger to one Runtime entry. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createRecommendationScheduler,
-} from '@megumi/application/discovery/scheduling/recommendation-scheduler';
+import { createRecommendationScheduler } from '@megumi/application/discovery/scheduling/recommendation-scheduler';
 
 describe('RecommendationScheduler', () => {
   it('runs startup catch-up after today generation time and schedules the next local day', async () => {
@@ -47,4 +45,23 @@ describe('RecommendationScheduler', () => {
     expect(scheduler.getNextScheduledAt()).toBe('2026-08-27T08:00:00.000Z');
     await scheduler.shutdown();
   });
+});
+
+it('applies a changed generation time to the running schedule', async () => {
+  let time = '08:00';
+  const scheduler = createRecommendationScheduler({
+    now: () => '2026-08-27T07:00:00.000Z',
+    timezone: () => 'UTC',
+    generationTime: () => time,
+    ensure: async () => undefined,
+    onScheduledError: (error) => {
+      throw error;
+    },
+    timers: { setTimeout: () => 1, clearTimeout: () => undefined },
+  });
+  await scheduler.start();
+  time = '09:30';
+  scheduler.updateSchedule();
+  expect(scheduler.getNextScheduledAt()).toBe('2026-08-27T09:30:00.000Z');
+  await scheduler.shutdown();
 });

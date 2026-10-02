@@ -24,12 +24,16 @@ export interface Candidates {
   getStatus(): CandidateSupplyStatus;
   start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   ensureSupply(trigger: CandidateSupplyTrigger): Promise<CandidateSupplyResult>;
+  updateSchedule(): void;
   shutdown(): Promise<void>;
 }
 
 export type CandidateSupplyStatus =
   | { readonly status: 'idle' | 'running' }
-  | { readonly status: 'failed'; readonly failure: Extract<CandidateSupplyResult, { status: 'failed' }>['failure'] };
+  | {
+      readonly status: 'failed';
+      readonly failure: Extract<CandidateSupplyResult, { status: 'failed' }>['failure'];
+    };
 
 export interface CreateCandidatesOptions {
   readonly repository: DiscoveryRepository;
@@ -48,9 +52,7 @@ export interface CreateCandidatesOptions {
 }
 
 /** Creates the independent Candidate Supply background owner. */
-export function createCandidates(
-  options: CreateCandidatesOptions,
-): Candidates {
+export function createCandidates(options: CreateCandidatesOptions): Candidates {
   const timers = options.timers ?? nodeTimers();
   let activeCompletion: Promise<CandidateSupplyResult> | undefined;
   let stopped = false;
@@ -64,22 +66,24 @@ export function createCandidates(
     const requestId = options.ids.createRequestId();
     const requestedAt = parseTimestamp(options.now());
     if (activeCompletion) {
-      return Promise.resolve(notNeeded(
-        requestId,
-        trigger,
-        requestedAt,
-        options.now(),
-        'supply_in_progress',
-      ));
+      return Promise.resolve(
+        notNeeded(requestId, trigger, requestedAt, options.now(), 'supply_in_progress'),
+      );
     }
     let completion: Promise<CandidateSupplyResult>;
-    completion = executeSupply(options, requestId, trigger, requestedAt).then((result) => {
-      lastResult = result;
-      return result;
-    }).finally(() => {
-      if (activeCompletion === completion) activeCompletion = undefined;
-      schedule();
-    });
+    completion = executeSupply(options, requestId, trigger, requestedAt)
+      .then((result) => {
+        lastResult = result;
+        return result;
+      })
+      .finally(() => {
+        if (activeCompletion === completion) activeCompletion = undefined;
+        try {
+          schedule();
+        } catch (error) {
+          reportBackgroundError(options, error);
+        }
+      });
     activeCompletion = completion;
     return completion;
   }
@@ -87,16 +91,10 @@ export function createCandidates(
   function schedule(): void {
     if (stopped || !automaticTriggers) return;
     if (timer !== undefined) timers.clear(timer);
-    let intervalMinutes: number;
-    try {
-      intervalMinutes = positiveInteger(
-        readConfiguration(options.settings).discovery.candidateSupplyCheckIntervalMinutes,
-        'candidateSupplyCheckIntervalMinutes',
-      );
-    } catch (error) {
-      reportBackgroundError(options, error);
-      return;
-    }
+    const intervalMinutes = positiveInteger(
+      readConfiguration(options.settings).discovery.candidateSupplyCheckIntervalMinutes,
+      'candidateSupplyCheckIntervalMinutes',
+    );
     timer = timers.set(intervalMinutes * 60_000, () => {
       timer = undefined;
       void ensureSupply('scheduled').catch((error) => reportBackgroundError(options, error));
@@ -113,7 +111,10 @@ export function createCandidates(
         const settings = snapshot.settings.config.discovery;
         if (settings.candidateSupplyConfirmed) return { status: 'already_confirmed' as const };
         const pendingBeforeConfirmation = activeCompletion;
-        const saved = options.settings.updateSettings({ patch: { discovery: { candidateSupplyConfirmed: true } }, expectedRevision: snapshot.settings.revision });
+        const saved = options.settings.updateSettings({
+          patch: { discovery: { candidateSupplyConfirmed: true } },
+          expectedRevision: snapshot.settings.revision,
+        });
         if (saved.status === 'rejected') throw new Error(saved.error.message);
         if (stopped) throw new Error('Candidate Supply is shutting down.');
         // Consent and business completion are distinct: never keep the UI waiting for the Agent.
@@ -123,7 +124,9 @@ export function createCandidates(
           if (!stopped) await ensureSupply('supply_conditions_changed');
         })().catch((error) => reportBackgroundError(options, error));
         return { status: 'confirmed' as const };
-      })().finally(() => { confirmation = undefined; });
+      })().finally(() => {
+        confirmation = undefined;
+      });
       return confirmation;
     },
     getStatus() {
@@ -139,6 +142,7 @@ export function createCandidates(
       }
     },
     ensureSupply,
+    updateSchedule: schedule,
     async shutdown() {
       stopped = true;
       automaticTriggers = false;
@@ -156,12 +160,9 @@ async function executeSupply(
   requestedAt: string,
 ): Promise<CandidateSupplyResult> {
   try {
-    return await withTrace(options.observability, requestId, () => runCheck(
-      options,
-      requestId,
-      trigger,
-      requestedAt,
-    ));
+    return await withTrace(options.observability, requestId, () =>
+      runCheck(options, requestId, trigger, requestedAt),
+    );
   } catch (error) {
     return {
       ...baseResult(requestId, trigger, requestedAt, options.now(), 0, 0),
@@ -188,7 +189,8 @@ async function runCheck(
     candidateValidityDays: configuration.candidateValidityDays,
     candidateContentExcerptMaxCharacters: configuration.candidateContentExcerptMaxCharacters,
   });
-  const activeInterests = options.repository.listNonDeletedInterests()
+  const activeInterests = options.repository
+    .listNonDeletedInterests()
     .filter(({ status }) => status === 'active');
   if (activeInterests.length === 0) {
     return notNeeded(requestId, trigger, requestedAt, options.now(), 'no_active_interest');
@@ -200,7 +202,11 @@ async function runCheck(
   if (before.minimumShortfall === 0) {
     return notNeeded(requestId, trigger, requestedAt, options.now(), 'no_gap');
   }
-  const readySourceIds = readySources(options.sourceRegistry, configuration.enabledSources, options.observability);
+  const readySourceIds = readySources(
+    options.sourceRegistry,
+    configuration.enabledSources,
+    options.observability,
+  );
   if (readySourceIds.length === 0) {
     return {
       ...baseResult(requestId, trigger, requestedAt, options.now(), 0, 0),
@@ -212,18 +218,29 @@ async function runCheck(
   }
   const executionId = randomUUID();
   options.attempts.start({
-    executionId, startedAt: options.now(), trigger, repository: options.repository,
-    sourceRegistry: options.sourceRegistry, enabledSourceIds: readySourceIds,
-    settings: poolSettings, twitterBudget: configuration.twitterBudget, now: options.now,
+    executionId,
+    startedAt: options.now(),
+    trigger,
+    repository: options.repository,
+    sourceRegistry: options.sourceRegistry,
+    enabledSourceIds: readySourceIds,
+    settings: poolSettings,
+    twitterBudget: configuration.twitterBudget,
+    now: options.now,
   });
   try {
     const started = await options.runtime.startRun({
-      kind: 'candidate_supply', runId: executionId, requestId, trigger,
+      kind: 'candidate_supply',
+      runId: executionId,
+      requestId,
+      trigger,
+      modelSelection: configuration.candidateSupplyModel,
     });
     if (started.status === 'rejected') {
       return failureResult(requestId, trigger, requestedAt, options.now(), before, {
         code: started.error.code === 'MODEL_UNAVAILABLE' ? 'model_unavailable' : started.error.code,
-        message: started.error.message, retryable: started.error.code === 'MODEL_UNAVAILABLE',
+        message: started.error.message,
+        retryable: started.error.code === 'MODEL_UNAVAILABLE',
       });
     }
     const outcome = await started.run.completion;
@@ -314,7 +331,12 @@ function readySources(
     if (!base.enabled) return { ...base, selected: false, reason: 'disabled' };
     try {
       const availability = registry.get(id)?.getAvailability();
-      return { ...base, selected: availability?.state === 'ready', reason: availability?.state ?? 'unregistered', availability };
+      return {
+        ...base,
+        selected: availability?.state === 'ready',
+        reason: availability?.state ?? 'unregistered',
+        availability,
+      };
     } catch {
       return { ...base, selected: false, reason: 'availability_read_failed' };
     }
@@ -333,14 +355,15 @@ function countAdditions(
   summary: ReturnType<CandidateSupplyAttempts['summarize']>,
 ): { readonly candidates: number; readonly matches: number } {
   const beforeCandidateIds = new Set(before.candidates.map(({ candidate }) => candidate.id));
-  const beforeMatchIds = new Set(before.candidates.flatMap(({ interestMatches }) => (
-    interestMatches.map(({ id }) => id)
-  )));
+  const beforeMatchIds = new Set(
+    before.candidates.flatMap(({ interestMatches }) => interestMatches.map(({ id }) => id)),
+  );
   const snapshotCandidates = after
     ? after.candidates.filter(({ candidate }) => !beforeCandidateIds.has(candidate.id)).length
     : 0;
   const snapshotMatches = after
-    ? after.candidates.flatMap(({ interestMatches }) => interestMatches)
+    ? after.candidates
+        .flatMap(({ interestMatches }) => interestMatches)
         .filter(({ id }) => !beforeMatchIds.has(id)).length
     : 0;
   return {
@@ -418,11 +441,14 @@ async function withTrace(
   const runOnce = () => (pending ??= operation());
   if (!observability) return runOnce();
   try {
-    return await observability.withTrace({
-      kind: 'candidate_supply',
-      correlation: { requestId },
-      classifyResult: classifyResult,
-    }, runOnce);
+    return await observability.withTrace(
+      {
+        kind: 'candidate_supply',
+        correlation: { requestId },
+        classifyResult: classifyResult,
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }
@@ -459,7 +485,8 @@ function reportBackgroundError(options: CreateCandidatesOptions, error: unknown)
 }
 
 function positiveInteger(value: number, name: string): number {
-  if (!Number.isInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer.`);
+  if (!Number.isInteger(value) || value <= 0)
+    throw new Error(`${name} must be a positive integer.`);
   return value;
 }
 

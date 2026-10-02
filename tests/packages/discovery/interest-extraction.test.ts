@@ -20,13 +20,18 @@ const model = {
 
 describe('Interest extractor', () => {
   it('provides only the user turn, reference reply, and current Interest facts and parses JSON', async () => {
-    const completeSimple = vi.fn(async () => ({
-      stopReason: 'stop',
-      content: [{
-        type: 'text',
-        text: '```json\n{"evidence":[{"description":"Agent 工程化","effect":"support","confidence":"high"}]}\n```',
-      }],
-    } as any));
+    const completeSimple = vi.fn(
+      async () =>
+        ({
+          stopReason: 'stop',
+          content: [
+            {
+              type: 'text',
+              text: '```json\n{"evidence":[{"description":"Agent 工程化","effect":"support","confidence":"high"}]}\n```',
+            },
+          ],
+        }) as any,
+    );
     const extractor = createInterestExtractor({});
 
     await expect(extractor.extract({ ...input(), client: { completeSimple } })).resolves.toEqual({
@@ -40,7 +45,10 @@ describe('Interest extractor', () => {
 
   it('rejects invalid model JSON instead of persisting a partial interpretation', async () => {
     const extractor = createInterestExtractor({});
-    const completeSimple = async () => ({ stopReason: 'stop', content: [{ type: 'text', text: '{"evidence":[{"confidence":"certain"}]}' }] });
+    const completeSimple = async () => ({
+      stopReason: 'stop',
+      content: [{ type: 'text', text: '{"evidence":[{"confidence":"certain"}]}' }],
+    });
     await expect(extractor.extract({ ...input(), client: { completeSimple } })).rejects.toThrow();
   });
 });
@@ -49,8 +57,12 @@ describe('Interest extraction queue', () => {
   it('reports each worker failure once and continues draining later jobs', async () => {
     const failedSequences: number[] = [];
     const queue = createInterestExtractionQueue({
-      process: async (job) => { throw new Error(`failed:${job.sequence}`); },
-      onError: (_error, job) => { failedSequences.push(job.sequence); },
+      process: async (job) => {
+        throw new Error(`failed:${job.sequence}`);
+      },
+      onError: (_error, job) => {
+        failedSequences.push(job.sequence);
+      },
     });
     for (const index of [1, 2]) {
       queue.submit({
@@ -95,14 +107,16 @@ describe('Interest extraction queue', () => {
     expect(shutdown).toBeInstanceOf(Promise);
     await shutdown;
     expect(workerFinished).toBe(true);
-    expect(queue.submit({
-      sessionId: 'session:2',
-      executionId: 'execution:2',
-      userMessageId: 'user:2',
-      assistantMessageId: 'assistant:2',
-      completedAt: '2026-08-22T10:01:00.000Z',
-      queuedAt: '2026-08-22T10:01:00.000Z',
-    })).toBeUndefined();
+    expect(
+      queue.submit({
+        sessionId: 'session:2',
+        executionId: 'execution:2',
+        userMessageId: 'user:2',
+        assistantMessageId: 'assistant:2',
+        completedAt: '2026-08-22T10:01:00.000Z',
+        queuedAt: '2026-08-22T10:01:00.000Z',
+      }),
+    ).toBeUndefined();
   });
 
   it('starts observation when a job is accepted before worker processing begins', async () => {
@@ -119,8 +133,11 @@ describe('Interest extraction queue', () => {
     });
 
     queue.submit({
-      sessionId: 'session:1', executionId: 'execution:1', userMessageId: 'user:1',
-      assistantMessageId: 'assistant:1', completedAt: '2026-08-22T10:00:00.000Z',
+      sessionId: 'session:1',
+      executionId: 'execution:1',
+      userMessageId: 'user:1',
+      assistantMessageId: 'assistant:1',
+      completedAt: '2026-08-22T10:00:00.000Z',
       queuedAt: '2026-08-22T10:00:00.000Z',
     });
 

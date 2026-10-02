@@ -3,8 +3,20 @@
  */
 import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Activity, AudioLines, Bot, Boxes, CheckCircle2, Info, Palette, Rss, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Activity,
+  AudioLines,
+  Bot,
+  Boxes,
+  CheckCircle2,
+  Info,
+  Palette,
+  Rss,
+  ShieldCheck,
+} from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
+import { DiscoverySettingsPanel } from '../features/discovery-settings/DiscoverySettingsPanel';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ContentSourcesSettingsPanel } from '../features/content-sources-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
@@ -13,15 +25,18 @@ import { VoiceSettingsPanel } from '../features/voice-settings';
 import { AboutMegumiPanel, useApplicationUpdateStore } from '../features/application-update';
 import { ThemeSelector } from '../shared/theme';
 import { LanguageSelector } from '../shared/i18n';
-import {
-  Button,
-  SettingsPageHeader,
-  SettingsRow,
-  SettingsSection,
-  cx,
-} from '../shared/ui';
+import { Button, SettingsPageHeader, SettingsRow, SettingsSection, cx } from '../shared/ui';
 
-export type SettingsCategory = 'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'diagnostics' | 'security' | 'about';
+export type SettingsCategory =
+  | 'discovery'
+  | 'appearance'
+  | 'voice'
+  | 'models'
+  | 'skills'
+  | 'sources'
+  | 'diagnostics'
+  | 'security'
+  | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -35,7 +50,10 @@ interface SettingsCategoryItem {
   icon: typeof Palette;
 }
 
-const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: SettingsCategoryItem[] }> = [
+const categoryGroups: Array<{
+  id: 'personal' | 'aiTools' | 'support';
+  items: SettingsCategoryItem[];
+}> = [
   {
     id: 'personal',
     items: [
@@ -47,6 +65,7 @@ const categoryGroups: Array<{ id: 'personal' | 'aiTools' | 'support'; items: Set
     id: 'aiTools',
     items: [
       { id: 'models', icon: Bot },
+      { id: 'discovery', icon: Rss },
       { id: 'skills', icon: Boxes },
       { id: 'sources', icon: Rss },
       { id: 'security', icon: ShieldCheck },
@@ -67,7 +86,12 @@ function activeCategoryLabel(category: SettingsCategory): SettingsCategoryItem {
   return categories.find((item) => item.id === category) ?? categories[0];
 }
 
-export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWidth = 288, onStartSidebarResize }: SettingsPageProps) {
+export function SettingsPage({
+  onDone,
+  initialCategory = 'appearance',
+  sidebarWidth = 288,
+  onStartSidebarResize,
+}: SettingsPageProps) {
   const { t } = useTranslation('settings');
   const [category, setCategory] = useState<SettingsCategory>(initialCategory);
   const updateSnapshot = useApplicationUpdateStore((state) => state.snapshot);
@@ -157,13 +181,18 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
                             aria-hidden="true"
                             className={selected ? 'text-[var(--color-accent)]' : undefined}
                           />
-                          <span className="min-w-0 flex-1 truncate">{t(`categories.${item.id}.label`)}</span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {t(`categories.${item.id}.label`)}
+                          </span>
                           {item.id === 'about' && updatePending ? (
                             <span
                               aria-label={t('about.updateBadgeLabel')}
                               className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-accent-soft)] px-1.5 py-0.5 text-[0.65rem] font-semibold text-[var(--color-accent)]"
                             >
-                              <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+                              <span
+                                className="size-1.5 rounded-full bg-current"
+                                aria-hidden="true"
+                              />
                               {t('about.updateBadge')}
                             </span>
                           ) : null}
@@ -207,6 +236,7 @@ export function SettingsPage({ onDone, initialCategory = 'appearance', sidebarWi
                 </div>
               ) : null}
 
+              {category === 'discovery' ? <DiscoverySettingsPanel /> : null}
               {category === 'models' ? <ProviderSettingsPanel /> : null}
 
               {category === 'voice' ? <VoiceSettingsPanel /> : null}

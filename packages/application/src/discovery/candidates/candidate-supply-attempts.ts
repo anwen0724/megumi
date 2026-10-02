@@ -3,7 +3,11 @@
  */
 import type { SettingsConfiguration } from '../../settings/settings-schema';
 import { randomUUID } from 'node:crypto';
-import type { Observability, OperationCompletion, TraceCorrelation } from '../../observability/index';
+import type {
+  Observability,
+  OperationCompletion,
+  TraceCorrelation,
+} from '../../observability/index';
 import type { RawToolResult } from '@megumi/agent-runtime/tools/index';
 import {
   CandidateSupplySearchInputSchema,
@@ -95,9 +99,11 @@ interface ToolRequest {
 }
 
 /** Creates the transient Tool owner shared by Agent Executions and Context. */
-export function createCandidateSupplyAttempts(options: {
-  readonly observability?: Observability;
-} = {}): CandidateSupplyAttempts {
+export function createCandidateSupplyAttempts(
+  options: {
+    readonly observability?: Observability;
+  } = {},
+): CandidateSupplyAttempts {
   const attempts = new Map<string, CandidateSupplyAttempt>();
 
   return {
@@ -135,13 +141,19 @@ export function createCandidateSupplyAttempts(options: {
     },
     async searchContent(request) {
       const attempt = attempts.get(request.executionId);
-      if (!attempt) return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
-      if (request.signal.aborted) return toolError('tool_cancelled', 'Candidate search was cancelled.');
+      if (!attempt)
+        return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
+      if (request.signal.aborted)
+        return toolError('tool_cancelled', 'Candidate search was cancelled.');
       const parsed = CandidateSupplySearchInputSchema.safeParse(request.input);
-      if (!parsed.success) return toolError('invalid_search_request', 'Candidate search input is invalid.');
+      if (!parsed.success)
+        return toolError('invalid_search_request', 'Candidate search input is invalid.');
       const source = attempt.sourceRegistry.get(parsed.data.sourceId);
       if (!source || !attempt.enabledSourceIds.has(parsed.data.sourceId)) {
-        return toolError('source_not_available', 'Source is not enabled for this Candidate Supply execution.');
+        return toolError(
+          'source_not_available',
+          'Source is not enabled for this Candidate Supply execution.',
+        );
       }
       let availability;
       try {
@@ -153,70 +165,84 @@ export function createCandidateSupplyAttempts(options: {
         return toolError('source_not_available', `Source is not ready: ${availability.state}.`);
       }
       if (!source.descriptor.supportedModes.includes(parsed.data.mode)) {
-        return toolError('source_mode_unsupported', 'Source does not support the requested search mode.');
+        return toolError(
+          'source_mode_unsupported',
+          'Source does not support the requested search mode.',
+        );
       }
-      return withSourceLock(attempt, source.descriptor.id, () => observeOperation(
-        options.observability,
-        'source.search',
-        { executionId: request.executionId, sourceId: source.descriptor.id },
-        async () => {
-          let limit = parsed.data.limit;
-          if (source.descriptor.id === 'twitter') {
-            const budget = attempt.twitterBudget;
-            if (attempt.twitterSearchCalls >= budget.maxSearchCalls || attempt.twitterResults >= budget.maxResultsPerAttempt) {
-              return toolError('source_budget_exhausted', 'Twitter search budget has been reached for this attempt.');
+      return withSourceLock(attempt, source.descriptor.id, () =>
+        observeOperation(
+          options.observability,
+          'source.search',
+          { executionId: request.executionId, sourceId: source.descriptor.id },
+          async () => {
+            let limit = parsed.data.limit;
+            if (source.descriptor.id === 'twitter') {
+              const budget = attempt.twitterBudget;
+              if (
+                attempt.twitterSearchCalls >= budget.maxSearchCalls ||
+                attempt.twitterResults >= budget.maxResultsPerAttempt
+              ) {
+                return toolError(
+                  'source_budget_exhausted',
+                  'Twitter search budget has been reached for this attempt.',
+                );
+              }
+              limit = Math.min(
+                limit,
+                budget.maxResultsPerSearch,
+                budget.maxResultsPerAttempt - attempt.twitterResults,
+              );
+              attempt.twitterSearchCalls += 1;
             }
-            limit = Math.min(limit, budget.maxResultsPerSearch, budget.maxResultsPerAttempt - attempt.twitterResults);
-            attempt.twitterSearchCalls += 1;
-          }
-          const result = await source.search({
-            query: parsed.data.query,
-            mode: parsed.data.mode,
-            limit,
-            signal: request.signal,
-            onProviderResponse: (value) => recordContent(
-              options.observability,
-              'source.provider_response',
-              value,
-              { executionId: request.executionId, sourceId: source.descriptor.id },
-            ),
-          });
-          recordContent(
-            options.observability,
-            'source.result',
-            result,
-            { executionId: request.executionId, sourceId: source.descriptor.id },
-          );
-          if (result.status === 'failed') {
-            attempt.sourceFailureCount += 1;
-            return toolError(result.failure.code, result.failure.message);
-          }
-          const results = result.items.slice(0, limit).flatMap((item) => {
-            const validated = SourceContentSchema.safeParse(item);
-            if (!validated.success) return [];
-            const sourceResult: SourceResult = {
-              resultId: `source-result:${randomUUID()}`,
-              source,
-              content: validated.data,
-            };
-            attempt.results.set(sourceResult.resultId, sourceResult);
-            return [{ resultId: sourceResult.resultId, content: sourceResult.content }];
-          });
-          if (source.descriptor.id === 'twitter') attempt.twitterResults += results.length;
-          attempt.searchesSucceeded += 1;
-          attempt.searchResultCount += results.length;
-          return toolSuccess({
-            status: 'success',
-            results,
-            pool: attempt.repository.getCandidatePoolSnapshot(attempt.settings),
-          });
-        },
-      ));
+            const result = await source.search({
+              query: parsed.data.query,
+              mode: parsed.data.mode,
+              limit,
+              signal: request.signal,
+              onProviderResponse: (value) =>
+                recordContent(options.observability, 'source.provider_response', value, {
+                  executionId: request.executionId,
+                  sourceId: source.descriptor.id,
+                }),
+            });
+            recordContent(options.observability, 'source.result', result, {
+              executionId: request.executionId,
+              sourceId: source.descriptor.id,
+            });
+            if (result.status === 'failed') {
+              attempt.sourceFailureCount += 1;
+              return toolError(result.failure.code, result.failure.message);
+            }
+            const results = result.items.slice(0, limit).flatMap((item) => {
+              const validated = SourceContentSchema.safeParse(item);
+              if (!validated.success) return [];
+              const sourceResult: SourceResult = {
+                resultId: `source-result:${randomUUID()}`,
+                source,
+                content: validated.data,
+              };
+              attempt.results.set(sourceResult.resultId, sourceResult);
+              return [{ resultId: sourceResult.resultId, content: sourceResult.content }];
+            });
+            if (source.descriptor.id === 'twitter') attempt.twitterResults += results.length;
+            attempt.searchesSucceeded += 1;
+            attempt.searchResultCount += results.length;
+            return toolSuccess({
+              status: 'success',
+              results,
+              pool: attempt.repository.getCandidatePoolSnapshot(attempt.settings),
+            });
+          },
+        ),
+      );
     },
     async readSourceCandidate(request) {
       const attempt = attempts.get(request.executionId);
-      if (!attempt) return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
-      if (request.signal.aborted) return toolError('tool_cancelled', 'Candidate detail read was cancelled.');
+      if (!attempt)
+        return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
+      if (request.signal.aborted)
+        return toolError('tool_cancelled', 'Candidate detail read was cancelled.');
       const resultId = recordString(request.input, 'resultId');
       const sourceResult = resultId ? attempt.results.get(resultId) : undefined;
       if (!resultId || !sourceResult) {
@@ -225,58 +251,62 @@ export function createCandidateSupplyAttempts(options: {
       if (!sourceResult.source.read) {
         return toolError('read_unavailable', 'Source cannot provide additional detail.');
       }
-      return withSourceLock(attempt, sourceResult.source.descriptor.id, () => observeOperation(
-        options.observability,
-        'source.read',
-        {
-          executionId: request.executionId,
-          sourceId: sourceResult.source.descriptor.id,
-        },
-        async () => {
-          const read = await sourceResult.source.read!({
-            ...(sourceResult.content.sourceContentId
-              ? { sourceContentId: sourceResult.content.sourceContentId }
-              : {}),
-            url: sourceResult.content.canonicalUrl,
-            signal: request.signal,
-            onProviderResponse: (value) => recordContent(
-              options.observability,
-              'source.provider_response',
-              value,
-              {
-                executionId: request.executionId,
-                sourceId: sourceResult.source.descriptor.id,
-              },
-            ),
-          });
-          recordContent(options.observability, 'source.result', read, {
+      return withSourceLock(attempt, sourceResult.source.descriptor.id, () =>
+        observeOperation(
+          options.observability,
+          'source.read',
+          {
             executionId: request.executionId,
             sourceId: sourceResult.source.descriptor.id,
-          });
-          if (read.status === 'failed') {
-            attempt.sourceFailureCount += 1;
-            return toolError(read.failure.code, read.failure.message);
-          }
-          sourceResult.content = read.detail;
-          return toolSuccess({
-            status: 'success',
-            result: { resultId, content: read.detail },
-          });
-        },
-      ));
+          },
+          async () => {
+            const read = await sourceResult.source.read!({
+              ...(sourceResult.content.sourceContentId
+                ? { sourceContentId: sourceResult.content.sourceContentId }
+                : {}),
+              url: sourceResult.content.canonicalUrl,
+              signal: request.signal,
+              onProviderResponse: (value) =>
+                recordContent(options.observability, 'source.provider_response', value, {
+                  executionId: request.executionId,
+                  sourceId: sourceResult.source.descriptor.id,
+                }),
+            });
+            recordContent(options.observability, 'source.result', read, {
+              executionId: request.executionId,
+              sourceId: sourceResult.source.descriptor.id,
+            });
+            if (read.status === 'failed') {
+              attempt.sourceFailureCount += 1;
+              return toolError(read.failure.code, read.failure.message);
+            }
+            sourceResult.content = read.detail;
+            return toolSuccess({
+              status: 'success',
+              result: { resultId, content: read.detail },
+            });
+          },
+        ),
+      );
     },
     async submitCandidates(request) {
       const attempt = attempts.get(request.executionId);
-      if (!attempt) return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
-      if (request.signal.aborted) return toolError('tool_cancelled', 'Candidate submission was cancelled.');
+      if (!attempt)
+        return toolError('attempt_not_found', 'Candidate Supply attempt was not found.');
+      if (request.signal.aborted)
+        return toolError('tool_cancelled', 'Candidate submission was cancelled.');
       const parsed = CandidateSupplySubmitInputSchema.safeParse(request.input);
-      if (!parsed.success) return toolError('invalid_submission', 'Candidate submission input is invalid.');
+      if (!parsed.success)
+        return toolError('invalid_submission', 'Candidate submission input is invalid.');
       const sourceResults = parsed.data.items.map((item) => ({
         item,
         result: attempt.results.get(item.resultId),
       }));
       if (sourceResults.some(({ result }) => !result)) {
-        return toolError('source_result_not_found', 'Submission contains a result outside this execution.');
+        return toolError(
+          'source_result_not_found',
+          'Submission contains a result outside this execution.',
+        );
       }
       return observeOperation(
         options.observability,
@@ -361,11 +391,14 @@ async function observeOperation(
   const runOnce = () => (pending ??= operation());
   if (!observability) return runOnce();
   try {
-    return await observability.withSpan({
-      name,
-      correlation,
-      classifyResult,
-    }, runOnce);
+    return await observability.withSpan(
+      {
+        name,
+        correlation,
+        classifyResult,
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }

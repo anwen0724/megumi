@@ -1,7 +1,11 @@
 /* Verifies Candidate Supply Agent tools keep search evidence transient and persist only submitted facts. */
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
+import {
+  createDatabase,
+  migrateDatabase,
+  type DatabaseConnection,
+} from '@megumi/application/storage/index';
 import {
   createCandidateSupplyAttempts,
   createCandidateSupplyRepository,
@@ -28,7 +32,10 @@ describe('CandidateSupplyAttempts', () => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
     createDiscoveryRepository({ database }).applyInterestChange({
-      action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
+      action: 'create',
+      interestId: 'interest:1',
+      description: 'Agent architecture',
+      now,
     });
     let candidate = 0;
     let match = 0;
@@ -48,39 +55,54 @@ describe('CandidateSupplyAttempts', () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start(attemptInput(repository, source()));
 
-    const searched = await attempts.searchContent(toolRequest({
-      sourceId: 'source:1',
-      query: 'Agent architecture',
-      mode: 'relevance',
-      limit: 10,
-      targetInterestIds: ['interest:1'],
-    }));
+    const searched = await attempts.searchContent(
+      toolRequest({
+        sourceId: 'source:1',
+        query: 'Agent architecture',
+        mode: 'relevance',
+        limit: 10,
+        targetInterestIds: ['interest:1'],
+      }),
+    );
 
     expect(searched).toMatchObject({
       content: {
         status: 'success',
-        results: [expect.objectContaining({
-          resultId: expect.any(String),
-          content: expect.objectContaining({ title: 'Agent architecture' }),
-        })],
+        results: [
+          expect.objectContaining({
+            resultId: expect.any(String),
+            content: expect.objectContaining({ title: 'Agent architecture' }),
+          }),
+        ],
       },
     });
-    expect(database.prepare<{ count: number }>({
-      sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
-    }).get()?.count).toBe(0);
+    expect(
+      database
+        .prepare<{ count: number }>({
+          sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
+        })
+        .get()?.count,
+    ).toBe(0);
 
-    const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!.resultId;
-    const submitted = await attempts.submitCandidates(toolRequest({
-      items: [{
-        resultId,
-        contentSummary: 'A grounded summary of Agent architecture patterns.',
-        matches: [{
-          interestId: 'interest:1',
-          relevance: 'direct',
-          matchReason: 'Directly discusses Agent architecture.',
-        }],
-      }],
-    }));
+    const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!
+      .resultId;
+    const submitted = await attempts.submitCandidates(
+      toolRequest({
+        items: [
+          {
+            resultId,
+            contentSummary: 'A grounded summary of Agent architecture patterns.',
+            matches: [
+              {
+                interestId: 'interest:1',
+                relevance: 'direct',
+                matchReason: 'Directly discusses Agent architecture.',
+              },
+            ],
+          },
+        ],
+      }),
+    );
 
     expect(submitted).toMatchObject({
       content: {
@@ -102,10 +124,17 @@ describe('CandidateSupplyAttempts', () => {
   it('keeps Source detail transient until submission and then persists bounded evidence', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start(attemptInput(repository, source()));
-    const searched = await attempts.searchContent(toolRequest({
-      sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
-    }));
-    const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!.resultId;
+    const searched = await attempts.searchContent(
+      toolRequest({
+        sourceId: 'source:1',
+        query: 'Agent',
+        mode: 'recent',
+        limit: 1,
+        targetInterestIds: [],
+      }),
+    );
+    const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!
+      .resultId;
 
     const read = await attempts.readSourceCandidate(toolRequest({ resultId }));
 
@@ -118,19 +147,31 @@ describe('CandidateSupplyAttempts', () => {
         },
       },
     });
-    expect(database.prepare<{ count: number }>({
-      sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
-    }).get()?.count).toBe(0);
+    expect(
+      database
+        .prepare<{ count: number }>({
+          sql: 'SELECT COUNT(*) AS count FROM discovery_candidates',
+        })
+        .get()?.count,
+    ).toBe(0);
 
-    await attempts.submitCandidates(toolRequest({
-      items: [{
-        resultId,
-        contentSummary: 'The Source explains implementation details.',
-        matches: [{
-          interestId: 'interest:1', relevance: 'direct', matchReason: 'Direct implementation guidance.',
-        }],
-      }],
-    }));
+    await attempts.submitCandidates(
+      toolRequest({
+        items: [
+          {
+            resultId,
+            contentSummary: 'The Source explains implementation details.',
+            matches: [
+              {
+                interestId: 'interest:1',
+                relevance: 'direct',
+                matchReason: 'Direct implementation guidance.',
+              },
+            ],
+          },
+        ],
+      }),
+    );
 
     expect(repository.findCandidateById('candidate:1')).toMatchObject({
       candidate: {
@@ -138,9 +179,11 @@ describe('CandidateSupplyAttempts', () => {
         contentExcerpt: 'Full implementation detail.',
         contentTruncated: false,
       },
-      interestMatches: [expect.objectContaining({
-        matchReason: 'Direct implementation guidance.',
-      })],
+      interestMatches: [
+        expect.objectContaining({
+          matchReason: 'Direct implementation guidance.',
+        }),
+      ],
     });
   });
 
@@ -157,12 +200,28 @@ describe('CandidateSupplyAttempts', () => {
       enabledSourceIds: ['source:failed', 'source:1'],
     });
 
-    await expect(attempts.searchContent(toolRequest({
-      sourceId: 'source:failed', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
-    }))).resolves.toMatchObject({ isError: true, content: { code: 'network_error' } });
-    await expect(attempts.searchContent(toolRequest({
-      sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
-    }))).resolves.toMatchObject({ content: { status: 'success' } });
+    await expect(
+      attempts.searchContent(
+        toolRequest({
+          sourceId: 'source:failed',
+          query: 'Agent',
+          mode: 'recent',
+          limit: 1,
+          targetInterestIds: [],
+        }),
+      ),
+    ).resolves.toMatchObject({ isError: true, content: { code: 'network_error' } });
+    await expect(
+      attempts.searchContent(
+        toolRequest({
+          sourceId: 'source:1',
+          query: 'Agent',
+          mode: 'recent',
+          limit: 1,
+          targetInterestIds: [],
+        }),
+      ),
+    ).resolves.toMatchObject({ content: { status: 'success' } });
     expect(attempts.summarize('execution:1')).toMatchObject({
       sourceFailureCount: 1,
       searchResultCount: 1,
@@ -182,50 +241,97 @@ describe('CandidateSupplyAttempts', () => {
     });
     attempts.start(attemptInput(repository, source()));
 
-    await attempts.searchContent(toolRequest({
-      sourceId: 'source:1', query: 'Agent', mode: 'recent', limit: 1, targetInterestIds: [],
-    }));
+    await attempts.searchContent(
+      toolRequest({
+        sourceId: 'source:1',
+        query: 'Agent',
+        mode: 'recent',
+        limit: 1,
+        targetInterestIds: [],
+      }),
+    );
 
-    expect(recordContent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'source.provider_response' }));
+    expect(recordContent).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'source.provider_response' }),
+    );
     expect(recordContent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'source.result' }));
   });
 
   it.each([
-    { budget: { maxSearchCalls: 1, maxResultsPerSearch: 2, maxResultsPerAttempt: 10 }, limits: [2] },
-    { budget: { maxSearchCalls: 5, maxResultsPerSearch: 2, maxResultsPerAttempt: 3 }, limits: [2, 1] },
-  ])('enforces configured Twitter search and result limits: $budget', async ({ budget, limits }) => {
-    const requested: number[] = [];
-    const twitter = source('twitter');
-    twitter.search = async request => {
-      requested.push(request.limit);
-      return { status: 'success', items: Array.from({ length: request.limit }, (_, index) => ({
-        sourceId: 'twitter', sourceName: 'Twitter', sourceContentId: String(index),
-        canonicalUrl: `https://example.com/post/${index}`, contentType: 'post', title: 'Agent', description: 'Details',
-      })) };
-    };
-    const attempts = createCandidateSupplyAttempts();
-    attempts.start({ ...attemptInput(repository, twitter), twitterBudget: budget });
-    for (const limit of limits) {
-      const result = await attempts.searchContent(toolRequest({ sourceId: 'twitter', query: 'Agent', mode: 'recent', limit: 20, targetInterestIds: [] }));
-      expect(result).toMatchObject({ content: { results: expect.any(Array) } });
-      expect((result.content as { results: unknown[] }).results).toHaveLength(limit);
-    }
-    expect(await attempts.searchContent(toolRequest({ sourceId: 'twitter', query: 'More', mode: 'recent', limit: 20, targetInterestIds: [] }))).toMatchObject({ isError: true });
-    expect(requested).toEqual(limits);
-  });
+    {
+      budget: { maxSearchCalls: 1, maxResultsPerSearch: 2, maxResultsPerAttempt: 10 },
+      limits: [2],
+    },
+    {
+      budget: { maxSearchCalls: 5, maxResultsPerSearch: 2, maxResultsPerAttempt: 3 },
+      limits: [2, 1],
+    },
+  ])(
+    'enforces configured Twitter search and result limits: $budget',
+    async ({ budget, limits }) => {
+      const requested: number[] = [];
+      const twitter = source('twitter');
+      twitter.search = async (request) => {
+        requested.push(request.limit);
+        return {
+          status: 'success',
+          items: Array.from({ length: request.limit }, (_, index) => ({
+            sourceId: 'twitter',
+            sourceName: 'Twitter',
+            sourceContentId: String(index),
+            canonicalUrl: `https://example.com/post/${index}`,
+            contentType: 'post',
+            title: 'Agent',
+            description: 'Details',
+          })),
+        };
+      };
+      const attempts = createCandidateSupplyAttempts();
+      attempts.start({ ...attemptInput(repository, twitter), twitterBudget: budget });
+      for (const limit of limits) {
+        const result = await attempts.searchContent(
+          toolRequest({
+            sourceId: 'twitter',
+            query: 'Agent',
+            mode: 'recent',
+            limit: 20,
+            targetInterestIds: [],
+          }),
+        );
+        expect(result).toMatchObject({ content: { results: expect.any(Array) } });
+        expect((result.content as { results: unknown[] }).results).toHaveLength(limit);
+      }
+      expect(
+        await attempts.searchContent(
+          toolRequest({
+            sourceId: 'twitter',
+            query: 'More',
+            mode: 'recent',
+            limit: 20,
+            targetInterestIds: [],
+          }),
+        ),
+      ).toMatchObject({ isError: true });
+      expect(requested).toEqual(limits);
+    },
+  );
 
   it('does not implement a Candidate Supply search or read budget', async () => {
     const attempts = createCandidateSupplyAttempts();
     attempts.start(attemptInput(repository, source()));
 
     for (let index = 0; index < 13; index += 1) {
-      await expect(attempts.searchContent(toolRequest({
-        sourceId: 'source:1',
-        query: `Agent ${index}`,
-        mode: 'relevance',
-        limit: 1,
-        targetInterestIds: ['interest:1'],
-      }))).resolves.not.toMatchObject({ isError: true });
+      await expect(
+        attempts.searchContent(
+          toolRequest({
+            sourceId: 'source:1',
+            query: `Agent ${index}`,
+            mode: 'relevance',
+            limit: 1,
+            targetInterestIds: ['interest:1'],
+          }),
+        ),
+      ).resolves.not.toMatchObject({ isError: true });
     }
   });
 });
@@ -255,23 +361,28 @@ function toolRequest(input: unknown) {
 function source(id = 'source:1'): DiscoverySource {
   return {
     descriptor: {
-      id, name: id, access: 'public_http',
-      supportedModes: ['relevance', 'recent'], supportsRead: true,
+      id,
+      name: id,
+      access: 'public_http',
+      supportedModes: ['relevance', 'recent'],
+      supportsRead: true,
     },
     getAvailability: () => ({ state: 'ready' }),
     async search(request) {
       request.onProviderResponse?.({ status: 200, body: { items: 1 } });
       return {
         status: 'success',
-        items: [{
-          sourceId: id,
-          sourceName: id,
-          sourceContentId: 'article:1',
-          canonicalUrl: `https://example.com/${id}/article/1`,
-          contentType: 'article',
-          title: 'Agent architecture',
-          description: 'Concrete patterns and implementation trade-offs.',
-        }],
+        items: [
+          {
+            sourceId: id,
+            sourceName: id,
+            sourceContentId: 'article:1',
+            canonicalUrl: `https://example.com/${id}/article/1`,
+            contentType: 'article',
+            title: 'Agent architecture',
+            description: 'Concrete patterns and implementation trade-offs.',
+          },
+        ],
       };
     },
     async read() {

@@ -25,52 +25,86 @@ export interface DiscoveryConfigurationSettings {
 
 export type DiscoveryConfigurationStore = Pick<Settings, 'readSettings' | 'updateSettings'>;
 
-export const UpdateDiscoveryConfigurationRequestSchema = z.object({
-  recommendationCandidateCheckIntervalSeconds: z.number().int().positive().optional(),
-  conversationRecognitionEnabled: z.boolean().optional(),
-  recommendationGenerationTime: LocalTimeSchema.optional(),
-  recommendationTargetCount: z.number().int().min(1).max(100).optional(),
-  recommendationWorkingSetCount: z.number().int().min(1).max(200).optional(),
-  enabledSources: z.array(z.string().trim().min(1)).optional(),
-  candidatePoolMinimumCount: z.number().int().positive().optional(),
-  candidatePoolMaximumCount: z.number().int().positive().optional(),
-  candidateValidityDays: z.number().int().positive().optional(),
-  candidateContentExcerptMaxCharacters: z.number().int().positive().optional(),
-  candidateSupplyCheckIntervalMinutes: z.number().int().positive().optional(),
-}).strict();
-export const ConnectDiscoverySourceRequestSchema = z.object({
-  sourceId: z.string().trim().min(1),
-}).strict();
+export const UpdateDiscoveryConfigurationRequestSchema = z
+  .object({
+    recommendationCandidateCheckIntervalSeconds: z.number().int().positive().optional(),
+    conversationRecognitionEnabled: z.boolean().optional(),
+    recommendationGenerationTime: LocalTimeSchema.optional(),
+    recommendationTargetCount: z.number().int().min(1).max(100).optional(),
+    recommendationWorkingSetCount: z.number().int().min(1).max(200).optional(),
+    enabledSources: z.array(z.string().trim().min(1)).optional(),
+    candidatePoolMinimumCount: z.number().int().positive().optional(),
+    candidatePoolMaximumCount: z.number().int().positive().optional(),
+    candidateValidityDays: z.number().int().positive().optional(),
+    candidateContentExcerptMaxCharacters: z.number().int().positive().optional(),
+    candidateSupplyCheckIntervalMinutes: z.number().int().positive().optional(),
+  })
+  .strict();
+export const ConnectDiscoverySourceRequestSchema = z
+  .object({
+    sourceId: z.string().trim().min(1),
+  })
+  .strict();
 export const RefreshDiscoverySourceRequestSchema = ConnectDiscoverySourceRequestSchema;
 
-export const DiscoverySourceViewSchema = z.object({
-  sourceId: z.string().trim().min(1),
-  name: z.string().trim().min(1),
-  access: z.enum(['public_http', 'configured_provider', 'browser_session']),
-  supportedModes: z.array(z.enum(['relevance', 'recent'])).min(1),
-  supportsRead: z.boolean(),
-  enabled: z.boolean(),
-  connectionState: z.enum(['ready', 'unknown', 'not_configured', 'login_required', 'rate_limited', 'risk_controlled']),
-  provider: z.string().trim().min(1).optional(),
-  checkedAt: z.string().datetime({ offset: true }).optional(),
-  retryAt: z.string().datetime({ offset: true }).optional(),
-}).strict();
+export const DiscoverySourceViewSchema = z
+  .object({
+    sourceId: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    access: z.enum(['public_http', 'configured_provider', 'browser_session']),
+    supportedModes: z.array(z.enum(['relevance', 'recent'])).min(1),
+    supportsRead: z.boolean(),
+    enabled: z.boolean(),
+    connectionState: z.enum([
+      'ready',
+      'unknown',
+      'not_configured',
+      'login_required',
+      'rate_limited',
+      'risk_controlled',
+    ]),
+    provider: z.string().trim().min(1).optional(),
+    checkedAt: z.string().datetime({ offset: true }).optional(),
+    retryAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
 
-export const DiscoveryConfigurationViewSchema = z.object({
-  recommendationCandidateCheckIntervalSeconds: z.number().int().positive(),
-  conversationRecognitionEnabled: z.boolean(),
-  recommendationGenerationTime: LocalTimeSchema,
-  recommendationTargetCount: z.number().int().min(1).max(100),
-  recommendationWorkingSetCount: z.number().int().min(1).max(200),
-  candidatePoolMinimumCount: z.number().int().positive(),
-  candidatePoolMaximumCount: z.number().int().positive(),
-  candidateValidityDays: z.number().int().positive(),
-  candidateContentExcerptMaxCharacters: z.number().int().positive(),
-  candidateSupplyCheckIntervalMinutes: z.number().int().positive(),
-  sources: z.array(DiscoverySourceViewSchema),
-}).strict();
+export const DiscoveryConfigurationViewSchema = z
+  .object({
+    recommendationCandidateCheckIntervalSeconds: z.number().int().positive(),
+    conversationRecognitionEnabled: z.boolean(),
+    recommendationGenerationTime: LocalTimeSchema,
+    recommendationTargetCount: z.number().int().min(1).max(100),
+    recommendationWorkingSetCount: z.number().int().min(1).max(200),
+    candidatePoolMinimumCount: z.number().int().positive(),
+    candidatePoolMaximumCount: z.number().int().positive(),
+    candidateValidityDays: z.number().int().positive(),
+    candidateContentExcerptMaxCharacters: z.number().int().positive(),
+    candidateSupplyCheckIntervalMinutes: z.number().int().positive(),
+    sources: z.array(DiscoverySourceViewSchema),
+  })
+  .strict();
 
-export type UpdateDiscoveryConfigurationRequest = z.infer<typeof UpdateDiscoveryConfigurationRequestSchema>;
+export const DiscoveryConfigurationUpdateResultSchema = DiscoveryConfigurationViewSchema.extend({
+  scheduling: z.discriminatedUnion('status', [
+    z.object({ status: z.literal('applied') }).strict(),
+    z
+      .object({
+        status: z.literal('failed'),
+        error: z
+          .object({ code: z.literal('DISCOVERY_SCHEDULE_FAILED'), message: z.string() })
+          .strict(),
+      })
+      .strict(),
+  ]),
+});
+export type DiscoveryConfigurationUpdateResult = z.infer<
+  typeof DiscoveryConfigurationUpdateResultSchema
+>;
+
+export type UpdateDiscoveryConfigurationRequest = z.infer<
+  typeof UpdateDiscoveryConfigurationRequestSchema
+>;
 export type ConnectDiscoverySourceRequest = z.infer<typeof ConnectDiscoverySourceRequestSchema>;
 export type RefreshDiscoverySourceRequest = z.infer<typeof RefreshDiscoverySourceRequestSchema>;
 
@@ -104,7 +138,8 @@ export function createDiscoveryConfiguration(input: {
     const settings = read().config.discovery;
     const enabled = new Set(settings.enabledSources);
     return {
-      recommendationCandidateCheckIntervalSeconds: settings.recommendationCandidateCheckIntervalSeconds,
+      recommendationCandidateCheckIntervalSeconds:
+        settings.recommendationCandidateCheckIntervalSeconds,
       conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
       recommendationGenerationTime: settings.recommendationGenerationTime,
       recommendationTargetCount: settings.recommendationTargetCount,
@@ -114,9 +149,13 @@ export function createDiscoveryConfiguration(input: {
       candidateValidityDays: settings.candidateValidityDays,
       candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
       candidateSupplyCheckIntervalMinutes: settings.candidateSupplyCheckIntervalMinutes,
-      sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) => sourceView({
-        descriptor, availability, enabled: enabled.has(descriptor.id),
-      })),
+      sources: input.sourceRegistry.listSources().map(({ descriptor, availability }) =>
+        sourceView({
+          descriptor,
+          availability,
+          enabled: enabled.has(descriptor.id),
+        }),
+      ),
     };
   };
 
@@ -156,7 +195,9 @@ export function createDiscoveryConfiguration(input: {
       });
     },
     async refreshSources(sourceIds) {
-      await input.sourceRegistry.checkSources(sourceIds ?? input.sourceRegistry.listDescriptors().map((source) => source.id));
+      await input.sourceRegistry.checkSources(
+        sourceIds ?? input.sourceRegistry.listDescriptors().map((source) => source.id),
+      );
       return view();
     },
   };

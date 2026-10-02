@@ -1,3 +1,4 @@
+import type { DiscoveryConfigurationUpdateResult } from './discovery-configuration';
 import type { Settings } from '../settings/settings-store';
 /*
  * Composes Discovery business owners while keeping Agent Core as the sole
@@ -5,10 +6,7 @@ import type { Settings } from '../settings/settings-store';
  */
 import { candidatePoolSettings } from './candidates/candidate-pool';
 import type { PreferenceLearningStatus } from './preferences/preference-learning';
-import {
-  createCandidates,
-  type CreateCandidatesOptions,
-} from './candidates/candidates';
+import { createCandidates, type CreateCandidatesOptions } from './candidates/candidates';
 import type {
   CandidatePoolSnapshot,
   CandidateSupplyResult,
@@ -52,7 +50,10 @@ import {
   createPreferenceLearning,
   type CreatePreferenceLearningOptions,
 } from './preferences/preference-learning';
-import type { PreferenceLearningFacts, PreferenceLearningCompletion } from './preferences/preference';
+import type {
+  PreferenceLearningFacts,
+  PreferenceLearningCompletion,
+} from './preferences/preference';
 import type {
   Recommendation,
   RecommendationCollection,
@@ -67,9 +68,19 @@ import {
 } from './recommendations/recommendations';
 import type { UpdateRecommendationStateResult } from './recommendations/recommendation-repository';
 import type { SourceRegistry } from './sources/source-registry';
-import type { PreferenceScopeRequest, PreferenceManagementDetails, PreferenceEvidenceView } from './preferences/preference';
-import type { PreferenceEditResult, PreferenceDeleteResult } from './preferences/preference-learning-repository';
-import type { PreparePreferencesRequest, PreparePreferencesResult } from './preferences/preference-learning';
+import type {
+  PreferenceScopeRequest,
+  PreferenceManagementDetails,
+  PreferenceEvidenceView,
+} from './preferences/preference';
+import type {
+  PreferenceEditResult,
+  PreferenceDeleteResult,
+} from './preferences/preference-learning-repository';
+import type {
+  PreparePreferencesRequest,
+  PreparePreferencesResult,
+} from './preferences/preference-learning';
 
 export interface InterestFacts {
   readonly interests: readonly Interest[];
@@ -95,16 +106,27 @@ export interface Discovery {
   /** Reads current and historical evidence for a visible preference. */
   getPreferenceEvidence(preferenceId: string): PreferenceEvidenceView | undefined;
   /** Saves the user's exact requirement with optimistic concurrency protection. */
-  editPreference(request: { preferenceId: string; expectedRevision: number; statement: string }): PreferenceEditResult;
+  editPreference(request: {
+    preferenceId: string;
+    expectedRevision: number;
+    statement: string;
+  }): PreferenceEditResult;
   /** Removes a preference immediately and preserves its deletion boundary. */
-  deletePreference(request: { preferenceId: string; expectedRevision: number }): PreferenceDeleteResult;
+  deletePreference(request: {
+    preferenceId: string;
+    expectedRevision: number;
+  }): PreferenceDeleteResult;
   /** Internal recommendation and controlled-evaluation entry; not exposed as a Desktop learning action. */
-  preparePreferencesForRecommendation(request: PreparePreferencesRequest): Promise<PreparePreferencesResult>;
+  preparePreferencesForRecommendation(
+    request: PreparePreferencesRequest,
+  ): Promise<PreparePreferencesResult>;
   /** Confirms first Candidate Supply use without waiting for the background execution. */
   confirmCandidateSupply(): Promise<{ readonly status: 'confirmed' | 'already_confirmed' }>;
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
   /** Updates a Session's participation setting and retracts its Evidence when excluded. */
-  setInterestSessionSetting(request: SetInterestSessionSettingRequest): Promise<InterestSessionSetting>;
+  setInterestSessionSetting(
+    request: SetInterestSessionSettingRequest,
+  ): Promise<InterestSessionSetting>;
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   getInterestFacts(request: {
     readonly interestIds: readonly string[];
@@ -112,23 +134,41 @@ export interface Discovery {
   }): InterestFacts;
   retractSessionEvidence(sessionId: string): Promise<void>;
   startBackground(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
-  requestRecommendation(request: { readonly trigger: 'scheduled' | 'startup_catchup' | 'manual' }): Promise<RequestRecommendationResult>;
-  waitRecommendation(request: { readonly requestId: string; readonly timeoutMs: number }): Promise<WaitRecommendationResult>;
+  requestRecommendation(request: {
+    readonly trigger: 'scheduled' | 'startup_catchup' | 'manual';
+  }): Promise<RequestRecommendationResult>;
+  waitRecommendation(request: {
+    readonly requestId: string;
+    readonly timeoutMs: number;
+  }): Promise<WaitRecommendationResult>;
   getTodayRecommendation(): TodayRecommendationResult;
-  getRecommendationCollection(localDate: string, includeHidden?: boolean): RecommendationCollection | undefined;
+  getRecommendationCollection(
+    localDate: string,
+    includeHidden?: boolean,
+  ): RecommendationCollection | undefined;
   getRecommendationById(recommendationId: string): Recommendation | undefined;
   getRecommendationReference(recommendationId: string): RecommendationReferenceContent | undefined;
-  requestCandidateSupply(trigger?: CandidateSupplyTrigger): Promise<CandidateSupplyResult> | undefined;
+  requestCandidateSupply(
+    trigger?: CandidateSupplyTrigger,
+  ): Promise<CandidateSupplyResult> | undefined;
   getCandidatePool(): CandidatePoolSnapshot | undefined;
   /** Supplies Context with this process's current work snapshot, never durable execution history. */
   getActivePreferenceLearningFacts(batchId: string): PreferenceLearningFacts | undefined;
-  getPreferenceLearningCompletion(recommendationId: string): PreferenceLearningCompletion | undefined;
+  getPreferenceLearningCompletion(
+    recommendationId: string,
+  ): PreferenceLearningCompletion | undefined;
   getPreferenceLearningStatus(recommendationId: string): PreferenceLearningStatus;
   getDiscoveryHome(request: GetDiscoveryHomeRequest): Promise<DiscoveryHomeView>;
-  searchRecommendations(request: SearchRecommendationsRequest): Promise<SearchRecommendationsResult>;
-  updateRecommendationState(request: UpdateRecommendationStateRequest): Promise<UpdateRecommendationStateResult>;
+  searchRecommendations(
+    request: SearchRecommendationsRequest,
+  ): Promise<SearchRecommendationsResult>;
+  updateRecommendationState(
+    request: UpdateRecommendationStateRequest,
+  ): Promise<UpdateRecommendationStateResult>;
   getDiscoveryConfiguration(): Promise<DiscoveryConfigurationView>;
-  updateDiscoveryConfiguration(request: UpdateDiscoveryConfigurationRequest): Promise<DiscoveryConfigurationView>;
+  updateDiscoveryConfiguration(
+    request: UpdateDiscoveryConfigurationRequest,
+  ): Promise<DiscoveryConfigurationUpdateResult>;
   connectDiscoverySource(request: ConnectDiscoverySourceRequest): Promise<DiscoverySourceView>;
   refreshDiscoverySource(request: RefreshDiscoverySourceRequest): Promise<DiscoverySourceView>;
   refreshDiscoverySources(): Promise<DiscoveryConfigurationView>;
@@ -142,11 +182,20 @@ export interface CreateDiscoveryOptions {
   readonly recommendation?: CreateRecommendationsOptions;
   readonly candidateSupply?: CreateCandidatesOptions;
   readonly preferenceLearning?: CreatePreferenceLearningOptions;
-  readonly configuration?: { readonly sourceRegistry: SourceRegistry; readonly settings: DiscoveryConfigurationStore };
-  readonly onBackgroundError?: (error: unknown, context: {
-    readonly operation: 'source_refresh' | 'candidate_supply_start'
-      | 'preference_learning_start' | 'recommendation_start';
-  }) => void;
+  readonly configuration?: {
+    readonly sourceRegistry: SourceRegistry;
+    readonly settings: DiscoveryConfigurationStore;
+  };
+  readonly onBackgroundError?: (
+    error: unknown,
+    context: {
+      readonly operation:
+        | 'source_refresh'
+        | 'candidate_supply_start'
+        | 'preference_learning_start'
+        | 'recommendation_start';
+    },
+  ) => void;
 }
 
 /** Composes Megumi's Discovery business operations from optional capabilities. */
@@ -155,10 +204,16 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     ? createPreferenceLearning(options.preferenceLearning)
     : undefined;
   const recommendation = options.recommendation
-    ? createRecommendations({ ...options.recommendation, ...(preferenceLearning ? {
-      preparePreferences: async (request) => options.consumePreparedPreferences?.()
-        ?? preferenceLearning.preparePreferencesForRecommendation(request),
-    } : {}) })
+    ? createRecommendations({
+        ...options.recommendation,
+        ...(preferenceLearning
+          ? {
+              preparePreferences: async (request) =>
+                options.consumePreparedPreferences?.() ??
+                preferenceLearning.preparePreferencesForRecommendation(request),
+            }
+          : {}),
+      })
     : undefined;
   const candidateSupply = options.candidateSupply
     ? createCandidates(options.candidateSupply)
@@ -178,15 +233,22 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
 
   const recommendationRepository = options.recommendation?.repository;
   return {
-    getPreferenceDetails: (scope) => options.preferenceLearning?.repository.getPreferenceDetails(scope),
+    getPreferenceDetails: (scope) =>
+      options.preferenceLearning?.repository.getPreferenceDetails(scope),
     getPreferenceEvidence: (id) => options.preferenceLearning?.repository.getPreferenceEvidence(id),
     editPreference(request) {
       if (!options.preferenceLearning) throw new Error('Preference Learning is not configured.');
-      return options.preferenceLearning.repository.editPreference({ ...request, now: options.preferenceLearning.now() });
+      return options.preferenceLearning.repository.editPreference({
+        ...request,
+        now: options.preferenceLearning.now(),
+      });
     },
     deletePreference(request) {
       if (!options.preferenceLearning) throw new Error('Preference Learning is not configured.');
-      return options.preferenceLearning.repository.deletePreference({ ...request, now: options.preferenceLearning.now() });
+      return options.preferenceLearning.repository.deletePreference({
+        ...request,
+        now: options.preferenceLearning.now(),
+      });
     },
     preparePreferencesForRecommendation(request) {
       if (!preferenceLearning) throw new Error('Preference Learning is not configured.');
@@ -211,7 +273,9 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       await runBackgroundStep(options, failures, 'source_refresh', async () => {
         if (!configuration) return;
         const view = await configuration.get();
-        await configuration.refreshSources(view.sources.filter(({ enabled }) => enabled).map(({ sourceId }) => sourceId));
+        await configuration.refreshSources(
+          view.sources.filter(({ enabled }) => enabled).map(({ sourceId }) => sourceId),
+        );
       });
       await runBackgroundStep(options, failures, 'candidate_supply_start', async () => {
         await candidateSupply?.start({ automaticTriggers });
@@ -222,49 +286,65 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       await runBackgroundStep(options, failures, 'recommendation_start', async () => {
         await recommendation?.start({ automaticTriggers });
       });
-      if (failures.length > 0) throw new AggregateError(failures, 'Discovery background startup failed.');
+      if (failures.length > 0)
+        throw new AggregateError(failures, 'Discovery background startup failed.');
     },
-    requestRecommendation: (request) => recommendation
-      ? recommendation.generate(request)
-      : Promise.resolve({
-          status: 'failed',
-          localDate: new Date().toISOString().slice(0, 10),
-          failure: { code: 'settings_invalid', message: 'Recommendation is not configured.', retryable: false },
-        }),
-    waitRecommendation: (request) => recommendation
-      ? recommendation.wait(request)
-      : Promise.resolve({
-          status: 'failed',
-          localDate: new Date().toISOString().slice(0, 10),
-          failure: { code: 'settings_invalid', message: 'Recommendation is not configured.', retryable: false },
-        }),
-    getTodayRecommendation: () => recommendation
-      ? recommendation.getToday()
-      : { status: 'not_generated', localDate: new Date().toISOString().slice(0, 10) },
-    getRecommendationCollection: (localDate, includeHidden = false) => (
-      recommendationRepository?.getCollection(localDate, includeHidden)
-    ),
-    getRecommendationById: (recommendationId) => (
-      recommendationRepository?.findRecommendationById(recommendationId)
-    ),
+    requestRecommendation: (request) =>
+      recommendation
+        ? recommendation.generate(request)
+        : Promise.resolve({
+            status: 'failed',
+            localDate: new Date().toISOString().slice(0, 10),
+            failure: {
+              code: 'settings_invalid',
+              message: 'Recommendation is not configured.',
+              retryable: false,
+            },
+          }),
+    waitRecommendation: (request) =>
+      recommendation
+        ? recommendation.wait(request)
+        : Promise.resolve({
+            status: 'failed',
+            localDate: new Date().toISOString().slice(0, 10),
+            failure: {
+              code: 'settings_invalid',
+              message: 'Recommendation is not configured.',
+              retryable: false,
+            },
+          }),
+    getTodayRecommendation: () =>
+      recommendation
+        ? recommendation.getToday()
+        : { status: 'not_generated', localDate: new Date().toISOString().slice(0, 10) },
+    getRecommendationCollection: (localDate, includeHidden = false) =>
+      recommendationRepository?.getCollection(localDate, includeHidden),
+    getRecommendationById: (recommendationId) =>
+      recommendationRepository?.findRecommendationById(recommendationId),
     getRecommendationReference(recommendationId) {
       const item = recommendationRepository?.findRecommendationById(recommendationId);
       return item ? recommendationReference(item) : undefined;
     },
-    requestCandidateSupply: (trigger = 'supply_conditions_changed') => candidateSupply?.ensureSupply(trigger),
+    requestCandidateSupply: (trigger = 'supply_conditions_changed') =>
+      candidateSupply?.ensureSupply(trigger),
     getCandidatePool: () => {
       if (!options.candidateSupply) return undefined;
       const settings = readConfiguration(options.candidateSupply.settings).discovery;
-      return options.candidateSupply.repository.getCandidatePoolSnapshot(candidatePoolSettings({
-        minimumCount: settings.candidatePoolMinimumCount,
-        maximumCount: settings.candidatePoolMaximumCount,
-        candidateValidityDays: settings.candidateValidityDays,
-        candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
-      }));
+      return options.candidateSupply.repository.getCandidatePoolSnapshot(
+        candidatePoolSettings({
+          minimumCount: settings.candidatePoolMinimumCount,
+          maximumCount: settings.candidatePoolMaximumCount,
+          candidateValidityDays: settings.candidateValidityDays,
+          candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
+        }),
+      );
     },
-    getActivePreferenceLearningFacts: (id) => preferenceLearning?.getActivePreferenceLearningFacts(id),
-    getPreferenceLearningCompletion: (id) => options.preferenceLearning?.repository.getPreferenceLearningCompletion(id),
-    getPreferenceLearningStatus: (id) => preferenceLearning?.getPreferenceLearningStatus(id) ?? { status: 'idle' },
+    getActivePreferenceLearningFacts: (id) =>
+      preferenceLearning?.getActivePreferenceLearningFacts(id),
+    getPreferenceLearningCompletion: (id) =>
+      options.preferenceLearning?.repository.getPreferenceLearningCompletion(id),
+    getPreferenceLearningStatus: (id) =>
+      preferenceLearning?.getPreferenceLearningStatus(id) ?? { status: 'idle' },
     async getDiscoveryHome(rawRequest) {
       if (!recommendationRepository) throw new Error('Recommendation is not configured.');
       const request = GetDiscoveryHomeRequestSchema.parse(rawRequest);
@@ -283,26 +363,32 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         days.set(item.localDate, values);
       }
       return DiscoveryHomeViewSchema.parse({
-        candidateSupplyConfirmed: options.candidateSupply ? readConfiguration(options.candidateSupply.settings).discovery.candidateSupplyConfirmed : false,
+        candidateSupplyConfirmed: options.candidateSupply
+          ? readConfiguration(options.candidateSupply.settings).discovery.candidateSupplyConfirmed
+          : false,
         candidateSupplyStatus: candidateSupply?.getStatus() ?? { status: 'idle' },
         mode: request.mode,
         today: todayView(recommendation?.getToday()),
         days: [...days].map(([localDate, recommendations]) => ({ localDate, recommendations })),
         // Project the home response explicitly; durable revision and lifecycle fields stay on the entity.
-        interests: options.interests?.repository.listNonDeletedInterests()
-          .filter(({ status }) => status !== 'deleted')
-          .map((interest) => ({
-            interestId: interest.id,
-            description: interest.description,
-            status: interest.status,
-            createdFrom: interest.createdFrom,
-            ...(interest.userManagedAt ? { userManagedAt: interest.userManagedAt } : {}),
-            createdAt: interest.createdAt,
-            updatedAt: interest.updatedAt,
-          })) ?? [],
+        interests:
+          options.interests?.repository
+            .listNonDeletedInterests()
+            .filter(({ status }) => status !== 'deleted')
+            .map((interest) => ({
+              interestId: interest.id,
+              description: interest.description,
+              status: interest.status,
+              createdFrom: interest.createdFrom,
+              ...(interest.userManagedAt ? { userManagedAt: interest.userManagedAt } : {}),
+              createdAt: interest.createdAt,
+              updatedAt: interest.updatedAt,
+            })) ?? [],
         favoriteCount: recommendationRepository.countRecommendations('favorites'),
         watchLaterCount: recommendationRepository.countRecommendations('watch_later'),
-        ...(recommendation?.getNextScheduledAt() ? { nextScheduledAt: recommendation.getNextScheduledAt() } : {}),
+        ...(recommendation?.getNextScheduledAt()
+          ? { nextScheduledAt: recommendation.getNextScheduledAt() }
+          : {}),
         ...(page.hasMore ? { nextCursor: encodeCursor(offset + limit) } : {}),
       });
     },
@@ -312,7 +398,10 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       const limit = request.limit ?? 20;
       const offset = decodeCursor(request.cursor);
       const page = recommendationRepository.searchRecommendations({
-        query: request.query, includeHidden: false, offset, limit,
+        query: request.query,
+        includeHidden: false,
+        offset,
+        limit,
       });
       return SearchRecommendationsResultSchema.parse({
         query: request.query,
@@ -328,14 +417,30 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
       }
       return result;
     },
-    getDiscoveryConfiguration: () => configuration
-      ? configuration.get()
-      : Promise.reject(new Error('Discovery configuration is not configured.')),
+    getDiscoveryConfiguration: () =>
+      configuration
+        ? configuration.get()
+        : Promise.reject(new Error('Discovery configuration is not configured.')),
     async updateDiscoveryConfiguration(request) {
       if (!configuration) throw new Error('Discovery configuration is not configured.');
       const view = await configuration.update(request);
+      try {
+        recommendation?.updateSchedule();
+        candidateSupply?.updateSchedule();
+      } catch (error) {
+        return {
+          ...view,
+          scheduling: {
+            status: 'failed',
+            error: {
+              code: 'DISCOVERY_SCHEDULE_FAILED',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          },
+        };
+      }
       requestCandidateSupply(candidateSupply, 'supply_conditions_changed', options);
-      return view;
+      return { ...view, scheduling: { status: 'applied' } };
     },
     async connectDiscoverySource(request) {
       if (!configuration) throw new Error('Discovery configuration is not configured.');
@@ -393,7 +498,9 @@ function recommendationView(item: Recommendation): RecommendationView {
     ...(item.content.sourceContentId ? { sourceContentId: item.content.sourceContentId } : {}),
     title: item.content.title,
     ...(item.content.author ? { author: item.content.author } : {}),
-    ...(item.content.contentPublishedAt ? { contentPublishedAt: item.content.contentPublishedAt } : {}),
+    ...(item.content.contentPublishedAt
+      ? { contentPublishedAt: item.content.contentPublishedAt }
+      : {}),
     ...(item.content.description ? { description: item.content.description } : {}),
     contentSummary: item.content.contentSummary,
     ...(item.content.coverUrl ? { coverUrl: item.content.coverUrl } : {}),
@@ -409,13 +516,19 @@ function recommendationView(item: Recommendation): RecommendationView {
 }
 
 function todayView(value: TodayRecommendationResult | undefined) {
-  if (!value) return { localDate: new Date().toISOString().slice(0, 10), status: 'not_generated', resultCount: 0 };
-  if (value.status === 'published') return {
-    localDate: value.collection.localDate,
-    status: 'published',
-    resultCount: value.collection.items.length,
-    publishedAt: value.collection.publishedAt,
-  };
+  if (!value)
+    return {
+      localDate: new Date().toISOString().slice(0, 10),
+      status: 'not_generated',
+      resultCount: 0,
+    };
+  if (value.status === 'published')
+    return {
+      localDate: value.collection.localDate,
+      status: 'published',
+      resultCount: value.collection.items.length,
+      publishedAt: value.collection.publishedAt,
+    };
   return {
     localDate: value.localDate,
     status: value.status,

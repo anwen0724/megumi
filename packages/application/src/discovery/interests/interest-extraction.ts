@@ -3,7 +3,11 @@
  */
 import type { ModelClient } from '@megumi/agent-runtime';
 import type { Api, Context, Model } from '@megumi/ai';
-import type { Observability, OperationCompletion, TraceCorrelation } from '../../observability/index';
+import type {
+  Observability,
+  OperationCompletion,
+  TraceCorrelation,
+} from '../../observability/index';
 import {
   InterestExtractionResultSchema,
   type Interest,
@@ -36,34 +40,46 @@ export function createInterestExtractor(options: {
     async extract(input) {
       const context: Context = {
         systemPrompt: systemPrompt,
-        messages: [{
-          role: 'user',
-          content: JSON.stringify({
-            userMessage: input.userText,
-            assistantReplyForReferenceOnly: input.assistantText,
-            existingInterests: input.interests,
-            pendingMediumEvidence: input.pendingEvidence,
-          }),
-          timestamp: Date.parse(input.job.completedAt),
-        }],
+        messages: [
+          {
+            role: 'user',
+            content: JSON.stringify({
+              userMessage: input.userText,
+              assistantReplyForReferenceOnly: input.assistantText,
+              existingInterests: input.interests,
+              pendingMediumEvidence: input.pendingEvidence,
+            }),
+            timestamp: Date.parse(input.job.completedAt),
+          },
+        ],
       };
       const correlation = interestCorrelation(input.job);
-      safeRecord(options.observability, 'interest.understanding.input', {
-        userMessage: input.userText,
-        assistantReplyForReferenceOnly: input.assistantText,
-        existingInterests: input.interests,
-        pendingMediumEvidence: input.pendingEvidence,
-      }, correlation);
-      safeRecord(options.observability, 'model.request', {
-        model: { providerId: input.model.provider, modelId: input.model.id },
-        context,
-      }, correlation);
-      const response = await observeModelCall(options.observability, correlation, () => (
+      safeRecord(
+        options.observability,
+        'interest.understanding.input',
+        {
+          userMessage: input.userText,
+          assistantReplyForReferenceOnly: input.assistantText,
+          existingInterests: input.interests,
+          pendingMediumEvidence: input.pendingEvidence,
+        },
+        correlation,
+      );
+      safeRecord(
+        options.observability,
+        'model.request',
+        {
+          model: { providerId: input.model.provider, modelId: input.model.id },
+          context,
+        },
+        correlation,
+      );
+      const response = await observeModelCall(options.observability, correlation, () =>
         input.client.completeSimple(input.model, context, {
           sessionId: `interest-extraction:${input.job.sessionId}`,
           signal: input.signal,
-        })
-      ));
+        }),
+      );
       safeRecord(options.observability, 'model.response', response, correlation);
       if (response.stopReason === 'error' || response.stopReason === 'aborted') {
         throw new Error(response.errorMessage ?? 'Interest extraction failed.');
@@ -87,11 +103,14 @@ async function observeModelCall<T>(
   const runOnce = () => (promise ??= operation());
   if (!observability) return runOnce();
   try {
-    return await observability.withSpan({
-      name: 'model.call',
-      correlation,
-      classifyResult: (): OperationCompletion => ({ outcome: { status: 'ok' } }),
-    }, runOnce);
+    return await observability.withSpan(
+      {
+        name: 'model.call',
+        correlation,
+        classifyResult: (): OperationCompletion => ({ outcome: { status: 'ok' } }),
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }

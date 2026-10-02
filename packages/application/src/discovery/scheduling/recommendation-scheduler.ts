@@ -3,6 +3,7 @@ import type { RecommendationTrigger } from '../recommendations/recommendations';
 
 export interface RecommendationScheduler {
   start(): Promise<void>;
+  updateSchedule(): void;
   getNextScheduledAt(): string | undefined;
   shutdown(): Promise<void>;
 }
@@ -34,7 +35,9 @@ export function createRecommendationScheduler(
     if (!accepting || !started) return;
     if (timerHandle !== undefined) timers.clearTimeout(timerHandle);
     nextScheduledAt = nextScheduledTimestamp(
-      options.now(), options.timezone(), options.generationTime(),
+      options.now(),
+      options.timezone(),
+      options.generationTime(),
     );
     const delay = Math.max(0, Date.parse(nextScheduledAt) - Date.parse(options.now()));
     timerHandle = timers.setTimeout(() => {
@@ -67,6 +70,7 @@ export function createRecommendationScheduler(
       }
       scheduleNext();
     },
+    updateSchedule: scheduleNext,
     getNextScheduledAt: () => nextScheduledAt,
     async shutdown() {
       accepting = false;
@@ -81,7 +85,10 @@ export function createRecommendationScheduler(
 /** Resolves a timestamp to its calendar date in the configured timezone. */
 export function localDateAt(timestamp: string, timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(new Date(timestamp));
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
@@ -95,10 +102,7 @@ async function runScheduledEnsure(options: CreateRecommendationSchedulerOptions)
   }
 }
 
-function reportScheduledError(
-  options: CreateRecommendationSchedulerOptions,
-  error: unknown,
-): void {
+function reportScheduledError(options: CreateRecommendationSchedulerOptions, error: unknown): void {
   try {
     options.onScheduledError(error);
   } catch {
@@ -123,10 +127,16 @@ function scheduledTimestamp(localDate: string, generationTime: string, timezone:
   const timeParts = generationTime.split(':').map(Number);
   const [year, month, day] = dateParts;
   const [hour, minute] = timeParts;
-  if (dateParts.length !== 3 || timeParts.length !== 2
-    || year === undefined || month === undefined || day === undefined
-    || hour === undefined || minute === undefined
-    || ![year, month, day, hour, minute].every(Number.isFinite)) {
+  if (
+    dateParts.length !== 3 ||
+    timeParts.length !== 2 ||
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    ![year, month, day, hour, minute].every(Number.isFinite)
+  ) {
     throw new Error('Discovery schedule contains an invalid date or time.');
   }
   const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute);
@@ -134,13 +144,22 @@ function scheduledTimestamp(localDate: string, generationTime: string, timezone:
   for (let index = 0; index < 3; index += 1) {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
     }).formatToParts(new Date(instant));
     const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
     const representedAsUtc = Date.UTC(
-      Number(value.year), Number(value.month) - 1, Number(value.day),
-      Number(value.hour), Number(value.minute), Number(value.second),
+      Number(value.year),
+      Number(value.month) - 1,
+      Number(value.day),
+      Number(value.hour),
+      Number(value.minute),
+      Number(value.second),
     );
     instant += desiredAsUtc - representedAsUtc;
   }
@@ -159,8 +178,12 @@ function defaultTimers() {
 }
 
 function unrefTimer(handle: unknown): void {
-  if (handle && typeof handle === 'object' && 'unref' in handle
-    && typeof (handle as { unref?: unknown }).unref === 'function') {
+  if (
+    handle &&
+    typeof handle === 'object' &&
+    'unref' in handle &&
+    typeof (handle as { unref?: unknown }).unref === 'function'
+  ) {
     (handle as { unref(): void }).unref();
   }
 }

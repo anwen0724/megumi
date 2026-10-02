@@ -20,7 +20,9 @@ function source(
   return {
     descriptor: { id, name: id, access, supportedModes: ['relevance'], supportsRead: false },
     getAvailability: () => ({ state }),
-    async search() { return { status: 'success', items: [] }; },
+    async search() {
+      return { status: 'success', items: [] };
+    },
   };
 }
 
@@ -50,16 +52,28 @@ describe('Discovery configuration', () => {
       sources: [
         expect.objectContaining({ sourceId: 'bilibili', enabled: true, connectionState: 'ready' }),
         expect.objectContaining({ sourceId: 'open_web', enabled: true, connectionState: 'ready' }),
-        expect.objectContaining({ sourceId: 'xiaohongshu', enabled: false, connectionState: 'not_configured' }),
+        expect.objectContaining({
+          sourceId: 'xiaohongshu',
+          enabled: false,
+          connectionState: 'not_configured',
+        }),
       ],
     });
 
     await configuration.update({ enabledSources: ['xiaohongshu', 'open_web', 'future_source'] });
     await configuration.update({ recommendationCandidateCheckIntervalSeconds: 90 });
     const saved = settings.readSettings();
-    expect(saved).toMatchObject({ status: 'ok', settings: { config: { discovery: {
-      candidateSupplyConfirmed: true, enabledSources: ['xiaohongshu', 'open_web', 'future_source'],
-    } } } });
+    expect(saved).toMatchObject({
+      status: 'ok',
+      settings: {
+        config: {
+          discovery: {
+            candidateSupplyConfirmed: true,
+            enabledSources: ['xiaohongshu', 'open_web', 'future_source'],
+          },
+        },
+      },
+    });
     await configuration.update({ enabledSources: [] });
     expect((await configuration.get()).sources.every((item) => !item.enabled)).toBe(true);
     expect((await configuration.get()).recommendationCandidateCheckIntervalSeconds).toBe(90);
@@ -67,21 +81,25 @@ describe('Discovery configuration', () => {
 
   it('opens login only through a browser-session source and returns its refreshed public state', async () => {
     let connected = false;
-    const connect = vi.fn(async () => { connected = true; });
+    const connect = vi.fn(async () => {
+      connected = true;
+    });
     const browserSource: DiscoverySource = {
       descriptor: {
-        id: 'xiaohongshu', name: '小红书', access: 'browser_session',
-        supportedModes: ['relevance'], supportsRead: true,
+        id: 'xiaohongshu',
+        name: '小红书',
+        access: 'browser_session',
+        supportedModes: ['relevance'],
+        supportsRead: true,
       },
       getAvailability: () => ({ state: connected ? 'unknown' : 'login_required' }),
       connect,
-      async search() { return { status: 'success', items: [] }; },
+      async search() {
+        return { status: 'success', items: [] };
+      },
     };
     const configuration = createDiscoveryConfiguration({
-      sourceRegistry: createSourceRegistry([
-        source('bilibili', 'public_http'),
-        browserSource,
-      ]),
+      sourceRegistry: createSourceRegistry([source('bilibili', 'public_http'), browserSource]),
       settings: fileSettings({ enabledSources: ['xiaohongshu'] }),
     });
 
@@ -130,16 +148,25 @@ describe('Discovery configuration', () => {
       settings,
     });
     await expect(configuration.update(patch)).rejects.toThrow();
-    expect(settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { discovery: { recommendationTargetCount: 20 } } } });
+    expect(settings.readSettings()).toMatchObject({
+      status: 'ok',
+      settings: { config: { discovery: { recommendationTargetCount: 20 } } },
+    });
   });
 });
 
 const directories: string[] = [];
-afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => {
+  for (const directory of directories.splice(0))
+    fs.rmSync(directory, { recursive: true, force: true });
+});
 function fileSettings(discovery = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'discovery-config-'));
   directories.push(root);
   const globalSettingsPath = path.join(root, 'settings.json');
   fs.writeFileSync(globalSettingsPath, JSON.stringify({ discovery }));
-  return createSettings({ globalSettingsPath, credentialsPath: path.join(root, 'credentials.json') });
+  return createSettings({
+    globalSettingsPath,
+    credentialsPath: path.join(root, 'credentials.json'),
+  });
 }

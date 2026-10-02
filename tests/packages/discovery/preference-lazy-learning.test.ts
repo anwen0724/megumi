@@ -3,29 +3,55 @@
  */
 // @vitest-environment node
 import { expect, it, vi } from 'vitest';
-import { createPreferenceLearning, type PreferenceLearningFacts } from '@megumi/application/discovery/index';
+import {
+  createPreferenceLearning,
+  type PreferenceLearningFacts,
+} from '@megumi/application/discovery/index';
 import { completedMessage, model } from '../context/context-test-fixtures';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
 it('learns only on demand and reuses inconclusive historical feedback on the next demand', async () => {
   const { database, repository } = createLearningFixture();
   seedRecommendation(database, 1);
-  repository.updateState({ recommendationId: 'recommendation:1', action: 'set_reaction', reaction: 'liked' });
+  repository.updateState({
+    recommendationId: 'recommendation:1',
+    action: 'set_reaction',
+    reaction: 'liked',
+  });
   let facts: PreferenceLearningFacts | undefined;
-  const models = { completeSimple: vi.fn(async () => {
-    if (!facts) throw new Error('Missing learning context');
-    return completedMessage(JSON.stringify({ scopes: facts.currentPreferences.map(({ preferenceSet }) => ({
-      preferenceSetId: preferenceSet.id, baseRevision: preferenceSet.revision,
-      changes: [], reviewedPreferenceIds: [], outcome: 'insufficient',
-    })) }));
-  }) };
+  const models = {
+    completeSimple: vi.fn(async () => {
+      if (!facts) throw new Error('Missing learning context');
+      return completedMessage(
+        JSON.stringify({
+          scopes: facts.currentPreferences.map(({ preferenceSet }) => ({
+            preferenceSetId: preferenceSet.id,
+            baseRevision: preferenceSet.revision,
+            changes: [],
+            reviewedPreferenceIds: [],
+            outcome: 'insufficient',
+          })),
+        }),
+      );
+    }),
+  };
   const runtime = createPreferenceLearning({
-    repository, models, prepareModel: async () => ({ status: 'ok' as const, model, client: models, compactionThresholdRatio: 0.8 }), now: () => now,
+    repository,
+    models,
+    prepareModel: async () => ({
+      status: 'ok' as const,
+      model,
+      client: models,
+      compactionThresholdRatio: 0.8,
+    }),
+    now: () => now,
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' },
-    context: { build: async () => {
-      facts = runtime.getActivePreferenceLearningFacts('batch');
-      return { status: 'ready', prompt: { systemPrompt: 'learn', messages: [], tools: [] } };
-    } },
+    context: {
+      build: async () => {
+        facts = runtime.getActivePreferenceLearningFacts('batch');
+        return { status: 'ready', prompt: { systemPrompt: 'learn', messages: [], tools: [] } };
+      },
+    },
   });
   try {
     await runtime.start();
@@ -36,9 +62,19 @@ it('learns only on demand and reuses inconclusive historical feedback on the nex
     await runtime.preparePreferencesForRecommendation({ requestId: 'request2' });
     expect(models.completeSimple).toHaveBeenCalledTimes(1);
     seedRecommendation(database, 2);
-    repository.updateState({ recommendationId: 'recommendation:2', action: 'set_reaction', reaction: 'liked' });
+    repository.updateState({
+      recommendationId: 'recommendation:2',
+      action: 'set_reaction',
+      reaction: 'liked',
+    });
     await runtime.preparePreferencesForRecommendation({ requestId: 'request3' });
-    expect(facts?.reactionChanges.map((entry) => entry.recommendationId).sort()).toEqual(['recommendation:1', 'recommendation:2']);
+    expect(facts?.reactionChanges.map((entry) => entry.recommendationId).sort()).toEqual([
+      'recommendation:1',
+      'recommendation:2',
+    ]);
     expect(repository.getPreferenceLearningCompletion('recommendation:2')?.status).toBe('learned');
-  } finally { await runtime.shutdown(); database.close(); }
+  } finally {
+    await runtime.shutdown();
+    database.close();
+  }
 });

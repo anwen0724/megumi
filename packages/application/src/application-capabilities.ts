@@ -42,11 +42,11 @@ import {
   type SourceRegistry,
 } from './discovery/index';
 import { createAgentRuntime, type AgentRuntime } from '@megumi/agent-runtime/agent-runtime';
+import { createEventBus, type EventBus } from '@megumi/agent-runtime/events';
 import {
-  createEventBus,
-  type EventBus,
-} from '@megumi/agent-runtime/events';
-import { createInputProcessor, type InputSourceAccess } from '@megumi/agent-runtime/runs/input/index';
+  createInputProcessor,
+  type InputSourceAccess,
+} from '@megumi/agent-runtime/runs/input/index';
 import { createInstructionReader } from '@megumi/agent-runtime/resources/instructions/index';
 import {
   captureRuntimeLogData,
@@ -57,7 +57,12 @@ import {
   type ObservabilityPersistenceStorage,
   type StructuredRuntimeLogger,
 } from './observability/index';
-import { createPermissions, type Permissions, resolveConfiguredPermissionRules, recordConfiguredSessionGrant } from '@megumi/agent-runtime/permissions/index';
+import {
+  createPermissions,
+  type Permissions,
+  resolveConfiguredPermissionRules,
+  recordConfiguredSessionGrant,
+} from '@megumi/agent-runtime/permissions/index';
 import { createSandbox } from '@megumi/agent-runtime/tools/sandbox/index';
 import {
   createSessionAttachmentReader,
@@ -106,7 +111,9 @@ export interface ProductCapabilitiesOptions {
   /** Supplies a previously prepared result; callers must bind it to unchanged business state. */
   consumePreparedPreferences?: () => PreparePreferencesResult | undefined;
   /** Supplies a read-only projection at the recommendation input boundary. */
-  recommendationPreferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
+  recommendationPreferenceSource?: (
+    effective: readonly PreferenceSetDetail[],
+  ) => readonly PreferenceSetDetail[];
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
@@ -164,9 +171,10 @@ export interface ProductCapabilities {
   readonly discoveryFactsReader: DiscoveryFactsReader;
 }
 
-
 /** Composes the capability instances once per Host process. */
-export function composeProductCapabilities(options: ProductCapabilitiesOptions): ProductCapabilities {
+export function composeProductCapabilities(
+  options: ProductCapabilitiesOptions,
+): ProductCapabilities {
   const homePaths = initializeMegumiHomeSync(options.home);
   const observabilityRoot = path.join(homePaths.logsPath, 'observability');
   const observability = composeObservability({
@@ -189,7 +197,9 @@ export function composeProductCapabilities(options: ProductCapabilitiesOptions):
       migrateDatabase({
         database,
         ...(options.migrationsFolder ? { migrationsFolder: options.migrationsFolder } : {}),
-        ...(options.migrationEnvironment ? { migrationEnvironment: options.migrationEnvironment } : {}),
+        ...(options.migrationEnvironment
+          ? { migrationEnvironment: options.migrationEnvironment }
+          : {}),
         ...(options.productEnvironment?.appVersion
           ? { releaseUpgrade: { targetApplicationVersion: options.productEnvironment.appVersion } }
           : {}),
@@ -214,17 +224,25 @@ function composeCapabilitiesWithDatabase(
   logger: ProductCapabilities['logger'],
   database: DatabaseConnection,
 ): ProductCapabilities {
-  const settings = createSettings({ globalSettingsPath: homePaths.settingsPath, credentialsPath: homePaths.credentialsPath, readEnvironment: options.readEnvironment ?? ((name) => process.env[name]) });
+  const settings = createSettings({
+    globalSettingsPath: homePaths.settingsPath,
+    credentialsPath: homePaths.credentialsPath,
+    readEnvironment: options.readEnvironment ?? ((name) => process.env[name]),
+  });
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = options.workspaceFileSystem;
   const workspacePathPolicy = createWorkspacePathPolicy();
   const sandbox = createSandbox();
-  const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
+  const workspaces = createWorkspaceCatalog({
+    store: workspaceStore,
+    file_system: workspaceFileSystem,
+  });
   const settingsForWorkspace = (workspaceId?: string) => {
     let projectSettingsPath: string | undefined;
     if (workspaceId) {
       const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-      if (workspace.status !== 'found' || workspace.workspace.status !== 'available') throw new Error('WORKSPACE_UNAVAILABLE');
+      if (workspace.status !== 'found' || workspace.workspace.status !== 'available')
+        throw new Error('WORKSPACE_UNAVAILABLE');
       projectSettingsPath = path.join(workspace.workspace.root_path, '.megumi', 'settings.json');
     }
     return createSettings({
@@ -313,25 +331,32 @@ function composeCapabilitiesWithDatabase(
           }
         : {
             status: 'failed',
-            failure: { code: 'workspace_not_found', message: `Workspace ${workspaceId} was not found.` },
+            failure: {
+              code: 'workspace_not_found',
+              message: `Workspace ${workspaceId} was not found.`,
+            },
           };
     },
   };
   let discoveryFactsReaderDelegate: DiscoveryFactsReader | undefined;
   let discoverySourceRegistryDelegate: ContextDiscoverySourceRegistry | undefined;
   const discoveryFactsReader: DiscoveryFactsReader = {
-    readCandidateSupplyFacts: (request) => discoveryFactsReaderDelegate
-      ? discoveryFactsReaderDelegate.readCandidateSupplyFacts(request)
-      : Promise.resolve(discoveryFactsUnavailable()),
-    readRecommendationFacts: (request) => discoveryFactsReaderDelegate
-      ? discoveryFactsReaderDelegate.readRecommendationFacts(request)
-      : Promise.resolve(discoveryFactsUnavailable()),
-    readPreferenceLearningFacts: (request) => discoveryFactsReaderDelegate
-      ? discoveryFactsReaderDelegate.readPreferenceLearningFacts(request)
-      : Promise.resolve(discoveryFactsUnavailable()),
+    readCandidateSupplyFacts: (request) =>
+      discoveryFactsReaderDelegate
+        ? discoveryFactsReaderDelegate.readCandidateSupplyFacts(request)
+        : Promise.resolve(discoveryFactsUnavailable()),
+    readRecommendationFacts: (request) =>
+      discoveryFactsReaderDelegate
+        ? discoveryFactsReaderDelegate.readRecommendationFacts(request)
+        : Promise.resolve(discoveryFactsUnavailable()),
+    readPreferenceLearningFacts: (request) =>
+      discoveryFactsReaderDelegate
+        ? discoveryFactsReaderDelegate.readPreferenceLearningFacts(request)
+        : Promise.resolve(discoveryFactsUnavailable()),
   };
   const discoveryContextSources: ContextDiscoverySourceRegistry = {
-    listContextSources: (request) => discoverySourceRegistryDelegate?.listContextSources(request) ?? [],
+    listContextSources: (request) =>
+      discoverySourceRegistryDelegate?.listContextSources(request) ?? [],
   };
   const context = createContext({
     sessionHistory: history,
@@ -353,15 +378,26 @@ function composeCapabilitiesWithDatabase(
     ruleWriter: {
       recordSessionPermissionGrant(request) {
         const session = sessions.getSession({ session_id: request.sessionId });
-        if (session.status !== 'found') return { status: 'failed', failure: { code: 'session_not_found', message: 'Session was not found.' } };
-        return recordConfiguredSessionGrant(settingsForWorkspace(session.session.workspace_id), settings, request);
+        if (session.status !== 'found')
+          return {
+            status: 'failed',
+            failure: { code: 'session_not_found', message: 'Session was not found.' },
+          };
+        return recordConfiguredSessionGrant(
+          settingsForWorkspace(session.session.workspace_id),
+          settings,
+          request,
+        );
       },
     },
     workspacePathClassifier: {
       async classifyWorkspacePath(request) {
         const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
         if (workspace.status !== 'found') {
-          return { status: 'failed', failure: { code: 'workspace_not_found', message: 'Workspace was not found.' } };
+          return {
+            status: 'failed',
+            failure: { code: 'workspace_not_found', message: 'Workspace was not found.' },
+          };
         }
         const canonical = await workspacePathPolicy.classifyCanonicalPath({
           workspace_root: workspace.workspace.root_path,
@@ -438,14 +474,13 @@ function composeCapabilitiesWithDatabase(
   const branches = createSessionBranchDrafts({
     events,
     entries: {
-      findMessageEntryBySessionIdAndMessageId: (request) => (
-        sessionStore.findMessageEntryBySessionIdAndMessageId(request)
-      ),
+      findMessageEntryBySessionIdAndMessageId: (request) =>
+        sessionStore.findMessageEntryBySessionIdAndMessageId(request),
     },
   });
   const clock = options.clock ?? { now: () => new Date().toISOString() };
-  const createId = (scope: string) => options.createApplicationId?.(scope)
-    ?? `${scope}:${crypto.randomUUID()}`;
+  const createId = (scope: string) =>
+    options.createApplicationId?.(scope) ?? `${scope}:${crypto.randomUUID()}`;
   const discoveryRepository = createDiscoveryRepository({
     database,
     clock,
@@ -457,31 +492,36 @@ function composeCapabilitiesWithDatabase(
   const interestExtractor = createInterestExtractor({
     observability: observability.observability,
   });
-  const discoverySources = options.discoverySourceRegistry ?? createDiscoverySourceRegistry({
-    webSearch: () => options.webSearch ?? resolveConfiguredWebSearch(settings),
-    webFetch: options.webFetch ?? createWebFetch(),
-    embeddedBrowser: options.embeddedBrowser ?? unavailableEmbeddedBrowser,
-    zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
-    twitterApiKey: () => discoveryCredential(settings, 'twitter'),
-    observability: observability.observability,
-    onCheckResult(sourceId, availability) {
-      observability.runtimeLogger.write({
-        level: availability.state === 'ready' ? 'info' : 'warn',
-        module: 'discovery', code: 'discovery_source_checked',
-        message: 'Discovery Source availability was checked.',
-        correlation: { sourceId },
-        data: { ...availability },
-      });
-    },
-    onCheckError(error, sourceId) {
-      observability.runtimeLogger.write({
-        level: 'warn', module: 'discovery', code: 'discovery_source_check_failed',
-        message: 'A Discovery Source availability check failed.',
-        correlation: { sourceId },
-        data: { errorMessage: error instanceof Error ? error.message : String(error) },
-      });
-    },
-  });
+  const discoverySources =
+    options.discoverySourceRegistry ??
+    createDiscoverySourceRegistry({
+      webSearch: () => options.webSearch ?? resolveConfiguredWebSearch(settings),
+      webFetch: options.webFetch ?? createWebFetch(),
+      embeddedBrowser: options.embeddedBrowser ?? unavailableEmbeddedBrowser,
+      zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
+      twitterApiKey: () => discoveryCredential(settings, 'twitter'),
+      observability: observability.observability,
+      onCheckResult(sourceId, availability) {
+        observability.runtimeLogger.write({
+          level: availability.state === 'ready' ? 'info' : 'warn',
+          module: 'discovery',
+          code: 'discovery_source_checked',
+          message: 'Discovery Source availability was checked.',
+          correlation: { sourceId },
+          data: { ...availability },
+        });
+      },
+      onCheckError(error, sourceId) {
+        observability.runtimeLogger.write({
+          level: 'warn',
+          module: 'discovery',
+          code: 'discovery_source_check_failed',
+          message: 'A Discovery Source availability check failed.',
+          correlation: { sourceId },
+          data: { errorMessage: error instanceof Error ? error.message : String(error) },
+        });
+      },
+    });
 
   const ids = {
     createExecutionId: () => createId('execution'),
@@ -492,16 +532,20 @@ function composeCapabilitiesWithDatabase(
   };
   let discovery: Discovery;
   const runtime = createAgentRuntime({
-    modelResolution: (workspaceId) => ({ settings: settingsForWorkspace(workspaceId), apiImplementations: options.modelStreams }),
+    modelResolution: (workspaceId) => ({
+      settings: settingsForWorkspace(workspaceId),
+      apiImplementations: options.modelStreams,
+    }),
     createRunId: ids.createExecutionId,
     terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
     execution: {
       createContentDigest,
-      createProviderCapture: input => createProviderCapture({ ...input, observability: observability.observability }),
+      createProviderCapture: (input) =>
+        createProviderCapture({ ...input, observability: observability.observability }),
       ids,
       clock,
       events,
-        context,
+      context,
       tools,
       permissions,
       session: history,
@@ -510,7 +554,8 @@ function composeCapabilitiesWithDatabase(
       policy: PRODUCT_EXECUTION_POLICY,
     },
     finalizeRun(execution) {
-      if (execution.kind !== 'conversation' || !execution.workspaceId || !execution.sessionId) return;
+      if (execution.kind !== 'conversation' || !execution.workspaceId || !execution.sessionId)
+        return;
       workspaceChanges.finalizeChangeSet({
         workspace_id: execution.workspaceId,
         session_id: execution.sessionId,
@@ -519,10 +564,13 @@ function composeCapabilitiesWithDatabase(
       });
     },
     onSettled(execution, outcome) {
-      if (execution.kind !== 'conversation'
-        || outcome.status !== 'completed'
-        || !outcome.assistantMessageId
-        || !execution.completedAt) return;
+      if (
+        execution.kind !== 'conversation' ||
+        outcome.status !== 'completed' ||
+        !outcome.assistantMessageId ||
+        !execution.completedAt
+      )
+        return;
       discovery.observeConversationTurn({
         sessionId: execution.sessionId,
         executionId: execution.executionId,
@@ -543,16 +591,21 @@ function composeCapabilitiesWithDatabase(
     repository: discoveryRepository,
     candidateSupplyAttempts,
     recommendationAttempts,
-    getActivePreferenceLearningFacts: (batchId) => discovery.getActivePreferenceLearningFacts(batchId),
+    getActivePreferenceLearningFacts: (batchId) =>
+      discovery.getActivePreferenceLearningFacts(batchId),
   });
   discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
     sourceRegistry: discoverySources,
   });
   discovery = createDiscovery({
-    ...(options.consumePreparedPreferences ? { consumePreparedPreferences: options.consumePreparedPreferences } : {}),
+    ...(options.consumePreparedPreferences
+      ? { consumePreparedPreferences: options.consumePreparedPreferences }
+      : {}),
     onBackgroundError(error, context) {
       observability.runtimeLogger.write({
-        level: 'warn', module: 'discovery', code: 'discovery_background_step_failed',
+        level: 'warn',
+        module: 'discovery',
+        code: 'discovery_background_step_failed',
         message: 'A Discovery background startup step failed.',
         data: {
           operation: context.operation,
@@ -565,7 +618,7 @@ function composeCapabilitiesWithDatabase(
       settings,
       sessions,
       history,
-      prepareModel: () => runtime.prepareModel(),
+      prepareModel: (request) => runtime.prepareModel(request),
       extractor: (input) => interestExtractor.extract(input),
       ids: {
         createInterestId: () => crypto.randomUUID(),
@@ -589,7 +642,9 @@ function composeCapabilitiesWithDatabase(
       },
     },
     recommendation: {
-      ...(options.recommendationPreferenceSource ? { preferenceSource: options.recommendationPreferenceSource } : {}),
+      ...(options.recommendationPreferenceSource
+        ? { preferenceSource: options.recommendationPreferenceSource }
+        : {}),
       observability: observability.observability,
       repository: discoveryRepository,
       attempts: recommendationAttempts,
@@ -609,9 +664,7 @@ function composeCapabilitiesWithDatabase(
           code: 'recommendation_background_failed',
           message: 'Recommendation background work failed.',
           correlation: {
-            ...(context.requestId
-              ? { requestId: context.requestId }
-              : {}),
+            ...(context.requestId ? { requestId: context.requestId } : {}),
             ...(context.executionId ? { executionId: context.executionId } : {}),
           },
           data: {
@@ -624,16 +677,25 @@ function composeCapabilitiesWithDatabase(
     preferenceLearning: {
       repository: discoveryRepository,
       context,
-        now: clock.now,
+      now: clock.now,
       observability: observability.observability,
-      prepareModel: () => runtime.prepareModel(),
+      prepareModel: () => {
+        const read = settings.readSettings();
+        if (read.status === 'rejected')
+          return Promise.resolve({ status: 'failed' as const, failure: read.error });
+        return runtime.prepareModel({
+          selection: read.settings.config.discovery.recommendationModel,
+        });
+      },
       ids: {
         createBatchId: () => createId('preference-batch'),
         createModelCallId: ids.createModelCallId,
       },
       onBackgroundError(error) {
         observability.runtimeLogger.write({
-          level: 'warn', module: 'discovery', code: 'preference_learning_background_failed',
+          level: 'warn',
+          module: 'discovery',
+          code: 'preference_learning_background_failed',
           message: 'Preference Learning background work failed.',
           data: { errorMessage: error instanceof Error ? error.message : String(error) },
         });
@@ -648,15 +710,20 @@ function composeCapabilitiesWithDatabase(
       now: clock.now,
       ids: { createRequestId: () => createId('candidate-supply-request') },
       observability: observability.observability,
-      ...(options.timers ? {
-        timers: {
-          set: (delayMs: number, callback: () => void) => options.timers!.setTimeout(callback, delayMs),
-          clear: (handle: unknown) => options.timers!.clearTimeout(handle),
-        },
-      } : {}),
+      ...(options.timers
+        ? {
+            timers: {
+              set: (delayMs: number, callback: () => void) =>
+                options.timers!.setTimeout(callback, delayMs),
+              clear: (handle: unknown) => options.timers!.clearTimeout(handle),
+            },
+          }
+        : {}),
       onBackgroundError(error) {
         observability.runtimeLogger.write({
-          level: 'warn', module: 'discovery', code: 'candidate_supply_background_failed',
+          level: 'warn',
+          module: 'discovery',
+          code: 'candidate_supply_background_failed',
           message: 'Candidate Supply background work failed.',
           data: { errorMessage: error instanceof Error ? error.message : String(error) },
         });
@@ -706,7 +773,10 @@ function discoveryCredential(
   settings: ReturnType<typeof createSettings>,
   sourceId: 'zhihu' | 'twitter',
 ): string | undefined {
-  const result = settings.readCredential({ target: { kind: 'discoverySource', sourceId }, defaultEnvNames: sourceId === 'twitter' ? ['TWITTERAPI_IO_API_KEY'] : ['ZHIHU_ACCESS_SECRET'] });
+  const result = settings.readCredential({
+    target: { kind: 'discoverySource', sourceId },
+    defaultEnvNames: sourceId === 'twitter' ? ['TWITTERAPI_IO_API_KEY'] : ['ZHIHU_ACCESS_SECRET'],
+  });
   return result.status === 'found' ? result.value : undefined;
 }
 
@@ -721,9 +791,12 @@ function discoveryFactsUnavailable() {
 }
 
 const unavailableEmbeddedBrowser: EmbeddedBrowser = {
-  openLogin: async () => { throw new Error('Embedded browser is unavailable.'); },
+  openLogin: async () => {
+    throw new Error('Embedded browser is unavailable.');
+  },
   snapshot: async () => ({
-    status: 'failed', failure: { code: 'network_error', message: 'Embedded browser is unavailable.' },
+    status: 'failed',
+    failure: { code: 'network_error', message: 'Embedded browser is unavailable.' },
   }),
   shutdown: async () => undefined,
 };
@@ -740,11 +813,15 @@ function recoverInterruptedSessionCompactions(
 ): void {
   const recovered = history.interruptRunningCompactions({ completedAt });
   if (recovered.status === 'failed') {
-    throw new Error(`Failed to recover interrupted Context Compactions: ${recovered.failure.message}`);
+    throw new Error(
+      `Failed to recover interrupted Context Compactions: ${recovered.failure.message}`,
+    );
   }
   for (const compaction of recovered.compactions) {
     if (!compaction.error) {
-      throw new Error(`Interrupted Compaction ${compaction.compactionId} is missing its error fact.`);
+      throw new Error(
+        `Interrupted Compaction ${compaction.compactionId} is missing its error fact.`,
+      );
     }
     events.publish({
       type: 'session.compaction.ended',
@@ -759,8 +836,12 @@ function recoverInterruptedSessionCompactions(
 }
 
 const unavailableInputSourceAccess: InputSourceAccess = {
-  async readImage() { throw new Error('Host image file reading is unavailable.'); },
-  async resolveDocument() { throw new Error('Host document file resolution is unavailable.'); },
+  async readImage() {
+    throw new Error('Host image file reading is unavailable.');
+  },
+  async resolveDocument() {
+    throw new Error('Host document file resolution is unavailable.');
+  },
 };
 
 function createApplicationLogger(

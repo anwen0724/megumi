@@ -6,7 +6,12 @@ import type { Settings } from '../../settings/settings-store';
 import type { PreparePreferencesResult } from '../preferences/preference-learning';
 import type { PreferenceSetDetail } from '../preferences/preference';
 import { randomUUID } from 'node:crypto';
-import type { AgentRunOutcome, AgentRuntime, StartRunRequest, StartRunResult } from '@megumi/agent-runtime/agent-runtime';
+import type {
+  AgentRunOutcome,
+  AgentRuntime,
+  StartRunRequest,
+  StartRunResult,
+} from '@megumi/agent-runtime/agent-runtime';
 import type { Observability, OperationCompletion } from '../../observability/index';
 import { candidatePoolSettings } from '../candidates/candidate-pool';
 import type { CandidateSupplyRepository } from '../candidates/candidate-supply';
@@ -35,23 +40,47 @@ export interface RecommendationFailure {
 }
 
 export type RequestRecommendationResult =
-  | { readonly status: 'started' | 'in_progress'; readonly localDate: string; readonly requestId: string; readonly phase: 'preparing_preferences' | 'executing'; readonly executionId?: string }
+  | {
+      readonly status: 'started' | 'in_progress';
+      readonly localDate: string;
+      readonly requestId: string;
+      readonly phase: 'preparing_preferences' | 'executing';
+      readonly executionId?: string;
+    }
   | { readonly status: 'already_published'; readonly collection: RecommendationCollection }
   | { readonly status: 'waiting_for_candidates' | 'model_unavailable'; readonly localDate: string }
-  | { readonly status: 'failed'; readonly localDate: string; readonly failure: RecommendationFailure };
+  | {
+      readonly status: 'failed';
+      readonly localDate: string;
+      readonly failure: RecommendationFailure;
+    };
 
 export type WaitRecommendationResult =
   | { readonly status: 'published'; readonly collection: RecommendationCollection }
-  | { readonly status: 'waiting_for_candidates' | 'model_unavailable' | 'cancelled'; readonly localDate: string }
-  | { readonly status: 'failed'; readonly localDate: string; readonly failure: RecommendationFailure }
+  | {
+      readonly status: 'waiting_for_candidates' | 'model_unavailable' | 'cancelled';
+      readonly localDate: string;
+    }
+  | {
+      readonly status: 'failed';
+      readonly localDate: string;
+      readonly failure: RecommendationFailure;
+    }
   | { readonly status: 'timed_out'; readonly localDate: string; readonly requestId: string };
 
 export type TodayRecommendationResult =
   | { readonly status: 'not_generated'; readonly localDate: string }
-  | { readonly status: 'running'; readonly localDate: string; readonly requestId: string; readonly phase: 'preparing_preferences' | 'executing'; readonly executionId?: string }
+  | {
+      readonly status: 'running';
+      readonly localDate: string;
+      readonly requestId: string;
+      readonly phase: 'preparing_preferences' | 'executing';
+      readonly executionId?: string;
+    }
   | WaitRecommendationResult;
 
 interface RecommendationSettings {
+  readonly recommendationModel?: { providerId: string; modelId: string };
   readonly recommendationCandidateCheckIntervalSeconds: number;
   readonly recommendationGenerationTime: string;
   readonly recommendationTargetCount: number;
@@ -62,14 +91,21 @@ interface RecommendationSettings {
   readonly candidateContentExcerptMaxCharacters: number;
 }
 
-type RecommendationDataRepository = RecommendationRepository & CandidateSupplyRepository
-  & InterestRepository & PreferenceLearningRepository;
+type RecommendationDataRepository = RecommendationRepository &
+  CandidateSupplyRepository &
+  InterestRepository &
+  PreferenceLearningRepository;
 
 export interface CreateRecommendationsOptions {
   /** Read-only projection of already validated preferences; production defaults to the complete source. */
-  readonly preferenceSource?: (effective: readonly PreferenceSetDetail[]) => readonly PreferenceSetDetail[];
+  readonly preferenceSource?: (
+    effective: readonly PreferenceSetDetail[],
+  ) => readonly PreferenceSetDetail[];
   /** Prepares pending preference inputs after recommendation admission, before freezing its snapshot. */
-  readonly preparePreferences?: (request: { requestId: string; signal: AbortSignal }) => Promise<PreparePreferencesResult | void>;
+  readonly preparePreferences?: (request: {
+    requestId: string;
+    signal: AbortSignal;
+  }) => Promise<PreparePreferencesResult | void>;
   readonly observability?: Observability;
   readonly repository: RecommendationDataRepository;
   readonly attempts: RecommendationAttempts;
@@ -85,17 +121,26 @@ export interface CreateRecommendationsOptions {
     setTimeout(callback: () => void, delayMs: number): unknown;
     clearTimeout(handle: unknown): void;
   };
-  readonly onBackgroundError?: (error: unknown, context: {
-    readonly operation: 'scheduled_request' | 'execution_settlement' | 'automatic_retry';
-    readonly requestId?: string;
-    readonly executionId?: string;
-  }) => void;
+  readonly onBackgroundError?: (
+    error: unknown,
+    context: {
+      readonly operation: 'scheduled_request' | 'execution_settlement' | 'automatic_retry';
+      readonly requestId?: string;
+      readonly executionId?: string;
+    },
+  ) => void;
 }
 
 export interface Recommendations {
   start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
-  generate(request: { readonly trigger: RecommendationTrigger }): Promise<RequestRecommendationResult>;
-  wait(request: { readonly requestId: string; readonly timeoutMs: number }): Promise<WaitRecommendationResult>;
+  updateSchedule(): void;
+  generate(request: {
+    readonly trigger: RecommendationTrigger;
+  }): Promise<RequestRecommendationResult>;
+  wait(request: {
+    readonly requestId: string;
+    readonly timeoutMs: number;
+  }): Promise<WaitRecommendationResult>;
   getToday(): TodayRecommendationResult;
   getNextScheduledAt(): string | undefined;
   shutdown(): Promise<void>;
@@ -124,7 +169,8 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
   let starting: Promise<RequestRecommendationResult> | undefined;
   let shuttingDown = false;
   let lastCheck: TodayRecommendationResult | undefined;
-  let candidateWait: { readonly localDate: string; readonly trigger: RecommendationTrigger } | undefined;
+  let candidateWait:
+    { readonly localDate: string; readonly trigger: RecommendationTrigger } | undefined;
   let candidateWaitTimer: unknown;
   const preparationTasks = new Set<Promise<void>>();
   const runTasks = new Set<Promise<void>>();
@@ -136,9 +182,18 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       result = await options.runtime.startRun(request);
     } catch (error) {
       // Convert an unexpected admission failure so the business owner can settle and release its attempt.
-      result = { status: 'rejected', error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Run admission failed.' } };
+      result = {
+        status: 'rejected',
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Run admission failed.',
+        },
+      };
     }
-    if (options.observability && (result.status === 'started' || result.status === 'already_started')) {
+    if (
+      options.observability &&
+      (result.status === 'started' || result.status === 'already_started')
+    ) {
       const completions = executionCompletions.get(request.requestId) ?? [];
       completions.push(result.run.completion);
       executionCompletions.set(request.requestId, completions);
@@ -161,14 +216,19 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     }
     if (candidateWaitTimer !== undefined && candidateWait?.localDate === localDate) return;
     clearCandidateWait();
-    const seconds = readConfiguration(options.settings).discovery.recommendationCandidateCheckIntervalSeconds;
-    if (!Number.isInteger(seconds) || seconds <= 0) throw new Error('Invalid candidate check interval.');
+    const seconds = readConfiguration(options.settings).discovery
+      .recommendationCandidateCheckIntervalSeconds;
+    if (!Number.isInteger(seconds) || seconds <= 0)
+      throw new Error('Invalid candidate check interval.');
     const waiting = { localDate, trigger };
     candidateWait = waiting;
-    candidateWaitTimer = runtimeTimers(options).setTimeout(() => {
-      candidateWaitTimer = undefined;
-      void recheckCandidates(waiting);
-    }, Math.min(seconds * 1_000, 2_147_483_647));
+    candidateWaitTimer = runtimeTimers(options).setTimeout(
+      () => {
+        candidateWaitTimer = undefined;
+        void recheckCandidates(waiting);
+      },
+      Math.min(seconds * 1_000, 2_147_483_647),
+    );
   }
 
   /** Reuses request serialization without promoting a previous day's waiting into new work. */
@@ -182,7 +242,12 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       await requestRecommendation({ trigger: waiting.trigger }, waiting.localDate);
     } catch (error) {
       clearCandidateWait();
-      lastCheck = failureResult(waiting.localDate, 'snapshot_unavailable', 'Recommendation input could not be checked.', false);
+      lastCheck = failureResult(
+        waiting.localDate,
+        'snapshot_unavailable',
+        'Recommendation input could not be checked.',
+        false,
+      );
       try {
         options.onBackgroundError?.(error, { operation: 'scheduled_request' });
       } catch {
@@ -202,65 +267,125 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     if (published) return { status: 'already_published', collection: published };
     if (active) {
       const current = active;
-      return { status: 'in_progress', localDate: current.localDate, requestId: current.requestId,
-        phase: current.executionId ? 'executing' : 'preparing_preferences', executionId: current.executionId };
+      return {
+        status: 'in_progress',
+        localDate: current.localDate,
+        requestId: current.requestId,
+        phase: current.executionId ? 'executing' : 'preparing_preferences',
+        executionId: current.executionId,
+      };
     }
-    if (shuttingDown) return failureResult(localDate, 'agent_execution_failed', 'Recommendation is shutting down.', false);
+    if (shuttingDown)
+      return failureResult(
+        localDate,
+        'agent_execution_failed',
+        'Recommendation is shutting down.',
+        false,
+      );
 
     let settings: RecommendationSettings;
     try {
       settings = readConfiguration(options.settings).discovery;
     } catch {
-      return failureResult(localDate, 'settings_invalid', 'Recommendation settings are invalid.', false);
+      return failureResult(
+        localDate,
+        'settings_invalid',
+        'Recommendation settings are invalid.',
+        false,
+      );
     }
     let prepared: ReturnType<typeof prepareSnapshot>;
     try {
       prepared = prepareSnapshot(options, snapshotAt, localDate, settings);
     } catch {
-      return failureResult(localDate, 'snapshot_unavailable', 'Recommendation snapshot could not be created.', true);
+      return failureResult(
+        localDate,
+        'snapshot_unavailable',
+        'Recommendation snapshot could not be created.',
+        true,
+      );
     }
-    if (prepared.ranking.actualTargetCount === 0) return { status: 'waiting_for_candidates', localDate };
+    if (prepared.ranking.actualTargetCount === 0)
+      return { status: 'waiting_for_candidates', localDate };
 
-    if (shuttingDown) return failureResult(localDate, 'agent_execution_failed', 'Recommendation is shutting down.', false);
-    if (expectedLocalDate && localDateAt(options.clock.now(), options.timezone.get()) !== expectedLocalDate) {
+    if (shuttingDown)
+      return failureResult(
+        localDate,
+        'agent_execution_failed',
+        'Recommendation is shutting down.',
+        false,
+      );
+    if (
+      expectedLocalDate &&
+      localDateAt(options.clock.now(), options.timezone.get()) !== expectedLocalDate
+    ) {
       return { status: 'waiting_for_candidates', localDate: expectedLocalDate };
     }
     clearCandidateWait();
 
     const requestId = observedRequestId ?? ids.createRequestId();
-    try { options.observability?.recordContent({ kind: 'discovery.candidates', value: prepared, correlation: { requestId } }); }
-    catch { /* Observation cannot affect snapshot admission. */ }
+    try {
+      options.observability?.recordContent({
+        kind: 'discovery.candidates',
+        value: prepared,
+        correlation: { requestId },
+      });
+    } catch {
+      /* Observation cannot affect snapshot admission. */
+    }
     active = createActiveRequest(requestId, localDate, request.trigger);
     if (options.preparePreferences) {
       const current = active;
-      const task = retry(current).catch((error: unknown) => {
-        complete(current, failureResult(current.localDate, 'snapshot_unavailable', error instanceof Error ? error.message : 'Preference preparation failed.', false));
-      }).finally(() => preparationTasks.delete(task));
+      const task = retry(current)
+        .catch((error: unknown) => {
+          complete(
+            current,
+            failureResult(
+              current.localDate,
+              'snapshot_unavailable',
+              error instanceof Error ? error.message : 'Preference preparation failed.',
+              false,
+            ),
+          );
+        })
+        .finally(() => preparationTasks.delete(task));
       preparationTasks.add(task);
       return { status: 'started', localDate, requestId, phase: 'preparing_preferences' };
     }
     const executionId = randomUUID();
     active.markExecutionStarted(executionId);
     options.attempts.start({
-          requestId, executionId, localDate, snapshotAt,
-          actualTarget: prepared.ranking.actualTargetCount, workingSetCount: settings.recommendationWorkingSetCount,
-          rankedCandidates: prepared.ranking.rankedCandidates, exclusions: prepared.ranking.exclusions,
-          interestRevisions: prepared.interestRevisions, preferenceRevisions: prepared.preferenceRevisions,
-          preferenceGuard: prepared.preferenceGuard, interests: prepared.interests, preferences: prepared.preferences,
-          history: prepared.history, repository: options.repository, now: options.clock.now,
+      requestId,
+      executionId,
+      localDate,
+      snapshotAt,
+      actualTarget: prepared.ranking.actualTargetCount,
+      workingSetCount: settings.recommendationWorkingSetCount,
+      rankedCandidates: prepared.ranking.rankedCandidates,
+      exclusions: prepared.ranking.exclusions,
+      interestRevisions: prepared.interestRevisions,
+      preferenceRevisions: prepared.preferenceRevisions,
+      preferenceGuard: prepared.preferenceGuard,
+      interests: prepared.interests,
+      preferences: prepared.preferences,
+      history: prepared.history,
+      repository: options.repository,
+      now: options.clock.now,
     });
     const started = await startRun({
       runId: executionId,
       signal: active?.controller.signal,
       kind: 'recommendation',
+      modelSelection: settings.recommendationModel,
       requestId,
       localDate,
     });
     if (started.status === 'rejected') {
       options.attempts.dispose(executionId);
-      const result = started.error.code === 'MODEL_UNAVAILABLE'
-        ? { status: 'model_unavailable' as const, localDate }
-        : failureResult(localDate, 'agent_execution_failed', started.error.message, false);
+      const result =
+        started.error.code === 'MODEL_UNAVAILABLE'
+          ? { status: 'model_unavailable' as const, localDate }
+          : failureResult(localDate, 'agent_execution_failed', started.error.message, false);
       active?.settle(result);
       latest = { requestId, result };
       active = undefined;
@@ -268,7 +393,13 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     }
     if (active) active.markExecutionStarted(started.run.runId);
     followRun(requestId, started.run.runId, started.run.completion);
-    return { status: 'started', localDate, requestId, phase: 'executing', executionId: started.run.runId };
+    return {
+      status: 'started',
+      localDate,
+      requestId,
+      phase: 'executing',
+      executionId: started.run.runId,
+    };
   };
 
   const requestRecommendation = async (
@@ -315,37 +446,68 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
   };
 
   /** Acknowledges startup promptly but keeps the business Trace open through settlement and Agent shutdown. */
-  function observeRecommendation(request: { readonly trigger: RecommendationTrigger }, expectedLocalDate?: string): Promise<RequestRecommendationResult> {
+  function observeRecommendation(
+    request: { readonly trigger: RecommendationTrigger },
+    expectedLocalDate?: string,
+  ): Promise<RequestRecommendationResult> {
     if (!options.observability || active) return startRecommendation(request, expectedLocalDate);
     const requestId = ids.createRequestId();
     let resolveAccepted!: (result: RequestRecommendationResult) => void;
     let rejectAccepted!: (error: unknown) => void;
-    const accepted = new Promise<RequestRecommendationResult>((resolve, reject) => { resolveAccepted = resolve; rejectAccepted = reject; });
+    const accepted = new Promise<RequestRecommendationResult>((resolve, reject) => {
+      resolveAccepted = resolve;
+      rejectAccepted = reject;
+    });
     let work: Promise<RequestRecommendationResult | WaitRecommendationResult> | undefined;
-    const runOnce = () => (work ??= (async () => {
-      try {
-        const result = await startRecommendation(request, expectedLocalDate, requestId);
-        resolveAccepted(result);
-        const completion = active?.requestId === requestId ? active.completion : undefined;
-        const final = completion ? await completion : latest?.requestId === requestId ? latest.result : result;
-        await Promise.allSettled(executionCompletions.get(requestId) ?? []);
-        return final;
-      } catch (error) { rejectAccepted(error); throw error; }
-    })());
+    const runOnce = () =>
+      (work ??= (async () => {
+        try {
+          const result = await startRecommendation(request, expectedLocalDate, requestId);
+          resolveAccepted(result);
+          const completion = active?.requestId === requestId ? active.completion : undefined;
+          const final = completion
+            ? await completion
+            : latest?.requestId === requestId
+              ? latest.result
+              : result;
+          await Promise.allSettled(executionCompletions.get(requestId) ?? []);
+          return final;
+        } catch (error) {
+          rejectAccepted(error);
+          throw error;
+        }
+      })());
     const traced = (async () => {
       try {
-        await options.observability!.withTrace({ kind: 'recommendation', correlation: { requestId }, classifyResult: classifyRecommendation }, runOnce);
-      } catch { await runOnce(); }
-    })().catch((error: unknown) => { rejectAccepted(error); }).finally(() => {
-      traceTasks.delete(traced);
-      executionCompletions.delete(requestId);
-    });
+        await options.observability!.withTrace(
+          {
+            kind: 'recommendation',
+            correlation: { requestId },
+            classifyResult: classifyRecommendation,
+          },
+          runOnce,
+        );
+      } catch {
+        await runOnce();
+      }
+    })()
+      .catch((error: unknown) => {
+        rejectAccepted(error);
+      })
+      .finally(() => {
+        traceTasks.delete(traced);
+        executionCompletions.delete(requestId);
+      });
     traceTasks.add(traced);
     return accepted;
   }
 
   /** Business publication starts only after the run has completed all required cleanup. */
-  function followRun(requestId: string, executionId: string, completion: Promise<AgentRunOutcome>): void {
+  function followRun(
+    requestId: string,
+    executionId: string,
+    completion: Promise<AgentRunOutcome>,
+  ): void {
     const task = (async () => {
       try {
         const outcome = await completion;
@@ -354,11 +516,25 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
         options.attempts.dispose(executionId);
         const current = active;
         if (current?.requestId === requestId && current.executionId === executionId) {
-          complete(current, failureResult(current.localDate, 'agent_execution_failed',
-            error instanceof Error ? error.message : 'Recommendation run failed.', false));
+          complete(
+            current,
+            failureResult(
+              current.localDate,
+              'agent_execution_failed',
+              error instanceof Error ? error.message : 'Recommendation run failed.',
+              false,
+            ),
+          );
         }
-        try { options.onBackgroundError?.(error, { operation: 'execution_settlement', requestId, executionId }); }
-        catch { /* Diagnostic failure cannot resurrect a settled business task. */ }
+        try {
+          options.onBackgroundError?.(error, {
+            operation: 'execution_settlement',
+            requestId,
+            executionId,
+          });
+        } catch {
+          /* Diagnostic failure cannot resurrect a settled business task. */
+        }
       }
     })().finally(() => runTasks.delete(task));
     runTasks.add(task);
@@ -377,11 +553,21 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     let publication: ReturnType<RecommendationAttempts['publishDraft']> | undefined;
     try {
       if (outcome.status === 'completed') {
-        publication = options.attempts.publishDraft({ executionId, signal: current.controller.signal });
+        publication = options.attempts.publishDraft({
+          executionId,
+          signal: current.controller.signal,
+        });
       }
     } catch (error) {
-      complete(current, failureResult(current.localDate, 'storage_failed',
-        error instanceof Error ? error.message : 'Recommendation publication failed.', false));
+      complete(
+        current,
+        failureResult(
+          current.localDate,
+          'storage_failed',
+          error instanceof Error ? error.message : 'Recommendation publication failed.',
+          false,
+        ),
+      );
       return;
     } finally {
       options.attempts.dispose(executionId);
@@ -395,11 +581,30 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       return;
     }
     if (publication?.status === 'conflict') {
-      complete(current, failureResult(current.localDate, 'publication_conflict', 'Selected candidates are no longer available.', false));
+      complete(
+        current,
+        failureResult(
+          current.localDate,
+          'publication_conflict',
+          'Selected candidates are no longer available.',
+          false,
+        ),
+      );
       return;
     }
     if (publication?.status === 'input_changed') {
-      if (current.inputRetryCount >= 1) { complete(current, failureResult(current.localDate, 'input_changed', 'User requirements changed repeatedly.', false)); return; }
+      if (current.inputRetryCount >= 1) {
+        complete(
+          current,
+          failureResult(
+            current.localDate,
+            'input_changed',
+            'User requirements changed repeatedly.',
+            false,
+          ),
+        );
+        return;
+      }
       current.inputRetryCount += 1;
       await retry(current);
       return;
@@ -415,28 +620,32 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
             requestId: current.requestId,
             executionId: current.executionId,
           });
-          complete(current, failureResult(
-            current.localDate,
-            'agent_execution_failed',
-            error instanceof Error ? error.message : 'Recommendation retry failed.',
-            false,
-          ));
+          complete(
+            current,
+            failureResult(
+              current.localDate,
+              'agent_execution_failed',
+              error instanceof Error ? error.message : 'Recommendation retry failed.',
+              false,
+            ),
+          );
         });
       }, delayMs);
       return;
     }
-    const result = outcome.status === 'cancelled'
-      ? { status: 'cancelled' as const, localDate: current.localDate }
-      : failureResult(
-          current.localDate,
-          outcome.status === 'failed' && outcome.error.code === 'LOOP_LIMIT_EXCEEDED'
-            ? 'agent_limit_reached'
-            : 'agent_execution_failed',
-          outcome.status === 'failed'
-            ? outcome.error.message
-            : 'Agent completed without an accepted recommendation draft.',
-          false,
-        );
+    const result =
+      outcome.status === 'cancelled'
+        ? { status: 'cancelled' as const, localDate: current.localDate }
+        : failureResult(
+            current.localDate,
+            outcome.status === 'failed' && outcome.error.code === 'LOOP_LIMIT_EXCEEDED'
+              ? 'agent_limit_reached'
+              : 'agent_execution_failed',
+            outcome.status === 'failed'
+              ? outcome.error.message
+              : 'Agent completed without an accepted recommendation draft.',
+            false,
+          );
     complete(current, result);
   }
 
@@ -451,17 +660,41 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     try {
       settings = readConfiguration(options.settings).discovery;
     } catch {
-      complete(current, failureResult(current.localDate, 'settings_invalid', 'Recommendation settings are invalid.', false));
+      complete(
+        current,
+        failureResult(
+          current.localDate,
+          'settings_invalid',
+          'Recommendation settings are invalid.',
+          false,
+        ),
+      );
       return;
     }
     const admission = prepareSnapshot(options, options.clock.now(), current.localDate, settings);
-    if (admission.ranking.actualTargetCount === 0) { complete(current, { status: 'waiting_for_candidates', localDate: current.localDate }); return; }
+    if (admission.ranking.actualTargetCount === 0) {
+      complete(current, { status: 'waiting_for_candidates', localDate: current.localDate });
+      return;
+    }
     current.executionId = undefined;
-    const preferencePreparation = await options.preparePreferences?.({ requestId: current.requestId, signal: current.controller.signal });
+    const preferencePreparation = await options.preparePreferences?.({
+      requestId: current.requestId,
+      signal: current.controller.signal,
+    });
     if (preferencePreparation) {
-      try { options.observability?.recordContent({ kind: 'preference.preparation', value: {
-        status: preferencePreparation.status, scopeResults: preferencePreparation.scopeResults, failures: preferencePreparation.failures,
-      }, correlation: { requestId: current.requestId } }); } catch { /* Diagnostics do not change preparation or publication. */ }
+      try {
+        options.observability?.recordContent({
+          kind: 'preference.preparation',
+          value: {
+            status: preferencePreparation.status,
+            scopeResults: preferencePreparation.scopeResults,
+            failures: preferencePreparation.failures,
+          },
+          correlation: { requestId: current.requestId },
+        });
+      } catch {
+        /* Diagnostics do not change preparation or publication. */
+      }
     }
     if (shuttingDown || current.controller.signal.aborted || active !== current) return;
     if (localDateAt(options.clock.now(), options.timezone.get()) !== current.localDate) {
@@ -474,12 +707,15 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     try {
       prepared = prepareSnapshot(options, snapshotAt, current.localDate, settings);
     } catch {
-      complete(current, failureResult(
-        current.localDate,
-        'snapshot_unavailable',
-        'Recommendation snapshot could not be created.',
-        false,
-      ));
+      complete(
+        current,
+        failureResult(
+          current.localDate,
+          'snapshot_unavailable',
+          'Recommendation snapshot could not be created.',
+          false,
+        ),
+      );
       return;
     }
     if (prepared.ranking.actualTargetCount === 0) {
@@ -489,18 +725,29 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     const executionId = randomUUID();
     current.markExecutionStarted(executionId);
     options.attempts.start({
-      requestId: current.requestId, executionId, localDate: current.localDate, snapshotAt,
+      requestId: current.requestId,
+      executionId,
+      localDate: current.localDate,
+      snapshotAt,
       ...(preferencePreparation ? { preferencePreparation } : {}),
-      actualTarget: prepared.ranking.actualTargetCount, workingSetCount: settings.recommendationWorkingSetCount,
-      rankedCandidates: prepared.ranking.rankedCandidates, exclusions: prepared.ranking.exclusions,
-      interestRevisions: prepared.interestRevisions, preferenceRevisions: prepared.preferenceRevisions,
-      preferenceGuard: prepared.preferenceGuard, interests: prepared.interests, preferences: prepared.preferences,
-      history: prepared.history, repository: options.repository, now: options.clock.now,
+      actualTarget: prepared.ranking.actualTargetCount,
+      workingSetCount: settings.recommendationWorkingSetCount,
+      rankedCandidates: prepared.ranking.rankedCandidates,
+      exclusions: prepared.ranking.exclusions,
+      interestRevisions: prepared.interestRevisions,
+      preferenceRevisions: prepared.preferenceRevisions,
+      preferenceGuard: prepared.preferenceGuard,
+      interests: prepared.interests,
+      preferences: prepared.preferences,
+      history: prepared.history,
+      repository: options.repository,
+      now: options.clock.now,
     });
     const started = await startRun({
       runId: executionId,
       signal: active?.controller.signal,
       kind: 'recommendation',
+      modelSelection: settings.recommendationModel,
       requestId: current.requestId,
       localDate: current.localDate,
     });
@@ -515,15 +762,17 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
         complete(current, { status: 'model_unavailable', localDate: current.localDate });
         return;
       }
-      complete(current, failureResult(
-        current.localDate,
-        'agent_execution_failed',
-        'Recommendation execution lost ownership.',
-        false,
-      ));
+      complete(
+        current,
+        failureResult(
+          current.localDate,
+          'agent_execution_failed',
+          'Recommendation execution lost ownership.',
+          false,
+        ),
+      );
       return;
     }
-
   }
 
   function complete(current: ActiveRequest, result: WaitRecommendationResult): void {
@@ -532,15 +781,18 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     latest = { requestId: current.requestId, result };
     active = undefined;
     lastCheck = result;
-    if (result.status === 'waiting_for_candidates') scheduleCandidateWait(result.localDate, current.trigger);
+    if (result.status === 'waiting_for_candidates')
+      scheduleCandidateWait(result.localDate, current.trigger);
   }
 
   const scheduler = createRecommendationScheduler({
     now: options.clock.now,
     timezone: options.timezone.get,
-    generationTime: () => readConfiguration(options.settings).discovery.recommendationGenerationTime,
+    generationTime: () =>
+      readConfiguration(options.settings).discovery.recommendationGenerationTime,
     ensure: requestRecommendation,
-    onScheduledError: (error) => options.onBackgroundError?.(error, { operation: 'scheduled_request' }),
+    onScheduledError: (error) =>
+      options.onBackgroundError?.(error, { operation: 'scheduled_request' }),
     ...(options.timers ? { timers: options.timers } : {}),
   });
 
@@ -552,7 +804,12 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     async wait(request) {
       if (!active || active.requestId !== request.requestId) {
         if (latest?.requestId === request.requestId) return latest.result;
-        return failureResult(localDateAt(options.clock.now(), options.timezone.get()), 'agent_execution_failed', 'Recommendation request was not found.', false);
+        return failureResult(
+          localDateAt(options.clock.now(), options.timezone.get()),
+          'agent_execution_failed',
+          'Recommendation request was not found.',
+          false,
+        );
       }
       return waitFor(active, request.timeoutMs);
     },
@@ -561,11 +818,27 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       const collection = options.repository.getCollection(localDate, true);
       if (collection) return { status: 'published', collection };
       if (active && active.localDate === localDate) {
-        return { status: 'running', localDate, requestId: active.requestId, phase: active.executionId ? 'executing' : 'preparing_preferences', executionId: active.executionId };
+        return {
+          status: 'running',
+          localDate,
+          requestId: active.requestId,
+          phase: active.executionId ? 'executing' : 'preparing_preferences',
+          executionId: active.executionId,
+        };
       }
-      if (lastCheck && 'localDate' in lastCheck && lastCheck.localDate === localDate) return lastCheck;
-      if (latest && 'localDate' in latest.result && latest.result.localDate === localDate) return latest.result;
+      if (lastCheck && 'localDate' in lastCheck && lastCheck.localDate === localDate)
+        return lastCheck;
+      if (latest && 'localDate' in latest.result && latest.result.localDate === localDate)
+        return latest.result;
       return { status: 'not_generated', localDate };
+    },
+    updateSchedule() {
+      scheduler.updateSchedule();
+      const waiting = candidateWait;
+      if (waiting) {
+        clearCandidateWait();
+        scheduleCandidateWait(waiting.localDate, waiting.trigger);
+      }
     },
     getNextScheduledAt: () => scheduler.getNextScheduledAt(),
     async shutdown() {
@@ -575,7 +848,8 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       const current = active;
       if (current) {
         current.controller.abort();
-        if (current.retryTimer !== undefined) runtimeTimers(options).clearTimeout(current.retryTimer);
+        if (current.retryTimer !== undefined)
+          runtimeTimers(options).clearTimeout(current.retryTimer);
         if (current.executionId) await options.runtime.cancelRun(current.executionId);
         complete(current, { status: 'cancelled', localDate: current.localDate });
       }
@@ -584,8 +858,13 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
   };
 }
 
-function classifyRecommendation(result: RequestRecommendationResult | WaitRecommendationResult): OperationCompletion {
-  if (result.status === 'failed') return { outcome: { status: 'error', code: result.failure.code, message: result.failure.message } };
+function classifyRecommendation(
+  result: RequestRecommendationResult | WaitRecommendationResult,
+): OperationCompletion {
+  if (result.status === 'failed')
+    return {
+      outcome: { status: 'error', code: result.failure.code, message: result.failure.message },
+    };
   if (result.status === 'cancelled') return { outcome: { status: 'cancelled' } };
   return { outcome: { status: 'ok', code: result.status } };
 }
@@ -596,15 +875,20 @@ function prepareSnapshot(
   localDate: string,
   settings: RecommendationSettings,
 ) {
-  const pool = options.repository.getCandidatePoolSnapshot(candidatePoolSettings({
-    minimumCount: settings.candidatePoolMinimumCount,
-    maximumCount: settings.candidatePoolMaximumCount,
-    candidateValidityDays: settings.candidateValidityDays,
-    candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
-  }));
-  const interests = options.repository.listNonDeletedInterests().filter(({ status }) => status === 'active');
+  const pool = options.repository.getCandidatePoolSnapshot(
+    candidatePoolSettings({
+      minimumCount: settings.candidatePoolMinimumCount,
+      maximumCount: settings.candidatePoolMaximumCount,
+      candidateValidityDays: settings.candidateValidityDays,
+      candidateContentExcerptMaxCharacters: settings.candidateContentExcerptMaxCharacters,
+    }),
+  );
+  const interests = options.repository
+    .listNonDeletedInterests()
+    .filter(({ status }) => status === 'active');
   const effectivePreferences = options.repository.listPreferenceSetDetails({ effectiveOnly: true });
-  const preferences = options.preferenceSource?.(structuredClone(effectivePreferences)) ?? effectivePreferences;
+  const preferences =
+    options.preferenceSource?.(structuredClone(effectivePreferences)) ?? effectivePreferences;
   const history = options.repository.listRecommendationHistory('1970-01-01T00:00:00.000Z');
   const rankingHistory: RecommendationHistoryItem[] = history.map((item) => ({
     recommendationId: item.id,
@@ -633,16 +917,26 @@ function prepareSnapshot(
     ranking,
     interestRevisions: interests.map(({ id, revision }) => ({ interestId: id, revision })),
     preferenceGuard: options.repository.getPreferenceGuard(),
-    preferenceRevisions: preferences.map(({ preferenceSet }) => ({ preferenceSetId: preferenceSet.id, revision: preferenceSet.revision })),
+    preferenceRevisions: preferences.map(({ preferenceSet }) => ({
+      preferenceSetId: preferenceSet.id,
+      revision: preferenceSet.revision,
+    })),
   };
 }
 
-
-function createActiveRequest(requestId: string, localDate: string, trigger: RecommendationTrigger): ActiveRequest {
+function createActiveRequest(
+  requestId: string,
+  localDate: string,
+  trigger: RecommendationTrigger,
+): ActiveRequest {
   let resolve!: (result: WaitRecommendationResult) => void;
-  const completion = new Promise<WaitRecommendationResult>((settle) => { resolve = settle; });
+  const completion = new Promise<WaitRecommendationResult>((settle) => {
+    resolve = settle;
+  });
   let resolveExecution!: (executionId: string | undefined) => void;
-  const executionReady = new Promise<string | undefined>((settle) => { resolveExecution = settle; });
+  const executionReady = new Promise<string | undefined>((settle) => {
+    resolveExecution = settle;
+  });
   let executionResolved = false;
   let settled = false;
   return {
@@ -673,19 +967,31 @@ function createActiveRequest(requestId: string, localDate: string, trigger: Reco
 }
 
 function runtimeTimers(options: CreateRecommendationsOptions) {
-  return options.timers ?? {
-    setTimeout: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
-    clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-  };
+  return (
+    options.timers ?? {
+      setTimeout: (callback: () => void, delayMs: number) => setTimeout(callback, delayMs),
+      clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    }
+  );
 }
 
-async function waitFor(active: ActiveRequest, timeoutMs: number): Promise<WaitRecommendationResult> {
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) throw new Error('timeoutMs must be a positive integer.');
+async function waitFor(
+  active: ActiveRequest,
+  timeoutMs: number,
+): Promise<WaitRecommendationResult> {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1)
+    throw new Error('timeoutMs must be a positive integer.');
   let handle: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<WaitRecommendationResult>((resolve) => {
-    handle = setTimeout(() => resolve({
-      status: 'timed_out', localDate: active.localDate, requestId: active.requestId,
-    }), timeoutMs);
+    handle = setTimeout(
+      () =>
+        resolve({
+          status: 'timed_out',
+          localDate: active.localDate,
+          requestId: active.requestId,
+        }),
+      timeoutMs,
+    );
   });
   const result = await Promise.race([active.completion, timeout]);
   if (handle) clearTimeout(handle);
@@ -703,9 +1009,13 @@ function failureResult(
 
 export function localDateAt(instant: string, timezone: string): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(new Date(instant));
-  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
   return `${value('year')}-${value('month')}-${value('day')}`;
 }
 

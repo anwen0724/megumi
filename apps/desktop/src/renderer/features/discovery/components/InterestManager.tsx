@@ -13,7 +13,10 @@ import {
 } from 'react';
 import { Check, MoreHorizontal, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryConfigurationUiDto, DiscoveryHomeUiResult } from '@megumi/application/contracts';
+import type {
+  DiscoveryConfigurationUiDto,
+  DiscoveryHomeUiResult,
+} from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button, cx } from '../../../shared/ui';
@@ -31,7 +34,13 @@ type ManagerView = 'interests' | 'settings';
 type DiscoverySettings = DiscoveryConfigurationUiDto;
 const EXIT_SETTLE_MS = 260;
 
-export function InterestManager({ open, interests, onClose, onChanged, onOpenContentSources }: InterestManagerProps) {
+export function InterestManager({
+  open,
+  interests,
+  onClose,
+  onChanged,
+  onOpenContentSources,
+}: InterestManagerProps) {
   const { t } = useTranslation('discovery');
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -51,7 +60,8 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
 
   useEffect(() => {
     if (open) {
-      previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      previousFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setRendered(true);
       setView('interests');
       setEditingInterestId(null);
@@ -65,16 +75,21 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     }
 
     setVisible(false);
-    const exitTimer = window.setTimeout(() => {
-      setRendered(false);
-      previousFocusRef.current?.focus();
-    }, prefersReducedMotion() ? 0 : EXIT_SETTLE_MS);
+    const exitTimer = window.setTimeout(
+      () => {
+        setRendered(false);
+        previousFocusRef.current?.focus();
+      },
+      prefersReducedMotion() ? 0 : EXIT_SETTLE_MS,
+    );
     return () => window.clearTimeout(exitTimer);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    setDrafts(Object.fromEntries(interests.map((interest) => [interest.interestId, interest.description])));
+    setDrafts(
+      Object.fromEntries(interests.map((interest) => [interest.interestId, interest.description])),
+    );
   }, [open, interests]);
 
   useEffect(() => {
@@ -89,11 +104,13 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     return () => window.clearInterval(timer);
   }, [open, view]);
 
-  const settingsDirty = useMemo(() => (
-    settings !== null
-    && persistedSettings !== null
-    && JSON.stringify(settings) !== JSON.stringify(persistedSettings)
-  ), [persistedSettings, settings]);
+  const settingsDirty = useMemo(
+    () =>
+      settings !== null &&
+      persistedSettings !== null &&
+      JSON.stringify(settings) !== JSON.stringify(persistedSettings),
+    [persistedSettings, settings],
+  );
 
   async function loadSettings() {
     try {
@@ -111,7 +128,9 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     }
   }
 
-  async function changeInterest(payload: Parameters<typeof window.megumi.discovery.changeInterest>[0]['payload']) {
+  async function changeInterest(
+    payload: Parameters<typeof window.megumi.discovery.changeInterest>[0]['payload'],
+  ) {
     setBusy(true);
     setError(null);
     try {
@@ -153,15 +172,16 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     setError(null);
     setSaved(false);
     try {
-      const result = await window.megumi.discovery.updateConfiguration(createRendererRuntimeIpcRequest(
-        IPC_CHANNELS.discovery.configurationUpdate,
-        {
+      const result = await window.megumi.discovery.updateConfiguration(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationUpdate, {
           conversationRecognitionEnabled: settings.conversationRecognitionEnabled,
           recommendationGenerationTime: settings.recommendationGenerationTime,
           recommendationTargetCount: settings.recommendationTargetCount,
-          enabledSources: settings.sources.filter((source) => source.enabled).map((source) => source.sourceId),
-        },
-      ));
+          enabledSources: settings.sources
+            .filter((source) => source.enabled)
+            .map((source) => source.sourceId),
+        }),
+      );
       if (!result.ok) {
         setError(t('actionFailed'));
         return;
@@ -170,6 +190,8 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
       setSettings(savedSettings);
       setPersistedSettings(savedSettings);
       setSaved(true);
+      if (savedSettings.scheduling.status === 'failed')
+        setError(savedSettings.scheduling.error.message);
     } catch {
       setError(t('actionFailed'));
     } finally {
@@ -184,17 +206,20 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     );
     if (!result.ok) return;
     const latestById = new Map(result.data.sources.map((source) => [source.sourceId, source]));
-    const merge = (current: DiscoverySettings | null) => current ? ({
-      ...current,
-      sources: current.sources.map((source) => latestById.get(source.sourceId) ?? source),
-    }) : current;
+    const merge = (current: DiscoverySettings | null) =>
+      current
+        ? {
+            ...current,
+            sources: current.sources.map((source) => latestById.get(source.sourceId) ?? source),
+          }
+        : current;
     setSettings(merge);
     setPersistedSettings(merge);
   }
 
   function updateSettings(update: (current: DiscoverySettings) => DiscoverySettings) {
     setSaved(false);
-    setSettings((current) => current ? update(current) : current);
+    setSettings((current) => (current ? update(current) : current));
   }
 
   function cancelEditing(interestId: string, description: string) {
@@ -210,9 +235,11 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
     }
     if (event.key !== 'Tab' || !dialogRef.current) return;
 
-    const focusable = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-    ));
+    const focusable = Array.from(
+      dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      ),
+    );
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -228,10 +255,10 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
   if (!rendered) return null;
 
   const settingsValid = Boolean(
-    settings
-    && settings.sources.some((source) => source.enabled)
-    && settings.recommendationTargetCount >= 1
-    && settings.recommendationTargetCount <= 100,
+    settings &&
+    settings.sources.some((source) => source.enabled) &&
+    settings.recommendationTargetCount >= 1 &&
+    settings.recommendationTargetCount <= 100,
   );
 
   return (
@@ -263,10 +290,20 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
         <header className="border-b border-[var(--color-border)] bg-[var(--color-app-bg)]/95 px-6 pb-4 pt-5 backdrop-blur">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 id="interest-manager-title" className="text-xl font-semibold tracking-[-0.025em] text-[var(--color-text)]">{t('managementTitle')}</h2>
-              <p className="mt-1 max-w-md text-sm leading-5 text-[var(--color-text-muted)]">{t('managementDescription')}</p>
+              <h2
+                id="interest-manager-title"
+                className="text-xl font-semibold tracking-[-0.025em] text-[var(--color-text)]"
+              >
+                {t('managementTitle')}
+              </h2>
+              <p className="mt-1 max-w-md text-sm leading-5 text-[var(--color-text-muted)]">
+                {t('managementDescription')}
+              </p>
               <p className="mt-2 text-xs font-medium text-[var(--color-text-subtle)]">
-                {t('managementSummary', { count: interests.length, time: settings?.recommendationGenerationTime ?? '—' })}
+                {t('managementSummary', {
+                  count: interests.length,
+                  time: settings?.recommendationGenerationTime ?? '—',
+                })}
               </p>
             </div>
             <button
@@ -280,11 +317,23 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
             </button>
           </div>
 
-          <div role="tablist" aria-label={t('managementTitle')} className="mt-5 grid grid-cols-2 rounded-xl bg-[var(--color-surface-muted)] p-1">
-            <ManagerTab active={view === 'interests'} controls="interest-manager-interests" onClick={() => setView('interests')}>
+          <div
+            role="tablist"
+            aria-label={t('managementTitle')}
+            className="mt-5 grid grid-cols-2 rounded-xl bg-[var(--color-surface-muted)] p-1"
+          >
+            <ManagerTab
+              active={view === 'interests'}
+              controls="interest-manager-interests"
+              onClick={() => setView('interests')}
+            >
               {t('interestsTab', { count: interests.length })}
             </ManagerTab>
-            <ManagerTab active={view === 'settings'} controls="interest-manager-settings" onClick={() => setView('settings')}>
+            <ManagerTab
+              active={view === 'settings'}
+              controls="interest-manager-settings"
+              onClick={() => setView('settings')}
+            >
               {t('settingsTab')}
             </ManagerTab>
           </div>
@@ -292,9 +341,15 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {view === 'interests' ? (
-            <section id="interest-manager-interests" role="tabpanel" className="animate-[megumi-panel-in_180ms_ease-out] space-y-5 p-6 motion-reduce:animate-none">
+            <section
+              id="interest-manager-interests"
+              role="tabpanel"
+              className="animate-[megumi-panel-in_180ms_ease-out] space-y-5 p-6 motion-reduce:animate-none"
+            >
               <form onSubmit={(event) => void addInterest(event)} className="flex gap-2">
-                <label className="sr-only" htmlFor="new-discovery-interest">{t('addInterestLabel')}</label>
+                <label className="sr-only" htmlFor="new-discovery-interest">
+                  {t('addInterestLabel')}
+                </label>
                 <input
                   id="new-discovery-interest"
                   aria-label={t('addInterestLabel')}
@@ -304,8 +359,14 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
                   placeholder={t('addInterestPlaceholder')}
                   className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-2.5 text-sm text-[var(--color-text)] outline-none transition-shadow placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
                 />
-                <Button type="submit" variant="primary" className="min-h-11 rounded-xl" disabled={busy || !newInterest.trim()}>
-                  <Plus size={15} aria-hidden="true" />{t('add')}
+                <Button
+                  type="submit"
+                  variant="primary"
+                  className="min-h-11 rounded-xl"
+                  disabled={busy || !newInterest.trim()}
+                >
+                  <Plus size={15} aria-hidden="true" />
+                  {t('add')}
                 </Button>
               </form>
 
@@ -314,10 +375,16 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
                   const editing = editingInterestId === interest.interestId;
                   const menuOpen = menuInterestId === interest.interestId;
                   return (
-                    <article key={interest.interestId} className="relative rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 shadow-sm transition-shadow hover:shadow-[var(--shadow-soft)]">
+                    <article
+                      key={interest.interestId}
+                      className="relative rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 shadow-sm transition-shadow hover:shadow-[var(--shadow-soft)]"
+                    >
                       {editing ? (
                         <div className="animate-[megumi-panel-in_150ms_ease-out] motion-reduce:animate-none">
-                          <label className="sr-only" htmlFor={`interest-editor-${interest.interestId}`}>
+                          <label
+                            className="sr-only"
+                            htmlFor={`interest-editor-${interest.interestId}`}
+                          >
                             {t('editInterest', { description: interest.description })}
                           </label>
                           <textarea
@@ -326,12 +393,32 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
                             rows={3}
                             value={drafts[interest.interestId] ?? interest.description}
                             disabled={busy}
-                            onChange={(event) => setDrafts((current) => ({ ...current, [interest.interestId]: event.target.value }))}
+                            onChange={(event) =>
+                              setDrafts((current) => ({
+                                ...current,
+                                [interest.interestId]: event.target.value,
+                              }))
+                            }
                             className="w-full resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] px-3 py-2.5 text-sm leading-6 text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
                           />
                           <div className="mt-3 flex justify-end gap-2">
-                            <Button size="sm" variant="ghost" disabled={busy} onClick={() => cancelEditing(interest.interestId, interest.description)}>{t('cancel')}</Button>
-                            <Button size="sm" disabled={busy || !drafts[interest.interestId]?.trim()} onClick={() => void saveInterest(interest.interestId)}>{t('saveChanges')}</Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={busy}
+                              onClick={() =>
+                                cancelEditing(interest.interestId, interest.description)
+                              }
+                            >
+                              {t('cancel')}
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={busy || !drafts[interest.interestId]?.trim()}
+                              onClick={() => void saveInterest(interest.interestId)}
+                            >
+                              {t('saveChanges')}
+                            </Button>
                           </div>
                         </div>
                       ) : (
@@ -347,22 +434,31 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
                           deleteLabel={t('delete')}
                           stateLabel={t(interest.status === 'active' ? 'active' : 'paused')}
                           switchLabel={`${t(interest.status === 'active' ? 'pause' : 'resume')} ${interest.description}`}
-                          onToggleMenu={() => setMenuInterestId(menuOpen ? null : interest.interestId)}
+                          onToggleMenu={() =>
+                            setMenuInterestId(menuOpen ? null : interest.interestId)
+                          }
                           onEdit={() => {
                             setMenuInterestId(null);
                             setEditingInterestId(interest.interestId);
                           }}
                           onDelete={() => {
                             setMenuInterestId(null);
-                            void changeInterest({ action: 'delete', interestId: interest.interestId });
+                            void changeInterest({
+                              action: 'delete',
+                              interestId: interest.interestId,
+                            });
                           }}
-                          onToggleActive={() => void changeInterest({
-                            action: interest.status === 'active' ? 'pause' : 'resume',
-                            interestId: interest.interestId,
-                          })}
+                          onToggleActive={() =>
+                            void changeInterest({
+                              action: interest.status === 'active' ? 'pause' : 'resume',
+                              interestId: interest.interestId,
+                            })
+                          }
                         />
                       )}
-                      <PreferencePanel scope={{ scope: 'interest', interestId: interest.interestId }} />
+                      <PreferencePanel
+                        scope={{ scope: 'interest', interestId: interest.interestId }}
+                      />
                     </article>
                   );
                 })}
@@ -370,18 +466,45 @@ export function InterestManager({ open, interests, onClose, onChanged, onOpenCon
               </div>
             </section>
           ) : (
-          <SettingsPanel settings={settings} busy={busy} onUpdate={updateSettings} onOpenContentSources={onOpenContentSources} />
+            <SettingsPanel
+              settings={settings}
+              busy={busy}
+              onUpdate={updateSettings}
+              onOpenContentSources={onOpenContentSources}
+            />
           )}
 
-          {error ? <p role="alert" className={cx('mx-6 mb-6 rounded-xl px-4 py-3 text-sm', 'bg-[var(--color-danger-soft)] text-[var(--color-danger)]')}>{error}</p> : null}
+          {error ? (
+            <p
+              role="alert"
+              className={cx(
+                'mx-6 mb-6 rounded-xl px-4 py-3 text-sm',
+                'bg-[var(--color-danger-soft)] text-[var(--color-danger)]',
+              )}
+            >
+              {error}
+            </p>
+          ) : null}
         </div>
 
         {view === 'settings' && settings ? (
           <footer className="flex min-h-20 items-center justify-between gap-4 border-t border-[var(--color-border)] bg-[var(--color-app-bg)]/95 px-6 py-4 backdrop-blur">
-            <span aria-live="polite" className={cx('inline-flex items-center gap-1.5 text-xs transition-opacity', saved ? 'text-[var(--color-success)] opacity-100' : 'opacity-0')}>
-              <Check size={14} aria-hidden="true" />{t('saved')}
+            <span
+              aria-live="polite"
+              className={cx(
+                'inline-flex items-center gap-1.5 text-xs transition-opacity',
+                saved ? 'text-[var(--color-success)] opacity-100' : 'opacity-0',
+              )}
+            >
+              <Check size={14} aria-hidden="true" />
+              {t('saved')}
             </span>
-            <Button variant="primary" className="min-h-11 rounded-xl" disabled={busy || !settingsValid || !settingsDirty} onClick={() => void saveSettings()}>
+            <Button
+              variant="primary"
+              className="min-h-11 rounded-xl"
+              disabled={busy || !settingsValid || !settingsDirty}
+              onClick={() => void saveSettings()}
+            >
               {t('saveSettings')}
             </Button>
           </footer>
@@ -416,11 +539,20 @@ function InterestSummary(props: {
     <>
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <p className="whitespace-pre-wrap text-sm font-medium leading-6 text-[var(--color-text)]">{props.description}</p>
+          <p className="whitespace-pre-wrap text-sm font-medium leading-6 text-[var(--color-text)]">
+            {props.description}
+          </p>
           <div className="mt-2 flex items-center gap-2 text-[0.72rem] text-[var(--color-text-subtle)]">
-            <span>{props.origin}</span><span aria-hidden="true">·</span>
+            <span>{props.origin}</span>
+            <span aria-hidden="true">·</span>
             <span className="inline-flex items-center gap-1.5">
-              <span className={cx('h-1.5 w-1.5 rounded-full', props.active ? 'bg-[var(--color-success)]' : 'bg-[var(--color-text-subtle)]')} aria-hidden="true" />
+              <span
+                className={cx(
+                  'h-1.5 w-1.5 rounded-full',
+                  props.active ? 'bg-[var(--color-success)]' : 'bg-[var(--color-text-subtle)]',
+                )}
+                aria-hidden="true"
+              />
               {props.status}
             </span>
           </div>
@@ -438,12 +570,27 @@ function InterestSummary(props: {
             <MoreHorizontal size={18} aria-hidden="true" />
           </button>
           {props.menuOpen ? (
-            <div role="menu" className="absolute right-0 top-11 z-20 min-w-32 animate-[megumi-panel-in_120ms_ease-out] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-1.5 shadow-[var(--shadow-soft)] motion-reduce:animate-none">
-              <button type="button" role="menuitem" onClick={props.onEdit} className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]">
-                <Pencil size={14} aria-hidden="true" />{props.editLabel}
+            <div
+              role="menu"
+              className="absolute right-0 top-11 z-20 min-w-32 animate-[megumi-panel-in_120ms_ease-out] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-1.5 shadow-[var(--shadow-soft)] motion-reduce:animate-none"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={props.onEdit}
+                className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-muted)]"
+              >
+                <Pencil size={14} aria-hidden="true" />
+                {props.editLabel}
               </button>
-              <button type="button" role="menuitem" onClick={props.onDelete} className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-soft)]">
-                <Trash2 size={14} aria-hidden="true" />{props.deleteLabel}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={props.onDelete}
+                className="flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-lg px-3 text-left text-sm text-[var(--color-danger)] transition-colors hover:bg-[var(--color-danger-soft)]"
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                {props.deleteLabel}
               </button>
             </div>
           ) : null}
@@ -451,13 +598,23 @@ function InterestSummary(props: {
       </div>
       <div className="mt-3 flex items-center justify-between border-t border-[var(--color-border)] pt-3">
         <span className="text-xs text-[var(--color-text-muted)]">{props.stateLabel}</span>
-        <Switch checked={props.active} disabled={props.busy} label={props.switchLabel} onCheckedChange={props.onToggleActive} />
+        <Switch
+          checked={props.active}
+          disabled={props.busy}
+          label={props.switchLabel}
+          onCheckedChange={props.onToggleActive}
+        />
       </div>
     </>
   );
 }
 
-function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
+function SettingsPanel({
+  settings,
+  busy,
+  onUpdate,
+  onOpenContentSources,
+}: {
   settings: DiscoverySettings | null;
   busy: boolean;
   onUpdate(update: (current: DiscoverySettings) => DiscoverySettings): void;
@@ -465,32 +622,79 @@ function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
 }) {
   const { t } = useTranslation('discovery');
   return (
-    <section id="interest-manager-settings" role="tabpanel" className="animate-[megumi-panel-in_180ms_ease-out] p-6 motion-reduce:animate-none">
+    <section
+      id="interest-manager-settings"
+      role="tabpanel"
+      className="animate-[megumi-panel-in_180ms_ease-out] p-6 motion-reduce:animate-none"
+    >
       <h3 className="text-base font-semibold text-[var(--color-text)]">{t('settingsTitle')}</h3>
-      <p className="mt-1 text-sm leading-5 text-[var(--color-text-muted)]">{t('settingsDescription')}</p>
+      <p className="mt-1 text-sm leading-5 text-[var(--color-text-muted)]">
+        {t('settingsDescription')}
+      </p>
       {settings ? (
         <>
           <div className="mt-5 divide-y divide-[var(--color-border)] rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4">
             <SettingRow label={t('recognition')}>
-              <Switch checked={settings.conversationRecognitionEnabled} disabled={busy} label={t('recognition')} onCheckedChange={(checked) => onUpdate((current) => ({ ...current, conversationRecognitionEnabled: checked }))} />
+              <Switch
+                checked={settings.conversationRecognitionEnabled}
+                disabled={busy}
+                label={t('recognition')}
+                onCheckedChange={(checked) =>
+                  onUpdate((current) => ({ ...current, conversationRecognitionEnabled: checked }))
+                }
+              />
             </SettingRow>
             <SettingRow label={t('generationTime')} htmlFor="discovery-generation-time">
-              <input id="discovery-generation-time" type="time" value={settings.recommendationGenerationTime} disabled={busy} onChange={(event) => onUpdate((current) => ({ ...current, recommendationGenerationTime: event.target.value }))} className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20" />
+              <input
+                id="discovery-generation-time"
+                type="time"
+                value={settings.recommendationGenerationTime}
+                disabled={busy}
+                onChange={(event) =>
+                  onUpdate((current) => ({
+                    ...current,
+                    recommendationGenerationTime: event.target.value,
+                  }))
+                }
+                className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
+              />
             </SettingRow>
             <SettingRow label={t('targetCount')} htmlFor="discovery-target-count">
-              <input id="discovery-target-count" aria-label={t('targetCount')} type="number" min={1} max={100} value={settings.recommendationTargetCount} disabled={busy} onChange={(event) => onUpdate((current) => ({ ...current, recommendationTargetCount: Number(event.target.value) }))} className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20" />
+              <input
+                id="discovery-target-count"
+                aria-label={t('targetCount')}
+                type="number"
+                min={1}
+                max={100}
+                value={settings.recommendationTargetCount}
+                disabled={busy}
+                onChange={(event) =>
+                  onUpdate((current) => ({
+                    ...current,
+                    recommendationTargetCount: Number(event.target.value),
+                  }))
+                }
+                className="min-h-11 w-32 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
+              />
             </SettingRow>
           </div>
 
           <fieldset className="mt-6">
-            <legend className="text-sm font-semibold text-[var(--color-text)]">{t('sources')}</legend>
-            <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">{t('sourcesDescription')}</p>
+            <legend className="text-sm font-semibold text-[var(--color-text)]">
+              {t('sources')}
+            </legend>
+            <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
+              {t('sourcesDescription')}
+            </p>
             <div className="mt-3 space-y-2">
               {settings.sources.map((source) => {
                 const label = source.name;
                 const checked = source.enabled;
                 return (
-                  <div key={source.sourceId} className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+                  <div
+                    key={source.sourceId}
+                    className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2"
+                  >
                     <span className="min-w-0 text-sm text-[var(--color-text)]">
                       <span className="block">{label}</span>
                       <span className="block text-xs text-[var(--color-text-muted)]">
@@ -498,17 +702,42 @@ function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
                           ? t('sourceReadyWithProvider', { provider: source.provider })
                           : t(sourceStateTranslationKey(source.connectionState))}
                       </span>
-                      {source.checkedAt ? <span className="mt-0.5 block text-[0.68rem] text-[var(--color-text-subtle)]">{t('sourceCheckedAt', { time: formatSourceTime(source.checkedAt) })}</span> : null}
-                      {source.retryAt ? <span className="mt-0.5 block text-[0.68rem] text-[var(--color-text-subtle)]">{t('sourceRetryAt', { time: formatSourceTime(source.retryAt) })}</span> : null}
+                      {source.checkedAt ? (
+                        <span className="mt-0.5 block text-[0.68rem] text-[var(--color-text-subtle)]">
+                          {t('sourceCheckedAt', { time: formatSourceTime(source.checkedAt) })}
+                        </span>
+                      ) : null}
+                      {source.retryAt ? (
+                        <span className="mt-0.5 block text-[0.68rem] text-[var(--color-text-subtle)]">
+                          {t('sourceRetryAt', { time: formatSourceTime(source.retryAt) })}
+                        </span>
+                      ) : null}
                     </span>
                     <span className="flex items-center gap-1">
-                      <Button type="button" size="sm" variant="ghost" disabled={busy || !onOpenContentSources} onClick={onOpenContentSources}>{t('configureSources')}</Button>
-                      <Switch checked={checked} disabled={busy} label={label} onCheckedChange={(nextChecked) => onUpdate((current) => ({
-                        ...current,
-                        sources: current.sources.map((item) => item.sourceId === source.sourceId
-                          ? { ...item, enabled: nextChecked }
-                          : item),
-                      }))} />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy || !onOpenContentSources}
+                        onClick={onOpenContentSources}
+                      >
+                        {t('configureSources')}
+                      </Button>
+                      <Switch
+                        checked={checked}
+                        disabled={busy}
+                        label={label}
+                        onCheckedChange={(nextChecked) =>
+                          onUpdate((current) => ({
+                            ...current,
+                            sources: current.sources.map((item) =>
+                              item.sourceId === source.sourceId
+                                ? { ...item, enabled: nextChecked }
+                                : item,
+                            ),
+                          }))
+                        }
+                      />
                     </span>
                   </div>
                 );
@@ -516,57 +745,124 @@ function SettingsPanel({ settings, busy, onUpdate, onOpenContentSources }: {
             </div>
           </fieldset>
         </>
-      ) : <p className="mt-5 text-sm text-[var(--color-text-muted)]">{t('loading')}</p>}
+      ) : (
+        <p className="mt-5 text-sm text-[var(--color-text-muted)]">{t('loading')}</p>
+      )}
     </section>
   );
 }
 
 function sourceStateTranslationKey(state: DiscoverySettings['sources'][number]['connectionState']) {
-  return ({
-    ready: 'sourceReady',
-    unknown: 'sourceUnknown',
-    login_required: 'sourceLoginRequired',
-    rate_limited: 'sourceRateLimited',
-    risk_controlled: 'sourceRiskControlled',
-    not_configured: 'sourceNotConfigured',
-  } as const)[state];
+  return (
+    {
+      ready: 'sourceReady',
+      unknown: 'sourceUnknown',
+      login_required: 'sourceLoginRequired',
+      rate_limited: 'sourceRateLimited',
+      risk_controlled: 'sourceRiskControlled',
+      not_configured: 'sourceNotConfigured',
+    } as const
+  )[state];
 }
 
 function formatSourceTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(value),
+  );
 }
 
-function ManagerTab({ active, controls, onClick, children }: { active: boolean; controls: string; onClick(): void; children: string }) {
+function ManagerTab({
+  active,
+  controls,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  controls: string;
+  onClick(): void;
+  children: string;
+}) {
   return (
-    <button type="button" role="tab" aria-selected={active} aria-controls={controls} onClick={onClick} className={cx(
-      'min-h-10 cursor-pointer rounded-lg px-3 text-sm font-medium transition-[background-color,color,box-shadow] duration-150',
-      active ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
-    )}>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      aria-controls={controls}
+      onClick={onClick}
+      className={cx(
+        'min-h-10 cursor-pointer rounded-lg px-3 text-sm font-medium transition-[background-color,color,box-shadow] duration-150',
+        active
+          ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-sm'
+          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+      )}
+    >
       {children}
     </button>
   );
 }
 
-function SettingRow({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
+function SettingRow({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex min-h-[4.5rem] items-center justify-between gap-4 py-3">
-      {htmlFor ? <label htmlFor={htmlFor} className="text-sm text-[var(--color-text)]">{label}</label> : <span className="max-w-[18rem] text-sm leading-5 text-[var(--color-text)]">{label}</span>}
+      {htmlFor ? (
+        <label htmlFor={htmlFor} className="text-sm text-[var(--color-text)]">
+          {label}
+        </label>
+      ) : (
+        <span className="max-w-[18rem] text-sm leading-5 text-[var(--color-text)]">{label}</span>
+      )}
       {children}
     </div>
   );
 }
 
-function Switch({ checked, disabled, label, onCheckedChange }: { checked: boolean; disabled?: boolean; label: string; onCheckedChange(checked: boolean): void }) {
+function Switch({
+  checked,
+  disabled,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onCheckedChange(checked: boolean): void;
+}) {
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} title={label} disabled={disabled} onClick={() => onCheckedChange(!checked)} className="inline-flex h-11 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-50">
-      <span aria-hidden="true" className={cx(
-        'relative h-6 w-11 rounded-full border transition-[background-color,border-color] duration-150',
-        checked ? 'border-[var(--color-accent)] bg-[var(--color-accent)]' : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
-      )}>
-        <span className={cx(
-          'absolute left-0.5 top-0.5 h-[1.125rem] w-[1.125rem] rounded-full shadow-sm transition-[transform,background-color] duration-150 ease-out',
-          checked ? 'translate-x-5 bg-[var(--color-accent-foreground)]' : 'translate-x-0 bg-[var(--color-text-subtle)]',
-        )} />
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={() => onCheckedChange(!checked)}
+      className="inline-flex h-11 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'relative h-6 w-11 rounded-full border transition-[background-color,border-color] duration-150',
+          checked
+            ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+            : 'border-[var(--color-border-strong)] bg-[var(--color-surface-muted)]',
+        )}
+      >
+        <span
+          className={cx(
+            'absolute left-0.5 top-0.5 h-[1.125rem] w-[1.125rem] rounded-full shadow-sm transition-[transform,background-color] duration-150 ease-out',
+            checked
+              ? 'translate-x-5 bg-[var(--color-accent-foreground)]'
+              : 'translate-x-0 bg-[var(--color-text-subtle)]',
+          )}
+        />
       </span>
     </button>
   );

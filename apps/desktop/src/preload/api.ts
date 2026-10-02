@@ -1,10 +1,26 @@
-import type { SettingsSnapshot, UpdateSettingsRequest, UpdateSettingsResult, CredentialTarget, CredentialValue, UpdateCredentialRequest } from '@megumi/application/settings/settings-contracts';
+import type {
+  SettingsSnapshot,
+  UpdateSettingsRequest,
+  UpdateSettingsResult,
+  CredentialTarget,
+  CredentialValue,
+  UpdateCredentialRequest,
+} from '@megumi/application/settings/settings-contracts';
 import type { ModelCatalogResult } from '@megumi/agent-runtime/runs/model-resolution';
 /*
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */
 import { ipcRenderer } from 'electron';
-import type { DiscoveryPreferenceDetailsPayload, DiscoveryPreferenceDetailsResult, DiscoveryPreferenceEvidencePayload, DiscoveryPreferenceEvidenceResult, DiscoveryPreferenceEditPayload, DiscoveryPreferenceEditResult, DiscoveryPreferenceDeletePayload, DiscoveryPreferenceDeleteResult } from '@megumi/application/contracts';
+import type {
+  DiscoveryPreferenceDetailsPayload,
+  DiscoveryPreferenceDetailsResult,
+  DiscoveryPreferenceEvidencePayload,
+  DiscoveryPreferenceEvidenceResult,
+  DiscoveryPreferenceEditPayload,
+  DiscoveryPreferenceEditResult,
+  DiscoveryPreferenceDeletePayload,
+  DiscoveryPreferenceDeleteResult,
+} from '@megumi/application/contracts';
 import type { AnyEvent } from '@megumi/application/contracts';
 import type {
   ApprovalHostResult,
@@ -58,10 +74,15 @@ import type {
   DiscoveryRecommendationUiDto,
   DiscoveryRecommendationStateResult,
   DiscoveryConfigurationUiDto,
+  DiscoveryConfigurationUpdateUiResult,
   DiscoverySourceUiDto,
 } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../main/ipc/channels';
-import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
+import type {
+  BusinessIpcChannel,
+  RuntimeIpcRequest,
+  RuntimeIpcResult,
+} from '../main/ipc/contracts';
 import type {
   ApprovalResolvePayload,
   InputSuggestionsPayload,
@@ -113,7 +134,10 @@ import {
   SessionMessagePresentationEventSchema,
   type SessionMessagePresentationEvent,
 } from '../main/ipc/session-message-presentation';
-import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
+import type {
+  CharacterWindowShapeRect,
+  CharacterWindowSnapshot,
+} from '../main/app/character-window-controller';
 import { parseSpeechInputEvent } from '@megumi/application/voice/speech-input/speech-input-schema';
 import { parseSpeechOutputEvent } from '@megumi/application/voice/speech-output/speech-output-schema';
 import type { SpeechInputEvent, SpeechOutputEvent } from '@megumi/application/voice/index';
@@ -122,7 +146,10 @@ import {
   type ApplicationUpdateSnapshot,
 } from '../application-update/application-update-contract';
 
-type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<TPayload, TChannel>;
+type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<
+  TPayload,
+  TChannel
+>;
 type EmptyPayload = Record<string, never>;
 type EmptyData = Record<string, never>;
 type SessionMessageSendData = SendUserInputPayload;
@@ -141,12 +168,16 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   ipcRenderer.postMessage(IPC_CHANNELS.voice.inputPort, null, [port]);
 });
 
-async function invokeRuntimeIpc<TPayload, TData extends object, TChannel extends BusinessIpcChannel>(
+async function invokeRuntimeIpc<
+  TPayload,
+  TData extends object,
+  TChannel extends BusinessIpcChannel,
+>(
   channel: TChannel,
   request: BusinessRequest<TPayload, TChannel>,
 ): Promise<RuntimeIpcResult<TData, TChannel>> {
   try {
-    return await ipcRenderer.invoke(channel, request) as RuntimeIpcResult<TData, TChannel>;
+    return (await ipcRenderer.invoke(channel, request)) as RuntimeIpcResult<TData, TChannel>;
   } catch {
     return {
       ok: false,
@@ -178,51 +209,84 @@ export const api = {
     close: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.window.close),
   },
   applicationUpdate: {
-    getSnapshot: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
-      await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.snapshotGet),
-    ),
-    checkNow: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
-      await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.check),
-    ),
-    setAutomaticChecksEnabled: async (enabled: boolean): Promise<ApplicationUpdateSnapshot> => (
-      ApplicationUpdateSnapshotSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.automaticChecksSet,
-        { enabled },
-      ))
-    ),
-    downloadUpdate: async (): Promise<ApplicationUpdateSnapshot> => ApplicationUpdateSnapshotSchema.parse(
-      await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.download),
-    ),
-    restartAndInstall: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.restartAndInstall),
-    openReleasePage: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.releasePageOpen),
+    getSnapshot: async (): Promise<ApplicationUpdateSnapshot> =>
+      ApplicationUpdateSnapshotSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.snapshotGet),
+      ),
+    checkNow: async (): Promise<ApplicationUpdateSnapshot> =>
+      ApplicationUpdateSnapshotSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.check),
+      ),
+    setAutomaticChecksEnabled: async (enabled: boolean): Promise<ApplicationUpdateSnapshot> =>
+      ApplicationUpdateSnapshotSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.automaticChecksSet, { enabled }),
+      ),
+    downloadUpdate: async (): Promise<ApplicationUpdateSnapshot> =>
+      ApplicationUpdateSnapshotSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.download),
+      ),
+    restartAndInstall: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.restartAndInstall),
+    openReleasePage: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.applicationUpdate.releasePageOpen),
     onSnapshot: (callback: (snapshot: ApplicationUpdateSnapshot) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, rawSnapshot: unknown) => {
         const parsed = ApplicationUpdateSnapshotSchema.safeParse(rawSnapshot);
         if (parsed.success) callback(parsed.data);
       };
       ipcRenderer.on(IPC_CHANNELS.applicationUpdate.snapshotChanged, listener);
-      return () => ipcRenderer.removeListener(IPC_CHANNELS.applicationUpdate.snapshotChanged, listener);
+      return () =>
+        ipcRenderer.removeListener(IPC_CHANNELS.applicationUpdate.snapshotChanged, listener);
     },
   },
   settingsRecovery: {
-    get: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.get>)
-      : Promise<RuntimeIpcResult<{ settingsPath: string }, typeof IPC_CHANNELS.settingsRecovery.get>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.get, request),
-    openDirectory: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.openDirectory>)
-      : Promise<RuntimeIpcResult<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.openDirectory>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.openDirectory, request),
-    restart: (request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.restart>)
-      : Promise<RuntimeIpcResult<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.restart>> =>
+    get: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.get>,
+    ): Promise<
+      RuntimeIpcResult<{ settingsPath: string }, typeof IPC_CHANNELS.settingsRecovery.get>
+    > => invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.get, request),
+    openDirectory: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.openDirectory>,
+    ): Promise<
+      RuntimeIpcResult<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.openDirectory>
+    > => invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.openDirectory, request),
+    restart: (
+      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.restart>,
+    ): Promise<RuntimeIpcResult<EmptyPayload, typeof IPC_CHANNELS.settingsRecovery.restart>> =>
       invokeRuntimeIpc(IPC_CHANNELS.settingsRecovery.restart, request),
   },
   settings: {
-    readSettings: (): Promise<RuntimeIpcResult<SettingsSnapshot, typeof IPC_CHANNELS.settings.read>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.read, requestFor(IPC_CHANNELS.settings.read, {})),
-    updateSettings: (request: UpdateSettingsRequest): Promise<RuntimeIpcResult<Extract<UpdateSettingsResult, { settings: SettingsSnapshot }>, typeof IPC_CHANNELS.settings.update>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.settings.update, requestFor(IPC_CHANNELS.settings.update, request)),
-    readCredential: (request: { target: CredentialTarget }): Promise<RuntimeIpcResult<CredentialValue, typeof IPC_CHANNELS.credentials.read>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.credentials.read, requestFor(IPC_CHANNELS.credentials.read, request)),
-    updateCredential: (request: UpdateCredentialRequest): Promise<RuntimeIpcResult<{ status: 'updated' | 'unchanged' }, typeof IPC_CHANNELS.credentials.update>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.credentials.update, requestFor(IPC_CHANNELS.credentials.update, request)),
+    readSettings: (): Promise<
+      RuntimeIpcResult<SettingsSnapshot, typeof IPC_CHANNELS.settings.read>
+    > => invokeRuntimeIpc(IPC_CHANNELS.settings.read, requestFor(IPC_CHANNELS.settings.read, {})),
+    updateSettings: (
+      request: UpdateSettingsRequest,
+    ): Promise<
+      RuntimeIpcResult<
+        Extract<UpdateSettingsResult, { settings: SettingsSnapshot }>,
+        typeof IPC_CHANNELS.settings.update
+      >
+    > =>
+      invokeRuntimeIpc(
+        IPC_CHANNELS.settings.update,
+        requestFor(IPC_CHANNELS.settings.update, request),
+      ),
+    readCredential: (request: {
+      target: CredentialTarget;
+    }): Promise<RuntimeIpcResult<CredentialValue, typeof IPC_CHANNELS.credentials.read>> =>
+      invokeRuntimeIpc(
+        IPC_CHANNELS.credentials.read,
+        requestFor(IPC_CHANNELS.credentials.read, request),
+      ),
+    updateCredential: (
+      request: UpdateCredentialRequest,
+    ): Promise<
+      RuntimeIpcResult<{ status: 'updated' | 'unchanged' }, typeof IPC_CHANNELS.credentials.update>
+    > =>
+      invokeRuntimeIpc(
+        IPC_CHANNELS.credentials.update,
+        requestFor(IPC_CHANNELS.credentials.update, request),
+      ),
     onChanged: (callback: () => void): (() => void) => {
       const listener = () => callback();
       ipcRenderer.on(IPC_CHANNELS.settings.changed, listener);
@@ -230,18 +294,37 @@ export const api = {
     },
   },
   models: {
-    getCatalog: (request: { workspaceId?: string } = {}): Promise<RuntimeIpcResult<ModelCatalogResult, typeof IPC_CHANNELS.models.getCatalog>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.models.getCatalog, requestFor(IPC_CHANNELS.models.getCatalog, request)),
+    getCatalog: (
+      request: { workspaceId?: string } = {},
+    ): Promise<RuntimeIpcResult<ModelCatalogResult, typeof IPC_CHANNELS.models.getCatalog>> =>
+      invokeRuntimeIpc(
+        IPC_CHANNELS.models.getCatalog,
+        requestFor(IPC_CHANNELS.models.getCatalog, request),
+      ),
   },
   tools: {
-    list: (): Promise<RuntimeIpcResult<{ tools: Array<{ identity: { sourceId: string; namespace: string; sourceToolName: string }; name: string; displayName: string }> }, typeof IPC_CHANNELS.tools.list>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.tools.list, requestFor(IPC_CHANNELS.tools.list, {})),
+    list: (): Promise<
+      RuntimeIpcResult<
+        {
+          tools: Array<{
+            identity: { sourceId: string; namespace: string; sourceToolName: string };
+            name: string;
+            displayName: string;
+          }>;
+        },
+        typeof IPC_CHANNELS.tools.list
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.tools.list, requestFor(IPC_CHANNELS.tools.list, {})),
   },
   command: {
     suggestions: (
-      request: BusinessRequest<InputSuggestionsPayload, typeof IPC_CHANNELS.session.inputSuggestions>,
-    ): Promise<RuntimeIpcResult<GetInputSuggestionsResult, typeof IPC_CHANNELS.session.inputSuggestions>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.session.inputSuggestions, request),
+      request: BusinessRequest<
+        InputSuggestionsPayload,
+        typeof IPC_CHANNELS.session.inputSuggestions
+      >,
+    ): Promise<
+      RuntimeIpcResult<GetInputSuggestionsResult, typeof IPC_CHANNELS.session.inputSuggestions>
+    > => invokeRuntimeIpc(IPC_CHANNELS.session.inputSuggestions, request),
   },
   skill: {
     list: (
@@ -270,7 +353,17 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.skill.refresh, request),
   },
   session: {
-    updateModelSelection: (request: BusinessRequest<SessionModelSelectionPayload, typeof IPC_CHANNELS.session.sessionModelSelection>): Promise<RuntimeIpcResult<SessionModelSelectionResult, typeof IPC_CHANNELS.session.sessionModelSelection>> => invokeRuntimeIpc(IPC_CHANNELS.session.sessionModelSelection, request),
+    updateModelSelection: (
+      request: BusinessRequest<
+        SessionModelSelectionPayload,
+        typeof IPC_CHANNELS.session.sessionModelSelection
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        SessionModelSelectionResult,
+        typeof IPC_CHANNELS.session.sessionModelSelection
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.session.sessionModelSelection, request),
     create: (
       request: BusinessRequest<SessionCreatePayload, typeof IPC_CHANNELS.session.sessionCreate>,
     ): Promise<RuntimeIpcResult<CreateSessionResult, typeof IPC_CHANNELS.session.sessionCreate>> =>
@@ -281,77 +374,147 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.session.sessionList, request),
     branchDraft: {
       create: (
-        request: BusinessRequest<SessionBranchDraftCreatePayload, typeof IPC_CHANNELS.session.branchDraftCreate>,
-      ): Promise<RuntimeIpcResult<SessionBranchDraftCreateData, typeof IPC_CHANNELS.session.branchDraftCreate>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.branchDraftCreate, request),
+        request: BusinessRequest<
+          SessionBranchDraftCreatePayload,
+          typeof IPC_CHANNELS.session.branchDraftCreate
+        >,
+      ): Promise<
+        RuntimeIpcResult<
+          SessionBranchDraftCreateData,
+          typeof IPC_CHANNELS.session.branchDraftCreate
+        >
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.branchDraftCreate, request),
       cancel: (
-        request: BusinessRequest<SessionBranchDraftCancelPayload, typeof IPC_CHANNELS.session.branchDraftCancel>,
-      ): Promise<RuntimeIpcResult<SessionBranchDraftCancelData, typeof IPC_CHANNELS.session.branchDraftCancel>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.branchDraftCancel, request),
+        request: BusinessRequest<
+          SessionBranchDraftCancelPayload,
+          typeof IPC_CHANNELS.session.branchDraftCancel
+        >,
+      ): Promise<
+        RuntimeIpcResult<
+          SessionBranchDraftCancelData,
+          typeof IPC_CHANNELS.session.branchDraftCancel
+        >
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.branchDraftCancel, request),
     },
     message: {
       list: (
-        request: BusinessRequest<SessionMessageListPayload, typeof IPC_CHANNELS.session.sessionMessageList>,
-      ): Promise<RuntimeIpcResult<ListUserMessagesByExecutionIdsResult, typeof IPC_CHANNELS.session.sessionMessageList>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageList, request),
+        request: BusinessRequest<
+          SessionMessageListPayload,
+          typeof IPC_CHANNELS.session.sessionMessageList
+        >,
+      ): Promise<
+        RuntimeIpcResult<
+          ListUserMessagesByExecutionIdsResult,
+          typeof IPC_CHANNELS.session.sessionMessageList
+        >
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageList, request),
       send: (
-        request: BusinessRequest<SessionMessageSendPayload, typeof IPC_CHANNELS.session.sessionMessageSend>,
-      ): Promise<RuntimeIpcResult<SessionMessageSendData, typeof IPC_CHANNELS.session.sessionMessageSend>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageSend, request),
-      onPresentationEvent: (callback: (event: SessionMessagePresentationEvent) => void): (() => void) => {
+        request: BusinessRequest<
+          SessionMessageSendPayload,
+          typeof IPC_CHANNELS.session.sessionMessageSend
+        >,
+      ): Promise<
+        RuntimeIpcResult<SessionMessageSendData, typeof IPC_CHANNELS.session.sessionMessageSend>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageSend, request),
+      onPresentationEvent: (
+        callback: (event: SessionMessagePresentationEvent) => void,
+      ): (() => void) => {
         const listener = (_event: Electron.IpcRendererEvent, rawEvent: unknown) => {
           const parsed = SessionMessagePresentationEventSchema.safeParse(rawEvent);
           if (parsed.success) callback(parsed.data);
         };
         ipcRenderer.on(IPC_CHANNELS.session.sessionMessagePresentation, listener);
-        return () => ipcRenderer.removeListener(IPC_CHANNELS.session.sessionMessagePresentation, listener);
+        return () =>
+          ipcRenderer.removeListener(IPC_CHANNELS.session.sessionMessagePresentation, listener);
       },
       cancel: (
-        request: BusinessRequest<SessionMessageCancelPayload, typeof IPC_CHANNELS.session.sessionMessageCancel>,
-      ): Promise<RuntimeIpcResult<CancelUserInputResult['payload'], typeof IPC_CHANNELS.session.sessionMessageCancel>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageCancel, request),
+        request: BusinessRequest<
+          SessionMessageCancelPayload,
+          typeof IPC_CHANNELS.session.sessionMessageCancel
+        >,
+      ): Promise<
+        RuntimeIpcResult<
+          CancelUserInputResult['payload'],
+          typeof IPC_CHANNELS.session.sessionMessageCancel
+        >
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.sessionMessageCancel, request),
     },
     read: (
       request: BusinessRequest<SessionReadPayload, typeof IPC_CHANNELS.session.sessionRead>,
     ): Promise<RuntimeIpcResult<ReadSessionResult, typeof IPC_CHANNELS.session.sessionRead>> =>
       invokeRuntimeIpc(IPC_CHANNELS.session.sessionRead, request),
     readCommittedRun: (
-      request: BusinessRequest<CommittedRunReadPayload, typeof IPC_CHANNELS.session.committedRunRead>,
-    ): Promise<RuntimeIpcResult<ReadCommittedRunResult, typeof IPC_CHANNELS.session.committedRunRead>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.session.committedRunRead, request),
+      request: BusinessRequest<
+        CommittedRunReadPayload,
+        typeof IPC_CHANNELS.session.committedRunRead
+      >,
+    ): Promise<
+      RuntimeIpcResult<ReadCommittedRunResult, typeof IPC_CHANNELS.session.committedRunRead>
+    > => invokeRuntimeIpc(IPC_CHANNELS.session.committedRunRead, request),
     contextUsage: {
       get: (
-        request: BusinessRequest<SessionContextUsageGetPayload, typeof IPC_CHANNELS.session.sessionContextUsageGet>,
-      ): Promise<RuntimeIpcResult<GetContextUsageResult, typeof IPC_CHANNELS.session.sessionContextUsageGet>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.sessionContextUsageGet, request),
+        request: BusinessRequest<
+          SessionContextUsageGetPayload,
+          typeof IPC_CHANNELS.session.sessionContextUsageGet
+        >,
+      ): Promise<
+        RuntimeIpcResult<GetContextUsageResult, typeof IPC_CHANNELS.session.sessionContextUsageGet>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.sessionContextUsageGet, request),
     },
     imageInput: {
       capabilities: (
-        request: BusinessRequest<ImageInputCapabilitiesPayload, typeof IPC_CHANNELS.session.inputCapabilitiesGet>,
-      ): Promise<RuntimeIpcResult<InputCapabilitiesResult, typeof IPC_CHANNELS.session.inputCapabilitiesGet>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.inputCapabilitiesGet, request),
+        request: BusinessRequest<
+          ImageInputCapabilitiesPayload,
+          typeof IPC_CHANNELS.session.inputCapabilitiesGet
+        >,
+      ): Promise<
+        RuntimeIpcResult<InputCapabilitiesResult, typeof IPC_CHANNELS.session.inputCapabilitiesGet>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.inputCapabilitiesGet, request),
       select: (
-        request: BusinessRequest<ImageInputSelectPayload, typeof IPC_CHANNELS.session.imageInputSelect>,
-      ): Promise<RuntimeIpcResult<SelectImagesResult, typeof IPC_CHANNELS.session.imageInputSelect>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.imageInputSelect, request),
+        request: BusinessRequest<
+          ImageInputSelectPayload,
+          typeof IPC_CHANNELS.session.imageInputSelect
+        >,
+      ): Promise<
+        RuntimeIpcResult<SelectImagesResult, typeof IPC_CHANNELS.session.imageInputSelect>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.imageInputSelect, request),
       readClipboard: (
-        request: BusinessRequest<ImageInputClipboardReadPayload, typeof IPC_CHANNELS.session.imageInputClipboardRead>,
-      ): Promise<RuntimeIpcResult<SelectImagesResult, typeof IPC_CHANNELS.session.imageInputClipboardRead>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.imageInputClipboardRead, request),
+        request: BusinessRequest<
+          ImageInputClipboardReadPayload,
+          typeof IPC_CHANNELS.session.imageInputClipboardRead
+        >,
+      ): Promise<
+        RuntimeIpcResult<SelectImagesResult, typeof IPC_CHANNELS.session.imageInputClipboardRead>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.imageInputClipboardRead, request),
       readAttachment: (
-        request: BusinessRequest<AttachmentImageReadPayload, typeof IPC_CHANNELS.session.attachmentImageRead>,
-      ): Promise<RuntimeIpcResult<ReadAttachmentImageResult, typeof IPC_CHANNELS.session.attachmentImageRead>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.attachmentImageRead, request),
+        request: BusinessRequest<
+          AttachmentImageReadPayload,
+          typeof IPC_CHANNELS.session.attachmentImageRead
+        >,
+      ): Promise<
+        RuntimeIpcResult<ReadAttachmentImageResult, typeof IPC_CHANNELS.session.attachmentImageRead>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.attachmentImageRead, request),
     },
     documentInput: {
       select: (
-        request: BusinessRequest<DocumentInputSelectPayload, typeof IPC_CHANNELS.session.documentInputSelect>,
-      ): Promise<RuntimeIpcResult<SelectDocumentsResult, typeof IPC_CHANNELS.session.documentInputSelect>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.documentInputSelect, request),
+        request: BusinessRequest<
+          DocumentInputSelectPayload,
+          typeof IPC_CHANNELS.session.documentInputSelect
+        >,
+      ): Promise<
+        RuntimeIpcResult<SelectDocumentsResult, typeof IPC_CHANNELS.session.documentInputSelect>
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.documentInputSelect, request),
       getAttachmentStatus: (
-        request: BusinessRequest<AttachmentFileStatusPayload, typeof IPC_CHANNELS.session.attachmentFileStatus>,
-      ): Promise<RuntimeIpcResult<GetAttachmentFileStatusResult, typeof IPC_CHANNELS.session.attachmentFileStatus>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.session.attachmentFileStatus, request),
+        request: BusinessRequest<
+          AttachmentFileStatusPayload,
+          typeof IPC_CHANNELS.session.attachmentFileStatus
+        >,
+      ): Promise<
+        RuntimeIpcResult<
+          GetAttachmentFileStatusResult,
+          typeof IPC_CHANNELS.session.attachmentFileStatus
+        >
+      > => invokeRuntimeIpc(IPC_CHANNELS.session.attachmentFileStatus, request),
     },
   },
   approval: {
@@ -362,70 +525,154 @@ export const api = {
   },
   discovery: {
     getPreferenceDetails: (
-      request: BusinessRequest<DiscoveryPreferenceDetailsPayload, typeof IPC_CHANNELS.discovery.preferenceDetails>,
-    ): Promise<RuntimeIpcResult<DiscoveryPreferenceDetailsResult, typeof IPC_CHANNELS.discovery.preferenceDetails>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDetails, request),
+      request: BusinessRequest<
+        DiscoveryPreferenceDetailsPayload,
+        typeof IPC_CHANNELS.discovery.preferenceDetails
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryPreferenceDetailsResult,
+        typeof IPC_CHANNELS.discovery.preferenceDetails
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDetails, request),
     getPreferenceEvidence: (
-      request: BusinessRequest<DiscoveryPreferenceEvidencePayload, typeof IPC_CHANNELS.discovery.preferenceEvidence>,
-    ): Promise<RuntimeIpcResult<DiscoveryPreferenceEvidenceResult, typeof IPC_CHANNELS.discovery.preferenceEvidence>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEvidence, request),
+      request: BusinessRequest<
+        DiscoveryPreferenceEvidencePayload,
+        typeof IPC_CHANNELS.discovery.preferenceEvidence
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryPreferenceEvidenceResult,
+        typeof IPC_CHANNELS.discovery.preferenceEvidence
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEvidence, request),
     editPreference: (
-      request: BusinessRequest<DiscoveryPreferenceEditPayload, typeof IPC_CHANNELS.discovery.preferenceEdit>,
-    ): Promise<RuntimeIpcResult<DiscoveryPreferenceEditResult, typeof IPC_CHANNELS.discovery.preferenceEdit>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEdit, request),
+      request: BusinessRequest<
+        DiscoveryPreferenceEditPayload,
+        typeof IPC_CHANNELS.discovery.preferenceEdit
+      >,
+    ): Promise<
+      RuntimeIpcResult<DiscoveryPreferenceEditResult, typeof IPC_CHANNELS.discovery.preferenceEdit>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEdit, request),
     deletePreference: (
-      request: BusinessRequest<DiscoveryPreferenceDeletePayload, typeof IPC_CHANNELS.discovery.preferenceDelete>,
-    ): Promise<RuntimeIpcResult<DiscoveryPreferenceDeleteResult, typeof IPC_CHANNELS.discovery.preferenceDelete>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDelete, request),
+      request: BusinessRequest<
+        DiscoveryPreferenceDeletePayload,
+        typeof IPC_CHANNELS.discovery.preferenceDelete
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryPreferenceDeleteResult,
+        typeof IPC_CHANNELS.discovery.preferenceDelete
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDelete, request),
 
     confirmCandidateSupply: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>,
-    ): Promise<RuntimeIpcResult<DiscoveryCandidateSupplyConfirmResult, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.candidateSupplyConfirm, request),
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryCandidateSupplyConfirmResult,
+        typeof IPC_CHANNELS.discovery.candidateSupplyConfirm
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.candidateSupplyConfirm, request),
     getConfiguration: (
-      request: BusinessRequest<DiscoveryConfigurationGetPayload, typeof IPC_CHANNELS.discovery.configurationGet>,
-    ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationGet, request),
+      request: BusinessRequest<
+        DiscoveryConfigurationGetPayload,
+        typeof IPC_CHANNELS.discovery.configurationGet
+      >,
+    ): Promise<
+      RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationGet>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationGet, request),
     updateConfiguration: (
-      request: BusinessRequest<DiscoveryConfigurationUpdatePayload, typeof IPC_CHANNELS.discovery.configurationUpdate>,
-    ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationUpdate>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationUpdate, request),
+      request: BusinessRequest<
+        DiscoveryConfigurationUpdatePayload,
+        typeof IPC_CHANNELS.discovery.configurationUpdate
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryConfigurationUpdateUiResult,
+        typeof IPC_CHANNELS.discovery.configurationUpdate
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationUpdate, request),
     connectSource: (
-      request: BusinessRequest<DiscoverySourceConnectPayload, typeof IPC_CHANNELS.discovery.sourceConnect>,
-    ): Promise<RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceConnect>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceConnect, request),
+      request: BusinessRequest<
+        DiscoverySourceConnectPayload,
+        typeof IPC_CHANNELS.discovery.sourceConnect
+      >,
+    ): Promise<
+      RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceConnect>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceConnect, request),
     refreshSource: (
-      request: BusinessRequest<DiscoverySourceRefreshPayload, typeof IPC_CHANNELS.discovery.sourceRefresh>,
-    ): Promise<RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceRefresh>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceRefresh, request),
+      request: BusinessRequest<
+        DiscoverySourceRefreshPayload,
+        typeof IPC_CHANNELS.discovery.sourceRefresh
+      >,
+    ): Promise<
+      RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceRefresh>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceRefresh, request),
     refreshSources: (
-      request: BusinessRequest<DiscoverySourcesRefreshPayload, typeof IPC_CHANNELS.discovery.sourcesRefresh>,
-    ): Promise<RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.sourcesRefresh>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.sourcesRefresh, request),
+      request: BusinessRequest<
+        DiscoverySourcesRefreshPayload,
+        typeof IPC_CHANNELS.discovery.sourcesRefresh
+      >,
+    ): Promise<
+      RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.sourcesRefresh>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourcesRefresh, request),
     changeInterest: (
-      request: BusinessRequest<DiscoveryInterestChangePayload, typeof IPC_CHANNELS.discovery.interestChange>,
-    ): Promise<RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
+      request: BusinessRequest<
+        DiscoveryInterestChangePayload,
+        typeof IPC_CHANNELS.discovery.interestChange
+      >,
+    ): Promise<
+      RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
     setInterestSessionSetting: (
-      request: BusinessRequest<DiscoveryInterestSessionSettingPayload, typeof IPC_CHANNELS.discovery.sessionParticipationSet>,
-    ): Promise<RuntimeIpcResult<DiscoveryInterestSessionSettingUiDto, typeof IPC_CHANNELS.discovery.sessionParticipationSet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.sessionParticipationSet, request),
+      request: BusinessRequest<
+        DiscoveryInterestSessionSettingPayload,
+        typeof IPC_CHANNELS.discovery.sessionParticipationSet
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryInterestSessionSettingUiDto,
+        typeof IPC_CHANNELS.discovery.sessionParticipationSet
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sessionParticipationSet, request),
     requestRecommendation: (
-      request: BusinessRequest<DiscoveryRecommendationRequestPayload, typeof IPC_CHANNELS.discovery.recommendationRequest>,
-    ): Promise<RuntimeIpcResult<DiscoveryRecommendationRequestResult, typeof IPC_CHANNELS.discovery.recommendationRequest>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationRequest, request),
+      request: BusinessRequest<
+        DiscoveryRecommendationRequestPayload,
+        typeof IPC_CHANNELS.discovery.recommendationRequest
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryRecommendationRequestResult,
+        typeof IPC_CHANNELS.discovery.recommendationRequest
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationRequest, request),
     getHome: (
       request: BusinessRequest<DiscoveryHomePayload, typeof IPC_CHANNELS.discovery.homeGet>,
     ): Promise<RuntimeIpcResult<DiscoveryHomeUiResult, typeof IPC_CHANNELS.discovery.homeGet>> =>
       invokeRuntimeIpc(IPC_CHANNELS.discovery.homeGet, request),
     searchRecommendations: (
-      request: BusinessRequest<DiscoveryRecommendationSearchPayload, typeof IPC_CHANNELS.discovery.recommendationsSearch>,
-    ): Promise<RuntimeIpcResult<DiscoveryRecommendationSearchUiResult, typeof IPC_CHANNELS.discovery.recommendationsSearch>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationsSearch, request),
+      request: BusinessRequest<
+        DiscoveryRecommendationSearchPayload,
+        typeof IPC_CHANNELS.discovery.recommendationsSearch
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryRecommendationSearchUiResult,
+        typeof IPC_CHANNELS.discovery.recommendationsSearch
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationsSearch, request),
     updateRecommendationState: (
-      request: BusinessRequest<DiscoveryRecommendationStatePayload, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>,
-    ): Promise<RuntimeIpcResult<DiscoveryRecommendationStateResult, typeof IPC_CHANNELS.discovery.recommendationStateUpdate>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
+      request: BusinessRequest<
+        DiscoveryRecommendationStatePayload,
+        typeof IPC_CHANNELS.discovery.recommendationStateUpdate
+      >,
+    ): Promise<
+      RuntimeIpcResult<
+        DiscoveryRecommendationStateResult,
+        typeof IPC_CHANNELS.discovery.recommendationStateUpdate
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
   },
   voiceInput: {
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {
@@ -448,17 +695,23 @@ export const api = {
     ): Promise<RuntimeIpcResult<VoiceHostModelStatus, typeof IPC_CHANNELS.voice.modelStatus>> =>
       invokeRuntimeIpc(IPC_CHANNELS.voice.modelStatus, request),
     getModelCapabilityStatus: (
-      request: BusinessRequest<VoiceModelCapabilityPayload, typeof IPC_CHANNELS.voice.modelCapability>,
-    ): Promise<RuntimeIpcResult<VoiceHostModelCapabilityStatus, typeof IPC_CHANNELS.voice.modelCapability>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.voice.modelCapability, request),
+      request: BusinessRequest<
+        VoiceModelCapabilityPayload,
+        typeof IPC_CHANNELS.voice.modelCapability
+      >,
+    ): Promise<
+      RuntimeIpcResult<VoiceHostModelCapabilityStatus, typeof IPC_CHANNELS.voice.modelCapability>
+    > => invokeRuntimeIpc(IPC_CHANNELS.voice.modelCapability, request),
     checkModelUpdates: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelsCheckUpdates>,
-    ): Promise<RuntimeIpcResult<VoiceHostModelUpdateResult, typeof IPC_CHANNELS.voice.modelsCheckUpdates>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.voice.modelsCheckUpdates, request),
+    ): Promise<
+      RuntimeIpcResult<VoiceHostModelUpdateResult, typeof IPC_CHANNELS.voice.modelsCheckUpdates>
+    > => invokeRuntimeIpc(IPC_CHANNELS.voice.modelsCheckUpdates, request),
     prepareModels: (
       request: BusinessRequest<{ repair?: boolean }, typeof IPC_CHANNELS.voice.modelsPrepare>,
-    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.modelsPrepare>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.voice.modelsPrepare, request),
+    ): Promise<
+      RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.modelsPrepare>
+    > => invokeRuntimeIpc(IPC_CHANNELS.voice.modelsPrepare, request),
     cancelModelPreparation: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.modelsCancel>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.modelsCancel>> =>
@@ -469,12 +722,14 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.voice.sessionStart, request),
     startManualUtterance: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionManualStart>,
-    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionManualStart>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionManualStart, request),
+    ): Promise<
+      RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionManualStart>
+    > => invokeRuntimeIpc(IPC_CHANNELS.voice.sessionManualStart, request),
     finishManualUtterance: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.sessionManualFinish>,
-    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionManualFinish>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.voice.sessionManualFinish, request),
+    ): Promise<
+      RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionManualFinish>
+    > => invokeRuntimeIpc(IPC_CHANNELS.voice.sessionManualFinish, request),
     setMuted: (
       request: BusinessRequest<VoiceSessionMutedPayload, typeof IPC_CHANNELS.voice.sessionMute>,
     ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.sessionMute>> =>
@@ -485,8 +740,9 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.voice.sessionEnd, request),
     stopSpeechOutput: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.voice.speechOutputStop>,
-    ): Promise<RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.speechOutputStop>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.voice.speechOutputStop, request),
+    ): Promise<
+      RuntimeIpcResult<VoiceHostMutationResult, typeof IPC_CHANNELS.voice.speechOutputStop>
+    > => invokeRuntimeIpc(IPC_CHANNELS.voice.speechOutputStop, request),
     onSpeechOutputEvent: (callback: (event: SpeechOutputEvent) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, rawEvent: unknown) => {
         // Trust boundary: never deliver an unvalidated event to the app.
@@ -500,7 +756,8 @@ export const api = {
   character: {
     show: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.show),
     hide: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.hide),
-    getSnapshot: (): Promise<CharacterWindowSnapshot> => ipcRenderer.invoke(IPC_CHANNELS.character.snapshot),
+    getSnapshot: (): Promise<CharacterWindowSnapshot> =>
+      ipcRenderer.invoke(IPC_CHANNELS.character.snapshot),
     toggleAlwaysOnTop: (): Promise<CharacterWindowSnapshot> =>
       ipcRenderer.invoke(IPC_CHANNELS.character.toggleAlwaysOnTop),
     setScale: (scale: number): Promise<CharacterWindowSnapshot> =>
@@ -514,7 +771,8 @@ export const api = {
     selectSession: (sessionId: string | null): Promise<CharacterWindowSnapshot> =>
       ipcRenderer.invoke(IPC_CHANNELS.character.selectSession, { sessionId }),
     onSnapshot: (callback: (snapshot: CharacterWindowSnapshot) => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, snapshot: CharacterWindowSnapshot) => callback(snapshot);
+      const listener = (_event: Electron.IpcRendererEvent, snapshot: CharacterWindowSnapshot) =>
+        callback(snapshot);
       ipcRenderer.on(IPC_CHANNELS.character.snapshotChanged, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.character.snapshotChanged, listener);
     },
@@ -527,40 +785,81 @@ export const api = {
   project: {
     list: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.workspace.projectList>,
-    ): Promise<RuntimeIpcResult<WorkspaceListProjectsUiResult, typeof IPC_CHANNELS.workspace.projectList>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.workspace.projectList, request),
+    ): Promise<
+      RuntimeIpcResult<WorkspaceListProjectsUiResult, typeof IPC_CHANNELS.workspace.projectList>
+    > => invokeRuntimeIpc(IPC_CHANNELS.workspace.projectList, request),
     useExisting: (
       request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.workspace.projectUseExisting>,
-    ): Promise<RuntimeIpcResult<WorkspaceUseExistingProjectUiResult, typeof IPC_CHANNELS.workspace.projectUseExisting>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.workspace.projectUseExisting, request),
+    ): Promise<
+      RuntimeIpcResult<
+        WorkspaceUseExistingProjectUiResult,
+        typeof IPC_CHANNELS.workspace.projectUseExisting
+      >
+    > => invokeRuntimeIpc(IPC_CHANNELS.workspace.projectUseExisting, request),
     open: (
       request: BusinessRequest<ProjectOpenPayload, typeof IPC_CHANNELS.workspace.projectOpen>,
-    ): Promise<RuntimeIpcResult<WorkspaceOpenProjectUiResult, typeof IPC_CHANNELS.workspace.projectOpen>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.workspace.projectOpen, request),
+    ): Promise<
+      RuntimeIpcResult<WorkspaceOpenProjectUiResult, typeof IPC_CHANNELS.workspace.projectOpen>
+    > => invokeRuntimeIpc(IPC_CHANNELS.workspace.projectOpen, request),
     remove: (
       request: BusinessRequest<ProjectRemovePayload, typeof IPC_CHANNELS.workspace.projectRemove>,
-    ): Promise<RuntimeIpcResult<WorkspaceRemoveProjectUiResult, typeof IPC_CHANNELS.workspace.projectRemove>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.workspace.projectRemove, request),
+    ): Promise<
+      RuntimeIpcResult<WorkspaceRemoveProjectUiResult, typeof IPC_CHANNELS.workspace.projectRemove>
+    > => invokeRuntimeIpc(IPC_CHANNELS.workspace.projectRemove, request),
   },
   workspace: {
     files: {
       list: (
-        request: BusinessRequest<WorkspaceFilesListPayload, typeof IPC_CHANNELS.workspace.filesList>,
-      ): Promise<RuntimeIpcResult<WorkspaceListFilesUiResult, typeof IPC_CHANNELS.workspace.filesList>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.workspace.filesList, request),
+        request: BusinessRequest<
+          WorkspaceFilesListPayload,
+          typeof IPC_CHANNELS.workspace.filesList
+        >,
+      ): Promise<
+        RuntimeIpcResult<WorkspaceListFilesUiResult, typeof IPC_CHANNELS.workspace.filesList>
+      > => invokeRuntimeIpc(IPC_CHANNELS.workspace.filesList, request),
       open: (
         request: BusinessRequest<WorkspaceFileOpenPayload, typeof IPC_CHANNELS.workspace.filesOpen>,
-      ): Promise<RuntimeIpcResult<WorkspaceOpenFileUiResult, typeof IPC_CHANNELS.workspace.filesOpen>> =>
-        invokeRuntimeIpc(IPC_CHANNELS.workspace.filesOpen, request),
+      ): Promise<
+        RuntimeIpcResult<WorkspaceOpenFileUiResult, typeof IPC_CHANNELS.workspace.filesOpen>
+      > => invokeRuntimeIpc(IPC_CHANNELS.workspace.filesOpen, request),
     },
   },
   observability: {
-    list: (request: BusinessRequest<ObservabilityListPayload, typeof IPC_CHANNELS.observability.list>): Promise<RuntimeIpcResult<ObservabilityListResult, typeof IPC_CHANNELS.observability.list>> => invokeRuntimeIpc(IPC_CHANNELS.observability.list, request),
-    get: (request: BusinessRequest<ObservabilityTracePayload, typeof IPC_CHANNELS.observability.get>): Promise<RuntimeIpcResult<ObservabilityGetTraceResult, typeof IPC_CHANNELS.observability.get>> => invokeRuntimeIpc(IPC_CHANNELS.observability.get, request),
-    getContent: (request: BusinessRequest<ObservabilityContentPayload, typeof IPC_CHANNELS.observability.content>): Promise<RuntimeIpcResult<ObservabilityGetContentResult, typeof IPC_CHANNELS.observability.content>> => invokeRuntimeIpc(IPC_CHANNELS.observability.content, request),
-    getHealth: (request: BusinessRequest<ObservabilityEmptyPayload, typeof IPC_CHANNELS.observability.health>): Promise<RuntimeIpcResult<ObservabilityHealthResult, typeof IPC_CHANNELS.observability.health>> => invokeRuntimeIpc(IPC_CHANNELS.observability.health, request),
-    rebuildIndex: (request: BusinessRequest<ObservabilityEmptyPayload, typeof IPC_CHANNELS.observability.rebuildIndex>): Promise<RuntimeIpcResult<ObservabilityRebuildResult, typeof IPC_CHANNELS.observability.rebuildIndex>> => invokeRuntimeIpc(IPC_CHANNELS.observability.rebuildIndex, request),
-    createBundle: (request: BusinessRequest<ObservabilityTracePayload, typeof IPC_CHANNELS.observability.bundle>): Promise<RuntimeIpcResult<ObservabilityExportResult, typeof IPC_CHANNELS.observability.bundle>> => invokeRuntimeIpc(IPC_CHANNELS.observability.bundle, request),
+    list: (
+      request: BusinessRequest<ObservabilityListPayload, typeof IPC_CHANNELS.observability.list>,
+    ): Promise<RuntimeIpcResult<ObservabilityListResult, typeof IPC_CHANNELS.observability.list>> =>
+      invokeRuntimeIpc(IPC_CHANNELS.observability.list, request),
+    get: (
+      request: BusinessRequest<ObservabilityTracePayload, typeof IPC_CHANNELS.observability.get>,
+    ): Promise<
+      RuntimeIpcResult<ObservabilityGetTraceResult, typeof IPC_CHANNELS.observability.get>
+    > => invokeRuntimeIpc(IPC_CHANNELS.observability.get, request),
+    getContent: (
+      request: BusinessRequest<
+        ObservabilityContentPayload,
+        typeof IPC_CHANNELS.observability.content
+      >,
+    ): Promise<
+      RuntimeIpcResult<ObservabilityGetContentResult, typeof IPC_CHANNELS.observability.content>
+    > => invokeRuntimeIpc(IPC_CHANNELS.observability.content, request),
+    getHealth: (
+      request: BusinessRequest<ObservabilityEmptyPayload, typeof IPC_CHANNELS.observability.health>,
+    ): Promise<
+      RuntimeIpcResult<ObservabilityHealthResult, typeof IPC_CHANNELS.observability.health>
+    > => invokeRuntimeIpc(IPC_CHANNELS.observability.health, request),
+    rebuildIndex: (
+      request: BusinessRequest<
+        ObservabilityEmptyPayload,
+        typeof IPC_CHANNELS.observability.rebuildIndex
+      >,
+    ): Promise<
+      RuntimeIpcResult<ObservabilityRebuildResult, typeof IPC_CHANNELS.observability.rebuildIndex>
+    > => invokeRuntimeIpc(IPC_CHANNELS.observability.rebuildIndex, request),
+    createBundle: (
+      request: BusinessRequest<ObservabilityTracePayload, typeof IPC_CHANNELS.observability.bundle>,
+    ): Promise<
+      RuntimeIpcResult<ObservabilityExportResult, typeof IPC_CHANNELS.observability.bundle>
+    > => invokeRuntimeIpc(IPC_CHANNELS.observability.bundle, request),
   },
   runtime: {
     onEvent: (callback: (event: AnyEvent) => void): (() => void) => {
@@ -574,6 +873,13 @@ export const api = {
   },
 };
 
-function requestFor<T, C extends BusinessIpcChannel>(channel: C, payload: T): RuntimeIpcRequest<T, C> {
-  return { requestId: crypto.randomUUID(), payload, meta: { channel, source: 'renderer', createdAt: new Date().toISOString() } };
+function requestFor<T, C extends BusinessIpcChannel>(
+  channel: C,
+  payload: T,
+): RuntimeIpcRequest<T, C> {
+  return {
+    requestId: crypto.randomUUID(),
+    payload,
+    meta: { channel, source: 'renderer', createdAt: new Date().toISOString() },
+  };
 }

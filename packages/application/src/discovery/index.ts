@@ -2,11 +2,7 @@
  * Exposes Megumi's content-discovery business interface and contracts.
  */
 export { createDiscovery } from './discovery';
-export type {
-  CreateDiscoveryOptions,
-  Discovery,
-  InterestFacts,
-} from './discovery';
+export type { CreateDiscoveryOptions, Discovery, InterestFacts } from './discovery';
 export {
   InterestCreatedFromSchema,
   InterestDescriptionSchema,
@@ -17,10 +13,7 @@ export {
   InterestSessionSettingSchema,
 } from './interests/interest';
 export { createInterestExtractor } from './interests/interest-extraction';
-export type {
-  InterestExtractionInput,
-  InterestExtractor,
-} from './interests/interest-extraction';
+export type { InterestExtractionInput, InterestExtractor } from './interests/interest-extraction';
 export type {
   CreateInterestsOptions,
   ObserveConversationTurnRequest,
@@ -65,7 +58,11 @@ export { createZhihuSource } from './sources/zhihu-source';
 export { createTwitterSource } from './sources/twitter-source';
 export { createDiscoverySourceRegistry, DISCOVERY_SOURCE_IDS } from './sources/source-catalog';
 export { signBilibiliWbiParameters } from './sources/bilibili-wbi';
-export { canonicalContentIdentity, normalizeContentUrl, sourceContentIdentity } from './candidates/content-identity';
+export {
+  canonicalContentIdentity,
+  normalizeContentUrl,
+  sourceContentIdentity,
+} from './candidates/content-identity';
 export { rankRecommendationCandidates } from './recommendations/recommendation-ranking';
 export { createRecommendations, localDateAt } from './recommendations/recommendations';
 export type {
@@ -139,10 +136,7 @@ export type {
   CandidateSupplyAttemptSummary,
 } from './candidates/candidate-supply-attempts';
 export { createCandidates } from './candidates/candidates';
-export type {
-  Candidates,
-  CreateCandidatesOptions,
-} from './candidates/candidates';
+export type { Candidates, CreateCandidatesOptions } from './candidates/candidates';
 export type {
   Candidate,
   CandidateIdentity,
@@ -180,6 +174,7 @@ export {
   ConnectDiscoverySourceRequestSchema,
   RefreshDiscoverySourceRequestSchema,
   DiscoveryConfigurationViewSchema,
+  DiscoveryConfigurationUpdateResultSchema,
   DiscoverySourceViewSchema,
   UpdateDiscoveryConfigurationRequestSchema,
 } from './discovery-configuration';
@@ -190,6 +185,7 @@ export type {
   DiscoveryConfigurationSettings,
   DiscoveryConfigurationStore,
   DiscoveryConfigurationView,
+  DiscoveryConfigurationUpdateResult,
   DiscoverySourceView,
   UpdateDiscoveryConfigurationRequest,
 } from './discovery-configuration';
@@ -205,7 +201,11 @@ export {
   TodayDiscoveryViewSchema,
 } from './discovery-view';
 export { createDiscoveryRepository } from './discovery-repository';
-export { DiscoveryStateSchema, getDiscoveryState, initializeDiscoveryState } from './discovery-state';
+export {
+  DiscoveryStateSchema,
+  getDiscoveryState,
+  initializeDiscoveryState,
+} from './discovery-state';
 export type { DiscoveryState } from './discovery-state';
 export { createCandidateSupplyRepository } from './candidates/candidate-supply-repository';
 export type { CreateCandidateSupplyRepositoryOptions } from './candidates/candidate-supply-repository';
@@ -253,9 +253,7 @@ export type {
   PreferenceLearningSupport,
   RecommendationContentEvidence,
 } from './preferences/preference';
-export {
-  createPreferenceLearningRepository,
-} from './preferences/preference-learning-repository';
+export { createPreferenceLearningRepository } from './preferences/preference-learning-repository';
 export {
   createPreferenceLearning,
   type CreatePreferenceLearningOptions,
@@ -281,4 +279,7 @@ export type {
   TodayDiscoveryView,
 } from './discovery-view';
 
-export { PreparePreferencesRequestSchema, PreparePreferencesResultSchema } from './preferences/preference-learning';
+export {
+  PreparePreferencesRequestSchema,
+  PreparePreferencesResultSchema,
+} from './preferences/preference-learning';

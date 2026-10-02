@@ -40,7 +40,8 @@ export type ObserveConversationTurnResult =
   | { readonly status: 'accepted' }
   | {
       readonly status: 'skipped';
-      readonly reason: 'recognition_disabled' | 'session_excluded' | 'before_effective_from' | 'shutting_down';
+      readonly reason:
+        'recognition_disabled' | 'session_excluded' | 'before_effective_from' | 'shutting_down';
     };
 
 export interface CreateInterestsOptions {
@@ -48,7 +49,10 @@ export interface CreateInterestsOptions {
   readonly settings: Pick<Settings, 'readSettings'>;
   readonly sessions: Pick<SessionCatalog, 'getSession'>;
   readonly history: Pick<SessionHistory, 'getCommittedRunMessages'>;
-  readonly prepareModel: () => Promise<ModelPreparationResult>;
+  readonly prepareModel: (request: {
+    workspaceId: string;
+    selection?: { providerId: string; modelId: string };
+  }) => Promise<ModelPreparationResult>;
   readonly extractor: InterestExtractor['extract'];
   readonly ids: {
     createInterestId(): string;
@@ -64,7 +68,9 @@ export interface Interests {
   /** Applies one explicit user Interest command. */
   changeInterest(request: ChangeInterestRequest): Promise<Interest>;
   /** Changes whether one Session contributes future Interest Evidence. */
-  setInterestSessionSetting(request: SetInterestSessionSettingRequest): Promise<InterestSessionSetting>;
+  setInterestSessionSetting(
+    request: SetInterestSessionSettingRequest,
+  ): Promise<InterestSessionSetting>;
   /** Enqueues one eligible completed turn without blocking conversation completion. */
   observeConversationTurn(request: ObserveConversationTurnRequest): ObserveConversationTurnResult;
   /** Reads the exact Interest and Evidence business facts requested by their identities. */
@@ -93,16 +99,18 @@ export function createInterests(options: CreateInterestsOptions): Interests {
   return {
     async changeInterest(request) {
       const now = options.clock.now();
-      return options.repository.applyInterestChange(request.action === 'create'
-        ? {
-            action: 'create',
-            interestId: options.ids.createInterestId(),
-            description: request.description,
-            now,
-          }
-        : request.action === 'update'
-          ? { ...request, now }
-          : { ...request, now });
+      return options.repository.applyInterestChange(
+        request.action === 'create'
+          ? {
+              action: 'create',
+              interestId: options.ids.createInterestId(),
+              description: request.description,
+              now,
+            }
+          : request.action === 'update'
+            ? { ...request, now }
+            : { ...request, now },
+      );
     },
 
     async setInterestSessionSetting(request) {
@@ -190,28 +198,42 @@ async function processJob(
 ): Promise<InterestExtractionOutcome> {
   throwIfAborted(signal);
   if (canProcess(options, job.sessionId, job.completedAt)) return noDurableEvidence();
-  if (options.sessions.getSession({ session_id: job.sessionId }).status !== 'found') return noDurableEvidence();
-  const committed = await observeInterestSpan(options, 'interest.turn.resolve', job, () => Promise.resolve(
-    options.history.getCommittedRunMessages({
-      sessionId: job.sessionId,
-      executionId: job.executionId,
-    }),
-  ));
+  const session = options.sessions.getSession({ session_id: job.sessionId });
+  if (session.status !== 'found') return noDurableEvidence();
+  const committed = await observeInterestSpan(options, 'interest.turn.resolve', job, () =>
+    Promise.resolve(
+      options.history.getCommittedRunMessages({
+        sessionId: job.sessionId,
+        executionId: job.executionId,
+      }),
+    ),
+  );
   if (committed.status !== 'ok') return noDurableEvidence();
-  const user = committed.messages.find((item) => (
-    item.message.message_id === job.userMessageId
-    && item.message.message_kind === 'user_message'
-  ));
-  const assistant = committed.messages.find((item) => (
-    item.message.message_id === job.assistantMessageId
-    && item.message.message_kind === 'assistant_reply'
-    && item.message.status === 'completed'
-  ));
-  if (!user || !assistant) return noDurableEvidence();
+  const user = committed.messages.find(
+    (item) =>
+      item.message.message_id === job.userMessageId && item.message.message_kind === 'user_message',
+  );
+  const assistant = committed.messages.find(
+    (item) =>
+      item.message.message_id === job.assistantMessageId &&
+      item.message.message_kind === 'assistant_reply' &&
+      item.message.status === 'completed',
+  );
+  if (!user || !assistant || assistant.message.message_kind !== 'assistant_reply')
+    return noDurableEvidence();
+  const reply = assistant.message;
 
   const interests = options.repository.listNonDeletedInterests();
   const pendingEvidence = options.repository.listPendingInterestEvidence();
-  const resolvedModel = await observeInterestSpan(options, 'model.resolve', job, options.prepareModel);
+  const resolvedModel = await observeInterestSpan(options, 'model.resolve', job, () =>
+    options.prepareModel({
+      workspaceId: session.session.workspace_id,
+      selection:
+        reply.provider && reply.model
+          ? { providerId: reply.provider, modelId: reply.model }
+          : session.session.model_selection,
+    }),
+  );
   if (resolvedModel.status === 'failed') throw new Error(resolvedModel.failure.message);
   throwIfAborted(signal);
   const extracted = await options.extractor({
@@ -239,9 +261,13 @@ async function processJob(
       }
     }
     safeRecordInterestContent(options, 'interest.understanding.result', validated, job);
-    return validated.evidence.filter((evidence): evidence is typeof evidence & {
-      readonly confidence: 'high' | 'medium';
-    } => evidence.confidence !== 'low');
+    return validated.evidence.filter(
+      (
+        evidence,
+      ): evidence is typeof evidence & {
+        readonly confidence: 'high' | 'medium';
+      } => evidence.confidence !== 'low',
+    );
   });
   if (durable.length === 0) return noDurableEvidence();
   const evidence = durable.map((item) => ({
@@ -253,18 +279,25 @@ async function processJob(
     ...(item.matchedInterestId ? { matchedInterestId: item.matchedInterestId } : {}),
     ...(item.supportingEvidenceIds ? { supportingEvidenceIds: item.supportingEvidenceIds } : {}),
   }));
-  const changed = await observeInterestSpan(options, 'interest.commit', job, () => Promise.resolve(
-    options.repository.applyInterestExtraction({
-      sessionId: job.sessionId,
-      messageId: job.userMessageId,
-      now: options.clock.now(),
+  const changed = await observeInterestSpan(options, 'interest.commit', job, () =>
+    Promise.resolve(
+      options.repository.applyInterestExtraction({
+        sessionId: job.sessionId,
+        messageId: job.userMessageId,
+        now: options.clock.now(),
+        evidence,
+      }),
+    ),
+  );
+  safeRecordInterestContent(
+    options,
+    'interest.committed',
+    {
       evidence,
-    }),
-  ));
-  safeRecordInterestContent(options, 'interest.committed', {
-    evidence,
-    changedInterestIds: changed.map(({ id }) => id),
-  }, job);
+      changedInterestIds: changed.map(({ id }) => id),
+    },
+    job,
+  );
   if (changed.length > 0) options.onInterestsChanged?.(changed.map(({ id }) => id));
   return {
     outcome: 'evidence_committed',
@@ -282,31 +315,34 @@ async function withInterestUnderstandingTrace(
   const runOnce = () => (promise ??= operation());
   if (!options.observability) return runOnce();
   try {
-    return await options.observability.withTrace({
-      kind: 'interest_understanding',
-      correlation: interestCorrelation(job),
-      classifyResult: (result): OperationCompletion => ({
-        outcome: { status: 'ok', code: result.outcome },
-      }),
-    }, async () => {
-      try {
-        options.observability?.linkTrace({
-          kind: 'continues',
-          target: {
-            by: 'correlation',
-            traceKind: 'conversation',
-            correlation: { executionId: job.executionId },
-            state: 'latest_ended',
-          },
-          correlation: interestCorrelation(job),
-        });
-      } catch {
-        // Linking is diagnostic-only and cannot block Interest Understanding.
-      }
-      const result = await runOnce();
-      safeRecordInterestContent(options, 'interest.understanding.outcome', result, job);
-      return result;
-    });
+    return await options.observability.withTrace(
+      {
+        kind: 'interest_understanding',
+        correlation: interestCorrelation(job),
+        classifyResult: (result): OperationCompletion => ({
+          outcome: { status: 'ok', code: result.outcome },
+        }),
+      },
+      async () => {
+        try {
+          options.observability?.linkTrace({
+            kind: 'continues',
+            target: {
+              by: 'correlation',
+              traceKind: 'conversation',
+              correlation: { executionId: job.executionId },
+              state: 'latest_ended',
+            },
+            correlation: interestCorrelation(job),
+          });
+        } catch {
+          // Linking is diagnostic-only and cannot block Interest Understanding.
+        }
+        const result = await runOnce();
+        safeRecordInterestContent(options, 'interest.understanding.outcome', result, job);
+        return result;
+      },
+    );
   } catch {
     return runOnce();
   }
@@ -322,11 +358,14 @@ async function observeInterestSpan<T>(
   const runOnce = () => (promise ??= operation());
   if (!options.observability) return runOnce();
   try {
-    return await options.observability.withSpan({
-      name,
-      correlation: interestCorrelation(job),
-      classifyResult: (): OperationCompletion => ({ outcome: { status: 'ok' } }),
-    }, runOnce);
+    return await options.observability.withSpan(
+      {
+        name,
+        correlation: interestCorrelation(job),
+        classifyResult: (): OperationCompletion => ({ outcome: { status: 'ok' } }),
+      },
+      runOnce,
+    );
   } catch {
     return runOnce();
   }
