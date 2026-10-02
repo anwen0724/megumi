@@ -471,9 +471,9 @@ export function ProviderSettingsPanel() {
         </p>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(24rem,1.55fr)]">
+      <div className="grid min-h-0 flex-1 grid-rows-[12rem_minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(15rem,0.8fr)_minmax(24rem,1.55fr)] lg:grid-rows-[minmax(0,1fr)]">
         <section className="flex min-h-0 flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex shrink-0 items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-[var(--color-text)]">
               {t('provider.providers')}
             </h2>
@@ -489,7 +489,7 @@ export function ProviderSettingsPanel() {
             </Button>
           </div>
 
-          <label className="mt-4 flex h-10 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text-muted)] focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
+          <label className="mt-4 flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 text-sm text-[var(--color-text-muted)] focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
             <Search size={16} aria-hidden="true" />
             <input
               aria-label={t('provider.search')}
@@ -542,7 +542,7 @@ export function ProviderSettingsPanel() {
         <section className="flex min-h-0 flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           {selectedEntry || isCreating ? (
             <>
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex shrink-0 items-start justify-between gap-4">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className={providerIconClassName(true)}>
                     <Bot size={19} aria-hidden="true" />
@@ -727,7 +727,7 @@ export function ProviderSettingsPanel() {
                     size="sm"
                     variant="secondary"
                     onClick={startAddModel}
-                    className="self-start"
+                    className="shrink-0 self-start"
                   >
                     <Plus size={14} aria-hidden="true" /> {t('provider.addModel')}
                   </Button>
@@ -806,11 +806,14 @@ function ModelEditorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="model-editor-title"
-        className="max-h-[90vh] w-full max-w-[27rem] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
+        className={cx(
+          'flex max-h-[calc(100dvh-2rem)] w-full max-w-[27rem] flex-col overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl',
+          !editor.originalModelId && 'h-[31rem]',
+        )}
       >
         <h2
           id="model-editor-title"
-          className="mb-4 text-base font-semibold text-[var(--color-text)]"
+          className="mb-4 shrink-0 text-base font-semibold text-[var(--color-text)]"
         >
           {editor.originalModelId
             ? t('settings:provider.editModel')
@@ -819,7 +822,7 @@ function ModelEditorDialog({
 
         {!editor.originalModelId ? (
           <div
-            className="mb-4 flex gap-1 rounded-lg bg-[var(--color-surface-muted)] p-1"
+            className="mb-4 flex shrink-0 gap-1 rounded-lg bg-[var(--color-surface-muted)] p-1"
             aria-label={t('settings:provider.addMethod')}
           >
             {(['list', 'manual'] as const).map((method) => (
@@ -846,7 +849,7 @@ function ModelEditorDialog({
         ) : null}
 
         {choosingFromList ? (
-          <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-[var(--color-border)] [scrollbar-gutter:stable]">
             {catalogModels.map((model) => {
               const alreadyAdded = addedModelIds.includes(model.modelId);
               return (
@@ -897,7 +900,7 @@ function ModelEditorDialog({
             ) : null}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain [scrollbar-gutter:stable]">
             {editor.originalModelId ? (
               <div>
                 <p className="text-sm font-medium text-[var(--color-text-subtle)]">ID</p>
@@ -1040,7 +1043,7 @@ function ModelEditorDialog({
           </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-2.5">
+        <div className="mt-5 flex shrink-0 justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onCancel}>
             {t('common:actions.cancel')}
           </Button>
@@ -1144,7 +1147,7 @@ function FormGroup({
         className,
       )}
     >
-      <h3 className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">
+      <h3 className="shrink-0 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-subtle)]">
         {title}
       </h3>
       {children}

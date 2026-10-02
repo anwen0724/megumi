@@ -200,7 +200,12 @@ export function SettingsPage({
             aria-label={t(`categories.${activeCategory.id}.label`)}
             className="h-full min-w-0 overflow-y-auto px-8 [scrollbar-gutter:stable]"
           >
-            <div className="mx-auto min-h-full max-w-5xl py-8">
+            <div
+              className={cx(
+                'mx-auto max-w-5xl py-8',
+                category === 'models' ? 'h-full min-h-[60rem] lg:min-h-[42rem]' : 'min-h-full',
+              )}
+            >
               {category === 'appearance' ? (
                 <div className="space-y-6">
                   <SettingsPageHeader
