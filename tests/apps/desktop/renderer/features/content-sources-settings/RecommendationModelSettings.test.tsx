@@ -24,7 +24,7 @@ it('saves separate task models chosen from added models without changing the cha
   const candidate = screen.getByLabelText('Candidate supply model');
   await waitFor(() => expect(recommendation).not.toBeDisabled());
   await user.click(recommendation);
-  await user.click(screen.getByRole('option', { name: 'DeepSeek-V4.1-Flash', exact: true }));
+  await user.click(screen.getByRole('option', { name: 'DeepSeek V4.1 Flash', exact: true }));
   await user.click(candidate);
   await user.click(screen.getByRole('option', { name: 'custom-analysis', exact: true }));
   await user.click(screen.getByRole('button', { name: 'Save' }));

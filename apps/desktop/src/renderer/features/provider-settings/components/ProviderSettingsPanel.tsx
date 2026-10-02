@@ -390,6 +390,25 @@ export function ProviderSettingsPanel() {
     setModelEditor(null);
   }
 
+  // Add catalog selections to the same draft saved by the provider form.
+  function addCatalogModels(modelIds: string[]) {
+    const models =
+      selectedCatalogEntry?.models.filter((model) => modelIds.includes(model.modelId)) ?? [];
+    updateForm({
+      models: [
+        ...selectedForm.models,
+        ...models.map((model) => ({
+          modelId: model.modelId,
+          displayName: model.displayName,
+          contextWindowTokens: String(model.contextWindowTokens),
+          maxOutputTokens: String(model.maxOutputTokens),
+          imageInput: model.capabilities.imageInput,
+        })),
+      ],
+    });
+    setModelEditor(null);
+  }
+
   function removeModel(modelId: string) {
     updateForm({ models: selectedForm.models.filter((model) => model.modelId !== modelId) });
   }
@@ -703,43 +722,6 @@ export function ProviderSettingsPanel() {
                       </p>
                     ) : null}
                   </div>
-                  {selectedCatalogEntry && (
-                    <select
-                      aria-label={t('provider.addBuiltinModel')}
-                      value=""
-                      className={fieldClassName}
-                      onChange={(event) => {
-                        const model = selectedCatalogEntry.models.find(
-                          (item) => item.modelId === event.target.value,
-                        );
-                        if (!model) return;
-                        updateForm({
-                          models: [
-                            ...selectedForm.models,
-                            {
-                              modelId: model.modelId,
-                              displayName: model.displayName,
-                              contextWindowTokens: String(model.contextWindowTokens),
-                              maxOutputTokens: String(model.maxOutputTokens),
-                              imageInput: model.capabilities.imageInput,
-                            },
-                          ],
-                        });
-                      }}
-                    >
-                      <option value="">{t('provider.addBuiltinModel')}</option>
-                      {selectedCatalogEntry.models
-                        .filter(
-                          (item) =>
-                            !selectedForm.models.some((model) => model.modelId === item.modelId),
-                        )
-                        .map((item) => (
-                          <option key={item.modelId} value={item.modelId}>
-                            {item.displayName}
-                          </option>
-                        ))}
-                    </select>
-                  )}
                   <Button
                     type="button"
                     size="sm"
@@ -775,6 +757,9 @@ export function ProviderSettingsPanel() {
       {modelEditor ? (
         <ModelEditorDialog
           editor={modelEditor}
+          catalogModels={selectedCatalogEntry?.models ?? []}
+          addedModelIds={selectedForm.models.map((model) => model.modelId)}
+          onAddModels={addCatalogModels}
           onChange={(model) =>
             setModelEditor((current) => (current ? { ...current, model } : current))
           }
@@ -788,11 +773,17 @@ export function ProviderSettingsPanel() {
 
 function ModelEditorDialog({
   editor,
+  catalogModels,
+  addedModelIds,
+  onAddModels,
   onChange,
   onCancel,
   onSave,
 }: {
   editor: ModelEditorState;
+  catalogModels: ProviderCatalogUiDto['models'];
+  addedModelIds: string[];
+  onAddModels: (modelIds: string[]) => void;
   onChange: (model: ProviderModelForm) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -800,6 +791,11 @@ function ModelEditorDialog({
   const imageEnabled = editor.model.imageInput === true;
   const { t } = useTranslation(['settings', 'common']);
   const [contextPresetOpen, setContextPresetOpen] = useState(false);
+  const [addMethod, setAddMethod] = useState<'list' | 'manual'>(
+    catalogModels.length > 0 ? 'list' : 'manual',
+  );
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+  const choosingFromList = !editor.originalModelId && addMethod === 'list';
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-black/55 p-4 backdrop-blur-[2px]"
@@ -810,164 +806,255 @@ function ModelEditorDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="model-editor-title"
-        className="w-full max-w-[27rem] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-[27rem] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl"
       >
-        <h2 id="model-editor-title" className="sr-only">
+        <h2
+          id="model-editor-title"
+          className="mb-4 text-base font-semibold text-[var(--color-text)]"
+        >
           {editor.originalModelId
             ? t('settings:provider.editModel')
             : t('settings:provider.addModel')}
         </h2>
 
-        <div className="space-y-4">
-          {editor.originalModelId ? (
-            <div>
-              <p className="text-sm font-medium text-[var(--color-text-subtle)]">ID</p>
-              <p className="mt-1.5 font-mono text-[15px] text-[var(--color-text-muted)]">
-                {editor.model.modelId}
+        {!editor.originalModelId ? (
+          <div
+            className="mb-4 flex gap-1 rounded-lg bg-[var(--color-surface-muted)] p-1"
+            aria-label={t('settings:provider.addMethod')}
+          >
+            {(['list', 'manual'] as const).map((method) => (
+              <button
+                key={method}
+                type="button"
+                aria-pressed={addMethod === method}
+                onClick={() => setAddMethod(method)}
+                className={cx(
+                  'flex-1 rounded-md px-3 py-2 text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-focus)]',
+                  addMethod === method
+                    ? 'bg-[var(--color-surface)] font-medium text-[var(--color-text)] shadow-sm'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]',
+                )}
+              >
+                {t(
+                  method === 'list'
+                    ? 'settings:provider.chooseFromList'
+                    : 'settings:provider.addManually',
+                )}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {choosingFromList ? (
+          <div className="max-h-72 overflow-y-auto rounded-lg border border-[var(--color-border)]">
+            {catalogModels.map((model) => {
+              const alreadyAdded = addedModelIds.includes(model.modelId);
+              return (
+                <label
+                  key={model.modelId}
+                  className={cx(
+                    'flex items-center gap-3 border-b border-[var(--color-border)] px-3 py-3 last:border-b-0',
+                    alreadyAdded
+                      ? 'cursor-default opacity-55'
+                      : 'cursor-pointer hover:bg-[var(--color-surface-muted)]',
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    aria-label={model.displayName}
+                    disabled={alreadyAdded}
+                    checked={alreadyAdded || selectedModelIds.includes(model.modelId)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setSelectedModelIds((current) =>
+                        checked
+                          ? [...current, model.modelId]
+                          : current.filter((id) => id !== model.modelId),
+                      );
+                    }}
+                    className="h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block break-words text-sm text-[var(--color-text)]">
+                      {model.displayName}
+                    </span>
+                    <span className="block break-all text-xs text-[var(--color-text-muted)]">
+                      {model.modelId}
+                    </span>
+                  </span>
+                  {alreadyAdded ? (
+                    <span className="text-xs text-[var(--color-text-muted)]">
+                      {t('settings:provider.alreadyAdded')}
+                    </span>
+                  ) : null}
+                </label>
+              );
+            })}
+            {catalogModels.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-[var(--color-text-muted)]">
+                {t('settings:provider.noCatalogModels')}
               </p>
-            </div>
-          ) : (
+            ) : null}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {editor.originalModelId ? (
+              <div>
+                <p className="text-sm font-medium text-[var(--color-text-subtle)]">ID</p>
+                <p className="mt-1.5 font-mono text-[15px] text-[var(--color-text-muted)]">
+                  {editor.model.modelId}
+                </p>
+              </div>
+            ) : (
+              <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
+                <span>ID</span>
+                <input
+                  aria-label={t('settings:provider.modelId')}
+                  value={editor.model.modelId}
+                  onChange={(event) => onChange({ ...editor.model, modelId: event.target.value })}
+                  className={compactFieldClassName}
+                />
+              </label>
+            )}
+
             <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
-              <span>ID</span>
+              <span>{t('settings:provider.displayName')}</span>
               <input
-                aria-label={t('settings:provider.modelId')}
-                value={editor.model.modelId}
-                onChange={(event) => onChange({ ...editor.model, modelId: event.target.value })}
+                aria-label={t('settings:provider.displayName')}
+                value={editor.model.displayName}
+                onChange={(event) => onChange({ ...editor.model, displayName: event.target.value })}
                 className={compactFieldClassName}
               />
             </label>
-          )}
 
-          <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
-            <span>{t('settings:provider.displayName')}</span>
-            <input
-              aria-label={t('settings:provider.displayName')}
-              value={editor.model.displayName}
-              onChange={(event) => onChange({ ...editor.model, displayName: event.target.value })}
-              className={compactFieldClassName}
-            />
-          </label>
+            <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
+              <span>{t('settings:provider.contextWindow')}</span>
+              <div className="relative flex h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/65 shadow-sm transition focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
+                <input
+                  aria-label={t('settings:provider.contextWindow')}
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={editor.model.contextWindowTokens}
+                  onChange={(event) =>
+                    onChange({ ...editor.model, contextWindowTokens: event.target.value })
+                  }
+                  className="peer min-w-0 flex-1 bg-transparent px-3 font-mono text-[15px] text-[var(--color-text)] outline-none [&::-webkit-inner-spin-button]:opacity-0 hover:[&::-webkit-inner-spin-button]:opacity-100 focus:[&::-webkit-inner-spin-button]:opacity-100"
+                />
+                <button
+                  type="button"
+                  aria-label={t('settings:provider.openContextPresets')}
+                  aria-haspopup="listbox"
+                  aria-expanded={contextPresetOpen}
+                  onClick={() => setContextPresetOpen((open) => !open)}
+                  className="grid w-9 shrink-0 place-items-center border-l border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text)]"
+                >
+                  <ChevronDown
+                    size={15}
+                    aria-hidden="true"
+                    className={cx(
+                      'transition-transform',
+                      contextPresetOpen ? 'rotate-180' : undefined,
+                    )}
+                  />
+                </button>
+                {contextPresetOpen ? (
+                  <div
+                    role="listbox"
+                    aria-label={t('settings:provider.contextPresets')}
+                    className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 shadow-xl"
+                  >
+                    {contextWindowPresets.map((preset) => (
+                      <button
+                        key={preset.value}
+                        type="button"
+                        role="option"
+                        aria-selected={editor.model.contextWindowTokens === String(preset.value)}
+                        onClick={() => {
+                          onChange({ ...editor.model, contextWindowTokens: String(preset.value) });
+                          setContextPresetOpen(false);
+                        }}
+                        className={cx(
+                          'flex w-full items-center justify-between px-3 py-2 text-left text-sm transition',
+                          editor.model.contextWindowTokens === String(preset.value)
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]',
+                        )}
+                      >
+                        <span className="font-medium">{preset.label}</span>
+                        <span className="font-mono text-xs opacity-75">
+                          {formatNumber(preset.value)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </label>
 
-          <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
-            <span>{t('settings:provider.contextWindow')}</span>
-            <div className="relative flex h-9 rounded-md border border-[var(--color-border)] bg-[var(--color-app-bg)]/65 shadow-sm transition focus-within:border-[var(--color-focus)] focus-within:ring-2 focus-within:ring-[var(--color-focus)]/20">
+            <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
+              <span>{t('settings:provider.maxOutputTokens')}</span>
               <input
-                aria-label={t('settings:provider.contextWindow')}
                 type="number"
                 min={1}
                 step={1}
-                value={editor.model.contextWindowTokens}
+                aria-label={t('settings:provider.maxOutputTokens')}
+                value={editor.model.maxOutputTokens}
                 onChange={(event) =>
-                  onChange({ ...editor.model, contextWindowTokens: event.target.value })
+                  onChange({ ...editor.model, maxOutputTokens: event.target.value })
                 }
-                className="peer min-w-0 flex-1 bg-transparent px-3 font-mono text-[15px] text-[var(--color-text)] outline-none [&::-webkit-inner-spin-button]:opacity-0 hover:[&::-webkit-inner-spin-button]:opacity-100 focus:[&::-webkit-inner-spin-button]:opacity-100"
+                className={compactFieldClassName}
               />
-              <button
-                type="button"
-                aria-label={t('settings:provider.openContextPresets')}
-                aria-haspopup="listbox"
-                aria-expanded={contextPresetOpen}
-                onClick={() => setContextPresetOpen((open) => !open)}
-                className="grid w-9 shrink-0 place-items-center border-l border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:bg-[var(--color-surface-elevated)] hover:text-[var(--color-text)]"
-              >
-                <ChevronDown
-                  size={15}
-                  aria-hidden="true"
+            </label>
+
+            {editor.originalModelId ? (
+              <div className="flex items-end justify-between border-t border-[var(--color-border)] pt-3">
+                <p className="pb-0.5 text-sm font-medium text-[var(--color-text-subtle)]">
+                  {t('settings:provider.imageInput')}
+                </p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label={t('settings:provider.imageInput')}
+                  aria-checked={imageEnabled}
+                  onClick={() => {
+                    const next = !imageEnabled;
+                    onChange({ ...editor.model, imageInput: next, imageInputOverride: next });
+                  }}
                   className={cx(
-                    'transition-transform',
-                    contextPresetOpen ? 'rotate-180' : undefined,
+                    'relative mb-0.5 h-5 w-9 rounded-full border transition',
+                    imageEnabled
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface-muted)]',
                   )}
-                />
-              </button>
-              {contextPresetOpen ? (
-                <div
-                  role="listbox"
-                  aria-label={t('settings:provider.contextPresets')}
-                  className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-10 overflow-hidden rounded-md border border-[var(--color-border)] bg-[var(--color-surface-elevated)] py-1.5 shadow-xl"
                 >
-                  {contextWindowPresets.map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      role="option"
-                      aria-selected={editor.model.contextWindowTokens === String(preset.value)}
-                      onClick={() => {
-                        onChange({ ...editor.model, contextWindowTokens: String(preset.value) });
-                        setContextPresetOpen(false);
-                      }}
-                      className={cx(
-                        'flex w-full items-center justify-between px-3 py-2 text-left text-sm transition',
-                        editor.model.contextWindowTokens === String(preset.value)
-                          ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
-                          : 'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-text)]',
-                      )}
-                    >
-                      <span className="font-medium">{preset.label}</span>
-                      <span className="font-mono text-xs opacity-75">
-                        {formatNumber(preset.value)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </label>
-
-          <label className="block space-y-1.5 text-sm font-medium text-[var(--color-text-subtle)]">
-            <span>{t('settings:provider.maxOutputTokens')}</span>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              aria-label={t('settings:provider.maxOutputTokens')}
-              value={editor.model.maxOutputTokens}
-              onChange={(event) =>
-                onChange({ ...editor.model, maxOutputTokens: event.target.value })
-              }
-              className={compactFieldClassName}
-            />
-          </label>
-
-          {editor.originalModelId ? (
-            <div className="flex items-end justify-between border-t border-[var(--color-border)] pt-3">
-              <p className="pb-0.5 text-sm font-medium text-[var(--color-text-subtle)]">
-                {t('settings:provider.imageInput')}
-              </p>
-              <button
-                type="button"
-                role="switch"
-                aria-label={t('settings:provider.imageInput')}
-                aria-checked={imageEnabled}
-                onClick={() => {
-                  const next = !imageEnabled;
-                  onChange({ ...editor.model, imageInput: next, imageInputOverride: next });
-                }}
-                className={cx(
-                  'relative mb-0.5 h-5 w-9 rounded-full border transition',
-                  imageEnabled
-                    ? 'border-[var(--color-accent)] bg-[var(--color-accent)]'
-                    : 'border-[var(--color-border)] bg-[var(--color-surface-muted)]',
-                )}
-              >
-                <span
-                  className={cx(
-                    'absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all',
-                    imageEnabled ? 'left-[1.05rem]' : 'left-0.5',
-                  )}
-                />
-              </button>
-            </div>
-          ) : null}
-        </div>
+                  <span
+                    className={cx(
+                      'absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-all',
+                      imageEnabled ? 'left-[1.05rem]' : 'left-0.5',
+                    )}
+                  />
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         <div className="mt-5 flex justify-end gap-2.5">
           <Button type="button" variant="secondary" onClick={onCancel}>
             {t('common:actions.cancel')}
           </Button>
-          <Button type="button" variant="primary" onClick={onSave}>
-            {editor.originalModelId
-              ? t('settings:provider.done')
-              : t('settings:provider.addAction')}
+          <Button
+            type="button"
+            variant="primary"
+            disabled={choosingFromList && selectedModelIds.length === 0}
+            onClick={() => (choosingFromList ? onAddModels(selectedModelIds) : onSave())}
+          >
+            {choosingFromList
+              ? t('settings:provider.addSelectedModels')
+              : editor.originalModelId
+                ? t('settings:provider.done')
+                : t('settings:provider.addAction')}
           </Button>
         </div>
       </section>

@@ -43,7 +43,7 @@ export function RecommendationModelSettings() {
               providerId: provider.id,
               modelId: model.id,
               value: `${provider.id}/${model.id}`,
-              label: model.name.trim().replace(/\s+/g, '-'),
+              label: model.name,
             })),
           ),
         );

@@ -50,9 +50,7 @@ export function getComposerModelOptionsForProviders(
         modelId: String(modelId),
         providerId: provider.providerId,
         imageInput: provider.modelSettings[modelId]?.capabilities.imageInput ?? 'unknown',
-        label: (provider.modelSettings[modelId]?.displayName ?? String(modelId))
-          .trim()
-          .replace(/\s+/g, '-'),
+        label: provider.modelSettings[modelId]?.displayName ?? String(modelId),
       })),
     );
 }

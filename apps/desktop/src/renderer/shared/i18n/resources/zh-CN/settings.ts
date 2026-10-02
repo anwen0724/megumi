@@ -330,7 +330,12 @@ export const settings = {
     },
   },
   provider: {
-    addBuiltinModel: '从内置目录添加模型',
+    addMethod: '添加方式',
+    chooseFromList: '从列表选择',
+    addManually: '手动添加',
+    alreadyAdded: '已添加',
+    addSelectedModels: '添加所选模型',
+    noCatalogModels: '暂无可选择的模型，请手动添加。',
     selectModel: '请选择模型',
     maxOutputTokens: '最大输出 Token',
     title: '模型与供应商',

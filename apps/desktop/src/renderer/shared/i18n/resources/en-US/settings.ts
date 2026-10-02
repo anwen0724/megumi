@@ -361,7 +361,12 @@ export const settings = {
     },
   },
   provider: {
-    addBuiltinModel: 'Add model from built-in catalog',
+    addMethod: 'Add method',
+    chooseFromList: 'Choose from list',
+    addManually: 'Add manually',
+    alreadyAdded: 'Added',
+    addSelectedModels: 'Add selected models',
+    noCatalogModels: 'No models available in the list. Add a model manually.',
     selectModel: 'Select a model',
     maxOutputTokens: 'Maximum output tokens',
     title: 'Models & Providers',

@@ -332,6 +332,7 @@ describe('ProviderSettingsPanel', () => {
     await user.selectOptions(screen.getByLabelText('Protocol'), 'anthropic-messages');
     await user.type(screen.getByLabelText('Base URL'), 'https://api.deepseek.com/v1');
     await user.click(screen.getByRole('button', { name: 'Add model' }));
+    await user.click(screen.getByRole('button', { name: 'Add manually' }));
     expect(screen.queryByRole('switch', { name: 'Image input' })).not.toBeInTheDocument();
     await user.type(screen.getByLabelText('Model ID'), 'deepseek-chat');
     await user.type(screen.getByLabelText('Display name'), 'DeepSeek Chat');
@@ -424,10 +425,9 @@ it('removes and restores a builtin model through the real settings file', async 
     status: 'ok',
     settings: { config: { providers: { deepseek: { models: {} } } } },
   });
-  await user.selectOptions(
-    screen.getByRole('combobox', { name: 'Add model from built-in catalog' }),
-    'deepseek-flash',
-  );
+  await user.click(screen.getByRole('button', { name: 'Add model' }));
+  await user.click(screen.getByRole('checkbox', { name: 'DeepSeek V4.1 Flash' }));
+  await user.click(screen.getByRole('button', { name: 'Add selected models' }));
   await user.click(screen.getByRole('button', { name: 'Save' }));
   await waitFor(() =>
     expect(useProviderStore.getState().configured[0]?.models.map((item) => item.model.id)).toEqual([
