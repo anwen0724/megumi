@@ -13,7 +13,6 @@ export const settings = {
     support: '支持',
   },
   categories: {
-    discovery: { label: '推荐与候选', description: '分别选择推荐生成与候选供给使用的模型。' },
     appearance: { label: '外观', description: '选择 Megumi 在此设备上的外观。' },
     voice: {
       label: '语音',
@@ -21,7 +20,10 @@ export const settings = {
     },
     models: { label: '模型与供应商', description: '连接模型供应商，并选择聊天中可用的模型。' },
     skills: { label: '技能', description: '查看和管理 Megumi 可用于任务的工作流程。' },
-    sources: { label: '内容来源', description: '连接 Megumi 生成每日发现时搜索的服务。' },
+    sources: {
+      label: '搜索与推荐',
+      description: '配置搜索服务、内容来源，以及推荐与候选使用的模型。',
+    },
     security: { label: '隐私与权限', description: '查看密钥和受限工具操作的保护方式。' },
     diagnostics: { label: 'Trace 诊断', description: '检查本机执行 Trace 与捕获的诊断内容。' },
     about: { label: '关于 Megumi', description: '查看版本信息和检查更新。' },

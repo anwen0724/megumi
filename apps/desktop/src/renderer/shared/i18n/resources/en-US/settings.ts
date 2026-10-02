@@ -10,10 +10,6 @@ export const settings = {
     support: 'Support',
   },
   categories: {
-    discovery: {
-      label: 'Recommendations & candidates',
-      description: 'Choose the model used by each background task.',
-    },
     appearance: { label: 'Appearance', description: 'Choose how Megumi looks on this device.' },
     voice: {
       label: 'Voice',
@@ -29,8 +25,9 @@ export const settings = {
       description: 'Review and manage the workflows Megumi can use for a task.',
     },
     sources: {
-      label: 'Content Sources',
-      description: 'Connect the services Megumi searches for daily discoveries.',
+      label: 'Search & recommendations',
+      description:
+        'Manage search services, content sources, and models for recommendations and candidates.',
     },
     security: {
       label: 'Privacy & Permissions',

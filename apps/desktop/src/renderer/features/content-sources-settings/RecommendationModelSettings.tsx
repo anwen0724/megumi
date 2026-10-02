@@ -2,13 +2,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SettingsSnapshot } from '@megumi/application/settings/settings-contracts';
-import { Button, SettingsPageHeader, SettingsSection } from '../../shared/ui';
+import { Button, Select } from '../../shared/ui';
 
 type ModelReference = { providerId: string; modelId: string };
 type ModelOption = ModelReference & { value: string; label: string };
 const valueOf = (model?: ModelReference) => (model ? `${model.providerId}/${model.modelId}` : '');
 
-export function DiscoverySettingsPanel() {
+export function RecommendationModelSettings() {
   const { t } = useTranslation('settings');
   const [snapshot, setSnapshot] = useState<SettingsSnapshot>();
   const [models, setModels] = useState<ModelOption[]>([]);
@@ -43,7 +43,7 @@ export function DiscoverySettingsPanel() {
               providerId: provider.id,
               modelId: model.id,
               value: `${provider.id}/${model.id}`,
-              label: `${model.name} · ${provider.name}`,
+              label: model.name.trim().replace(/\s+/g, '-'),
             })),
           ),
         );
@@ -88,62 +88,56 @@ export function DiscoverySettingsPanel() {
   }
 
   return (
-    <div className="space-y-6">
-      <SettingsPageHeader
-        title={t('categories.discovery.label')}
-        description={t('categories.discovery.description')}
-      />
-      <SettingsSection title={t('discovery.models')}>
-        <div className="space-y-5 p-5">
-          {[
-            {
-              id: 'recommendation',
-              label: t('discovery.recommendationModel'),
-              value: recommendation,
-              change: setRecommendation,
-            },
-            {
-              id: 'candidate',
-              label: t('discovery.candidateSupplyModel'),
-              value: candidate,
-              change: setCandidate,
-            },
-          ].map((field) => (
-            <label key={field.id} className="block space-y-2 text-sm">
-              <span>{field.label}</span>
-              <select
-                className="block w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2"
-                value={field.value}
-                onChange={(event) => field.change(event.target.value)}
-                disabled={!snapshot || saving}
-              >
-                <option value="">{t('discovery.selectModel')}</option>
-                {field.value && !models.some((model) => model.value === field.value) ? (
-                  <option value={field.value} disabled>
-                    {t('discovery.modelUnavailable')}
-                  </option>
-                ) : null}
-                {models.map((model) => (
-                  <option key={model.value} value={model.value}>
-                    {model.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+    <section className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+      <div className="border-b border-[var(--color-border)] px-5 py-4">
+        <h2 className="text-sm font-semibold text-[var(--color-text)]">{t('discovery.models')}</h2>
+      </div>
+      <div className="grid gap-5 p-5 sm:grid-cols-2">
+        {[
+          {
+            id: 'recommendation',
+            label: t('discovery.recommendationModel'),
+            value: recommendation,
+            change: setRecommendation,
+          },
+          {
+            id: 'candidate',
+            label: t('discovery.candidateSupplyModel'),
+            value: candidate,
+            change: setCandidate,
+          },
+        ].map((field) => (
+          <Select
+            key={field.id}
+            label={field.label}
+            value={field.value}
+            onValueChange={field.change}
+            disabled={!snapshot || saving}
+            options={[
+              { value: '', label: t('discovery.selectModel') },
+              ...(field.value && !models.some((model) => model.value === field.value)
+                ? [{ value: field.value, label: t('discovery.modelUnavailable') }]
+                : []),
+              ...models,
+            ]}
+          />
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-4 rounded-b-xl border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-5 py-3">
+        <div className="min-w-0 text-sm">
           {models.length === 0 && snapshot ? (
-            <p className="text-sm text-[var(--color-text-muted)]">{t('discovery.noModels')}</p>
+            <p className="text-[var(--color-text-muted)]">{t('discovery.noModels')}</p>
           ) : null}
           {error ? (
-            <p role="alert" className="text-sm text-[var(--color-danger)]">
+            <p role="alert" className="text-[var(--color-danger)]">
               {error}
             </p>
           ) : null}
-          <Button onClick={() => void save()} disabled={!snapshot || saving}>
-            {t('provider.save')}
-          </Button>
         </div>
-      </SettingsSection>
-    </div>
+        <Button variant="primary" onClick={() => void save()} disabled={!snapshot || saving}>
+          {t('provider.save')}
+        </Button>
+      </div>
+    </section>
   );
 }

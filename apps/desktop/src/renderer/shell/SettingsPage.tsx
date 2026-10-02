@@ -16,7 +16,6 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { DiagnosticsPanel } from '../features/observability';
-import { DiscoverySettingsPanel } from '../features/discovery-settings/DiscoverySettingsPanel';
 import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ContentSourcesSettingsPanel } from '../features/content-sources-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
@@ -28,15 +27,7 @@ import { LanguageSelector } from '../shared/i18n';
 import { Button, SettingsPageHeader, SettingsRow, SettingsSection, cx } from '../shared/ui';
 
 export type SettingsCategory =
-  | 'discovery'
-  | 'appearance'
-  | 'voice'
-  | 'models'
-  | 'skills'
-  | 'sources'
-  | 'diagnostics'
-  | 'security'
-  | 'about';
+  'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -65,7 +56,6 @@ const categoryGroups: Array<{
     id: 'aiTools',
     items: [
       { id: 'models', icon: Bot },
-      { id: 'discovery', icon: Rss },
       { id: 'skills', icon: Boxes },
       { id: 'sources', icon: Rss },
       { id: 'security', icon: ShieldCheck },
@@ -236,7 +226,6 @@ export function SettingsPage({
                 </div>
               ) : null}
 
-              {category === 'discovery' ? <DiscoverySettingsPanel /> : null}
               {category === 'models' ? <ProviderSettingsPanel /> : null}
 
               {category === 'voice' ? <VoiceSettingsPanel /> : null}

@@ -17,6 +17,7 @@ import type { DiscoveryConfigurationUiDto } from '@megumi/application/contracts'
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { Button, SecretInput, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
+import { RecommendationModelSettings } from './RecommendationModelSettings';
 import { WebSettingsPanel } from '../web-settings';
 
 type ProviderSourceId = 'zhihu' | 'twitter';
@@ -184,6 +185,8 @@ export function ContentSourcesSettingsPanel() {
         title={t('settings:categories.sources.label')}
         description={t('settings:categories.sources.description')}
       />
+
+      <RecommendationModelSettings />
 
       <WebSettingsPanel showHeader={false} />
 

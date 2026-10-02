@@ -42,6 +42,7 @@ describe('ContentSourcesSettingsPanel', () => {
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
+        models: fixture.api.models,
         settings: { ...fixture.api.settings, updateCredential: setCredential },
         discovery: { getConfiguration, connectSource, refreshSource, refreshSources },
       },

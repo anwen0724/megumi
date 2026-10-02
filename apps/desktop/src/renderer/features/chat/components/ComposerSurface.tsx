@@ -291,7 +291,6 @@ export const ComposerSurface = forwardRef<HTMLFormElement, ComposerSurfaceProps>
                     options={modelOptions.map((option) => ({
                       value: option.value,
                       label: option.label,
-                      meta: option.providerId,
                     }))}
                     onChange={onModelChange}
                   />
