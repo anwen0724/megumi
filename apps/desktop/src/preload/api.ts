@@ -2,8 +2,8 @@
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */
 import { ipcRenderer } from 'electron';
-import type { DiscoveryPreferenceDetailsPayload, DiscoveryPreferenceDetailsResult, DiscoveryPreferenceEvidencePayload, DiscoveryPreferenceEvidenceResult, DiscoveryPreferenceEditPayload, DiscoveryPreferenceEditResult, DiscoveryPreferenceDeletePayload, DiscoveryPreferenceDeleteResult } from '@megumi/product-host/host';
-import type { AnyEvent } from '@megumi/product-host/host';
+import type { DiscoveryPreferenceDetailsPayload, DiscoveryPreferenceDetailsResult, DiscoveryPreferenceEvidencePayload, DiscoveryPreferenceEvidenceResult, DiscoveryPreferenceEditPayload, DiscoveryPreferenceEditResult, DiscoveryPreferenceDeletePayload, DiscoveryPreferenceDeleteResult } from '@megumi/application/contracts';
+import type { AnyEvent } from '@megumi/application/contracts';
 import type {
   ApprovalHostResult,
   CancelBranchDraftResult,
@@ -67,7 +67,7 @@ import type {
   DiscoveryConfigurationUiDto,
   DiscoverySourceCredentialStatusUiResult,
   DiscoverySourceUiDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from '../main/ipc/contracts';
 import type {
@@ -129,9 +129,9 @@ import {
   type SessionMessagePresentationEvent,
 } from '../main/ipc/session-message-presentation';
 import type { CharacterWindowShapeRect, CharacterWindowSnapshot } from '../main/app/character-window-controller';
-import { parseSpeechInputEvent } from '@megumi/voice/speech-input/speech-input-schema';
-import { parseSpeechOutputEvent } from '@megumi/voice/speech-output/speech-output-schema';
-import type { SpeechInputEvent, SpeechOutputEvent } from '@megumi/voice';
+import { parseSpeechInputEvent } from '@megumi/application/voice/speech-input/speech-input-schema';
+import { parseSpeechOutputEvent } from '@megumi/application/voice/speech-output/speech-output-schema';
+import type { SpeechInputEvent, SpeechOutputEvent } from '@megumi/application/voice/index';
 import {
   ApplicationUpdateSnapshotSchema,
   type ApplicationUpdateSnapshot,

@@ -3,7 +3,7 @@ import {
   createVoice,
   type SpeechInputEvent,
   type SpeechInputRuntime,
-} from '../../../packages/agent/voice/src/index';
+} from '@megumi/application/voice/index';
 
 function createNoopSpeechInput(): SpeechInputRuntime & { start: ReturnType<typeof vi.fn>; emit(event: SpeechInputEvent): void } {
   const listeners = new Set<(event: SpeechInputEvent) => void>();

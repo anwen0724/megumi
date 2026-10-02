@@ -1,7 +1,7 @@
 /* Stores canonical Product Host Session projections plus renderer selection state. */
 import { create } from 'zustand';
-import type { SessionDto } from '@megumi/product-host/host';
-import type { DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
+import type { SessionDto } from '@megumi/application/contracts';
+import type { DiscoveryRecommendationUiDto } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import { useChatUiStore } from '../chat-ui/store';

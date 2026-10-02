@@ -3,8 +3,8 @@ import type {
   GetContextUsageResult,
   InputCapabilitiesResult,
   ProviderPublicStatusUiDto,
-} from '@megumi/product-host/host';
-import type { InputSuggestionQueryResult } from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
+import type { InputSuggestionQueryResult } from '@megumi/application/contracts';
 import type { ToolActivityItem } from '../../session-timeline';
 import type { ToolApprovalResolvePayload, ToolApprovalResolveResult } from '../../../entities/approval';
 import { ApprovalStack } from '../components/ApprovalStack';

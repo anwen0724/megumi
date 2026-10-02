@@ -1,7 +1,7 @@
 /* Discovers compatible, immutable Voice bundle manifests from project-owned GitHub Releases. */
 
 import { net } from 'electron';
-import { parseVoiceModelManifest, type VoiceModelReleaseDiscovery } from '@megumi/voice';
+import { parseVoiceModelManifest, type VoiceModelReleaseDiscovery } from '@megumi/application/voice/index';
 
 const RELEASES_URL = 'https://api.github.com/repos/anwen0724/megumi/releases?per_page=20';
 

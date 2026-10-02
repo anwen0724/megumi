@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Verifies safe, deterministic capture of diagnostic content. */
 import { describe, expect, it } from 'vitest';
-import { captureContent } from '../../../packages/agent/observability/src/content/content-capture';
+import { captureContent } from '@megumi/application/observability/content/content-capture';
 
 describe('Content capture', () => {
   it('redacts credential-like query parameters inside Source URLs', () => {

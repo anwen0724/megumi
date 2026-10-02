@@ -2,8 +2,8 @@
  * Seeds real Recommendation business facts for Preference repository and runtime tests.
  */
 // @vitest-environment node
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createDiscoveryRepository } from '@megumi/discovery';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
+import { createDiscoveryRepository } from '@megumi/application/discovery/index';
 
 export const now = '2026-08-27T08:00:00.000Z';
 

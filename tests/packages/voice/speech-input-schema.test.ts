@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSpeechInputEvent } from '../../../packages/agent/voice/src';
+import { parseSpeechInputEvent } from '@megumi/application/voice/index';
 
 describe('Speech Input Event runtime schema', () => {
   it('accepts every valid event kind', () => {

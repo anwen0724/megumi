@@ -1,7 +1,7 @@
 /* Verifies Discovery businesses extend the existing closed Trace contract. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { TraceCorrelationSchema, TraceKindSchema } from '@megumi/observability';
+import { TraceCorrelationSchema, TraceKindSchema } from '@megumi/application/observability/index';
 
 describe('Trace contract', () => {
   it('accepts closed Discovery Trace kinds without opening arbitrary values', () => {

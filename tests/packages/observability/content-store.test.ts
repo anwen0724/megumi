@@ -2,12 +2,12 @@
 /* Verifies immutable, content-addressed persistence behind the diagnostic Content Store. */
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { createContentStore } from '../../../packages/agent/observability/src/content/content-store';
+import { createContentStore } from '@megumi/application/observability/content/content-store';
 import type {
   ObservabilityDirectoryEntry,
   ObservabilityFileStat,
   ObservabilityStorage,
-} from '../../../packages/agent/observability/src/persistence/observability-storage';
+} from '@megumi/application/observability/persistence/observability-storage';
 
 const STORAGE_FAILURE_POINTS: readonly ('write' | 'move')[] = ['write', 'move'];
 

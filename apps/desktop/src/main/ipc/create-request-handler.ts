@@ -3,7 +3,7 @@
  */
 import type { IpcMainInvokeEvent } from 'electron';
 import type { z } from 'zod';
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../runtime-logger';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import { normalizeRuntimeIpcError, sanitizeZodIssues, type RuntimeIpcError } from './errors';
 
@@ -16,7 +16,7 @@ export interface CreateIpcRequestHandlerOptions<
   requestSchema: z.ZodType<RuntimeIpcRequest<TPayload, TChannel>>;
   responseSchema: z.ZodType<TData>;
   responseValidation?: 'strict' | 'dev-only' | 'off';
-  logger?: ProductRuntimeLogger;
+  logger?: ApplicationLogger;
   handle(
     request: RuntimeIpcRequest<TPayload, TChannel>,
     event: IpcMainInvokeEvent,

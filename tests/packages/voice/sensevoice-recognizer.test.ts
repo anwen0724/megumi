@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSenseVoiceRecognizer } from '../../../packages/agent/voice/src';
+import { createSenseVoiceRecognizer } from '@megumi/application/voice/index';
 
 interface FakeRecognizerInput {
   readonly result?: { readonly text?: string };

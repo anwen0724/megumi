@@ -17,7 +17,7 @@ import {
   SkillGetPayloadSchema,
   WorkspaceFilesListPayloadSchema,
   WorkspaceListProjectsUiResultSchema,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 
 describe('Product Host runtime schemas', () => {
   it('accepts canonical Host requests and rejects renderer-derived workspace facts', () => {
@@ -196,7 +196,7 @@ describe('Product Host runtime schemas', () => {
 
     const failure = {
       status: 'failed', approvalRequestId: 'approval:1',
-      failure: { code: 'internal_error', message: 'failed', retryable: false },
+      failure: { code: 'INTERNAL_ERROR', message: 'failed', retryable: false },
     };
     expect(ApprovalResolveResultSchema.safeParse(failure).success).toBe(true);
     expect(ApprovalResolveResultSchema.safeParse({

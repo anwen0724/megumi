@@ -1,8 +1,8 @@
 /*
- * Node Speech Worker entry. Creates exactly one packages/agent/voice Speech Input
+ * Node Speech Worker entry. Creates exactly one packages/application/src/voice Speech Input
  * Runtime and bridges the private Adapter protocol to it. The worker is only
  * an execution location: every VAD, utterance, STT, and cancellation rule
- * stays inside packages/agent/voice, and nothing here touches Sessions, Input, or
+ * stays inside packages/application/src/voice, and nothing here touches Sessions, Input, or
  * the Discovery Agent.
  */
 
@@ -11,7 +11,7 @@ import {
   createSenseVoiceRecognizer,
   createSherpaVad,
   createSpeechInputRuntime,
-} from '@megumi/voice';
+} from '@megumi/application/voice/index';
 import {
   parseVoiceInputWorkerRequest,
   type VoiceInputWorkerData,

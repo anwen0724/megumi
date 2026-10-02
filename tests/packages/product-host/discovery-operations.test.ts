@@ -13,7 +13,7 @@ describe('Discovery Product Host operations', () => {
   it('returns the final Candidate Supply result and exposes the derived Candidate Pool', async () => {
     application = composeTestApplication();
     await application.runtime.start();
-    const result = await application.runtime.host.discovery.requestCandidateSupply({
+    const result = await application.runtime.discovery.requestCandidateSupply({
       trigger: 'supply_conditions_changed',
     });
     expect(result).toMatchObject({
@@ -22,7 +22,7 @@ describe('Discovery Product Host operations', () => {
       trigger: 'supply_conditions_changed',
       addedCandidateCount: 0,
     });
-    await expect(application.runtime.host.discovery.getCandidatePool()).resolves.toMatchObject({
+    await expect(application.runtime.discovery.getCandidatePool()).resolves.toMatchObject({
       minimumCount: 100,
       targetCount: 160,
       maximumCount: 200,
@@ -33,10 +33,10 @@ describe('Discovery Product Host operations', () => {
   it('reads exact Interest business facts by IDs', async () => {
     application = composeTestApplication();
     await application.runtime.start();
-    const interest = await application.runtime.host.discovery.changeInterest({
+    const interest = await application.runtime.discovery.changeInterest({
       action: 'create', description: 'TypeScript architecture',
     });
-    await expect(application.runtime.host.discovery.getInterestFacts({
+    await expect(application.runtime.discovery.getInterestFacts({
       interestIds: [interest.id, 'interest:missing'],
       evidenceIds: [],
     })).resolves.toEqual({ interests: [interest], evidence: [] });

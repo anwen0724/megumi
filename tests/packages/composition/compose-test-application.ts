@@ -3,14 +3,14 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import fs from 'fs-extra';
-import { composeApplication, type ProductRuntime } from '@megumi/composition';
+import { createApplication, type Application } from '@megumi/application/index';
 import type { Api, AssistantMessage, Model, ProviderStreams } from '@megumi/ai';
 import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
-import { nodeObservabilityStorage } from '@megumi/observability';
-import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
+import { nodeObservabilityStorage } from '@megumi/application/observability/index';
+import { createNodeWorkspaceFileSystem } from '@megumi/application/workspace/node-workspace-file-system';
 
 export interface TestApplication {
-  readonly runtime: ProductRuntime;
+  readonly runtime: Application;
   readonly root: string;
   readonly home: string;
   readonly workspace: string;
@@ -43,7 +43,7 @@ export function composeTestApplication(responses: readonly string[] = ['Test rep
       enabled_sources: ['open_web'],
     },
   };
-  const runtime = composeApplication({
+  const runtime = createApplication({
     home: {
       env: { MEGUMI_HOME: home },
       homeDirectory: root,

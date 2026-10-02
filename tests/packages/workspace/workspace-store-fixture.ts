@@ -1,8 +1,8 @@
 /*
  * Creates the minimal Database schema used by Workspace Store focused tests.
  */
-import { createDatabase } from '@megumi/database';
-import { createWorkspaceStore } from '../../../packages/agent/workspace/src/workspace-store';
+import { createDatabase } from '@megumi/application/storage/index';
+import { createWorkspaceStore } from '@megumi/application/workspace/workspace-store';
 
 export function createWorkspaceStoreFixture() {
   const database = createDatabase({ filename: ':memory:' });

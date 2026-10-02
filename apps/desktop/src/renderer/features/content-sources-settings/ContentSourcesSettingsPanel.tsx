@@ -13,7 +13,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryConfigurationUiDto } from '@megumi/product-host/host';
+import type { DiscoveryConfigurationUiDto } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { Button, SecretInput, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';

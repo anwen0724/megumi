@@ -1,9 +1,10 @@
 /* Assembles Context with real Session, Instructions, Skills, and file storage. */
-import { type BuildContextRequest, type CompactContextRequest, type CreateContextOptions } from '@megumi/context';
-import { createEventBus } from '@megumi/events';
-import { createInstructionReader } from '@megumi/instructions';
-import { createSessionAttachmentReader } from '@megumi/session';
-import { createSkills } from '@megumi/skills';
+import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
+import { type BuildContextRequest, type CompactContextRequest, type CreateContextOptions } from '@megumi/agent-runtime/context/index';
+import { createEventBus } from '@megumi/agent-runtime/events';
+import { createInstructionReader } from '@megumi/agent-runtime/resources/instructions/index';
+import { createSessionAttachmentReader } from '@megumi/agent-runtime/sessions/index';
+import { createSkills } from '@megumi/agent-runtime/resources/skills/index';
 import { createSessionFixture, savedAt } from '../session/session-test-fixture';
 import { completedMessage, model } from './context-test-fixtures';
 
@@ -39,7 +40,7 @@ export async function createContextFixture(
     instructionReader: createInstructionReader({ megumiHomePath: root }),
     skills: createSkills({
       homePath: root,
-      database,
+      availabilityStore: createDatabaseSkillAvailabilityStore(database),
       workspaceRootResolver: { resolveWorkspaceRoot: async () => workspaceRoot },
     }),
     models: { completeSimple },

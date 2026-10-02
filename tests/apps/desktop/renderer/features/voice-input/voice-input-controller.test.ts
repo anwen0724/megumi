@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createVoiceInputController } from '@megumi/desktop/renderer/features/voice-input/voice-input-controller';
 import type { MicrophoneCapture } from '@megumi/desktop/renderer/features/voice-input/microphone-capture';
-import type { FinalTranscript, SpeechInputEvent } from '@megumi/voice';
+import type { FinalTranscript, SpeechInputEvent } from '@megumi/application/voice/index';
 
 function fakeCapture() {
   const snapshot = {

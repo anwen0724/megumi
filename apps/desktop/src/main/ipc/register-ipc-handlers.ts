@@ -8,7 +8,7 @@ import { registerSkillHandlers, type SkillHandlersService } from './handlers/ski
 import { registerSettingsHandlers, type SettingsHandlersService } from './handlers/settings.handler';
 import { registerApprovalHandlers, type ApprovalHandlersService } from './handlers/approval.handler';
 import { registerDiscoveryHandlers, type DiscoveryHandlersService } from './handlers/discovery.handler';
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../runtime-logger';
 import { registerObservabilityHandlers } from './handlers/observability.handler';
 import { registerVoiceHandlers, type VoiceHandlersService } from './handlers/voice.handler';
 import { registerCharacterHandlers } from './handlers/character.handler';
@@ -24,7 +24,7 @@ import type { ApplicationUpdateController } from '../application-update/applicat
 import { registerSettingsRecoveryHandlers, type SettingsRecoveryService } from './handlers/settings-recovery.handler';
 
 export interface RegisterAllHandlersOptions {
-  logger?: ProductRuntimeLogger;
+  logger?: ApplicationLogger;
   ipcMain?: DesktopIpcMain;
   workspace?: WorkspaceHandlersService;
   session?: SessionHandlersService;
@@ -34,7 +34,7 @@ export interface RegisterAllHandlersOptions {
   settingsRecovery?: SettingsRecoveryService;
   approval?: ApprovalHandlersService;
   discovery?: DiscoveryHandlersService;
-  observability?: { host: Pick<import('@megumi/product-host/host').ProductHostInterface, 'observability'> };
+  observability?: { host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'observability'> };
   voice?: VoiceHandlersService;
   character?: CharacterWindowController;
   voiceInput?: { adapter: ElectronVoiceInputAdapter };

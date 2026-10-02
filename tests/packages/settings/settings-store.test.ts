@@ -7,11 +7,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   createSettings,
-} from '../../../packages/agent/settings/src';
+} from '@megumi/application/settings/index';
 import {
   SettingsStoreParseError,
   createSettingsStore,
-} from '@megumi/settings/store';
+} from '@megumi/application/settings/settings-store';
 
 describe('settings.json store', () => {
   let temporaryHome: string | undefined;

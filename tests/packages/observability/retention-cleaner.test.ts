@@ -3,16 +3,16 @@
 import { createHash } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { createObservabilityHealth } from '../../../packages/agent/observability/src/runtime/observability-health';
-import { encodeRuntimeLogEntry } from '../../../packages/agent/observability/src/runtime/runtime-log-entry';
+import { createObservabilityHealth } from '@megumi/application/observability/runtime/observability-health';
+import { encodeRuntimeLogEntry } from '@megumi/application/observability/runtime/runtime-log-entry';
 import {
   createRetentionCleaner,
   type RetentionIndexPruner,
-} from '../../../packages/agent/observability/src/persistence/retention-cleaner';
+} from '@megumi/application/observability/persistence/retention-cleaner';
 import {
   encodeTraceJournalRecord,
   type TraceJournalRecord,
-} from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+} from '@megumi/application/observability/persistence/trace-journal-record';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Retention cleaner', () => {

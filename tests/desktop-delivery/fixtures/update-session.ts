@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { vi } from 'vitest';
-import { composeApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
+import { createApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
 import { electronBoundary, installElectronModuleBoundary } from './electron-boundary';
 import { createUpdateSource } from './update-source';
 
@@ -20,7 +20,7 @@ export async function createUpdateSession(prepareToQuit: () => Promise<void> = a
   const fixture = await createUpdateSource();
   await fs.writeFile(path.join(home, 'app-update.yml'),
     `provider: generic\nurl: ${fixture.url}\nupdaterCacheDirName: fixture-updater\n`);
-  const controller = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit });
+  const controller = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit });
   return {
     ...fixture, controller, home,
     async close() {

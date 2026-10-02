@@ -8,7 +8,7 @@ import {
   DatabaseMigrationError,
   createDatabase,
   migrateDatabase,
-} from '../../../packages/agent/database/src';
+} from '@megumi/application/storage/index';
 
 let tempDir: string | null = null;
 

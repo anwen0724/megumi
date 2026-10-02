@@ -1,11 +1,11 @@
 // @vitest-environment node
 /* Verifies callback-scoped Trace behavior through the Recorder boundary. */
 import { describe, expect, it, vi } from 'vitest';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import {
   TraceJournalRecordSchema,
   type TraceJournalRecord,
-} from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+} from '@megumi/application/observability/persistence/trace-journal-record';
 
 describe('Trace recorder', () => {
   it('executes one operation once and records its complete Trace lifecycle', async () => {

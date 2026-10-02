@@ -1,8 +1,8 @@
 /* Provides shared model messages and input data for Context behavior tests. */
 import { vi } from 'vitest';
 import type { Api, AssistantMessage, Model } from '@megumi/ai';
-import type { SessionHistoryItem } from '@megumi/session';
-import type { CreateContextOptions } from '../../../packages/agent/context/src/index';
+import type { SessionHistoryItem } from '@megumi/agent-runtime/sessions/index';
+import type { CreateContextOptions } from '@megumi/agent-runtime/context/index';
 
 export const model: Model<Api> = {
   id: 'gpt',

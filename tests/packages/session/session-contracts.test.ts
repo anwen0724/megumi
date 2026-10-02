@@ -3,10 +3,10 @@ import {
   SessionAssistantReplyPayloadSchema,
   SessionMessageSchema,
   SessionModelResponsePayloadSchema,
-} from '../../../packages/agent/session/src/index';
+} from '@megumi/agent-runtime/sessions/index';
 import type {
   SessionMessage
-} from '../../../packages/agent/session/src/index';
+} from '@megumi/agent-runtime/sessions/index';
 
 describe('session contracts v2', () => {
   it('accepts a user message with display and model content', () => {

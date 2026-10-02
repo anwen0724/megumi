@@ -3,8 +3,8 @@ import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({
   dialect: 'sqlite',
-  schema: './packages/agent/database/src/database-schema.ts',
-  out: './packages/agent/database/migrations',
+  schema: './packages/application/src/storage/database-schema.ts',
+  out: './packages/application/resources/migrations',
   dbCredentials: {
     url: './.megumi/sqlite/megumi.sqlite3',
   },

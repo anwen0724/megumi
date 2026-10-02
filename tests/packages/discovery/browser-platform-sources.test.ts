@@ -6,7 +6,7 @@ import {
   createXiaohongshuSource,
   type EmbeddedBrowser,
   type EmbeddedBrowserSnapshot,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 describe('embedded-browser platform sources', () => {
   it('recognizes the captured Douyin verification interstitial with an empty body', async () => {

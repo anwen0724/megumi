@@ -5,7 +5,7 @@
  * carries references only, never content).
  */
 import { describe, expect, it } from 'vitest';
-import { EventSchema } from '../../../packages/agent/events/src/event-schema';
+import { EventSchema } from '@megumi/agent-runtime/runs/events/event-schema';
 
 function completeEvent(overrides: Record<string, unknown> = {}) {
   return {

@@ -17,6 +17,8 @@ const alias = [
 export default defineConfig(({ command }) => ({
   main: {
     resolve: { alias },
+    // Vite 5's esbuild cannot parse AI's ES2024 tsconfig; Electron's build target still governs emitted code.
+    esbuild: { tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } } },
     define: {
       MAIN_WINDOW_VITE_NAME: JSON.stringify('main_window'),
       MEGUMI_APP_ID: JSON.stringify(delivery.appId),

@@ -9,7 +9,7 @@ import {
   MessagesSquare,
   XCircle,
 } from 'lucide-react';
-import type { ObservabilityTraceSummaryUiDto } from '@megumi/product-host/host';
+import type { ObservabilityTraceSummaryUiDto } from '@megumi/application/contracts';
 import { useTranslation } from 'react-i18next';
 import { cx } from '../../shared/ui';
 import { formatTraceDuration, formatTraceTime } from './diagnostics-format';

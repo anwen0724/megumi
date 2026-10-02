@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSessionReader } from '../../../packages/agent/product-host/src/operations/session/session-reader';
+import { createSessionReader } from '@megumi/application/session-reader';
 
 const session = {
   session_id: 'session:1',
@@ -49,16 +49,13 @@ describe('Product Session reader', () => {
         }),
         getCommittedRunMessages: () => ({ status: 'ok', messages: [messageItem] }),
       },
-      executions: {
-        getActive: () => ({
-          status: 'found',
-          execution: {
+      runtime: {
+        getSessionRun: () => ({
             kind: 'conversation',
-            executionId: 'execution:1', requestId: 'request:1', workspaceId: 'workspace:1',
+            runId: 'execution:1', requestId: 'request:1', workspaceId: 'workspace:1',
             sessionId: 'session:1', userMessageId: 'message:1',
             model: {} as never, permissionMode: 'ask', status: 'waiting',
             createdAt: '2026-07-04T00:00:02.000Z', startedAt: '2026-07-04T00:00:02.000Z',
-          },
         }),
       },
       events: {
@@ -98,7 +95,7 @@ describe('Product Session reader', () => {
         getActiveConversationHistory: () => ({ status: 'ok', conversation: [] }),
         getCommittedRunMessages: () => ({ status: 'ok', messages: [messageItem] }),
       },
-      executions: { getActive: () => { executionReads += 1; return { status: 'not_found', sessionId: session.session_id }; } },
+      runtime: { getSessionRun: () => { executionReads += 1; return undefined; } },
       events: { read: () => { eventReads += 1; return { events: [], truncated: false }; } },
       workspaceChanges: { listChangeSummaries: () => ({ summaries: [] }) },
     });

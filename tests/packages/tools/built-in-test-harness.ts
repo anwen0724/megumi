@@ -6,20 +6,20 @@ import {
   createToolRouter,
   type ToolExecutionOptions,
   type ToolExecutionResult,
-} from '../../../packages/agent/tools/src';
-import type { ToolProcessAdapter } from '../../../packages/agent/tools/src/built-ins/run-command';
-import type { WebFetch } from '../../../packages/agent/tools/src/built-ins/web-fetch';
-import type { WebSearch } from '../../../packages/agent/tools/src/built-ins/web-search';
+} from '@megumi/agent-runtime/tools/index';
+import type { ToolProcessAdapter } from '@megumi/agent-runtime/tools/run-command';
+import type { WebFetch } from '@megumi/agent-runtime/tools/web-fetch';
+import type { WebSearch } from '@megumi/agent-runtime/tools/web-search';
 import type {
   BuiltInToolContext,
   WorkspaceFileAccess,
-} from '../../../packages/agent/tools/src/built-ins/workspace-file-access';
+} from '@megumi/agent-runtime/tools/workspace-file-access';
 import {
   createCancelledToolResult,
   createFailedToolResult,
   normalizeRawToolResult,
   ToolExecutionFailure,
-} from '../../../packages/agent/tools/src/tool-result';
+} from '@megumi/agent-runtime/tools/tool-result';
 
 export function createBuiltInTestHarness(request: {
   readonly workspaceFileAccess: WorkspaceFileAccess;

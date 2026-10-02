@@ -1,6 +1,6 @@
 import { ChatPage } from '../features/chat';
 import { DiscoveryPage } from '../features/discovery';
-import type { DiscoveryRecommendationUiDto } from '@megumi/product-host/host';
+import type { DiscoveryRecommendationUiDto } from '@megumi/application/contracts';
 
 export function PageHost({ page, onStartRecommendationConversation, onOpenContentSources }: {
   page: 'discovery' | 'chat';

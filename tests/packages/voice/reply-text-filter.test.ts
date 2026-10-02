@@ -1,7 +1,7 @@
 /* Verifies the reply text filter that turns Assistant Replies into speakable text. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { filterReplyTextForSpeech } from '../../../packages/agent/voice/src/speech-output/reply-text-filter';
+import { filterReplyTextForSpeech } from '@megumi/application/voice/speech-output/reply-text-filter';
 
 describe('filterReplyTextForSpeech', () => {
   it('keeps plain Chinese text', () => {

@@ -1,7 +1,7 @@
 /* Verifies startup rollback and shutdown attempt every registered resource. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createApplicationResourceManager } from '../../../packages/agent/composition/src/application-resource-manager';
+import { createApplicationResourceManager } from '@megumi/application/application-resource-manager';
 
 describe('Application resource recovery', () => {
   it('rolls back registered resources in reverse-safe order', () => {
@@ -23,8 +23,7 @@ describe('Application resource recovery', () => {
     resources.registerEventSubscription({ unsubscribe });
     await expect(resources.dispose({
       discovery: { shutdown: async () => { throw new Error('discovery'); } },
-      executions: { shutdown: async () => ({ status: 'completed', interruptedExecutionIds: [] }) },
-      conversation: { shutdown: async () => undefined },
+      runtime: { stop: async () => ({ status: 'stopped' }) },
       voice: { dispose: async () => undefined },
       speechOutput: { dispose() {} },
       observability: { shutdown: async () => undefined },

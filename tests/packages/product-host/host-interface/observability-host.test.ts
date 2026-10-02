@@ -4,8 +4,8 @@
 // @vitest-environment node
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { summarizeTrace, type ObservabilityQueries, type TraceProjection } from '@megumi/observability';
-import { createObservabilityOperations } from '@megumi/product-host/operations';
+import { summarizeTrace, type ObservabilityQueries, type TraceProjection } from '@megumi/application/observability/index';
+import { createObservabilityOperations } from '@megumi/application/operations';
 
 const TRACE_ID = '00000000-0000-4000-8000-000000000001';
 const CONTENT_ID = sha256(new TextEncoder().encode('actual prompt'));

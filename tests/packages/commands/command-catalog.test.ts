@@ -2,8 +2,8 @@
  * Protects deterministic command-name and alias conflict resolution.
  */
 import { describe, expect, it } from "vitest";
-import { createCommandCatalog } from "../../../packages/agent/commands/src/command-catalog";
-import type { CommandDefinition } from "@megumi/commands";
+import { createCommandCatalog } from "@megumi/agent-runtime/resources/commands/command-catalog";
+import type { CommandDefinition } from "@megumi/agent-runtime/runs/commands/index";
 
 const handle: CommandDefinition["handle"] = async ({ input }) => ({ type: "not_command", input });
 

@@ -1,6 +1,6 @@
 /* Describes Product-owned resources copied into packaged host artifacts. */
 import path from 'node:path';
-import { DATABASE_MIGRATIONS_RESOURCE_PATH } from '@megumi/database';
+import { DATABASE_MIGRATIONS_RESOURCE_PATH } from '@megumi/application/storage/index';
 
 export const PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH = 'product/system-skills';
 export const PRODUCT_INSTRUCTIONS_RESOURCE_PATH = 'product/instructions';
@@ -13,7 +13,7 @@ export function resolveProductSystemSkillsPath(input: {
 }): string {
   return input.isPackaged
     ? path.resolve(input.resourcesPath, PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH)
-    : path.resolve(input.cwd, 'packages/agent/skills/built-in-skills');
+    : path.resolve(input.cwd, 'packages/agent-runtime/resources/skills');
 }
 
 export function resolveProductInstructionsPath(input: {
@@ -23,15 +23,15 @@ export function resolveProductInstructionsPath(input: {
 }): string {
   return input.isPackaged
     ? path.resolve(input.resourcesPath, PRODUCT_INSTRUCTIONS_RESOURCE_PATH)
-    : path.resolve(input.cwd, 'packages/agent/instructions/content');
+    : path.resolve(input.cwd, 'packages/agent-runtime/resources/instructions');
 }
 
 /** Lists the required runtime resources; the build fails if any source is absent. */
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
-  const systemSkillsPath = path.resolve(cwd, 'packages/agent/skills/built-in-skills');
-  const instructionsPath = path.resolve(cwd, 'packages/agent/instructions/content');
-  const voiceManifestPath = path.resolve(cwd, 'packages/agent/voice/resources/model-manifest.json');
-  const vadResourcePath = path.resolve(cwd, 'packages/agent/voice/resources/vad');
+  const systemSkillsPath = path.resolve(cwd, 'packages/agent-runtime/resources/skills');
+  const instructionsPath = path.resolve(cwd, 'packages/agent-runtime/resources/instructions');
+  const voiceManifestPath = path.resolve(cwd, 'packages/application/resources/voice/model-manifest.json');
+  const vadResourcePath = path.resolve(cwd, 'packages/application/resources/voice/vad');
   return [
     {
       source: path.resolve(cwd, 'apps/desktop/assets/app-icon.ico'),
@@ -46,7 +46,7 @@ export function getProductPackagingResources(cwd: string): Array<{ source: strin
       target: PRODUCT_INSTRUCTIONS_RESOURCE_PATH,
     },
     {
-      source: path.resolve(cwd, 'packages/agent/database/migrations'),
+      source: path.resolve(cwd, 'packages/application/resources/migrations'),
       target: DATABASE_MIGRATIONS_RESOURCE_PATH,
     },
     {

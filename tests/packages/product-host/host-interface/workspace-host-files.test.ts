@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceOperations } from '../../../../packages/agent/product-host/src/operations/workspace-operations';
+import { createWorkspaceOperations } from '@megumi/application/workspace/workspace-operations';
 
 describe('WorkspaceHost files', () => {
   it('maps canonical Workspace file results and opens only the resolved absolute path', async () => {

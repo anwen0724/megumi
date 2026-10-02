@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase } from '../../../packages/agent/database/src';
+import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
 
-const migrationsRoot = path.join(process.cwd(), 'packages/agent/database/migrations');
+const migrationsRoot = path.join(process.cwd(), 'packages/application/resources/migrations');
 let tempRoot: string | undefined;
 
 afterEach(() => {

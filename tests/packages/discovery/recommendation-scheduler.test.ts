@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createRecommendationScheduler,
-} from '../../../packages/agent/discovery/src/recommendation/recommendation-scheduler';
+} from '@megumi/application/discovery/scheduling/recommendation-scheduler';
 
 describe('RecommendationScheduler', () => {
   it('runs startup catch-up after today generation time and schedules the next local day', async () => {

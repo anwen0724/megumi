@@ -1,9 +1,9 @@
 /* Exercises Context compaction against real Session, Instructions and Skills storage. */
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
-import { createContext, type CreateContextOptions } from '@megumi/context';
-import { sessionMessageText } from '@megumi/session';
-import { type AnyEvent } from '@megumi/events';
+import { createContext, type CreateContextOptions } from '@megumi/agent-runtime/context/index';
+import { sessionMessageText } from '@megumi/agent-runtime/sessions/index';
+import { type AnyEvent } from '@megumi/agent-runtime/events';
 import { createSessionFixture, savedAt } from '../session/session-test-fixture';
 import { completedMessage } from './context-test-fixtures';
 import { createContextFixture, contextModel as compactingModel } from './context-behavior-fixture';

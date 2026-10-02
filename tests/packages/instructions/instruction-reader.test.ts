@@ -14,7 +14,7 @@ import {
   type ReadInstructionFileResult,
   type ResolveInstructionPathRequest,
   type ResolveInstructionPathResult,
-} from '../../../packages/agent/instructions/src/index';
+} from '@megumi/agent-runtime/resources/instructions/index';
 
 const temporaryInstructionRoots: string[] = [];
 

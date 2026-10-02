@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createToolRegistry, type ToolDefinition, type ToolRegistration } from '../../../packages/agent/tools/src';
+import { createToolRegistry, type ToolDefinition, type ToolRegistration } from '@megumi/agent-runtime/tools/index';
 
 const definition: ToolDefinition = {
   name: 'echo', description: 'Echo one string.',

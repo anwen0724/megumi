@@ -1,12 +1,13 @@
 /* Verifies Recommendation's frozen Candidate reads, ordered expansion, and terminal publication tools. */
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
+import { resolveRecommendationDiscussion } from '@megumi/application/discovery/recommendations/recommendation-discussion';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 import {
   createRecommendationAttempts,
   createRecommendationRepository,
   type RecommendationCandidate,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 const databases: DatabaseConnection[] = [];
 const now = '2026-09-03T00:00:00.000Z';
@@ -27,22 +28,41 @@ describe('Recommendation tools', () => {
       .resolves.toMatchObject({ content: { status: 'read', candidate: { candidate: { id: 'candidate:3' } } } });
   });
 
-  it('requires the actual target and publishes only exposed Candidates', async () => {
+  it('requires the actual target and accepts a draft without publishing it', async () => {
     const { attempts, repository } = setup();
-    await expect(attempts.publishRecommendations(tool('execution:1', {
+    await expect(attempts.submitRecommendations(tool('execution:1', {
       items: [{ candidateId: 'candidate:1', recommendationReason: 'Relevant.' }],
     }))).resolves.toMatchObject({ isError: true, content: { code: 'selection_count_invalid' } });
 
-    const result = await attempts.publishRecommendations(tool('execution:1', {
+    const result = await attempts.submitRecommendations(tool('execution:1', {
       items: [
         { candidateId: 'candidate:1', recommendationReason: 'Relevant one.' },
         { candidateId: 'candidate:2', recommendationReason: 'Relevant two.' },
       ],
     }));
 
-    expect(result).toMatchObject({ content: { status: 'published', count: 2 } });
-    expect(repository.getCollection('2026-09-03', true)?.items.map(({ candidateId }) => candidateId))
-      .toEqual(['candidate:1', 'candidate:2']);
+    expect(result).toMatchObject({ content: { status: 'accepted', count: 2 } });
+    expect(repository.getCollection('2026-09-03', true)).toBeUndefined();
+  });
+
+  it('associates only a visible published recommendation with a new discussion', async () => {
+    const { attempts, repository } = setup();
+    await attempts.submitRecommendations(tool('execution:1', { items: [
+      { candidateId: 'candidate:1', recommendationReason: 'Relevant one.' },
+      { candidateId: 'candidate:2', recommendationReason: 'Relevant two.' },
+    ] }));
+    const publication = attempts.publishDraft({ executionId: 'execution:1', signal: new AbortController().signal });
+    if (publication.status !== 'published') throw new Error('Expected a published collection');
+    const recommendationId = publication.collection.items[0].id;
+    expect(resolveRecommendationDiscussion({ recommendationId }, repository)).toMatchObject({
+      status: 'resolved', reference: { recommendationId, recommendationReason: 'Relevant one.' },
+    });
+    expect(resolveRecommendationDiscussion({ recommendationId, sessionId: 'existing' }, repository)).toMatchObject({
+      status: 'rejected', error: { code: 'RECOMMENDATION_REQUIRES_NEW_SESSION' },
+    });
+    expect(resolveRecommendationDiscussion({ recommendationId: 'missing' }, repository)).toMatchObject({
+      status: 'rejected', error: { code: 'RECOMMENDATION_NOT_FOUND' },
+    });
   });
 });
 

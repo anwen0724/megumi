@@ -19,125 +19,8 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@megumi/composition": [
-        "packages/agent/composition/src/index.ts"
-      ],
-      "@megumi/composition/*": [
-        "packages/agent/composition/src/*"
-      ],
       "@megumi/desktop/*": [
         "apps/desktop/src/*"
-      ],
-      "@megumi/product-host": [
-        "packages/agent/product-host/src/index.ts"
-      ],
-      "@megumi/product-host/*": [
-        "packages/agent/product-host/src/*"
-      ],
-      "@megumi/agent-core": [
-        "packages/agent-core/src/index.ts"
-      ],
-      "@megumi/agent-core/*": [
-        "packages/agent-core/src/*"
-      ],
-      "@megumi/discovery": [
-        "packages/agent/discovery/src/index.ts"
-      ],
-      "@megumi/discovery/*": [
-        "packages/agent/discovery/src/*"
-      ],
-      "@megumi/input": [
-        "packages/agent/input/src/index.ts"
-      ],
-      "@megumi/input/*": [
-        "packages/agent/input/src/*"
-      ],
-      "@megumi/commands": [
-        "packages/agent/commands/src/index.ts"
-      ],
-      "@megumi/commands/*": [
-        "packages/agent/commands/src/*"
-      ],
-      "@megumi/instructions": [
-        "packages/agent/instructions/src/index.ts"
-      ],
-      "@megumi/instructions/*": [
-        "packages/agent/instructions/src/*"
-      ],
-      "@megumi/tools": [
-        "packages/agent/tools/src/index.ts"
-      ],
-      "@megumi/tools/*": [
-        "packages/agent/tools/src/*"
-      ],
-      "@megumi/permissions": [
-        "packages/agent/permissions/src/index.ts"
-      ],
-      "@megumi/permissions/*": [
-        "packages/agent/permissions/src/*"
-      ],
-      "@megumi/database": [
-        "packages/agent/database/src/index.ts"
-      ],
-      "@megumi/database/*": [
-        "packages/agent/database/src/*"
-      ],
-      "@megumi/events": [
-        "packages/agent/events/src/index.ts"
-      ],
-      "@megumi/events/*": [
-        "packages/agent/events/src/*"
-      ],
-      "@megumi/session": [
-        "packages/agent/session/src/index.ts"
-      ],
-      "@megumi/session/attachment-store": [
-        "packages/agent/session/src/session-attachment.ts"
-      ],
-      "@megumi/session/store": [
-        "packages/agent/session/src/session-store.ts"
-      ],
-      "@megumi/session/*": [
-        "packages/agent/session/src/*"
-      ],
-      "@megumi/context": [
-        "packages/agent/context/src/index.ts"
-      ],
-      "@megumi/context/*": [
-        "packages/agent/context/src/*"
-      ],
-      "@megumi/workspace/node": [
-        "packages/agent/workspace/src/node-workspace-file-system.ts"
-      ],
-      "@megumi/workspace/store": [
-        "packages/agent/workspace/src/workspace-store.ts"
-      ],
-      "@megumi/workspace": [
-        "packages/agent/workspace/src/index.ts"
-      ],
-      "@megumi/workspace/*": [
-        "packages/agent/workspace/src/*"
-      ],
-      "@megumi/settings": [
-        "packages/agent/settings/src/index.ts"
-      ],
-      "@megumi/settings/store": [
-        "packages/agent/settings/src/settings-store.ts"
-      ],
-      "@megumi/settings/*": [
-        "packages/agent/settings/src/*"
-      ],
-      "@megumi/sandbox": [
-        "packages/agent/sandbox/src/index.ts"
-      ],
-      "@megumi/sandbox/*": [
-        "packages/agent/sandbox/src/*"
-      ],
-      "@megumi/skills": [
-        "packages/agent/skills/src/index.ts"
-      ],
-      "@megumi/skills/*": [
-        "packages/agent/skills/src/*"
       ],
       "@megumi/ai": [
         "packages/ai/src/index.ts"
@@ -145,20 +28,17 @@
       "@megumi/ai/*": [
         "packages/ai/src/*"
       ],
-      "@megumi/observability": [
-        "packages/agent/observability/src/index.ts"
+      "@megumi/agent-runtime": [
+        "packages/agent-runtime/src/index.ts"
       ],
-      "@megumi/observability/*": [
-        "packages/agent/observability/src/*"
+      "@megumi/agent-runtime/*": [
+        "packages/agent-runtime/src/*"
       ],
-      "@megumi/voice": [
-        "packages/agent/voice/src/index.ts"
+      "@megumi/application": [
+        "packages/application/src/index.ts"
       ],
-      "@megumi/voice/*": [
-        "packages/agent/voice/src/*"
-      ],
-      "@megumi/voice/speech-input/*": [
-        "packages/agent/voice/src/speech-input/*"
+      "@megumi/application/*": [
+        "packages/application/src/*"
       ]
     }
   },

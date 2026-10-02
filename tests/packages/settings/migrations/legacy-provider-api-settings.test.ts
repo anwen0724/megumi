@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Protects the one-time Provider API migration without widening current Settings contracts. */
 import { describe, expect, it } from 'vitest';
-import { migrateLegacyProviderApiSettings } from '@megumi/settings';
+import { migrateLegacyProviderApiSettings } from '@megumi/application/settings/index';
 
 describe('legacy provider API settings migration', () => {
   it('migrates legacy protocols while preserving current user settings', () => {

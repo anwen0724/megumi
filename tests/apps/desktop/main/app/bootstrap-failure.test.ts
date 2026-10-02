@@ -7,7 +7,7 @@ import {
   DatabaseDowngradeUnsupportedError,
   DatabaseMigrationError,
   DatabaseReleaseUpgradeError,
-} from '@megumi/database';
+} from '@megumi/application/storage/index';
 
 vi.mock('electron', () => ({
   app: { whenReady: vi.fn().mockResolvedValue(undefined) },

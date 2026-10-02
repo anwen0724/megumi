@@ -2,10 +2,10 @@
 /* Verifies that diagnostics failures never alter product callback semantics. */
 import { describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
-import { composeObservability } from '@megumi/observability';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createTraceJournal } from '../../../packages/agent/observability/src/persistence/trace-journal';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import { composeObservability } from '@megumi/application/observability/index';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
+import { createTraceJournal } from '@megumi/application/observability/persistence/trace-journal';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Observability failure isolation', () => {

@@ -2,14 +2,14 @@
 // @vitest-environment node
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase } from '@megumi/database';
-import { getDiscoveryState, initializeDiscoveryState, type DiscoveryState } from '@megumi/discovery';
+import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
+import { getDiscoveryState, initializeDiscoveryState, type DiscoveryState } from '@megumi/application/discovery/index';
 
 describe('Discovery state', () => {
   it('rejects dangling references atomically and never overwrites existing data', () => {
     const database = createDatabase({ filename: ':memory:' });
     try {
-      migrateDatabase({ database, migrationsFolder: path.resolve('packages/agent/database/migrations') });
+      migrateDatabase({ database, migrationsFolder: path.resolve('packages/application/resources/migrations') });
       const empty = getDiscoveryState(database);
       const state: DiscoveryState = { ...empty, interests: [{
         id: 'interest', description: 'Agents', status: 'active', createdFrom: 'manual', revision: 0,

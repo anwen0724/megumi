@@ -1,15 +1,15 @@
 /* Verifies the Discovery Agent Execution Registry: reservation, exclusion, approval, terminal, idle. */
 import { describe, expect, it, vi } from 'vitest';
-import { Agent, type AgentOptions } from '@megumi/agent-core';
+import { RunLoopController, type AgentOptions } from '@megumi/agent-runtime/runs/loop';
 import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
 import { Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
 import {
-  ExecutionRegistry,
+  RunRegistry,
   type ApprovalRequest,
   type ExecutionMetadata,
   type ExecutionOutcome,
   type TerminalExecution,
-} from '@megumi/execution';
+} from '@megumi/agent-runtime/runs/index';
 
 const model: Model<Api> = {
   id: 'test-model',
@@ -100,12 +100,12 @@ function agentOptions(overrides: Partial<AgentOptions> = {}): AgentOptions {
   };
 }
 
-function createAgent(options: Partial<AgentOptions> = {}): Agent {
-  return new Agent(agentOptions(options));
+function createAgent(options: Partial<AgentOptions> = {}): RunLoopController {
+  return new RunLoopController(agentOptions(options));
 }
 
-function registry(): ExecutionRegistry {
-  return new ExecutionRegistry({ clock, terminalRetentionMs: 60_000 });
+function registry(): RunRegistry {
+  return new RunRegistry({ clock, terminalRetentionMs: 60_000 });
 }
 
 function resolveOutcome<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -184,7 +184,7 @@ describe('Execution Registry', () => {
     expect(again.status).toBe('reserved');
   });
 
-  it('derives running, waiting and cancelling projections from the Agent and the pending approval', async () => {
+  it('owns running, waiting and cancelling projections through run operations', async () => {
     const store = registry();
     const hangingTool = {
       name: 'hang',
@@ -225,7 +225,7 @@ describe('Execution Registry', () => {
     expect(store.getExecution('execution:1')?.status).toBe('waiting');
 
     expect(store.cancelPendingApproval('execution:1')).toBe(true);
-    agent.abort();
+    store.requestCancellation('execution:1');
     expect(store.getExecution('execution:1')?.status).toBe('cancelling');
     await expect(wait).resolves.toEqual({ status: 'cancelled' });
     await execution;
@@ -296,7 +296,7 @@ describe('Execution Registry', () => {
 
     // Expiry drops the terminal record and the idempotent start result.
     let now = '2026-07-31T00:00:00.000Z';
-    const later = new ExecutionRegistry({
+    const later = new RunRegistry({
       clock: { now: () => now },
       terminalRetentionMs: 60_000,
     });
@@ -374,7 +374,7 @@ describe('Execution Registry', () => {
   });
 });
 
-function stubUserMessage(): import('@megumi/session').SessionMessageWithAttachments {
+function stubUserMessage(): import('@megumi/agent-runtime/sessions/index').SessionMessageWithAttachments {
   return {
     message: {
       message_id: 'message:1',
@@ -385,10 +385,10 @@ function stubUserMessage(): import('@megumi/session').SessionMessageWithAttachme
       created_at: clock.now(),
     },
     attachments: [],
-  } as unknown as import('@megumi/session').SessionMessageWithAttachments;
+  } as unknown as import('@megumi/agent-runtime/sessions/index').SessionMessageWithAttachments;
 }
 
-function stubUserEntry(): import('@megumi/session').SessionEntry {
+function stubUserEntry(): import('@megumi/agent-runtime/sessions/index').SessionEntry {
   return {
     entry_id: 'entry:1',
     session_id: 'session:1',
@@ -398,17 +398,17 @@ function stubUserEntry(): import('@megumi/session').SessionEntry {
   };
 }
 
-function stubFailure(): import('@megumi/execution').ExecutionFailure {
+function stubFailure(): import('@megumi/agent-runtime/runs/index').ExecutionFailure {
   return { code: 'internal_error', message: 'start failed', retryable: false };
 }
 
 /** Attaches a real Agent parked in executing_tools so approval waits derive as waiting. */
 async function attachExecutingToolsAgent(
-  store: ExecutionRegistry,
+  store: RunRegistry,
   executionId: string,
 ): Promise<{
-  readonly agent: Agent;
-  readonly execution: Promise<import('@megumi/agent-core').AgentExecutionResult>;
+  readonly agent: RunLoopController;
+  readonly execution: Promise<import('@megumi/agent-runtime/runs/loop').AgentExecutionResult>;
 }> {
   const hangingTool = {
     name: 'hang',

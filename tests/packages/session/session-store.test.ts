@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type {
   SessionAssistantReplyMessage,
   UserMessage,
-} from '../../../packages/agent/session/src';
+} from '@megumi/agent-runtime/sessions/index';
 import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/agent/database/src/index';
-import { createSessionStore } from '@megumi/session/store';
+} from '@megumi/application/storage/index';
+import { createSessionStore } from '@megumi/application/storage/session-store';
 
 function createTestDatabase() {
   const database = createDatabase({ filename: ':memory:' });

@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Verifies validation of session-scoped permission rules. */
 import { describe, expect, it } from 'vitest';
-import * as permissionsModule from '../../../packages/agent/permissions/src/index';
+import * as permissionsModule from '@megumi/agent-runtime/permissions/index';
 
 const toolIdentity = {
   source_id: 'built_in',

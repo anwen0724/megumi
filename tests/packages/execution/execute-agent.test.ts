@@ -3,16 +3,18 @@
  * approval waits inside the original ToolCall Promise, and outcome mapping.
  */
 import {
-  launchAgentExecution,
-  type ExecuteAgentDependencies,
-} from '@megumi/execution';
+  prepareRun,
+  type RunDependencies,
+} from '@megumi/agent-runtime/runs/index';
 import { describe, expect, it, vi } from 'vitest';
-import type { EventBus } from '@megumi/events';
-import type { PermissionDecision } from '@megumi/permissions';
-import type { Observability } from '@megumi/observability';
-import type { SessionHistory } from '@megumi/session';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import { createModels, createProvider } from '@megumi/ai';
+import { openAICompletionsApi } from '@megumi/ai/api/openai-completions.lazy';
+import type { EventBus } from '@megumi/agent-runtime/events';
+import type { PermissionDecision } from '@megumi/agent-runtime/permissions/index';
+import type { Observability } from '@megumi/application/observability/index';
+import type { SessionHistory } from '@megumi/agent-runtime/sessions/index';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import {
   assistantStream,
   collectEvents,
@@ -62,74 +64,63 @@ describe('Execute Agent', () => {
     ))).toBe(false);
   });
 
-  it('keeps one model.call span while recording Provider attempts, retry, response, and final Model response', async () => {
+  it('keeps one model.call span and records actual provider retries and the final response', async () => {
     const records: TraceJournalRecord[] = [];
     const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
-    const fixture = createExecutionFixture({
-      streams: [assistantStream('provider final')],
-      observability,
+    const fixture = createExecutionFixture({ observability });
+    const model = { ...executionMetadata().model, api: 'openai-completions' as const };
+    const models = createModels();
+    models.setProvider(createProvider({
+      id: model.provider, name: 'Test provider', baseUrl: model.baseUrl, models: [model],
+      auth: { apiKey: { name: 'Test key', resolve: async () => ({ auth: { apiKey: 'test' }, source: 'test' }) } },
+      api: openAICompletionsApi(),
+    }));
+    let requests = 0;
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      requests++;
+      if (requests === 1) return new Response('{"error":{"message":"Rate limited"}}', {
+        status: 429, headers: { 'content-type': 'application/json', 'retry-after-ms': '1' },
+      });
+      return new Response('data: ' + JSON.stringify({
+        id: 'response:1', object: 'chat.completion.chunk', created: 1, model: model.id,
+        choices: [{ index: 0, delta: { role: 'assistant', content: 'provider final' }, finish_reason: 'stop' }],
+      }) + '\n\ndata: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
     });
-    const originalStream = fixture.dependencies.models.streamSimple.bind(fixture.dependencies.models);
-    const dependencies = dependenciesFrom(fixture, {
-      models: {
-        ...fixture.dependencies.models,
-        streamSimple: ((model, context, options) => {
-          options?.onProviderExchange?.({
-            type: 'request', attempt: 1, payload: { messages: ['provider request 1'] },
-          });
-          options?.onProviderExchange?.({
-            type: 'retry_scheduled', currentAttempt: 1, nextAttempt: 2, reasonCode: 'http_429',
-          });
-          options?.onProviderExchange?.({
-            type: 'request', attempt: 2, payload: { messages: ['provider request 2'] },
-          });
-          options?.onProviderExchange?.({ type: 'output_started', attempt: 2 });
-          options?.onProviderExchange?.({
-            type: 'response', attempt: 2, payload: { id: 'provider-response:1', text: 'provider final' },
-          });
-          return originalStream(model, context, options);
-        }) as ExecuteAgentDependencies['models']['streamSimple'],
-      },
-    });
-
-    await observability.withTrace({ kind: 'conversation' }, async () => {
-      const launched = await launchWith(fixture, dependencies);
-      await launched.execute();
-    });
-
-    const modelSpans = records.filter((record) => (
-      record.type === 'span.started' && record.name === 'model.call'
-    ));
+    try {
+      const outcome = await observability.withTrace({ kind: 'conversation' }, async () => {
+        const launched = await prepareRun({
+          kind: 'conversation', metadata: executionMetadata({ model }),
+          input: { displayContent: [{ type: 'text', text: 'hello' }], modelContent: [{ type: 'text', text: 'hello' }], attachments: [] },
+          awaitApproval: async () => ({ status: 'cancelled' }),
+        }, dependenciesFrom(fixture, {
+          models, policy: { ...fixture.dependencies.policy, providerRequestMaxRetries: 1, modelCallTimeoutMs: 5000 },
+        }));
+        return launched.execute();
+      });
+      expect(outcome.status).toBe('completed');
+    } finally {
+      fetch.mockRestore();
+    }
+    expect(requests).toBe(2);
+    const modelSpans = records.filter((record) => record.type === 'span.started' && record.name === 'model.call');
     expect(modelSpans).toHaveLength(1);
-    expect(modelSpans[0]?.correlation.modelCallId).toBe('model-call:1');
-    const modelContent = records.filter((record) => record.type === 'content.recorded');
-    expect(modelContent.map((record) => record.kind)).toEqual([
-      'model.request',
-      'model.provider_request',
-      'model.provider_request',
-      'model.provider_response',
-      'model.response',
-    ]);
-    expect(modelContent.filter((record) => record.kind === 'model.provider_request').map((record) => (
-      record.correlation.providerAttempt
-    ))).toEqual([1, 2]);
-    expect(modelContent.filter((record) => record.kind === 'model.provider_request').every((record) => (
-      record.content.mode !== 'inline' || record.content.issues === undefined
-    ))).toBe(true);
+    const content = records.filter((record) => record.type === 'content.recorded');
+    expect(content.filter((record) => record.kind === 'model.provider_request'
+      && record.correlation.providerAttempt !== undefined).map((record) => record.correlation.providerAttempt)).toEqual([1, 2]);
+    expect(content.filter((record) => record.kind.startsWith('model.')).every((record) =>
+      record.correlation.modelCallId === modelSpans[0]?.correlation.modelCallId,
+    )).toBe(true);
+    expect(content.some((record) => record.kind === 'model.provider_event')).toBe(true);
+    expect(content.some((record) => record.kind === 'model.response'
+      && record.content.mode === 'inline' && JSON.stringify(record.content.value).includes('provider final'))).toBe(true);
     expect(records.filter((record) => record.type === 'span.event').map((record) => record.event)).toEqual([
-      {
-        type: 'model.retry.scheduled',
-        currentAttempt: 1,
-        nextAttempt: 2,
-        reasonCode: 'http_429',
-      },
+      { type: 'model.retry.started', currentAttempt: 1, nextAttempt: 2, reasonCode: 'http_429' },
       { type: 'model.output.started', providerAttempt: 2 },
     ]);
-    const modelRequest = modelContent.find((record) => record.kind === 'model.request');
-    expect(modelRequest?.content.mode).toBe('inline');
-    if (modelRequest?.content.mode !== 'inline') throw new Error('Expected inline Model request.');
-    const request = modelRequest.content.value as { context?: { tools?: Record<string, unknown>[] } };
-    expect(request.context?.tools?.every((tool) => !('execute' in tool))).toBe(true);
+    const request = content.find((record) => record.kind === 'model.request');
+    expect(request?.content.mode).toBe('inline');
+    if (request?.content.mode !== 'inline') throw new Error('Expected inline request.');
+    expect(JSON.stringify(request.content.value)).not.toContain('"execute"');
   });
 
   it('executes the Model once and preserves its outcome when Observability fails', async () => {
@@ -140,7 +131,7 @@ describe('Execute Agent', () => {
       models: {
         ...fixture.dependencies.models,
         streamSimple,
-      } as ExecuteAgentDependencies['models'],
+      } as RunDependencies['models'],
     });
 
     const launched = await launchWith(fixture, dependencies);
@@ -153,7 +144,7 @@ describe('Execute Agent', () => {
 
   it('persists a Recommendation reference and presents it to the first model call', async () => {
     const fixture = createExecutionFixture({ streams: [assistantStream('done')] });
-    const launched = await launchAgentExecution({
+    const launched = await prepareRun({
       kind: 'conversation',
       metadata: executionMetadata(),
       input: {
@@ -595,7 +586,7 @@ describe('Execute Agent', () => {
 });
 
 function approvalDecisionFor(
-  request: import('@megumi/permissions').EvaluateToolCallRequest,
+  request: import('@megumi/agent-runtime/permissions/index').EvaluateToolCallRequest,
 ): Extract<PermissionDecision, { type: 'requires_approval' }> {
   const allowed = {
     type: 'allow' as const,
@@ -624,9 +615,9 @@ function approvalDecisionFor(
 
 function launchWith(
   fixture: ExecutionFixture,
-  dependencies: ExecuteAgentDependencies,
+  dependencies: RunDependencies,
 ) {
-  return launchAgentExecution({
+  return prepareRun({
     kind: 'conversation',
     metadata: executionMetadata(),
     input: {
@@ -640,8 +631,8 @@ function launchWith(
 
 function dependenciesFrom(
   fixture: ExecutionFixture,
-  overrides: Partial<ExecuteAgentDependencies> = {},
-): ExecuteAgentDependencies {
+  overrides: Partial<RunDependencies> = {},
+): RunDependencies {
   return {
     ...fixture.dependencies,
     ...overrides,
@@ -649,9 +640,9 @@ function dependenciesFrom(
 }
 
 function captureReleases(
-  tools: ExecuteAgentDependencies['tools'],
+  tools: RunDependencies['tools'],
   released: string[],
-): ExecuteAgentDependencies['tools'] {
+): RunDependencies['tools'] {
   return {
     bindExecution(request) {
       const result = tools.bindExecution(request);

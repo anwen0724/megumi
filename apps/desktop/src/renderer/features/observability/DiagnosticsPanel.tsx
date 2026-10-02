@@ -11,7 +11,7 @@ import type {
   ObservabilityTraceSummaryUiDto,
   SessionDto,
   UserMessageSummaryDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../../../main/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../shared/ipc/runtime-request';
 import { Button, Select, SettingsPageHeader, cx } from '../../shared/ui';

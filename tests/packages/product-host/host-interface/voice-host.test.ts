@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   VoiceHostMutationResultSchema,
   VoiceSessionStartPayloadSchema
-} from '../../../../packages/agent/product-host/src/host';
+} from '@megumi/application/contracts';
 
 describe('VoiceHost contract', () => {
   it('starts against one explicit Bound Session and an optional recognition language', () => {

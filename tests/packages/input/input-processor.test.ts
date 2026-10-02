@@ -12,7 +12,7 @@ import {
   type InputSourceAccess,
   type RawUserInput,
   type UserInput,
-} from "@megumi/input";
+} from "@megumi/agent-runtime/runs/input/index";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 

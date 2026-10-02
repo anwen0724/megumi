@@ -2,9 +2,9 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import { assertSeparateHome } from '../installation/installation-environment';
-import { resolveMegumiHomePath } from '@megumi/home';
-import { composeApplication } from '@megumi/composition';
-import { nodeObservabilityStorage } from '@megumi/observability';
+import { resolveMegumiHomePath } from '@megumi/application/storage/home';
+import { createApplication } from '@megumi/application/index';
+import { nodeObservabilityStorage } from '@megumi/application/observability/index';
 import { createElectronMegumiHomeSyncOptions } from '../adapters/electron-home-adapter';
 import { forwardRuntimeEvent } from '../ipc/event-forwarders';
 import { electronDirectoryPickerAdapter } from '../adapters/electron-directory-picker-adapter';
@@ -47,7 +47,7 @@ export function composeDesktopMain() {
     }),
   });
   // Desktop selects environment adapters; shared Composition owns the object graph.
-  const product = composeApplication({
+  const product = createApplication({
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
     observabilityStorage: nodeObservabilityStorage,
@@ -70,7 +70,7 @@ export function composeDesktopMain() {
     voice: { ...voiceResources.voiceOptions, speechInput: voiceInputAdapter },
   });
   const runtimeLogger = product.logger;
-  const productHost = product.host;
+  const productHost = product;
 
   // Runtime event bridge: the bus is the single event source; every renderer
   // window receives the stream over IPC and filters by its active session.

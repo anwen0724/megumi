@@ -1,7 +1,7 @@
 /* Verifies that Megumi defines one six-source discovery catalog. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createDiscoverySourceRegistry, type EmbeddedBrowser } from '@megumi/discovery';
+import { createDiscoverySourceRegistry, type EmbeddedBrowser } from '@megumi/application/discovery/index';
 
 describe('production Discovery source catalog', () => {
   it('always exposes one fixed six-source catalog while Host capabilities remain injectable', () => {

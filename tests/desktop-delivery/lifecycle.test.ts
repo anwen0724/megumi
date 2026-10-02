@@ -5,7 +5,7 @@ import path from 'node:path';
 import { EventEmitter, once } from 'node:events';
 import net from 'node:net';
 import syncFs from 'node:fs';
-import { createDatabase, migrateDatabase, DatabaseMigrationError } from '@megumi/database';
+import { createDatabase, migrateDatabase, DatabaseMigrationError } from '@megumi/application/storage/index';
 import { composeDesktopMain } from '@megumi/desktop/main/shell-composition/desktop-main-composition';
 import { describeDesktopBootstrapFailure } from '@megumi/desktop/main/app/bootstrap-failure';
 import { afterEach, expect, it, vi } from 'vitest';

@@ -6,12 +6,12 @@ import {
   type AssistantMessage,
   type Model,
 } from '@megumi/ai';
-import { runModelCall } from '../../../packages/agent-core/src/model-call';
+import { runModelCall } from '@megumi/agent-runtime/runs/model-call';
 import type {
   AgentContext,
   AgentEvent,
   AgentExecutionProgress,
-} from '../../../packages/agent-core/src/types';
+} from '@megumi/agent-runtime/runs/run-loop-types';
 
 const model: Model<Api> = {
   id: 'test-model',

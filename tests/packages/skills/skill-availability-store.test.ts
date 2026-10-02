@@ -1,3 +1,4 @@
+import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
 /*
  * Verifies the durable Skill availability repository contract against SQLite.
  */
@@ -6,13 +7,12 @@ import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '@megumi/database';
+} from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  createDatabaseSkillAvailabilityStore,
   type SkillAvailabilityStore,
-} from '../../../packages/agent/skills/src/skill-availability';
+} from '@megumi/agent-runtime/resources/skills/skill-availability';
 
 describe('SkillAvailabilityStore', () => {
   let database: DatabaseConnection;

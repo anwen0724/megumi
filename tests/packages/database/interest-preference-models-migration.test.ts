@@ -6,8 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createDiscoveryRepository } from '@megumi/discovery';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
+import { createDiscoveryRepository } from '@megumi/application/discovery/index';
 
 const now = '2026-08-27T08:00:00.000Z';
 
@@ -16,7 +16,7 @@ describe('Interest and Preference entity upgrade', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-preference-upgrade-'));
     const database = createDatabase({ filename: path.join(root, 'test.sqlite') });
     try {
-      const migrations = path.join(process.cwd(), 'packages/agent/database/migrations');
+      const migrations = path.join(process.cwd(), 'packages/application/resources/migrations');
       const journal = JSON.parse(fs.readFileSync(path.join(migrations, 'meta/_journal.json'), 'utf8'));
       const entries = journal.entries.filter((entry: { idx: number }) => entry.idx <= 23);
       const previous = path.join(root, 'migrations');

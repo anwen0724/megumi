@@ -1,13 +1,13 @@
 /* Test-only adapters exercise Tools through the same Sandbox file seam used by Product. */
 
-import { createNodeSandboxFileAccess } from '../../../packages/agent/sandbox/src';
+import { createNodeSandboxFileAccess } from '@megumi/agent-runtime/tools/sandbox/index';
 import type {
   ToolProcessAdapter,
   ToolProcessOptions,
   ToolProcessRequest,
   ToolProcessResult,
   WorkspaceFileAccess,
-} from '../../../packages/agent/tools/src';
+} from '@megumi/agent-runtime/tools/index';
 
 export function createLocalWorkspaceFileAccess(root: string): WorkspaceFileAccess {
   return createNodeSandboxFileAccess({ workspaceRoot: root });

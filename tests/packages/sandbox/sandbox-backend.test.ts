@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   type SandboxCapabilities,
   type SandboxProcess,
-} from '../../../packages/agent/sandbox/src';
+} from '@megumi/agent-runtime/tools/sandbox/index';
 import {
   resolveSandboxBackend,
   type SandboxBackend
-} from '../../../packages/agent/sandbox/src/sandbox-backend';
-import { createSandboxWithBackend } from '../../../packages/agent/sandbox/src/sandbox-scope';
+} from '@megumi/agent-runtime/tools/sandbox/sandbox-backend';
+import { createSandboxWithBackend } from '@megumi/agent-runtime/tools/sandbox/sandbox-scope';
 
 const workspaceAccess = {
   fileSystem: { mode: 'workspace' as const },

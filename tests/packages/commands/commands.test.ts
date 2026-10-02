@@ -2,7 +2,7 @@
  * Protects explicit command handling and Input Interpretation integration.
  */
 import { describe, expect, it, vi } from "vitest";
-import { createCommands, createCommandInputInterpreter } from "@megumi/commands";
+import { createCommands, createCommandInputInterpreter } from "@megumi/agent-runtime/runs/commands/index";
 
 const model = {
   id: "model-1",

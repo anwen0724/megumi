@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertDatabaseMigrationsFolder,
   resolveDatabaseMigrationsFolder,
-} from '../../../packages/agent/database/src';
+} from '@megumi/application/storage/index';
 
 let tempDir: string | null = null;
 

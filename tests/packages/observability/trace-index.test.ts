@@ -1,10 +1,10 @@
 // @vitest-environment node
 /* Verifies metadata-only Derived Index filtering, checkpoints, pruning, and rebuild semantics. */
-import { createDatabase, type DatabaseRow } from '@megumi/database';
+import { createDatabase, type DatabaseRow } from '@megumi/application/storage/index';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createTraceIndex, type JournalCheckpoint } from '../../../packages/agent/observability/src/persistence/trace-index';
-import { projectTrace } from '../../../packages/agent/observability/src/query/trace-projector';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTraceIndex, type JournalCheckpoint } from '@megumi/application/observability/persistence/trace-index';
+import { projectTrace } from '@megumi/application/observability/query/trace-projector';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
 
 const databases: ReturnType<typeof createDatabase>[] = [];
 

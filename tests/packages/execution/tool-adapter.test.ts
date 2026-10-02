@@ -1,18 +1,18 @@
 /* Verifies the Tool adapter: route, permissions, approval waits inside AgentTool.execute, and execution. */
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentToolExecutionOutcome } from '@megumi/agent-core';
-import { createEventBus, type AnyEvent } from '@megumi/events';
-import type { PermissionDecision, Permissions } from '@megumi/permissions';
-import type { Observability } from '@megumi/observability';
-import type { ModelCallToolBinding, ToolDefinition } from '@megumi/tools';
+import type { AgentToolExecutionOutcome } from '@megumi/agent-runtime/runs/loop';
+import { createEventBus, type AnyEvent } from '@megumi/agent-runtime/events';
+import type { PermissionDecision, Permissions } from '@megumi/agent-runtime/permissions/index';
+import type { Observability } from '@megumi/application/observability/index';
+import type { ModelCallToolBinding, ToolDefinition } from '@megumi/agent-runtime/tools/index';
 import {
   createAgentTool,
   type AgentToolResultDetails,
   type ToolAdapterDependencies,
-} from '@megumi/execution';
-import type { ToolScope } from '@megumi/execution';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+} from '@megumi/agent-runtime/runs/index';
+import type { ToolScope } from '@megumi/agent-runtime/runs/index';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import { executionMetadata } from './execution-test-fixtures';
 import {
   allowDecision,

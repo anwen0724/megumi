@@ -9,9 +9,9 @@ import {
   databaseTables,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/agent/database/src';
+} from '@megumi/application/storage/index';
 
-const migrationsRoot = path.join(process.cwd(), 'packages/agent/database/migrations');
+const migrationsRoot = path.join(process.cwd(), 'packages/application/resources/migrations');
 let tempRoot: string | undefined;
 
 afterEach(() => {

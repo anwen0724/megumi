@@ -6,7 +6,7 @@ import type {
   EvaluateToolCallRequest,
   PermissionDecision,
   Permissions,
-} from '@megumi/permissions';
+} from '@megumi/agent-runtime/permissions/index';
 import {
   createToolRouter,
   type RegisteredTool,
@@ -14,7 +14,7 @@ import {
   type ToolExecutionOptions,
   type ToolExecutionResult,
   type Tools,
-} from '@megumi/tools';
+} from '@megumi/agent-runtime/tools/index';
 
 export { createToolRouter };
 export type { RegisteredTool };

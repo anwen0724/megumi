@@ -17,7 +17,7 @@ import { composeDesktopMain } from './shell-composition/desktop-main-composition
 import type { CharacterWindowController } from './app/character-window-controller';
 import { createFileCharacterWindowStateStore } from './adapters/file-character-window-state-store';
 import { showDesktopBootstrapFailure } from './app/bootstrap-failure';
-import { composeApplicationUpdate } from './application-update/application-update-composition';
+import { createApplicationUpdate } from './application-update/application-update-composition';
 
 declare const MAIN_WINDOW_VITE_NAME: string;
 declare const MEGUMI_APP_ID: string;
@@ -40,7 +40,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
   let prepareToQuit: () => Promise<void> = async () => {
     throw new Error('Desktop lifecycle is not ready for update installation.');
   };
-  const applicationUpdate = composeApplicationUpdate({
+  const applicationUpdate = createApplicationUpdate({
     megumiHomePath: desktopMain.homePath,
     logger: desktopMain.runtimeLogger,
     prepareToQuit: () => prepareToQuit(),

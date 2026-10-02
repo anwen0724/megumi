@@ -101,10 +101,10 @@ flowchart TD
 | 层次 | 职责 |
 | --- | --- |
 | [AI](./packages/ai/) | 模型协议、服务适配、认证与流式响应 |
-| [Agent Core](./packages/agent-core/) | 与产品无关的 Agent 循环、执行状态、模型调用、工具调用推进与取消 |
-| [Harness 模块](./packages/agent/) | 输入处理、上下文、会话、工具绑定、权限、沙箱、业务流程与可观测能力 |
+| [Agent Runtime](./packages/agent-runtime/) | 共用运行入口、循环、上下文、会话、资源、工具与权限 |
+| [Application](./packages/application/) | 应用操作与生命周期、推荐业务、设置、工作区、语音、存储与观测 |
 
-桌面应用与评估 Host 使用同一应用装配入口，分别注入平台适配器。这些是同一个产品内部的代码职责划分。
+桌面通过 Application 接入，共用一个 AgentRuntime。Eval 保留现有代码，尚待单独适配新接口。
 
 - **模型与输入适配。** 支持多种模型协议、图片、文档输入（PDF、DOCX、TXT、Markdown）及本地语音识别；图片理解取决于所选模型的能力。
 - **任务驱动的工具组织。** 按当前任务和工作区绑定工具与 Skills，提供受控并发、超时处理和取消机制。
@@ -113,6 +113,8 @@ flowchart TD
 - **Trace 与日志观测。** 关联上下文构建、模型请求、工具调用、来源访问和业务提交记录，通过桌面诊断界面追溯执行过程。
 
 ## 质量评估
+
+当前 Eval 尚未适配新的包路径与推荐提交接口，以下为原有评估能力说明。
 
 [Agent 评估平台](./evals/agent/README.md)覆盖通用对话、兴趣理解、内容供给、推荐与偏好学习。受控题集包含 **8 个数据集、23 个样本**，包括推荐质量与连续多轮偏好变化场景。
 
@@ -162,21 +164,12 @@ Megumi 当前支持 Windows 10 和 Windows 11。本文描述源码中的实现�
 apps/desktop/                  Electron 主进程、Preload Bridge 与 React UI
 packages/
 ├── ai/                        模型协议与服务适配
-├── agent-core/                与产品无关的 Agent 循环
-└── agent/                     Harness 与产品模块
-    ├── composition/           桌面与评估环境的应用装配
-    ├── product-host/          Host 操作与面向 UI 的契约
-    ├── discovery/             兴趣、内容供给、推荐与偏好
-    ├── execution/             任务生命周期与业务接入
-    ├── input/                 文字、图片、文档与命令输入
-    ├── context/               上下文构建与压缩
-    ├── session/               持久化会话与分支
-    ├── tools/                 工具定义、绑定与调度
-    ├── permissions/           授权与审批
-    ├── sandbox/               Windows 执行边界
-    ├── observability/         Trace、日志与诊断查询
-    ├── voice/                 本地语音识别
-    └── …                      存储、设置、Skills、工作区与事件等模块
+├── agent-runtime/             共用 Agent 运行时
+│   ├── src/                   runs、context、sessions、resources、tools、permissions
+│   └── resources/             指令与内置技能
+└── application/               应用操作、生命周期和业务模块
+    ├── src/                   discovery、settings、workspace、voice、storage、observability
+    └── resources/             SQL 迁移与语音资源
 
 evals/agent/                   数据集、隔离执行、评分与对照
 tests/                         自动化测试与架构守卫
@@ -197,7 +190,6 @@ npm start
 ```bash
 npm run typecheck:packages
 npm run typecheck:product
-npm run typecheck:evals
 npm test
 ```
 

@@ -1,7 +1,7 @@
 /* Verifies one-pass Session Entry to AI Message materialization with exact mapping. */
 import { describe, expect, it, vi } from 'vitest';
-import { buildContextMessages } from '../../../packages/agent/context/src/prompt/context-message-builder';
-import type { SessionHistoryItem } from '@megumi/session';
+import { buildContextMessages } from '@megumi/agent-runtime/context/prompt/context-message-builder';
+import type { SessionHistoryItem } from '@megumi/agent-runtime/sessions/index';
 
 function userHistory(overrides: {
   modelContent?: string;
@@ -88,7 +88,7 @@ function summaryThenConversation(): SessionHistoryItem[] {
 
 async function materialize(
   history: SessionHistoryItem[],
-  attachmentReader: Pick<import('@megumi/session').SessionAttachmentReader, 'readAttachmentContent'>
+  attachmentReader: Pick<import('@megumi/agent-runtime/sessions/index').SessionAttachmentReader, 'readAttachmentContent'>
     = { readAttachmentContent: vi.fn() },
 ) {
   const result = await buildContextMessages({

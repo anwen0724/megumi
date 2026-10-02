@@ -1,15 +1,15 @@
 /* Verifies the Context adapter: one Router scope per turn, overflow reuse, idempotent release. */
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentContextProvider } from '@megumi/agent-core';
-import type { ContextCapabilities } from '@megumi/context';
-import type { ModelCallToolBinding, ToolExecutionBinding } from '@megumi/tools';
+import type { AgentContextProvider } from '@megumi/agent-runtime/runs/loop';
+import type { ContextCapabilities } from '@megumi/agent-runtime/context/index';
+import type { ModelCallToolBinding, ToolExecutionBinding } from '@megumi/agent-runtime/tools/index';
 import {
   createContextAdapter,
   releaseActiveScope,
   type ContextAdapterDependencies,
   type ContextAdapterRuntime,
-} from '@megumi/execution';
-import type { ExecutionMetadata } from '@megumi/execution';
+} from '@megumi/agent-runtime/runs/index';
+import type { ExecutionMetadata } from '@megumi/agent-runtime/runs/index';
 import { executionMetadata, model } from './execution-test-fixtures';
 
 const metadata = executionMetadata();

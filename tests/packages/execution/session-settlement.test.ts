@@ -1,11 +1,11 @@
 /* Verifies committed conversation history using real Session storage. */
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase } from '@megumi/database';
-import { createSessionHistory } from '@megumi/session';
-import { createSessionStore } from '@megumi/session/store';
-import { createSessionMessageCommitter, type SessionToolResultCommit } from '@megumi/execution';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import { createDatabase } from '@megumi/application/storage/index';
+import { createSessionHistory } from '@megumi/agent-runtime/sessions/index';
+import { createSessionStore } from '@megumi/application/storage/session-store';
+import { createSessionMessageCommitter, type SessionToolResultCommit } from '@megumi/agent-runtime/runs/index';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import { createSessionFixture, savedAt } from '../session/session-test-fixture';
 
 const fixtures: Awaited<ReturnType<typeof createSessionFixture>>[] = [];

@@ -1,362 +1,229 @@
-/* Verifies Recommendation freezes all eligible facts before delegating one execution to Agent Core. */
+/* Verifies recommendation admission and publication through the real shared runtime and storage. */
 // @vitest-environment node
-import type { Api, Model } from '@megumi/ai';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import {
-  createDiscoveryRepository,
-  createRecommendationAttempts,
-  createRecommendationRuntime,
-  createSourceRegistry,
-  type CreateRecommendationRuntimeOptions,
-  type DiscoverySource,
-} from '@megumi/discovery';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DatabaseConnection } from '@megumi/application/storage/index';
+import { createRecommendations, createSourceRegistry, type CreateRecommendationsOptions, type DiscoverySource } from '@megumi/application/discovery/index';
+import { expect, it, onTestFinished, vi } from 'vitest';
+import { createRuntimeFixture } from '../agent-runtime/runtime-fixture';
+import { controlModelHttp, modelResponse } from '../agent-runtime/model-http-fixture';
 
 const now = '2026-09-03T00:00:00.000Z';
 
-describe('Recommendation runtime', () => {
-  let database: DatabaseConnection;
-
-  beforeEach(() => {
-    database = createDatabase({ filename: ':memory:' });
-    migrateDatabase({ database });
-    seedInterest(database);
-  });
-
-  afterEach(() => database.close());
-
-  it('prepares preferences only after candidate admission and exposes a cancellable preparation phase', async () => {
-    let finish: (() => void) | undefined;
-    const preparePreferences = vi.fn(async () => { await new Promise<void>((resolve) => { finish = resolve; }); });
-    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
-      const accepted = await request.accept({ executionId: 'execution:lazy' });
-      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
-      return { status: 'started', execution: { kind: 'recommendation', executionId: 'execution:lazy' }, completion: new Promise<never>(() => undefined) };
-    });
-    const runtime = createRecommendationRuntime({ ...runtimeOptions(database, startExecution), preparePreferences });
-    try {
-      await runtime.request({ trigger: 'manual' });
-      expect(preparePreferences).not.toHaveBeenCalled();
-      seedCandidate(database, 1);
-      const result = await runtime.request({ trigger: 'manual' });
-      expect(result).toMatchObject({ status: 'started', phase: 'preparing_preferences' });
-      expect(startExecution).not.toHaveBeenCalled();
-      expect(runtime.getToday()).toMatchObject({ status: 'running', phase: 'preparing_preferences' });
-      finish?.();
-      await vi.waitFor(() => expect(startExecution).toHaveBeenCalledOnce());
-    } finally { finish?.(); await runtime.shutdown(); }
-  });
-
-  it('returns waiting without starting Agent Core when no Candidate is eligible', async () => {
-    const startExecution = vi.fn();
-    const runtime = createRecommendationRuntime(runtimeOptions(database, startExecution));
-
-    await expect(runtime.request({ trigger: 'manual' })).resolves.toEqual({
-      status: 'waiting_for_candidates', localDate: '2026-09-03',
-    });
-    expect(startExecution).not.toHaveBeenCalled();
-    expect(runtime.getToday()).toEqual({ status: 'waiting_for_candidates', localDate: '2026-09-03' });
-    await runtime.shutdown();
-  });
-
-  it('rechecks locally and starts once when candidates arrive without a Supply notification', async () => {
-    vi.useFakeTimers();
-    const attempts = createRecommendationAttempts();
-    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
-      const accepted = await request.accept({ executionId: 'execution:wait' });
-      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
-      return { status: 'started', execution: { kind: 'recommendation', executionId: 'execution:wait' },
-        completion: new Promise<never>(() => undefined) };
-    });
-    const options = runtimeOptions(database, startExecution, attempts);
-    const resolveModel = vi.fn(options.resolveModel);
-    const runtime = createRecommendationRuntime({ ...options, resolveModel });
-    try {
-      await runtime.request({ trigger: 'manual' });
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(resolveModel).not.toHaveBeenCalled();
-      expect(startExecution).not.toHaveBeenCalled();
-      seedCandidate(database, 1);
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(startExecution).toHaveBeenCalledOnce();
-      expect(attempts.getSnapshot('execution:wait')).toMatchObject({ actualTarget: 1 });
-      expect(runtime.getToday()).toMatchObject({ status: 'running' });
-      await vi.advanceTimersByTimeAsync(180_000);
-      expect(startExecution).toHaveBeenCalledOnce();
-    } finally {
-      await runtime.shutdown();
-      vi.useRealTimers();
-    }
-  });
-
-  it('joins concurrent requests while model resolution is still starting one execution', async () => {
-    seedCandidate(database, 1);
-    let releaseModel!: () => void;
-    const modelReady = new Promise<void>((resolve) => { releaseModel = resolve; });
-    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
-      const executionId = 'execution:1';
-      const accepted = await request.accept({ executionId });
-      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
-      return {
-        status: 'started',
-        execution: { kind: 'recommendation', executionId },
-        completion: new Promise<never>(() => undefined),
-      };
-    });
-    const runtime = createRecommendationRuntime({
-      ...runtimeOptions(database, startExecution),
-      resolveModel: async () => {
-        await modelReady;
-        return { status: 'ok', model };
-      },
-    });
-
-    const first = runtime.request({ trigger: 'manual' });
-    const second = runtime.request({ trigger: 'manual' });
-    releaseModel();
-
-    await expect(first).resolves.toMatchObject({
-      status: 'started', requestId: 'request:1', executionId: 'execution:1',
-    });
-    await expect(second).resolves.toMatchObject({
-      status: 'in_progress', requestId: 'request:1', executionId: 'execution:1',
-    });
-    expect(startExecution).toHaveBeenCalledTimes(1);
-    await runtime.shutdown();
-  });
-
-  it.each(['shutdown', 'next_day'] as const)('discards input waiting on %s', async (boundary) => {
-    vi.useFakeTimers();
-    let currentTime = now;
-    const startExecution = vi.fn();
-    const runtime = createRecommendationRuntime({
-      ...runtimeOptions(database, startExecution), clock: { now: () => currentTime },
-    });
-    try {
-      await runtime.request({ trigger: 'manual' });
-      await runtime.request({ trigger: 'manual' });
-      expect(vi.getTimerCount()).toBe(1);
-      if (boundary === 'shutdown') await runtime.shutdown();
-      else currentTime = '2026-09-04T00:00:00.000Z';
-      await vi.advanceTimersByTimeAsync(180_000);
-      expect(vi.getTimerCount()).toBe(0);
-      expect(startExecution).not.toHaveBeenCalled();
-    } finally {
-      await runtime.shutdown();
-      vi.useRealTimers();
-    }
-  });
-
-  it('does not restore a manual wait before the scheduled time after restart', async () => {
-    vi.useFakeTimers();
-    const startExecution = vi.fn();
-    const options = runtimeOptions(database, startExecution);
-    const first = createRecommendationRuntime(options);
-    const restarted = createRecommendationRuntime(options);
-    try {
-      await first.request({ trigger: 'manual' });
-      await first.shutdown();
-      await restarted.start();
-      expect(restarted.getToday()).toMatchObject({ status: 'not_generated' });
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(startExecution).not.toHaveBeenCalled();
-    } finally {
-      await restarted.shutdown();
-      vi.useRealTimers();
-    }
-  });
-
-  it('does not launch a deferred recheck execution after shutdown', async () => {
-    vi.useFakeTimers();
-    let releaseModel!: () => void;
-    const modelReady = new Promise<void>((resolve) => { releaseModel = resolve; });
-    const startExecution = vi.fn();
-    const runtime = createRecommendationRuntime({
-      ...runtimeOptions(database, startExecution),
-      resolveModel: async () => { await modelReady; return { status: 'ok', model }; },
-    });
-    try {
-      await runtime.request({ trigger: 'manual' });
-      seedCandidate(database, 1);
-      await vi.advanceTimersByTimeAsync(60_000);
-      await runtime.shutdown();
-      releaseModel();
-      await vi.advanceTimersByTimeAsync(120_000);
-      expect(startExecution).not.toHaveBeenCalled();
-      expect(vi.getTimerCount()).toBe(0);
-    } finally {
-      releaseModel();
-      await runtime.shutdown();
-      vi.useRealTimers();
-    }
-  });
-
-  it('stops local rechecks on an execution failure and shows a later wait instead of the stale error', async () => {
-    vi.useFakeTimers();
-    const startExecution = vi.fn(async () => ({ status: 'failed' as const, failure: {
-      code: 'provider_unavailable', message: '402: insufficient balance', retryable: false,
-    } }));
-    const runtime = createRecommendationRuntime(runtimeOptions(database, startExecution));
-    try {
-      await runtime.request({ trigger: 'manual' });
-      seedCandidate(database, 1);
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(runtime.getToday()).toMatchObject({ status: 'failed' });
-      await vi.advanceTimersByTimeAsync(180_000);
-      expect(startExecution).toHaveBeenCalledOnce();
-      expect(vi.getTimerCount()).toBe(0);
-      database.prepare({ sql: "UPDATE discovery_interests SET status = 'paused'" }).run();
-      await runtime.request({ trigger: 'manual' });
-      expect(runtime.getToday()).toMatchObject({ status: 'waiting_for_candidates' });
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(startExecution).toHaveBeenCalledOnce();
-    } finally {
-      await runtime.shutdown();
-      vi.useRealTimers();
-    }
-  });
-
-  it('publishes the configured target through Agent Core and exposes all ranked facts to the attempt', async () => {
-    for (let index = 1; index <= 3; index += 1) seedCandidate(database, index);
-    const attempts = createRecommendationAttempts();
-    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
-      const executionId = 'execution:1';
-      const accepted = await request.accept({ executionId });
-      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
-      const completion = Promise.resolve({ status: 'completed' as const });
-      setTimeout(() => {
-        void attempts.publishRecommendations({
-          executionId,
-          signal: new AbortController().signal,
-          input: {
-            items: [
-              { candidateId: 'candidate:1', recommendationReason: 'Reason one.' },
-              { candidateId: 'candidate:2', recommendationReason: 'Reason two.' },
-            ],
-          },
-        }).then(() => request.onSettled({ executionId, outcome: { status: 'completed' } }));
-      }, 0);
-      return {
-        status: 'started',
-        execution: { kind: 'recommendation', executionId },
-        completion,
-      };
-    });
-    const runtime = createRecommendationRuntime(runtimeOptions(database, startExecution, attempts));
-
-    const accepted = await runtime.request({ trigger: 'manual' });
-    expect(accepted).toMatchObject({
-      status: 'started', localDate: '2026-09-03', requestId: 'request:1', executionId: 'execution:1',
-    });
-    const snapshot = attempts.getSnapshot('execution:1');
-    expect(snapshot).toMatchObject({ actualTarget: 2, workingSetCount: 2 });
-    expect(snapshot?.rankedCandidates).toHaveLength(3);
-
-    await expect(runtime.wait({ requestId: 'request:1', timeoutMs: 1_000 })).resolves.toMatchObject({
-      status: 'published',
-      collection: { localDate: '2026-09-03', items: [{ candidateId: 'candidate:1' }, { candidateId: 'candidate:2' }] },
-    });
-  });
-
-  it('keeps one request identity while retrying a retryable Agent execution with a new snapshot', async () => {
-    for (let index = 1; index <= 2; index += 1) seedCandidate(database, index);
-    const attempts = createRecommendationAttempts();
-    const scheduled: Array<{ delayMs: number; callback: () => void }> = [];
-    let executionNumber = 0;
-    const startExecution: CreateRecommendationRuntimeOptions['startExecution'] = vi.fn(async (request) => {
-      const executionId = `execution:${++executionNumber}`;
-      const accepted = await request.accept({ executionId });
-      if (accepted.status === 'rejected') return { status: 'rejected', reason: accepted.reason };
-      if (executionNumber === 1) {
-        queueMicrotask(() => void request.onSettled({
-          executionId,
-          outcome: {
-            status: 'failed',
-            failure: { code: 'provider_unavailable', message: 'Temporary provider failure.', retryable: true },
-          },
-        }));
-      } else {
-        queueMicrotask(() => {
-          void attempts.publishRecommendations({
-            executionId,
-            signal: new AbortController().signal,
-            input: {
-              items: [
-                { candidateId: 'candidate:1', recommendationReason: 'Reason one.' },
-                { candidateId: 'candidate:2', recommendationReason: 'Reason two.' },
-              ],
-            },
-          }).then(() => request.onSettled({ executionId, outcome: { status: 'completed' } }));
-        });
-      }
-      return {
-        status: 'started',
-        execution: { kind: 'recommendation', executionId },
-        completion: Promise.resolve({ status: 'completed' }),
-      };
-    });
-    const options: CreateRecommendationRuntimeOptions = {
-      ...runtimeOptions(database, startExecution, attempts),
-      timers: {
-      setTimeout(callback, delayMs) {
-        scheduled.push({ callback, delayMs });
-        return callback;
-      },
-      clearTimeout() {},
-      },
-    };
-    const runtime = createRecommendationRuntime(options);
-
-    const accepted = await runtime.request({ trigger: 'manual' });
-    expect(accepted).toMatchObject({ status: 'started', requestId: 'request:1', executionId: 'execution:1' });
-    await vi.waitFor(() => expect(scheduled).toHaveLength(1));
-    expect(scheduled[0]?.delayMs).toBe(5_000);
-    scheduled[0]?.callback();
-
-    await expect(runtime.wait({ requestId: 'request:1', timeoutMs: 1_000 })).resolves.toMatchObject({
-      status: 'published',
-      collection: { items: [{ candidateId: 'candidate:1' }, { candidateId: 'candidate:2' }] },
-    });
-    expect(startExecution).toHaveBeenCalledTimes(2);
-    expect(attempts.getSnapshot('execution:1')).toBeUndefined();
-    expect(attempts.getSnapshot('execution:2')).toBeUndefined();
-  });
+it('waits for candidates without making a model request', async () => {
+  const { business, http } = await setup(0);
+  expect(await business.generate({ trigger: 'manual' })).toEqual({ status: 'waiting_for_candidates', localDate: '2026-09-03' });
+  expect(business.getToday()).toMatchObject({ status: 'waiting_for_candidates' });
+  expect(http.requests).toHaveLength(0);
 });
 
-function runtimeOptions(
-  database: DatabaseConnection,
-  startExecution: CreateRecommendationRuntimeOptions['startExecution'],
-  attempts = createRecommendationAttempts(),
-): CreateRecommendationRuntimeOptions {
-  let requestId = 0;
+it('prepares preferences only after admission and exposes the preparation phase', async () => {
+  const gate = Promise.withResolvers<void>();
+  const { business, fixture, http } = await setup(0, { preparePreferences: async () => gate.promise });
+  onTestFinished(() => gate.resolve());
+  await business.generate({ trigger: 'manual' });
+  expect(business.getToday()).toMatchObject({ status: 'waiting_for_candidates' });
+  seedCandidate(fixture.database, 1);
+  expect(await business.generate({ trigger: 'manual' })).toMatchObject({ status: 'started', phase: 'preparing_preferences' });
+  expect(business.getToday()).toMatchObject({ status: 'running', phase: 'preparing_preferences' });
+  expect(http.requests).toHaveLength(0);
+  gate.resolve();
+  await http.waitForRequest();
+  expect(business.getToday()).toMatchObject({ status: 'running', phase: 'executing' });
+});
+
+it('rechecks locally when candidates arrive and keeps only one active run', async () => {
+  const scheduled: Array<() => void> = [];
+  const { business, fixture, http } = await setup(0, { timers: {
+    setTimeout(callback) { scheduled.push(callback); return callback; },
+    clearTimeout(handle) { const i = scheduled.indexOf(handle as () => void); if (i >= 0) scheduled.splice(i, 1); },
+  } });
+  await business.generate({ trigger: 'manual' });
+  seedCandidate(fixture.database, 1);
+  scheduled.shift()?.();
+  await http.waitForRequest();
+  expect(business.getToday()).toMatchObject({ status: 'running' });
+  expect(await business.generate({ trigger: 'manual' })).toMatchObject({ status: 'in_progress' });
+  expect(http.requests).toHaveLength(1);
+});
+
+it('joins requests while model resolution is still pending', async () => {
+  const gate = Promise.withResolvers<void>();
+  const { business, fixture } = await setup(1);
+  const options = optionsFor(fixture);
+  const joined = createRecommendations({ ...options, resolveModel: async () => { await gate.promise; return { status: 'ok', model: fixture.model }; } });
+  onTestFinished(() => joined.shutdown());
+  const first = joined.generate({ trigger: 'manual' });
+  const second = joined.generate({ trigger: 'manual' });
+  gate.resolve();
+  const accepted = await first;
+  expect(accepted.status).toBe('started');
+  expect(await second).toMatchObject({ status: 'in_progress', requestId: 'request:1' });
+});
+
+it.each(['shutdown', 'next_day'] as const)('discards waiting on %s', async boundary => {
+  const scheduled: Array<() => void> = [];
+  let currentTime = now;
+  const { business, http } = await setup(0, { clock: { now: () => currentTime }, timers: {
+    setTimeout(callback) { scheduled.push(callback); return callback; },
+    clearTimeout(handle) { const i = scheduled.indexOf(handle as () => void); if (i >= 0) scheduled.splice(i, 1); },
+  } });
+  await business.generate({ trigger: 'manual' });
+  if (boundary === 'shutdown') await business.shutdown(); else currentTime = '2026-09-04T00:00:00.000Z';
+  scheduled.shift()?.();
+  expect(scheduled).toHaveLength(0);
+  expect(http.requests).toHaveLength(0);
+});
+
+it('does not restore manual waiting on restart before the scheduled time', async () => {
+  const { fixture, business, http } = await setup(0);
+  await business.generate({ trigger: 'manual' });
+  await business.shutdown();
+  const restarted = createRecommendations(optionsFor(fixture));
+  onTestFinished(() => restarted.shutdown());
+  await restarted.start();
+  expect(restarted.getToday()).toMatchObject({ status: 'not_generated' });
+  expect(http.requests).toHaveLength(0);
+});
+
+it('does not launch a model request after shutdown during model resolution', async () => {
+  const gate = Promise.withResolvers<void>();
+  const { fixture, http } = await setup(1);
+  const business = createRecommendations({ ...optionsFor(fixture), resolveModel: async () => { await gate.promise; return { status: 'ok', model: fixture.model }; } });
+  const accepted = business.generate({ trigger: 'manual' });
+  await business.shutdown();
+  gate.resolve();
+  expect(await accepted).toMatchObject({ status: 'failed' });
+  expect(http.requests).toHaveLength(0);
+});
+
+it('publishes the configured ordered selection after successful run completion', async () => {
+  const { fixture, business, http } = await setup(3);
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected admission');
+  await http.waitForRequest();
+  expect(fixture.recommendationAttempts.getSnapshot(accepted.executionId!)).toMatchObject({ actualTarget: 2, workingSetCount: 2 });
+  http.respond(modelResponse(selection));
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'published', collection: {
+    items: [{ candidateId: 'candidate:1' }, { candidateId: 'candidate:2' }],
+  } });
+  expect(fixture.runtime.getRun(accepted.executionId!)?.status).toBe('completed');
+  expect(fixture.recommendationAttempts.getSnapshot(accepted.executionId!)).toBeUndefined();
+  expect(http.requests).toHaveLength(1);
+});
+
+it('allows correction of an invalid selection before accepting the draft', async () => {
+  const { business, http } = await setup(2);
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected admission');
+  http.respond(modelResponse({ name: 'submit_recommendations', arguments: { items: [{ candidateId: 'candidate:1', recommendationReason: 'One.' }] } }));
+  await http.waitForRequest(2);
+  expect(business.getToday()).toMatchObject({ status: 'running' });
+  http.respond(modelResponse(selection));
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'published' });
+  expect(http.requests).toHaveLength(2);
+});
+
+it('does not publish when the model finishes without submitting a draft', async () => {
+  const { business, fixture, http } = await setup(2);
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected admission');
+  http.respond(modelResponse('Done.'));
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'failed' });
+  expect(fixture.repository.getCollection('2026-09-03', true)).toBeUndefined();
+});
+
+it('keeps publication atomic when the database rejects a recommendation insert', async () => {
+  const { business, fixture, http } = await setup(2);
+  fixture.database.prepare({ sql: `CREATE TRIGGER reject_recommendation BEFORE INSERT ON discovery_recommendations
+    WHEN NEW.candidate_id = 'candidate:2'
+    BEGIN SELECT RAISE(ABORT, 'publication storage unavailable'); END` }).run();
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected a recommendation task.');
+  http.respond(modelResponse({ name: 'submit_recommendations', arguments: { items: [
+    { candidateId: 'candidate:1', recommendationReason: 'Relevant one.' },
+    { candidateId: 'candidate:2', recommendationReason: 'Relevant two.' },
+  ] } }));
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'failed' });
+  expect(fixture.repository.getCollection('2026-09-03', true)).toBeUndefined();
+});
+
+it('cancels an active recommendation task on shutdown without publishing', async () => {
+  const { business, fixture, http } = await setup(2);
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected a recommendation task.');
+  await http.waitForRequest();
+  await business.shutdown();
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'cancelled' });
+  expect(fixture.repository.getCollection('2026-09-03', true)).toBeUndefined();
+});
+
+it('checks current candidate availability before publication', async () => {
+  const { business, fixture, http } = await setup(2);
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected admission');
+  await http.waitForRequest();
+  fixture.database.prepare({ sql: "UPDATE discovery_candidates SET status = 'expired' WHERE id = 'candidate:1'" }).run();
+  http.respond(modelResponse(selection));
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'failed', failure: { code: 'publication_conflict' } });
+  expect(fixture.repository.getCollection('2026-09-03', true)).toBeUndefined();
+});
+
+it('keeps the business request while retrying failed runs with new snapshots', async () => {
+  const retry = Promise.withResolvers<{ callback: () => void; delay: number }>();
+  const { business, fixture, http } = await setup(2, { timers: {
+    setTimeout(callback, delay) { retry.resolve({ callback, delay }); return callback; }, clearTimeout() {},
+  } });
+  const first = await business.generate({ trigger: 'manual' });
+  if (first.status !== 'started') throw new Error('Expected admission');
+  http.respond(new Response(JSON.stringify({ error: { message: 'Temporary failure.' } }), { status: 503 }));
+  const scheduled = await retry.promise;
+  expect(scheduled.delay).toBe(5000);
+  expect(fixture.runtime.getRun(first.executionId!)?.status).toBe('failed');
+  scheduled.callback();
+  await http.waitForRequest(2);
+  const current = business.getToday();
+  expect(current).toMatchObject({ status: 'running', requestId: first.requestId });
+  if (current.status !== 'running') throw new Error('Expected retry');
+  expect(current.executionId).not.toBe(first.executionId);
+  http.respond(modelResponse(selection));
+  expect(await business.wait({ requestId: first.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'published' });
+});
+
+it('replaces a previous failure with waiting when no candidate remains eligible', async () => {
+  const { business, fixture, http } = await setup(2);
+  const accepted = await business.generate({ trigger: 'manual' });
+  if (accepted.status !== 'started') throw new Error('Expected admission');
+  http.respond(new Response(JSON.stringify({ error: { message: 'Insufficient balance.' } }), { status: 402 }));
+  expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({ status: 'failed' });
+  fixture.repository.applyInterestChange({ action: 'pause', interestId: 'interest:1', now });
+  expect(await business.generate({ trigger: 'manual' })).toMatchObject({ status: 'waiting_for_candidates' });
+  expect(business.getToday()).toMatchObject({ status: 'waiting_for_candidates' });
+  expect(http.requests).toHaveLength(1);
+});
+
+const selection = { name: 'submit_recommendations', arguments: { items: [
+  { candidateId: 'candidate:1', recommendationReason: 'Reason one.' },
+  { candidateId: 'candidate:2', recommendationReason: 'Reason two.' },
+] } };
+
+async function setup(candidates: number, overrides: Partial<CreateRecommendationsOptions> = {}) {
+  const fixture = await createRuntimeFixture({ now: () => now });
+  seedInterest(fixture.database);
+  for (let index = 1; index <= candidates; index++) seedCandidate(fixture.database, index);
+  const http = controlModelHttp();
+  const business = createRecommendations({ ...optionsFor(fixture), ...overrides });
+  onTestFinished(async () => { await business.shutdown(); await fixture.cleanup(); http.restore(); });
+  return { fixture, business, http };
+}
+
+function optionsFor(fixture: Awaited<ReturnType<typeof createRuntimeFixture>>): CreateRecommendationsOptions {
+  let id = 0;
   return {
-    repository: createDiscoveryRepository({
-      database,
-      clock: { now: () => now },
-      candidateIds: {
-        createCandidateId: () => 'unused',
-        createInterestMatchId: () => 'unused',
-      },
-    }),
-    attempts,
-    sourceRegistry: createSourceRegistry([source()]),
-    startExecution,
-    resolveModel: async () => ({ status: 'ok', model }),
-    settings: {
-      resolve: () => ({
-        recommendationGenerationTime: '08:00',
-        recommendationCandidateCheckIntervalSeconds: 60,
-        recommendationTargetCount: 2,
-        recommendationWorkingSetCount: 2,
-        candidatePoolMinimumCount: 1,
-        candidatePoolMaximumCount: 200,
-        candidateValidityDays: 30,
-        candidateContentExcerptMaxCharacters: 8_000,
-      }),
-    },
-    clock: { now: () => now },
-    timezone: { get: () => 'UTC' },
-    ids: { createRequestId: () => `request:${++requestId}` },
+    repository: fixture.repository, attempts: fixture.recommendationAttempts, runtime: fixture.runtime,
+    sourceRegistry: createSourceRegistry([source()]), resolveModel: async () => ({ status: 'ok', model: fixture.model }),
+    settings: { resolve: () => ({ recommendationGenerationTime: '08:00', recommendationCandidateCheckIntervalSeconds: 60,
+      recommendationTargetCount: 2, recommendationWorkingSetCount: 2, candidatePoolMinimumCount: 1,
+      candidatePoolMaximumCount: 200, candidateValidityDays: 30, candidateContentExcerptMaxCharacters: 8000 }) },
+    clock: { now: () => now }, timezone: { get: () => 'UTC' }, ids: { createRequestId: () => 'request:' + ++id },
   };
 }
 
@@ -395,10 +262,3 @@ function source(): DiscoverySource {
     search: async () => ({ status: 'success', items: [] }),
   };
 }
-
-const model = {
-  id: 'model:1', name: 'Model', api: 'openai-completions', provider: 'openai',
-  baseUrl: 'https://example.com', reasoning: false, input: ['text'],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 128_000, maxTokens: 4_096,
-} as Model<Api>;

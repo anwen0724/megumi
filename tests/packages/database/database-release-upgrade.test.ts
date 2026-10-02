@@ -12,7 +12,7 @@ import {
   DatabaseMigrationError,
   createDatabase,
   migrateDatabase,
-} from '../../../packages/agent/database/src';
+} from '@megumi/application/storage/index';
 
 let tempRoot: string | undefined;
 

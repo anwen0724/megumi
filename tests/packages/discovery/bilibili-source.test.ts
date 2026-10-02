@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createBilibiliSource,
   signBilibiliWbiParameters,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 const navPayload = {
   code: 0,

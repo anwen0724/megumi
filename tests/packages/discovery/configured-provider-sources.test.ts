@@ -1,9 +1,9 @@
 /* Verifies configured provider sources normalize public content without leaking credentials. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createTwitterSource, createZhihuSource } from '@megumi/discovery';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createTwitterSource, createZhihuSource } from '@megumi/application/discovery/index';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
 
 describe('configured provider discovery sources', () => {
   it('uses the official Zhihu search API and clamps its one-call result limit to ten', async () => {

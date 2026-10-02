@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkspaceOperations } from '../../../../packages/agent/product-host/src/operations/workspace-operations';
+import { createWorkspaceOperations } from '@megumi/application/workspace/workspace-operations';
 
 describe('WorkspaceHost semantics', () => {
   it('projects remove results without collapsing owner statuses into booleans', () => {

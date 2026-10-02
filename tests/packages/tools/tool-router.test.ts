@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createToolRegistry, createToolRouter, type ToolRegistration } from '../../../packages/agent/tools/src';
+import { createToolRegistry, createToolRouter, type ToolRegistration } from '@megumi/agent-runtime/tools/index';
 
 function registration(name: string): ToolRegistration {
   return {

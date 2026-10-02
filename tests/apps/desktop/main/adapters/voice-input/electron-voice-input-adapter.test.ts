@@ -9,7 +9,7 @@ import type {
   VoiceInputWorkerRequest,
   VoiceInputWorkerResponse,
 } from '@megumi/desktop/main/adapters/voice-input/voice-input-worker-protocol';
-import type { SpeechInputEvent } from '@megumi/voice';
+import type { SpeechInputEvent } from '@megumi/application/voice/index';
 
 type Listener = (...args: never[]) => void;
 

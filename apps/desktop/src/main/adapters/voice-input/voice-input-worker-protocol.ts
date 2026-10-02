@@ -2,12 +2,12 @@
  * Private in-process protocol between the Voice Input Adapter and its Node
  * Speech Worker. Carries only control requests, PCM frames, frame acks, and
  * Speech Input Events. It is a transport detail of the Adapter module and is
- * never a second business contract next to packages/agent/voice. Both sides validate
+ * never a second business contract next to packages/application/src/voice. Both sides validate
  * messages against the schemas below before they touch any state machine.
  */
 
 import { z } from 'zod';
-import { SpeechInputEventSchema, type SpeechInputEvent } from '@megumi/voice';
+import { SpeechInputEventSchema, type SpeechInputEvent } from '@megumi/application/voice/index';
 
 export type VoiceInputWorkerLanguage = 'zh' | 'en' | 'auto';
 

@@ -5,7 +5,7 @@ import {
   RecordSessionPermissionGrantRequestSchema,
   PermissionRulesRawSchema,
   PermissionSettingsSchema,
-} from '../../../packages/agent/settings/src';
+} from '@megumi/application/settings/index';
 
 const rule = {
   source: 'session' as const,

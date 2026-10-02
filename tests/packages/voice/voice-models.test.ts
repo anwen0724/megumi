@@ -9,7 +9,7 @@ import {
   createFileVoiceModels,
   type VoiceModelDownloader,
   type VoiceModelManifest,
-} from '../../../packages/agent/voice/src';
+} from '@megumi/application/voice/index';
 
 describe('Voice Models', () => {
   const temporaryDirectories: string[] = [];

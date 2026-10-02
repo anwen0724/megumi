@@ -3,10 +3,10 @@
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { ContentStoreReadResult } from '../../../packages/agent/observability/src/content/content-store';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createTraceDiagnosticBundle } from '../../../packages/agent/observability/src/query/diagnostic-bundle';
-import { projectTrace } from '../../../packages/agent/observability/src/query/trace-projector';
+import type { ContentStoreReadResult } from '@megumi/application/observability/content/content-store';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
+import { createTraceDiagnosticBundle } from '@megumi/application/observability/query/diagnostic-bundle';
+import { projectTrace } from '@megumi/application/observability/query/trace-projector';
 
 describe('Trace diagnostic bundle', () => {
   it('exports only one Trace, its records, referenced bytes, and an explicit missing list', async () => {

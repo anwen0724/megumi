@@ -4,8 +4,8 @@ import type {
   GetContextUsageResult,
   InputCapabilitiesResult,
   ProviderPublicStatusUiDto,
-} from '@megumi/product-host/host';
-import type { InputSuggestionQueryResult } from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
+import type { InputSuggestionQueryResult } from '@megumi/application/contracts';
 import type { ComposerModel, ComposerPermissionMode } from './composer-options';
 import type {
   ChatComposerDraft,

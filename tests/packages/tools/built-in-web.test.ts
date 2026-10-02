@@ -8,12 +8,12 @@ import {
   createFallbackWebSearch,
   createWebFetch,
   createWebSearch,
-} from '../../../packages/agent/tools/src';
+} from '@megumi/agent-runtime/tools/index';
 import { createBuiltInTestHarness } from './built-in-test-harness';
 import {
   isAllowedResolvedAddress,
   isPublicIp,
-} from '../../../packages/agent/tools/src/built-ins/web-fetch';
+} from '@megumi/agent-runtime/tools/web-fetch';
 import { createLocalWorkspaceFileAccess } from './tool-test-fixtures';
 
 describe('web_search built-in Tool', () => {

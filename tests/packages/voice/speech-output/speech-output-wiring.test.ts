@@ -1,8 +1,8 @@
 /* Verifies the run.ended -> speech-output mapping without opening a database. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { onRunEndedForSpeechOutput, type SpeechOutputWiringDeps } from '@megumi/voice';
-import type { ReadSpeechOutputRequest, SpeechOutputRuntime } from '../../../../packages/agent/voice/src';
+import { onRunEndedForSpeechOutput, type SpeechOutputWiringDeps } from '@megumi/application/voice/index';
+import type { ReadSpeechOutputRequest, SpeechOutputRuntime } from '@megumi/application/voice/index';
 
 function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiringDeps & {
   speechOutput: SpeechOutputRuntime & { reads: ReadSpeechOutputRequest[] };

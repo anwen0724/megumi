@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUILT_IN_TOOL_NAMES, createBuiltInToolRegistry } from '../../../packages/agent/tools/src';
+import { BUILT_IN_TOOL_NAMES, createBuiltInToolRegistry } from '@megumi/agent-runtime/tools/index';
 import { createProcessAdapter } from './tool-test-fixtures';
 
 describe('built-in Tool Registry', () => {
@@ -50,7 +50,7 @@ const candidateSupplyTools = {
 const recommendationTools = {
   async readRecommendationCandidate() { return { outputKind: 'json' as const, content: {} }; },
   async expandRecommendationWorkingSet() { return { outputKind: 'json' as const, content: {} }; },
-  async publishRecommendations() { return { outputKind: 'json' as const, content: {} }; },
+  async submitRecommendations() { return { outputKind: 'json' as const, content: {} }; },
 };
 
 function completeRegistry() {

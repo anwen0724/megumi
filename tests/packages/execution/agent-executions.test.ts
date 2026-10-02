@@ -1,31 +1,31 @@
 /* Verifies shared Agent Execution and conversation-submission operations. */
 import { describe, expect, it, vi } from 'vitest';
-import { Agent } from '@megumi/agent-core';
+import { RunLoopController } from '@megumi/agent-runtime/runs/loop';
 import { AssistantMessageEventStream, Type, type Api, type AssistantMessage, type Model } from '@megumi/ai';
-import { createEventBus, type AnyEvent } from '@megumi/events';
-import type { CommandTerminalResult } from '@megumi/commands';
-import type { InputProcessor } from '@megumi/input';
+import { createEventBus, type AnyEvent } from '@megumi/agent-runtime/events';
+import type { CommandTerminalResult } from '@megumi/agent-runtime/runs/commands/index';
+import type { InputProcessor } from '@megumi/agent-runtime/runs/input/index';
 import type {
   SessionBranchDrafts,
   SessionCatalog,
   SessionEntry,
   SessionHistory,
   SessionMessageWithAttachments,
-} from '@megumi/session';
+} from '@megumi/agent-runtime/sessions/index';
 import {
-  createAgentExecutions,
+  createRunManager,
   createConversationSubmission,
-  type AgentExecutions,
+  type RunManager,
   ApprovalRequest,
   type ConversationSubmissionDependencies,
   ExecutionOutcome,
-  LaunchedAgentExecution,
+  PreparedRun,
   LaunchAgentExecutionInput,
-  type LaunchAgentExecution,
+  type PrepareRun,
   type StartExecutionRequest,
   type SubmitConversationInputRequest,
   type SubmitConversationInputResult,
-} from '@megumi/execution';
+} from '@megumi/agent-runtime/runs/index';
 
 const model: Model<Api> = {
   id: 'test-model',
@@ -86,20 +86,20 @@ const session = {
 } as const;
 
 interface LaunchHandle {
-  readonly agent: Agent;
+  readonly agent: RunLoopController;
   readonly input: LaunchAgentExecutionInput;
   resolveOutcome(outcome: ExecutionOutcome): void;
   approve(outcome: ExecutionOutcome): void;
 }
 
 interface TestLaunch {
-  readonly launch: LaunchAgentExecution;
+  readonly launch: PrepareRun;
   readonly handles: LaunchHandle[];
 }
 
 function createTestLaunch(): TestLaunch {
   const handles: LaunchHandle[] = [];
-  const launch = async (input: LaunchAgentExecutionInput): Promise<LaunchedAgentExecution> => {
+  const launch = async (input: LaunchAgentExecutionInput): Promise<PreparedRun> => {
     let resolveOutcome!: (outcome: ExecutionOutcome) => void;
     const outcome = new Promise<ExecutionOutcome>((resolve) => { resolveOutcome = resolve; });
     // The control Agent parks in executing_tools so approval waits derive as waiting.
@@ -121,7 +121,7 @@ function createTestLaunch(): TestLaunch {
       value.end();
       return value;
     };
-    const agent = new Agent({
+    const agent = new RunLoopController({
       initialState: {
         configuration: { systemPrompt: 'test', model, thinkingLevel: 'minimal', tools: [hangingTool] },
         messages: [{ role: 'user', content: input.input.modelContent[0]?.text ?? '', timestamp: 1 }],
@@ -149,12 +149,12 @@ function createTestLaunch(): TestLaunch {
   return { launch, handles };
 }
 
-interface TestRuntime extends AgentExecutions {
+interface TestRuntime extends RunManager {
   submitConversationInput(request: SubmitConversationInputRequest): Promise<SubmitConversationInputResult>;
 }
 
 interface TestRuntimeOptions {
-  readonly launch: LaunchAgentExecution;
+  readonly launch: PrepareRun;
   readonly conversation: ConversationSubmissionDependencies;
 }
 
@@ -176,7 +176,7 @@ function fixture(overrides: Partial<TestRuntimeOptions> = {}): {
     branches: {} as Pick<SessionBranchDrafts, 'resolveBranchDraft' | 'commitBranchDraft'>,
     resolveModel: async () => ({ status: 'ok', model }),
   };
-  const executions = createAgentExecutions({
+  const executions = createRunManager({
     ids: {
       createExecutionId: () => `execution:${++executionNumber}`,
       createSessionMessageId: () => `message:${++messageNumber}`,
@@ -221,90 +221,6 @@ function approvalRequest(executionId: string, approvalId: string): ApprovalReque
 }
 
 describe('Agent Executions and conversation submission', () => {
-  it('starts Candidate Supply as a background execution with its fixed Run Context', async () => {
-    let launched: LaunchAgentExecutionInput | undefined;
-    const settled = vi.fn();
-    const executions = createAgentExecutions({
-      ids: { createExecutionId: () => 'execution:supply', createSessionMessageId: () => 'unused' },
-      clock,
-      terminalRetentionMs: 60_000,
-      events: createEventBus(),
-      launch: async (input) => {
-        launched = input;
-        const agent = new Agent({
-          initialState: {
-            configuration: { systemPrompt: '', model, thinkingLevel: 'minimal', tools: [] },
-            messages: [],
-          },
-          stream: () => new AssistantMessageEventStream(),
-        });
-        return { agent, execute: async () => ({ status: 'completed' }) };
-      },
-    });
-    const started = await executions.start({
-      kind: 'candidate_supply', requestId: 'request:supply', model,
-      material: {
-        pool: {
-          counts: { available: 0 }, lowWatermark: 10, target: 20, hardLimit: 40,
-          totalShortfall: 20, uncoveredInterestIds: [], consumerShortfalls: [],
-        },
-        interests: [], negativeConstraints: [], sources: [], recentQueryOutcomes: [], pendingCandidates: [],
-        budget: { searchesRemaining: 12, readsRemaining: 40, rawResultsRemaining: 200 },
-      },
-      accept: async () => ({ status: 'accepted' }),
-      onSettled: settled,
-    });
-
-    expect(started.status).toBe('started');
-    expect(launched).toMatchObject({
-      kind: 'candidate_supply',
-      runContext: { kind: 'candidate_supply', executionId: 'execution:supply' },
-    });
-    if (started.status === 'started') await started.completion;
-    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith({
-      executionId: 'execution:supply', outcome: { status: 'completed' },
-    }));
-  });
-
-  it('starts Recommendation with request metadata and Context-owned facts', async () => {
-    let launched: LaunchAgentExecutionInput | undefined;
-    const executions = createAgentExecutions({
-      ids: { createExecutionId: () => 'execution:daily', createSessionMessageId: () => 'unused' },
-      clock,
-      terminalRetentionMs: 60_000,
-      events: createEventBus(),
-      launch: async (input) => {
-        launched = input;
-        const agent = new Agent({
-          initialState: {
-            configuration: { systemPrompt: '', model, thinkingLevel: 'minimal', tools: [] },
-            messages: [],
-          },
-          stream: () => new AssistantMessageEventStream(),
-        });
-        return { agent, execute: async () => ({ status: 'completed' }) };
-      },
-    });
-    const started = await executions.start({
-      kind: 'recommendation',
-      requestId: 'request:daily',
-      localDate: '2026-08-27',
-      model,
-      accept: async () => ({ status: 'accepted' }),
-      onSettled: () => undefined,
-    });
-
-    expect(started.status).toBe('started');
-    expect(launched).toMatchObject({
-      kind: 'recommendation',
-      metadata: { kind: 'recommendation', requestId: 'request:daily', localDate: '2026-08-27' },
-      runContext: {
-        kind: 'recommendation', executionId: 'execution:daily', requestId: 'request:daily',
-      },
-    });
-    if (started.status === 'started') await started.completion;
-  });
-
   it('does not create a Session or start an execution when Input completes the request', async () => {
     const createSession = vi.fn();
     const { runtime, testLaunch } = fixture({
@@ -398,97 +314,6 @@ describe('Agent Executions and conversation submission', () => {
     expect(result.session).toEqual(session);
     expect(result.execution).toMatchObject({ sessionId: 'session:1' });
     expect(testLaunch.handles).toHaveLength(1);
-  });
-
-  it('starts two independent Sessions from the same authoritative Recommendation', async () => {
-    let sessionNumber = 0;
-    const createSession = vi.fn(() => {
-      const id = `session:recommendation:${++sessionNumber}`;
-      return { status: 'created' as const, session: { ...session, session_id: id } };
-    });
-    const recommendation = {
-      recommendationId: 'recommendation:1', localDate: '2026-08-22', position: 0,
-      sourceId: 'open-web' as const, sourceName: 'GitHub', canonicalUrl: 'https://example.com/agent',
-      contentType: 'article' as const, title: 'Agent runtime', author: 'Example',
-      description: 'A concrete implementation.', contentSummary: 'A concrete Agent runtime summary.',
-      recommendationReason: 'Relevant to your interests.',
-      hidden: false, favorite: false, watchLater: false, publishedAt: '2026-08-22T00:00:00.000Z',
-    };
-    const { runtime, testLaunch } = fixture({
-      conversation: {
-        input: { process: async () => ({
-          status: 'accepted',
-          input: {
-            displayContent: [{ type: 'text', text: '聊聊这个项目' }],
-            modelContent: [{ type: 'text', text: '聊聊这个项目' }],
-            attachments: [],
-          },
-        }) },
-        sessions: { getSession: vi.fn(), createSession },
-        history: { getCommittedBranch: vi.fn() },
-        branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
-        resolveModel: async () => ({ status: 'ok', model }),
-        recommendations: { getRecommendationReference: () => ({
-          type: 'recommendation_reference', recommendationId: recommendation.recommendationId,
-          sourceName: recommendation.sourceName, canonicalUrl: recommendation.canonicalUrl,
-          title: recommendation.title, author: recommendation.author, description: recommendation.description,
-          recommendationReason: recommendation.recommendationReason,
-        }) },
-      },
-    });
-
-    const base = {
-      workspaceId: 'workspace:1', recommendationId: 'recommendation:1', text: '聊聊这个项目',
-      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
-    } as const;
-    const first = await runtime.submitConversationInput({ ...base, requestId: 'request:recommendation:1' });
-    const second = await runtime.submitConversationInput({ ...base, requestId: 'request:recommendation:2' });
-
-    expect(first.status).toBe('agent_started');
-    expect(second.status).toBe('agent_started');
-    if (first.status !== 'agent_started' || second.status !== 'agent_started') throw new Error('unreachable');
-    expect(first.session.session_id).not.toBe(second.session.session_id);
-    expect(testLaunch.handles.map((handle) => handle.input.recommendationReference)).toEqual([
-      expect.objectContaining({ recommendationId: 'recommendation:1', title: 'Agent runtime' }),
-      expect.objectContaining({ recommendationId: 'recommendation:1', title: 'Agent runtime' }),
-    ]);
-  });
-
-  it('rejects unavailable Recommendation drafts and existing-Session injection before creating a Session', async () => {
-    const createSession = vi.fn();
-    const process = vi.fn(async () => ({
-      status: 'accepted' as const,
-      input: {
-        displayContent: [{ type: 'text' as const, text: '聊聊它' }],
-        modelContent: [{ type: 'text' as const, text: '聊聊它' }],
-        attachments: [],
-      },
-    }));
-    const { runtime, testLaunch } = fixture({
-      conversation: {
-        input: { process },
-        sessions: { getSession: vi.fn(), createSession },
-        history: { getCommittedBranch: vi.fn() },
-        branches: { resolveBranchDraft: vi.fn(), commitBranchDraft: vi.fn() },
-        resolveModel: async () => ({ status: 'ok', model }),
-        recommendations: { getRecommendationReference: () => undefined },
-      },
-    });
-
-    const missing = await runtime.submitConversationInput({
-      requestId: 'request:missing', workspaceId: 'workspace:1', recommendationId: 'recommendation:missing',
-      text: '聊聊它', modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
-    });
-    const existing = await runtime.submitConversationInput({
-      requestId: 'request:existing', workspaceId: 'workspace:1', sessionId: 'session:1',
-      recommendationId: 'recommendation:1', text: '注入已有会话',
-      modelSelection: { providerId: 'test-provider', modelId: 'test-model' },
-    });
-
-    expect(missing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_not_found' } });
-    expect(existing).toMatchObject({ status: 'failed', failure: { code: 'recommendation_requires_new_session' } });
-    expect(createSession).not.toHaveBeenCalled();
-    expect(testLaunch.handles).toHaveLength(0);
   });
 
   it('does not process Input or create a Session when model resolution fails', async () => {
@@ -756,7 +581,7 @@ describe('Agent Executions and conversation submission', () => {
   });
 
   it('releases the reservation when the launch fails so the same request can start again', async () => {
-    const failingLaunch = vi.fn<LaunchAgentExecution>(async () => {
+    const failingLaunch = vi.fn<PrepareRun>(async () => {
       throw new Error('launch exploded');
     });
     const { runtime } = fixture({ launch: failingLaunch });

@@ -1,8 +1,8 @@
 /*
  * Protects the complete Megumi Agent Event to Desktop approval-control projection.
  */
-import { EventSchema } from '@megumi/events';
-import type { PermissionDecision } from '@megumi/permissions';
+import { EventSchema } from '@megumi/agent-runtime/events';
+import type { PermissionDecision } from '@megumi/agent-runtime/permissions/index';
 import { reduceRuntimeTimelineEvent } from '@megumi/desktop/renderer/features/session-timeline';
 import { describe, expect, it, vi } from 'vitest';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
@@ -68,7 +68,7 @@ describe('approval Runtime flow', () => {
 });
 
 function approvalDecisionFor(
-  request: import('@megumi/permissions').EvaluateToolCallRequest,
+  request: import('@megumi/agent-runtime/permissions/index').EvaluateToolCallRequest,
 ): Extract<PermissionDecision, { type: 'requires_approval' }> {
   const identity = request.operations[0]?.context.toolIdentity ?? {
     sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'internal', registeredToolName: 'internal',

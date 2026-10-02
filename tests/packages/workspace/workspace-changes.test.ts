@@ -6,7 +6,7 @@ import {
   type WorkspaceChangeSet,
   type WorkspaceToolEffectReport,
   type WorkspaceStore,
-} from '../../../packages/agent/workspace/src/index';
+} from '@megumi/application/workspace/index';
 
 type Result = { type: 'succeeded' | 'failed'; value?: string; effectReport?: WorkspaceToolEffectReport };
 const result = (effectReport?: WorkspaceToolEffectReport, type: Result['type'] = 'succeeded'): Result => ({ type, ...(effectReport ? { effectReport } : {}) });

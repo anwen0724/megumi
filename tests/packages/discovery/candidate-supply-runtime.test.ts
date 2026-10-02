@@ -1,358 +1,166 @@
-/* Verifies Candidate Supply triggering, single execution ownership, and database-based settlement. */
+/* Verifies candidate supply against real runtime, tools and isolated storage. */
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Api, Model } from '@megumi/ai';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import {
-  createCandidateSupplyAttempts,
-  createCandidateSupplyRuntime,
-  createDiscoveryRepository,
-  createSourceRegistry,
-  type DiscoveryRepository,
-  type DiscoverySource,
-} from '@megumi/discovery';
+import { expect, it, onTestFinished } from 'vitest';
+import { createCandidates, createSourceRegistry, type CreateCandidatesOptions, type DiscoverySource } from '@megumi/application/discovery/index';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
+import { createRuntimeFixture } from '../agent-runtime/runtime-fixture';
+import { controlModelHttp, modelResponse } from '../agent-runtime/model-http-fixture';
 
 const now = '2026-09-03T00:00:00.000Z';
-const model: Model<Api> = {
-  id: 'model:1', name: 'Model', api: 'test-api', provider: 'test-provider',
-  baseUrl: 'https://example.invalid', reasoning: false, input: ['text'],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: 8_192, maxTokens: 1_024,
-};
 
-describe('Candidate Supply Runtime', () => {
-  let database: DatabaseConnection;
-  let repository: DiscoveryRepository;
-
-  beforeEach(() => {
-    database = createDatabase({ filename: ':memory:' });
-    migrateDatabase({ database });
-    repository = createDiscoveryRepository({ database });
-  });
-
-  afterEach(() => database.close());
-
-  it('records enabled, unavailable and disabled Sources without changing their selection', async () => {
-    createInterest();
-    const records: TraceJournalRecord[] = [];
-    const observability = createTraceRecorder({ enqueue: (record) => { records.push(record); } });
-    const registry = createSourceRegistry([
-      source(),
-      { ...source(), descriptor: { ...source().descriptor, id: 'disabled' } },
-      { ...source(), descriptor: { ...source().descriptor, id: 'xiaohongshu' }, getAvailability: () => ({ state: 'login_required' }) },
-    ]);
-    const options = runtimeOptions({ sourceRegistry: registry, startExecution: async () => ({
-      status: 'failed', failure: { code: 'test_stop', message: 'No model call in this test.', retryable: false },
-    }) });
-    const runtime = createCandidateSupplyRuntime({ ...options, observability, settings: {
-      ...options.settings, read: () => ({ ...options.settings.read(), enabledSources: ['source:1', 'xiaohongshu'] }),
-    } });
-    await runtime.requestCheck('startup');
-    expect(records).toContainEqual(expect.objectContaining({
-      type: 'content.recorded', kind: 'source.selection',
-      content: expect.objectContaining({ mode: 'inline', value: [
-        expect.objectContaining({ sourceId: 'source:1', enabled: true, selected: true, reason: 'ready' }),
-        expect.objectContaining({ sourceId: 'disabled', enabled: false, selected: false, reason: 'disabled' }),
-        expect.objectContaining({ sourceId: 'xiaohongshu', enabled: true, selected: false, reason: 'login_required' }),
-      ] }),
-    }));
-  });
-
-  it.each([false, true])('does not start without an active Interest (confirmed=%s)', async (confirmed) => {
-    const startExecution = vi.fn();
-    const options = runtimeOptions({ startExecution });
-    const runtime = createCandidateSupplyRuntime({ ...options, settings: {
-      ...options.settings, read: () => ({ ...options.settings.read(), candidateSupplyConfirmed: confirmed }),
-    } });
-
-    await expect(runtime.requestCheck('startup')).resolves.toMatchObject({
-      status: 'not_needed',
-      reason: 'no_active_interest',
-      addedCandidateCount: 0,
-      addedInterestMatchCount: 0,
-    });
-    expect(startExecution).not.toHaveBeenCalled();
-  });
-
-  it('does not start when the Pool is not below minimumCount', async () => {
-    createInterest();
-    for (const url of ['https://example.com/one', 'https://example.com/two']) {
-      repository.submitCandidate({
-        content: content(url),
-        contentSummary: 'Related content.',
-        matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
-        settings: poolSettings(),
-      });
-    }
-    const startExecution = vi.fn();
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({ startExecution }));
-
-    await expect(runtime.requestCheck('scheduled')).resolves.toMatchObject({
-      status: 'not_needed',
-      reason: 'no_gap',
-    });
-    expect(startExecution).not.toHaveBeenCalled();
-  });
-
-  it.each(['startup', 'scheduled', 'interest_changed', 'supply_conditions_changed'] as const)(
-    'blocks %s until first supply is confirmed', async (trigger) => {
-      createInterest();
-      const startExecution = vi.fn();
-      const options = runtimeOptions({ startExecution });
-      const settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
-      const runtime = createCandidateSupplyRuntime({ ...options,
-        settings: { read: () => settings, write: () => undefined },
-      });
-      await expect(runtime.requestCheck(trigger)).resolves.toMatchObject({
-        status: 'not_needed', reason: 'confirmation_required',
-      });
-      expect(startExecution).not.toHaveBeenCalled();
-      await runtime.shutdown();
-    },
-  );
-
-  it('persists confirmation before starting and returns without waiting for execution', async () => {
-    createInterest();
-    const pending = new Promise<{ status: 'completed' }>(() => undefined);
-    const startExecution = vi.fn(async () => ({
-      status: 'started' as const, execution: executionSnapshot('execution:1'), completion: pending,
-    }));
-    const options = runtimeOptions({ startExecution });
-    let settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
-    const write = vi.fn(async (next: typeof settings) => { settings = next; });
-    const runtime = createCandidateSupplyRuntime({ ...options, settings: { read: () => settings, write } });
-    await Promise.all([runtime.confirm(), runtime.confirm()]);
-    expect(settings.candidateSupplyConfirmed).toBe(true);
-    expect(write).toHaveBeenCalledOnce();
-    expect(startExecution).toHaveBeenCalledOnce();
-    expect(runtime.getStatus()).toEqual({ status: 'running' });
-    await expect(runtime.confirm()).resolves.toEqual({ status: 'already_confirmed' });
-    expect(startExecution).toHaveBeenCalledOnce();
-  });
-
-  it('does not start or confirm after a failed settings write', async () => {
-    createInterest();
-    const startExecution = vi.fn();
-    const options = runtimeOptions({ startExecution });
-    const settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
-    const runtime = createCandidateSupplyRuntime({ ...options, settings: {
-      read: () => settings, write: () => { throw new Error('Settings write failed'); },
-    } });
-    await expect(runtime.confirm()).rejects.toThrow('Settings write failed');
-    expect(settings.candidateSupplyConfirmed).toBe(false);
-    expect(startExecution).not.toHaveBeenCalled();
-  });
-
-  it('does not launch after shutdown interrupts confirmation persistence', async () => {
-    createInterest();
-    const startExecution = vi.fn();
-    const options = runtimeOptions({ startExecution });
-    let settings = { ...options.settings.read(), candidateSupplyConfirmed: false };
-    let releaseWrite!: () => void;
-    const pendingWrite = new Promise<void>((resolve) => { releaseWrite = resolve; });
-    const runtime = createCandidateSupplyRuntime({ ...options, settings: {
-      read: () => settings,
-      write: async (next) => { await pendingWrite; settings = next; },
-    } });
-    const confirmation = runtime.confirm();
-    await runtime.shutdown();
-    releaseWrite();
-    await expect(confirmation).rejects.toThrow('shutting down');
-    expect(startExecution).not.toHaveBeenCalled();
-    expect(settings.candidateSupplyConfirmed).toBe(true);
-  });
-
-  it('settles fulfillment from final Candidate database facts', async () => {
-    createInterest();
-    const attempts = createCandidateSupplyAttempts();
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({
-      attempts,
-      async startExecution(request) {
-        const accepted = await request.accept({ executionId: 'execution:1' });
-        if (accepted.status !== 'accepted') return { status: 'rejected', reason: accepted.reason };
-        for (const url of [
-          'https://example.com/one',
-          'https://example.com/two',
-          'https://example.com/three',
-          'https://example.com/four',
-        ]) {
-          repository.submitCandidate({
-            content: content(url),
-            contentSummary: 'Related content.',
-            matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
-            settings: poolSettings(),
-          });
-        }
-        return {
-          status: 'started',
-          execution: executionSnapshot('execution:1'),
-          completion: Promise.resolve({ status: 'completed' }),
-        };
-      },
-    }));
-
-    await expect(runtime.requestCheck('interest_changed')).resolves.toMatchObject({
-      status: 'fulfilled',
-      executionId: 'execution:1',
-      availableCount: 4,
-      remainingReplenishmentCount: 0,
-      addedCandidateCount: 4,
-    });
-  });
-
-  it('returns supply_in_progress instead of starting a second execution', async () => {
-    createInterest();
-    let finish: ((value: { status: 'completed' }) => void) | undefined;
-    const completion = new Promise<{ status: 'completed' }>((resolve) => {
-      finish = resolve;
-    });
-    const startExecution = vi.fn(async (request) => {
-      const accepted = await request.accept({ executionId: 'execution:1' });
-      if (accepted.status !== 'accepted') return { status: 'rejected' as const, reason: accepted.reason };
-      return {
-        status: 'started' as const,
-        execution: executionSnapshot('execution:1'),
-        completion,
-      };
-    });
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({ startExecution }));
-
-    const first = runtime.requestCheck('startup');
-    await vi.waitFor(() => expect(startExecution).toHaveBeenCalledTimes(1));
-    await expect(runtime.requestCheck('supply_conditions_changed')).resolves.toMatchObject({
-      status: 'not_needed',
-      reason: 'supply_in_progress',
-    });
-    finish?.({ status: 'completed' });
-    await first;
-    expect(startExecution).toHaveBeenCalledTimes(1);
-  });
-
-  it('waits for the active supply to settle during shutdown', async () => {
-    createInterest();
-    let finish: ((value: { status: 'completed' }) => void) | undefined;
-    const completion = new Promise<{ status: 'completed' }>((resolve) => {
-      finish = resolve;
-    });
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({
-      async startExecution(request) {
-        const accepted = await request.accept({ executionId: 'execution:1' });
-        if (accepted.status !== 'accepted') return { status: 'rejected', reason: accepted.reason };
-        return {
-          status: 'started',
-          execution: executionSnapshot('execution:1'),
-          completion,
-        };
-      },
-    }));
-
-    const supply = runtime.requestCheck('startup');
-    let shutDown = false;
-    const shutdown = runtime.shutdown().then(() => { shutDown = true; });
-    await Promise.resolve();
-    expect(shutDown).toBe(false);
-
-    finish?.({ status: 'completed' });
-    await Promise.all([supply, shutdown]);
-    expect(shutDown).toBe(true);
-  });
-
-  it('returns unfulfilled when no enabled Source is currently ready', async () => {
-    createInterest();
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({
-      sourceRegistry: createSourceRegistry([]),
-    }));
-
-    await expect(runtime.requestCheck('startup')).resolves.toMatchObject({
-      status: 'unfulfilled',
-      reason: 'no_available_source',
-      availableCount: 0,
-      remainingReplenishmentCount: 4,
-    });
-  });
-
-  it('preserves Agent Core failure codes and already committed Candidate counts', async () => {
-    createInterest();
-    const runtime = createCandidateSupplyRuntime(runtimeOptions({
-      async startExecution(request) {
-        const accepted = await request.accept({ executionId: 'execution:1' });
-        if (accepted.status !== 'accepted') return { status: 'rejected', reason: accepted.reason };
-        repository.submitCandidate({
-          content: content(),
-          contentSummary: 'Related content.',
-          matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }],
-          settings: poolSettings(),
-        });
-        return {
-          status: 'started',
-          execution: executionSnapshot('execution:1'),
-          completion: Promise.resolve({
-            status: 'failed',
-            failure: {
-              code: 'execution_limit_reached',
-              message: 'Agent Core limit reached.',
-              retryable: false,
-            },
-          }),
-        };
-      },
-    }));
-
-    await expect(runtime.requestCheck('startup')).resolves.toMatchObject({
-      status: 'failed',
-      executionId: 'execution:1',
-      availableCount: 1,
-      remainingReplenishmentCount: 3,
-      addedCandidateCount: 1,
-      failure: { code: 'execution_limit_reached' },
-    });
-  });
-
-  function createInterest(): void {
-    repository.applyInterestChange({
-      action: 'create', interestId: 'interest:1', description: 'Agent architecture', now,
-    });
-  }
-
-  function runtimeOptions(overrides: {
-    readonly attempts?: ReturnType<typeof createCandidateSupplyAttempts>;
-    readonly sourceRegistry?: ReturnType<typeof createSourceRegistry>;
-    readonly startExecution?: Parameters<typeof createCandidateSupplyRuntime>[0]['startExecution'];
-  } = {}): Parameters<typeof createCandidateSupplyRuntime>[0] {
-    let request = 0;
-    return {
-      repository,
-      attempts: overrides.attempts ?? createCandidateSupplyAttempts(),
-      sourceRegistry: overrides.sourceRegistry ?? createSourceRegistry([source()]),
-      settings: {
-        read: () => ({
-          conversationRecognitionEnabled: true,
-          candidateSupplyConfirmed: true,
-          recommendationCandidateCheckIntervalSeconds: 60,
-          recommendationGenerationTime: '08:00',
-          recommendationTargetCount: 20,
-          recommendationWorkingSetCount: 80,
-          enabledSources: ['source:1'],
-          candidatePoolMinimumCount: 2,
-          candidatePoolMaximumCount: 5,
-          candidateValidityDays: 30,
-          candidateContentExcerptMaxCharacters: 8_000,
-          candidateSupplyCheckIntervalMinutes: 360,
-        }),
-        write: () => undefined,
-      },
-      startExecution: overrides.startExecution ?? (async () => {
-        throw new Error('Agent Execution was not expected.');
-      }),
-      resolveModel: async () => ({ status: 'ok', model }),
-      now: () => now,
-      ids: { createRequestId: () => `candidate-supply-request:${++request}` },
-      timers: { set: () => Symbol('timer'), clear: () => undefined },
-    };
-  }
+it.each([false, true])('does not start without active interests (confirmed=%s)', async confirmed => {
+  const { supply, http } = await setup({ interest: false, confirmed });
+  expect(await supply.ensureSupply('startup')).toMatchObject({ status: 'not_needed', reason: 'no_active_interest', addedCandidateCount: 0, addedInterestMatchCount: 0 });
+  expect(http.requests).toHaveLength(0);
 });
+
+it('does not start when the pool meets its minimum', async () => {
+  const { supply, fixture, http } = await setup();
+  for (const url of ['https://example.com/one', 'https://example.com/two']) addCandidate(fixture, url);
+  expect(await supply.ensureSupply('scheduled')).toMatchObject({ status: 'not_needed', reason: 'no_gap' });
+  expect(http.requests).toHaveLength(0);
+});
+
+it.each(['startup', 'scheduled', 'interest_changed', 'supply_conditions_changed'] as const)('requires confirmation before %s', async trigger => {
+  const { supply, http } = await setup({ confirmed: false });
+  expect(await supply.ensureSupply(trigger)).toMatchObject({ status: 'not_needed', reason: 'confirmation_required' });
+  expect(http.requests).toHaveLength(0);
+});
+
+it('persists confirmation and returns while the actual run is still pending', async () => {
+  const { supply, http, readSettings } = await setup({ confirmed: false });
+  await Promise.all([supply.confirm(), supply.confirm()]);
+  expect(readSettings().candidateSupplyConfirmed).toBe(true);
+  await http.waitForRequest();
+  expect(supply.getStatus()).toMatchObject({ status: 'running' });
+  expect(await supply.confirm()).toMatchObject({ status: 'already_confirmed' });
+  expect(http.requests).toHaveLength(1);
+});
+
+it('does not confirm or run when settings cannot be saved', async () => {
+  const { supply, http, readSettings } = await setup({ confirmed: false, saveSettings: async () => { throw new Error('Settings write failed'); } });
+  await expect(supply.confirm()).rejects.toThrow('Settings write failed');
+  expect(readSettings().candidateSupplyConfirmed).toBe(false);
+  expect(http.requests).toHaveLength(0);
+});
+
+it('does not launch when shutdown interrupts confirmation persistence', async () => {
+  const write = Promise.withResolvers<void>();
+  const { supply, http, readSettings } = await setup({ confirmed: false, saveSettings: () => write.promise });
+  const confirmation = supply.confirm();
+  const rejected = expect(confirmation).rejects.toThrow('shutting down');
+  await supply.shutdown();
+  write.resolve();
+  await rejected;
+  expect(readSettings().candidateSupplyConfirmed).toBe(true);
+  expect(http.requests).toHaveLength(0);
+});
+
+it('settles fulfillment from the actual submitted candidates', async () => {
+  const { supply, http } = await setup({ source: searchSource(4) });
+  const completion = supply.ensureSupply('interest_changed');
+  await submitSourceResults(http);
+  http.respond(modelResponse('Completed.'));
+  expect(await completion).toMatchObject({ status: 'fulfilled', availableCount: 4, remainingReplenishmentCount: 0, addedCandidateCount: 4 });
+});
+
+it('joins supply checks without launching a second run', async () => {
+  const { supply, http } = await setup();
+  const first = supply.ensureSupply('startup');
+  await http.waitForRequest();
+  expect(await supply.ensureSupply('supply_conditions_changed')).toMatchObject({ status: 'not_needed', reason: 'supply_in_progress' });
+  http.respond(modelResponse('No candidates found.'));
+  await first;
+  expect(http.requests).toHaveLength(1);
+});
+
+it('waits for the active run during shutdown', async () => {
+  const { supply, http } = await setup();
+  const work = supply.ensureSupply('startup');
+  await http.waitForRequest();
+  let stopped = false;
+  const shutdown = supply.shutdown().then(() => { stopped = true; });
+  await Promise.resolve();
+  expect(stopped).toBe(false);
+  http.respond(modelResponse('No candidates found.'));
+  await Promise.all([work, shutdown]);
+  expect(stopped).toBe(true);
+});
+
+it('reports unavailable sources without starting a run', async () => {
+  const { supply, http } = await setup({ overrides: { sourceRegistry: createSourceRegistry([]) } });
+  expect(await supply.ensureSupply('startup')).toMatchObject({ status: 'unfulfilled', reason: 'no_available_source', availableCount: 0, remainingReplenishmentCount: 4 });
+  expect(http.requests).toHaveLength(0);
+});
+
+it('keeps already submitted candidates when the subsequent model call fails', async () => {
+  const { supply, fixture, http } = await setup({ source: searchSource(1) });
+  const completion = supply.ensureSupply('startup');
+  await submitSourceResults(http);
+  http.respond(new Response(JSON.stringify({ error: { message: 'Insufficient balance' } }), { status: 402 }));
+  expect(await completion).toMatchObject({ status: 'failed', availableCount: 1, remainingReplenishmentCount: 3, addedCandidateCount: 1, failure: { code: 'MODEL_CALL_FAILED' } });
+  expect(fixture.repository.getCandidatePoolSnapshot(poolSettings()).availableCount).toBe(1);
+});
+
+it('records enabled, unavailable and disabled sources without changing selection', async () => {
+  const records: TraceJournalRecord[] = [];
+  const observability = createTraceRecorder({ enqueue: record => { records.push(record); } });
+  const registry = createSourceRegistry([source(),
+    { ...source(), descriptor: { ...source().descriptor, id: 'disabled' } },
+    { ...source(), descriptor: { ...source().descriptor, id: 'xiaohongshu' }, getAvailability: () => ({ state: 'login_required' }) },
+  ]);
+  const { supply, http } = await setup({ overrides: { sourceRegistry: registry, observability }, enabledSources: ['source:1', 'xiaohongshu'] });
+  const work = supply.ensureSupply('startup');
+  http.respond(modelResponse('No candidates found.'));
+  await work;
+  expect(records).toContainEqual(expect.objectContaining({ type: 'content.recorded', kind: 'source.selection', content: expect.objectContaining({ mode: 'inline', value: [
+    expect.objectContaining({ sourceId: 'source:1', selected: true, reason: 'ready' }),
+    expect.objectContaining({ sourceId: 'disabled', selected: false, reason: 'disabled' }),
+    expect.objectContaining({ sourceId: 'xiaohongshu', selected: false, reason: 'login_required' }),
+  ] }) }));
+});
+
+async function setup(options: { interest?: boolean; confirmed?: boolean; source?: DiscoverySource; enabledSources?: string[]; saveSettings?: () => Promise<void>; overrides?: Partial<CreateCandidatesOptions> } = {}) {
+  const fixture = await createRuntimeFixture({ now: () => now });
+  if (options.interest !== false) fixture.repository.applyInterestChange({ action: 'create', interestId: 'interest:1', description: 'Agent architecture', now });
+  const http = controlModelHttp();
+  let settings = {
+    conversationRecognitionEnabled: true, candidateSupplyConfirmed: options.confirmed ?? true,
+    recommendationCandidateCheckIntervalSeconds: 60, recommendationGenerationTime: '08:00', recommendationTargetCount: 20,
+    recommendationWorkingSetCount: 80, enabledSources: options.enabledSources ?? ['source:1'], candidatePoolMinimumCount: 2,
+    candidatePoolMaximumCount: 5, candidateValidityDays: 30, candidateContentExcerptMaxCharacters: 8000, candidateSupplyCheckIntervalMinutes: 360,
+  };
+  let id = 0;
+  const supply = createCandidates({
+    repository: fixture.repository, attempts: fixture.candidateSupplyAttempts, runtime: fixture.runtime,
+    sourceRegistry: createSourceRegistry([options.source ?? source()]),
+    settings: { read: () => settings, async write(next) { await options.saveSettings?.(); settings = next; } },
+    resolveModel: async () => ({ status: 'ok', model: fixture.model }), now: () => now,
+    ids: { createRequestId: () => 'supply:' + ++id }, ...options.overrides,
+  });
+  onTestFinished(async () => { await fixture.runtime.stop({ timeoutMs: 5000 }); await supply.shutdown(); await fixture.cleanup(); http.restore(); });
+  return { fixture, supply, http, readSettings: () => settings };
+}
+
+function addCandidate(fixture: Awaited<ReturnType<typeof createRuntimeFixture>>, url: string) {
+  fixture.repository.submitCandidate({ content: content(url), contentSummary: 'Related content.', matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }], settings: poolSettings() });
+}
+
+function searchSource(count: number): DiscoverySource {
+  return { ...source(), search: async () => ({ status: 'success', items: Array.from({ length: count }, (_, i) => content('https://example.com/' + i)) }) };
+}
+
+async function submitSourceResults(http: ReturnType<typeof controlModelHttp>) {
+  http.respond(modelResponse({ name: 'search_content', arguments: { sourceId: 'source:1', query: 'Agent', mode: 'relevance', limit: 10, targetInterestIds: ['interest:1'] } }));
+  await http.waitForRequest(2);
+  // Result IDs are read from the external model request rather than assuming an internal ID format.
+  const request = http.requests.at(-1) as { messages: Array<{ role: string; content: string }> };
+  const message = request.messages.find(message => message.role === 'tool');
+  const results = JSON.parse(message?.content ?? '{}').results as Array<{ resultId: string }>;
+  http.respond(modelResponse({ name: 'submit_candidates', arguments: { items: results.map(({ resultId }) => ({ resultId, contentSummary: 'Related content.', matches: [{ interestId: 'interest:1', relevance: 'direct', matchReason: 'Related.' }] })) } }));
+  await http.waitForRequest(3);
+}
 
 function poolSettings() {
   return {
@@ -384,17 +192,5 @@ function content(url = 'https://example.com/article') {
     contentType: 'article' as const,
     title: 'Agent architecture in practice',
     description: 'Concrete implementation patterns.',
-  };
-}
-
-function executionSnapshot(executionId: string) {
-  return {
-    kind: 'candidate_supply' as const,
-    executionId,
-    requestId: 'candidate-supply-request:1',
-    model,
-    createdAt: now,
-    startedAt: now,
-    status: 'running' as const,
   };
 }

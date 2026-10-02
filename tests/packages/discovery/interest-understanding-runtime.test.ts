@@ -16,9 +16,9 @@ describe('Interest Understanding Runtime', () => {
       '{"evidence":[{"description":"Agent architecture","effect":"support","confidence":"high"}]}',
     ]);
     await application.runtime.start();
-    const opened = await application.runtime.host.workspace.useExistingProject();
+    const opened = await application.runtime.workspace.useExistingProject();
     if (opened.status !== 'opened' || !opened.project) throw new Error('Test Workspace did not open.');
-    const submitted = await application.runtime.host.session.sendUserInput({
+    const submitted = await application.runtime.session.sendUserInput({
       projectId: opened.project.projectId,
       text: 'This is only a temporary test instruction.',
       modelSelection: { provider_id: 'test', model_id: 'model' },
@@ -27,11 +27,11 @@ describe('Interest Understanding Runtime', () => {
     if (submitted.payload.type !== 'agent_run') throw new Error('Test Run did not start.');
 
     let traces!: Awaited<
-      ReturnType<TestApplication['runtime']['host']['observability']['listTraces']>
+      ReturnType<TestApplication['runtime']['observability']['listTraces']>
     >;
     await vi.waitFor(async () => {
-      await application!.runtime.host.observability.flush();
-      traces = await application!.runtime.host.observability.listTraces({
+      await application!.runtime.observability.flush();
+      traces = await application!.runtime.observability.listTraces({
         traceKind: 'interest_understanding',
         correlation: { executionId: submitted.payload.run.executionId },
         limit: 5,
@@ -48,7 +48,7 @@ describe('Interest Understanding Runtime', () => {
       userMessageId: submitted.payload.userMessageId,
     });
 
-    const detail = await application.runtime.host.observability.getTrace({
+    const detail = await application.runtime.observability.getTrace({
       traceId: traces.traces[0]!.traceId,
     });
     expect(detail.status).toBe('found');
@@ -57,7 +57,7 @@ describe('Interest Understanding Runtime', () => {
       (content) => content.kind === 'interest.understanding.outcome',
     );
     expect(checkpoint).toBeDefined();
-    const content = await application.runtime.host.observability.getContent({
+    const content = await application.runtime.observability.getContent({
       traceId: detail.trace.summary.traceId,
       sequence: checkpoint!.sequence,
     });
@@ -66,7 +66,7 @@ describe('Interest Understanding Runtime', () => {
     const outcome = JSON.parse(
       content.content.encoding === 'json' ? content.content.json : content.content.text,
     ) as { changedInterestIds: string[]; evidenceIds: string[] };
-    const facts = await application.runtime.host.discovery.getInterestFacts({
+    const facts = await application.runtime.discovery.getInterestFacts({
       interestIds: outcome.changedInterestIds,
       evidenceIds: outcome.evidenceIds,
     });

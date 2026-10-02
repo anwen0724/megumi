@@ -1,9 +1,9 @@
 /* Verifies the Sandbox execution boundary for an already-routed and authorized ToolInvocation. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import type { Sandbox, SandboxCapabilities, SandboxScope } from '../../../packages/agent/sandbox/src';
-import type { ToolExecutionResult, ToolInvocation } from '../../../packages/agent/tools/src';
-import { executeSandboxToolInvocation } from '../../../packages/agent/tools/src/sandbox-tool-executor';
+import type { Sandbox, SandboxCapabilities, SandboxScope } from '@megumi/agent-runtime/tools/sandbox/index';
+import type { ToolExecutionResult, ToolInvocation } from '@megumi/agent-runtime/tools/index';
+import { executeSandboxToolInvocation } from '@megumi/agent-runtime/tools/sandbox-tool-executor';
 
 const access = {
   fileSystem: { mode: 'workspace' as const },

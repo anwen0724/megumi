@@ -3,6 +3,20 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["apps/**/*", "packages/**/*"],
-  "exclude": ["node_modules", "evals", "tests"]
+  "include": [
+    "apps/**/*",
+    "packages/agent-runtime/src/**/*",
+    "packages/application/src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "evals",
+    "tests",
+    "packages/ai"
+  ],
+  "references": [
+    {
+      "path": "./packages/ai"
+    }
+  ]
 }

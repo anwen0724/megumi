@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabase, migrateDatabase,
   type DatabaseConnection
-} from '../../../packages/agent/database/src';
+} from '@megumi/application/storage/index';
 
 describe('final Database schema', () => {
   let database: DatabaseConnection;

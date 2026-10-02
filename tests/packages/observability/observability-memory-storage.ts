@@ -6,7 +6,7 @@ import type {
   ObservabilityDirectoryEntry,
   ObservabilityFileStat,
   ObservabilityStorage,
-} from '../../../packages/agent/observability/src/persistence/observability-storage';
+} from '@megumi/application/observability/persistence/observability-storage';
 
 interface MemoryFile {
   readonly bytes: Uint8Array;

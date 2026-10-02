@@ -1,5 +1,5 @@
 /* Provides locale-explicit formatting without changing canonical values. */
-import type { AppLanguage } from '@megumi/product-host/host';
+import type { AppLanguage } from '@megumi/application/contracts';
 import { getRendererLanguage } from './locale';
 
 function localeOrCurrent(locale?: AppLanguage): AppLanguage {

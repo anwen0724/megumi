@@ -18,10 +18,10 @@ import {
   SelectDocumentsResultSchema,
   ReadAttachmentImageResultSchema,
   AttachmentFileStatusResultSchema,
-  type ProductHostInterface,
-} from '@megumi/product-host/host';
+  type ApplicationOperations,
+} from '@megumi/application/contracts';
 
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 
@@ -62,11 +62,11 @@ import {
 import type { SessionMessagePresentationEvent } from '../session-message-presentation';
 
 export interface SessionHandlersService {
-  host: Pick<ProductHostInterface, 'session'>;
+  host: Pick<ApplicationOperations, 'session'>;
 }
 
 export interface RegisterSessionHandlersOptions {
-  logger?: ProductRuntimeLogger;
+  logger?: ApplicationLogger;
   ipcMain?: DesktopIpcMain;
   publishMessageEvent?(event: SessionMessagePresentationEvent): void;
 }

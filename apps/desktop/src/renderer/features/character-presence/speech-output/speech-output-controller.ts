@@ -6,7 +6,7 @@
  * decode, so provider chunking never loses audio.
  */
 
-import type { SpeechOutputEvent } from '@megumi/voice';
+import type { SpeechOutputEvent } from '@megumi/application/voice/index';
 
 export type SpeechOutputViewStatus = 'idle' | 'playing' | 'error';
 

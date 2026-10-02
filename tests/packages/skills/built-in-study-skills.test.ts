@@ -5,14 +5,14 @@
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SKILLS_POLICY, loadSkills } from '@megumi/skills/skill-loader';
+import { DEFAULT_SKILLS_POLICY, loadSkills } from '@megumi/agent-runtime/resources/skills/skill-loader';
 
 const BUILT_IN_SKILLS_ROOT = path.resolve(
   process.cwd(),
   'packages',
-  'agent',
+  'agent-runtime',
+  'resources',
   'skills',
-  'built-in-skills',
 );
 
 const EXPECTED_STUDY_SKILLS = [

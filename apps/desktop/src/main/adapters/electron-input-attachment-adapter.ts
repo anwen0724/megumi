@@ -2,8 +2,8 @@
 import { clipboard, dialog } from 'electron';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { AttachmentPicker } from '@megumi/product-host/host';
-import type { InputSourceAccess as ProductInputSourceAccess } from '@megumi/input';
+import type { AttachmentPicker } from '@megumi/application/contracts';
+import type { InputSourceAccess as ProductInputSourceAccess } from '@megumi/agent-runtime/runs/input/index';
 
 type TransientInputSource =
   | { type: 'file'; filePath: string }

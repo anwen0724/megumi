@@ -6,7 +6,7 @@ import {
   createDiscoveryConfiguration,
   createSourceRegistry,
   type DiscoverySource,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 function source(
   id: string,

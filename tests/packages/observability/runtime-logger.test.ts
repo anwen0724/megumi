@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeRuntimeLogLine,
   RuntimeLogEntrySchema,
-} from '../../../packages/agent/observability/src/runtime/runtime-log-entry';
+} from '@megumi/application/observability/runtime/runtime-log-entry';
 import {
   createRuntimeLogger,
   RUNTIME_DRAIN_INTERVAL_MS,
   RUNTIME_QUEUE_CAPACITY_BYTES,
-} from '../../../packages/agent/observability/src/runtime/runtime-logger';
-import { createTraceContext } from '../../../packages/agent/observability/src/trace/trace-context';
+} from '@megumi/application/observability/runtime/runtime-logger';
+import { createTraceContext } from '@megumi/application/observability/trace/trace-context';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Runtime Logger', () => {

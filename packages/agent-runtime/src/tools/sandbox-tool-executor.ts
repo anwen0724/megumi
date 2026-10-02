@@ -1,0 +1,99 @@
+/* Executes an already-authorized ToolInvocation inside its Sandbox and Workspace Changes boundary. */
+
+import { executeSandboxScope, type Sandbox } from './sandbox/index';
+import type { ToolExecutionAccess, ToolExecutionOptions, ToolExecutionResult } from './tool';
+import type { ToolInvocation } from './tool-handler';
+import type { WebFetch } from './web-fetch';
+import type { WebSearch } from './web-search';
+import type { BuiltInToolContext } from './workspace-file-access';
+import { createFailedToolResult } from './tool-result';
+
+export interface ToolExecutionPolicy {
+  readonly maxExecutionTimeMs: number;
+  readonly maxOutputBytes: number;
+  readonly maxProcessCount: number;
+}
+
+export interface ToolWorkspaceChanges {
+  trackToolExecution(request: {
+    readonly scope?: {
+      readonly workspace_id: string;
+      readonly session_id: string;
+      readonly execution_id: string;
+      readonly step_id?: string;
+      readonly tool_call_id?: string;
+      readonly tool_execution_id?: string;
+    };
+    readonly execute: () => Promise<ToolExecutionResult>;
+  }): Promise<ToolExecutionResult>;
+}
+
+export async function executeSandboxToolInvocation(request: {
+  readonly sandbox: Sandbox;
+  readonly executionPolicy: ToolExecutionPolicy;
+  readonly workspaceChanges: ToolWorkspaceChanges;
+  readonly workspaceRoot: string;
+  readonly invocation: ToolInvocation;
+  readonly webSearch?: WebSearch;
+  readonly webFetch: WebFetch;
+  readonly stepId?: string;
+  readonly toolExecutionId?: string;
+  readonly options: ToolExecutionOptions & { readonly executionAccess: ToolExecutionAccess };
+  readonly execute: (context: BuiltInToolContext) => Promise<ToolExecutionResult>;
+}): Promise<ToolExecutionResult> {
+  const workspaceId = request.invocation.workspaceId;
+  const sessionId = request.invocation.sessionId;
+  if (!workspaceId || !sessionId) {
+    return createFailedToolResult({
+      toolName: request.invocation.toolName,
+      code: 'sandbox_denied',
+      message: 'Protected Tool execution requires a Session and Workspace.',
+    });
+  }
+  const execution = await executeSandboxScope({
+    sandbox: request.sandbox,
+    open: {
+      policy: {
+        workspaceRoot: request.workspaceRoot,
+        ...request.executionPolicy,
+        executionAccess: request.options.executionAccess,
+      },
+      ...(request.options.signal ? { signal: request.options.signal } : {}),
+    },
+    async execute(scope) {
+      const context: BuiltInToolContext = {
+        workspaceFileAccess: scope.files,
+        process: scope.process,
+        ...(request.webSearch ? { webSearch: request.webSearch } : {}),
+        webFetch: request.webFetch,
+      };
+      return request.workspaceChanges.trackToolExecution({
+        scope: {
+          workspace_id: workspaceId,
+          session_id: sessionId,
+          execution_id: request.invocation.executionId,
+          ...(request.stepId ? { step_id: request.stepId } : {}),
+          tool_call_id: request.invocation.toolCallId,
+          ...(request.toolExecutionId ? { tool_execution_id: request.toolExecutionId } : {}),
+        },
+        execute: () => request.execute(context),
+      });
+    },
+  });
+  if (execution.status === 'unavailable') {
+    return createFailedToolResult({
+      toolName: request.invocation.toolName,
+      code: 'sandbox_unavailable',
+      message: execution.reason,
+    });
+  }
+  if (execution.status === 'termination_unconfirmed') {
+    return createFailedToolResult({
+      toolName: request.invocation.toolName,
+      code: 'termination_unconfirmed',
+      message: 'Sandbox scope could not confirm process termination.',
+      ...(execution.value.effectReport ? { effectReport: execution.value.effectReport } : {}),
+    });
+  }
+  return execution.value;
+}

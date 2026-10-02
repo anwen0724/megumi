@@ -1,12 +1,12 @@
 /* Verifies the stateful Agent exclusively through its public package interface. */
 import { describe, expect, it, vi } from 'vitest';
 import {
-  Agent,
-  AgentOperationError,
+  RunLoopController,
+  RunLoopOperationError,
   type AgentEvent,
   type AgentOptions,
   type AgentTool,
-} from '@megumi/agent-core';
+} from '@megumi/agent-runtime/runs/loop';
 import {
   AssistantMessageEventStream,
   Type,
@@ -90,7 +90,7 @@ describe('Agent', () => {
   it('copies constructor inputs and returns isolated state snapshots', () => {
     const tools: AgentTool[] = [lookupTool()];
     const messages: UserMessage[] = [{ role: 'user', content: 'seed', timestamp: 1 }];
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       initialState: {
         configuration: { systemPrompt: 'Initial.', model, thinkingLevel: 'low', tools },
         messages,
@@ -112,7 +112,7 @@ describe('Agent', () => {
   });
 
   it('configures and replaces history atomically while idle, then reset preserves configuration', () => {
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     const history: UserMessage[] = [{ role: 'user', content: 'resume', timestamp: 1 }];
     agent.configure({ systemPrompt: 'Changed.', thinkingLevel: 'high' });
     agent.replaceMessages(history);
@@ -129,7 +129,7 @@ describe('Agent', () => {
 
   it('prompts with one or many normalized messages and continues only from a valid tail', async () => {
     const contexts: string[][] = [];
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       stream: (_model, context) => {
         contexts.push(context.messages.map((message) => message.role));
         return completedStream(assistant(`done-${contexts.length}`, contexts.length + 1));
@@ -159,7 +159,7 @@ describe('Agent', () => {
     const streamStarted = Promise.withResolvers<void>();
     const releaseStream = Promise.withResolvers<void>();
     const events: AgentEvent[] = [];
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       stream: async () => {
         streamStarted.resolve();
         await releaseStream.promise;
@@ -175,7 +175,7 @@ describe('Agent', () => {
     await expect(agent.prompt({ role: 'user', content: 'second', timestamp: 2 }))
       .rejects.toEqual(expect.objectContaining({ code: 'agent_busy' }));
     await expect(agent.continue()).rejects.toEqual(expect.objectContaining({ code: 'agent_busy' }));
-    expect(() => agent.configure({ systemPrompt: 'late' })).toThrow(AgentOperationError);
+    expect(() => agent.configure({ systemPrompt: 'late' })).toThrow(RunLoopOperationError);
     expect(() => agent.replaceMessages([])).toThrow(expect.objectContaining({ code: 'invalid_state' }));
     expect(() => agent.reset()).toThrow(expect.objectContaining({ code: 'invalid_state' }));
     expect(agent.state.messages).toEqual(stateBefore.messages);
@@ -189,7 +189,7 @@ describe('Agent', () => {
   it('projects state before ordered awaited listeners and unsubscribe affects only later events', async () => {
     const observations: string[] = [];
     const listenerGate = Promise.withResolvers<void>();
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     const unsubscribe = agent.subscribe(async (event) => {
       if (event.type === 'message_update') {
         observations.push(`first:${agent.state.streamingMessage?.content.length}`);
@@ -219,7 +219,7 @@ describe('Agent', () => {
 
   it('turns an unisolated listener exception into a failed result and stops before the model call', async () => {
     const stream = vi.fn(() => completedStream(assistant('unused')));
-    const agent = new Agent(options({ stream }));
+    const agent = new RunLoopController(options({ stream }));
     agent.subscribe((event) => {
       if (event.type === 'turn_start') throw new Error('persistence failed');
     });
@@ -242,7 +242,7 @@ describe('Agent', () => {
       message: 'Unknown errors must not cross the Agent boundary.',
       retryable: true,
     };
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       context: {
         prepare: async () => { throw invalidError; },
       },
@@ -268,7 +268,7 @@ describe('Agent', () => {
       message: 'Context storage is unavailable.',
       retryable: true,
     };
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       context: {
         prepare: async () => { throw contextError; },
       },
@@ -288,7 +288,7 @@ describe('Agent', () => {
     };
     const streams = [completedStream(toolMessage), completedStream(assistant('done', 4))];
     const observations: string[] = [];
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       initialState: {
         configuration: {
           systemPrompt: 'Be concise.',
@@ -314,7 +314,7 @@ describe('Agent', () => {
 
   it('rejects an invalid continuation without events or state changes', async () => {
     const events: AgentEvent[] = [];
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     agent.subscribe((event) => { events.push(event); });
     const before = agent.state;
 
@@ -326,7 +326,7 @@ describe('Agent', () => {
   it('aborts idempotently and waitForIdle settles after final listeners and cleanup', async () => {
     const streamStarted = Promise.withResolvers<void>();
     const agentEndGate = Promise.withResolvers<void>();
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       stream: async (_model, _context, streamOptions) => {
         streamStarted.resolve();
         await new Promise<void>((resolve) => {
@@ -363,18 +363,18 @@ describe('Agent', () => {
   });
 
   it('does nothing when abort is called while idle', () => {
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     agent.abort();
     expect(agent.state.execution).toEqual({ status: 'idle' });
   });
 
   it('rejects invalid policy before any execution can start', () => {
-    expect(() => new Agent(options({ policy: { maxModelCalls: 0 } }))).toThrow(TypeError);
-    expect(() => new Agent(options({ policy: { modelRetryDelayMs: -1 } }))).toThrow(TypeError);
+    expect(() => new RunLoopController(options({ policy: { maxModelCalls: 0 } }))).toThrow(TypeError);
+    expect(() => new RunLoopController(options({ policy: { modelRetryDelayMs: -1 } }))).toThrow(TypeError);
   });
 
   it('rejects a caller-provided executionId that is not a non-empty string', async () => {
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     await expect(agent.prompt(
       { role: 'user', content: 'hello', timestamp: 1 },
       { executionId: '' },
@@ -384,7 +384,7 @@ describe('Agent', () => {
 
   it('uses one caller-provided executionId across state, every event, and the result', async () => {
     const events: AgentEvent[] = [];
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     agent.subscribe((event) => { events.push(event); });
 
     const result = await agent.prompt(
@@ -419,7 +419,7 @@ describe('Agent', () => {
     };
     const streams = [completedStream(toolMessage), completedStream(assistant('done', 4))];
     const transitions: Array<{ previous: string; current: string; turn: number }> = [];
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       initialState: {
         configuration: {
           systemPrompt: 'Be concise.',
@@ -468,7 +468,7 @@ describe('Agent', () => {
       turn: number;
       attempt: number;
     }> = [];
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     agent.subscribe((event) => {
       if (event.type === 'model_call_attempt_started' || event.type === 'model_call_attempt_ended') {
         attempts.push(event);
@@ -499,7 +499,7 @@ describe('Agent', () => {
 
   it('aborts synchronously into the same phase cancelling from every executing phase', async () => {
     const streamStarted = Promise.withResolvers<void>();
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       stream: async (_model, _context, streamOptions) => {
         streamStarted.resolve();
         await new Promise<void>((resolve) => {
@@ -532,7 +532,7 @@ describe('Agent', () => {
   it('runs the awaited settlement seam inside settling and returns the fixed result', async () => {
     const seamPhases: string[] = [];
     let settledResult: unknown;
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       settlement: async (result) => {
         const execution = agent.state.execution;
         seamPhases.push(execution.status === 'idle' ? 'idle' : `${execution.status}.${execution.phase}`);
@@ -549,7 +549,7 @@ describe('Agent', () => {
   it('turns a settlement failure into one fixed failed result for agent_end and the promise', async () => {
     const agentEndResults: unknown[] = [];
     let settlementCalls = 0;
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       settlement: async () => {
         settlementCalls += 1;
         throw new Error('session unavailable');
@@ -571,7 +571,7 @@ describe('Agent', () => {
   });
 
   it('isolates agent_end observer failures from the already fixed result', async () => {
-    const agent = new Agent(options());
+    const agent = new RunLoopController(options());
     agent.subscribe((event) => {
       if (event.type === 'agent_end') throw new Error('observer exploded');
     });
@@ -584,7 +584,7 @@ describe('Agent', () => {
 
   it('fixes one cancelled result when abort arrives during settlement', async () => {
     const settlementStarted = Promise.withResolvers<void>();
-    const agent = new Agent(options({
+    const agent = new RunLoopController(options({
       settlement: async (_result, signal) => {
         settlementStarted.resolve();
         await new Promise<void>((resolve) => {

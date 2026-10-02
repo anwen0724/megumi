@@ -2,13 +2,13 @@
  * Verifies Product approval operations against Agent Execution-owned state.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { createApprovalOperations } from '../../../../packages/agent/product-host/src/operations/approval-operations';
+import { createApprovalOperations } from '@megumi/application/approval-operations';
 
 describe('ApprovalHost', () => {
   it('maps an approved decision to Agent Execution', async () => {
     const resolveApproval = vi.fn(async () => ({
       status: 'accepted' as const,
-      execution: executionFixture('waiting'),
+      run: executionFixture('waiting'),
     }));
     const host = createApprovalOperations({ resolveApproval } as never);
 
@@ -44,7 +44,7 @@ describe('ApprovalHost', () => {
   it('maps a denied decision without inventing decision metadata', async () => {
     const resolveApproval = vi.fn(async () => ({
       status: 'accepted' as const,
-      execution: executionFixture('waiting'),
+      run: executionFixture('waiting'),
     }));
     const host = createApprovalOperations({ resolveApproval } as never);
 
@@ -66,7 +66,7 @@ describe('ApprovalHost', () => {
       { status: 'not_found', approvalRequestId: 'approval:missing' },
     ],
     [
-      { status: 'not_waiting' as const, approvalId: 'approval:1', execution: executionFixture('completed') },
+      { status: 'not_waiting' as const, approvalId: 'approval:1', run: executionFixture('completed') },
       {
         status: 'not_waiting',
         approvalRequestId: 'approval:1',
@@ -74,7 +74,7 @@ describe('ApprovalHost', () => {
       },
     ],
     [
-      { status: 'already_resolved' as const, approvalId: 'approval:1', execution: executionFixture('completed') },
+      { status: 'already_resolved' as const, approvalId: 'approval:1', run: executionFixture('completed') },
       {
         status: 'not_waiting',
         approvalRequestId: 'approval:1',
@@ -84,8 +84,8 @@ describe('ApprovalHost', () => {
     [
       {
         status: 'failed' as const,
-        failure: {
-          code: 'permission_failed' as const,
+        error: {
+          code: 'PERMISSION_FAILED' as const,
           message: 'Permission decision failed.',
           retryable: false,
         },
@@ -94,7 +94,7 @@ describe('ApprovalHost', () => {
         status: 'failed',
         approvalRequestId: 'approval:1',
         failure: {
-          code: 'permission_failed',
+          code: 'PERMISSION_FAILED',
           message: 'Permission decision failed.',
           retryable: false,
         },
@@ -117,7 +117,7 @@ describe('ApprovalHost', () => {
 function executionFixture(status: 'waiting' | 'completed') {
   return {
     kind: 'conversation',
-    executionId: 'execution:1',
+    runId: 'execution:1',
     requestId: 'request:1',
     workspaceId: 'workspace:1',
     sessionId: 'session:1',

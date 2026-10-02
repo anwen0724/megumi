@@ -10,7 +10,7 @@ import { createFileUpdateStateStore } from './update-state-store';
 declare const MEGUMI_APP_ID: string;
 
 /** Builds the single update owner after Desktop has resolved its real Home. */
-export function composeApplicationUpdate(request: {
+export function createApplicationUpdate(request: {
   readonly megumiHomePath: string; readonly logger: DesktopRuntimeLogger;
   readonly prepareToQuit: () => Promise<void>;
 }): ApplicationUpdateController {

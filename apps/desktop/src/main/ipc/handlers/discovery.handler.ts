@@ -13,9 +13,9 @@ import {
   DiscoveryRecommendationStateResultSchema,
   DiscoveryInterestSessionSettingUiDtoSchema,
   DiscoverySourceUiDtoSchema,
-  type ProductHostInterface,
-} from '@megumi/product-host/host';
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
+  type ApplicationOperations,
+} from '@megumi/application/contracts';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
@@ -40,11 +40,11 @@ import {
 } from '../schemas';
 
 export interface DiscoveryHandlersService {
-  host: Pick<ProductHostInterface, 'discovery'>;
+  host: Pick<ApplicationOperations, 'discovery'>;
 }
 
 export interface RegisterDiscoveryHandlersOptions {
-  logger?: ProductRuntimeLogger;
+  logger?: ApplicationLogger;
   ipcMain?: DesktopIpcMain;
 }
 

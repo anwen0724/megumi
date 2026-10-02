@@ -7,7 +7,7 @@ import {
   type SpeechOutputAudioContext,
   type SpeechOutputBufferSource,
 } from '@megumi/desktop/renderer/features/character-presence/speech-output/speech-output-controller';
-import type { SpeechOutputEvent } from '@megumi/voice';
+import type { SpeechOutputEvent } from '@megumi/application/voice/index';
 
 class FakeSource implements SpeechOutputBufferSource {
   buffer: SpeechOutputAudioBuffer | null = null;

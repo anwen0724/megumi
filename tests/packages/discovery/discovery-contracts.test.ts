@@ -11,7 +11,7 @@ import {
   UpdateRecommendationStateRequestSchema,
   SourceContentSchema,
   SourceDescriptorSchema,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 const now = '2026-08-22T00:00:00.000Z';
 

@@ -11,7 +11,7 @@ import {
 import type {
   ObservabilityContentCheckpointUiDto,
   ObservabilityGetContentResult,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import { Button, cx } from '../../shared/ui';
 
 interface TraceContentViewerProps {

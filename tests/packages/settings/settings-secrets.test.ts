@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createSettings,
   type SettingsStore,
-} from '../../../packages/agent/settings/src';
+} from '@megumi/application/settings/index';
 
 class MemorySettingsStore implements SettingsStore {
   constructor(public document: unknown = {}) {}

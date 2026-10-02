@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeLegacyAssistantContent,
   normalizeLegacyUserMessagePayload,
-} from '../../../packages/agent/session/src/legacy-content-normalizer';
+} from '@megumi/agent-runtime/sessions/legacy-content-normalizer';
 
 describe('legacy content normalizer', () => {
   it('projects a single legacy user content onto display and model content', () => {

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LegacyPermissionSettingsMigrationError,
   migrateLegacyPermissionSettings,
-} from '@megumi/settings';
+} from '@megumi/application/settings/index';
 
 describe('legacy permission settings migration', () => {
   it('migrates session patterns to stable tool grants and path rules to operations', () => {

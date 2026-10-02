@@ -6,8 +6,8 @@
  *  - consumer failures are isolated (best-effort delivery, run never affected)
  */
 import { describe, expect, it } from 'vitest';
-import { createEventBus } from '../../../packages/agent/events/src/bus';
-import type { Event } from '../../../packages/agent/events/src/event';
+import { createEventBus } from '@megumi/agent-runtime/runs/events/bus';
+import type { Event } from '@megumi/agent-runtime/runs/events/event';
 
 function publishSequence(events: Event[]): number[] {
   return events.map((event) => event.sequence);

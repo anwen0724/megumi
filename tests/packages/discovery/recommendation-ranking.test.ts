@@ -5,7 +5,7 @@ import {
   rankRecommendationCandidates,
   type RecommendationCandidate,
   type RecommendationHistoryItem,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 const snapshotAt = '2026-08-27T08:00:00.000Z';
 

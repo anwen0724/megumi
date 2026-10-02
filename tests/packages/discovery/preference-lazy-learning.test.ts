@@ -3,7 +3,7 @@
  */
 // @vitest-environment node
 import { expect, it, vi } from 'vitest';
-import { createPreferenceLearningRuntime, type PreferenceLearningFacts } from '@megumi/discovery';
+import { createPreferenceLearning, type PreferenceLearningFacts } from '@megumi/application/discovery/index';
 import { completedMessage, model } from '../context/context-test-fixtures';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
@@ -19,7 +19,7 @@ it('learns only on demand and reuses inconclusive historical feedback on the nex
       changes: [], reviewedPreferenceIds: [], outcome: 'insufficient',
     })) }));
   }) };
-  const runtime = createPreferenceLearningRuntime({
+  const runtime = createPreferenceLearning({
     repository, models, resolveModel: async () => model, now: () => now,
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' },
     context: { build: async () => {

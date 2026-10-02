@@ -6,9 +6,9 @@ import {
   ObservabilityHealthResultSchema,
   ObservabilityListResultSchema,
   ObservabilityRebuildResultSchema,
-  type ProductHostInterface,
-} from '@megumi/product-host/host';
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
+  type ApplicationOperations,
+} from '@megumi/application/contracts';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { IPC_CHANNELS } from '../channels';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -27,8 +27,8 @@ const mapError = () => ({
 });
 
 export function registerObservabilityHandlers(
-  service: { host: Pick<ProductHostInterface, 'observability'> },
-  options: { logger?: ProductRuntimeLogger; ipcMain?: DesktopIpcMain } = {},
+  service: { host: Pick<ApplicationOperations, 'observability'> },
+  options: { logger?: ApplicationLogger; ipcMain?: DesktopIpcMain } = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
   ipcMain.handle(IPC_CHANNELS.observability.list, createIpcRequestHandler({

@@ -3,7 +3,7 @@
  */
 // @vitest-environment node
 import { expect, it } from 'vitest';
-import type { DiscoveryRepository, LearnedScopeInput } from '@megumi/discovery';
+import type { DiscoveryRepository, LearnedScopeInput } from '@megumi/application/discovery/index';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
 function prepare(repository: DiscoveryRepository) {

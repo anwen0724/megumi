@@ -5,7 +5,7 @@ import type {
   ObservabilityTraceSummaryUiDto,
   SessionDto,
   UserMessageSummaryDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 
 export interface TraceDisplayLabels {
   readonly conversationFallback: string;

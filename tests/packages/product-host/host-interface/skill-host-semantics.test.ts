@@ -1,12 +1,13 @@
 // @vitest-environment node
 /* Exercises SkillHost against real Skill files and isolated database storage. */
+import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createSkills } from '@megumi/skills';
-import { createSkillOperations } from '../../../../packages/agent/product-host/src/operations/skill-operations';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
+import { createSkills } from '@megumi/agent-runtime/resources/skills/index';
+import { createSkillOperations } from '@megumi/application/skill-operations';
 
 let homePath: string;
 let database: DatabaseConnection;
@@ -16,7 +17,7 @@ beforeEach(() => {
   homePath = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-skill-host-'));
   database = createDatabase({ filename: ':memory:' });
   migrateDatabase({ database });
-  host = createSkillOperations({ skills: createSkills({ homePath, database }) });
+  host = createSkillOperations({ skills: createSkills({ homePath, availabilityStore: createDatabaseSkillAvailabilityStore(database), }) });
 });
 afterEach(() => {
   database?.close();

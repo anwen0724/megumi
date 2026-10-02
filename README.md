@@ -101,10 +101,10 @@ Megumi's execution infrastructure supports general conversation, background sear
 | Layer | Responsibility |
 | --- | --- |
 | [AI](./packages/ai/) | Model protocols, provider adapters, authentication, and streaming responses |
-| [Agent Core](./packages/agent-core/) | Product-neutral Agent loop, execution state, model calls, tool-call progression, and cancellation |
-| [Harness modules](./packages/agent/) | Input processing, context, sessions, tool binding, permissions, sandboxing, business workflows, and observability |
+| [Agent Runtime](./packages/agent-runtime/) | Shared run admission, loop, context, sessions, resources, tools, and permissions |
+| [Application](./packages/application/) | Application operations and lifecycle, discovery workflows, settings, workspace, voice, storage, and observability |
 
-The desktop application and evaluation host use the same application composition with their own platform adapters. These are internal code boundaries within one product.
+Desktop connects through Application and shares one AgentRuntime. Eval retains its existing code and awaits a separate interface migration.
 
 - **Model and input adaptation.** Support multiple model protocols, images, document inputs (PDF, DOCX, TXT, and Markdown), and local speech recognition. Image understanding depends on the selected model's capabilities.
 - **Task-driven tools.** Bind tools and Skills to the current task and workspace, with controlled concurrent execution, timeout handling, and cancellation.
@@ -113,6 +113,8 @@ The desktop application and evaluation host use the same application composition
 - **Trace and log diagnostics.** Follow context construction, model requests, tool calls, source access, and business submission through linked execution records and a desktop diagnostics view.
 
 ## Evaluation
+
+Eval has not yet been adapted to the new package paths and recommendation submission interface; the following describes the existing evaluation setup.
 
 The [Agent evaluation platform](./evals/agent/README.md) covers conversation, interest understanding, content supply, recommendation, and preference learning. The controlled suite contains **8 datasets and 23 cases**, including recommendation quality and preference changes across successive rounds.
 
@@ -162,21 +164,12 @@ Use the built-in provider catalog or configure a custom provider with a supporte
 apps/desktop/                  Electron main process, preload bridge, and React UI
 packages/
 ├── ai/                        Model protocols and provider adapters
-├── agent-core/                Product-neutral Agent loop
-└── agent/                     Harness and product modules
-    ├── composition/           Application assembly for desktop and evaluation
-    ├── product-host/          Host operations and UI-facing contracts
-    ├── discovery/             Interests, content supply, recommendations, preferences
-    ├── execution/             Task lifecycle and business integration
-    ├── input/                 Text, images, documents, and command input
-    ├── context/               Context construction and compaction
-    ├── session/               Persistent sessions and branches
-    ├── tools/                 Tool definitions, binding, and scheduling
-    ├── permissions/           Authorization and approvals
-    ├── sandbox/               Windows execution boundaries
-    ├── observability/         Traces, logs, and diagnostic queries
-    ├── voice/                 Local speech recognition
-    └── …                      Storage, settings, Skills, workspace, and events
+├── agent-runtime/             Shared Agent runtime
+│   ├── src/                   runs, context, sessions, resources, tools, permissions
+│   └── resources/             Instructions and built-in skills
+└── application/               Application operations, lifecycle, and business modules
+    ├── src/                   discovery, settings, workspace, voice, storage, observability
+    └── resources/             SQL migrations and voice resources
 
 evals/agent/                   Datasets, isolated runs, scoring, and comparisons
 tests/                         Automated tests and architecture guards
@@ -199,7 +192,6 @@ Run the project checks:
 ```bash
 npm run typecheck:packages
 npm run typecheck:product
-npm run typecheck:evals
 npm test
 ```
 

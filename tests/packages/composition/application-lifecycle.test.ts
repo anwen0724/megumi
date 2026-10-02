@@ -1,7 +1,7 @@
 /* Protects idempotent startup and disposal on a real composed Application. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createApplicationRuntime } from '../../../packages/agent/composition/src/application-runtime';
+import { bindApplicationLifecycle } from '@megumi/application/application';
 import { composeTestApplication } from './compose-test-application';
 
 describe('Application lifecycle', () => {
@@ -12,20 +12,20 @@ describe('Application lifecycle', () => {
       const first = application.runtime.stop();
       expect(application.runtime.stop()).toBe(first);
       await first;
-      expect(await application.runtime.host.discovery.getCandidatePool()).toBeDefined();
-      expect((await application.runtime.host.observability.listTraces({ limit: 1 })).status).not.toBe('failed');
+      expect(await application.runtime.discovery.getCandidatePool()).toBeDefined();
+      expect((await application.runtime.observability.listTraces({ limit: 1 })).status).not.toBe('failed');
     } finally { await application.cleanup(); }
   });
   it('does not start business after disposal while settings validation is pending', async () => {
     const application = composeTestApplication();
-    const loaded = await application.runtime.host.settings.get();
+    const loaded = await application.runtime.settings.get();
     let release: (() => void) | undefined;
-    vi.spyOn(application.runtime.host.settings, 'get').mockImplementation(() => new Promise((resolve) => {
+    vi.spyOn(application.runtime.settings, 'get').mockImplementation(() => new Promise((resolve) => {
       release = () => resolve(loaded);
     }));
     const start = vi.fn(async () => undefined);
-    const runtime = createApplicationRuntime({
-      host: application.runtime.host, logger: application.runtime.logger, start,
+    const runtime = bindApplicationLifecycle({
+      operations: application.runtime, logger: application.runtime.logger, start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
       subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
       stop: async () => undefined,
@@ -42,11 +42,11 @@ describe('Application lifecycle', () => {
   it('blocks background startup on invalid settings while retaining the settings host', async () => {
     const application = composeTestApplication();
     const start = vi.fn(async () => undefined);
-    vi.spyOn(application.runtime.host.settings, 'get').mockResolvedValue({ status: 'failed', failure: {
+    vi.spyOn(application.runtime.settings, 'get').mockResolvedValue({ status: 'failed', failure: {
       code: 'config_invalid', message: 'Settings could not be resolved.',
     } });
-    const runtime = createApplicationRuntime({
-      host: application.runtime.host, logger: application.runtime.logger, start,
+    const runtime = bindApplicationLifecycle({
+      operations: application.runtime, logger: application.runtime.logger, start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
       subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
       stop: async () => undefined,
@@ -55,7 +55,7 @@ describe('Application lifecycle', () => {
     try {
       await expect(runtime.start()).rejects.toThrow('Settings');
       expect(start).not.toHaveBeenCalled();
-      expect((await runtime.host.settings.get()).status).toBe('failed');
+      expect((await runtime.settings.get()).status).toBe('failed');
     } finally { await application.cleanup(); }
   });
   it('starts and disposes exactly once', async () => {
@@ -72,8 +72,8 @@ describe('Application lifecycle', () => {
   it('uses the first background trigger mode for the complete runtime lifetime', async () => {
     const application = composeTestApplication();
     const start = vi.fn(async () => undefined);
-    const runtime = createApplicationRuntime({
-      host: application.runtime.host,
+    const runtime = bindApplicationLifecycle({
+      operations: application.runtime,
       logger: application.runtime.logger,
       start,
       subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,

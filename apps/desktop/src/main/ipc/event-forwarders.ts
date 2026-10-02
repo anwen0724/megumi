@@ -4,14 +4,14 @@
 import {
   RuntimeEventSchema,
   type AnyEvent,
-} from '@megumi/product-host/host';
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../runtime-logger';
+} from '@megumi/application/contracts';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../runtime-logger';
 import { IPC_CHANNELS } from './channels';
 
 export function forwardRuntimeEvent(
   sender: { send(channel: string, event: AnyEvent): void },
   event: AnyEvent,
-  options: { logger?: ProductRuntimeLogger } = {},
+  options: { logger?: ApplicationLogger } = {},
 ): void {
   const parsed = RuntimeEventSchema.safeParse(event);
   if (!parsed.success) {

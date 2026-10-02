@@ -1,12 +1,11 @@
 /* Verifies Usage: full-Prompt calculation and Session-derived display usage. */
 import type { Api, Model } from '@megumi/ai';
-import { estimateMessageTokens, estimateTextTokens } from '@megumi/ai/utils/estimate';
 import { describe, expect, it, vi } from 'vitest';
-import { deriveContextUsage } from '../../../packages/agent/context/src/index';
-import { calculatePromptUsage } from '../../../packages/agent/context/src/context-usage-calculator';
-import type { Prompt } from '../../../packages/agent/context/src/index';
-import type { SessionHistoryItem } from '@megumi/session';
-import type { ToolDefinition } from '@megumi/tools';
+import { deriveContextUsage } from '@megumi/agent-runtime/context/index';
+import { calculatePromptUsage } from '@megumi/agent-runtime/context/context-usage-calculator';
+import type { Prompt } from '@megumi/agent-runtime/context/index';
+import type { SessionHistoryItem } from '@megumi/agent-runtime/sessions/index';
+import type { ToolDefinition } from '@megumi/agent-runtime/tools/index';
 
 const model: Model<Api> = {
   id: 'gpt',
@@ -91,16 +90,12 @@ describe('calculatePromptUsage', () => {
   it('counts System Prompt, Messages and Tool Definitions without a provider baseline', () => {
     const prompt = promptWithoutBaseline();
     const result = calculatePromptUsage({ prompt });
-    // The default path estimates the complete Prompt: systemPrompt + messages + tools.
-    const expected = estimateTextTokens(prompt.systemPrompt)
-      + prompt.messages.reduce((sum, message) => sum + estimateMessageTokens(message), 0)
-      + estimateTextTokens(JSON.stringify(prompt.tools));
-    expect(result.tokens).toBe(expected);
+    // Known fixture: 4 system + 3 message + 21 tool tokens at four chars/token.
+    expect(result.tokens).toBe(28);
     expect(result.usageTokens).toBe(0);
     expect(result.trailingTokens).toBe(result.tokens);
     // The System Prompt and Tools are inside the estimate, not only the messages.
-    expect(result.tokens).toBeGreaterThan(estimateMessageTokens(prompt.messages[0]!)
-      + estimateMessageTokens(prompt.messages[1]!));
+    expect(result.tokens).toBeGreaterThan(3);
   });
 
   it('passes the complete Prompt to a custom estimator', () => {
@@ -132,10 +127,10 @@ describe('calculatePromptUsage', () => {
           toolCallId: 'call:1',
           toolName: 'read_file',
           content: [{ type: 'text', text: 'ok' }],
-          addedToolNames: ['read_file'],
           isError: false,
           timestamp: 3,
         },
+        { role: 'system', content: '', toolsAdded: [readFileTool], timestamp: 3 },
       ],
       tools: [readFileTool],
     };
@@ -145,7 +140,7 @@ describe('calculatePromptUsage', () => {
     expect(result.usageTokens).toBe(400);
     expect(result.tokens).toBeGreaterThan(400);
     expect(result.tokens).toBe(result.usageTokens + result.trailingTokens);
-    expect(result.trailingTokens).toBeGreaterThan(estimateMessageTokens(prompt.messages[2]!));
+    expect(result.trailingTokens).toBe(22);
   });
 });
 

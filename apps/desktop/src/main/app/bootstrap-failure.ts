@@ -8,7 +8,7 @@ import {
   DatabaseDowngradeUnsupportedError,
   DatabaseMigrationError,
   DatabaseReleaseUpgradeError,
-} from '@megumi/database';
+} from '@megumi/application/storage/index';
 
 interface DesktopBootstrapFailurePresentation {
   readonly title: string;

@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryPreferenceDetailsPayload, DiscoveryPreferenceDetailsResult, DiscoveryPreferenceEvidenceResult } from '@megumi/product-host/host';
+import type { DiscoveryPreferenceDetailsPayload, DiscoveryPreferenceDetailsResult, DiscoveryPreferenceEvidenceResult } from '@megumi/application/contracts';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { Button } from '../../../shared/ui';

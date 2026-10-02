@@ -1,27 +1,14 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/agent-core" },
-    { "path": "./packages/ai" },
-    { "path": "./packages/agent/composition" },
-    { "path": "./packages/agent/commands" },
-    { "path": "./packages/agent/context" },
-    { "path": "./packages/agent/database" },
-    { "path": "./packages/agent/discovery" },
-    { "path": "./packages/agent/execution" },
-    { "path": "./packages/agent/events" },
-    { "path": "./packages/agent/home" },
-    { "path": "./packages/agent/input" },
-    { "path": "./packages/agent/instructions" },
-    { "path": "./packages/agent/observability" },
-    { "path": "./packages/agent/permissions" },
-    { "path": "./packages/agent/product-host" },
-    { "path": "./packages/agent/sandbox" },
-    { "path": "./packages/agent/session" },
-    { "path": "./packages/agent/settings" },
-    { "path": "./packages/agent/skills" },
-    { "path": "./packages/agent/tools" },
-    { "path": "./packages/agent/voice" },
-    { "path": "./packages/agent/workspace" }
+    {
+      "path": "./packages/ai"
+    },
+    {
+      "path": "./packages/agent-runtime"
+    },
+    {
+      "path": "./packages/application"
+    }
   ]
 }

@@ -4,15 +4,15 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { Api, Model } from '@megumi/ai';
-import type { Observability } from '@megumi/observability';
+import type { Observability } from '@megumi/application/observability/index';
 import {
   createConversationSubmission,
   type ConversationSubmissionDependencies,
   type ExecutionOutcome,
   type StartExecutionResult,
-} from '@megumi/execution';
-import type { TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+} from '@megumi/agent-runtime/runs/index';
+import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 
 const NOW = '2026-08-26T00:00:00.000Z';
 const model: Model<Api> = {
@@ -101,11 +101,6 @@ describe('Conversation Submission Trace', () => {
     const conversation = createConversationSubmission({
       dependencies: dependencies({
         observability,
-        recommendations: { getRecommendationReference: () => ({
-          type: 'recommendation_reference', recommendationId: 'recommendation:1',
-          sourceName: 'Source', canonicalUrl: 'https://example.com/item', title: 'Item',
-          description: 'Description', recommendationReason: 'Relevant',
-        }) },
         sessions: {
           getSession: vi.fn(),
           createSession: () => ({ status: 'created', session }),
@@ -130,7 +125,11 @@ describe('Conversation Submission Trace', () => {
     });
 
     const result = await conversation.submit({
-      ...request('request:full'), sessionId: undefined, recommendationId: 'recommendation:1',
+      ...request('request:full'), sessionId: undefined, recommendationReference: {
+        type: 'recommendation_reference', recommendationId: 'recommendation:1',
+        sourceName: 'Source', canonicalUrl: 'https://example.com/item', title: 'Item',
+        description: 'Description', recommendationReason: 'Relevant',
+      },
       branchMarkerId: 'branch:1',
     });
     await conversation.shutdown();
@@ -139,7 +138,6 @@ describe('Conversation Submission Trace', () => {
     expect(records.filter(isSpanStarted).map((record) => record.name)).toEqual([
       'model.resolve',
       'input.process',
-      'recommendation.reference.resolve',
       'session.create',
       'session.branch.resolve',
       'session.branch.commit',

@@ -10,7 +10,7 @@
  * 2 KiB and the credit cap bounds copies; Main transfers its copy to the Worker.
  */
 
-import { VOICE_INPUT_MAX_IN_FLIGHT_FRAMES } from '@megumi/voice/speech-input/voice-input-capacity';
+import { VOICE_INPUT_MAX_IN_FLIGHT_FRAMES } from '@megumi/application/voice/speech-input/voice-input-capacity';
 
 export interface VoiceInputFrameSender {
   sendFrame(frame: {

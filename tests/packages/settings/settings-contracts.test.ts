@@ -7,7 +7,7 @@ import {
   createSettings,
   createSettingsJsonSchema,
   type SettingsStore
-} from '../../../packages/agent/settings/src';
+} from '@megumi/application/settings/index';
 
 describe('Settings contracts', () => {
   it('accepts sparse secret-free raw settings and resolves defaults', () => {
@@ -47,7 +47,7 @@ describe('Settings contracts', () => {
           display_name: 'DeepSeek',
           base_url: 'https://api.deepseek.com',
           models: {
-            'deepseek-v4-flash': { context_window_tokens: 1_000_000, max_output_tokens: 384_000 },
+            'deepseek-flash': { context_window_tokens: 1_000_000, max_output_tokens: 384_000 },
             'deepseek-v4-pro': { context_window_tokens: 1_000_000, max_output_tokens: 384_000 },
           },
         },

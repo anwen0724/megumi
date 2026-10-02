@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '../../../packages/agent/database/src';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 
 const recommendationTables = [
   'discovery_recommendations',
@@ -126,7 +126,7 @@ function tableNames(database: DatabaseConnection): string[] {
 }
 
 function createMigrationFolderAt0011(target: string): void {
-  const source = path.join(process.cwd(), 'packages/agent/database/migrations');
+  const source = path.join(process.cwd(), 'packages/application/resources/migrations');
   fs.mkdirSync(path.join(target, 'meta'), { recursive: true });
   for (const filename of fs.readdirSync(source)) {
     if (/^00(?:0\d|1[01])_.+\.sql$/u.test(filename)) {

@@ -8,14 +8,14 @@ import {
   type Model,
   type UserMessage,
 } from '@megumi/ai';
-import { runAgentLoop } from '../../../packages/agent-core/src/agent-loop';
+import { runAgentLoop } from '@megumi/agent-runtime/runs/agent-loop';
 import type {
   AgentConfiguration,
   AgentEvent,
   AgentExecutionProgress,
   AgentPolicy,
   AgentTool,
-} from '../../../packages/agent-core/src/types';
+} from '@megumi/agent-runtime/runs/run-loop-types';
 
 const model: Model<Api> = {
   id: 'test-model',

@@ -3,16 +3,16 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createDatabase } from '@megumi/database';
-import { createTraceIndex } from '../../../packages/agent/observability/src/persistence/trace-index';
-import { encodeTraceJournalRecord, type TraceJournalRecord } from '../../../packages/agent/observability/src/persistence/trace-journal-record';
+import { createDatabase } from '@megumi/application/storage/index';
+import { createTraceIndex } from '@megumi/application/observability/persistence/trace-index';
+import { encodeTraceJournalRecord, type TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
 import type {
   JournalCheckpoint,
   TraceIndex,
   TraceRecordLocator,
-} from '../../../packages/agent/observability/src/persistence/trace-index';
-import { createTraceReader } from '../../../packages/agent/observability/src/query/trace-reader';
-import { summarizeTrace, type TraceProjection } from '../../../packages/agent/observability/src/query/trace-projector';
+} from '@megumi/application/observability/persistence/trace-index';
+import { createTraceReader } from '@megumi/application/observability/query/trace-reader';
+import { summarizeTrace, type TraceProjection } from '@megumi/application/observability/query/trace-projector';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Trace Reader', () => {

@@ -13,19 +13,19 @@ import {
   buildMegumiHomePaths,
   resolveMegumiHomePath,
   type InitializeMegumiHomeSyncOptions,
-} from '@megumi/home';
-import type { ComposeApplicationVoiceOptions } from '@megumi/composition';
+} from '@megumi/application/storage/home';
+import type { ApplicationVoiceOptions } from '@megumi/application/index';
 import {
   createFileVoiceModels,
   createMinimaxSynthesizer,
   readVoiceModelManifest,
   type VoiceModelArchiveExtractor,
-} from '@megumi/voice';
+} from '@megumi/application/voice/index';
 import { createElectronVoiceModelDownloader } from './electron-voice-model-downloader';
 import { createGithubVoiceReleaseDiscovery } from './github-voice-release-discovery';
 
 export interface ElectronVoiceResources {
-  readonly voiceOptions: ComposeApplicationVoiceOptions;
+  readonly voiceOptions: ApplicationVoiceOptions;
   /** SenseVoice/Silero paths for the single Voice Input Adapter. */
   readonly speechInputPaths: () => {
     readonly vadModelPath: string;
@@ -69,7 +69,7 @@ export function createElectronVoiceOptions(
 export function resolveVadModelPath(): string {
   const packaged = path.join(process.resourcesPath, 'voice', 'vad', 'silero_vad.onnx');
   if (app.isPackaged && fs.existsSync(packaged)) return packaged;
-  return path.resolve(process.cwd(), 'packages/agent/voice/resources/vad/silero_vad.onnx');
+  return path.resolve(process.cwd(), 'packages/application/resources/voice/vad/silero_vad.onnx');
 }
 
 const electronVoiceArchiveExtractor: VoiceModelArchiveExtractor = {
@@ -97,5 +97,5 @@ const electronVoiceArchiveExtractor: VoiceModelArchiveExtractor = {
 function resolveVoiceManifestPath(): string {
   const packaged = path.join(process.resourcesPath, 'voice', 'model-manifest.json');
   if (app.isPackaged && fs.existsSync(packaged)) return packaged;
-  return path.resolve(process.cwd(), 'packages/agent/voice/resources/model-manifest.json');
+  return path.resolve(process.cwd(), 'packages/application/resources/voice/model-manifest.json');
 }

@@ -2,8 +2,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { Api, Model } from '@megumi/ai';
-import { createInterestExtractor } from '@megumi/discovery';
-import { createInterestExtractionQueue } from '../../../packages/agent/discovery/src/interests/interest-extraction-queue';
+import { createInterestExtractor } from '@megumi/application/discovery/index';
+import { createInterestExtractionQueue } from '@megumi/application/discovery/interests/interest-extraction-queue';
 
 const model = {
   id: 'test-model',

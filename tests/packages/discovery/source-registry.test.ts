@@ -5,7 +5,7 @@ import {
   createSourceRegistry,
   type DiscoverySource,
   type SourceSearchMode,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 function source(id: string, modes: readonly SourceSearchMode[] = ['relevance']): DiscoverySource {
   return {

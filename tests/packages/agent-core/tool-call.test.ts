@@ -1,12 +1,12 @@
 /* Verifies Agent ToolCall batches through the package-internal protocol seam. */
 import { describe, expect, it, vi } from 'vitest';
 import { Type, type ToolCall } from '@megumi/ai';
-import { runToolCallBatch } from '../../../packages/agent-core/src/tool-call';
+import { runToolCallBatch } from '@megumi/agent-runtime/runs/tool-call';
 import type {
   AgentEvent,
   AgentTool,
   AgentToolResult,
-} from '../../../packages/agent-core/src/types';
+} from '@megumi/agent-runtime/runs/run-loop-types';
 
 function call(id: string, name: string, argumentsValue: Record<string, unknown> = {}): ToolCall {
   return { type: 'toolCall', id, name, arguments: argumentsValue };

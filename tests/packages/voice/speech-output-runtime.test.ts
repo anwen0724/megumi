@@ -1,20 +1,24 @@
 /* Verifies the speech-output runtime: filtering, replacement, stop, and failure isolation. */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished } from 'vitest';
 import {
   VoiceSpeechFailureError,
   type SpeechAudioChunk,
   type SpeechSynthesizer,
   type SynthesizeSpeechRequest,
-} from '../../../packages/agent/voice/src/speech';
+} from '@megumi/application/voice/speech';
 import {
   createSpeechOutputRuntime,
   type SpeechOutputEvent,
-} from '../../../packages/agent/voice/src/speech-output/speech-output-runtime';
-import { SpeechOutputEventSchema, parseSpeechOutputEvent } from '../../../packages/agent/voice/src/speech-output/speech-output-schema';
+} from '@megumi/application/voice/speech-output/speech-output-runtime';
+import { SpeechOutputEventSchema, parseSpeechOutputEvent } from '@megumi/application/voice/speech-output/speech-output-schema';
 
 class ControlledSynthesizer implements SpeechSynthesizer {
   readonly calls: Array<{ text: string; aborted: boolean }> = [];
+  private releases = new Map<string, () => void>();
+
+  release(text: string): void { this.releases.get(text)?.(); }
+
   private nextFailure: { code: string; message: string } | undefined;
 
   failNext(failure: { code: string; message: string }): void {
@@ -32,15 +36,15 @@ class ControlledSynthesizer implements SpeechSynthesizer {
       this.nextFailure = undefined;
       return { status: 'failed', failure };
     }
+    const ready = new Promise<void>((resolve) => {
+      this.releases.set(request.text, resolve);
+      signal?.addEventListener('abort', resolve.bind(undefined, undefined), { once: true });
+    });
     return {
       status: 'ready',
       chunks: (async function* () {
         yield chunk(1, false);
-        await new Promise<void>((resolve) => {
-          if (signal?.aborted) { resolve(); return; }
-          const timer = setTimeout(resolve, 15);
-          signal?.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
-        });
+        await ready;
         if (signal?.aborted) throw abortError();
         yield chunk(2, true);
       })(),
@@ -65,12 +69,27 @@ function abortError(): Error {
   return error;
 }
 
-async function collect(runtime: ReturnType<typeof createSpeechOutputRuntime>): Promise<SpeechOutputEvent[]> {
-  const events: SpeechOutputEvent[] = [];
-  const subscription = runtime.subscribe((event) => events.push(event));
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  subscription.unsubscribe();
-  return events;
+/** Observes public events and lets each test wait for the fact it needs. */
+function collect(runtime: ReturnType<typeof createSpeechOutputRuntime>) {
+  const items: SpeechOutputEvent[] = [];
+  const waiters = new Set<() => void>();
+  const subscription = runtime.subscribe((event) => {
+    items.push(event);
+    for (const check of [...waiters]) check();
+  });
+  onTestFinished(() => { runtime.dispose(); subscription.unsubscribe(); });
+  return {
+    items,
+    waitFor(predicate: (event: SpeechOutputEvent) => boolean): Promise<void> {
+      if (items.some(predicate)) return Promise.resolve();
+      return new Promise((resolve) => {
+        const check = () => {
+          if (items.some(predicate)) { waiters.delete(check); resolve(); }
+        };
+        waiters.add(check);
+      });
+    },
+  };
 }
 
 describe('SpeechOutputRuntime', () => {
@@ -85,7 +104,10 @@ describe('SpeechOutputRuntime', () => {
       config: { provider: 'minimax', apiKey: 'key', voiceId: 'female-shaonv' },
     });
 
-    const received = await events;
+    await events.waitFor((event) => event.type === 'audio-chunk');
+    synthesizer.release('你好 再见');
+    await events.waitFor((event) => event.type === 'completed');
+    const received = events.items;
     expect(synthesizer.calls).toHaveLength(1);
     expect(synthesizer.calls[0]!.text).toBe('你好 再见');
     expect(received.map((event) => event.type)).toEqual(['synthesis-started', 'audio-chunk', 'audio-chunk', 'completed']);
@@ -105,7 +127,7 @@ describe('SpeechOutputRuntime', () => {
       config: { provider: 'minimax', apiKey: 'key', voiceId: 'female-shaonv' },
     });
 
-    const received = await events;
+    const received = events.items;
     expect(received).toEqual([]);
     expect(synthesizer.calls).toHaveLength(0);
   });
@@ -116,10 +138,13 @@ describe('SpeechOutputRuntime', () => {
     const events = collect(runtime);
 
     runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '第一句', config: config() });
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await events.waitFor((event) => event.type === 'audio-chunk' && event.executionId === 'run-1');
     runtime.read({ executionId: 'run-2', sessionId: 'session-1', text: '第二句', config: config() });
 
-    const received = await events;
+    await events.waitFor((event) => event.type === 'audio-chunk' && event.executionId === 'run-2');
+    synthesizer.release('第二句');
+    await events.waitFor((event) => event.type === 'completed' && event.executionId === 'run-2');
+    const received = events.items;
     const types = received.map((event) => event.type);
     expect(types).toEqual(['synthesis-started', 'audio-chunk', 'stopped', 'synthesis-started', 'audio-chunk', 'audio-chunk', 'completed']);
     expect(received[2]).toMatchObject({ type: 'stopped', executionId: 'run-1', reason: 'replaced' });
@@ -134,10 +159,11 @@ describe('SpeechOutputRuntime', () => {
     const events = collect(runtime);
 
     runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '正在朗读', config: config() });
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await events.waitFor((event) => event.type === 'audio-chunk');
     runtime.stop('character_hidden');
 
-    const received = await events;
+    await events.waitFor((event) => event.type === 'stopped');
+    const received = events.items;
     expect(received.map((event) => event.type)).toEqual(['synthesis-started', 'audio-chunk', 'stopped']);
     expect(received[2]).toMatchObject({ type: 'stopped', executionId: 'run-1', reason: 'character_hidden' });
   });
@@ -149,10 +175,13 @@ describe('SpeechOutputRuntime', () => {
 
     synthesizer.failNext({ code: 'voice_tts_key_missing', message: 'no key' });
     runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '第一句', config: config() });
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await events.waitFor((event) => event.type === 'error');
     runtime.read({ executionId: 'run-2', sessionId: 'session-1', text: '第二句', config: config() });
 
-    const received = await events;
+    await events.waitFor((event) => event.type === 'audio-chunk' && event.executionId === 'run-2');
+    synthesizer.release('第二句');
+    await events.waitFor((event) => event.type === 'completed');
+    const received = events.items;
     expect(received[0]).toMatchObject({
       type: 'error',
       executionId: 'run-1',
@@ -164,11 +193,13 @@ describe('SpeechOutputRuntime', () => {
   it('exposes a schema-valid event stream for cross-process trust boundaries', async () => {
     const synthesizer = new ControlledSynthesizer();
     const runtime = createSpeechOutputRuntime({ synthesizer });
-    const seen: unknown[] = [];
-    runtime.subscribe((event) => seen.push(event));
+    const events = collect(runtime);
+    const seen = events.items;
 
     runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await events.waitFor((event) => event.type === 'audio-chunk');
+    synthesizer.release('你好');
+    await events.waitFor((event) => event.type === 'completed');
 
     expect(seen.length).toBeGreaterThan(0);
     for (const event of seen) {
@@ -197,7 +228,8 @@ describe('SpeechOutputRuntime', () => {
 
     runtime.read({ executionId: 'run-1', sessionId: 'session-1', text: '你好', config: config() });
 
-    const received = await events;
+    await events.waitFor((event) => event.type === 'error');
+    const received = events.items;
     const failure = received.find((event) => event.type === 'error');
     expect(failure).toMatchObject({
       type: 'error',

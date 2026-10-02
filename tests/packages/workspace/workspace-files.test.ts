@@ -7,7 +7,7 @@ import {
   createWorkspaceFiles,
   createWorkspacePathPolicy,
   type Workspace,
-} from '../../../packages/agent/workspace/src/index';
+} from '@megumi/application/workspace/index';
 
 const workspace: Workspace = {
   workspace_id: 'workspace:one',

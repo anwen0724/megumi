@@ -5,7 +5,7 @@ import {
   createSettings,
   createSettingsCredentialStore,
   type SettingsStore,
-} from '@megumi/settings';
+} from '@megumi/application/settings/index';
 import { describe, expect, it } from 'vitest';
 
 describe('Settings CredentialStore Adapter', () => {

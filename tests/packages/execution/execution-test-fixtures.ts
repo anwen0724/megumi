@@ -1,3 +1,4 @@
+import { createContentDigest, createProviderCapture } from '@megumi/application/observability/index';
 /*
  * Supplies typed in-memory collaborators for Discovery Agent execution tests.
  */
@@ -7,28 +8,28 @@ import type {
   Model,
   Models,
 } from '@megumi/ai';
-import type { ContextCapabilities, Prompt } from '@megumi/context';
-import { createEventBus, type AnyEvent, type EventBus } from '@megumi/events';
-import type { Permissions } from '@megumi/permissions';
-import type { Observability } from '@megumi/observability';
+import type { ContextCapabilities, Prompt } from '@megumi/agent-runtime/context/index';
+import { createEventBus, type AnyEvent, type EventBus } from '@megumi/agent-runtime/events';
+import type { Permissions } from '@megumi/agent-runtime/permissions/index';
+import type { Observability } from '@megumi/application/observability/index';
 import type {
   SaveAssistantReplyRequest,
   SaveModelResponseRequest,
   SaveToolResultMessageRequest,
   SaveUserMessageRequest,
   SessionHistory,
-} from '@megumi/session';
-import type { Tools } from '@megumi/tools';
+} from '@megumi/agent-runtime/sessions/index';
+import type { Tools } from '@megumi/agent-runtime/tools/index';
 import { AssistantMessageEventStream } from '../../../packages/ai/src/utils/event-stream';
 import {
-  launchAgentExecution,
+  prepareRun,
   type AgentExecutionPolicy,
-  type ExecuteAgentDependencies,
-} from '@megumi/execution';
-import type { LaunchedAgentExecution } from '@megumi/execution';
+  type RunDependencies,
+} from '@megumi/agent-runtime/runs/index';
+import type { PreparedRun } from '@megumi/agent-runtime/runs/index';
 import type {
   ExecutionMetadata,
-} from '@megumi/execution';
+} from '@megumi/agent-runtime/runs/index';
 import {
   allowDecision,
   approvalSubjectFor,
@@ -80,7 +81,7 @@ export const executionPolicy: AgentExecutionPolicy = {
 const NOW = '2026-07-31T00:00:00.000Z';
 
 export interface ExecutionFixture {
-  readonly dependencies: ExecuteAgentDependencies;
+  readonly dependencies: RunDependencies;
   readonly writes: string[];
   readonly contextRuns: unknown[];
   readonly published: AnyEvent[];
@@ -96,8 +97,8 @@ export function createExecutionFixture(input: {
   readonly permissions?: Pick<Permissions, 'evaluateToolCall' | 'applyApprovalDecision'>;
   readonly executeTool?: TestToolExecute;
   readonly policy?: Partial<AgentExecutionPolicy>;
-  readonly contextBuild?: ExecuteAgentDependencies['context']['build'];
-  readonly contextCompact?: ExecuteAgentDependencies['context']['compact'];
+  readonly contextBuild?: RunDependencies['context']['build'];
+  readonly contextCompact?: RunDependencies['context']['compact'];
   readonly failUserMessageSave?: boolean;
   readonly observability?: Observability;
 } = {}): ExecutionFixture {
@@ -182,7 +183,7 @@ export function createExecutionFixture(input: {
   };
 
   const context: Prompt = { systemPrompt: 'test', messages: [], tools: [] };
-  const dependencies: ExecuteAgentDependencies = {
+  const dependencies: RunDependencies = {
     models: {
       // Adapter contract wiring: cancellation settles the fake stream with an
       // aborted terminal so the single Agent Loop always converges.
@@ -206,7 +207,7 @@ export function createExecutionFixture(input: {
       }) as Models['streamSimple'],
     } as Models,
     context: {
-      build: input.contextBuild ?? (async (request): Promise<import('@megumi/context').BuildContextResult> => {
+      build: input.contextBuild ?? (async (request): Promise<import('@megumi/agent-runtime/context/index').BuildContextResult> => {
         contextRuns.push(structuredClone(request.modelCallContext));
         // The built Prompt carries the resolved ModelCall Tool Definitions so
         // Overflow compaction receives the same tools without re-resolution.
@@ -226,7 +227,7 @@ export function createExecutionFixture(input: {
     tools: toolsForRun(input.tools ?? [], input.executeTool),
     permissions: input.permissions ?? defaultPermissions,
     events: eventsBus,
-    ...(input.observability ? { observability: input.observability } : {}),
+    ...(input.observability ? { observability: input.observability, createContentDigest, createProviderCapture: request => createProviderCapture({ ...request, observability: input.observability }) } : {}),
     ids: {
       createModelCallId: () => `model-call:${++modelCallNumber}`,
       createToolExecutionId: () => `tool-execution:${++executionNumber}`,
@@ -274,10 +275,10 @@ export async function launchedExecution(
   fixture: ExecutionFixture,
   overrides: {
     readonly metadata?: Partial<ExecutionMetadata>;
-    readonly awaitApproval?: (request: { readonly approval: import('@megumi/execution').ApprovalRequest }) => Promise<import('@megumi/execution').ApprovalResolution>;
+    readonly awaitApproval?: (request: { readonly approval: import('@megumi/agent-runtime/runs/index').ApprovalRequest }) => Promise<import('@megumi/agent-runtime/runs/index').ApprovalResolution>;
   } = {},
-): Promise<LaunchedAgentExecution> {
-  return launchAgentExecution({
+): Promise<PreparedRun> {
+  return prepareRun({
     kind: 'conversation',
     metadata: executionMetadata(overrides.metadata),
     input: executionInput,
@@ -427,7 +428,7 @@ export function retryableFailedStream(text: string): AssistantMessageEventStream
   return stream;
 }
 
-export function compactedOverflowCompaction(): import('@megumi/context').CompactContextResult {
+export function compactedOverflowCompaction(): import('@megumi/agent-runtime/context/index').CompactContextResult {
   return {
     status: 'compacted',
     compactionId: 'compaction:overflow',

@@ -7,15 +7,15 @@ import {
   decodeTraceJournalLine,
   encodeTraceJournalRecord,
   type TraceJournalRecord,
-} from '../../../packages/agent/observability/src/persistence/trace-journal-record';
-import { createObservabilityWriteQueue } from '../../../packages/agent/observability/src/persistence/observability-write-queue';
-import { createRollingJsonlWriter } from '../../../packages/agent/observability/src/persistence/rolling-jsonl-writer';
+} from '@megumi/application/observability/persistence/trace-journal-record';
+import { createObservabilityWriteQueue } from '@megumi/application/observability/persistence/observability-write-queue';
+import { createRollingJsonlWriter } from '@megumi/application/observability/persistence/rolling-jsonl-writer';
 import {
   createTraceJournal,
   OBSERVABILITY_DRAIN_INTERVAL_MS,
   TRACE_QUEUE_CAPACITY_BYTES,
-} from '../../../packages/agent/observability/src/persistence/trace-journal';
-import { createObservabilityHealth } from '../../../packages/agent/observability/src/runtime/observability-health';
+} from '@megumi/application/observability/persistence/trace-journal';
+import { createObservabilityHealth } from '@megumi/application/observability/runtime/observability-health';
 import { ObservabilityMemoryStorage } from './observability-memory-storage';
 
 describe('Trace Journal', () => {

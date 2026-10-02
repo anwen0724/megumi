@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createVoice, type SpeechInputRuntime, type SpeechOutputRuntime } from '../../../packages/agent/voice/src';
-import { createVoiceOperations } from '../../../packages/agent/product-host/src/operations/voice-operations';
+import { createVoice, type SpeechInputRuntime, type SpeechOutputRuntime } from '@megumi/application/voice/index';
+import { createVoiceOperations } from '@megumi/application/voice/voice-operations';
 
 function noopSpeechInput(): SpeechInputRuntime {
   return {

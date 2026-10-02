@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createSettings, type SettingsStore } from '@megumi/settings';
-import { createSettingsOperations } from '../../../../packages/agent/product-host/src/operations/settings-operations';
-import { SettingsGetUiResultSchema } from '@megumi/product-host/host';
+import { createSettings, type SettingsStore } from '@megumi/application/settings/index';
+import { createSettingsOperations } from '@megumi/application/settings/settings-operations';
+import { SettingsGetUiResultSchema } from '@megumi/application/contracts';
 
 describe('SettingsHost semantics', () => {
   it('preserves safe field diagnostics through the validated Host boundary', async () => {

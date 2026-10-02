@@ -3,12 +3,12 @@
  */
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest';
-import { createPreferenceLearningRuntime, type PreferenceLearningFacts, type PreferenceLearningRuntime } from '@megumi/discovery';
-import type { DatabaseConnection } from '@megumi/database';
+import { createPreferenceLearning, type PreferenceLearningFacts, type PreferenceLearning } from '@megumi/application/discovery/index';
+import type { DatabaseConnection } from '@megumi/application/storage/index';
 import { completedMessage, model } from '../context/context-test-fixtures';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
-const resources: Array<{ database: DatabaseConnection; runtime: PreferenceLearningRuntime }> = [];
+const resources: Array<{ database: DatabaseConnection; runtime: PreferenceLearning }> = [];
 afterEach(async () => { for (const { database, runtime } of resources.splice(0)) { await runtime.shutdown(); database.close(); } });
 
 function setup() {
@@ -29,7 +29,7 @@ function setup() {
     facts = runtime.getActivePreferenceLearningFacts('batch');
     return { status: 'ready' as const, prompt: { systemPrompt: 'Learn from feedback.', messages: [], tools: [] } };
   }) };
-  const runtime = createPreferenceLearningRuntime({ repository, models, context, resolveModel,
+  const runtime = createPreferenceLearning({ repository, models, context, resolveModel,
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' }, now: () => now });
   resources.push({ database, runtime });
   return { database, repository, runtime, models, context, resolveModel };

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTools, type BuiltInToolName } from '@megumi/tools';
+import { createTools, type BuiltInToolName } from '@megumi/agent-runtime/tools/index';
 
 describe('Tools ModelCall routing', () => {
-  it('routes Candidate Supply search, transient read, and submission through its own Tool Group', async () => {
+  it('routes the explicitly selected search, read and submission tools', async () => {
     const calls: string[] = [];
     const tools = createTools({
       settings: { resolveWebSearch: () => ({ status: 'failed' }), readWebSearchApiKey: () => ({ status: 'missing' }) },
@@ -26,7 +26,8 @@ describe('Tools ModelCall routing', () => {
       },
     });
     const execution = tools.bindExecution({
-      executionId: 'execution:supply', subject: { kind: 'background' }, toolGroupId: 'candidate_supply',
+      executionId: 'execution:supply', subject: { kind: 'background' },
+      toolNames: ['update_plan', 'search_content', 'read_source_candidate', 'submit_candidates'],
     });
     expect(execution.status).toBe('bound');
     if (execution.status !== 'bound') return;
@@ -108,7 +109,7 @@ describe('Tools ModelCall routing', () => {
     const execution = tools.bindExecution({
       executionId: 'run:1',
       subject: { kind: 'session', sessionId: 'session:1', workspaceId: 'workspace:1' },
-      toolGroupId: 'conversation',
+      toolNames: ['read_file'],
     });
     expect(execution.status).toBe('bound');
     if (execution.status !== 'bound') throw new Error('Expected execution binding.');
@@ -174,11 +175,15 @@ describe('Tools ModelCall routing', () => {
     const execution = tools.bindExecution({
       executionId: 'run:plan',
       subject: { kind: 'session', sessionId: 'session:plan', workspaceId: 'workspace:plan' },
-      toolGroupId: 'conversation',
+      toolNames: ['update_plan'],
     });
     if (execution.status !== 'bound') throw new Error('Expected execution binding.');
     const modelCall = execution.binding.prepareModelCall({ modelCallId: 'model-call:plan' });
     if (modelCall.status !== 'prepared') throw new Error('Expected ModelCall binding.');
+    expect(modelCall.binding.definitions.map((tool) => tool.name)).toEqual(['update_plan']);
+    expect(modelCall.binding.routeToolCall({
+      toolCallId: 'tool-call:unselected', toolName: 'read_file', input: { path: 'notes.md' },
+    })).toMatchObject({ status: 'failed', error: { code: 'unknown_tool' } });
     const routed = modelCall.binding.routeToolCall({
       toolCallId: 'tool-call:plan',
       toolName: 'update_plan',

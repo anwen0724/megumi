@@ -7,13 +7,13 @@ import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '@megumi/database';
+} from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   createInterestRepository,
   type InterestRepository,
-} from '../../../packages/agent/discovery/src/persistence/interest-repository';
+} from '@megumi/application/discovery/interests/interest-repository';
 
 describe('InterestRepository', () => {
   let database: DatabaseConnection;

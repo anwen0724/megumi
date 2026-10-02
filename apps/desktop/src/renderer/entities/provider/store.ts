@@ -10,7 +10,7 @@ import type {
   ModelCapabilitiesUiDto,
   ProviderCatalogUiDto,
   ProviderPublicStatusUiDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import {
   createRendererRuntimeIpcRequest,
   getRendererRuntimeIpcError,

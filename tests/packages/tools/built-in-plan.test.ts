@@ -3,7 +3,7 @@ import {
   createBuiltInToolRegistry,
   createToolRouter,
   updatePlanToolHandler,
-} from '@megumi/tools';
+} from '@megumi/agent-runtime/tools/index';
 
 function planRouter() {
   const registry = createBuiltInToolRegistry({});

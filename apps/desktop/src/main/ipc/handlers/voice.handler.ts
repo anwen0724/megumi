@@ -2,8 +2,8 @@
  * Exposes Product VoiceHost operations through validated Desktop IPC envelopes.
  * The handler remains a transport controller and never calls Voice internals directly.
  */
-import * as host from '@megumi/product-host/host';
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
+import * as host from '@megumi/application/contracts';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { IPC_CHANNELS } from '../channels';
 import { createIpcRequestHandler } from '../create-request-handler';
@@ -23,12 +23,12 @@ import {
 } from '../schemas';
 
 export interface VoiceHandlersService {
-  readonly host: Pick<host.ProductHostInterface, 'voice'>;
+  readonly host: Pick<host.ApplicationOperations, 'voice'>;
 }
 
 export function registerVoiceHandlers(
   service: VoiceHandlersService,
-  options: { readonly logger?: ProductRuntimeLogger; readonly ipcMain?: DesktopIpcMain } = {},
+  options: { readonly logger?: ApplicationLogger; readonly ipcMain?: DesktopIpcMain } = {},
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
   const voice = service.host.voice;

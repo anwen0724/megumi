@@ -10,7 +10,7 @@ import type {
   SessionMessageDto,
   UserMessageDto,
   WorkspaceChangeSummaryDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import type {
   AnswerTextStatus,
   ProcessDisclosureItem,

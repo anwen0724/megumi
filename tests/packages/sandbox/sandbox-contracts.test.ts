@@ -1,13 +1,13 @@
 /* Verifies Sandbox capability disclosure and scope ownership contracts. */
 
 import { describe, expect, it } from 'vitest';
-import { executeSandboxScope } from '../../../packages/agent/sandbox/src';
+import { executeSandboxScope } from '@megumi/agent-runtime/tools/sandbox/index';
 import type {
   Sandbox,
   SandboxCapabilities,
   SandboxPolicy,
   SandboxScope,
-} from '../../../packages/agent/sandbox/src';
+} from '@megumi/agent-runtime/tools/sandbox/index';
 
 describe('Sandbox contracts', () => {
   it('requires explicit capability disclosure before opening a scope', async () => {

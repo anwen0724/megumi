@@ -1,7 +1,7 @@
 /* Verifies Candidate Supply Agent tools keep search evidence transient and persist only submitted facts. */
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 import {
   createCandidateSupplyAttempts,
   createCandidateSupplyRepository,
@@ -9,7 +9,7 @@ import {
   createSourceRegistry,
   type CandidateSupplyRepository,
   type DiscoverySource,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 const now = '2026-09-03T00:00:00.000Z';
 const settings = {

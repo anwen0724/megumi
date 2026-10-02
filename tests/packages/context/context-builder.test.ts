@@ -3,9 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createContext, type CreateContextOptions } from '@megumi/context';
-import { createInstructionReader } from '@megumi/instructions';
-import { createTraceRecorder } from '../../../packages/agent/observability/src/trace/trace-recorder';
+import { createContext, type CreateContextOptions } from '@megumi/agent-runtime/context/index';
+import { createInstructionReader } from '@megumi/agent-runtime/resources/instructions/index';
+import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import { createContextFixture, contextModel } from './context-behavior-fixture';
 import { savedAt } from '../session/session-test-fixture';
 

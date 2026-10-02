@@ -6,7 +6,7 @@ import {
   createSettings,
   createRecordSettingsEnvironment,
   type SettingsStore,
-} from '../../../packages/agent/settings/src';
+} from '@megumi/application/settings/index';
 
 class MemorySettingsStore implements SettingsStore {
   document: Record<string, any> = {};
@@ -269,18 +269,18 @@ describe('Settings', () => {
     expect(settings.updateProvider({
       provider_id: 'deepseek',
       patch: { models: {
-        'deepseek-v4-flash': { capabilities: { imageInput: true, thinking: 'unknown' } },
+        'deepseek-flash': { capabilities: { imageInput: true, thinking: 'unknown' } },
       } },
     })).toMatchObject({ status: 'updated' });
 
-    expect(store.document.providers.deepseek.models['deepseek-v4-flash']).toEqual({
+    expect(store.document.providers.deepseek.models['deepseek-flash']).toEqual({
       context_window_tokens: 1_000_000,
       max_output_tokens: 384_000,
       capabilities: { imageInput: true, thinking: 'unknown' },
     });
     expect(settings.resolveProvider({
       provider_id: 'deepseek',
-      model_id: 'deepseek-v4-flash',
+      model_id: 'deepseek-flash',
     })).toMatchObject({
       status: 'ok',
       config: {
@@ -297,13 +297,13 @@ describe('Settings', () => {
     store.document = {
       context: { compaction_threshold_ratio: 0.7 },
       providers: { deepseek: { models: {
-        'deepseek-v4-flash': { context_window_tokens: 2_000_000 },
+        'deepseek-flash': { context_window_tokens: 2_000_000 },
       } } },
     };
     const settings = createSettings({ store });
     expect(settings.resolveModel({
       provider_id: 'deepseek',
-      model_id: 'deepseek-v4-flash',
+      model_id: 'deepseek-flash',
     })).toEqual({
       status: 'ok',
       context: { context_window_tokens: 1_000_000, compaction_threshold_ratio: 0.7 },

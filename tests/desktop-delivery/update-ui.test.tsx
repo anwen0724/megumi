@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nextProvider } from 'react-i18next';
-import { composeApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
+import { createApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
 import { registerApplicationUpdateHandlers } from '@megumi/desktop/main/ipc/handlers/application-update.handler';
 import { api } from '@megumi/desktop/preload/api';
 import { AboutMegumiPanel } from '@megumi/desktop/renderer/features/application-update/AboutMegumiPanel';
@@ -46,7 +46,7 @@ it('shows the unsupported development environment and exposes no automatic-downl
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-update-ui-'));
   vi.stubGlobal('MEGUMI_APP_ID', 'com.megumi.desktop');
   Object.defineProperty(window, 'megumi', { configurable: true, value: api });
-  const controller = composeApplicationUpdate({ megumiHomePath: home, logger: console,
+  const controller = createApplicationUpdate({ megumiHomePath: home, logger: console,
     prepareToQuit: async () => undefined });
   try {
     registerApplicationUpdateHandlers({ controller });
@@ -77,7 +77,7 @@ it('checks and downloads through IPC, shows transfer progress, then offers expli
   const restoreElectron = installElectronModuleBoundary();
   await fs.writeFile(path.join(home, 'app-update.yml'), `provider: generic\nurl: ${source.url}\nupdaterCacheDirName: fixture-updater\n`);
   Object.defineProperty(window, 'megumi', { configurable: true, value: api });
-  const controller = composeApplicationUpdate({ megumiHomePath: home, logger: console,
+  const controller = createApplicationUpdate({ megumiHomePath: home, logger: console,
     prepareToQuit: async () => undefined });
   const unsubscribe = controller.subscribe(snapshot => ipcRenderer.emit(IPC_CHANNELS.applicationUpdate.snapshotChanged, {}, snapshot));
   try {
@@ -114,7 +114,7 @@ it('shows cache verification after restart and offers installation once local ve
   session.controller.dispose();
   session.source.statusCode = 503;
   const before = [...session.requests];
-  const restored = composeApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
+  const restored = createApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
   const unsubscribe = restored.subscribe(snapshot => ipcRenderer.emit(IPC_CHANNELS.applicationUpdate.snapshotChanged, {}, snapshot));
   try {
     Object.defineProperty(window, 'megumi', { configurable: true, value: api });

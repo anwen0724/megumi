@@ -1,12 +1,12 @@
 /* Verifies Agent Event projection stays a business Runtime Event and Session concern only. */
 import type { AssistantMessage, ToolResultMessage } from '@megumi/ai';
-import { createEventBus, type AnyEvent } from '@megumi/events';
+import { createEventBus, type AnyEvent } from '@megumi/agent-runtime/events';
 import {
   createAgentEventListener,
   type CreateAgentEventListenerOptions,
   type ExecutionProjectionRuntime,
   type SessionMessageCommitter,
-} from '@megumi/execution';
+} from '@megumi/agent-runtime/runs/index';
 import { describe, expect, it, vi } from 'vitest';
 import { executionMetadata, model } from './execution-test-fixtures';
 
@@ -149,7 +149,6 @@ function fixture(): {
     ids: { createSessionMessageId: () => 'message:1' },
     clock: { now: () => '2026-07-31T00:00:00.000Z' },
     runtime,
-    onAgentEnd: vi.fn(),
   };
   return { listener: createAgentEventListener(options), published, options };
 }

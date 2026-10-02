@@ -8,7 +8,7 @@ import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
-} from '../../../packages/agent/database/src';
+} from '@megumi/application/storage/index';
 
 let tempDir: string | null = null;
 
@@ -128,7 +128,7 @@ describe('versioned database migrations', () => {
     first.close();
 
     fs.copyFileSync(
-      path.join(process.cwd(), 'packages/agent/database/migrations/0006_remove_artifact_memory.sql'),
+      path.join(process.cwd(), 'packages/application/resources/migrations/0006_remove_artifact_memory.sql'),
       path.join(migrationsFolder, '0001_remove_artifact_memory.sql'),
     );
     writeJournal(migrationsFolder, [

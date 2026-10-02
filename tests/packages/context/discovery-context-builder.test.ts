@@ -1,6 +1,6 @@
 /* Verifies Discovery Context resolvers own business-fact reads for every model call. */
 import { describe, expect, it, vi } from 'vitest';
-import { createContext } from '../../../packages/agent/context/src';
+import { createContext } from '@megumi/agent-runtime/context/index';
 import { completedMessage, model, workspaceSource } from './context-test-fixtures';
 
 function options() {
@@ -104,7 +104,7 @@ describe('Discovery Context ownership', () => {
       { instructionId: 'megumi.recommendation', sourcePath: '/recommendation.md', content: 'recommendation' },
     ]);
     const recommendationTools = [{
-      name: 'publish_recommendations', description: 'Publish recommendations.',
+      name: 'submit_recommendations', description: 'Publish recommendations.',
       promptSnippet: 'Publish recommendations.', parameters: { type: 'object' },
     }];
     const result = await createContext(dependencies).build({

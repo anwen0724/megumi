@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createFileUpdatePreferencesStore } from '@megumi/desktop/main/application-update/update-preferences-store';
-import { composeApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
+import { createApplicationUpdate } from '@megumi/desktop/main/application-update/application-update-composition';
 import { electronBoundary } from './fixtures/electron-boundary';
 import { createUpdateSession } from './fixtures/update-session';
 import { createUpdateSource } from './fixtures/update-source';
@@ -56,7 +56,7 @@ it('keeps a discovered release across restart and a failed recheck without enabl
   await controller.setAutomaticChecksEnabled(false);
   const discovered = await controller.checkNow();
   controller.dispose();
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   expect(restarted.getSnapshot()).toMatchObject({ status: 'available', lastKnown: true,
     checkedAt: discovered.checkedAt, release: { version: '0.3.0', title: 'Stable release' } });
@@ -75,17 +75,17 @@ it('limits a manually selected validation feed to that process without changing 
   cleanups.push(validation.close);
   validation.source.version = '0.4.0';
   const argv = process.argv;
-  let validating: ReturnType<typeof composeApplicationUpdate> | undefined;
+  let validating: ReturnType<typeof createApplicationUpdate> | undefined;
   try {
     process.argv = [...argv, '--megumi-delivery-validation', `--megumi-validation-url=${validation.url}`];
-    validating = composeApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
+    validating = createApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
     expect(await validating.checkNow()).toMatchObject({ status: 'available', release: { version: '0.4.0' } });
   } finally { process.argv = argv; validating?.dispose(); }
   expect(validation.requests.length).toBeGreaterThan(0);
   expect(await session.controller.checkNow()).toMatchObject({ status: 'available', release: { version: '0.3.0' } });
   const files = await fs.readdir(path.join(session.home, 'desktop')).catch(() => []);
   expect(files).toEqual(['application-update-state.json']);
-  const restarted = composeApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: session.home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   expect(restarted.getSnapshot()).toMatchObject({ release: { version: '0.3.0' } });
 });
@@ -109,7 +109,7 @@ it('verifies a completed download locally after restart and installs only on exp
   electronBoundary.app.quit();
   expect(electronBoundary.processLaunches).toEqual([]);
   controller.dispose();
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   expect(restarted.getSnapshot().status).toBe('verifying');
   source.statusCode = 503;
@@ -124,7 +124,7 @@ it('verifies a completed download locally after restart and installs only on exp
 it('reports development mode as unsupported without starting an update operation', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'megumi-update-'));
   directories.push(home);
-  const controller = composeApplicationUpdate({
+  const controller = createApplicationUpdate({
     megumiHomePath: home, logger: console, prepareToQuit: async () => undefined,
   });
   try {
@@ -145,7 +145,7 @@ it.each(['missing', 'corrupt'] as const)('requires an explicit redownload when t
   const cachedFile = path.join(home, 'cache/fixture-updater/pending/Megumi-0.3.0.exe');
   if (damage === 'missing') await fs.unlink(cachedFile);
   else await fs.writeFile(cachedFile, 'damaged bytes');
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   const before = [...requests];
   expect(await restarted.checkNow()).toMatchObject({ status: 'error', error: { operation: 'restore',
@@ -163,7 +163,7 @@ it('keeps a completed target when a newer release appears before restarting', as
   await controller.downloadUpdate();
   controller.dispose();
   source.version = '0.4.0';
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   const before = [...requests];
@@ -179,7 +179,7 @@ it('keeps a temporarily unreadable cache pending and allows a local verification
   await controller.checkNow();
   await controller.downloadUpdate();
   controller.dispose();
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   const before = [...requests];
   vi.spyOn(fs, 'stat').mockRejectedValueOnce(Object.assign(new Error('File busy'), { code: 'EACCES' }));
@@ -205,7 +205,7 @@ it('asks the user to download again when revalidation finds a different version'
   const { controller, home, source, requests } = await createSession();
   await controller.checkNow();
   controller.dispose();
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   source.version = '0.4.0';
   expect(await restarted.downloadUpdate()).toMatchObject({ status: 'available', release: { version: '0.4.0' } });
@@ -219,7 +219,7 @@ it('discards obsolete update records after upgrading without deleting the instal
   await controller.downloadUpdate();
   controller.dispose();
   vi.spyOn(electronBoundary.app, 'getVersion').mockReturnValue('0.3.0');
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   expect(restarted.getSnapshot().status).toBe('idle');
   await expect(fs.stat(path.join(home, 'desktop/application-update-state.json'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -294,7 +294,7 @@ it('cancels a pending startup check, preserves that choice on restart and still 
   await controller.setAutomaticChecksEnabled(false);
   await vi.advanceTimersByTimeAsync(30_000);
   controller.dispose();
-  const restarted = composeApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
+  const restarted = createApplicationUpdate({ megumiHomePath: home, logger: console, prepareToQuit: async () => undefined });
   cleanups.push(async () => restarted.dispose());
   restarted.start();
   await vi.advanceTimersByTimeAsync(30_000);

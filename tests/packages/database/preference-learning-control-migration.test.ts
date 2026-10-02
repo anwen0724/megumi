@@ -7,15 +7,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
 import { z } from 'zod';
-import { createDatabase, migrateDatabase } from '@megumi/database';
-import { createDiscoveryRepository } from '@megumi/discovery';
+import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
+import { createDiscoveryRepository } from '@megumi/application/discovery/index';
 import { seedRecommendation, setReaction, now } from '../discovery/preference-learning-fixtures';
 
 it('upgrades version 25 without losing preference identities, evidence or feedback', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-preference-control-'));
   const database = createDatabase({ filename: ':memory:' });
   try {
-    const source = path.join(process.cwd(), 'packages/agent/database/migrations');
+    const source = path.join(process.cwd(), 'packages/application/resources/migrations');
     const entries = Array.from({ length: 26 }, (_, idx) => {
       const tag = fs.readdirSync(source).find((name) => name.startsWith(String(idx).padStart(4, '0') + '_'));
       if (!tag) throw new Error(`Missing migration ${idx}`);

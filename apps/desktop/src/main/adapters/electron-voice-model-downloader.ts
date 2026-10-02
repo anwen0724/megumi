@@ -3,7 +3,7 @@
 import { session as electronSession } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { VoiceModelDownloader } from '@megumi/voice';
+import type { VoiceModelDownloader } from '@megumi/application/voice/index';
 
 interface InterruptedDownloadMetadata {
   readonly url: string;

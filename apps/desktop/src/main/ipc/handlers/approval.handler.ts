@@ -3,10 +3,10 @@
  */
 import {
   ApprovalResolveResultSchema,
-  type ProductHostInterface,
-} from '@megumi/product-host/host';
+  type ApplicationOperations,
+} from '@megumi/application/contracts';
 
-import type { DesktopRuntimeLogger as ProductRuntimeLogger } from '../../runtime-logger';
+import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
 import { electronIpcMain, type DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
 
@@ -15,11 +15,11 @@ import type { RuntimeIpcError } from '../contracts';
 import { ApprovalResolveRequestSchema } from '../schemas';
 
 export interface ApprovalHandlersService {
-  host: Pick<ProductHostInterface, 'approval'>;
+  host: Pick<ApplicationOperations, 'approval'>;
 }
 
 export interface RegisterApprovalHandlersOptions {
-  logger?: ProductRuntimeLogger;
+  logger?: ApplicationLogger;
   ipcMain?: DesktopIpcMain;
 }
 

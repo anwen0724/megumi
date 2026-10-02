@@ -10,8 +10,8 @@ import {
   type PermissionRuleWriter,
   type PermissionSettings,
   type PermissionWorkspacePathClassifier,
-} from '../../../packages/agent/permissions/src/index';
-import type { ToolShellKind } from '../../../packages/agent/tools/src/index';
+} from '@megumi/agent-runtime/permissions/index';
+import type { ToolShellKind } from '@megumi/agent-runtime/tools/index';
 
 class FakeRuleAccess implements PermissionRuleReader, PermissionRuleWriter {
   readonly writes: unknown[] = [];

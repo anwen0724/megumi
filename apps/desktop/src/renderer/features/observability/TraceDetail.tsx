@@ -18,7 +18,7 @@ import type {
   ObservabilityGetContentResult,
   ObservabilitySpanUiDto,
   ObservabilityTraceDetailUiDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import { Button, Tabs, cx } from '../../shared/ui';
 import { correlationEntries, formatTraceDuration, formatTraceTime } from './diagnostics-format';
 import type { TraceDisplayItem } from './trace-display';

@@ -1,13 +1,13 @@
 /* Verifies Candidate Supply persistence at the Candidate and Candidate Pool boundary. */
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 import {
   createCandidateSupplyRepository,
   createDiscoveryRepository,
   type CandidateSupplyRepository,
   type DiscoveryRepository,
-} from '@megumi/discovery';
+} from '@megumi/application/discovery/index';
 
 const now = '2026-09-03T00:00:00.000Z';
 const settings = {

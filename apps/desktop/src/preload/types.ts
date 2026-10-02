@@ -22,7 +22,7 @@ import type {
   DiscoveryConfigurationUiDto,
   DiscoverySourceCredentialStatusUiResult,
   DiscoverySourceUiDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 import type {
   SessionBranchDraftCancelPayload,
   SessionBranchDraftCreatePayload,

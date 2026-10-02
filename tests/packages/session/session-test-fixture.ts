@@ -3,12 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
-import { createSessionCatalog, createSessionHistory } from '@megumi/session';
-import { createSessionStore } from '@megumi/session/store';
-import { createSessionAttachmentFileStore } from '@megumi/session/attachment-store';
-import { createWorkspaceCatalog } from '@megumi/workspace';
-import { createWorkspaceStore } from '@megumi/workspace/store';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
+import { createSessionCatalog, createSessionHistory } from '@megumi/agent-runtime/sessions/index';
+import { createSessionStore } from '@megumi/application/storage/session-store';
+import { createSessionAttachmentFileStore } from '@megumi/application/storage/session-attachment-store';
+import { createWorkspaceCatalog } from '@megumi/application/workspace/index';
+import { createWorkspaceStore } from '@megumi/application/workspace/workspace-store';
 
 export const savedAt = '2026-07-31T00:00:00.000Z';
 

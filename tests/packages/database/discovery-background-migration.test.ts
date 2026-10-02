@@ -1,6 +1,6 @@
 /* Protects Discovery persistence after execution-only Interest facts moved to Trace. */
 import { afterEach, describe, expect, it } from 'vitest';
-import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/database';
+import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 
 describe('Discovery background operation migration', () => {
   let database: DatabaseConnection | undefined;

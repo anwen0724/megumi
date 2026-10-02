@@ -6,7 +6,7 @@
  * and the Final Transcript is handed to the existing text input flow.
  */
 
-import type { FinalTranscript, SpeechInputEvent } from '@megumi/voice';
+import type { FinalTranscript, SpeechInputEvent } from '@megumi/application/voice/index';
 import type { MicrophoneCapture } from './microphone-capture';
 
 export type VoiceInputMicrophoneState = 'closed' | 'opening' | 'capturing' | 'muted' | 'failed';

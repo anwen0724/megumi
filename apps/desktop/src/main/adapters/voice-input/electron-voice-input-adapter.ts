@@ -1,5 +1,5 @@
 /*
- * Desktop host adapter that runs the packages/agent/voice Speech Input Runtime in a
+ * Desktop host adapter that runs the packages/application/src/voice Speech Input Runtime in a
  * Node Speech Worker. Owns the worker lifecycle, the bounded pending-frame
  * queue with ack gating, transfer of PCM ArrayBuffers, Speech Input Event
  * projection, and packaged/dev resource path resolution. It implements the
@@ -22,8 +22,8 @@ import type {
   StartSpeechInputRequest,
   StartSpeechInputResult,
   StopSpeechInputRequest,
-} from '@megumi/voice';
-import { VOICE_INPUT_MAX_IN_FLIGHT_FRAMES } from '@megumi/voice/speech-input/voice-input-capacity';
+} from '@megumi/application/voice/index';
+import { VOICE_INPUT_MAX_IN_FLIGHT_FRAMES } from '@megumi/application/voice/speech-input/voice-input-capacity';
 import {
   parseVoiceInputWorkerResponse,
   type VoiceInputWorkerData,
@@ -365,7 +365,7 @@ export function resolveVoiceInputWorkerEntryPath(input: {
 }
 
 function spawnNodeSpeechWorker(entryPath: string, workerData: VoiceInputWorkerData): VoiceInputWorker {
-  // worker_threads lives inside this host adapter module; packages/agent/voice stays
+  // worker_threads lives inside this host adapter module; packages/application/src/voice stays
   // free of Node threading concerns.
   const created = new Worker(entryPath, { workerData });
   return {

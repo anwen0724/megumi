@@ -2,7 +2,7 @@
 import type {
   ObservabilityCorrelationUiDto,
   ObservabilityTraceSummaryUiDto,
-} from '@megumi/product-host/host';
+} from '@megumi/application/contracts';
 
 export function formatTraceDuration(value: number | undefined): string {
   if (value === undefined) return '—';

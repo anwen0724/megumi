@@ -1,6 +1,6 @@
 /* Verifies SKILL.md frontmatter parsing, name fallback and validation rules. */
 import { describe, expect, it } from 'vitest';
-import { parseSkillManifest } from '@megumi/skills/skill-manifest';
+import { parseSkillManifest } from '@megumi/agent-runtime/resources/skills/skill-manifest';
 
 describe('parseSkillManifest', () => {
   it('parses a complete manifest with camelCase fields and stores the body as content', () => {

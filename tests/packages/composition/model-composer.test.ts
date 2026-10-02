@@ -1,7 +1,7 @@
 /* Verifies injected Provider streams resolve through the same Product model seam. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { composeModels } from '../../../packages/agent/composition/src/model-composer';
+import { composeModels } from '@megumi/application/settings/model-composer';
 import { createScriptedStreams } from './compose-test-application';
 
 describe('Composition model resolver', () => {
