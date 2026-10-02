@@ -133,22 +133,17 @@ export interface ModelCallToolBinding {
 }
 
 export interface ToolSettings {
-  resolveWebSearch():
-    | { readonly status: 'ok'; readonly settings: { readonly provider?: WebSearchProvider; readonly base_url?: string } }
-    | { readonly status: 'failed' };
-  readWebSearchApiKey(request: Record<string, never>):
-    | { readonly status: 'found'; readonly api_key: string }
-    | { readonly status: 'missing' | 'failed' };
-}
-
-export interface ToolWorkspaceCatalog {
-  getWorkspace(request: { readonly workspace_id: string }):
-    | { readonly status: 'found'; readonly workspace: { readonly root_path: string; readonly status: 'available' | 'missing' } }
-    | { readonly status: 'not_found'; readonly workspace_id: string };
+  readSettings():
+    | { status: 'ok'; settings: { config: { webSearch: { provider?: WebSearchProvider; baseUrl?: string; apiKeyEnv?: string } } } }
+    | { status: 'rejected'; error: { message: string } };
+  readCredential(request: { target: { kind: 'webSearch' }; apiKeyEnv?: string; defaultEnvNames?: readonly string[] }):
+    | { status: 'found'; value: string }
+    | { status: 'missing' }
+    | { status: 'rejected'; error: { message: string } };
 }
 
 export interface CreateToolsRequest {
-  readonly settings: ToolSettings;
+  readonly settings: (workspaceId?: string) => ToolSettings;
   readonly workspaces: ToolWorkspaceCatalog;
   readonly workspaceChanges: ToolWorkspaceChanges;
   readonly sandbox: Sandbox;
@@ -355,7 +350,7 @@ export function createTools(request: CreateToolsRequest): Tools {
       if (workspace.status === 'not_found') return failedResolution('workspace_not_found', `Workspace was not found: ${scope.workspaceId}`);
       if (workspace.workspace.status !== 'available') return failedResolution('workspace_unavailable', `Workspace is unavailable: ${scope.workspaceId}`);
       workspaceRoot = workspace.workspace.root_path;
-      webSearch = resolveWebSearch(request);
+      webSearch = resolveWebSearch(request, scope.workspaceId);
     }
     const selected = registry.list().filter((tool) => toolNames.has(tool.registeredToolName) && isSelected(tool.registeredToolName, {
       availability: request.builtInToolAvailability,
@@ -434,20 +429,24 @@ function toolProcessDescriptor(sandbox: Sandbox): ToolProcessDescriptor | undefi
     : undefined;
 }
 
-function resolveWebSearch(request: CreateToolsRequest): WebSearch | undefined {
-  return request.webSearch ?? resolveConfiguredWebSearch(request.settings);
+function resolveWebSearch(request: CreateToolsRequest, workspaceId?: string): WebSearch | undefined {
+  return request.webSearch ?? resolveConfiguredWebSearch(request.settings(workspaceId));
 }
 
 export function resolveConfiguredWebSearch(settings: ToolSettings): WebSearch | undefined {
-  const resolved = settings.resolveWebSearch();
-  if (resolved.status !== 'ok' || !resolved.settings.provider) return undefined;
-  const credential = settings.readWebSearchApiKey({});
-  if (credential.status !== 'found') return undefined;
-  return createWebSearch({
-    provider: resolved.settings.provider,
-    apiKey: credential.api_key,
-    ...(resolved.settings.base_url ? { baseUrl: resolved.settings.base_url } : {}),
+  const resolved = settings.readSettings();
+  if (resolved.status === 'rejected') throw new Error(resolved.error.message);
+  const config = resolved.settings.config.webSearch;
+  if (!config.provider) return undefined;
+  const environmentNames = { brave: 'BRAVE_SEARCH_API_KEY', tavily: 'TAVILY_API_KEY', exa: 'EXA_API_KEY' };
+  const credential = settings.readCredential({
+    target: { kind: 'webSearch' },
+    apiKeyEnv: config.apiKeyEnv,
+    defaultEnvNames: config.provider === 'custom' ? [] : [environmentNames[config.provider]],
   });
+  if (credential.status === 'rejected') throw new Error(credential.error.message);
+  if (credential.status === 'missing') return undefined;
+  return createWebSearch({ provider: config.provider, apiKey: credential.value, baseUrl: config.baseUrl });
 }
 
 function isSelected(toolName: string, facts: {

@@ -1,3 +1,4 @@
+import type { Settings } from '../../settings/settings-store';
 /*
  * Owns Candidate Supply triggers, single-execution gating, scheduling, and final settlement.
  */
@@ -89,7 +90,7 @@ export function createCandidates(
     let intervalMinutes: number;
     try {
       intervalMinutes = positiveInteger(
-        options.settings.read().candidateSupplyCheckIntervalMinutes,
+        readConfiguration(options.settings).discovery.candidateSupplyCheckIntervalMinutes,
         'candidateSupplyCheckIntervalMinutes',
       );
     } catch (error) {
@@ -107,10 +108,13 @@ export function createCandidates(
       if (stopped) return Promise.reject(new Error('Candidate Supply is shutting down.'));
       if (confirmation) return confirmation;
       confirmation = (async () => {
-        const settings = options.settings.read();
+        const snapshot = options.settings.readSettings();
+        if (snapshot.status === 'rejected') throw new Error(snapshot.error.message);
+        const settings = snapshot.settings.config.discovery;
         if (settings.candidateSupplyConfirmed) return { status: 'already_confirmed' as const };
         const pendingBeforeConfirmation = activeCompletion;
-        await options.settings.write({ ...settings, candidateSupplyConfirmed: true });
+        const saved = options.settings.updateSettings({ patch: { discovery: { candidateSupplyConfirmed: true } }, expectedRevision: snapshot.settings.revision });
+        if (saved.status === 'rejected') throw new Error(saved.error.message);
         if (stopped) throw new Error('Candidate Supply is shutting down.');
         // Consent and business completion are distinct: never keep the UI waiting for the Agent.
         // A pre-consent check may still be settling, so join it before requesting the confirmed check.
@@ -177,7 +181,7 @@ async function runCheck(
   trigger: CandidateSupplyTrigger,
   requestedAt: string,
 ): Promise<CandidateSupplyResult> {
-  const configuration = options.settings.read();
+  const configuration = readConfiguration(options.settings).discovery;
   const poolSettings = candidatePoolSettings({
     minimumCount: configuration.candidatePoolMinimumCount,
     maximumCount: configuration.candidatePoolMaximumCount,
@@ -470,3 +474,9 @@ function messageOf(error: unknown): string {
 }
 
 export type { CandidateSupplyTrigger } from './candidate-supply';
+
+function readConfiguration(settings: Pick<Settings, 'readSettings'>) {
+  const result = settings.readSettings();
+  if (result.status === 'rejected') throw new Error(result.error.message);
+  return result.settings.config;
+}

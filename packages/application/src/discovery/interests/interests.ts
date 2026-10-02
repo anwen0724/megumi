@@ -1,3 +1,4 @@
+import type { Settings } from '../../settings/settings-store';
 import type { ModelPreparationResult } from '@megumi/agent-runtime';
 /*
  * Coordinates public Interest operations and the post-conversation extraction worker.
@@ -44,9 +45,7 @@ export type ObserveConversationTurnResult =
 
 export interface CreateInterestsOptions {
   readonly repository: InterestRepository;
-  readonly settings: {
-    getDiscoverySettings(): { readonly conversationRecognitionEnabled: boolean };
-  };
+  readonly settings: Pick<Settings, 'readSettings'>;
   readonly sessions: Pick<SessionCatalog, 'getSession'>;
   readonly history: Pick<SessionHistory, 'getCommittedRunMessages'>;
   readonly prepareModel: () => Promise<ModelPreparationResult>;
@@ -172,7 +171,7 @@ function canProcess(
   sessionId: string,
   completedAt: string,
 ): 'recognition_disabled' | 'session_excluded' | 'before_effective_from' | undefined {
-  if (!options.settings.getDiscoverySettings().conversationRecognitionEnabled) {
+  if (!readConfiguration(options.settings).discovery.conversationRecognitionEnabled) {
     return 'recognition_disabled';
   }
   const policy = options.repository.findInterestSessionSettingBySessionId(sessionId);
@@ -368,4 +367,10 @@ function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
     throw new DOMException('Interest Understanding was interrupted.', 'AbortError');
   }
+}
+
+function readConfiguration(settings: Pick<Settings, 'readSettings'>) {
+  const result = settings.readSettings();
+  if (result.status === 'rejected') throw new Error(result.error.message);
+  return result.settings.config;
 }

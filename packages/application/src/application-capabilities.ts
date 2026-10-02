@@ -57,7 +57,7 @@ import {
   type ObservabilityPersistenceStorage,
   type StructuredRuntimeLogger,
 } from './observability/index';
-import { createPermissions, type Permissions } from '@megumi/agent-runtime/permissions/index';
+import { createPermissions, type Permissions, resolveConfiguredPermissionRules, recordConfiguredSessionGrant } from '@megumi/agent-runtime/permissions/index';
 import { createSandbox } from '@megumi/agent-runtime/tools/sandbox/index';
 import {
   createSessionAttachmentReader,
@@ -69,13 +69,7 @@ import {
 } from '@megumi/agent-runtime/sessions/index';
 import { createSessionAttachmentFileStore } from './storage/session-attachment-store';
 import { createSessionStore } from './storage/session-store';
-import {
-  createSettings,
-  createSettingsCredentialStore,
-  type SettingsEnvironment,
-  type SettingsStore,
-} from './settings/index';
-import { createSettingsStore } from './settings/settings-store';
+import { createSettings, type Settings } from './settings/settings-store';
 import { createSkills, type Skills } from '@megumi/agent-runtime/resources/skills/index';
 import {
   createWebFetch,
@@ -98,13 +92,11 @@ import {
   type InitializeMegumiHomeSyncOptions,
   type MegumiHomePaths,
 } from './storage/home';
-import { createSettings as createFileSettings } from './settings/settings-store';
 import {
   PRODUCT_EXECUTION_POLICY,
   PRODUCT_RECENT_EVENT_BUFFER,
   PRODUCT_SHUTDOWN_TIMEOUT_MS,
   PRODUCT_TERMINAL_RETENTION_MS,
-  resolveAutoCompactPercent,
   resolveModelVisibleOperatingSystem,
 } from './application-policy';
 import type { ProductWorkspaceFileSystem } from './contracts';
@@ -125,10 +117,9 @@ export interface ProductCapabilitiesOptions {
     readonly arch: string;
   };
   workspaceFileSystem: ProductWorkspaceFileSystem;
-  settingsEnvironment?: SettingsEnvironment;
+  readEnvironment?: (name: string) => string | undefined;
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
-  settingsStorage?: SettingsStore;
   builtInToolAvailability?: BuiltInToolAvailability;
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
   embeddedBrowser?: EmbeddedBrowser;
@@ -150,7 +141,7 @@ export interface ProductCapabilities {
   readonly logger: ApplicationLogger;
   readonly database: DatabaseConnection;
   readonly settings: ReturnType<typeof createSettings>;
-  readonly settingsForWorkspace: (workspaceId?: string) => ReturnType<typeof createFileSettings>;
+  readonly settingsForWorkspace: (workspaceId?: string) => Settings;
   readonly workspaceStore: ReturnType<typeof createWorkspaceStore>;
   readonly workspaceFileSystem: ProductWorkspaceFileSystem;
   readonly workspaces: ReturnType<typeof createWorkspaceCatalog>;
@@ -173,10 +164,6 @@ export interface ProductCapabilities {
   readonly discoveryFactsReader: DiscoveryFactsReader;
 }
 
-
-export type ProductModelResolutionResult =
-  | { status: 'ok'; model: Model<Api> }
-  | { status: 'failed'; failure: { code: string; message: string; retryable?: boolean } };
 
 /** Composes the capability instances once per Host process. */
 export function composeProductCapabilities(options: ProductCapabilitiesOptions): ProductCapabilities {
@@ -227,15 +214,26 @@ function composeCapabilitiesWithDatabase(
   logger: ProductCapabilities['logger'],
   database: DatabaseConnection,
 ): ProductCapabilities {
-  const settings = createSettings({
-    store: options.settingsStorage ?? createSettingsStore({ settingsPath: homePaths.settingsPath }),
-    ...(options.settingsEnvironment ? { environment: options.settingsEnvironment } : {}),
-  });
+  const settings = createSettings({ globalSettingsPath: homePaths.settingsPath, credentialsPath: homePaths.credentialsPath, readEnvironment: options.readEnvironment });
   const workspaceStore = createWorkspaceStore({ database });
   const workspaceFileSystem = options.workspaceFileSystem;
   const workspacePathPolicy = createWorkspacePathPolicy();
   const sandbox = createSandbox();
   const workspaces = createWorkspaceCatalog({ store: workspaceStore, file_system: workspaceFileSystem });
+  const settingsForWorkspace = (workspaceId?: string) => {
+    let projectSettingsPath: string | undefined;
+    if (workspaceId) {
+      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
+      if (workspace.status !== 'found' || workspace.workspace.status !== 'available') throw new Error('WORKSPACE_UNAVAILABLE');
+      projectSettingsPath = path.join(workspace.workspace.root_path, '.megumi', 'settings.json');
+    }
+    return createSettings({
+      globalSettingsPath: homePaths.settingsPath,
+      projectSettingsPath,
+      credentialsPath: homePaths.credentialsPath,
+      readEnvironment: options.readEnvironment,
+    });
+  };
   const workspaceFiles = createWorkspaceFiles({
     catalog: workspaces,
     path_policy: workspacePathPolicy,
@@ -349,25 +347,14 @@ function composeCapabilitiesWithDatabase(
   const permissions = createPermissions({
     ruleReader: {
       resolvePermissionRules(request) {
-        const resolved = settings.resolvePermissions({
-          workspace_id: request.workspaceId,
-          session_id: request.sessionId,
-        });
-        return resolved.status === 'ok'
-          ? { status: 'resolved', permissionSettings: resolved.settings }
-          : { status: 'failed', failure: resolved.failure };
+        return resolveConfiguredPermissionRules(settingsForWorkspace(request.workspaceId), request);
       },
     },
     ruleWriter: {
       recordSessionPermissionGrant(request) {
-        const result = settings.recordSessionPermissionGrant({
-          session_id: request.sessionId,
-          rules: [...request.rules],
-          applied_at: request.appliedAt,
-        });
-        return result.status === 'saved'
-          ? { status: 'saved' }
-          : { status: 'failed', failure: result.failure };
+        const session = sessions.getSession({ session_id: request.sessionId });
+        if (session.status !== 'found') return { status: 'failed', failure: { code: 'session_not_found', message: 'Session was not found.' } };
+        return recordConfiguredSessionGrant(settingsForWorkspace(session.session.workspace_id), settings, request);
       },
     },
     workspacePathClassifier: {
@@ -430,7 +417,7 @@ function composeCapabilitiesWithDatabase(
     observability: observability.observability,
   });
   const tools = createTools({
-    settings,
+    settings: settingsForWorkspace,
     workspaces,
     workspaceChanges,
     sandbox,
@@ -504,20 +491,6 @@ function composeCapabilitiesWithDatabase(
     createSessionMessageId: () => createId('message'),
   };
   let discovery: Discovery;
-  const settingsForWorkspace = (workspaceId?: string) => {
-    let projectSettingsPath: string | undefined;
-    if (workspaceId) {
-      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-      if (workspace.status !== 'found') throw new Error('WORKSPACE_UNAVAILABLE');
-      projectSettingsPath = path.join(workspace.workspace.root_path, '.megumi', 'settings.json');
-    }
-    return createFileSettings({
-      globalSettingsPath: homePaths.settingsPath,
-      projectSettingsPath,
-      credentialsPath: homePaths.credentialsPath,
-      readEnvironment: (name) => options.settingsEnvironment?.readVariable(name),
-    });
-  };
   const runtime = createAgentRuntime({
     modelResolution: (workspaceId) => ({ settings: settingsForWorkspace(workspaceId), apiImplementations: options.modelStreams }),
     createRunId: ids.createExecutionId,
@@ -575,63 +548,6 @@ function composeCapabilitiesWithDatabase(
   discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
     sourceRegistry: discoverySources,
   });
-  const discoveryConfigurationSettings = {
-    read() {
-      const resolved = settings.resolve();
-      return resolved.status === 'ok'
-        ? {
-            conversationRecognitionEnabled: resolved.settings.discovery.conversation_recognition_enabled,
-            candidateSupplyConfirmed: resolved.settings.discovery.candidate_supply_confirmed,
-            recommendationCandidateCheckIntervalSeconds: resolved.settings.discovery.recommendation_candidate_check_interval_seconds,
-            recommendationGenerationTime: resolved.settings.discovery.recommendation_generation_time,
-            recommendationTargetCount: resolved.settings.discovery.recommendation_target_count,
-            recommendationWorkingSetCount: resolved.settings.discovery.recommendation_working_set_count,
-            enabledSources: resolved.settings.discovery.enabled_sources,
-            candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
-            candidatePoolMaximumCount: resolved.settings.discovery.candidate_pool_maximum_count,
-            candidateValidityDays: resolved.settings.discovery.candidate_validity_days,
-            candidateContentExcerptMaxCharacters:
-              resolved.settings.discovery.candidate_content_excerpt_max_characters,
-            candidateSupplyCheckIntervalMinutes:
-              resolved.settings.discovery.candidate_supply_check_interval_minutes,
-          }
-        : {
-            conversationRecognitionEnabled: false,
-            candidateSupplyConfirmed: false,
-            recommendationCandidateCheckIntervalSeconds: 60,
-            recommendationGenerationTime: '08:00',
-            recommendationTargetCount: 20,
-            recommendationWorkingSetCount: 80,
-            enabledSources: [],
-            candidatePoolMinimumCount: 100,
-            candidatePoolMaximumCount: 200,
-            candidateValidityDays: 30,
-            candidateContentExcerptMaxCharacters: 8_000,
-            candidateSupplyCheckIntervalMinutes: 360,
-          };
-    },
-    write(next: import('./discovery/index').DiscoveryConfigurationSettings) {
-      const result = settings.update({
-        patch: {
-          discovery: {
-            conversation_recognition_enabled: next.conversationRecognitionEnabled,
-            candidate_supply_confirmed: next.candidateSupplyConfirmed,
-            recommendation_candidate_check_interval_seconds: next.recommendationCandidateCheckIntervalSeconds,
-            recommendation_generation_time: next.recommendationGenerationTime,
-            recommendation_target_count: next.recommendationTargetCount,
-            recommendation_working_set_count: next.recommendationWorkingSetCount,
-            enabled_sources: [...next.enabledSources],
-            candidate_pool_minimum_count: next.candidatePoolMinimumCount,
-            candidate_pool_maximum_count: next.candidatePoolMaximumCount,
-            candidate_validity_days: next.candidateValidityDays,
-            candidate_content_excerpt_max_characters: next.candidateContentExcerptMaxCharacters,
-            candidate_supply_check_interval_minutes: next.candidateSupplyCheckIntervalMinutes,
-          },
-        },
-      });
-      if (result.status !== 'updated') throw new Error(result.failure.message);
-    },
-  };
   discovery = createDiscovery({
     ...(options.consumePreparedPreferences ? { consumePreparedPreferences: options.consumePreparedPreferences } : {}),
     onBackgroundError(error, context) {
@@ -646,16 +562,7 @@ function composeCapabilitiesWithDatabase(
     },
     interests: {
       repository: discoveryRepository,
-      settings: {
-        getDiscoverySettings() {
-          const resolved = settings.resolve();
-          return {
-            conversationRecognitionEnabled: resolved.status === 'ok'
-              ? resolved.settings.discovery.conversation_recognition_enabled
-              : false,
-          };
-        },
-      },
+      settings,
       sessions,
       history,
       prepareModel: () => runtime.prepareModel(),
@@ -688,32 +595,7 @@ function composeCapabilitiesWithDatabase(
       attempts: recommendationAttempts,
       sourceRegistry: discoverySources,
       runtime,
-      settings: {
-        resolve() {
-          const resolved = settings.resolve();
-          return resolved.status === 'ok'
-            ? {
-                recommendationGenerationTime: resolved.settings.discovery.recommendation_generation_time,
-                recommendationCandidateCheckIntervalSeconds: resolved.settings.discovery.recommendation_candidate_check_interval_seconds,
-                recommendationTargetCount: resolved.settings.discovery.recommendation_target_count,
-                recommendationWorkingSetCount: resolved.settings.discovery.recommendation_working_set_count,
-                candidatePoolMinimumCount: resolved.settings.discovery.candidate_pool_minimum_count,
-                candidatePoolMaximumCount: resolved.settings.discovery.candidate_pool_maximum_count,
-                candidateValidityDays: resolved.settings.discovery.candidate_validity_days,
-                candidateContentExcerptMaxCharacters: resolved.settings.discovery.candidate_content_excerpt_max_characters,
-              }
-            : {
-                recommendationGenerationTime: '08:00',
-                recommendationCandidateCheckIntervalSeconds: 60,
-                recommendationTargetCount: 20,
-                recommendationWorkingSetCount: 80,
-                candidatePoolMinimumCount: 100,
-                candidatePoolMaximumCount: 200,
-                candidateValidityDays: 30,
-                candidateContentExcerptMaxCharacters: 8_000,
-              };
-        },
-      },
+      settings,
       clock,
       timezone: { get: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
       ids: {
@@ -761,7 +643,7 @@ function composeCapabilitiesWithDatabase(
       repository: discoveryRepository,
       attempts: candidateSupplyAttempts,
       sourceRegistry: discoverySources,
-      settings: discoveryConfigurationSettings,
+      settings,
       runtime,
       now: clock.now,
       ids: { createRequestId: () => createId('candidate-supply-request') },
@@ -782,7 +664,7 @@ function composeCapabilitiesWithDatabase(
     },
     configuration: {
       sourceRegistry: discoverySources,
-      settings: discoveryConfigurationSettings,
+      settings,
     },
   });
 
@@ -824,8 +706,8 @@ function discoveryCredential(
   settings: ReturnType<typeof createSettings>,
   sourceId: 'zhihu' | 'twitter',
 ): string | undefined {
-  const result = settings.readDiscoverySourceCredential({ source_id: sourceId });
-  return result.status === 'found' ? result.credential : undefined;
+  const result = settings.readCredential({ target: { kind: 'discoverySource', sourceId }, defaultEnvNames: sourceId === 'twitter' ? ['TWITTERAPI_IO_API_KEY'] : ['ZHIHU_ACCESS_SECRET'] });
+  return result.status === 'found' ? result.value : undefined;
 }
 
 function discoveryFactsUnavailable() {

@@ -1,3 +1,4 @@
+import type { Settings } from '../settings/settings-store';
 /*
  * Composes Discovery business owners while keeping Agent Core as the sole
  * execution-lifecycle owner and repositories behind public business methods.
@@ -253,7 +254,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
     requestCandidateSupply: (trigger = 'supply_conditions_changed') => candidateSupply?.ensureSupply(trigger),
     getCandidatePool: () => {
       if (!options.candidateSupply) return undefined;
-      const settings = options.candidateSupply.settings.read();
+      const settings = readConfiguration(options.candidateSupply.settings).discovery;
       return options.candidateSupply.repository.getCandidatePoolSnapshot(candidatePoolSettings({
         minimumCount: settings.candidatePoolMinimumCount,
         maximumCount: settings.candidatePoolMaximumCount,
@@ -282,7 +283,7 @@ export function createDiscovery(options: CreateDiscoveryOptions): Discovery {
         days.set(item.localDate, values);
       }
       return DiscoveryHomeViewSchema.parse({
-        candidateSupplyConfirmed: options.candidateSupply?.settings.read().candidateSupplyConfirmed ?? false,
+        candidateSupplyConfirmed: options.candidateSupply ? readConfiguration(options.candidateSupply.settings).discovery.candidateSupplyConfirmed : false,
         candidateSupplyStatus: candidateSupply?.getStatus() ?? { status: 'idle' },
         mode: request.mode,
         today: todayView(recommendation?.getToday()),
@@ -467,4 +468,10 @@ function requestCandidateSupply(
       // A diagnostic observer cannot change Candidate Supply behavior.
     }
   });
+}
+
+function readConfiguration(settings: Pick<Settings, 'readSettings'>) {
+  const result = settings.readSettings();
+  if (result.status === 'rejected') throw new Error(result.error.message);
+  return result.settings.config;
 }

@@ -1,6 +1,10 @@
 /* Verifies the run.ended -> speech-output mapping without opening a database. */
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createSettings } from '@megumi/application/settings/settings-store';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onRunEndedForSpeechOutput, type SpeechOutputWiringDeps } from '@megumi/application/voice/index';
 import type { ReadSpeechOutputRequest, SpeechOutputRuntime } from '@megumi/application/voice/index';
 
@@ -28,22 +32,7 @@ function deps(overrides: Partial<SpeechOutputWiringDeps> = {}): SpeechOutputWiri
   const base = {
     speechOutput,
     findAssistantReplyBySessionIdAndExecutionId,
-    settings: {
-      resolve: vi.fn(() => ({
-        status: 'ok' as const,
-        settings: { voice: { read_aloud_enabled: true } },
-      })),
-      resolveVoiceTts: vi.fn(() => ({
-        status: 'ok' as const,
-        settings: {
-          provider: 'minimax' as const,
-          voice_id: 'female-shaonv',
-          has_api_key: true,
-          credential_source: 'settings' as const,
-        },
-      })),
-      readVoiceTtsApiKey: vi.fn(() => ({ status: 'found' as const, api_key: 'sk-test', source: 'settings' as const })),
-    },
+    settings: fileSettings(),
   };
   return { ...base, ...overrides };
 }
@@ -86,10 +75,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('skips with a reason when the read-aloud toggle is off', () => {
     const wiring = deps();
-    wiring.settings.resolve = vi.fn(() => ({
-      status: 'ok' as const,
-      settings: { voice: { read_aloud_enabled: false } },
-    }));
+    wiring.settings = fileSettings({ voice: { readAloudEnabled: false } });
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'skipped', reason: 'read_aloud_disabled' });
@@ -98,7 +84,7 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('passes an empty api key when no credential is configured', () => {
     const wiring = deps();
-    wiring.settings.readVoiceTtsApiKey = vi.fn(() => ({ status: 'missing' as const }));
+    wiring.settings = fileSettings({ voice: { readAloudEnabled: true } }, false);
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'read' });
@@ -142,10 +128,22 @@ describe('onRunEndedForSpeechOutput', () => {
 
   it('skips with a reason when settings resolution fails', () => {
     const wiring = deps();
-    wiring.settings.resolve = vi.fn(() => ({ status: 'failed' as const, failure: { code: 'x', message: 'y' } }));
+    wiring.settings = fileSettings({ voice: { readAloudEnabled: 'invalid' } });
     const result = onRunEndedForSpeechOutput(wiring, completedEvent());
 
     expect(result).toEqual({ status: 'skipped', reason: 'settings_failed' });
     expect(wiring.speechOutput.reads).toHaveLength(0);
   });
 });
+
+const directories: string[] = [];
+afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+function fileSettings(config: unknown = { voice: { readAloudEnabled: true } }, credential = true) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-config-'));
+  directories.push(root);
+  const globalSettingsPath = path.join(root, 'settings.json');
+  fs.writeFileSync(globalSettingsPath, JSON.stringify(config));
+  const settings = createSettings({ globalSettingsPath, credentialsPath: path.join(root, 'credentials.json'), readEnvironment: () => undefined });
+  if (credential) settings.updateCredential({ target: { kind: 'voiceTts' }, value: 'sk-test' });
+  return settings;
+}

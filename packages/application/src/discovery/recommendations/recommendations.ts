@@ -1,3 +1,4 @@
+import type { Settings } from '../../settings/settings-store';
 /*
  * Owns Recommendation trigger admission, immutable snapshot construction,
  * Agent Core delegation, runtime-only status, and bounded waiting.
@@ -76,7 +77,7 @@ export interface CreateRecommendationsOptions {
     get(sourceId: string): { readonly descriptor: { readonly name: string } } | undefined;
   };
   readonly runtime: Pick<AgentRuntime, 'startRun' | 'cancelRun'>;
-  readonly settings: { readonly resolve: () => RecommendationSettings };
+  readonly settings: Pick<Settings, 'readSettings'>;
   readonly clock: { readonly now: () => string };
   readonly timezone: { readonly get: () => string };
   readonly ids?: { readonly createRequestId: () => string };
@@ -160,7 +161,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     }
     if (candidateWaitTimer !== undefined && candidateWait?.localDate === localDate) return;
     clearCandidateWait();
-    const seconds = options.settings.resolve().recommendationCandidateCheckIntervalSeconds;
+    const seconds = readConfiguration(options.settings).discovery.recommendationCandidateCheckIntervalSeconds;
     if (!Number.isInteger(seconds) || seconds <= 0) throw new Error('Invalid candidate check interval.');
     const waiting = { localDate, trigger };
     candidateWait = waiting;
@@ -208,7 +209,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
 
     let settings: RecommendationSettings;
     try {
-      settings = validateSettings(options.settings.resolve());
+      settings = readConfiguration(options.settings).discovery;
     } catch {
       return failureResult(localDate, 'settings_invalid', 'Recommendation settings are invalid.', false);
     }
@@ -447,7 +448,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     }
     let settings: RecommendationSettings;
     try {
-      settings = validateSettings(options.settings.resolve());
+      settings = readConfiguration(options.settings).discovery;
     } catch {
       complete(current, failureResult(current.localDate, 'settings_invalid', 'Recommendation settings are invalid.', false));
       return;
@@ -535,7 +536,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
   const scheduler = createRecommendationScheduler({
     now: options.clock.now,
     timezone: options.timezone.get,
-    generationTime: () => options.settings.resolve().recommendationGenerationTime,
+    generationTime: () => readConfiguration(options.settings).discovery.recommendationGenerationTime,
     ensure: requestRecommendation,
     onScheduledError: (error) => options.onBackgroundError?.(error, { operation: 'scheduled_request' }),
     ...(options.timers ? { timers: options.timers } : {}),
@@ -634,26 +635,6 @@ function prepareSnapshot(
   };
 }
 
-function validateSettings(settings: RecommendationSettings): RecommendationSettings {
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.recommendationGenerationTime)) throw new Error('time');
-  const values = [
-    settings.recommendationCandidateCheckIntervalSeconds,
-    settings.recommendationTargetCount,
-    settings.recommendationWorkingSetCount,
-    settings.candidatePoolMinimumCount,
-    settings.candidatePoolMaximumCount,
-    settings.candidateValidityDays,
-    settings.candidateContentExcerptMaxCharacters,
-  ];
-  if (values.some((value) => !Number.isInteger(value) || value <= 0)) throw new Error('count');
-  if (settings.recommendationTargetCount > 100
-    || settings.recommendationTargetCount > settings.recommendationWorkingSetCount
-    || settings.recommendationWorkingSetCount > settings.candidatePoolMaximumCount
-    || settings.candidatePoolMinimumCount > settings.candidatePoolMaximumCount) {
-    throw new Error('bounds');
-  }
-  return settings;
-}
 
 function createActiveRequest(requestId: string, localDate: string, trigger: RecommendationTrigger): ActiveRequest {
   let resolve!: (result: WaitRecommendationResult) => void;
@@ -724,4 +705,10 @@ export function localDateAt(instant: string, timezone: string): string {
   }).formatToParts(new Date(instant));
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
   return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+function readConfiguration(settings: Pick<Settings, 'readSettings'>) {
+  const result = settings.readSettings();
+  if (result.status === 'rejected') throw new Error(result.error.message);
+  return result.settings.config;
 }

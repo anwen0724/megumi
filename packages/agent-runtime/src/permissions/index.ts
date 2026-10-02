@@ -70,3 +70,5 @@ export type {
   EvaluateToolCallResult,
   Permissions,
 } from './permissions';
+
+export { resolveConfiguredPermissionRules, recordConfiguredSessionGrant } from './permission-rules';

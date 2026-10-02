@@ -40,12 +40,11 @@ export function createSessionOperations(options: {
       history: readonly import('@megumi/agent-runtime/sessions/index').SessionHistoryItem[],
       model: import('@megumi/ai').Model<import('@megumi/ai').Api>,
     ): import('@megumi/agent-runtime/context/index').DerivedContextUsage;
-    autoCompactPercent: number;
   };
   resolveModel: (request: {
     provider_id: string;
     model_id: string;
-  }) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
+  }, workspaceId?: string) => Promise<import('@megumi/ai').Model<import('@megumi/ai').Api> | undefined>;
   attachmentPicker?: AttachmentPicker;
   localFileAvailability?: LocalFileAvailability;
 }): SessionOperations {
@@ -113,7 +112,11 @@ export function createSessionOperations(options: {
     async getContextUsage(request) {
       const history = options.history.getActiveHistory({ session_id: request.sessionId });
       if (history.status === 'failed') return { status: 'not_available' };
-      const model = await options.resolveModel(request.modelSelection);
+      const session = options.sessions.getSession({ session_id: request.sessionId });
+      if (session.status !== 'found') return { status: 'not_available' };
+      const configuration = options.settingsForWorkspace(session.session.workspace_id).readSettings();
+      if (configuration.status === 'rejected') return { status: 'not_available' };
+      const model = await options.resolveModel(request.modelSelection, session.session.workspace_id);
       if (!model) return { status: 'not_available' };
       const usage = options.context.deriveUsage(history.history, model);
       return {
@@ -123,7 +126,7 @@ export function createSessionOperations(options: {
           totalTokens: usage.contextWindowTokens,
           remainingTokens: Math.max(0, usage.contextWindowTokens - usage.totalTokens),
           usedPercent: Math.min(100, Math.round(usage.usedRatio * 100)),
-          autoCompactPercent: options.context.autoCompactPercent,
+          autoCompactPercent: Math.round(configuration.settings.config.context.compactionThresholdRatio * 100),
           accuracy: usage.accuracy,
         },
       };

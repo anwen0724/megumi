@@ -276,3 +276,51 @@ function safeHostname(value: string): string | undefined {
     return undefined;
   }
 }
+
+export interface PermissionSettingsAccess {
+  readSettings():
+    | { status: 'ok'; settings: { config: { permissions: PermissionSettings }; revision: string; sources: readonly { path: readonly string[]; source: string }[] } }
+    | { status: 'rejected'; error: { code: string; message: string } };
+  updateSettings(request: { patch: { permissions: { allow: PermissionRule[] } }; expectedRevision: string }):
+    | { status: 'updated' | 'unchanged' }
+    | { status: 'rejected'; error: { code: string; message: string } };
+}
+
+/** Filters persisted rules to the current workspace and session. */
+export function resolveConfiguredPermissionRules(
+  settings: Pick<PermissionSettingsAccess, 'readSettings'>,
+  request: { workspaceId: string; sessionId: string },
+): ResolvePermissionRulesResult {
+  const result = settings.readSettings();
+  if (result.status === 'rejected') return { status: 'failed', failure: result.error };
+  const config = result.settings.config.permissions;
+  const applies = (rule: PermissionRule) => rule.source === 'user'
+    || (rule.source === 'workspace' && rule.source_id === request.workspaceId)
+    || (rule.source === 'session' && rule.source_id === request.sessionId);
+  return { status: 'resolved', permissionSettings: {
+    mode: config.mode, allow: config.allow.filter(applies), ask: config.ask.filter(applies), deny: config.deny.filter(applies),
+  } };
+}
+
+/** Saves session grants in the file supplying the effective allow array. */
+export function recordConfiguredSessionGrant(
+  settings: PermissionSettingsAccess,
+  globalSettings: PermissionSettingsAccess,
+  request: { sessionId: string; rules: readonly PermissionRule[] },
+): AddPermissionRulesResult {
+  const current = settings.readSettings();
+  if (current.status === 'rejected') return { status: 'failed', failure: current.error };
+  if (request.rules.some((rule) => rule.source !== 'session' || rule.source_id !== request.sessionId)) {
+    return { status: 'failed', failure: { code: 'permission_rule_invalid', message: 'Session grants must belong to the current session.' } };
+  }
+  const source = current.settings.sources.find((item) => item.path.join('.') === 'permissions.allow');
+  const target = source?.source === 'project' ? settings : globalSettings;
+  const snapshot = target === settings ? current : target.readSettings();
+  if (snapshot.status === 'rejected') return { status: 'failed', failure: snapshot.error };
+  const allow = [...snapshot.settings.config.permissions.allow];
+  for (const rule of request.rules) {
+    if (!allow.some((existing) => JSON.stringify(existing) === JSON.stringify(rule))) allow.push(rule);
+  }
+  const saved = target.updateSettings({ patch: { permissions: { allow } }, expectedRevision: snapshot.settings.revision });
+  return saved.status === 'rejected' ? { status: 'failed', failure: saved.error } : { status: 'saved' };
+}

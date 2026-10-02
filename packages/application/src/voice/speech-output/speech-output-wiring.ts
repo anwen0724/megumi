@@ -8,11 +8,11 @@
  */
 
 import { sessionMessageText, type SessionAssistantReplyMessage } from '@megumi/agent-runtime/sessions/index';
-import type { Settings } from '../../settings/index';
+import type { Settings } from '../../settings/settings-store';
 import type { SpeechOutputRuntime } from './speech-output-runtime';
 
 export interface SpeechOutputWiringDeps {
-  readonly settings: Pick<Settings, 'resolve' | 'resolveVoiceTts' | 'readVoiceTtsApiKey'>;
+  readonly settings: Pick<Settings, 'readSettings' | 'readCredential'>;
   readonly findAssistantReplyBySessionIdAndExecutionId: (input: {
     readonly session_id: string;
     readonly execution_id: string;
@@ -55,16 +55,17 @@ export function onRunEndedForSpeechOutput(
   }
   if (event.payload?.status !== 'completed') return { status: 'ignored' };
 
-  const resolvedSettings = deps.settings.resolve();
-  if (resolvedSettings.status === 'failed') return { status: 'skipped', reason: 'settings_failed' };
-  if (!resolvedSettings.settings.voice.read_aloud_enabled) {
+  const resolvedSettings = deps.settings.readSettings();
+  if (resolvedSettings.status === 'rejected') return { status: 'skipped', reason: 'settings_failed' };
+  if (!resolvedSettings.settings.config.voice.readAloudEnabled) {
     return { status: 'skipped', reason: 'read_aloud_disabled' };
   }
 
-  const tts = deps.settings.resolveVoiceTts();
-  if (tts.status === 'failed') return { status: 'skipped', reason: 'tts_resolution_failed' };
-
-  const credential = deps.settings.readVoiceTtsApiKey({});
+  const tts = resolvedSettings.settings.config.voice.tts;
+  const credential = deps.settings.readCredential({
+    target: { kind: 'voiceTts' }, apiKeyEnv: tts.apiKeyEnv, defaultEnvNames: ['MINIMAX_API_KEY'],
+  });
+  if (credential.status === 'rejected') return { status: 'skipped', reason: 'tts_resolution_failed' };
   const reply = deps.findAssistantReplyBySessionIdAndExecutionId({
     session_id: event.sessionId,
     execution_id: event.executionId,
@@ -78,11 +79,11 @@ export function onRunEndedForSpeechOutput(
     sessionId: event.sessionId,
     text,
     config: {
-      provider: tts.settings.provider,
+      provider: tts.provider,
       // A missing key rides the normal read path: the synthesizer turns the
       // empty credential into an error event without any network call.
-      apiKey: credential.status === 'found' ? credential.api_key : '',
-      voiceId: tts.settings.voice_id,
+      apiKey: credential.status === 'found' ? credential.value : '',
+      voiceId: tts.voiceId,
     },
   });
   return { status: 'read' };

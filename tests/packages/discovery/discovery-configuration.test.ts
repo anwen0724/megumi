@@ -1,6 +1,10 @@
 /* Verifies that Discovery owns source-aware configuration while Settings only persists it. */
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createSettings } from '@megumi/application/settings/settings-store';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createDiscovery,
   createDiscoveryConfiguration,
@@ -22,28 +26,14 @@ function source(
 
 describe('Discovery configuration', () => {
   it('projects registered source facts and persists only validated configuration', async () => {
-    let settings = {
-      candidateSupplyConfirmed: true,
-      recommendationCandidateCheckIntervalSeconds: 60,
-      conversationRecognitionEnabled: false,
-      recommendationGenerationTime: '08:00',
-      recommendationTargetCount: 20,
-      recommendationWorkingSetCount: 80,
-      candidatePoolMinimumCount: 100,
-      candidatePoolMaximumCount: 200,
-      candidateValidityDays: 30,
-      candidateContentExcerptMaxCharacters: 8_000,
-      candidateSupplyCheckIntervalMinutes: 360,
-      enabledSources: ['bilibili', 'open_web'],
-    };
-    const write = vi.fn(async (next: typeof settings) => { settings = next; });
+    const settings = fileSettings({ candidateSupplyConfirmed: true });
     const configuration = createDiscoveryConfiguration({
       sourceRegistry: createSourceRegistry([
         source('bilibili', 'public_http'),
         source('open_web', 'configured_provider'),
         source('xiaohongshu', 'browser_session', 'not_configured'),
       ]),
-      settings: { read: () => settings, write },
+      settings,
     });
 
     expect(await configuration.get()).toEqual({
@@ -64,13 +54,14 @@ describe('Discovery configuration', () => {
       ],
     });
 
-    await configuration.update({ enabledSources: [' xiaohongshu ', 'open_web', 'xiaohongshu'] });
-    expect(write).toHaveBeenCalledWith({
-      ...settings,
-      enabledSources: ['xiaohongshu', 'open_web'],
-    });
+    await configuration.update({ enabledSources: ['xiaohongshu', 'open_web', 'future_source'] });
     await configuration.update({ recommendationCandidateCheckIntervalSeconds: 90 });
-    expect(settings.candidateSupplyConfirmed).toBe(true);
+    const saved = settings.readSettings();
+    expect(saved).toMatchObject({ status: 'ok', settings: { config: { discovery: {
+      candidateSupplyConfirmed: true, enabledSources: ['xiaohongshu', 'open_web', 'future_source'],
+    } } } });
+    await configuration.update({ enabledSources: [] });
+    expect((await configuration.get()).sources.every((item) => !item.enabled)).toBe(true);
     expect((await configuration.get()).recommendationCandidateCheckIntervalSeconds).toBe(90);
   });
 
@@ -91,23 +82,7 @@ describe('Discovery configuration', () => {
         source('bilibili', 'public_http'),
         browserSource,
       ]),
-      settings: {
-        read: () => ({
-          candidateSupplyConfirmed: true,
-          recommendationCandidateCheckIntervalSeconds: 60,
-          conversationRecognitionEnabled: false,
-          recommendationGenerationTime: '08:00',
-          recommendationTargetCount: 20,
-          recommendationWorkingSetCount: 80,
-          candidatePoolMinimumCount: 100,
-          candidatePoolMaximumCount: 200,
-          candidateValidityDays: 30,
-          candidateContentExcerptMaxCharacters: 8_000,
-          candidateSupplyCheckIntervalMinutes: 360,
-          enabledSources: ['xiaohongshu'],
-        }),
-        write: vi.fn(),
-      },
+      settings: fileSettings({ enabledSources: ['xiaohongshu'] }),
     });
 
     await expect(configuration.connectSource({ sourceId: 'xiaohongshu' })).resolves.toMatchObject({
@@ -129,23 +104,7 @@ describe('Discovery configuration', () => {
     const discovery = createDiscovery({
       configuration: {
         sourceRegistry,
-        settings: {
-          read: () => ({
-            candidateSupplyConfirmed: true,
-            recommendationCandidateCheckIntervalSeconds: 60,
-            conversationRecognitionEnabled: false,
-            recommendationGenerationTime: '08:00',
-            recommendationTargetCount: 20,
-            recommendationWorkingSetCount: 80,
-            candidatePoolMinimumCount: 100,
-            candidatePoolMaximumCount: 200,
-            candidateValidityDays: 30,
-            candidateContentExcerptMaxCharacters: 8_000,
-            candidateSupplyCheckIntervalMinutes: 360,
-            enabledSources: ['enabled'],
-          }),
-          write: vi.fn(),
-        },
+        settings: fileSettings({ enabledSources: ['enabled'] }),
       },
     });
 
@@ -159,36 +118,28 @@ describe('Discovery configuration', () => {
   });
 
   it.each([
-    { enabledSources: [] },
-    { enabledSources: ['missing'] },
     { recommendationGenerationTime: '8:00' },
     { recommendationTargetCount: 0 },
     { recommendationCandidateCheckIntervalSeconds: 0 },
     { recommendationTargetCount: 101 },
     { recommendationTargetCount: 81, recommendationWorkingSetCount: 80 },
   ])('rejects invalid updates without writing: %j', async (patch) => {
-    const write = vi.fn();
+    const settings = fileSettings();
     const configuration = createDiscoveryConfiguration({
       sourceRegistry: createSourceRegistry([source('open_web', 'configured_provider')]),
-      settings: {
-        read: () => ({
-          candidateSupplyConfirmed: true,
-          recommendationCandidateCheckIntervalSeconds: 60,
-          conversationRecognitionEnabled: false,
-          recommendationGenerationTime: '08:00',
-          recommendationTargetCount: 20,
-          recommendationWorkingSetCount: 80,
-          candidatePoolMinimumCount: 100,
-          candidatePoolMaximumCount: 200,
-          candidateValidityDays: 30,
-          candidateContentExcerptMaxCharacters: 8_000,
-          candidateSupplyCheckIntervalMinutes: 360,
-          enabledSources: ['open_web'],
-        }),
-        write,
-      },
+      settings,
     });
     await expect(configuration.update(patch)).rejects.toThrow();
-    expect(write).not.toHaveBeenCalled();
+    expect(settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { discovery: { recommendationTargetCount: 20 } } } });
   });
 });
+
+const directories: string[] = [];
+afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+function fileSettings(discovery = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'discovery-config-'));
+  directories.push(root);
+  const globalSettingsPath = path.join(root, 'settings.json');
+  fs.writeFileSync(globalSettingsPath, JSON.stringify({ discovery }));
+  return createSettings({ globalSettingsPath, credentialsPath: path.join(root, 'credentials.json') });
+}

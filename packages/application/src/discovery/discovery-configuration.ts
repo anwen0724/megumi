@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import type { DiscoverySourceId } from './sources/discovery-source';
 import type { SourceRegistry } from './sources/source-registry';
-import { candidatePoolSettings } from './candidates/candidate-pool';
+import type { Settings } from '../settings/settings-store';
 
 const LocalTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u);
 
@@ -23,12 +23,7 @@ export interface DiscoveryConfigurationSettings {
   readonly candidateSupplyCheckIntervalMinutes: number;
 }
 
-export interface DiscoveryConfigurationStore {
-  /** Reads the current validated configuration snapshot. */
-  read(): DiscoveryConfigurationSettings;
-  /** Persists one complete validated configuration snapshot. */
-  write(settings: DiscoveryConfigurationSettings): Promise<void> | void;
-}
+export type DiscoveryConfigurationStore = Pick<Settings, 'readSettings' | 'updateSettings'>;
 
 export const UpdateDiscoveryConfigurationRequestSchema = z.object({
   recommendationCandidateCheckIntervalSeconds: z.number().int().positive().optional(),
@@ -36,7 +31,7 @@ export const UpdateDiscoveryConfigurationRequestSchema = z.object({
   recommendationGenerationTime: LocalTimeSchema.optional(),
   recommendationTargetCount: z.number().int().min(1).max(100).optional(),
   recommendationWorkingSetCount: z.number().int().min(1).max(200).optional(),
-  enabledSources: z.array(z.string().trim().min(1)).min(1).optional(),
+  enabledSources: z.array(z.string().trim().min(1)).optional(),
   candidatePoolMinimumCount: z.number().int().positive().optional(),
   candidatePoolMaximumCount: z.number().int().positive().optional(),
   candidateValidityDays: z.number().int().positive().optional(),
@@ -100,8 +95,13 @@ export function createDiscoveryConfiguration(input: {
   readonly sourceRegistry: SourceRegistry;
   readonly settings: DiscoveryConfigurationStore;
 }): DiscoveryConfiguration {
+  const read = () => {
+    const result = input.settings.readSettings();
+    if (result.status === 'rejected') throw new Error(result.error.message);
+    return result.settings;
+  };
   const view = (): DiscoveryConfigurationView => {
-    const settings = input.settings.read();
+    const settings = read().config.discovery;
     const enabled = new Set(settings.enabledSources);
     return {
       recommendationCandidateCheckIntervalSeconds: settings.recommendationCandidateCheckIntervalSeconds,
@@ -124,43 +124,11 @@ export function createDiscoveryConfiguration(input: {
     get: async () => view(),
     update: async (request) => {
       const patch = UpdateDiscoveryConfigurationRequestSchema.parse(request);
-      const current = input.settings.read();
-      const enabledSources = patch.enabledSources
-        ? [...new Set(patch.enabledSources.map((sourceId) => sourceId.trim()))]
-        : [...current.enabledSources];
-      const registered = new Set(input.sourceRegistry.listDescriptors().map((source) => source.id));
-      if (enabledSources.some((sourceId) => !registered.has(sourceId))) {
-        throw new Error('Discovery configuration contains an unregistered source.');
-      }
-      const next = {
-        candidateSupplyConfirmed: current.candidateSupplyConfirmed,
-        recommendationCandidateCheckIntervalSeconds: patch.recommendationCandidateCheckIntervalSeconds
-          ?? current.recommendationCandidateCheckIntervalSeconds,
-        conversationRecognitionEnabled: patch.conversationRecognitionEnabled ?? current.conversationRecognitionEnabled,
-        recommendationGenerationTime: patch.recommendationGenerationTime ?? current.recommendationGenerationTime,
-        recommendationTargetCount: patch.recommendationTargetCount ?? current.recommendationTargetCount,
-        recommendationWorkingSetCount: patch.recommendationWorkingSetCount
-          ?? current.recommendationWorkingSetCount,
-        enabledSources,
-        candidatePoolMinimumCount: patch.candidatePoolMinimumCount ?? current.candidatePoolMinimumCount,
-        candidatePoolMaximumCount: patch.candidatePoolMaximumCount ?? current.candidatePoolMaximumCount,
-        candidateValidityDays: patch.candidateValidityDays ?? current.candidateValidityDays,
-        candidateContentExcerptMaxCharacters: patch.candidateContentExcerptMaxCharacters
-          ?? current.candidateContentExcerptMaxCharacters,
-        candidateSupplyCheckIntervalMinutes: patch.candidateSupplyCheckIntervalMinutes
-          ?? current.candidateSupplyCheckIntervalMinutes,
-      };
-      candidatePoolSettings({
-        minimumCount: next.candidatePoolMinimumCount,
-        maximumCount: next.candidatePoolMaximumCount,
-        candidateValidityDays: next.candidateValidityDays,
-        candidateContentExcerptMaxCharacters: next.candidateContentExcerptMaxCharacters,
+      const result = input.settings.updateSettings({
+        patch: { discovery: patch },
+        expectedRevision: read().revision,
       });
-      if (next.recommendationTargetCount > next.recommendationWorkingSetCount
-        || next.recommendationWorkingSetCount > next.candidatePoolMaximumCount) {
-        throw new Error('Recommendation count settings are inconsistent.');
-      }
-      await input.settings.write(next);
+      if (result.status === 'rejected') throw new Error(result.error.message);
       return view();
     },
     async connectSource(request) {
@@ -173,7 +141,7 @@ export function createDiscoveryConfiguration(input: {
       return sourceView({
         descriptor: source.descriptor,
         availability: source.getAvailability(),
-        enabled: new Set(input.settings.read().enabledSources).has(source.descriptor.id),
+        enabled: new Set(read().config.discovery.enabledSources).has(source.descriptor.id),
       });
     },
     async refreshSource(request) {
@@ -184,7 +152,7 @@ export function createDiscoveryConfiguration(input: {
       return sourceView({
         descriptor: source.descriptor,
         availability: source.getAvailability(),
-        enabled: new Set(input.settings.read().enabledSources).has(source.descriptor.id),
+        enabled: new Set(read().config.discovery.enabledSources).has(source.descriptor.id),
       });
     },
     async refreshSources(sourceIds) {

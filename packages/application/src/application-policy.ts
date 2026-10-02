@@ -4,7 +4,6 @@
  */
 import type { RecentEventBufferOptions } from '@megumi/agent-runtime/events';
 import type { AgentExecutionPolicy } from '@megumi/agent-runtime/runs/index';
-import type { Settings } from './settings/index';
 
 export const PRODUCT_RECENT_EVENT_BUFFER = {
   maxSessions: 64,
@@ -39,13 +38,4 @@ export function resolveModelVisibleOperatingSystem(platform: NodeJS.Platform): s
   if (platform === 'darwin') return 'macOS';
   if (platform === 'linux') return 'Linux';
   return platform;
-}
-
-/** Resolves the UI percentage without making Product the owner of compaction policy. */
-export function resolveAutoCompactPercent(settings: Settings): number {
-  const resolved = settings.resolve();
-  const ratio = resolved.status === 'ok'
-    ? resolved.settings.context.compaction_threshold_ratio
-    : 0.8;
-  return Math.round((ratio ?? 0.8) * 100);
 }

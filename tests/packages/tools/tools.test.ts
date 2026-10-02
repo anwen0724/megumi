@@ -1,3 +1,8 @@
+import { createSettings } from '@megumi/application/settings/settings-store';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { afterEach } from 'vitest';
 import { describe, expect, it, vi } from 'vitest';
 import { createTools, type BuiltInToolName } from '@megumi/agent-runtime/tools/index';
 
@@ -5,7 +10,7 @@ describe('Tools ModelCall routing', () => {
   it('routes the explicitly selected search, read and submission tools', async () => {
     const calls: string[] = [];
     const tools = createTools({
-      settings: { resolveWebSearch: () => ({ status: 'failed' }), readWebSearchApiKey: () => ({ status: 'missing' }) },
+      settings: fileSettings,
       workspaces: { getWorkspace: () => { throw new Error('not used'); } },
       workspaceChanges: { trackToolExecution: ({ execute }) => execute() },
       sandbox: {
@@ -66,10 +71,7 @@ describe('Tools ModelCall routing', () => {
     const disabled = new Set<BuiltInToolName>();
     const openSandbox = vi.fn(async () => ({ status: 'unavailable' as const, reason: 'Not used.' }));
     const tools = createTools({
-      settings: {
-        resolveWebSearch: () => ({ status: 'ok', settings: {} }),
-        readWebSearchApiKey: () => ({ status: 'missing' }),
-      },
+      settings: fileSettings,
       workspaces: {
         getWorkspace: ({ workspace_id }) => ({
           status: 'found',
@@ -152,10 +154,7 @@ describe('Tools ModelCall routing', () => {
 
   it('executes update_plan without Permissions or Sandbox and emits a complete snapshot', async () => {
     const tools = createTools({
-      settings: {
-        resolveWebSearch: () => ({ status: 'failed' }),
-        readWebSearchApiKey: () => ({ status: 'missing' }),
-      },
+      settings: fileSettings,
       workspaces: {
         getWorkspace: () => ({ status: 'found', workspace: { root_path: 'C:/workspace', status: 'available' } }),
       },
@@ -213,3 +212,11 @@ describe('Tools ModelCall routing', () => {
   });
 
 });
+
+const directories: string[] = [];
+afterEach(() => { for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true }); });
+function fileSettings() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tool-config-'));
+  directories.push(root);
+  return createSettings({ globalSettingsPath: path.join(root, 'settings.json'), credentialsPath: path.join(root, 'credentials.json') });
+}

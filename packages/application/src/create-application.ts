@@ -2,10 +2,6 @@
  * Composes the complete Host-neutral Megumi application runtime.
  * Concrete hosts only inject environmental adapters and consume Application.
  */
-import {
-  migrateLegacyPermissionSettingsFile,
-  migrateLegacyProviderApiSettingsFile,
-} from './settings/index';
 import { deriveContextUsage } from '@megumi/agent-runtime/context/index';
 import {
   createSpeechOutputRuntime,
@@ -42,7 +38,6 @@ import {
 } from './application-capabilities';
 import {
   PRODUCT_SHUTDOWN_TIMEOUT_MS,
-  resolveAutoCompactPercent,
 } from './application-policy';
 import {
   createApplicationResourceManager,
@@ -76,7 +71,7 @@ export type ProductInputSourceAccess = NonNullable<ProductCapabilitiesOptions['i
 export type ProductSessionAttachmentFileSystem = NonNullable<ProductCapabilitiesOptions['sessionAttachmentFileSystem']>;
 export type ProductObservabilityStorage = NonNullable<ProductCapabilitiesOptions['observabilityStorage']>;
 export type ProductEnvironment = NonNullable<ProductCapabilitiesOptions['productEnvironment']>;
-export type ProductSettingsEnvironment = NonNullable<ProductCapabilitiesOptions['settingsEnvironment']>;
+export type ProductSettingsEnvironment = NonNullable<ProductCapabilitiesOptions['readEnvironment']>;
 
 /**
  * Builds the complete Product in dependency order and rolls back every resource
@@ -122,8 +117,6 @@ function createApplicationRuntime(
     commands,
   } = capabilities;
 
-  migrateLegacyPermissionSettingsFile(homePaths.settingsPath);
-  migrateLegacyProviderApiSettingsFile(homePaths.settingsPath);
   resources.registerDatabase(capabilities.database);
 
   const suggestions = createInputSuggestionQuery({
@@ -150,10 +143,9 @@ function createApplicationRuntime(
     workspaces,
     context: {
       deriveUsage: (historyItems, model) => deriveContextUsage({ history: historyItems, model }),
-      autoCompactPercent: resolveAutoCompactPercent(settings),
     },
-    resolveModel: async (selection) => {
-      const resolved = await runtime.prepareModel({ selection: { providerId: selection.provider_id, modelId: selection.model_id } });
+    resolveModel: async (selection, workspaceId) => {
+      const resolved = await runtime.prepareModel({ workspaceId, selection: { providerId: selection.provider_id, modelId: selection.model_id } });
       return resolved.status === 'ok' ? resolved.model : undefined;
     },
     ...(options.attachmentPicker ? { attachmentPicker: options.attachmentPicker } : {}),
@@ -174,7 +166,7 @@ function createApplicationRuntime(
       try {
         const result = onRunEndedForSpeechOutput(
           {
-            settings,
+            settings: capabilities.settingsForWorkspace(event.workspaceId),
             findAssistantReplyBySessionIdAndExecutionId: (request) =>
               sessionStore.findAssistantReplyBySessionIdAndExecutionId(request),
             speechOutput,
