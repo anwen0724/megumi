@@ -1484,7 +1484,8 @@ export function createSessionMessageSaver(options: {
         error_message: message.errorMessage,
       };
       const content = message.content.map((block) => ({ ...block }));
-      const completed_at = new Date(message.timestamp).toISOString();
+      // AI timestamps identify message creation; this hook receives the completed reply.
+      const completed_at = new Date().toISOString();
       const hasCalls = content.some((block) => block.type === 'toolCall');
       saved = hasCalls
         ? options.history.saveModelResponse({

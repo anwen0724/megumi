@@ -1,7 +1,7 @@
 /*
  * Reports diagnostic and observer failures without changing execution outcomes.
  */
-import type { AssistantMessage, AssistantMessageEvent, SimpleStreamOptions } from '@megumi/ai';
+import type { SimpleStreamOptions } from '@megumi/ai';
 
 export interface DiagnosticScope {
   readonly runId: string;
@@ -24,10 +24,8 @@ export type DiagnosticOutcome =
 export interface ModelCapture {
   readonly options: Pick<
     SimpleStreamOptions,
-    'fetch' | 'onPayload' | 'onResponse' | 'onProviderStreamEvent'
+    'fetch' | 'onProviderExchange'
   >;
-  observe(event: AssistantMessageEvent): void;
-  complete(message: AssistantMessage | undefined): void;
 }
 
 export interface AgentDiagnostics {
@@ -106,17 +104,5 @@ export function createModelCapture(
   } catch (error) {
     reportDiagnostic(diagnostics, scope.runId, error);
     return undefined;
-  }
-}
-
-export function observeModelCapture(
-  diagnostics: AgentDiagnostics | undefined,
-  runId: string,
-  observe: () => void,
-): void {
-  try {
-    observe();
-  } catch (error) {
-    reportDiagnostic(diagnostics, runId, error);
   }
 }

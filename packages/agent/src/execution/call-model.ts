@@ -4,7 +4,6 @@
 import {
   captureContent,
   createModelCapture,
-  observeModelCapture,
   observeOperation,
 } from '../diagnostics';
 import { isContextOverflow, isRetryableAssistantError, type AssistantMessage } from '@megumi/ai';
@@ -121,6 +120,7 @@ async function callAttempt(
       },
       {
         ...capture?.options,
+        reasoning: run.request.config.reasoning,
         signal,
         timeoutMs: policy.modelCallTimeoutMs,
         maxRetries: policy.providerRequestMaxRetries,
@@ -128,7 +128,6 @@ async function callAttempt(
       },
     );
     for await (const event of stream) {
-      observeModelCapture(run.diagnostics, run.runId, () => capture?.observe(event));
       if (event.type === 'done') message = event.message;
       else if (event.type === 'error') message = event.error;
       else {
@@ -154,7 +153,6 @@ async function callAttempt(
     );
   } finally {
     clearTimeout(timer);
-    observeModelCapture(run.diagnostics, run.runId, () => capture?.complete(message));
     captureContent(run.diagnostics, {
       runId: run.runId,
       modelCallId,

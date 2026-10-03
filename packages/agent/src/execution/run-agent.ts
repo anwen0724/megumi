@@ -1,7 +1,7 @@
 /*
  * Binds AI once and owns the state, cancellation and final result of each independent run.
  */
-import type { Api, AssistantMessage, Message, Model, Models } from '@megumi/ai';
+import type { Api, AssistantMessage, Message, Model, Models, ThinkingLevel } from '@megumi/ai';
 import { randomUUID } from 'node:crypto';
 import type { AgentContext, ExecutionEnvironment } from '../context/context-contracts';
 import { observeOperation, reportDiagnostic, type AgentDiagnostics } from '../diagnostics';
@@ -34,6 +34,8 @@ export interface AgentExecutionPolicy {
 
 export interface AgentConfig {
   readonly model: Model<Api>;
+  /** Product-selected thinking effort, passed unchanged to the AI adapter. */
+  readonly reasoning?: ThinkingLevel;
   readonly tools: readonly AgentTool[];
   readonly permissionMode: PermissionMode;
   readonly environment?: ExecutionEnvironment;

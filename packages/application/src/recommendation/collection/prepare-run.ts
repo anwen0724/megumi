@@ -34,6 +34,7 @@ export async function prepareCollectionRun(
     collection,
     config: {
       model,
+      ...(model.reasoning ? { reasoning: 'high' as const } : {}),
       tools: collection.tools,
       permissionMode: 'auto',
       policy: { ...dependencies.policy },

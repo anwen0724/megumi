@@ -38,13 +38,11 @@ export function createSessionEventObserver(options: {
         role: 'assistant',
         content: messageText(event.message),
       });
-      publish('message.thinking.update', {
-        messageId: event.messageId,
-        thinking: event.message.content
-          .filter((block) => block.type === 'thinking')
-          .map((block) => block.thinking)
-          .join(''),
-      });
+      const thinking = event.message.content
+        .filter((block) => block.type === 'thinking')
+        .map((block) => block.thinking)
+        .join('');
+      if (thinking) publish('message.thinking.update', { messageId: event.messageId, thinking });
     } else if (event.type === 'message' && event.message.role !== 'system') {
       startMessage(
         event.messageId,

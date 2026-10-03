@@ -30,6 +30,7 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
+import { notifyProviderExchange } from "../utils/provider-exchange.ts";
 import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
@@ -260,6 +261,8 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			stopReason: "pending",
 			timestamp: Date.now(),
 		};
+		let providerAttempt = 0;
+		let semanticOutputStarted = false;
 
 		try {
 			const apiKey = options?.apiKey;
@@ -305,6 +308,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				while (true) {
 					websocketStarted = false;
 					try {
+						providerAttempt += 1;
+						notifyProviderExchange(options?.onProviderExchange, {
+							type: "request",
+							attempt: providerAttempt,
+							payload: body,
+						});
 						await processWebSocketStream(
 							resolveCodexWebSocketUrl(model.baseUrl),
 							body,
@@ -314,6 +323,13 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 							model,
 							() => {
 								websocketStarted = true;
+								if (!semanticOutputStarted) {
+									semanticOutputStarted = true;
+									notifyProviderExchange(options?.onProviderExchange, {
+										type: "output_started",
+										attempt: providerAttempt,
+									});
+								}
 								if (!startEmitted) {
 									startEmitted = true;
 									stream.push({ type: "start", partial: output });
@@ -344,10 +360,22 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 						const previousResponseNotFound = isPreviousResponseNotFoundError(error);
 						if (!aborted && previousResponseNotFound && !retriedMissingWebSocketContinuation) {
 							retriedMissingWebSocketContinuation = true;
+							notifyProviderExchange(options?.onProviderExchange, {
+								type: "retry_scheduled",
+								currentAttempt: providerAttempt,
+								nextAttempt: providerAttempt + 1,
+								reasonCode: "previous_response_not_found",
+							});
 							continue;
 						}
 						if (!aborted && connectionLimitBeforeStart && !retriedWebSocketConnectionLimit) {
 							retriedWebSocketConnectionLimit = true;
+							notifyProviderExchange(options?.onProviderExchange, {
+								type: "retry_scheduled",
+								currentAttempt: providerAttempt,
+								nextAttempt: providerAttempt + 1,
+								reasonCode: "websocket_connection_limit",
+							});
 							continue;
 						}
 						if (aborted || (isCodexNonTransportError(error) && !connectionLimitBeforeStart)) {
@@ -368,6 +396,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 							throw error;
 						}
 						recordWebSocketSseFallback(cacheSessionId);
+						notifyProviderExchange(options?.onProviderExchange, {
+							type: "retry_scheduled",
+							currentAttempt: providerAttempt,
+							nextAttempt: providerAttempt + 1,
+							reasonCode: "transport_fallback",
+						});
 						break;
 					}
 				}
@@ -393,6 +427,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				}
 
 				try {
+					providerAttempt += 1;
+					notifyProviderExchange(options?.onProviderExchange, {
+						type: "request",
+						attempt: providerAttempt,
+						payload: body,
+					});
 					const headerTimeoutSignal =
 						httpTimeoutMs !== undefined && httpTimeoutMs > 0 ? AbortSignal.timeout(httpTimeoutMs) : undefined;
 					const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
@@ -428,6 +468,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 								? BASE_DELAY_MS * 2 ** attempt
 								: validateRetryDelayMs(retryAfterDelayMs, options);
 
+						notifyProviderExchange(options?.onProviderExchange, {
+							type: "retry_scheduled",
+							currentAttempt: providerAttempt,
+							nextAttempt: providerAttempt + 1,
+							reasonCode: `http_${response.status}`,
+						});
 						await sleep(delayMs, options?.signal);
 						continue;
 					}
@@ -453,6 +499,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 						!lastError.message.includes("usage limit")
 					) {
 						const delayMs = BASE_DELAY_MS * 2 ** attempt;
+						notifyProviderExchange(options?.onProviderExchange, {
+							type: "retry_scheduled",
+							currentAttempt: providerAttempt,
+							nextAttempt: providerAttempt + 1,
+							reasonCode: "network_error",
+						});
 						await sleep(delayMs, options?.signal);
 						continue;
 					}
@@ -472,6 +524,13 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				startEmitted = true;
 				stream.push({ type: "start", partial: output });
 			}
+			if (!semanticOutputStarted) {
+				semanticOutputStarted = true;
+				notifyProviderExchange(options?.onProviderExchange, {
+					type: "output_started",
+					attempt: providerAttempt,
+				});
+			}
 			await processStream(response, output, stream, model, grammarToolInputProperties, options);
 
 			if (options?.signal?.aborted) {
@@ -489,6 +548,13 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 			output.errorMessage = formatProviderError(normalizeProviderError(error));
+			if (semanticOutputStarted) {
+				notifyProviderExchange(options?.onProviderExchange, {
+					type: "stream_interrupted",
+					attempt: Math.max(providerAttempt, 1),
+					reasonCode: output.stopReason === "aborted" ? "aborted" : "stream_error",
+				});
+			}
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}

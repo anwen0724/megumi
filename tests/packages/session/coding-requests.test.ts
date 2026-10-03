@@ -42,8 +42,49 @@ async function codingFixture(sourceAccess?: InputSourceAccess, finalization?: { 
       changes.finalizeChangeSet({ workspace_id: run.workspaceId, session_id: run.sessionId,
       execution_id: run.runId, finalized_at: new Date().toISOString() }); },
   });
-  return { ...session, coding, provider, ai, config, changes };
+  return { ...session, coding, provider, ai, config, changes, events };
 }
+
+it('does not announce thinking for a reply containing only text', async () => {
+  const app = await codingFixture();
+  try {
+    const started = await app.coding.submitInput({
+      workspaceId: app.workspaceId, sessionId: app.sessionId, text: 'Hello',
+    });
+    if (started.status !== 'started') throw new Error('Coding request was not started.');
+    expect(await started.run.completion).toMatchObject({ status: 'completed' });
+    const events = app.events.read({ sessionId: app.sessionId }).events;
+    expect(events.some(event => event.type === 'message.update')).toBe(true);
+    expect(events.filter(event => event.type === 'message.thinking.update')).toEqual([]);
+  } finally { await app.coding.shutdown(); app.cleanup(); }
+});
+
+it('requests the existing high thinking level when the selected model supports reasoning', async () => {
+  const app = await codingFixture();
+  app.config.model.reasoning = true;
+  let requestedReasoning: string | undefined;
+  app.provider.setResponses([(_context, options) => {
+    requestedReasoning = options?.reasoning;
+    return fauxAssistantMessage([
+      { type: 'thinking', thinking: 'Checking the request.' },
+      { type: 'text', text: 'Done.' },
+    ]);
+  }]);
+  try {
+    const started = await app.coding.submitInput({
+      workspaceId: app.workspaceId, sessionId: app.sessionId, text: 'Investigate',
+    });
+    if (started.status !== 'started') throw new Error('Coding request was not started.');
+    expect(await started.run.completion).toMatchObject({ status: 'completed' });
+    expect(requestedReasoning).toBe('high');
+    expect(app.events.read({ sessionId: app.sessionId }).events).toContainEqual(expect.objectContaining({
+      type: 'message.thinking.update', payload: expect.objectContaining({ thinking: 'Checking the request.' }),
+    }));
+    const history = app.history.getCommittedRunMessages({ sessionId: app.sessionId, executionId: started.run.runId });
+    if (history.status !== 'ok') throw new Error(history.failure.message);
+    expect(history.messages.at(-1)?.message.content).toContainEqual({ type: 'thinking', thinking: 'Checking the request.' });
+  } finally { await app.coding.shutdown(); app.cleanup(); }
+});
 
 it('preserves the interrupted model reply in session history after cancellation', async () => {
   const app = await codingFixture();

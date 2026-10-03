@@ -82,17 +82,7 @@ export async function runAgentLoop(
 /** The returned context is already complete; the run never appends history again. */
 async function prepareContext(run: RunExecution): Promise<PreparedContext> {
   const { config } = run.request;
-  const tools = config.tools.map(
-    ({ name, description, parameters, executionMode, promptSnippet, promptGuidelines, label }) => ({
-      name,
-      description,
-      parameters,
-      executionMode,
-      promptSnippet,
-      promptGuidelines,
-      label,
-    }),
-  );
+  const tools = config.tools.map(({ execute, operations, ...definition }) => definition);
   const context = await observeOperation(
     run.diagnostics,
     { runId: run.runId, name: 'context.build' },

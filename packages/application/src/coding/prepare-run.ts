@@ -59,6 +59,7 @@ export async function prepareCodingRun(
   const tools = selectCodingTools(dependencies, request.session.workspace_id);
   return {
     model: request.model,
+    ...(request.model.reasoning ? { reasoning: 'high' as const } : {}),
     permissionMode: request.permissionMode,
     environment: {
       workingDirectory: workspace.workspace.root_path,

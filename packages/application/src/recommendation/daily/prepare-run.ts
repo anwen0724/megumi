@@ -44,6 +44,7 @@ export async function prepareRecommendationRun(
     workset,
     config: {
       model,
+      ...(model.reasoning ? { reasoning: 'high' as const } : {}),
       tools: createRecommendationTools(workset),
       permissionMode: 'auto',
       policy: { ...dependencies.policy },

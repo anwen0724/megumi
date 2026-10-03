@@ -20,7 +20,7 @@ export interface TestApplication {
 
 export function composeTestApplication(
   responses: readonly (string | AssistantMessage['content'])[] = ['Test reply.'],
-  platform: Pick<CreateApplicationOptions, 'inputSourceAccess'> = {},
+  platform: Pick<CreateApplicationOptions, 'inputSourceAccess' | 'modelStreams'> = {},
 ): TestApplication {
   const root = mkdtempSync(path.join(tmpdir(), 'megumi-composition-'));
   const home = path.join(root, 'home');
@@ -63,7 +63,7 @@ export function composeTestApplication(
     },
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
     observabilityStorage: nodeObservabilityStorage,
-    modelStreams: { 'openai-completions': scripted.streams },
+    modelStreams: platform.modelStreams ?? { 'openai-completions': scripted.streams },
     directoryPicker: { chooseDirectory: async () => ({ canceled: false, filePaths: [workspace] }) },
     clock: { now: () => '2026-01-01T00:00:00.000Z' },
     createApplicationId: createTestId,

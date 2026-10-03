@@ -43,6 +43,7 @@ import { parseStreamingJson } from "../utils/json-parse.ts";
 import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { notifyProviderExchange } from "../utils/provider-exchange.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
 import {
@@ -322,6 +323,8 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			stopReason: "pending",
 			timestamp: Date.now(),
 		};
+		let providerAttempt = 1;
+		let semanticOutputStarted = false;
 
 		// `reasoning_details` are replay metadata, not user-visible stream deltas.
 		// Keep them in memory during streaming and serialize once when the block is finalized.
@@ -368,11 +371,19 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				maxRetries: 0,
 			};
 			const { data: openaiStream, response } = await retryProviderRequest(
-				() => client.chat.completions.create(params, requestOptions).withResponse(),
+				(attempt) => {
+					providerAttempt = attempt;
+					notifyProviderExchange(options?.onProviderExchange, { type: "request", attempt, payload: params });
+					return client.chat.completions.create(params, requestOptions).withResponse();
+				},
 				{
 					maxRetries: options?.maxRetries,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
 					signal: options?.signal,
+					onRetryScheduled: (event) => notifyProviderExchange(options?.onProviderExchange, {
+						type: "retry_scheduled",
+						...event,
+					}),
 				},
 			);
 			await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
@@ -553,6 +564,13 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			for await (const chunk of openaiStream) {
 				await options?.onProviderStreamEvent?.(chunk, model);
 				if (!chunk || typeof chunk !== "object") continue;
+				if (!semanticOutputStarted) {
+					semanticOutputStarted = true;
+					notifyProviderExchange(options?.onProviderExchange, {
+						type: "output_started",
+						attempt: providerAttempt,
+					});
+				}
 
 				// OpenAI documents ChatCompletionChunk.id as the unique chat completion identifier,
 				// and each chunk in a streamed completion carries the same id.
@@ -719,6 +737,13 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			const rawMetadata = (error as any)?.error?.metadata?.raw;
 			if (rawMetadata && !output.errorMessage.includes(String(rawMetadata))) {
 				output.errorMessage += `\n${rawMetadata}`;
+			}
+			if (semanticOutputStarted) {
+				notifyProviderExchange(options?.onProviderExchange, {
+					type: "stream_interrupted",
+					attempt: providerAttempt,
+					reasonCode: output.stopReason === "aborted" ? "aborted" : "stream_error",
+				});
 			}
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();

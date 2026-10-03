@@ -1,6 +1,6 @@
 /* Verifies Coding persists every formed Agent message through the existing session tables. */
 // @vitest-environment node
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { fauxAssistantMessage, fauxToolCall } from '@megumi/ai';
 import { createSessionMessageSaver } from '@megumi/application/coding/sessions/session-history';
 import { createCodingContext } from '@megumi/application/coding/prepare-context';
@@ -8,6 +8,30 @@ import { createSessionAttachmentReader } from '@megumi/application/coding/sessio
 import { createModels } from '@megumi/ai';
 import { fixture } from '../agent/agent-fixture';
 import { createSessionFixture } from './session-test-fixture';
+
+it('persists reply completion time independently of the model message start timestamp', async () => {
+  const session = await createSessionFixture();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    const startedAt = Date.parse('2026-10-04T02:50:03.000+08:00');
+    const completedAt = '2026-10-03T18:50:07.000Z';
+    const save = createSessionMessageSaver({ history: session.history, user: {
+      session_id: session.sessionId, display_content: [{ type: 'text', text: 'Hello' }],
+      model_content: [{ type: 'text', text: 'Hello' }],
+    } });
+    vi.setSystemTime(startedAt);
+    await save({ runId: 'run:timing', messageId: 'user:timing',
+      message: { role: 'user', content: 'Hello', timestamp: startedAt } });
+    const reply = fauxAssistantMessage('Hello back', { timestamp: startedAt + 20 });
+    vi.setSystemTime(new Date(completedAt));
+    await save({ runId: 'run:timing', messageId: 'reply:timing', message: reply });
+    const committed = session.history.getCommittedRunMessages({
+      sessionId: session.sessionId, executionId: 'run:timing',
+    });
+    if (committed.status !== 'ok') throw new Error(committed.failure.message);
+    expect(committed.messages.at(-1)?.message.completed_at).toBe(completedAt);
+  } finally { vi.useRealTimers(); session.cleanup(); }
+});
 
 it('keeps user input, intermediate reply, tool result and final reply on the committed branch', async () => {
   const session = await createSessionFixture();

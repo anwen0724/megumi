@@ -44,6 +44,7 @@ import { parseJsonWithRepair, parseStreamingJson } from "../utils/json-parse.ts"
 import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
+import { notifyProviderExchange } from "../utils/provider-exchange.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../utils/text.ts";
 import {
@@ -599,6 +600,8 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 			stopReason: "pending",
 			timestamp: Date.now(),
 		};
+		let providerAttempt = 1;
+		let semanticOutputStarted = false;
 
 		try {
 			let client: Anthropic;
@@ -649,11 +652,19 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 				maxRetries: 0,
 			};
 			const response = await retryProviderRequest(
-				() => client.beta.messages.create(params, requestOptions).asResponse(),
+				(attempt) => {
+					providerAttempt = attempt;
+					notifyProviderExchange(options?.onProviderExchange, { type: "request", attempt, payload: params });
+					return client.beta.messages.create(params, requestOptions).asResponse();
+				},
 				{
 					maxRetries: options?.maxRetries,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
 					signal: options?.signal,
+					onRetryScheduled: (event) => notifyProviderExchange(options?.onProviderExchange, {
+						type: "retry_scheduled",
+						...event,
+					}),
 				},
 			);
 			await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
@@ -664,6 +675,13 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 
 			for await (const event of iterateAnthropicEvents(response, options?.signal)) {
 				await options?.onProviderStreamEvent?.(event, model);
+				if (!semanticOutputStarted) {
+					semanticOutputStarted = true;
+					notifyProviderExchange(options?.onProviderExchange, {
+						type: "output_started",
+						attempt: providerAttempt,
+					});
+				}
 				if (event.type === "message_start") {
 					output.responseId = event.message.id;
 					const transformations = event.message.input_transformations;
@@ -894,6 +912,13 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
 			output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+			if (semanticOutputStarted) {
+				notifyProviderExchange(options?.onProviderExchange, {
+					type: "stream_interrupted",
+					attempt: providerAttempt,
+					reasonCode: output.stopReason === "aborted" ? "aborted" : "stream_error",
+				});
+			}
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
