@@ -1,0 +1,80 @@
+/* Lists direct entries from a directory inside the active workspace. */
+import { fileContext } from '../../../sandbox/file-access';
+import type { BuiltInToolContext } from '../../tool-contracts';
+import type { RawToolResult, AgentTool } from '../../tool-contracts';
+import { buildBoundedItemPage } from '../../tool-result';
+import {
+  inputRecord,
+  optionalBoolean,
+  optionalNonNegativeInteger,
+  optionalPositiveInteger,
+  optionalString,
+} from '../../tool-input';
+import { withFileFailure } from '../../../sandbox/file-access';
+
+export const listDirectoryTool: AgentTool = {
+  name: 'list_directory',
+  description: 'List files and directories. Returns up to 100 entries per page by default; when hasMore is true, continue with nextOffset. Use limit, offset, maxDepth, and includeHidden to control the traversal.',
+  promptSnippet: 'List files and directories.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: {
+        type: 'string',
+        description: 'The directory to list. Relative paths are resolved from the current working directory.',
+      },
+      maxDepth: { type: 'integer', description: 'Optional recursive depth limit.' },
+      limit: { type: 'integer', description: 'Optional maximum number of entries.' },
+      includeHidden: { type: 'boolean', description: 'Whether hidden files should be included.' },
+      offset: { type: 'integer', minimum: 0, description: 'Entry offset. Defaults to 0.' },
+    },
+    required: ['path'],
+    additionalProperties: false,
+  },
+  outputSchema: {
+    type: 'object',
+    properties: {
+      entries: { type: 'array', items: { type: 'object', properties: {
+        path: { type: 'string' }, kind: { type: 'string', enum: ['file', 'directory', 'other'] },
+      } } },
+      offset: { type: 'integer' }, hasMore: { type: 'boolean' }, nextOffset: { type: 'integer' },
+    },
+    required: ['entries', 'offset', 'hasMore'],
+  },
+  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+  executionMode: 'parallel',
+  operations: (input) => [{ action: 'workspace.read', resource: {
+    type: 'workspace.path', id: optionalString(inputRecord(input), 'path', '.'),
+  } }],
+  execute: (input, execution) => executeListDirectory(fileContext(execution), input, execution.signal),
+};
+
+/** Executes the validated built-in operation within its supplied access scope. */
+async function executeListDirectory(
+  context: BuiltInToolContext,
+  input: unknown,
+  signal?: AbortSignal,
+): Promise<RawToolResult> {
+  const record = inputRecord(input);
+  const requestedPath = optionalString(record, 'path', '.');
+  const maxDepth = optionalPositiveInteger(record, 'maxDepth', 1);
+  const limit = optionalPositiveInteger(record, 'limit', 100);
+  const includeHidden = optionalBoolean(record, 'includeHidden', false);
+  const offset = optionalNonNegativeInteger(record, 'offset', 0);
+  const result = await withFileFailure('list', () => context.workspaceFileAccess.listDirectory({
+    path: requestedPath,
+    maxDepth,
+    includeHidden,
+    signal,
+  }));
+
+  return {
+    outputKind: 'json',
+    content: buildBoundedItemPage({
+      items: result.entries,
+      offset,
+      limit,
+      contentFor: (entries, page) => ({ path: result.path, entries, ...page }),
+    }),
+  };
+}

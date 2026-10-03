@@ -1,0 +1,38 @@
+/* Applies ordered, conflict-safe text edits to one Workspace file. */
+import { fileContext } from '../../../sandbox/file-access';
+import type { BuiltInToolContext } from '../../tool-contracts';
+import type { RawToolResult, AgentTool } from '../../tool-contracts';
+import { inputRecord, requireString } from '../../tool-input';
+import { assertTextMutationTarget, toolEffectPath, withFileFailure } from '../../../sandbox/file-access';
+
+export const editFileTool: AgentTool = {
+  name: 'edit_file', description: 'Apply ordered exact-text edits to an existing UTF-8 text file. Each edit must match unique text exactly.',
+  promptSnippet: 'Apply exact-text edits to an existing file.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path.' },
+      edits: { type: 'array', items: { type: 'object', properties: { oldText: { type: 'string', minLength: 1 }, newText: { type: 'string' } }, required: ['oldText', 'newText'], additionalProperties: false } },
+      expectedFingerprint: { type: 'string', description: 'Optional fingerprint returned by read_file.' },
+    },
+    required: ['path', 'edits'], additionalProperties: false,
+  },
+  annotations: { destructiveHint: true, idempotentHint: false, openWorldHint: false },
+  executionMode: 'serial',
+  operations: (input) => [{ action: 'workspace.write', resource: { type: 'workspace.path', id: requireString(inputRecord(input), 'path') } }],
+  execute: (input, execution) => executeEditFile(fileContext(execution), input, execution.signal),
+};
+
+/** Executes the validated built-in operation within its supplied access scope. */
+async function executeEditFile(context: BuiltInToolContext, input: unknown, signal?: AbortSignal): Promise<RawToolResult> {
+  const record = inputRecord(input);
+  const targetPath = requireString(record, 'path');
+  assertTextMutationTarget(targetPath);
+  if (!Array.isArray(record.edits)) throw new Error('edits must be an array.');
+  const edits = record.edits.map((value) => {
+    const edit = inputRecord(value);
+    return { oldText: requireString(edit, 'oldText'), newText: typeof edit.newText === 'string' ? edit.newText : (() => { throw new Error('Missing or invalid string input: newText'); })() };
+  });
+  const result = await withFileFailure('edit', () => context.workspaceFileAccess.editFile({ path: targetPath, edits, ...(typeof record.expectedFingerprint === 'string' ? { expectedFingerprint: record.expectedFingerprint } : {}), signal }));
+  return { outputKind: 'json', content: { path: result.path, replacements: result.replacements, changed: result.changed, fingerprint: result.fingerprint }, effectReport: { coverage: 'complete', effects: result.changed ? [{ type: 'modified', path: toolEffectPath(result.path), pathType: 'file' }] : [], itemFailures: [] } };
+}

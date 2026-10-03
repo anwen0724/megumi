@@ -14,7 +14,6 @@ export interface PromptSkillCatalog {
 import type { ToolDefinition } from '../tools/tool-contracts';
 import type { ExecutionEnvironment } from './context-contracts';
 
-
 export interface SystemPromptSources {
   readonly systemInstructions: readonly SystemInstructionDocument[];
   readonly effectiveInstructions?: EffectiveInstructions;

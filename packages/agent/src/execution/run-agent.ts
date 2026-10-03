@@ -4,9 +4,11 @@
 import { randomUUID } from 'node:crypto';
 import type { Api, AssistantMessage, Message, Model, Models } from '@megumi/ai';
 import type { AgentContext, ExecutionEnvironment } from '../context/context-contracts';
-import type { AgentTool, ApprovalDecision, ApprovalRequest, PermissionMode } from '../tools/tool-contracts';
+import type { AgentTool, ApprovalDecision, ApprovalRequest, PermissionMode, ToolExecutionResult, ToolExecutionNotification } from '../tools/tool-contracts';
 import { runAgentLoop } from './agent-loop';
 import { reportDiagnostic, type AgentDiagnostics } from '../diagnostics';
+import { createSandbox, type Sandbox } from '../sandbox/sandbox-scope';
+import type { AgentPermissionRules } from '../permissions/authorize-tool';
 
 export interface AgentExecutionPolicy {
   readonly maxModelCallsPerExecution: number;
@@ -76,6 +78,8 @@ export type AgentEvent = { readonly runId: string } & (
   | { readonly type: 'model_attempt'; readonly turn: number; readonly attempt: number; readonly outcome: 'started' | 'retrying' | 'completed' | 'failed' }
   | { readonly type: 'tool_started'; readonly toolCallId: string; readonly toolName: string; readonly arguments: unknown }
   | { readonly type: 'tool_output'; readonly toolCallId: string; readonly output: { readonly stream: 'stdout' | 'stderr'; readonly chunk: string; readonly truncated: boolean } }
+  | { readonly type: 'tool_finished'; readonly toolCallId: string; readonly result: ToolExecutionResult }
+  | { readonly type: 'tool_notification'; readonly toolCallId: string; readonly notification: ToolExecutionNotification }
   | { readonly type: 'ended'; readonly result: AgentResult }
 );
 
@@ -105,11 +109,14 @@ export interface Agent {
 export interface CreateAgentRequest {
   readonly ai: Pick<Models, 'streamSimple' | 'completeSimple'>;
   readonly diagnostics?: AgentDiagnostics;
+  readonly permissionRules?: AgentPermissionRules;
+  readonly sandbox?: Sandbox;
 }
 
 /** Binds the configured AI service without making a model request. */
 export function createAgent(options: CreateAgentRequest): Agent {
-  return { startAgent: request => startRun(options, request) };
+  const capabilities = { ...options, sandbox: options.sandbox ?? createSandbox() };
+  return { startAgent: request => startRun(capabilities, request) };
 }
 
 /** Execution failures carry a stable public code and retain their original diagnostic cause. */
@@ -125,13 +132,16 @@ export interface RunExecution {
   readonly ai: CreateAgentRequest['ai'];
   readonly signal: AbortSignal;
   readonly messages: Message[];
+  readonly sandbox: Sandbox;
+  readonly permissionRules?: AgentPermissionRules;
+  approvalWaiting(approvalId: string, waiting: boolean): void;
   emit(event: AgentEvent): void;
   progress(update: Partial<Pick<AgentSnapshot, 'phase' | 'turn' | 'attempt' | 'pendingToolCallIds' | 'streamingMessage'>>): void;
   record(message: Message, messageId?: string): Promise<void>;
 }
 
 /** Creates isolated run data before asynchronously advancing the execution. */
-function startRun(options: CreateAgentRequest, source: StartAgentRequest): AgentRun {
+function startRun(options: CreateAgentRequest & { readonly sandbox: Sandbox }, source: StartAgentRequest): AgentRun {
   const runId = randomUUID();
   const controller = new AbortController();
   const signal = source.signal ? AbortSignal.any([source.signal, controller.signal]) : controller.signal;
@@ -147,6 +157,7 @@ function startRun(options: CreateAgentRequest, source: StartAgentRequest): Agent
     },
   };
   const messages: Message[] = [];
+  const approvals = new Set<string>();
   let state: AgentSnapshot = {
     runId, status: signal.aborted ? 'cancelling' : 'running', phase: 'saving_message',
     turn: 0, attempt: 0, runMessages: messages, pendingToolCallIds: [],
@@ -173,6 +184,13 @@ function startRun(options: CreateAgentRequest, source: StartAgentRequest): Agent
   signal.addEventListener('abort', onAbort, { once: true });
   const execution: RunExecution = {
     runId, request, ai: options.ai, signal, messages, progress, emit,
+    sandbox: options.sandbox, permissionRules: options.permissionRules,
+    approvalWaiting(approvalId, waiting) {
+      if (waiting) approvals.add(approvalId);
+      else approvals.delete(approvalId);
+      state = { ...state, status: signal.aborted ? 'cancelling' : approvals.size ? 'waiting' : 'running' };
+      emit({ type: 'state_changed', runId, snapshot: snapshot() });
+    },
     async record(message, messageId = randomUUID()) {
       const owned = structuredClone(message);
       messages.push(owned);

@@ -1,8 +1,10 @@
 /*
  * Schedules a model's tool calls and saves each result before the next model turn.
  */
-import { validateToolArguments, type ToolCall, type ToolResultMessage } from '@megumi/ai';
-import type { ToolDefinition } from '../tools/tool-contracts';
+import type { ToolCall, ToolResultMessage } from '@megumi/ai';
+import { executeTool } from '../tools/execute-tool';
+import { createCancelledToolResult } from '../tools/tool-result';
+import type { ToolDefinition, ToolExecutionResult } from '../tools/tool-contracts';
 import type { RunExecution } from './run-agent';
 
 /** Parallel tools share a bounded window; serial calls wait for preceding work. */
@@ -17,11 +19,19 @@ export async function callTools(
   let failure: unknown;
   const execute = async (call: ToolCall) => {
     try {
-      const message = signal.aborted
-        ? resultMessage(call, 'Tool call was cancelled.', true)
-        : await executeCall(run, call, available, signal);
+      const execution = signal.aborted
+        ? { result: createCancelledToolResult({ toolName: call.name }) }
+        : await executeTool(run, call, available, signal);
+      const message: ToolResultMessage<ToolExecutionResult> = {
+        role: 'toolResult', toolCallId: call.id, toolName: call.name,
+        content: [{ type: 'text', text: execution.result.normalizedResult.content }],
+        details: { ...execution.result },
+        isError: execution.result.type === 'failed', timestamp: Date.now(),
+      };
+      run.emit({ type: 'tool_finished', runId: run.runId, toolCallId: call.id, result: execution.result });
       results.push(message);
       await run.record(message);
+      if (execution.failure) throw execution.failure;
     } catch (error) {
       failure ??= error;
       controller.abort();
@@ -50,34 +60,4 @@ export async function callTools(
   await flush();
   if (failure !== undefined) throw failure;
   return results;
-}
-
-/** Tool business failures become model-readable results; mandatory saves stay outside. */
-async function executeCall(
-  run: RunExecution, call: ToolCall, available: ReadonlySet<string>, signal: AbortSignal,
-): Promise<ToolResultMessage> {
-  const tool = available.has(call.name) && run.request.config.tools.find(item => item.name === call.name);
-  if (!tool) return resultMessage(call, `Unknown tool: ${call.name}`, true);
-  let input: unknown;
-  try { input = validateToolArguments(tool, call); }
-  catch { return resultMessage(call, 'Tool arguments are invalid.', true); }
-  run.emit({ type: 'tool_started', runId: run.runId, toolCallId: call.id, toolName: call.name, arguments: input });
-  try {
-    const result = await tool.execute(input, {
-      runId: run.runId, toolCallId: call.id, signal,
-      onOutput: output => run.emit({ type: 'tool_output', runId: run.runId, toolCallId: call.id, output }),
-    });
-    return resultMessage(call,
-      typeof result.content === 'string' ? result.content : JSON.stringify(result.content),
-      result.isError ?? false);
-  } catch (error) {
-    return resultMessage(call, error instanceof Error ? error.message : 'Tool execution failed.', true);
-  }
-}
-
-function resultMessage(call: ToolCall, text: string, isError: boolean): ToolResultMessage {
-  return {
-    role: 'toolResult', toolCallId: call.id, toolName: call.name,
-    content: [{ type: 'text', text }], isError, timestamp: Date.now(),
-  };
 }

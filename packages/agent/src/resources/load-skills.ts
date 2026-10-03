@@ -53,8 +53,6 @@ export interface Skill {
   readonly diagnostics: readonly SkillDiagnostic[];
 }
 
-
-
 export interface SkillRoot {
   readonly owner: SkillOwner;
   readonly scope: SkillScope;

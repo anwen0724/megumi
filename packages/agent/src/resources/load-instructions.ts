@@ -46,7 +46,6 @@ export type GetEffectiveInstructionsResult =
   | { readonly status: 'failed'; readonly failure: EffectiveInstructionFailure }
   | { readonly status: 'cancelled' };
 
-
 const INSTRUCTION_FILE_NAME = 'AGENTS.md';
 
 export interface InstructionSourceOperationOptions {

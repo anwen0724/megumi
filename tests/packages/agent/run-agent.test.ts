@@ -3,29 +3,9 @@
  * Verifies run completion and persistence through the standalone Agent public entry.
  */
 import { expect, it } from 'vitest';
-import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from '@megumi/ai';
-import { createAgent, type AgentConfig, type SaveMessageRequest, type AgentTool } from '@megumi/agent';
-
-function fixture() {
-  const ai = createModels();
-  const provider = fauxProvider();
-  provider.setResponses([fauxAssistantMessage('Done.')]);
-  ai.setProvider(provider.provider);
-  const model = ai.getModels()[0];
-  if (!model) throw new Error('Fixture model missing.');
-  const config: AgentConfig = {
-    model, tools: [], permissionMode: 'auto',
-    policy: {
-      maxModelCallsPerExecution: 4, maxToolRoundsPerExecution: 3,
-      maxToolCallsPerModelCall: 4, maxToolCallsPerExecution: 8,
-      maxConcurrentToolExecutions: 2, modelCallTimeoutMs: 1000,
-      toolExecutionTimeoutMs: 1000, maxModelCallAttempts: 1,
-      modelRetryDelayMs: 0, maxContextOverflowRecoveries: 0,
-      providerRequestMaxRetries: 0, providerRequestMaxRetryDelayMs: 0,
-    },
-  };
-  return { agent: createAgent({ ai }), config, provider };
-}
+import { fauxAssistantMessage, fauxToolCall } from '@megumi/ai';
+import { type SaveMessageRequest, type AgentTool } from '@megumi/agent';
+import { fixture, deferred } from './agent-fixture';
 
 it('fails before context preparation when saving the input fails', async () => {
   const { agent, config } = fixture();
@@ -85,11 +65,7 @@ it('saves a finished parallel tool immediately and waits for other active tools 
   expect(provider.state.callCount).toBe(1);
 });
 
-function deferred() {
-  let resolve = () => {};
-  const promise = new Promise<void>(done => { resolve = done; });
-  return { promise, resolve };
-}
+
 
 it('retries a transient model failure without persisting it as a completed reply', async () => {
   const { agent, config, provider } = fixture();
