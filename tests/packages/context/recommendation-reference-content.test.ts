@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { materializeRecommendationReference } from '@megumi/agent-runtime/context/index';
-import { buildContextMessages } from '@megumi/agent-runtime/context/prompt/context-message-builder';
+import { materializeRecommendationReference } from '@megumi/application/coding/prepare-context';
+import { buildContextMessages } from '@megumi/application/coding/prepare-context';
 import { history } from './context-test-fixtures';
 
 describe('Recommendation reference model materialization', () => {

@@ -153,6 +153,7 @@ export interface ModelSettingsAccess {
       status: 'ok';
       settings: {
         config: {
+          general: { lastSelectedModel?: { providerId: string; modelId: string } };
           providers: Record<string, ProviderConfiguration>;
           context: { compactionThresholdRatio: number };
         };

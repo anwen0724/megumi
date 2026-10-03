@@ -1,8 +1,7 @@
 /* Provides shared model messages and input data for Context behavior tests. */
 import { vi } from 'vitest';
 import type { Api, AssistantMessage, Model } from '@megumi/ai';
-import type { SessionHistoryItem } from '@megumi/agent-runtime/sessions/index';
-import type { CreateContextOptions } from '@megumi/agent-runtime/context/index';
+import type { SessionHistoryItem } from '@megumi/application/coding/sessions/session-branches';
 
 export const model: Model<Api> = {
   id: 'gpt',
@@ -84,16 +83,3 @@ export function history(): SessionHistoryItem[] {
 }
 
 /** Default Workspace source resolution used by Context build/compaction tests. */
-export function workspaceSource(): CreateContextOptions['workspaceSource'] {
-  return {
-    readWorkspace: vi.fn(async () => ({
-      status: 'ok' as const,
-      workspaceRoot: '/workspace',
-      environment: {
-        workingDirectory: '/workspace/packages/app',
-        operatingSystem: 'Linux',
-        shell: 'POSIX shell',
-      },
-    })),
-  };
-}

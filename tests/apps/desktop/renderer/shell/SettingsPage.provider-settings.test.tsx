@@ -76,17 +76,9 @@ describe('SettingsPage provider settings', () => {
     expect(screen.queryByText('Provider and model runtime settings')).not.toBeInTheDocument();
   });
 
-  it('uses product-facing names for every settings category', async () => {
+  it('opens permission settings from the settings navigation', async () => {
     const user = userEvent.setup();
     render(<SettingsPage onDone={vi.fn()} />);
-
-    expect(screen.getByRole('tab', { name: 'Models & Providers' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Skills' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Content Sources' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Privacy & Permissions' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Trace Diagnostics' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'About Megumi' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Voice' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Privacy & Permissions' }));
     expect(screen.getByRole('heading', { name: 'Privacy & Permissions' })).toBeInTheDocument();

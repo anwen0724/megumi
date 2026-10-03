@@ -2,27 +2,40 @@
 import type { AgentConfig, AgentExecutionPolicy } from '@megumi/agent';
 import type { Api, Model } from '@megumi/ai';
 import { candidatePoolSettings } from '../candidates/candidate-pool';
-import type { CreateRecommendationsOptions, RecommendationSettings } from './generate-recommendations';
+import type {
+  CreateRecommendationsOptions,
+  RecommendationSettings,
+} from './generate-recommendations';
 import type { RecommendationHistoryItem } from './publish-recommendations';
 import { rankRecommendationCandidates } from './rank-candidates';
 
 import type { Observability } from '../../observability/index';
 import { createRecommendationTools } from './agent-tools';
-import { createCandidateWorkset, type CandidateWorkset, type CandidateWorksetSnapshot } from './candidate-workset';
+import {
+  createCandidateWorkset,
+  type CandidateWorkset,
+  type CandidateWorksetSnapshot,
+} from './candidate-workset';
 
 export interface RecommendationPreparation {
   readonly policy: AgentExecutionPolicy;
-  readonly instructionDocuments: readonly { instructionId: string; sourcePath: string; }[];
-  readonly resolveModel: (selection?: { providerId: string; modelId: string; }) => Promise<Model<Api> | undefined>;
+  readonly instructionDocuments: readonly { instructionId: string; sourcePath: string }[];
+  readonly resolveModel: (selection?: {
+    providerId: string;
+    modelId: string;
+  }) => Promise<Model<Api> | undefined>;
 }
 
 /** Resolves the selected model and fixes this run's tools and completion rule. */
-export async function prepareRecommendationRun(input: {
-  readonly modelSelection?: { providerId: string; modelId: string; };
-  readonly snapshot: CandidateWorksetSnapshot;
-  readonly observability?: Observability;
-  readonly signal: AbortSignal;
-}, dependencies: RecommendationPreparation): Promise<{ readonly config: AgentConfig; readonly workset: CandidateWorkset; } | undefined> {
+export async function prepareRecommendationRun(
+  input: {
+    readonly modelSelection?: { providerId: string; modelId: string };
+    readonly snapshot: CandidateWorksetSnapshot;
+    readonly observability?: Observability;
+    readonly signal: AbortSignal;
+  },
+  dependencies: RecommendationPreparation,
+): Promise<{ readonly config: AgentConfig; readonly workset: CandidateWorkset } | undefined> {
   const model = await dependencies.resolveModel(input.modelSelection);
   input.signal.throwIfAborted();
   if (!model) return undefined;

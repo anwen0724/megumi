@@ -300,7 +300,7 @@ async function processBatch(
   signal: AbortSignal,
   setActive: (facts: PreferenceLearningFacts) => void,
 ): Promise<LearningBatchResult> {
-  const { batchId, startedAt } = facts.batch;
+  const { batchId } = facts.batch;
   try {
     const model = await options.resolveModel();
     if (!model)

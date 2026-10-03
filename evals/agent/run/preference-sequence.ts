@@ -1,7 +1,8 @@
 /* Executes continuous user operations in real isolated Products and preserves paired recommendation evidence. */
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import type { DiscoveryState, PreferenceSetDetail } from '@megumi/discovery';
+import type { DiscoveryState } from '@megumi/application/recommendation/recommendation-storage';
+import type { PreferenceSetDetail } from '@megumi/application/recommendation/preferences/preference-rules';
 import type { PreferenceSequenceCase } from '../contracts/evaluation-dataset';
 import { PreferenceSequenceRecordSchema, type PreferenceSequenceRecord, type PreferenceExperiment } from '../contracts/preference-sequence-record';
 import { digest } from '../evidence-digest';
@@ -54,7 +55,7 @@ export async function executePreferenceSequence(input: SequenceInput): Promise<C
 
 async function executeOperation(input: SequenceInput, step: PreferenceSequenceCase['input']['steps'][number], entry: PreferenceSequenceRecord['steps'][number], deadline: number): Promise<unknown> {
   const env = input.environment;
-  const host = env.runtime.host.discovery;
+  const host = env.runtime.discovery;
   const ids = env.initialStateIds;
   if (step.kind === 'advance_clock') {
     if (!env.advanceTime) throw new Error('A controlled clock is required.');
@@ -135,9 +136,9 @@ async function runArm(input: SequenceInput, env: CaseEnvironment, shared: Discov
 
 async function recommend(env: CaseEnvironment, deadline: number): Promise<unknown> {
   if (Date.now() >= deadline) throw new Error('Recommendation reached the sequence deadline.');
-  const accepted = await env.runtime.host.discovery.requestRecommendation({ trigger: 'manual' });
+  const accepted = await env.runtime.discovery.requestRecommendation({ trigger: 'manual' });
   if (accepted.status !== 'started' && accepted.status !== 'in_progress') return accepted;
-  const completion = await env.runtime.host.discovery.waitRecommendation({ requestId: accepted.requestId, timeoutMs: Math.min(300_000, Math.max(1, deadline - Date.now())) });
+  const completion = await env.runtime.discovery.waitRecommendation({ requestId: accepted.requestId, timeoutMs: Math.min(300_000, Math.max(1, deadline - Date.now())) });
   if (completion.status === 'timed_out') throw new Error('Recommendation did not settle within the sequence deadline.');
   return completion;
 }

@@ -23,42 +23,105 @@ export interface ExecutedTool {
 
 /** A fatal infrastructure failure still leaves a result for the model's pending call. */
 export async function executeTool(
-  run: RunExecution, call: ToolCall, available: ReadonlySet<string>, signal: AbortSignal,
+  run: RunExecution,
+  call: ToolCall,
+  available: ReadonlySet<string>,
+  signal: AbortSignal,
 ): Promise<ExecutedTool> {
-  const tool = available.has(call.name) && run.request.config.tools.find(item => item.name === call.name);
-  if (!tool) return { result: createFailedToolResult({ toolName: call.name, code: 'unknown_tool', message: `Unknown tool: ${call.name}` }) };
+  const tool =
+    available.has(call.name) && run.request.config.tools.find((item) => item.name === call.name);
+  if (!tool)
+    return {
+      result: createFailedToolResult({
+        toolName: call.name,
+        code: 'unknown_tool',
+        message: `Unknown tool: ${call.name}`,
+      }),
+    };
   const input = validateToolInput({ ...tool.parameters }, call.arguments);
-  if (!input.ok) return { result: createFailedToolResult({ toolName: call.name, code: 'invalid_tool_input', message: input.errorMessage }) };
+  if (!input.ok)
+    return {
+      result: createFailedToolResult({
+        toolName: call.name,
+        code: 'invalid_tool_input',
+        message: input.errorMessage,
+      }),
+    };
   try {
     signal.throwIfAborted();
-    captureContent(run.diagnostics, { runId: run.runId, toolCallId: call.id, kind: 'tool.arguments', value: input.value });
+    captureContent(run.diagnostics, {
+      runId: run.runId,
+      toolCallId: call.id,
+      kind: 'tool.arguments',
+      value: input.value,
+    });
     const operations = tool.operations(input.value);
-    const permission = await authorizeTool({ run, tool, toolCallId: call.id, input: call.arguments, operations, signal });
+    const permission = await authorizeTool({
+      run,
+      tool,
+      toolCallId: call.id,
+      input: call.arguments,
+      operations,
+      signal,
+    });
     if (permission.status === 'denied') {
-      return { result: createFailedToolResult({ toolName: call.name, code: 'permission_denied', message: 'Tool permission was denied.' }) };
+      return {
+        result: createFailedToolResult({
+          toolName: call.name,
+          code: 'permission_denied',
+          message: 'Tool permission was denied.',
+        }),
+      };
     }
     signal.throwIfAborted();
-    const needsScope = operations.some(operation => operation.action === 'workspace.read'
-      || operation.action === 'workspace.write' || operation.action === 'process.execute');
-    return await observeOperation(run.diagnostics, { runId: run.runId, name: 'tool.call', toolCallId: call.id, toolName: call.name },
+    const needsScope = operations.some(
+      (operation) =>
+        operation.action === 'workspace.read' ||
+        operation.action === 'workspace.write' ||
+        operation.action === 'process.execute',
+    );
+    return await observeOperation(
+      run.diagnostics,
+      { runId: run.runId, name: 'tool.call', toolCallId: call.id, toolName: call.name },
       () => executeAuthorizedTool(run, call, tool, permission.access, needsScope, signal),
-      execution => execution.result.type === 'failed'
-        ? { status: 'error', ...execution.result.error } : { status: 'ok' });
+      (execution) =>
+        execution.result.type === 'failed'
+          ? { status: 'error', ...execution.result.error }
+          : { status: 'ok' },
+    );
   } catch (cause) {
-    if (signal.aborted && !(cause instanceof AgentFailure)) return { result: createCancelledToolResult({ toolName: call.name }) };
+    if (signal.aborted && !(cause instanceof AgentFailure))
+      return { result: createCancelledToolResult({ toolName: call.name }) };
     return {
-      result: createFailedToolResult({ toolName: call.name, code: 'tool_execution_failed', message: 'Tool infrastructure failed.' }),
-      failure: cause instanceof AgentFailure ? cause : new AgentFailure('executing_tools', {
-        code: 'TOOL_SYSTEM_FAILED', message: 'Tool infrastructure failed.', retryable: false,
-      }, { cause }),
+      result: createFailedToolResult({
+        toolName: call.name,
+        code: 'tool_execution_failed',
+        message: 'Tool infrastructure failed.',
+      }),
+      failure:
+        cause instanceof AgentFailure
+          ? cause
+          : new AgentFailure(
+              'executing_tools',
+              {
+                code: 'TOOL_SYSTEM_FAILED',
+                message: 'Tool infrastructure failed.',
+                retryable: false,
+              },
+              { cause },
+            ),
     };
   }
 }
 
 /** Approval time is excluded; completion waits for the actual operation and scope closure. */
 async function executeAuthorizedTool(
-  run: RunExecution, call: ToolCall, tool: AgentTool, access: ToolExecutionAccess,
-  needsScope: boolean, signal: AbortSignal,
+  run: RunExecution,
+  call: ToolCall,
+  tool: AgentTool,
+  access: ToolExecutionAccess,
+  needsScope: boolean,
+  signal: AbortSignal,
 ): Promise<ExecutedTool> {
   let scope: SandboxScope | undefined;
   if (needsScope) {
@@ -67,13 +130,21 @@ async function executeAuthorizedTool(
     const opened = await run.sandbox.open({
       signal,
       policy: {
-        workspaceRoot: environment.workingDirectory, executionAccess: access,
+        workspaceRoot: environment.workingDirectory,
+        executionAccess: access,
         maxExecutionTimeMs: run.request.config.policy.toolExecutionTimeoutMs,
-        maxOutputBytes: 20_000, maxProcessCount: 16,
+        maxOutputBytes: 20_000,
+        maxProcessCount: 16,
       },
     });
     if (opened.status === 'unavailable') {
-      return { result: createFailedToolResult({ toolName: call.name, code: 'sandbox_unavailable', message: opened.reason }) };
+      return {
+        result: createFailedToolResult({
+          toolName: call.name,
+          code: 'sandbox_unavailable',
+          message: opened.reason,
+        }),
+      };
     }
     scope = opened.scope;
   }
@@ -85,27 +156,61 @@ async function executeAuthorizedTool(
   try {
     executionSignal.throwIfAborted();
     run.progress({ phase: 'executing_tools' });
-    run.emit({ type: 'tool_started', runId: run.runId, toolCallId: call.id, toolName: call.name, arguments: call.arguments });
-    const rawResult = await tool.execute(call.arguments, {
-      runId: run.runId, toolCallId: call.id, signal: executionSignal,
-      files: scope?.files, process: scope?.process,
-      onOutput: output => run.emit({ type: 'tool_output', runId: run.runId, toolCallId: call.id, output }),
-      onNotification: notification => run.emit({ type: 'tool_notification', runId: run.runId, toolCallId: call.id, notification }),
+    run.emit({
+      type: 'tool_started',
+      runId: run.runId,
+      toolCallId: call.id,
+      toolName: call.name,
+      arguments: call.arguments,
     });
-    captureContent(run.diagnostics, { runId: run.runId, toolCallId: call.id, kind: 'tool.handler_result', value: rawResult });
+    const rawResult = await tool.execute(call.arguments, {
+      runId: run.runId,
+      toolCallId: call.id,
+      signal: executionSignal,
+      files: scope?.files,
+      process: scope?.process,
+      onOutput: (output) =>
+        run.emit({ type: 'tool_output', runId: run.runId, toolCallId: call.id, output }),
+      onNotification: (notification) =>
+        run.emit({
+          type: 'tool_notification',
+          runId: run.runId,
+          toolCallId: call.id,
+          notification,
+        }),
+    });
+    captureContent(run.diagnostics, {
+      runId: run.runId,
+      toolCallId: call.id,
+      kind: 'tool.handler_result',
+      value: rawResult,
+    });
     result = normalizeRawToolResult({
       toolName: call.name,
-      rawResult: timeout.signal.aborted && rawResult.error?.code !== 'termination_unconfirmed'
-        ? { ...rawResult, isError: true, error: { code: 'tool_timeout', message: 'Tool execution exceeded its time limit.' } }
-        : rawResult,
+      rawResult:
+        timeout.signal.aborted && rawResult.error?.code !== 'termination_unconfirmed'
+          ? {
+              ...rawResult,
+              isError: true,
+              error: { code: 'tool_timeout', message: 'Tool execution exceeded its time limit.' },
+            }
+          : rawResult,
     });
   } catch (cause) {
     const known = cause instanceof ToolExecutionFailure || cause instanceof SandboxProcessError;
-    const code = known && cause.code === 'termination_unconfirmed' ? cause.code
-      : timeout.signal.aborted ? 'tool_timeout' : signal.aborted ? 'tool_cancelled'
-        : known ? cause.code : 'tool_execution_failed';
+    const code =
+      known && cause.code === 'termination_unconfirmed'
+        ? cause.code
+        : timeout.signal.aborted
+          ? 'tool_timeout'
+          : signal.aborted
+            ? 'tool_cancelled'
+            : known
+              ? cause.code
+              : 'tool_execution_failed';
     result = createFailedToolResult({
-      toolName: call.name, code,
+      toolName: call.name,
+      code,
       message: cause instanceof Error ? cause.message : 'Tool execution failed.',
       details: cause instanceof ToolExecutionFailure ? cause.details : undefined,
     });
@@ -113,14 +218,28 @@ async function executeAuthorizedTool(
     clearTimeout(timer);
     try {
       const closed = await scope?.close();
-      if (closed?.status === 'termination_unconfirmed') throw new Error('Tool process termination could not be confirmed.');
+      if (closed?.status === 'termination_unconfirmed')
+        throw new Error('Tool process termination could not be confirmed.');
     } catch (cause) {
-      failure = new AgentFailure('cleanup', { code: 'CLEANUP_FAILED', message: 'Tool scope could not be closed.', retryable: false }, { cause });
+      failure = new AgentFailure(
+        'cleanup',
+        { code: 'CLEANUP_FAILED', message: 'Tool scope could not be closed.', retryable: false },
+        { cause },
+      );
     }
   }
   if (result.type === 'failed' && result.error.code === 'termination_unconfirmed') {
-    failure ??= new AgentFailure('cleanup', { code: 'CLEANUP_FAILED', message: result.error.message, retryable: false });
+    failure ??= new AgentFailure('cleanup', {
+      code: 'CLEANUP_FAILED',
+      message: result.error.message,
+      retryable: false,
+    });
   }
-  captureContent(run.diagnostics, { runId: run.runId, toolCallId: call.id, kind: 'tool.result', value: result });
+  captureContent(run.diagnostics, {
+    runId: run.runId,
+    toolCallId: call.id,
+    kind: 'tool.result',
+    value: result,
+  });
   return { result, failure };
 }

@@ -1,9 +1,24 @@
 /* Commits and reads session messages, preserving conversation and branch semantics. */
 import type { JsonValue } from '@megumi/ai';
 import { z } from 'zod';
-import type { BeginCompactionRequest, BeginCompactionResult, CompleteCompactionRequest, CompleteCompactionResult, EndCompactionRequest, EndCompactionResult, InterruptRunningCompactionsRequest, InterruptRunningCompactionsResult, SessionCompactionLifecycle, SessionCompactionRecord } from '../compact-history';
+import type {
+  BeginCompactionRequest,
+  BeginCompactionResult,
+  CompleteCompactionRequest,
+  CompleteCompactionResult,
+  EndCompactionRequest,
+  EndCompactionResult,
+  InterruptRunningCompactionsRequest,
+  InterruptRunningCompactionsResult,
+  SessionCompactionLifecycle,
+  SessionCompactionRecord,
+} from '../compact-history';
 import { createSessionCompactionLifecycle } from '../compact-history';
-import type { SessionAttachmentContentStore, SessionAttachmentImport, SessionMessageAttachment } from './session-attachments';
+import type {
+  SessionAttachmentContentStore,
+  SessionAttachmentImport,
+  SessionMessageAttachment,
+} from './session-attachments';
 import type { SessionEntry, SessionHistoryItem } from './session-branches';
 import { buildActiveConversationPath, readActivePath } from './session-branches';
 import type { SessionFailure } from './session-catalog';
@@ -121,7 +136,9 @@ export interface SessionHistory {
   saveAssistantReply(request: SaveAssistantReplyRequest): SaveAssistantReplyResult;
   saveToolResultMessage(request: SaveToolResultMessageRequest): SaveToolResultMessageResult;
   listMessages(request: ListMessagesRequest): ListMessagesResult;
-  listUserMessagesByExecutionIds(request: ListUserMessagesByExecutionIdsRequest): ListUserMessagesByExecutionIdsResult;
+  listUserMessagesByExecutionIds(
+    request: ListUserMessagesByExecutionIdsRequest,
+  ): ListUserMessagesByExecutionIdsResult;
   getActiveHistory(request: GetActiveHistoryRequest): GetActiveHistoryResult;
   getActiveConversationHistory(
     request: GetActiveConversationHistoryRequest,
@@ -156,7 +173,8 @@ export function createSessionHistory(options: CreateSessionHistoryOptions): Sess
     saveAssistantReply: (request) => implementation.saveAssistantReply(request),
     saveToolResultMessage: (request) => implementation.saveToolResultMessage(request),
     listMessages: (request) => implementation.listMessages(request),
-    listUserMessagesByExecutionIds: (request) => implementation.listUserMessagesByExecutionIds(request),
+    listUserMessagesByExecutionIds: (request) =>
+      implementation.listUserMessagesByExecutionIds(request),
     getActiveHistory: (request) => implementation.getActiveHistory(request),
     getActiveConversationHistory: (request) => implementation.getActiveConversationHistory(request),
     getCommittedBranch: (request) => implementation.getCommittedBranch(request),
@@ -324,10 +342,12 @@ class DefaultSessionHistory implements SessionHistory {
     const replay = this.replayMessage(message);
     if (replay) return replay;
     try {
-      if (this.options.store.findAssistantReplyBySessionIdAndExecutionId({
-        session_id: request.session_id,
-        execution_id: request.execution_id,
-      })) {
+      if (
+        this.options.store.findAssistantReplyBySessionIdAndExecutionId({
+          session_id: request.session_id,
+          execution_id: request.execution_id,
+        })
+      ) {
         return {
           status: 'failed',
           failure: {
@@ -398,14 +418,14 @@ class DefaultSessionHistory implements SessionHistory {
       if (activePath.status === 'failed') return activePath;
       const path = activePath.entries;
       const messages = this.options.store.listMessagesByIds(
-        path.flatMap((entry) => entry.message_id ? [entry.message_id] : []),
+        path.flatMap((entry) => (entry.message_id ? [entry.message_id] : [])),
       );
       const messagesById = new Map(messages.map((message) => [message.message_id, message]));
       const attachmentsByMessageId = groupAttachments(
         this.options.store.listAttachmentsByMessageIds([...messagesById.keys()]),
       );
       const compactions = this.options.store.listCompletedCompactionSummariesByIds(
-        path.flatMap((entry) => entry.compaction_id ? [entry.compaction_id] : []),
+        path.flatMap((entry) => (entry.compaction_id ? [entry.compaction_id] : [])),
       );
       const compactionsById = new Map(compactions.map((item) => [item.compaction_id, item]));
       const history: SessionHistoryItem[] = [];
@@ -530,9 +550,7 @@ class DefaultSessionHistory implements SessionHistory {
         session_id: message.session_id,
         message_id: message.message_id,
       });
-      return entry
-        ? { status: 'saved', message: existing, entry }
-        : messageIdentityConflict();
+      return entry ? { status: 'saved', message: existing, entry } : messageIdentityConflict();
     } catch (error) {
       return sessionFailure(error);
     }
@@ -552,8 +570,8 @@ class DefaultSessionHistory implements SessionHistory {
       });
       const attachments = this.options.store.listAttachmentsByMessageIds([message.message_id]);
       if (
-        !entry
-        || !(await sameAttachmentImports(
+        !entry ||
+        !(await sameAttachmentImports(
           attachments,
           requestedAttachments,
           this.options.attachmentContentStore,
@@ -571,16 +589,18 @@ class DefaultSessionHistory implements SessionHistory {
     }
   }
 
-  private messagesForActivePath(sessionId: string):
-    | { status: 'ok'; messages: SessionMessage[] }
-    | { status: 'failed'; failure: SessionFailure } {
+  private messagesForActivePath(
+    sessionId: string,
+  ): { status: 'ok'; messages: SessionMessage[] } | { status: 'failed'; failure: SessionFailure } {
     const activePath = readActivePath(this.options.store, sessionId);
     if (activePath.status === 'failed') return activePath;
-    const messageIds = activePath.entries.flatMap((entry) => (
-      entry.entry_type === 'message' && entry.message_id ? [entry.message_id] : []
-    ));
+    const messageIds = activePath.entries.flatMap((entry) =>
+      entry.entry_type === 'message' && entry.message_id ? [entry.message_id] : [],
+    );
     const messagesById = new Map(
-      this.options.store.listMessagesByIds(messageIds).map((message) => [message.message_id, message]),
+      this.options.store
+        .listMessagesByIds(messageIds)
+        .map((message) => [message.message_id, message]),
     );
     return {
       status: 'ok',
@@ -605,7 +625,9 @@ class DefaultSessionHistory implements SessionHistory {
     session_id: string;
     explicit_parent_entry_id?: string;
     active_entry_id?: string;
-  }): { status: 'ok'; parent_entry_id?: string } | Extract<SaveUserMessageResult, { status: 'failed' }> {
+  }):
+    | { status: 'ok'; parent_entry_id?: string }
+    | Extract<SaveUserMessageResult, { status: 'failed' }> {
     const parentEntryId = input.explicit_parent_entry_id ?? input.active_entry_id;
     if (!input.explicit_parent_entry_id) {
       return { status: 'ok', ...(parentEntryId ? { parent_entry_id: parentEntryId } : {}) };
@@ -631,15 +653,17 @@ class DefaultSessionHistory implements SessionHistory {
     return this.options.ids?.attachmentId?.() ?? `attachment:${crypto.randomUUID()}`;
   }
 
-  private async cleanupImportedAttachments(
-    attachments: SessionMessageAttachment[],
-  ): Promise<void> {
+  private async cleanupImportedAttachments(attachments: SessionMessageAttachment[]): Promise<void> {
     if (!this.options.attachmentContentStore) return;
-    await Promise.all(attachments
-      .filter((attachment) => attachment.source_type === 'host_reference')
-      .map((attachment) => (
-        this.options.attachmentContentStore!.delete(attachment.source_value).catch(() => undefined)
-      )));
+    await Promise.all(
+      attachments
+        .filter((attachment) => attachment.source_type === 'host_reference')
+        .map((attachment) =>
+          this.options
+            .attachmentContentStore!.delete(attachment.source_value)
+            .catch(() => undefined),
+        ),
+    );
   }
 }
 
@@ -680,10 +704,15 @@ async function sameAttachmentImports(
   if (persisted.length !== requested.length) return false;
   for (const [ordinal, attachment] of persisted.entries()) {
     const candidate = requested[ordinal];
-    if (!candidate || attachment.ordinal !== ordinal || attachment.type !== candidate.type) return false;
-    if (attachment.name !== candidate.name || attachment.mime_type !== candidate.media_type) return false;
+    if (!candidate || attachment.ordinal !== ordinal || attachment.type !== candidate.type)
+      return false;
+    if (attachment.name !== candidate.name || attachment.mime_type !== candidate.media_type)
+      return false;
     if (candidate.type === 'file') {
-      if (attachment.source_type !== 'local_file' || attachment.source_value !== candidate.local_path) {
+      if (
+        attachment.source_type !== 'local_file' ||
+        attachment.source_value !== candidate.local_path
+      ) {
         return false;
       }
       // sizeBytes is part of the persisted document fact set: a replay that
@@ -703,8 +732,9 @@ async function sameAttachmentImports(
 }
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
-  return left.byteLength === right.byteLength
-    && left.every((value, index) => value === right[index]);
+  return (
+    left.byteLength === right.byteLength && left.every((value, index) => value === right[index])
+  );
 }
 
 function sameValue(left: unknown, right: unknown): boolean {
@@ -827,9 +857,10 @@ export function createSessionConversationReader(input: {
         if (result.status === 'failed') return result;
         return {
           status: 'ok',
-          messages: result.conversation.filter((item): item is SessionMessageConversationItem => (
-            item.type === 'message' && item.message.execution_id === request.executionId
-          )),
+          messages: result.conversation.filter(
+            (item): item is SessionMessageConversationItem =>
+              item.type === 'message' && item.message.execution_id === request.executionId,
+          ),
         };
       } catch (error) {
         return sessionFailure(error);
@@ -852,9 +883,9 @@ function buildConversation(
 
   const entries = store.listEntriesBySessionId(sessionId);
   const compactions = store.listCompactionsBySessionId(sessionId);
-  const completedSummaries = compactions.flatMap((record) => (
-    record.status === 'completed' && record.summary ? [record.summary] : []
-  ));
+  const completedSummaries = compactions.flatMap((record) =>
+    record.status === 'completed' && record.summary ? [record.summary] : [],
+  );
   const activeEntries = buildActiveConversationPath({
     session_id: sessionId,
     active_entry_id: session.active_entry_id,
@@ -863,11 +894,13 @@ function buildConversation(
   });
   const activeEntryIds = new Set(activeEntries.map((entry) => entry.entry_id));
   const messageEntries = activeEntries.filter((entry) => entry.entry_type === 'message');
-  const messages = store.listMessagesByIds(messageEntries.flatMap((entry) => (
-    entry.message_id ? [entry.message_id] : []
-  )));
+  const messages = store.listMessagesByIds(
+    messageEntries.flatMap((entry) => (entry.message_id ? [entry.message_id] : [])),
+  );
   const messagesById = new Map(messages.map((message) => [message.message_id, message]));
-  const attachments = groupConversationAttachments(store.listAttachmentsByMessageIds([...messagesById.keys()]));
+  const attachments = groupConversationAttachments(
+    store.listAttachmentsByMessageIds([...messagesById.keys()]),
+  );
   const compactionsByAnchor = groupCompactions(
     compactions.filter((record) => activeEntryIds.has(record.anchorEntryId)),
     messageEntries,
@@ -897,11 +930,12 @@ function branchForTarget(
   const source = entries.find((entry) => entry.entry_id === target.parent_entry_id);
   if (!source?.message_id) return undefined;
   const targetIndex = entries.findIndex((entry) => entry.entry_id === target.entry_id);
-  const hasEarlierSibling = entries.some((entry, index) => (
-    index < targetIndex
-    && entry.entry_id !== target.entry_id
-    && entry.parent_entry_id === target.parent_entry_id
-  ));
+  const hasEarlierSibling = entries.some(
+    (entry, index) =>
+      index < targetIndex &&
+      entry.entry_id !== target.entry_id &&
+      entry.parent_entry_id === target.parent_entry_id,
+  );
   if (!hasEarlierSibling) return undefined;
   return {
     type: 'branch',
@@ -952,10 +986,11 @@ function groupCompactions(
     grouped.set(anchorEntryId, values);
   }
   for (const values of grouped.values()) {
-    values.sort((left, right) => (
-      left.startedAt.localeCompare(right.startedAt)
-      || left.compactionId.localeCompare(right.compactionId)
-    ));
+    values.sort(
+      (left, right) =>
+        left.startedAt.localeCompare(right.startedAt) ||
+        left.compactionId.localeCompare(right.compactionId),
+    );
   }
   return grouped;
 }
@@ -1035,10 +1070,16 @@ function parseLegacyArguments(value: unknown): typeof SessionToolCallSchema._out
   }
 }
 
-const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
-  z.string(), z.number().finite(), z.boolean(), z.null(),
-  z.array(JsonValueSchema), z.record(z.string(), JsonValueSchema),
-]));
+const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(JsonValueSchema),
+    z.record(z.string(), JsonValueSchema),
+  ]),
+);
 
 const JsonObjectSchema = z.record(z.string(), JsonValueSchema);
 
@@ -1046,40 +1087,49 @@ const JsonObjectSchema = z.record(z.string(), JsonValueSchema);
  * Content block shapes follow the AI package's provider-neutral content
  * shapes; Session owns the persisted zod schemas for them.
  */
-export const SessionTextContentSchema = z.object({
-  type: z.literal('text'),
-  text: z.string(),
-  textSignature: z.string().optional(),
-}).strict();
+export const SessionTextContentSchema = z
+  .object({
+    type: z.literal('text'),
+    text: z.string(),
+    textSignature: z.string().optional(),
+  })
+  .strict();
 
 export type SessionTextContent = z.infer<typeof SessionTextContentSchema>;
 
-export const SessionImageContentSchema = z.object({
-  type: z.literal('image'),
-  data: z.string().min(1),
-  mimeType: z.string().min(1),
-}).strict();
+export const SessionImageContentSchema = z
+  .object({
+    type: z.literal('image'),
+    data: z.string().min(1),
+    mimeType: z.string().min(1),
+  })
+  .strict();
 
 export type SessionImageContent = z.infer<typeof SessionImageContentSchema>;
 
-const HttpUrlSchema = z.string().url().refine((value) => {
-  const protocol = new URL(value).protocol;
-  return protocol === 'http:' || protocol === 'https:';
-}, 'Expected an HTTP(S) URL.');
+const HttpUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  }, 'Expected an HTTP(S) URL.');
 
 /** A durable snapshot of the Recommendation that started a conversation. */
-export const RecommendationReferenceContentSchema = z.object({
-  type: z.literal('recommendation_reference'),
-  recommendationId: z.string().min(1),
-  sourceName: z.string().trim().min(1),
-  canonicalUrl: HttpUrlSchema,
-  title: z.string().trim().min(1),
-  author: z.string().trim().min(1).optional(),
-  publishedAt: z.string().datetime({ offset: true }).optional(),
-  description: z.string().trim().min(1).optional(),
-  coverUrl: HttpUrlSchema.optional(),
-  recommendationReason: z.string().trim().min(1).max(1000),
-}).strict();
+export const RecommendationReferenceContentSchema = z
+  .object({
+    type: z.literal('recommendation_reference'),
+    recommendationId: z.string().min(1),
+    sourceName: z.string().trim().min(1),
+    canonicalUrl: HttpUrlSchema,
+    title: z.string().trim().min(1),
+    author: z.string().trim().min(1).optional(),
+    publishedAt: z.string().datetime({ offset: true }).optional(),
+    description: z.string().trim().min(1).optional(),
+    coverUrl: HttpUrlSchema.optional(),
+    recommendationReason: z.string().trim().min(1).max(1000),
+  })
+  .strict();
 
 export type RecommendationReferenceContent = z.infer<typeof RecommendationReferenceContentSchema>;
 
@@ -1093,22 +1143,26 @@ export type SessionUserContent = z.infer<typeof SessionUserContentSchema>;
 
 export const SessionUserContentListSchema = z.array(SessionUserContentSchema);
 
-export const SessionThinkingContentSchema = z.object({
-  type: z.literal('thinking'),
-  thinking: z.string(),
-  thinkingSignature: z.string().optional(),
-  redacted: z.boolean().optional(),
-}).strict();
+export const SessionThinkingContentSchema = z
+  .object({
+    type: z.literal('thinking'),
+    thinking: z.string(),
+    thinkingSignature: z.string().optional(),
+    redacted: z.boolean().optional(),
+  })
+  .strict();
 
 export type SessionThinkingContent = z.infer<typeof SessionThinkingContentSchema>;
 
-export const SessionToolCallSchema = z.object({
-  type: z.literal('toolCall'),
-  id: z.string().min(1),
-  name: z.string().min(1),
-  arguments: JsonObjectSchema,
-  thoughtSignature: z.string().optional(),
-}).strict();
+export const SessionToolCallSchema = z
+  .object({
+    type: z.literal('toolCall'),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    arguments: JsonObjectSchema,
+    thoughtSignature: z.string().optional(),
+  })
+  .strict();
 
 export type SessionToolCall = z.infer<typeof SessionToolCallSchema>;
 
@@ -1151,102 +1205,126 @@ export const ASSISTANT_REPLY_REASON_CODES = [
 
 export type AssistantReplyReasonCode = (typeof ASSISTANT_REPLY_REASON_CODES)[number];
 
-export const LegacyMessageProvenanceSchema = z.object({
-  source: z.literal('pre_final_reply_semantics'),
-}).strict();
+export const LegacyMessageProvenanceSchema = z
+  .object({
+    source: z.literal('pre_final_reply_semantics'),
+  })
+  .strict();
 
 export type LegacyMessageProvenance = z.infer<typeof LegacyMessageProvenanceSchema>;
 
-export const SessionUserMessagePayloadSchema = z.object({
-  display_content: SessionUserContentListSchema,
-  model_content: SessionUserContentListSchema,
-  skill_selection: z.object({
-    name: z.string().min(1),
-    skill_path: z.string().min(1),
-  }).strict().optional(),
-  legacy_provenance: LegacyMessageProvenanceSchema.optional(),
-}).strict();
+export const SessionUserMessagePayloadSchema = z
+  .object({
+    display_content: SessionUserContentListSchema,
+    model_content: SessionUserContentListSchema,
+    skill_selection: z
+      .object({
+        name: z.string().min(1),
+        skill_path: z.string().min(1),
+      })
+      .strict()
+      .optional(),
+    legacy_provenance: LegacyMessageProvenanceSchema.optional(),
+  })
+  .strict();
 
-const AiUsageSchema = z.object({
-  input: z.number().int().nonnegative(),
-  output: z.number().int().nonnegative(),
-  cacheRead: z.number().int().nonnegative(),
-  cacheWrite: z.number().int().nonnegative(),
-  cacheWrite1h: z.number().int().nonnegative().optional(),
-  reasoning: z.number().int().nonnegative().optional(),
-  totalTokens: z.number().int().nonnegative(),
-  cost: z.object({
-    input: z.number().nonnegative(),
-    output: z.number().nonnegative(),
-    cacheRead: z.number().nonnegative(),
-    cacheWrite: z.number().nonnegative(),
-    total: z.number().nonnegative(),
-  }).strict(),
-}).strict();
+const AiUsageSchema = z
+  .object({
+    input: z.number().int().nonnegative(),
+    output: z.number().int().nonnegative(),
+    cacheRead: z.number().int().nonnegative(),
+    cacheWrite: z.number().int().nonnegative(),
+    cacheWrite1h: z.number().int().nonnegative().optional(),
+    reasoning: z.number().int().nonnegative().optional(),
+    totalTokens: z.number().int().nonnegative(),
+    cost: z
+      .object({
+        input: z.number().nonnegative(),
+        output: z.number().nonnegative(),
+        cacheRead: z.number().nonnegative(),
+        cacheWrite: z.number().nonnegative(),
+        total: z.number().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();
 
-export const SessionModelResponsePayloadSchema = z.object({
-  content: z.array(SessionAssistantContentSchema),
-  outcome_status: z.enum(['completed', 'incomplete', 'failed']),
-  reason_code: z.string().min(1).optional(),
-  stop_reason: z.string().min(1).optional(),
-  api: z.string().min(1).optional(),
-  provider: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-  response_model: z.string().min(1).optional(),
-  response_id: z.string().min(1).optional(),
-  usage: AiUsageSchema.optional(),
-  failure: z.object({
-    code: z.string().min(1),
-    message: z.string().min(1),
-    retryable: z.boolean(),
-    retryAfterMs: z.number().nonnegative().optional(),
-  }).strict().optional(),
-  error_message: z.string().min(1).optional(),
-  legacy_provenance: LegacyMessageProvenanceSchema.optional(),
-}).strict();
+export const SessionModelResponsePayloadSchema = z
+  .object({
+    content: z.array(SessionAssistantContentSchema),
+    outcome_status: z.enum(['completed', 'incomplete', 'failed']),
+    reason_code: z.string().min(1).optional(),
+    stop_reason: z.string().min(1).optional(),
+    api: z.string().min(1).optional(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    response_model: z.string().min(1).optional(),
+    response_id: z.string().min(1).optional(),
+    usage: AiUsageSchema.optional(),
+    failure: z
+      .object({
+        code: z.string().min(1),
+        message: z.string().min(1),
+        retryable: z.boolean(),
+        retryAfterMs: z.number().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+    error_message: z.string().min(1).optional(),
+    legacy_provenance: LegacyMessageProvenanceSchema.optional(),
+  })
+  .strict();
 
-export const SessionToolResultPayloadSchema = z.object({
-  tool_call_id: z.string().min(1),
-  tool_name: z.string().min(1),
-  status: z.enum(['success', 'failure', 'permission_denied', 'user_rejected', 'cancelled']),
-  error: z.object({
-    code: z.string().min(1),
-    message: z.string().min(1),
-    details: JsonObjectSchema.optional(),
-  }).strict().optional(),
-  content: SessionUserContentListSchema,
-  /** Tool-owned usage that never counts toward the main model Context. */
-  usage: AiUsageSchema.optional(),
-  legacy_provenance: LegacyMessageProvenanceSchema.optional(),
-}).strict();
+export const SessionToolResultPayloadSchema = z
+  .object({
+    tool_call_id: z.string().min(1),
+    tool_name: z.string().min(1),
+    status: z.enum(['success', 'failure', 'permission_denied', 'user_rejected', 'cancelled']),
+    error: z
+      .object({
+        code: z.string().min(1),
+        message: z.string().min(1),
+        details: JsonObjectSchema.optional(),
+      })
+      .strict()
+      .optional(),
+    content: SessionUserContentListSchema,
+    /** Tool-owned usage that never counts toward the main model Context. */
+    usage: AiUsageSchema.optional(),
+    legacy_provenance: LegacyMessageProvenanceSchema.optional(),
+  })
+  .strict();
 
-export const SessionAssistantReplyPayloadSchema = z.object({
-  status: z.enum(ASSISTANT_REPLY_STATUSES),
-  content: z.array(SessionAssistantContentSchema),
-  reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
-  api: z.string().min(1).optional(),
-  provider: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-  response_model: z.string().min(1).optional(),
-  response_id: z.string().min(1).optional(),
-  usage: AiUsageSchema.optional(),
-  error_message: z.string().min(1).optional(),
-}).strict().superRefine((payload, context) => {
-  if (payload.content.some((block) => block.type === 'toolCall')) {
-    context.addIssue({
-      code: 'custom',
-      path: ['content'],
-      message: 'Assistant Reply content cannot contain Work Tool Calls.',
-    });
-  }
-  if (payload.status === 'completed' && !hasUserVisibleAssistantContent(payload.content)) {
-    context.addIssue({
-      code: 'custom',
-      path: ['content'],
-      message: 'Completed Assistant Reply requires user-visible content.',
-    });
-  }
-});
+export const SessionAssistantReplyPayloadSchema = z
+  .object({
+    status: z.enum(ASSISTANT_REPLY_STATUSES),
+    content: z.array(SessionAssistantContentSchema),
+    reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
+    api: z.string().min(1).optional(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    response_model: z.string().min(1).optional(),
+    response_id: z.string().min(1).optional(),
+    usage: AiUsageSchema.optional(),
+    error_message: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine((payload, context) => {
+    if (payload.content.some((block) => block.type === 'toolCall')) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'Assistant Reply content cannot contain Work Tool Calls.',
+      });
+    }
+    if (payload.status === 'completed' && !hasUserVisibleAssistantContent(payload.content)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['content'],
+        message: 'Completed Assistant Reply requires user-visible content.',
+      });
+    }
+  });
 
 const SessionMessageBaseSchema = z.object({
   message_id: z.string().min(1),
@@ -1283,22 +1361,32 @@ export const SessionAssistantReplyMessageSchema = SessionMessageBaseSchema.exten
   response_id: z.string().min(1).optional(),
   usage: AiUsageSchema.optional(),
   error_message: z.string().min(1).optional(),
-}).strict().superRefine((message, context) => {
-  const result = SessionAssistantReplyPayloadSchema.safeParse({
-    status: message.status,
-    content: message.content,
-    ...(message.reason_code ? { reason_code: message.reason_code } : {}),
+})
+  .strict()
+  .superRefine((message, context) => {
+    const result = SessionAssistantReplyPayloadSchema.safeParse({
+      status: message.status,
+      content: message.content,
+      ...(message.reason_code ? { reason_code: message.reason_code } : {}),
+    });
+    if (!result.success) {
+      for (const issue of result.error.issues) context.addIssue(issue);
+    }
+    if (!message.execution_id) {
+      context.addIssue({
+        code: 'custom',
+        path: ['execution_id'],
+        message: 'Assistant Reply requires execution_id.',
+      });
+    }
+    if (!message.completed_at) {
+      context.addIssue({
+        code: 'custom',
+        path: ['completed_at'],
+        message: 'Assistant Reply requires completed_at.',
+      });
+    }
   });
-  if (!result.success) {
-    for (const issue of result.error.issues) context.addIssue(issue);
-  }
-  if (!message.execution_id) {
-    context.addIssue({ code: 'custom', path: ['execution_id'], message: 'Assistant Reply requires execution_id.' });
-  }
-  if (!message.completed_at) {
-    context.addIssue({ code: 'custom', path: ['completed_at'], message: 'Assistant Reply requires completed_at.' });
-  }
-});
 
 export const SessionMessageSchema = z.discriminatedUnion('message_kind', [
   SessionUserMessageSchema,
@@ -1346,8 +1434,9 @@ export interface SessionMessageWithAttachments {
 export type SessionMessageContent = SessionUserContent[] | SessionAssistantContent[];
 
 export function sessionMessageText(message: SessionMessage): string {
-  const blocks = message.message_kind === 'user_message' ? message.display_content : message.content;
-  return blocks.flatMap((block) => block.type === 'text' ? [block.text] : []).join('');
+  const blocks =
+    message.message_kind === 'user_message' ? message.display_content : message.content;
+  return blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('');
 }
 
 export function hasUserVisibleAssistantContent(content: SessionAssistantContent[]): boolean {
@@ -1355,7 +1444,10 @@ export function hasUserVisibleAssistantContent(content: SessionAssistantContent[
 }
 
 export function isLegacySessionMessage(message: SessionMessage): boolean {
-  return 'legacy_provenance' in message && message.legacy_provenance?.source === 'pre_final_reply_semantics';
+  return (
+    'legacy_provenance' in message &&
+    message.legacy_provenance?.source === 'pre_final_reply_semantics'
+  );
 }
 
 /** Binds the accepted Coding input to Agent's awaited message persistence hook. */
@@ -1365,38 +1457,91 @@ export function createSessionMessageSaver(options: {
   readonly onUserSaved?: (saved: Extract<SaveUserMessageResult, { status: 'saved' }>) => void;
 }): (request: import('@megumi/agent').SaveMessageRequest) => Promise<void> {
   return async ({ runId, messageId, message }) => {
-    const identity = { message_id: messageId, session_id: options.user.session_id, execution_id: runId };
+    const identity = {
+      message_id: messageId,
+      session_id: options.user.session_id,
+      execution_id: runId,
+    };
     if (message.role === 'user') {
-      const saved = await options.history.saveUserMessage({ ...options.user, ...identity, created_at: new Date(message.timestamp).toISOString() });
+      const saved = await options.history.saveUserMessage({
+        ...options.user,
+        ...identity,
+        created_at: new Date(message.timestamp).toISOString(),
+      });
       if (saved.status === 'failed') throw new Error(saved.failure.message);
       options.onUserSaved?.(saved);
       return;
     }
     let saved: SaveMessageResult;
     if (message.role === 'assistant') {
-      const metadata = { api: message.api, provider: message.provider, model: message.model,
-        response_model: message.responseModel, response_id: message.responseId,
-        usage: message.usage, error_message: message.errorMessage };
-      const content = message.content.map(block => ({ ...block }));
+      const metadata = {
+        api: message.api,
+        provider: message.provider,
+        model: message.model,
+        response_model: message.responseModel,
+        response_id: message.responseId,
+        usage: message.usage,
+        error_message: message.errorMessage,
+      };
+      const content = message.content.map((block) => ({ ...block }));
       const completed_at = new Date(message.timestamp).toISOString();
-      const hasCalls = content.some(block => block.type === 'toolCall');
+      const hasCalls = content.some((block) => block.type === 'toolCall');
       saved = hasCalls
-        ? options.history.saveModelResponse({ ...identity, ...metadata, content, completed_at,
-            outcome_status: 'completed', stop_reason: message.stopReason })
-        : options.history.saveAssistantReply({ ...identity, ...metadata, content, completed_at,
-            status: message.stopReason === 'aborted' ? 'cancelled' : message.stopReason === 'error' ? 'failed' : 'completed' });
+        ? options.history.saveModelResponse({
+            ...identity,
+            ...metadata,
+            content,
+            completed_at,
+            outcome_status: 'completed',
+            stop_reason: message.stopReason,
+          })
+        : options.history.saveAssistantReply({
+            ...identity,
+            ...metadata,
+            content,
+            completed_at,
+            ...(message.stopReason === 'aborted' ? { reason_code: 'user_cancelled' as const } : {}),
+            status:
+              message.stopReason === 'aborted'
+                ? 'cancelled'
+                : message.stopReason === 'error'
+                  ? 'failed'
+                  : 'completed',
+          });
     } else if (message.role === 'toolResult') {
       const detail = message.details;
-      const error = detail && typeof detail === 'object' && !Array.isArray(detail) && 'error' in detail
-        ? detail.error : undefined;
-      const code = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-        ? error.code : undefined;
-      saved = options.history.saveToolResultMessage({ ...identity, tool_call_id: message.toolCallId,
-        tool_name: message.toolName, content: [...message.content], usage: message.usage,
+      const error =
+        detail && typeof detail === 'object' && !Array.isArray(detail) && 'error' in detail
+          ? detail.error
+          : undefined;
+      const code =
+        error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+          ? error.code
+          : undefined;
+      saved = options.history.saveToolResultMessage({
+        ...identity,
+        tool_call_id: message.toolCallId,
+        tool_name: message.toolName,
+        content: [...message.content],
+        usage: message.usage,
         completed_at: new Date(message.timestamp).toISOString(),
-        status: code === 'permission_denied' ? 'permission_denied' : code === 'tool_cancelled' ? 'cancelled'
-          : message.isError ? 'failure' : 'success',
-        error: code ? { code, message: message.content.filter(block => block.type === 'text').map(block => block.text).join('') } : undefined,
+        status:
+          code === 'permission_denied'
+            ? 'permission_denied'
+            : code === 'tool_cancelled'
+              ? 'cancelled'
+              : message.isError
+                ? 'failure'
+                : 'success',
+        error: code
+          ? {
+              code,
+              message: message.content
+                .filter((block) => block.type === 'text')
+                .map((block) => block.text)
+                .join(''),
+            }
+          : undefined,
       });
     } else {
       throw new Error('System prompt messages do not belong to session history.');
@@ -1412,18 +1557,37 @@ export function saveInterruptedReply(input: {
   readonly result: import('@megumi/agent').AgentResult;
 }): void {
   const { result, history, sessionId } = input;
-  if (result.status === 'completed' || (result.status === 'failed' && result.error.code === 'MESSAGE_SAVE_FAILED')) return;
+  if (
+    result.status === 'completed' ||
+    (result.status === 'failed' && result.error.code === 'MESSAGE_SAVE_FAILED')
+  )
+    return;
   const committed = history.getCommittedRunMessages({ sessionId, executionId: result.runId });
   if (committed.status === 'failed') throw new Error(committed.failure.message);
-  if (!committed.messages.length || committed.messages.some(item => item.message.message_kind === 'assistant_reply')) return;
+  if (
+    !committed.messages.length ||
+    committed.messages.some((item) => item.message.message_kind === 'assistant_reply')
+  )
+    return;
   const reasons: Record<import('@megumi/agent').AgentError['code'], AssistantReplyReasonCode> = {
-    MESSAGE_SAVE_FAILED: 'session_failed', CONTEXT_FAILED: 'context_failed', CONTEXT_OVERFLOW: 'context_failed',
-    MODEL_CALL_FAILED: 'model_call_failed', MODEL_TIMEOUT: 'model_call_failed', MODEL_PROTOCOL_ERROR: 'runtime_protocol_violation',
-    TOOL_SYSTEM_FAILED: 'tool_call_failed', EXECUTION_LIMIT_REACHED: 'loop_limit_exceeded', CLEANUP_FAILED: 'internal_error',
+    MESSAGE_SAVE_FAILED: 'session_failed',
+    CONTEXT_FAILED: 'context_failed',
+    CONTEXT_OVERFLOW: 'context_failed',
+    MODEL_CALL_FAILED: 'model_call_failed',
+    MODEL_TIMEOUT: 'model_call_failed',
+    MODEL_PROTOCOL_ERROR: 'runtime_protocol_violation',
+    TOOL_SYSTEM_FAILED: 'tool_call_failed',
+    EXECUTION_LIMIT_REACHED: 'loop_limit_exceeded',
+    CLEANUP_FAILED: 'internal_error',
   };
-  const saved = history.saveAssistantReply({ message_id: crypto.randomUUID(), session_id: sessionId,
-    execution_id: result.runId, status: result.status, content: [],
+  const saved = history.saveAssistantReply({
+    message_id: crypto.randomUUID(),
+    session_id: sessionId,
+    execution_id: result.runId,
+    status: result.status,
+    content: [],
     reason_code: result.status === 'cancelled' ? 'user_cancelled' : reasons[result.error.code],
-    completed_at: new Date().toISOString() });
+    completed_at: new Date().toISOString(),
+  });
   if (saved.status === 'failed') throw new Error(saved.failure.message);
 }

@@ -4,15 +4,52 @@ import { estimateContextTokens } from '@megumi/ai/utils/estimate';
 import { resolveRecommendationDiscussion } from '../recommendation/recommendation-discussion';
 import type { AttachmentPicker } from '../platform/attachment-picker';
 import type { LocalFileAvailability } from '../platform/local-file-availability';
-import type { WorkspaceCatalog, WorkspaceChanges, WorkspaceChangeSummary } from '../workspace/index';
+import type {
+  WorkspaceCatalog,
+  WorkspaceChanges,
+  WorkspaceChangeSummary,
+} from '../workspace/index';
 import type { InputSuggestionQuery } from './input/execute-command';
-import { DEFAULT_INPUT_POLICY, DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from './input/parse-message';
+import {
+  DEFAULT_INPUT_POLICY,
+  DOCUMENT_INPUT_POLICY,
+  IMAGE_INPUT_POLICY,
+} from './input/parse-message';
 import { sessionMessagesToEstimateMessages } from './prepare-context';
-import type { HostFailure, ReadCommittedRunRequest, ReadCommittedRunResult, ReadSessionRequest, ReadSessionResult, RunDto, SendUserInputRequest, SendUserInputResult, SessionConversationItemDto, SessionDto, SessionHost, SessionMessageConversationItemDto, SessionMessageDto, SessionReadDiagnosticDto, UserMessageDto, UserMessageSummaryDto, WorkspaceChangeSummaryDto } from './session-contracts';
-import type { SessionAttachmentReader, SessionMessageAttachment } from './sessions/session-attachments';
+import type {
+  HostFailure,
+  ReadCommittedRunRequest,
+  ReadCommittedRunResult,
+  ReadSessionRequest,
+  ReadSessionResult,
+  RunDto,
+  SendUserInputRequest,
+  SendUserInputResult,
+  SessionConversationItemDto,
+  SessionDto,
+  SessionHost,
+  SessionMessageConversationItemDto,
+  SessionMessageDto,
+  SessionReadDiagnosticDto,
+  UserMessageDto,
+  UserMessageSummaryDto,
+  WorkspaceChangeSummaryDto,
+} from './session-contracts';
+import type {
+  SessionAttachmentReader,
+  SessionMessageAttachment,
+} from './sessions/session-attachments';
 import type { SessionBranchDrafts } from './sessions/session-branches';
 import type { Session, SessionCatalog } from './sessions/session-catalog';
-import type { SessionAssistantContent, SessionConversationItem, SessionHistory, SessionMessage, SessionMessageConversationItem, SessionMessageWithAttachments, SessionUserContent } from './sessions/session-history';
+import type {
+  SessionAssistantContent,
+  SessionConversationItem,
+  SessionHistory,
+  SessionMessage,
+  SessionMessageConversationItem,
+  SessionMessageWithAttachments,
+  SessionUserContent,
+} from './sessions/session-history';
 import { sessionMessageText } from './sessions/session-history';
 import type { Coding, CodingRunSnapshot, SubmitCodingInputResult } from './submit-message';
 
@@ -24,7 +61,10 @@ export function createSessionOperations(options: {
     workspaceId?: string,
   ) => Pick<import('../settings/settings-store').Settings, 'readSettings'>;
   reader: SessionReader;
-  recommendations: Pick<import('../recommendation/recommendation-api').Discovery, 'getRecommendationReference'>;
+  recommendations: Pick<
+    import('../recommendation/recommendation-api').Discovery,
+    'getRecommendationReference'
+  >;
   coding: Pick<Coding, 'cancelInput' | 'submitInput'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
@@ -95,7 +135,12 @@ export function createSessionOperations(options: {
     },
     async cancelUserInput(request) {
       const accepted = options.coding.cancelInput(request.requestId);
-      return { payload: { status: accepted ? 'cancellation_requested' : 'not_active', requestId: request.requestId } };
+      return {
+        payload: {
+          status: accepted ? 'cancellation_requested' : 'not_active',
+          requestId: request.requestId,
+        },
+      };
     },
     createBranchDraft(request) {
       const result = options.branches.createBranchDraft({
@@ -153,7 +198,7 @@ export function createSessionOperations(options: {
           usedTokens: usage.tokens,
           totalTokens: model.contextWindow,
           remainingTokens: Math.max(0, model.contextWindow - usage.tokens),
-          usedPercent: Math.min(100, Math.round(usage.tokens / model.contextWindow * 100)),
+          usedPercent: Math.min(100, Math.round((usage.tokens / model.contextWindow) * 100)),
           autoCompactPercent: Math.round(
             configuration.settings.config.context.compactionThresholdRatio * 100,
           ),
@@ -247,7 +292,10 @@ export function createSessionOperations(options: {
 async function submitUserInput(
   coding: Pick<Coding, 'submitInput'>,
   request: SendUserInputRequest,
-  recommendations: Pick<import('../recommendation/recommendation-api').Discovery, 'getRecommendationReference'>,
+  recommendations: Pick<
+    import('../recommendation/recommendation-api').Discovery,
+    'getRecommendationReference'
+  >,
 ): Promise<SendUserInputResult> {
   const reference = request.recommendationId
     ? resolveRecommendationDiscussion(

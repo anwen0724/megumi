@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  SessionAssistantReplyPayloadSchema,
-  SessionMessageSchema,
-  SessionModelResponsePayloadSchema,
-} from '@megumi/agent-runtime/sessions/index';
-import type {
-  SessionMessage
-} from '@megumi/agent-runtime/sessions/index';
+import { SessionAssistantReplyPayloadSchema, SessionMessageSchema, SessionModelResponsePayloadSchema } from '@megumi/application/coding/sessions/session-history';
+import type { SessionMessage } from '@megumi/application/coding/sessions/session-history';
 
 describe('session contracts v2', () => {
   it('accepts a user message with display and model content', () => {

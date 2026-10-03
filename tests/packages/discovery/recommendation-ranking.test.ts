@@ -1,11 +1,8 @@
 /* Verifies Recommendation ranks the complete eligible snapshot without a hidden Candidate window. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import {
-  rankRecommendationCandidates,
-  type RecommendationCandidate,
-  type RecommendationHistoryItem,
-} from '@megumi/application/discovery/index';
+import { rankRecommendationCandidates } from '@megumi/application/recommendation/daily/rank-candidates';
+import { type RecommendationCandidate, type RecommendationHistoryItem } from '@megumi/application/recommendation/daily/publish-recommendations';
 
 const snapshotAt = '2026-08-27T08:00:00.000Z';
 

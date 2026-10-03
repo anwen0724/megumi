@@ -1,22 +1,32 @@
 /* Builds model-visible preference facts from the product-owned feedback snapshot. */
-import { buildSystemPrompt, loadSystemInstructionDocuments, type PreparedContext } from '@megumi/agent';
+import {
+  buildSystemPrompt,
+  loadSystemInstructionDocuments,
+  type PreparedContext,
+} from '@megumi/agent';
 import type { PreferenceLearningFacts, PreferenceSetDetail } from './preference-rules';
 
 /** Includes effective preference text and its source evidence without storage handles. */
-export function contextPreference(
-  snapshot: PreferenceSetDetail,
-) {
+export function contextPreference(snapshot: PreferenceSetDetail) {
   return {
     preferenceSetId: snapshot.preferenceSet.id,
     scope: snapshot.preferenceSet.scope,
     ...(snapshot.preferenceSet.interestId ? { interestId: snapshot.preferenceSet.interestId } : {}),
     revision: snapshot.preferenceSet.revision,
     preferences: snapshot.preferences.map(({ preference, evidence }) => ({
-      id: preference.id, ...(preference.polarity ? { polarity: preference.polarity } : {}), ...(preference.dimension ? { dimension: preference.dimension } : {}),
-      origin: preference.origin, status: preference.status, revision: preference.revision,
-      ...(preference.userEditedAt ? { userEditedAt: preference.userEditedAt } : {}), ...(preference.deletedFeedbackSequence !== undefined ? { deletedFeedbackSequence: preference.deletedFeedbackSequence } : {}),
+      id: preference.id,
+      ...(preference.polarity ? { polarity: preference.polarity } : {}),
+      ...(preference.dimension ? { dimension: preference.dimension } : {}),
+      origin: preference.origin,
+      status: preference.status,
+      revision: preference.revision,
+      ...(preference.userEditedAt ? { userEditedAt: preference.userEditedAt } : {}),
+      ...(preference.deletedFeedbackSequence !== undefined
+        ? { deletedFeedbackSequence: preference.deletedFeedbackSequence }
+        : {}),
       evidence,
-      statement: preference.statement, updatedAt: preference.updatedAt,
+      statement: preference.statement,
+      updatedAt: preference.updatedAt,
       supportingRecommendationIds: evidence.map(({ recommendationId }) => recommendationId),
     })),
   };
@@ -25,15 +35,24 @@ export function contextPreference(
 /** Loads instructions and projects the supplied feedback batch without another owner lookup. */
 export async function preparePreferenceContext(request: {
   readonly facts: PreferenceLearningFacts;
-  readonly instructionDocuments: readonly { instructionId: string; sourcePath: string; }[];
+  readonly instructionDocuments: readonly { instructionId: string; sourcePath: string }[];
   readonly signal: AbortSignal;
 }): Promise<PreparedContext> {
-  const documents = await loadSystemInstructionDocuments({ documents: request.instructionDocuments, signal: request.signal });
+  const documents = await loadSystemInstructionDocuments({
+    documents: request.instructionDocuments,
+    signal: request.signal,
+  });
   request.signal.throwIfAborted();
   const material = preferenceFacts(request.facts);
   return {
     systemPrompt: buildSystemPrompt({ systemInstructions: documents, tools: [] }),
-    messages: [{ role: 'user', content: JSON.stringify(material), timestamp: Date.parse(request.facts.batch.startedAt) }],
+    messages: [
+      {
+        role: 'user',
+        content: JSON.stringify(material),
+        timestamp: Date.parse(request.facts.batch.startedAt),
+      },
+    ],
     tools: [],
   };
 }
@@ -51,7 +70,9 @@ function preferenceFacts(facts: PreferenceLearningFacts) {
       description: interest.description,
       status: interest.status,
       revision: interest.revision,
-      ...(interest.descriptionUserEditedAt ? { descriptionUserEditedAt: interest.descriptionUserEditedAt } : {}),
+      ...(interest.descriptionUserEditedAt
+        ? { descriptionUserEditedAt: interest.descriptionUserEditedAt }
+        : {}),
     })),
     currentPreferences: facts.currentPreferences.map(contextPreference),
     supportingReactions: facts.supportingReactions,

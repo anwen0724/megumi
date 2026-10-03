@@ -1,8 +1,17 @@
 /* Owns persisted compaction records and their session entry relationships. */
 import type { CompactResult } from '@megumi/agent';
-import { DEFAULT_COMPACTION_POLICY, generateCompactionSummary, planCompaction } from '@megumi/agent';
+import {
+  DEFAULT_COMPACTION_POLICY,
+  generateCompactionSummary,
+  planCompaction,
+} from '@megumi/agent';
 import { estimateMessageTokens } from '@megumi/ai/utils/estimate';
-import { buildContextMessages, type CodingContextOptions, type MaterializedHistory } from './prepare-context';
+import type { Observability } from '../observability/index';
+import {
+  buildContextMessages,
+  type CodingContextOptions,
+  type MaterializedHistory,
+} from './prepare-context';
 import type { SessionCompactionSummary, SessionEntry } from './sessions/session-branches';
 import type { SessionFailure } from './sessions/session-catalog';
 import { sessionFailure } from './sessions/session-catalog';
@@ -20,65 +29,162 @@ export async function compactCodingHistory(input: {
   if (!materialized) {
     const history = options.history.getActiveHistory({ session_id: options.sessionId });
     if (history.status === 'failed') return { status: 'failed', error: history.failure };
-    const built = await buildContextMessages({ history: history.history, attachmentReader: options.attachments,
-      imageInputSupport: options.config.model.input.includes('image'), signal });
+    const built = await buildContextMessages({
+      history: history.history,
+      attachmentReader: options.attachments,
+      imageInputSupport: options.config.model.input.includes('image'),
+      signal,
+    });
     if (built.status === 'failed') return { status: 'failed', error: built.failure };
     materialized = built.materialized;
   }
-  const planned = planCompaction({ sources: materialized.compactableSources,
-    policy: DEFAULT_COMPACTION_POLICY, estimateMessageTokens });
+  const planned = planCompaction({
+    sources: materialized.compactableSources,
+    policy: DEFAULT_COMPACTION_POLICY,
+    estimateMessageTokens,
+  });
   if (planned.status === 'nothing_to_compact') return planned;
   signal.throwIfAborted();
   const compactionId = crypto.randomUUID();
   const startedAt = new Date().toISOString();
-  const started = options.history.beginCompaction({ compactionId, sessionId: options.sessionId,
-    anchorEntryId: materialized.expectedActiveEntryId, trigger: input.trigger, startedAt });
+  const started = options.history.beginCompaction({
+    compactionId,
+    sessionId: options.sessionId,
+    anchorEntryId: materialized.expectedActiveEntryId,
+    trigger: input.trigger,
+    startedAt,
+  });
   if (started.status === 'failed') return { status: 'failed', error: started.failure };
-  options.events?.publish({ type: 'session.compaction.started', sessionId: options.sessionId,
-    payload: { compactionId, trigger: input.trigger } });
+  options.events?.publish({
+    type: 'session.compaction.started',
+    sessionId: options.sessionId,
+    payload: { compactionId, trigger: input.trigger },
+  });
+  const correlation = { sessionId: options.sessionId, compactionId };
+  recordDiagnostic(options.observability, (observer) => {
+    observer.recordEvent({
+      type: 'context.compaction.triggered',
+      compactionId,
+      trigger: input.trigger,
+    });
+    observer.recordContent({
+      kind: 'context.compaction.source',
+      correlation,
+      value: {
+        previousSummary: materialized.previousSummary,
+        messages: planned.plan.summarizedMessages,
+        turnPrefixMessages: planned.plan.turnPrefixMessages,
+        coveredUntilEntryId: planned.plan.coveredUntilEntryId,
+        firstKeptEntryId: planned.plan.firstKeptEntryId,
+      },
+    });
+  });
 
   const fail = (error: SessionCompactionError, cancelled = false): CompactResult => {
-    const ended = options.history.endCompaction({ compactionId, sessionId: options.sessionId,
-      status: cancelled ? 'cancelled' : 'failed', error: cancelled ? undefined : error,
-      completedAt: new Date().toISOString() });
+    const ended = options.history.endCompaction({
+      compactionId,
+      sessionId: options.sessionId,
+      status: cancelled ? 'cancelled' : 'failed',
+      error: cancelled ? undefined : error,
+      completedAt: new Date().toISOString(),
+    });
     if (ended.status === 'failed') return { status: 'failed', error: ended.failure };
-    options.events?.publish({ type: 'session.compaction.ended', sessionId: options.sessionId,
-      payload: cancelled ? { compactionId, status: 'cancelled' } : { compactionId, status: 'failed', error } });
+    options.events?.publish({
+      type: 'session.compaction.ended',
+      sessionId: options.sessionId,
+      payload: cancelled
+        ? { compactionId, status: 'cancelled' }
+        : { compactionId, status: 'failed', error },
+    });
     return { status: 'failed', error };
   };
   try {
-    const generated = await generateCompactionSummary({ ai: options.ai, model: options.config.model,
-      sessionId: options.sessionId, previousSummary: materialized.previousSummary,
-      messages: planned.plan.summarizedMessages, turnPrefixMessages: planned.plan.turnPrefixMessages,
-      timestamp: Date.parse(startedAt), signal });
+    const generate = () =>
+      generateCompactionSummary({
+        ai: options.ai,
+        model: options.config.model,
+        sessionId: options.sessionId,
+        previousSummary: materialized.previousSummary,
+        messages: planned.plan.summarizedMessages,
+        turnPrefixMessages: planned.plan.turnPrefixMessages,
+        timestamp: Date.parse(startedAt),
+        signal,
+      });
+    const generated = options.observability
+      ? await options.observability.withSpan({ name: 'model.call', correlation }, generate)
+      : await generate();
     if (signal.aborted || generated.status === 'cancelled') {
       return fail({ code: 'cancelled', message: 'Context compaction was cancelled.' }, true);
     }
     if (generated.status === 'failed') {
-      return fail({ code: 'summary_model_failed', message: generated.failure instanceof Error
-        ? generated.failure.message : String(generated.failure) });
+      return fail({
+        code: 'summary_model_failed',
+        message:
+          generated.failure instanceof Error
+            ? generated.failure.message
+            : String(generated.failure),
+      });
     }
-    const saved = options.history.completeCompaction({ compactionId, sessionId: options.sessionId,
-      summaryText: generated.content, coveredUntilEntryId: planned.plan.coveredUntilEntryId,
-      firstKeptEntryId: planned.plan.firstKeptEntryId, usage: generated.usage,
-      expectedActiveEntryId: materialized.expectedActiveEntryId, completedAt: new Date().toISOString(),
-      appendToActivePath: true });
+    recordDiagnostic(options.observability, (observer) =>
+      observer.recordContent({
+        kind: 'context.compaction.summary',
+        value: generated.content,
+        mediaType: 'text/plain;charset=utf-8',
+        correlation,
+      }),
+    );
+    const saved = options.history.completeCompaction({
+      compactionId,
+      sessionId: options.sessionId,
+      summaryText: generated.content,
+      coveredUntilEntryId: planned.plan.coveredUntilEntryId,
+      firstKeptEntryId: planned.plan.firstKeptEntryId,
+      usage: generated.usage,
+      expectedActiveEntryId: materialized.expectedActiveEntryId,
+      completedAt: new Date().toISOString(),
+      appendToActivePath: true,
+    });
     if (saved.status === 'failed') return fail(saved.failure);
-    options.events?.publish({ type: 'session.compaction.ended', sessionId: options.sessionId,
-      payload: { compactionId, status: 'completed' } });
+    options.events?.publish({
+      type: 'session.compaction.ended',
+      sessionId: options.sessionId,
+      payload: { compactionId, status: 'completed' },
+    });
+    if (saved.entry) {
+      const messageId = saved.entry.entry_id;
+      recordDiagnostic(options.observability, (observer) =>
+        observer.recordEvent({
+          type: 'context.compaction.persisted',
+          compactionId,
+          messageId,
+        }),
+      );
+    }
     return { status: 'compacted' };
   } catch (cause) {
-    return fail({ code: signal.aborted ? 'cancelled' : 'compaction_failed',
-      message: cause instanceof Error ? cause.message : 'Context compaction failed.' }, signal.aborted);
+    return fail(
+      {
+        code: signal.aborted ? 'cancelled' : 'compaction_failed',
+        message: cause instanceof Error ? cause.message : 'Context compaction failed.',
+      },
+      signal.aborted,
+    );
   }
 }
 
-export const SESSION_COMPACTION_TRIGGERS = [
-  'threshold',
-  'overflow',
-  'manual',
-  'legacy',
-] as const;
+function recordDiagnostic(
+  observability: Observability | undefined,
+  record: (observer: Observability) => void,
+): void {
+  if (!observability) return;
+  try {
+    record(observability);
+  } catch {
+    // Diagnostic capture cannot change whether the summary is committed.
+  }
+}
+
+export const SESSION_COMPACTION_TRIGGERS = ['threshold', 'overflow', 'manual', 'legacy'] as const;
 
 export const SESSION_COMPACTION_STATUSES = [
   'running',
@@ -88,9 +194,9 @@ export const SESSION_COMPACTION_STATUSES = [
   'interrupted',
 ] as const;
 
-export type SessionCompactionTrigger = typeof SESSION_COMPACTION_TRIGGERS[number];
+export type SessionCompactionTrigger = (typeof SESSION_COMPACTION_TRIGGERS)[number];
 
-export type SessionCompactionStatus = typeof SESSION_COMPACTION_STATUSES[number];
+export type SessionCompactionStatus = (typeof SESSION_COMPACTION_STATUSES)[number];
 
 export interface SessionCompactionError {
   readonly code: string;
@@ -172,9 +278,7 @@ export interface SessionCompactionLifecycle {
   /** Ends an already-started Compaction without changing the active semantic path. */
   end(request: EndCompactionRequest): EndCompactionResult;
   /** Closes records abandoned by a previous process without inventing runtime events. */
-  interruptRunning(
-    request: InterruptRunningCompactionsRequest,
-  ): InterruptRunningCompactionsResult;
+  interruptRunning(request: InterruptRunningCompactionsRequest): InterruptRunningCompactionsResult;
 }
 
 export interface CreateSessionCompactionLifecycleOptions {
@@ -245,10 +349,12 @@ function completeCompaction(
     };
     if (existing.status === 'completed') {
       if (!sameValue(existing, completed)) return compactionConflict(request.compactionId);
-      const entry = options.store.findEntryById(options.entryId({
-        kind: 'compaction',
-        source_id: request.compactionId,
-      }));
+      const entry = options.store.findEntryById(
+        options.entryId({
+          kind: 'compaction',
+          source_id: request.compactionId,
+        }),
+      );
       return { status: 'completed', compaction: existing, ...(entry ? { entry } : {}) };
     }
     if (existing.status !== 'running') return compactionConflict(request.compactionId);
@@ -257,8 +363,8 @@ function completeCompaction(
       const session = options.store.findSessionById(request.sessionId);
       if (!session) return sessionNotFound(request.sessionId);
       if (
-        Object.prototype.hasOwnProperty.call(request, 'expectedActiveEntryId')
-        && session.active_entry_id !== (request.expectedActiveEntryId ?? undefined)
+        Object.prototype.hasOwnProperty.call(request, 'expectedActiveEntryId') &&
+        session.active_entry_id !== (request.expectedActiveEntryId ?? undefined)
       ) {
         return failure(
           'active_entry_changed',
@@ -276,8 +382,8 @@ function completeCompaction(
         ? options.store.findEntryById(request.firstKeptEntryId)
         : undefined;
       if (
-        request.firstKeptEntryId
-        && (!firstKeptEntry || firstKeptEntry.session_id !== request.sessionId)
+        request.firstKeptEntryId &&
+        (!firstKeptEntry || firstKeptEntry.session_id !== request.sessionId)
       ) {
         return failure('invalid_first_kept_entry', 'firstKeptEntryId must belong to the Session.');
       }
@@ -303,10 +409,9 @@ function completeCompaction(
           });
         }
         if (
-          !session.active_entry_id
-          || session.active_entry_id === request.coveredUntilEntryId
-          || (!request.firstKeptEntryId
-            && session.active_entry_id !== request.coveredUntilEntryId)
+          !session.active_entry_id ||
+          session.active_entry_id === request.coveredUntilEntryId ||
+          (!request.firstKeptEntryId && session.active_entry_id !== request.coveredUntilEntryId)
         ) {
           options.store.updateSessionActiveEntry({
             session_id: request.sessionId,
@@ -325,10 +430,7 @@ function completeCompaction(
   }
 }
 
-function endCompaction(
-  store: SessionStore,
-  request: EndCompactionRequest,
-): EndCompactionResult {
+function endCompaction(store: SessionStore, request: EndCompactionRequest): EndCompactionResult {
   try {
     const existing = store.findCompactionById(request.compactionId);
     if (!existing || existing.sessionId !== request.sessionId) {
@@ -365,17 +467,20 @@ function interruptRunningCompactions(
       code: 'runtime_interrupted',
       message: 'Compaction was interrupted before it reached a terminal state.',
     };
-    const interrupted = store.runInTransaction(() => store.listRunningCompactions().map((record) => {
-      const updated: SessionCompactionRecord = {
-        ...record,
-        status: 'interrupted',
-        error,
-        completedAt: request.completedAt,
-      };
-      const saved = store.updateCompaction(updated);
-      if (!saved) throw new Error(`Compaction ${record.compactionId} disappeared during recovery.`);
-      return saved;
-    }));
+    const interrupted = store.runInTransaction(() =>
+      store.listRunningCompactions().map((record) => {
+        const updated: SessionCompactionRecord = {
+          ...record,
+          status: 'interrupted',
+          error,
+          completedAt: request.completedAt,
+        };
+        const saved = store.updateCompaction(updated);
+        if (!saved)
+          throw new Error(`Compaction ${record.compactionId} disappeared during recovery.`);
+        return saved;
+      }),
+    );
     return { status: 'completed', compactions: interrupted };
   } catch (error) {
     return sessionFailure(error);
@@ -418,9 +523,7 @@ function compactionConflict(
   );
 }
 
-function sessionNotFound(
-  sessionId: string,
-): Extract<BeginCompactionResult, { status: 'failed' }> {
+function sessionNotFound(sessionId: string): Extract<BeginCompactionResult, { status: 'failed' }> {
   return failure('session_not_found', `Session ${sessionId} was not found.`);
 }
 

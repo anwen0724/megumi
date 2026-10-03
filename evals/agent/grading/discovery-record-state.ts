@@ -1,6 +1,6 @@
 /* Reads legacy sealed facts without rewriting their stored shape or scoring semantics. */
 import { z } from 'zod';
-import { DiscoveryStateSchema } from '@megumi/discovery';
+import { DiscoveryStateSchema } from '@megumi/application/recommendation/recommendation-storage';
 
 const EnvelopeSchema = z.object({ facts: z.object({ discovery: z.record(z.unknown()) }) });
 const RowsSchema = z.array(z.record(z.unknown()));

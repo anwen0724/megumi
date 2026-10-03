@@ -2,15 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createSettings } from '@megumi/application/settings/settings-store';
-import {
-  resolveConfiguredPermissionRules,
-  recordConfiguredSessionGrant,
-} from '@megumi/agent-runtime/permissions/permission-rules';
+import { resolveConfiguredPermissionRules, recordConfiguredSessionGrant } from '@megumi/agent/permissions/permission-rules';
 // @vitest-environment node
 /* Verifies the resource-specific matching semantics kept internal to Permissions. */
 import { describe, expect, it, onTestFinished } from 'vitest';
-import type { PermissionOperation, PermissionRule } from '@megumi/agent-runtime/permissions/index';
-import { matchesPermissionRule } from '@megumi/agent-runtime/permissions/permission-rules';
+import type { PermissionOperation, PermissionRule } from '@megumi/agent/permissions/permission-rules';
+import { matchesPermissionRule } from '@megumi/agent/permissions/permission-rules';
 
 const context = {
   workspaceId: 'workspace_1',

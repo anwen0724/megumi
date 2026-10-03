@@ -13,7 +13,11 @@ import { createRecommendationScheduler } from '../recommendation-schedule';
 import type { RecommendationRepository } from '../recommendation-storage';
 import { type CandidateWorkset } from './candidate-workset';
 import { createRecommendationContext, recommendationFacts } from './prepare-context';
-import { prepareRecommendationRun, prepareRecommendationSnapshot, type RecommendationPreparation } from './prepare-run';
+import {
+  prepareRecommendationRun,
+  prepareRecommendationSnapshot,
+  type RecommendationPreparation,
+} from './prepare-run';
 import type { RecommendationCollection } from './publish-recommendations';
 import { publishRecommendations } from './publish-recommendations';
 
@@ -36,46 +40,46 @@ export interface RecommendationFailure {
 
 export type RequestRecommendationResult =
   | {
-    readonly status: 'started' | 'in_progress';
-    readonly localDate: string;
-    readonly requestId: string;
-    readonly phase: 'preparing_preferences' | 'executing';
-    readonly executionId?: string;
-  }
-  | { readonly status: 'already_published'; readonly collection: RecommendationCollection; }
-  | { readonly status: 'waiting_for_candidates' | 'model_unavailable'; readonly localDate: string; }
+      readonly status: 'started' | 'in_progress';
+      readonly localDate: string;
+      readonly requestId: string;
+      readonly phase: 'preparing_preferences' | 'executing';
+      readonly executionId?: string;
+    }
+  | { readonly status: 'already_published'; readonly collection: RecommendationCollection }
+  | { readonly status: 'waiting_for_candidates' | 'model_unavailable'; readonly localDate: string }
   | {
-    readonly status: 'failed';
-    readonly localDate: string;
-    readonly failure: RecommendationFailure;
-  };
+      readonly status: 'failed';
+      readonly localDate: string;
+      readonly failure: RecommendationFailure;
+    };
 
 export type WaitRecommendationResult =
-  | { readonly status: 'published'; readonly collection: RecommendationCollection; }
+  | { readonly status: 'published'; readonly collection: RecommendationCollection }
   | {
-    readonly status: 'waiting_for_candidates' | 'model_unavailable' | 'cancelled';
-    readonly localDate: string;
-  }
+      readonly status: 'waiting_for_candidates' | 'model_unavailable' | 'cancelled';
+      readonly localDate: string;
+    }
   | {
-    readonly status: 'failed';
-    readonly localDate: string;
-    readonly failure: RecommendationFailure;
-  }
-  | { readonly status: 'timed_out'; readonly localDate: string; readonly requestId: string; };
+      readonly status: 'failed';
+      readonly localDate: string;
+      readonly failure: RecommendationFailure;
+    }
+  | { readonly status: 'timed_out'; readonly localDate: string; readonly requestId: string };
 
 export type TodayRecommendationResult =
-  | { readonly status: 'not_generated'; readonly localDate: string; }
+  | { readonly status: 'not_generated'; readonly localDate: string }
   | {
-    readonly status: 'running';
-    readonly localDate: string;
-    readonly requestId: string;
-    readonly phase: 'preparing_preferences' | 'executing';
-    readonly executionId?: string;
-  }
+      readonly status: 'running';
+      readonly localDate: string;
+      readonly requestId: string;
+      readonly phase: 'preparing_preferences' | 'executing';
+      readonly executionId?: string;
+    }
   | WaitRecommendationResult;
 
 export interface RecommendationSettings {
-  readonly recommendationModel?: { providerId: string; modelId: string; };
+  readonly recommendationModel?: { providerId: string; modelId: string };
   readonly recommendationCandidateCheckIntervalSeconds: number;
   readonly recommendationGenerationTime: string;
   readonly recommendationTargetCount: number;
@@ -105,13 +109,13 @@ export interface CreateRecommendationsOptions {
   readonly repository: RecommendationDataRepository;
   readonly preparation: RecommendationPreparation;
   readonly sourceRegistry: {
-    get(sourceId: string): { readonly descriptor: { readonly name: string; }; } | undefined;
+    get(sourceId: string): { readonly descriptor: { readonly name: string } } | undefined;
   };
   readonly agent: Agent;
   readonly settings: Pick<Settings, 'readSettings'>;
-  readonly clock: { readonly now: () => string; };
-  readonly timezone: { readonly get: () => string; };
-  readonly ids?: { readonly createRequestId: () => string; };
+  readonly clock: { readonly now: () => string };
+  readonly timezone: { readonly get: () => string };
+  readonly ids?: { readonly createRequestId: () => string };
   readonly timers?: {
     setTimeout(callback: () => void, delayMs: number): unknown;
     clearTimeout(handle: unknown): void;
@@ -127,7 +131,7 @@ export interface CreateRecommendationsOptions {
 }
 
 export interface Recommendations {
-  start(options?: { readonly automaticTriggers?: boolean; }): Promise<void>;
+  start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   updateSchedule(): void;
   generate(request: {
     readonly trigger: RecommendationTrigger;
@@ -137,7 +141,11 @@ export interface Recommendations {
     readonly timeoutMs: number;
   }): Promise<WaitRecommendationResult>;
   getToday(): TodayRecommendationResult;
-  getFacts(request: { executionId: string; requestId: string; localDate: string; }): DiscoveryRecommendationFactsResult;
+  getFacts(request: {
+    executionId: string;
+    requestId: string;
+    localDate: string;
+  }): DiscoveryRecommendationFactsResult;
   getNextScheduledAt(): string | undefined;
   shutdown(): Promise<void>;
 }
@@ -161,12 +169,13 @@ interface ActiveRequest {
 export function createRecommendations(options: CreateRecommendationsOptions): Recommendations {
   const ids = options.ids ?? { createRequestId: () => `recommendation-request:${randomUUID()}` };
   let active: ActiveRequest | undefined;
-  let latest: { readonly requestId: string; readonly result: WaitRecommendationResult; } | undefined;
+  let latest: { readonly requestId: string; readonly result: WaitRecommendationResult } | undefined;
   let starting: Promise<RequestRecommendationResult> | undefined;
   let shuttingDown = false;
   let lastCheck: TodayRecommendationResult | undefined;
   let candidateWait:
-    { readonly localDate: string; readonly trigger: RecommendationTrigger; } | undefined;
+    | { readonly localDate: string; readonly trigger: RecommendationTrigger }
+    | undefined;
   let candidateWaitTimer: unknown;
   const runTasks = new Set<Promise<void>>();
   const traceTasks = new Set<Promise<unknown>>();
@@ -226,7 +235,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
   }
 
   const startRecommendation = async (
-    request: { readonly trigger: RecommendationTrigger; },
+    request: { readonly trigger: RecommendationTrigger },
     expectedLocalDate?: string,
     observedRequestId?: string,
   ): Promise<RequestRecommendationResult> => {
@@ -305,11 +314,10 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     active = createActiveRequest(requestId, localDate, request.trigger);
     launchAttempt(active);
     return { status: 'started', localDate, requestId, phase: 'preparing_preferences' };
-
   };
 
   const requestRecommendation = async (
-    request: { readonly trigger: RecommendationTrigger; },
+    request: { readonly trigger: RecommendationTrigger },
     expectedLocalDate?: string,
   ): Promise<RequestRecommendationResult> => {
     if (starting) {
@@ -353,7 +361,7 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
 
   /** Acknowledges startup promptly but keeps the business Trace open through settlement and Agent shutdown. */
   function observeRecommendation(
-    request: { readonly trigger: RecommendationTrigger; },
+    request: { readonly trigger: RecommendationTrigger },
     expectedLocalDate?: string,
   ): Promise<RequestRecommendationResult> {
     if (!options.observability || active) return startRecommendation(request, expectedLocalDate);
@@ -366,22 +374,22 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     });
     let work: Promise<RequestRecommendationResult | WaitRecommendationResult> | undefined;
     const runOnce = () =>
-    (work ??= (async () => {
-      try {
-        const result = await startRecommendation(request, expectedLocalDate, requestId);
-        resolveAccepted(result);
-        const completion = active?.requestId === requestId ? active.completion : undefined;
-        const final = completion
-          ? await completion
-          : latest?.requestId === requestId
-            ? latest.result
-            : result;
-        return final;
-      } catch (error) {
-        rejectAccepted(error);
-        throw error;
-      }
-    })());
+      (work ??= (async () => {
+        try {
+          const result = await startRecommendation(request, expectedLocalDate, requestId);
+          resolveAccepted(result);
+          const completion = active?.requestId === requestId ? active.completion : undefined;
+          const final = completion
+            ? await completion
+            : latest?.requestId === requestId
+              ? latest.result
+              : result;
+          return final;
+        } catch (error) {
+          rejectAccepted(error);
+          throw error;
+        }
+      })());
     const traced = (async () => {
       try {
         await options.observability!.withTrace(
@@ -408,20 +416,30 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
 
   /** Tracks the complete product attempt, including preparation, Agent cleanup and publication. */
   function launchAttempt(current: ActiveRequest): void {
-    const task = executeAttempt(current).catch((error: unknown) => {
-      complete(current, current.controller.signal.aborted
-        ? { status: 'cancelled', localDate: current.localDate }
-        : failureResult(current.localDate, 'agent_execution_failed',
-          error instanceof Error ? error.message : 'Recommendation execution failed.', false));
-      try {
-        options.onBackgroundError?.(error, {
-          operation: 'execution_settlement',
-          requestId: current.requestId, executionId: current.executionId
-        });
-      } catch {
-        // Diagnostics cannot change the settled business result.
-      }
-    }).finally(() => runTasks.delete(task));
+    const task = executeAttempt(current)
+      .catch((error: unknown) => {
+        complete(
+          current,
+          current.controller.signal.aborted
+            ? { status: 'cancelled', localDate: current.localDate }
+            : failureResult(
+                current.localDate,
+                'agent_execution_failed',
+                error instanceof Error ? error.message : 'Recommendation execution failed.',
+                false,
+              ),
+        );
+        try {
+          options.onBackgroundError?.(error, {
+            operation: 'execution_settlement',
+            requestId: current.requestId,
+            executionId: current.executionId,
+          });
+        } catch {
+          // Diagnostics cannot change the settled business result.
+        }
+      })
+      .finally(() => runTasks.delete(task));
     runTasks.add(task);
   }
 
@@ -440,7 +458,9 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     try {
       if (outcome.status === 'completed') {
         publication = publishRecommendations({
-          workset, repository: options.repository, publishedAt: options.clock.now(),
+          workset,
+          repository: options.repository,
+          publishedAt: options.clock.now(),
           signal: current.controller.signal,
         });
       }
@@ -493,7 +513,12 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       await executeAttempt(current);
       return;
     }
-    if (!current.controller.signal.aborted && outcome.status === 'failed' && outcome.error.retryable && current.retryCount < 2) {
+    if (
+      !current.controller.signal.aborted &&
+      outcome.status === 'failed' &&
+      outcome.error.retryable &&
+      current.retryCount < 2
+    ) {
       const delayMs = current.retryCount === 0 ? 5_000 : 30_000;
       current.retryCount += 1;
       current.retryTimer = runtimeTimers(options).setTimeout(() => {
@@ -506,15 +531,15 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       outcome.status === 'cancelled'
         ? { status: 'cancelled' as const, localDate: current.localDate }
         : failureResult(
-          current.localDate,
-          outcome.status === 'failed' && outcome.error.code === 'EXECUTION_LIMIT_REACHED'
-            ? 'agent_limit_reached'
-            : 'agent_execution_failed',
-          outcome.status === 'failed'
-            ? outcome.error.message
-            : 'Agent completed without an accepted recommendation draft.',
-          false,
-        );
+            current.localDate,
+            outcome.status === 'failed' && outcome.error.code === 'EXECUTION_LIMIT_REACHED'
+              ? 'agent_limit_reached'
+              : 'agent_execution_failed',
+            outcome.status === 'failed'
+              ? outcome.error.message
+              : 'Agent completed without an accepted recommendation draft.',
+            false,
+          );
     complete(current, result);
   }
 
@@ -544,7 +569,12 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       );
       return;
     }
-    const admission = prepareRecommendationSnapshot({ ...options, snapshotAt: options.clock.now(), localDate: current.localDate, settings });
+    const admission = prepareRecommendationSnapshot({
+      ...options,
+      snapshotAt: options.clock.now(),
+      localDate: current.localDate,
+      settings,
+    });
     if (admission.ranking.actualTargetCount === 0) {
       complete(current, { status: 'waiting_for_candidates', localDate: current.localDate });
       return;
@@ -583,7 +613,12 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
     const snapshotAt = options.clock.now();
     let prepared: ReturnType<typeof prepareRecommendationSnapshot>;
     try {
-      prepared = prepareRecommendationSnapshot({ ...options, snapshotAt, localDate: current.localDate, settings });
+      prepared = prepareRecommendationSnapshot({
+        ...options,
+        snapshotAt,
+        localDate: current.localDate,
+        settings,
+      });
     } catch {
       complete(
         current,
@@ -600,38 +635,46 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       complete(current, { status: 'waiting_for_candidates', localDate: current.localDate });
       return;
     }
-    const execution = await prepareRecommendationRun({
-      modelSelection: settings.recommendationModel,
-      signal: current.controller.signal,
-      observability: options.observability,
-      snapshot: {
-        requestId: current.requestId,
-        localDate: current.localDate,
-        snapshotAt,
-        ...(preferencePreparation ? { preferencePreparation } : {}),
-        actualTarget: prepared.ranking.actualTargetCount,
-        workingSetCount: settings.recommendationWorkingSetCount,
-        rankedCandidates: prepared.ranking.rankedCandidates,
-        exclusions: prepared.ranking.exclusions,
-        interestRevisions: prepared.interestRevisions,
-        preferenceRevisions: prepared.preferenceRevisions,
-        preferenceGuard: prepared.preferenceGuard,
-        interests: prepared.interests,
-        preferences: prepared.preferences,
-        history: prepared.history,
+    const execution = await prepareRecommendationRun(
+      {
+        modelSelection: settings.recommendationModel,
+        signal: current.controller.signal,
+        observability: options.observability,
+        snapshot: {
+          requestId: current.requestId,
+          localDate: current.localDate,
+          snapshotAt,
+          ...(preferencePreparation ? { preferencePreparation } : {}),
+          actualTarget: prepared.ranking.actualTargetCount,
+          workingSetCount: settings.recommendationWorkingSetCount,
+          rankedCandidates: prepared.ranking.rankedCandidates,
+          exclusions: prepared.ranking.exclusions,
+          interestRevisions: prepared.interestRevisions,
+          preferenceRevisions: prepared.preferenceRevisions,
+          preferenceGuard: prepared.preferenceGuard,
+          interests: prepared.interests,
+          preferences: prepared.preferences,
+          history: prepared.history,
+        },
       },
-    }, options.preparation);
+      options.preparation,
+    );
     if (!execution) {
       complete(current, { status: 'model_unavailable', localDate: current.localDate });
       return;
     }
     const { config, workset } = execution;
     const run = options.agent.startAgent({
-      config, signal: current.controller.signal,
-      input: { role: 'user', content: 'Generate today’s recommendations.', timestamp: Date.parse(snapshotAt) },
+      config,
+      signal: current.controller.signal,
+      input: {
+        role: 'user',
+        content: 'Generate today’s recommendations.',
+        timestamp: Date.parse(snapshotAt),
+      },
       context: createRecommendationContext({
         snapshot: workset.getSnapshot(),
-        instructionDocuments: options.preparation.instructionDocuments
+        instructionDocuments: options.preparation.instructionDocuments,
       }),
     });
     current.workset = workset;
@@ -679,13 +722,18 @@ export function createRecommendations(options: CreateRecommendationsOptions): Re
       return waitFor(active, request.timeoutMs);
     },
     getFacts(request) {
-      if (active?.executionId !== request.executionId || active.requestId !== request.requestId
-        || active.localDate !== request.localDate || !active.workset) {
+      if (
+        active?.executionId !== request.executionId ||
+        active.requestId !== request.requestId ||
+        active.localDate !== request.localDate ||
+        !active.workset
+      ) {
         return {
-          status: 'failed', failure: {
+          status: 'failed',
+          failure: {
             code: 'recommendation_attempt_not_found',
-            message: 'The requested recommendation facts are unavailable.'
-          }
+            message: 'The requested recommendation facts are unavailable.',
+          },
         };
       }
       return { status: 'ok', facts: recommendationFacts(active.workset.getSnapshot()) };
@@ -748,7 +796,6 @@ function classifyRecommendation(
   if (result.status === 'cancelled') return { outcome: { status: 'cancelled' } };
   return { outcome: { status: 'ok', code: result.status } };
 }
-
 
 function createActiveRequest(
   requestId: string,
@@ -816,7 +863,7 @@ function failureResult(
   code: RecommendationFailureCode,
   message: string,
   retryable: boolean,
-): Extract<RequestRecommendationResult, { readonly status: 'failed'; }> {
+): Extract<RequestRecommendationResult, { readonly status: 'failed' }> {
   return { status: 'failed', localDate, failure: { code, message, retryable } };
 }
 

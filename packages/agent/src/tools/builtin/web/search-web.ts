@@ -15,41 +15,62 @@ export type WebSearchProvider = 'brave' | 'tavily' | 'exa' | 'custom';
 
 export function createSearchWebTool(webSearch: WebSearch): AgentTool {
   return {
-  name: 'web_search',
-  description: 'Search the web and return structured result summaries and URLs. Returns up to 5 results by default (maximum 20).',
-  promptSnippet: 'Search the web and return result summaries.',
-  parameters: {
-    type: 'object',
-    properties: {
-      query: {
-        type: 'string', minLength: 1, maxLength: 400,
-        description: 'Search query. Use a focused query containing the important names and constraints.',
+    name: 'web_search',
+    description:
+      'Search the web and return structured result summaries and URLs. Returns up to 5 results by default (maximum 20).',
+    promptSnippet: 'Search the web and return result summaries.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 400,
+          description:
+            'Search query. Use a focused query containing the important names and constraints.',
+        },
+        count: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 20,
+          description: 'Optional number of search results. Defaults to 5.',
+        },
       },
-      count: {
-        type: 'integer', minimum: 1, maximum: 20,
-        description: 'Optional number of search results. Defaults to 5.',
+      required: ['query'],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        results: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              url: { type: 'string' },
+              snippet: { type: 'string' },
+            },
+            required: ['title', 'url', 'snippet'],
+            additionalProperties: false,
+          },
+        },
       },
+      required: ['query', 'results'],
+      additionalProperties: false,
     },
-    required: ['query'],
-    additionalProperties: false,
-  },
-  outputSchema: {
-    type: 'object',
-    properties: {
-      query: { type: 'string' },
-      results: { type: 'array', items: { type: 'object', properties: {
-        title: { type: 'string' }, url: { type: 'string' }, snippet: { type: 'string' },
-      }, required: ['title', 'url', 'snippet'], additionalProperties: false } },
-    },
-    required: ['query', 'results'],
-    additionalProperties: false,
-  },
-  annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
-  executionMode: 'parallel',
-  operations: (input) => [{ action: 'network.search', resource: {
-    type: 'network.public_web',
-  } }],
-  execute: (input, execution) => executeWebSearch({ webSearch }, input, execution.signal),
+    annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    executionMode: 'parallel',
+    operations: () => [
+      {
+        action: 'network.search',
+        resource: {
+          type: 'network.public_web',
+        },
+      },
+    ],
+    execute: (input, execution) => executeWebSearch({ webSearch }, input, execution.signal),
   };
 }
 
@@ -86,10 +107,12 @@ async function executeWebSearch(
   };
 }
 
-export function createWebSearch(input: WebSearchRuntimeConfig & {
-  fetch?: typeof globalThis.fetch;
-  timeoutMs?: number;
-}): WebSearch {
+export function createWebSearch(
+  input: WebSearchRuntimeConfig & {
+    fetch?: typeof globalThis.fetch;
+    timeoutMs?: number;
+  },
+): WebSearch {
   const apiKey = input.apiKey.trim();
   if (!apiKey) throw new Error('Web search API key is required.');
   const fetchImplementation = input.fetch ?? globalThis.fetch;
@@ -131,10 +154,12 @@ export function createBraveWebSearch(input: {
 }
 
 /** Creates a no-credential public Web Search over Bing's RSS response. */
-export function createBingRssWebSearch(input: {
-  fetch?: typeof globalThis.fetch;
-  timeoutMs?: number;
-} = {}): WebSearch {
+export function createBingRssWebSearch(
+  input: {
+    fetch?: typeof globalThis.fetch;
+    timeoutMs?: number;
+  } = {},
+): WebSearch {
   const fetchImplementation = input.fetch ?? globalThis.fetch;
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return {
@@ -190,11 +215,9 @@ export function createFallbackWebSearch(searches: readonly WebSearch[]): WebSear
       }
       if (sawSuccessfulProvider) return { query: completedQuery, results: [] };
       if (lastError !== undefined) throw lastError;
-      throw new ToolExecutionFailure(
-        'Web search is not configured.',
-        'tool_execution_failed',
-        { reason: 'not_configured' },
-      );
+      throw new ToolExecutionFailure('Web search is not configured.', 'tool_execution_failed', {
+        reason: 'not_configured',
+      });
     },
   };
 }
@@ -209,7 +232,11 @@ function createProviderRequest(
     url.searchParams.set('q', query);
     url.searchParams.set('count', String(request.count));
     url.searchParams.set('safesearch', 'moderate');
-    return { url, method: 'GET', headers: { accept: 'application/json', 'x-subscription-token': config.apiKey } };
+    return {
+      url,
+      method: 'GET',
+      headers: { accept: 'application/json', 'x-subscription-token': config.apiKey },
+    };
   }
   if (config.provider === 'tavily') {
     return jsonPost('https://api.tavily.com/search', config.apiKey, {
@@ -224,13 +251,25 @@ function createProviderRequest(
     return {
       url: new URL('https://api.exa.ai/search'),
       method: 'POST',
-      headers: { accept: 'application/json', 'content-type': 'application/json', 'x-api-key': config.apiKey },
-      body: JSON.stringify({ query, numResults: request.count, contents: { highlights: { maxCharacters: 600 } } }),
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'x-api-key': config.apiKey,
+      },
+      body: JSON.stringify({
+        query,
+        numResults: request.count,
+        contents: { highlights: { maxCharacters: 600 } },
+      }),
     };
   }
   if (!config.baseUrl) throw new Error('Custom web search Base URL is required.');
   const customUrl = new URL(config.baseUrl);
-  if ((customUrl.protocol !== 'http:' && customUrl.protocol !== 'https:') || customUrl.username || customUrl.password) {
+  if (
+    (customUrl.protocol !== 'http:' && customUrl.protocol !== 'https:') ||
+    customUrl.username ||
+    customUrl.password
+  ) {
     throw new Error('Custom web search Base URL must be HTTP(S) without embedded credentials.');
   }
   return jsonPost(customUrl.toString(), config.apiKey, { query, count: request.count });
@@ -240,42 +279,72 @@ function jsonPost(url: string, apiKey: string, body: Record<string, unknown>) {
   return {
     url: new URL(url),
     method: 'POST' as const,
-    headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/json',
+      authorization: `Bearer ${apiKey}`,
+    },
     body: JSON.stringify(body),
   };
 }
 
-function parseProviderResults(provider: WebSearchProvider, payload: unknown): WebSearchResultItem[] {
+function parseProviderResults(
+  provider: WebSearchProvider,
+  payload: unknown,
+): WebSearchResultItem[] {
   if (!isRecord(payload)) return [];
-  const candidates = provider === 'brave'
-    ? (isRecord(payload.web) && Array.isArray(payload.web.results) ? payload.web.results : [])
-    : (Array.isArray(payload.results) ? payload.results : []);
+  const candidates =
+    provider === 'brave'
+      ? isRecord(payload.web) && Array.isArray(payload.web.results)
+        ? payload.web.results
+        : []
+      : Array.isArray(payload.results)
+        ? payload.results
+        : [];
   return candidates.flatMap((candidate) => {
-    if (!isRecord(candidate) || typeof candidate.title !== 'string' || typeof candidate.url !== 'string') return [];
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.title !== 'string' ||
+      typeof candidate.url !== 'string'
+    )
+      return [];
     if (!isPublicHttpUrl(candidate.url)) return [];
-    const snippet = provider === 'brave'
-      ? candidate.description
-      : provider === 'tavily'
-        ? candidate.content
-        : provider === 'exa'
-          ? (Array.isArray(candidate.highlights) ? candidate.highlights[0] : candidate.text)
-          : candidate.snippet;
-    return [{ title: plainText(candidate.title), url: candidate.url, snippet: typeof snippet === 'string' ? plainText(snippet) : '' }];
+    const snippet =
+      provider === 'brave'
+        ? candidate.description
+        : provider === 'tavily'
+          ? candidate.content
+          : provider === 'exa'
+            ? Array.isArray(candidate.highlights)
+              ? candidate.highlights[0]
+              : candidate.text
+            : candidate.snippet;
+    return [
+      {
+        title: plainText(candidate.title),
+        url: candidate.url,
+        snippet: typeof snippet === 'string' ? plainText(snippet) : '',
+      },
+    ];
   });
 }
 
 function parseBingRssResults(payload: string): WebSearchResultItem[] {
   const items = payload.match(/<item\b[^>]*>[\s\S]*?<\/item>/gi) ?? [];
-  return items.flatMap((item) => {
-    const title = rssElement(item, 'title');
-    const url = rssElement(item, 'link');
-    if (!title || !url || !isPublicHttpUrl(url)) return [];
-    return [{
-      title: plainText(decodeXml(title)),
-      url,
-      snippet: plainText(decodeXml(rssElement(item, 'description') ?? '')),
-    }];
-  }).filter((item) => item.title.length > 0);
+  return items
+    .flatMap((item) => {
+      const title = rssElement(item, 'title');
+      const url = rssElement(item, 'link');
+      if (!title || !url || !isPublicHttpUrl(url)) return [];
+      return [
+        {
+          title: plainText(decodeXml(title)),
+          url,
+          snippet: plainText(decodeXml(rssElement(item, 'description') ?? '')),
+        },
+      ];
+    })
+    .filter((item) => item.title.length > 0);
 }
 
 function rssElement(item: string, name: string): string | undefined {
@@ -288,7 +357,9 @@ function rssElement(item: string, name: string): string | undefined {
 
 function decodeXml(value: string): string {
   return value
-    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code: string) =>
+      String.fromCodePoint(Number.parseInt(code, 16)),
+    )
     .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
@@ -298,16 +369,18 @@ function decodeXml(value: string): string {
 }
 
 function isCancelledSearch(error: unknown, signal: AbortSignal | undefined): boolean {
-  return Boolean(signal?.aborted) || (
-    error instanceof ToolExecutionFailure
-    && (error.code === 'tool_cancelled' || error.details?.reason === 'cancelled')
+  return (
+    Boolean(signal?.aborted) ||
+    (error instanceof ToolExecutionFailure &&
+      (error.code === 'tool_cancelled' || error.details?.reason === 'cancelled'))
   );
 }
 
 function validateRequest(request: WebSearchRequest): void {
   const query = request.query.trim();
   if (!query) throw new Error('Web search query must not be empty.');
-  if (query.length > 400 || query.split(/\s+/).length > 50) throw new Error('Web search query exceeds the provider limit.');
+  if (query.length > 400 || query.split(/\s+/).length > 50)
+    throw new Error('Web search query exceeds the provider limit.');
   if (!Number.isInteger(request.count) || request.count < 1 || request.count > MAX_RESULT_COUNT) {
     throw new Error(`Web search count must be between 1 and ${MAX_RESULT_COUNT}.`);
   }
@@ -316,7 +389,13 @@ function validateRequest(request: WebSearchRequest): void {
 async function fetchWithTimeout(
   fetchImplementation: typeof globalThis.fetch,
   url: URL,
-  input: { method: 'GET' | 'POST'; headers: Record<string, string>; body?: string; signal?: AbortSignal; timeoutMs: number },
+  input: {
+    method: 'GET' | 'POST';
+    headers: Record<string, string>;
+    body?: string;
+    signal?: AbortSignal;
+    timeoutMs: number;
+  },
 ): Promise<Response> {
   if (input.signal?.aborted) throw new Error('Web search was cancelled.');
   const controller = new AbortController();
@@ -332,7 +411,9 @@ async function fetchWithTimeout(
     });
   } catch (error) {
     if (input.signal?.aborted) {
-      throw new ToolExecutionFailure('Web search was cancelled.', 'tool_cancelled', { reason: 'cancelled' });
+      throw new ToolExecutionFailure('Web search was cancelled.', 'tool_cancelled', {
+        reason: 'cancelled',
+      });
     }
     if (controller.signal.aborted) {
       throw new ToolExecutionFailure(
@@ -342,7 +423,9 @@ async function fetchWithTimeout(
       );
     }
     if (error instanceof ToolExecutionFailure) throw error;
-    throw new ToolExecutionFailure('Web search request failed.', 'tool_execution_failed', { reason: 'network_error' });
+    throw new ToolExecutionFailure('Web search request failed.', 'tool_execution_failed', {
+      reason: 'network_error',
+    });
   } finally {
     clearTimeout(timeout);
     input.signal?.removeEventListener('abort', cancel);
@@ -352,13 +435,24 @@ async function fetchWithTimeout(
 function isPublicHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password;
-  } catch { return false; }
+    return (
+      (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
+    );
+  } catch {
+    return false;
+  }
 }
 
 function plainText(value: string): string {
-  return value.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function webSearchHttpError(status: number): string {

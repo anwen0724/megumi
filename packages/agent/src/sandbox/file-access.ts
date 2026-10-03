@@ -168,8 +168,8 @@ export function isProtectedWorkspacePath(
 ): boolean {
   const normalized = normalizeWorkspaceSlash(workspacePath);
   const firstSegment = normalized.split('/')[0];
-  return DEFAULT_PROTECTED_WORKSPACE_PATHS.directories.includes(firstSegment as never)
-    || DEFAULT_PROTECTED_WORKSPACE_PATHS.files.includes(normalized as never)
+  return DEFAULT_PROTECTED_WORKSPACE_PATHS.directories.some(directory => directory === firstSegment)
+    || DEFAULT_PROTECTED_WORKSPACE_PATHS.files.some(file => file === normalized)
     || protectedPathHints.some((hint) => matchesProtectedPathHint(normalized, hint));
 }
 

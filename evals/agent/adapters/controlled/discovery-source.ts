@@ -1,6 +1,8 @@
 /* Builds the fixed Discovery Source boundary used by Controlled Evaluation. */
-import { createOpenWebSource, createSourceRegistry, type SourceRegistry } from '@megumi/discovery';
-import type { WebFetch, WebSearch } from '@megumi/tools';
+import { createOpenWebSource } from '@megumi/application/recommendation/sources/web-source';
+import { createSourceRegistry, type SourceRegistry } from '@megumi/application/recommendation/sources/source-catalog';
+import type { WebFetch } from '@megumi/agent/tools/builtin/web/fetch-page';
+import type { WebSearch } from '@megumi/agent/tools/builtin/web/search-web';
 import type { CaseInitialState } from '../../run/initial-state';
 
 export function createControlledDiscoverySourceRegistry(input: {

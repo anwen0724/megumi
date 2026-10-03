@@ -1,20 +1,50 @@
 /* Builds Coding model messages from committed conversation facts. */
-import { buildSystemPrompt, calculatePromptUsage, createNodeInstructionSource, loadInstructionFiles, loadSystemInstructionDocuments } from '@megumi/agent';
+import {
+  buildSystemPrompt,
+  calculatePromptUsage,
+  createNodeInstructionSource,
+  loadInstructionFiles,
+  loadSystemInstructionDocuments,
+} from '@megumi/agent';
+import type { AgentConfig, AgentContext, ExecutionEnvironment } from '@megumi/agent';
 import { escapeXmlAttribute } from '@megumi/agent/context/prompt-builder';
-import type { AssistantMessage, ImageContent, Message, TextContent, ToolResultMessage } from '@megumi/ai';
+import type {
+  AssistantMessage,
+  ImageContent,
+  Message,
+  Models,
+  TextContent,
+  ToolResultMessage,
+} from '@megumi/ai';
+import type { EventBus } from '../application';
+import type { Observability } from '../observability/index';
+import type { Skills } from '../skill-operations';
 import { compactCodingHistory } from './compact-history';
 import { materializeSessionImage, UNSUPPORTED_IMAGE_TEXT } from './input/image-content';
-import type { SessionAttachmentReader, SessionMessageAttachment } from './sessions/session-attachments';
+import type {
+  SessionAttachmentReader,
+  SessionMessageAttachment,
+} from './sessions/session-attachments';
 import type { SessionHistoryItem } from './sessions/session-branches';
-import type { RecommendationReferenceContent, SessionMessage, SessionUserContent } from './sessions/session-history';
+import type {
+  RecommendationReferenceContent,
+  SessionMessage,
+  SessionHistory,
+  SessionUserContent,
+} from './sessions/session-history';
 
 export interface ContextFailure {
-  readonly code: 'cancelled' | 'protocol_closure_failed' | 'document_attachment_failed' | 'image_materialization_failed';
+  readonly code:
+    | 'cancelled'
+    | 'protocol_closure_failed'
+    | 'document_attachment_failed'
+    | 'image_materialization_failed';
   readonly message: string;
   readonly sourceCode?: string;
 }
 
-export const COMPACTION_SUMMARY_PREFIX = 'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
+export const COMPACTION_SUMMARY_PREFIX =
+  'The conversation history before this point was compacted into the following summary:\n\n<summary>\n';
 
 const COMPACTION_SUMMARY_SUFFIX = '\n</summary>';
 
@@ -43,10 +73,12 @@ export function sessionMessagesToEstimateMessages(
   const messages: Message[] = [];
   for (const item of history) {
     if (item.type === 'compaction') {
-      messages.push(buildCompactionSummaryMessage(
-        item.compaction.summary_text,
-        timestampOf(item.compaction.created_at),
-      ));
+      messages.push(
+        buildCompactionSummaryMessage(
+          item.compaction.summary_text,
+          timestampOf(item.compaction.created_at),
+        ),
+      );
       continue;
     }
     const message = item.message;
@@ -65,7 +97,10 @@ export function sessionMessagesToEstimateMessages(
         ],
         timestamp: timestampOf(message.created_at),
       });
-    } else if (message.message_kind === 'model_response' || message.message_kind === 'assistant_reply') {
+    } else if (
+      message.message_kind === 'model_response' ||
+      message.message_kind === 'assistant_reply'
+    ) {
       messages.push(assistantMessageFromSession(message, message.created_at));
     } else if (message.message_kind === 'tool_result') {
       messages.push(toolResultMessageFromSession(message, message.created_at));
@@ -86,16 +121,21 @@ export async function buildContextMessages(input: {
   const knownToolCallIds = new Set<string>();
   for (const item of input.history) {
     if (input.signal?.aborted) {
-      return { status: 'failed', failure: { code: 'cancelled', message: 'Context construction was cancelled.' } };
+      return {
+        status: 'failed',
+        failure: { code: 'cancelled', message: 'Context construction was cancelled.' },
+      };
     }
     if (item.type === 'compaction') {
       // The Summary is a Session fact inside messages but never a compactable
       // source: planning operates on ordinary conversation entries only.
       previousSummary = item.compaction.summary_text;
-      messages.push(buildCompactionSummaryMessage(
-        item.compaction.summary_text,
-        timestampOf(item.compaction.created_at),
-      ));
+      messages.push(
+        buildCompactionSummaryMessage(
+          item.compaction.summary_text,
+          timestampOf(item.compaction.created_at),
+        ),
+      );
       continue;
     }
     const message = item.message;
@@ -108,8 +148,15 @@ export async function buildContextMessages(input: {
         signal: input.signal,
       });
       if (content.status === 'failed') return content;
-      messages.push({ role: 'user', content: content.content, timestamp: timestampOf(message.created_at) });
-    } else if (message.message_kind === 'model_response' || message.message_kind === 'assistant_reply') {
+      messages.push({
+        role: 'user',
+        content: content.content,
+        timestamp: timestampOf(message.created_at),
+      });
+    } else if (
+      message.message_kind === 'model_response' ||
+      message.message_kind === 'assistant_reply'
+    ) {
       const converted = assistantMessageFromSession(message, message.created_at);
       for (const block of converted.content) {
         if (block.type === 'toolCall') knownToolCallIds.add(block.id);
@@ -117,14 +164,16 @@ export async function buildContextMessages(input: {
       messages.push(converted);
     } else if (message.message_kind === 'tool_result') {
       if (!knownToolCallIds.has(message.tool_call_id)) {
-        return { status: 'failed', failure: {
-          code: 'protocol_closure_failed',
-          message: `ToolResult ${message.tool_call_id} has no matching ToolCall in the active history.`,
-        } };
+        return {
+          status: 'failed',
+          failure: {
+            code: 'protocol_closure_failed',
+            message: `ToolResult ${message.tool_call_id} has no matching ToolCall in the active history.`,
+          },
+        };
       }
       const content = await materializeBlocks(
         message.content,
-        input.attachmentReader,
         input.imageInputSupport,
         input.signal,
       );
@@ -160,18 +209,24 @@ async function materializeUserMessageContent(input: {
   readonly imageInputSupport: boolean;
   readonly signal?: AbortSignal;
 }): Promise<
-  { readonly status: 'ok'; readonly content: Array<TextContent | ImageContent> }
+  | { readonly status: 'ok'; readonly content: Array<TextContent | ImageContent> }
   | { readonly status: 'failed'; readonly failure: ContextFailure }
 > {
   const content: Array<TextContent | ImageContent> = [];
   for (const block of input.blocks) {
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
-    else if (block.type === 'recommendation_reference') content.push(materializeRecommendationReference(block));
+    else if (block.type === 'recommendation_reference')
+      content.push(materializeRecommendationReference(block));
     else content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
   }
-  for (const attachment of [...input.attachments].sort((left, right) => left.ordinal - right.ordinal)) {
+  for (const attachment of [...input.attachments].sort(
+    (left, right) => left.ordinal - right.ordinal,
+  )) {
     if (input.signal?.aborted) {
-      return { status: 'failed', failure: { code: 'cancelled', message: 'Context construction was cancelled.' } };
+      return {
+        status: 'failed',
+        failure: { code: 'cancelled', message: 'Context construction was cancelled.' },
+      };
     }
     if (attachment.type === 'image') {
       const materialized = await materializeSessionImage({
@@ -184,11 +239,19 @@ async function materializeUserMessageContent(input: {
       content.push(materialized.content);
     } else {
       const path = attachment.source_type === 'local_file' ? attachment.source_value : undefined;
-      if (!path || !attachment.name || !attachment.mime_type || attachment.size_bytes === undefined) {
-        return { status: 'failed', failure: {
-          code: 'document_attachment_failed',
-          message: `Document attachment ${attachment.attachment_id} is missing persisted metadata.`,
-        } };
+      if (
+        !path ||
+        !attachment.name ||
+        !attachment.mime_type ||
+        attachment.size_bytes === undefined
+      ) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'document_attachment_failed',
+            message: `Document attachment ${attachment.attachment_id} is missing persisted metadata.`,
+          },
+        };
       }
       content.push({
         type: 'text',
@@ -206,30 +269,31 @@ async function materializeUserMessageContent(input: {
 
 async function materializeBlocks(
   blocks: readonly SessionUserContent[],
-  attachmentReader: Pick<SessionAttachmentReader, 'readAttachmentContent'>,
   imageInputSupport: boolean,
   signal?: AbortSignal,
 ): Promise<
-  { readonly status: 'ok'; readonly content: Array<TextContent | ImageContent> }
+  | { readonly status: 'ok'; readonly content: Array<TextContent | ImageContent> }
   | { readonly status: 'failed'; readonly failure: ContextFailure }
 > {
   const content: Array<TextContent | ImageContent> = [];
   for (const block of blocks) {
     if (signal?.aborted) {
-      return { status: 'failed', failure: { code: 'cancelled', message: 'Context construction was cancelled.' } };
+      return {
+        status: 'failed',
+        failure: { code: 'cancelled', message: 'Context construction was cancelled.' },
+      };
     }
     if (block.type === 'text') content.push({ type: 'text', text: block.text });
-    else if (block.type === 'recommendation_reference') content.push(materializeRecommendationReference(block));
-    else if (imageInputSupport) content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
+    else if (block.type === 'recommendation_reference')
+      content.push(materializeRecommendationReference(block));
+    else if (imageInputSupport)
+      content.push({ type: 'image', data: block.data, mimeType: block.mimeType });
     else content.push({ type: 'text', text: UNSUPPORTED_IMAGE_TEXT });
   }
   return { status: 'ok', content };
 }
 
-function assistantMessageFromSession(
-  message: SessionMessage,
-  createdAt: string,
-): AssistantMessage {
+function assistantMessageFromSession(message: SessionMessage, createdAt: string): AssistantMessage {
   if (message.message_kind !== 'model_response' && message.message_kind !== 'assistant_reply') {
     throw new Error('Unreachable Session message kind.');
   }
@@ -276,7 +340,8 @@ function toolResultMessageFromSession(
     toolName: message.tool_name,
     content: message.content.map((block) => {
       if (block.type === 'text') return { type: 'text' as const, text: block.text };
-      if (block.type === 'recommendation_reference') return materializeRecommendationReference(block);
+      if (block.type === 'recommendation_reference')
+        return materializeRecommendationReference(block);
       return { type: 'image' as const, data: block.data, mimeType: block.mimeType };
     }),
     ...(message.error ? { details: { error: message.error } } : {}),
@@ -289,10 +354,12 @@ function toolResultMessageFromSession(
 export function buildCompactionSummaryMessage(summary: string, timestamp: number): Message {
   return {
     role: 'user',
-    content: [{
-      type: 'text',
-      text: `${COMPACTION_SUMMARY_PREFIX}${summary}${COMPACTION_SUMMARY_SUFFIX}`,
-    }],
+    content: [
+      {
+        type: 'text',
+        text: `${COMPACTION_SUMMARY_PREFIX}${summary}${COMPACTION_SUMMARY_SUFFIX}`,
+      },
+    ],
     timestamp,
   };
 }
@@ -306,7 +373,9 @@ const ZERO_USAGE = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 } as const;
 
-function estimateAttachmentContent(attachment: SessionMessageAttachment): TextContent | ImageContent {
+function estimateAttachmentContent(
+  attachment: SessionMessageAttachment,
+): TextContent | ImageContent {
   if (attachment.type === 'image') {
     return { type: 'image', data: '', mimeType: attachment.mime_type ?? 'image/png' };
   }
@@ -361,8 +430,12 @@ export function materializeRecommendationReference(
     `<recommended_content id="${escapeMarkup(reference.recommendationId)}" source="${escapeMarkup(reference.sourceName)}" url="${escapeMarkup(reference.canonicalUrl)}">`,
     `<title>${escapeMarkup(reference.title)}</title>`,
     ...(reference.author ? [`<author>${escapeMarkup(reference.author)}</author>`] : []),
-    ...(reference.publishedAt ? [`<published_at>${escapeMarkup(reference.publishedAt)}</published_at>`] : []),
-    ...(reference.description ? [`<description>${escapeMarkup(reference.description)}</description>`] : []),
+    ...(reference.publishedAt
+      ? [`<published_at>${escapeMarkup(reference.publishedAt)}</published_at>`]
+      : []),
+    ...(reference.description
+      ? [`<description>${escapeMarkup(reference.description)}</description>`]
+      : []),
     `<recommendation_reason>${escapeMarkup(reference.recommendationReason)}</recommendation_reason>`,
     '</recommended_content>',
   ];
@@ -370,21 +443,24 @@ export function materializeRecommendationReference(
 }
 
 export interface CodingContextOptions {
+  readonly observability?: Observability;
   readonly sessionId: string;
   readonly workspaceId: string;
-  readonly config: import('@megumi/agent').AgentConfig & { readonly environment: import('@megumi/agent').ExecutionEnvironment };
+  readonly config: AgentConfig & {
+    readonly environment: ExecutionEnvironment;
+  };
   readonly compactionThresholdRatio: number;
-  readonly history: import('./sessions/session-history').SessionHistory;
+  readonly history: SessionHistory;
   readonly attachments: SessionAttachmentReader;
-  readonly ai: Pick<import('@megumi/ai').Models, 'completeSimple'>;
+  readonly ai: Pick<Models, 'completeSimple'>;
   readonly megumiHomePath: string;
   readonly instructionDocuments: readonly { instructionId: string; sourcePath: string }[];
-  readonly skills?: Pick<import('../skill-operations').Skills, 'createView'>;
-  readonly events?: Pick<import('../application').EventBus, 'publish'>;
+  readonly skills?: Pick<Skills, 'createView'>;
+  readonly events?: Pick<EventBus, 'publish'>;
 }
 
 /** Reads complete committed context for each model request. */
-export function createCodingContext(options: CodingContextOptions): import('@megumi/agent').AgentContext {
+export function createCodingContext(options: CodingContextOptions): AgentContext {
   return {
     compact: ({ reason, signal }) => compactCodingHistory({ options, trigger: reason, signal }),
     async prepare({ tools, signal }) {
@@ -392,34 +468,63 @@ export function createCodingContext(options: CodingContextOptions): import('@meg
       const history = options.history.getActiveHistory({ session_id: options.sessionId });
       if (history.status === 'failed') throw new Error(history.failure.message);
       const [built, documents, instructions, skills] = await Promise.all([
-        buildContextMessages({ history: history.history, attachmentReader: options.attachments,
-          imageInputSupport: options.config.model.input.includes('image'), signal }),
+        buildContextMessages({
+          history: history.history,
+          attachmentReader: options.attachments,
+          imageInputSupport: options.config.model.input.includes('image'),
+          signal,
+        }),
         loadSystemInstructionDocuments({ documents: options.instructionDocuments, signal }),
-        loadInstructionFiles({ megumiHomePath: options.megumiHomePath,
-          workspaceRoot: options.config.environment.workingDirectory,
-          workingDirectory: options.config.environment.workingDirectory, source: createNodeInstructionSource() }, { signal }),
+        loadInstructionFiles(
+          {
+            megumiHomePath: options.megumiHomePath,
+            workspaceRoot: options.config.environment.workingDirectory,
+            workingDirectory: options.config.environment.workingDirectory,
+            source: createNodeInstructionSource(),
+          },
+          { signal },
+        ),
         options.skills?.createView({ workspaceId: options.workspaceId, signal }),
       ]);
       signal.throwIfAborted();
       if (built.status === 'failed') throw new Error(built.failure.message);
-      if (instructions.status !== 'ok') throw new Error(instructions.status === 'failed' ? instructions.failure.message : 'Instruction loading was cancelled.');
+      if (instructions.status !== 'ok')
+        throw new Error(
+          instructions.status === 'failed'
+            ? instructions.failure.message
+            : 'Instruction loading was cancelled.',
+        );
       if (skills?.status === 'failed') throw new Error('Skill catalog could not be prepared.');
       const prepared = {
-        systemPrompt: buildSystemPrompt({ systemInstructions: documents, effectiveInstructions: { sources: instructions.sources },
-          skills: skills?.view, executionEnvironment: options.config.environment, tools }),
-        messages: built.materialized.messages, tools,
+        systemPrompt: buildSystemPrompt({
+          systemInstructions: documents,
+          effectiveInstructions: { sources: instructions.sources },
+          skills: skills?.view,
+          executionEnvironment: options.config.environment,
+          tools,
+        }),
+        messages: built.materialized.messages,
+        tools,
       };
       const tokens = calculatePromptUsage({ prompt: prepared }).tokens;
       if (tokens > options.config.model.contextWindow * options.compactionThresholdRatio) {
-        const compacted = await compactCodingHistory({ options, materialized: built.materialized,
-          trigger: 'threshold', signal });
+        const compacted = await compactCodingHistory({
+          options,
+          materialized: built.materialized,
+          trigger: 'threshold',
+          signal,
+        });
         signal.throwIfAborted();
         if (compacted.status === 'failed') throw new Error(compacted.error.message);
         if (compacted.status === 'compacted') {
           const current = options.history.getActiveHistory({ session_id: options.sessionId });
           if (current.status === 'failed') throw new Error(current.failure.message);
-          const updated = await buildContextMessages({ history: current.history, attachmentReader: options.attachments,
-            imageInputSupport: options.config.model.input.includes('image'), signal });
+          const updated = await buildContextMessages({
+            history: current.history,
+            attachmentReader: options.attachments,
+            imageInputSupport: options.config.model.input.includes('image'),
+            signal,
+          });
           if (updated.status === 'failed') throw new Error(updated.failure.message);
           prepared.messages = updated.materialized.messages;
         }

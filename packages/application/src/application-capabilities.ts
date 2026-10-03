@@ -5,12 +5,21 @@ import {
 } from '@megumi/agent/permissions/permission-rules';
 import type { InputSourceAccess } from './coding/input/read-attachments';
 import {
-  createAgent, createSandbox, createWebFetch, createWebSearch,
+  createAgent,
+  createSandbox,
+  createWebFetch,
+  createWebSearch,
   type Agent,
   type WebFetch,
-  type WebSearch
+  type WebSearch,
 } from '@megumi/agent';
-import { createModels, type Api, type Model, type Provider, type ProviderStreams } from '@megumi/ai';
+import {
+  createModels,
+  type Api,
+  type Model,
+  type Provider,
+  type ProviderStreams,
+} from '@megumi/ai';
 import { anthropicMessagesApi } from '@megumi/ai/api/anthropic-messages.lazy';
 import { openAICodexResponsesApi } from '@megumi/ai/api/openai-codex-responses.lazy';
 import { openAICompletionsApi } from '@megumi/ai/api/openai-completions.lazy';
@@ -21,8 +30,11 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { createEventBus, type ApplicationLogger, type EventBus } from './application';
 import {
-  PRODUCT_EXECUTION_POLICY, PRODUCT_RECENT_EVENT_BUFFER, PRODUCT_SHUTDOWN_TIMEOUT_MS,
-  PRODUCT_TERMINAL_RETENTION_MS, resolveModelVisibleOperatingSystem
+  PRODUCT_EXECUTION_POLICY,
+  PRODUCT_RECENT_EVENT_BUFFER,
+  PRODUCT_SHUTDOWN_TIMEOUT_MS,
+  PRODUCT_TERMINAL_RETENTION_MS,
+  resolveModelVisibleOperatingSystem,
 } from './application-policy';
 import { createApprovalOperations, type ApprovalOperations } from './approval-operations';
 import { compactCodingHistory } from './coding/compact-history';
@@ -46,7 +58,10 @@ import {
 import { createSessionBranchDrafts } from './coding/sessions/session-branches';
 import { createSessionCatalog } from './coding/sessions/session-catalog';
 import { createSessionHistory, type SessionHistory } from './coding/sessions/session-history';
-import { createSessionAttachmentFileStore, createSessionStore } from './coding/sessions/session-storage';
+import {
+  createSessionAttachmentFileStore,
+  createSessionStore,
+} from './coding/sessions/session-storage';
 import { createCoding, type Coding } from './coding/submit-message';
 import type {
   ConfiguredModel,
@@ -56,11 +71,15 @@ import type {
   ModelSelection,
   ModelSettingsAccess,
   ProductWorkspaceFileSystem,
-  ProviderConfiguration
+  ProviderConfiguration,
 } from './contracts';
 import {
-  captureRuntimeLogData, composeObservability, createProviderCapture, type ComposedObservability,
-  type ObservabilityPersistenceStorage, type StructuredRuntimeLogger
+  captureRuntimeLogData,
+  composeObservability,
+  createProviderCapture,
+  type ComposedObservability,
+  type ObservabilityPersistenceStorage,
+  type StructuredRuntimeLogger,
 } from './observability/index';
 import { createInterestExtractor } from './recommendation/interests/extract-interests';
 import type { PreparePreferencesResult } from './recommendation/preferences/preference-learning';
@@ -68,7 +87,10 @@ import type { PreferenceSetDetail } from './recommendation/preferences/preferenc
 import { createDiscovery, type Discovery } from './recommendation/recommendation-api';
 import { createDiscoveryRepository } from './recommendation/recommendation-storage';
 import type { EmbeddedBrowser } from './recommendation/sources/browser-access';
-import { createDiscoverySourceRegistry, type SourceRegistry } from './recommendation/sources/source-catalog';
+import {
+  createDiscoverySourceRegistry,
+  type SourceRegistry,
+} from './recommendation/sources/source-catalog';
 import { createSettings, type Settings } from './settings/settings-store';
 import { createSkills, type Skills } from './skill-operations';
 import {
@@ -150,9 +172,10 @@ export interface ProductCapabilities {
     listAvailableTools(request?: { includeDisabled?: boolean }): {
       tools: readonly {
         identity: { sourceId: string; namespace: string; sourceToolName: string };
-        registeredToolName: string; definition: { name: string };
-      }[]
-    }
+        registeredToolName: string;
+        definition: { name: string };
+      }[];
+    };
   };
   readonly branches: ReturnType<typeof createSessionBranchDrafts>;
   readonly coding: Coding;
@@ -172,11 +195,11 @@ export function composeProductCapabilities(
     storage: options.observabilityStorage ?? noopObservabilityStorage,
     ...(options.observabilityStorage
       ? {
-        openIndexDatabase: () => {
-          options.home.fileSystem.ensureDirSync(observabilityRoot);
-          return createDatabase({ filename: path.join(observabilityRoot, 'index.sqlite') });
-        },
-      }
+          openIndexDatabase: () => {
+            options.home.fileSystem.ensureDirSync(observabilityRoot);
+            return createDatabase({ filename: path.join(observabilityRoot, 'index.sqlite') });
+          },
+        }
       : {}),
   });
   const logger = createApplicationLogger(observability.runtimeLogger);
@@ -272,9 +295,9 @@ function composeCapabilitiesWithDatabase(
   const sessionStore = createSessionStore({ database });
   const attachmentContentStore = options.sessionAttachmentFileSystem
     ? createSessionAttachmentFileStore({
-      attachmentsPath: homePaths.attachmentsPath,
-      fileSystem: options.sessionAttachmentFileSystem,
-    })
+        attachmentsPath: homePaths.attachmentsPath,
+        fileSystem: options.sessionAttachmentFileSystem,
+      })
     : undefined;
   const sessions = createSessionCatalog({ store: sessionStore });
   const history = createSessionHistory({
@@ -298,40 +321,71 @@ function composeCapabilitiesWithDatabase(
       },
     },
   });
-  const models = createApplicationModels({ settingsForWorkspace, apiImplementations: options.modelStreams });
+  const models = createApplicationModels({
+    settingsForWorkspace,
+    apiImplementations: options.modelStreams,
+  });
   const ai = models.ai;
-  const instructionRoot = options.instructionContentRoot
-    ?? path.resolve(process.cwd(), 'packages/application/resources/instructions');
-  const documents = (profile: string) => ['common', profile].map(name => ({
-    instructionId: `megumi.${name}`, sourcePath: path.join(instructionRoot, `${name}.md`),
-  }));
+  const instructionRoot =
+    options.instructionContentRoot ??
+    path.resolve(process.cwd(), 'packages/application/resources/instructions');
+  const documents = (profile: string) =>
+    ['common', profile].map((name) => ({
+      instructionId: `megumi.${name}`,
+      sourcePath: path.join(instructionRoot, `${name}.md`),
+    }));
   const preparation: CodingRunPreparation = {
-    workspaces, workspaceChanges, sandbox, policy: PRODUCT_EXECUTION_POLICY,
+    workspaces,
+    workspaceChanges,
+    sandbox,
+    policy: PRODUCT_EXECUTION_POLICY,
     operatingSystem: resolveModelVisibleOperatingSystem(sandbox.capabilities().platform),
-    webSearch: workspaceId => options.webSearch ?? resolveConfiguredWebSearch(settingsForWorkspace(workspaceId)),
-    webFetch: options.webFetch ?? createWebFetch(), toolAvailability: options.builtInToolAvailability,
+    webSearch: (workspaceId) =>
+      options.webSearch ?? resolveConfiguredWebSearch(settingsForWorkspace(workspaceId)),
+    webFetch: options.webFetch ?? createWebFetch(),
+    toolAvailability: options.builtInToolAvailability,
   };
   const context = {
-    attachments, megumiHomePath: homePaths.homePath,
-    instructionDocuments: documents('conversation'), skills
+    attachments,
+    megumiHomePath: homePaths.homePath,
+    instructionDocuments: documents('conversation'),
+    skills,
+    observability: observability.observability,
   };
   const commands: Commands = createCommands({
     async compact(request, operationOptions) {
       const session = sessions.getSession({ session_id: request.sessionId });
-      if (session.status !== 'found') return { status: 'failed', failure: { message: 'Session was not found.' } };
+      if (session.status !== 'found')
+        return { status: 'failed', failure: { message: 'Session was not found.' } };
       const signal = operationOptions?.signal ?? new AbortController().signal;
-      const config = await prepareCodingRun({
-        session: session.session, model: request.model,
-        permissionMode: 'ask', signal
-      }, preparation);
+      const config = await prepareCodingRun(
+        {
+          session: session.session,
+          model: request.model,
+          permissionMode: 'ask',
+          signal,
+        },
+        preparation,
+      );
       const result = await compactCodingHistory({
-        trigger: 'manual', signal, options: {
-          ...context, sessionId: request.sessionId, workspaceId: request.workspaceId,
-          config: { ...config, tools: [] }, compactionThresholdRatio: request.compactionThresholdRatio,
-          ai, history, events,
-        }
+        trigger: 'manual',
+        signal,
+        options: {
+          ...context,
+          sessionId: request.sessionId,
+          workspaceId: request.workspaceId,
+          config: { ...config, tools: [] },
+          compactionThresholdRatio: request.compactionThresholdRatio,
+          ai,
+          history,
+          events,
+        },
       });
-      if (result.status === 'nothing_to_compact') return { ...result, reason: 'No earlier messages can be summarized while preserving the recent context.' };
+      if (result.status === 'nothing_to_compact')
+        return {
+          ...result,
+          reason: 'No earlier messages can be summarized while preserving the recent context.',
+        };
       return result.status === 'failed' ? { status: 'failed', failure: result.error } : result;
     },
   });
@@ -349,12 +403,15 @@ function composeCapabilitiesWithDatabase(
   });
   const tools: ProductCapabilities['tools'] = {
     listAvailableTools(request = {}) {
-      const names = request.includeDisabled ? codingToolNames : selectCodingTools(preparation).map(tool => tool.name);
+      const names = request.includeDisabled
+        ? codingToolNames
+        : selectCodingTools(preparation).map((tool) => tool.name);
       return {
-        tools: names.map(name => ({
+        tools: names.map((name) => ({
           identity: { sourceId: 'built_in', namespace: 'megumi', sourceToolName: name },
-          registeredToolName: name, definition: { name },
-        }))
+          registeredToolName: name,
+          definition: { name },
+        })),
       };
     },
   };
@@ -415,73 +472,110 @@ function composeCapabilitiesWithDatabase(
   let coding: Coding;
   let discovery: Discovery;
   const approval = createApprovalOperations({
-    events, getRun: runId => coding.getRun(runId),
-    terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS
+    events,
+    getRun: (runId) => coding.getRun(runId),
+    terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
   });
   const agent = createAgent({
-    ai, sandbox, permissionRules: {
+    ai,
+    sandbox,
+    permissionRules: {
       async resolve(runId) {
         const scope = coding.getRun(runId);
         if (!scope) throw new Error('No Coding permission scope exists for this run.');
-        const resolved = resolveConfiguredPermissionRules(settingsForWorkspace(scope.workspaceId), scope);
+        const resolved = resolveConfiguredPermissionRules(
+          settingsForWorkspace(scope.workspaceId),
+          scope,
+        );
         if (resolved.status === 'failed') throw new Error(resolved.failure.message);
         return { ...resolved, workspaceId: scope.workspaceId, sessionId: scope.sessionId };
       },
       async saveGrant(request) {
         const scope = coding.getRun(request.runId);
         if (!scope) throw new Error('No Coding session exists for this grant.');
-        const saved = recordConfiguredSessionGrant(settingsForWorkspace(scope.workspaceId), settings,
-          { sessionId: scope.sessionId, rules: [request.rule] });
+        const saved = recordConfiguredSessionGrant(
+          settingsForWorkspace(scope.workspaceId),
+          settings,
+          { sessionId: scope.sessionId, rules: [request.rule] },
+        );
         if (saved.status === 'failed') throw new Error(saved.failure.message);
       },
-    }, diagnostics: {
-      report(failure) { logger.warn('agent_diagnostic_failed', { ...failure }); },
+    },
+    diagnostics: {
+      report(failure) {
+        logger.warn('agent_diagnostic_failed', { ...failure });
+      },
       observe(scope, operation, classify) {
-        return observability.observability.withSpan({
-          name: scope.name,
-          correlation: { executionId: scope.runId, modelCallId: scope.modelCallId, toolCallId: scope.toolCallId },
-          metadata: scope.toolName ? { kind: 'tool_call', toolName: scope.toolName } : undefined,
-          classifyResult: classify ? result => ({ outcome: classify(result) }) : undefined,
-        }, operation);
+        return observability.observability.withSpan(
+          {
+            name: scope.name,
+            correlation: {
+              executionId: scope.runId,
+              modelCallId: scope.modelCallId,
+              toolCallId: scope.toolCallId,
+            },
+            metadata: scope.toolName ? { kind: 'tool_call', toolName: scope.toolName } : undefined,
+            classifyResult: classify ? (result) => ({ outcome: classify(result) }) : undefined,
+          },
+          operation,
+        );
       },
       content(input) {
         observability.observability.recordContent({
-          kind: input.kind, value: input.value,
-          correlation: { executionId: input.runId, modelCallId: input.modelCallId, toolCallId: input.toolCallId }
+          kind: input.kind,
+          value: input.value,
+          correlation: {
+            executionId: input.runId,
+            modelCallId: input.modelCallId,
+            toolCallId: input.toolCallId,
+          },
         });
       },
       modelCapture(scope) {
         return createProviderCapture({
           observability: observability.observability,
-          correlation: { executionId: scope.runId, modelCallId: scope.modelCallId }
+          correlation: { executionId: scope.runId, modelCallId: scope.modelCallId },
         });
       },
-    }
+    },
   });
   const ownedCoding = createCoding({
-    ai, agent, sessions, history, branches, input, preparation, context, events,
+    ai,
+    agent,
+    sessions,
+    history,
+    branches,
+    input,
+    preparation,
+    context,
+    events,
     observability: observability.observability,
     terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
     resolveModel: (workspaceId, selection) => models.resolveModel({ workspaceId, selection }),
     awaitApproval: approval.awaitApproval,
     async finalize(run) {
       workspaceChanges.finalizeChangeSet({
-        workspace_id: run.workspaceId, session_id: run.sessionId,
-        execution_id: run.runId, finalized_at: clock.now()
+        workspace_id: run.workspaceId,
+        session_id: run.sessionId,
+        execution_id: run.runId,
+        finalized_at: clock.now(),
       });
     },
     onCompleted(turn) {
-      try { models.withWorkspace(undefined, () => discovery.observeConversationTurn(turn)); }
-      catch (error) { logger.warn('interest_extraction_enqueue_failed', { error }); }
+      try {
+        models.withWorkspace(undefined, () => discovery.observeConversationTurn(turn));
+      } catch (error) {
+        logger.warn('interest_extraction_enqueue_failed', { error });
+      }
     },
   });
   coding = {
-    ...ownedCoding, submitInput: request =>
-      models.withWorkspace(request.workspaceId, () => ownedCoding.submitInput(request))
+    ...ownedCoding,
+    submitInput: (request) =>
+      models.withWorkspace(request.workspaceId, () => ownedCoding.submitInput(request)),
   };
   const backgroundAgent: Agent = {
-    startAgent: request =>
-      models.withWorkspace(undefined, () => agent.startAgent(request))
+    startAgent: (request) => models.withWorkspace(undefined, () => agent.startAgent(request)),
   };
   const resolveBackgroundModel = async (selection?: ModelSelection) => {
     const result = await models.resolveModel({ selection });
@@ -508,14 +602,14 @@ function composeCapabilitiesWithDatabase(
       settings,
       sessions,
       history,
-      resolveModel: async request => {
+      resolveModel: async (request) => {
         const result = await models.resolveModel(request);
         return result.status === 'ok' ? result.model : undefined;
       },
-      extractor: input => models.withWorkspace(
-        sessionStore.findSessionById(input.job.sessionId)?.workspace_id,
-        () => interestExtractor.extract(input),
-      ),
+      extractor: (input) =>
+        models.withWorkspace(sessionStore.findSessionById(input.job.sessionId)?.workspace_id, () =>
+          interestExtractor.extract(input),
+        ),
       ids: {
         createInterestId: () => crypto.randomUUID(),
         createEvidenceId: () => crypto.randomUUID(),
@@ -543,7 +637,11 @@ function composeCapabilitiesWithDatabase(
         : {}),
       observability: observability.observability,
       repository: discoveryRepository,
-      preparation: { policy: PRODUCT_EXECUTION_POLICY, instructionDocuments: documents('recommendation'), resolveModel: resolveBackgroundModel },
+      preparation: {
+        policy: PRODUCT_EXECUTION_POLICY,
+        instructionDocuments: documents('recommendation'),
+        resolveModel: resolveBackgroundModel,
+      },
       sourceRegistry: discoverySources,
       agent: backgroundAgent,
       settings,
@@ -572,7 +670,8 @@ function composeCapabilitiesWithDatabase(
     },
     preferenceLearning: {
       repository: discoveryRepository,
-      ai, instructionDocuments: documents('preference-learning'),
+      ai,
+      instructionDocuments: documents('preference-learning'),
       now: clock.now,
       observability: observability.observability,
       resolveModel: () => {
@@ -596,7 +695,11 @@ function composeCapabilitiesWithDatabase(
     },
     candidateSupply: {
       repository: discoveryRepository,
-      preparation: { policy: PRODUCT_EXECUTION_POLICY, instructionDocuments: documents('candidate-supply'), resolveModel: resolveBackgroundModel },
+      preparation: {
+        policy: PRODUCT_EXECUTION_POLICY,
+        instructionDocuments: documents('candidate-supply'),
+        resolveModel: resolveBackgroundModel,
+      },
       sourceRegistry: discoverySources,
       settings,
       agent: backgroundAgent,
@@ -605,12 +708,12 @@ function composeCapabilitiesWithDatabase(
       observability: observability.observability,
       ...(options.timers
         ? {
-          timers: {
-            set: (delayMs: number, callback: () => void) =>
-              options.timers!.setTimeout(callback, delayMs),
-            clear: (handle: unknown) => options.timers!.clearTimeout(handle),
-          },
-        }
+            timers: {
+              set: (delayMs: number, callback: () => void) =>
+                options.timers!.setTimeout(callback, delayMs),
+              clear: (handle: unknown) => options.timers!.clearTimeout(handle),
+            },
+          }
         : {}),
       onBackgroundError(error) {
         observability.runtimeLogger.write({
@@ -762,7 +865,6 @@ const noopObservabilityStorage: ObservabilityPersistenceStorage = {
   removeFile: async () => undefined,
 };
 
-
 export function createApplicationModels(options: {
   readonly settingsForWorkspace: (workspaceId?: string) => ModelSettingsAccess;
   readonly apiImplementations?: Partial<Record<Api, ProviderStreams>>;
@@ -777,11 +879,11 @@ export function createApplicationModels(options: {
 
   function register(providerId: string): void {
     if (registered.has(providerId)) return;
-    const builtin = builtins.find(item => item.id === providerId);
+    const builtin = builtins.find((item) => item.id === providerId);
     const implementation = (model: Model<Api>): ProviderStreams => {
       const injected = options.apiImplementations?.[model.api];
       if (injected) return injected;
-      if (builtin?.getModels().some(item => item.api === model.api)) return builtin;
+      if (builtin?.getModels().some((item) => item.api === model.api)) return builtin;
       const api = defaultApiImplementations[model.api];
       if (!api) throw new Error(`Unsupported model API: ${model.api}`);
       return api;
@@ -798,15 +900,20 @@ export function createApplicationModels(options: {
             const read = settings.readSettings();
             if (read.status === 'rejected') throw new Error(read.error.message);
             const apiKeyEnv = read.settings.config.providers[providerId]?.apiKeyEnv;
-            const credential = settings.readCredential({ target: { kind: 'provider', providerId }, apiKeyEnv });
+            const credential = settings.readCredential({
+              target: { kind: 'provider', providerId },
+              apiKeyEnv,
+            });
             if (credential.status === 'rejected') throw new Error(credential.error.message);
-            if (credential.status === 'found') return { auth: { apiKey: credential.value }, source: credential.source };
+            if (credential.status === 'found')
+              return { auth: { apiKey: credential.value }, source: credential.source };
             return apiKeyEnv ? undefined : builtin?.auth.apiKey?.resolve(input);
           },
-        }
+        },
       },
       stream: (model, context, request) => implementation(model).stream(model, context, request),
-      streamSimple: (model, context, request) => implementation(model).streamSimple(model, context, request),
+      streamSimple: (model, context, request) =>
+        implementation(model).streamSimple(model, context, request),
     });
     registered.add(providerId);
   }
@@ -817,28 +924,40 @@ export function createApplicationModels(options: {
       if (read.status === 'rejected') return { status: 'failed' as const, failure: read.error };
       const catalog = configuredCatalog(read.settings.config.providers, builtins);
       if (catalog.status === 'failed') return catalog;
-      const provider = catalog.providers.find(item => item.id === request.selection?.providerId);
-      const selected = provider?.models.find(item => item.model.id === request.selection?.modelId);
+      const selection = request.selection ?? read.settings.config.general.lastSelectedModel;
+      const provider = catalog.providers.find((item) => item.id === selection?.providerId);
+      const selected = provider?.models.find((item) => item.model.id === selection?.modelId);
       if (!provider || !selected) return modelUnavailable('Select an added model.');
       const model = selected.model;
-      if (model.maxTokens > model.contextWindow) return modelUnavailable('Model output capacity exceeds its context window.');
-      const builtin = builtins.find(item => item.id === provider.id);
-      if (!options.apiImplementations?.[model.api] && !defaultApiImplementations[model.api]
-        && !builtin?.getModels().some(item => item.api === model.api)) {
+      if (model.maxTokens > model.contextWindow)
+        return modelUnavailable('Model output capacity exceeds its context window.');
+      const builtin = builtins.find((item) => item.id === provider.id);
+      if (
+        !options.apiImplementations?.[model.api] &&
+        !defaultApiImplementations[model.api] &&
+        !builtin?.getModels().some((item) => item.api === model.api)
+      ) {
         return modelUnavailable(`Unsupported model API: ${model.api}`);
       }
       register(provider.id);
       try {
-        if (!(await ai.getAuth(provider.id))) return modelUnavailable(`Credentials are missing for ${provider.name}.`);
+        if (!(await ai.getAuth(provider.id)))
+          return modelUnavailable(`Credentials are missing for ${provider.name}.`);
       } catch {
         return modelUnavailable(`Credentials could not be read for ${provider.name}.`);
       }
-      return { status: 'ok' as const, model, compactionThresholdRatio: read.settings.config.context.compactionThresholdRatio };
+      return {
+        status: 'ok' as const,
+        model,
+        compactionThresholdRatio: read.settings.config.context.compactionThresholdRatio,
+      };
     });
   }
 
   return {
-    ai, withWorkspace, resolveModel,
+    ai,
+    withWorkspace,
+    resolveModel,
     readModelCatalog: (request: { workspaceId?: string } = {}) =>
       readModelCatalog(options.settingsForWorkspace(request.workspaceId)),
   };
@@ -903,17 +1022,17 @@ function configuredCatalog(
       const model: Model<Api> = original
         ? { ...original, api, baseUrl }
         : {
-          id: modelId,
-          provider: id,
-          api,
-          baseUrl,
-          name: modelId,
-          contextWindow: parameters.contextWindowTokens!,
-          maxTokens: parameters.maxOutputTokens!,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          reasoning: false,
-          input: ['text'],
-        };
+            id: modelId,
+            provider: id,
+            api,
+            baseUrl,
+            name: modelId,
+            contextWindow: parameters.contextWindowTokens!,
+            maxTokens: parameters.maxOutputTokens!,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            reasoning: false,
+            input: ['text'],
+          };
       models.push(configuredModel(model, parameters, !original));
     }
     providers.push({
@@ -955,7 +1074,6 @@ function configuredModel(
   };
 }
 
-
 const defaultApiImplementations: Readonly<Record<string, ProviderStreams>> = {
   'openai-completions': openAICompletionsApi(),
   'openai-responses': openAIResponsesApi(),
@@ -963,8 +1081,9 @@ const defaultApiImplementations: Readonly<Record<string, ProviderStreams>> = {
   'anthropic-messages': anthropicMessagesApi(),
 };
 
-
-export function resolveConfiguredWebSearch(settings: Pick<Settings, 'readSettings' | 'readCredential'>): WebSearch | undefined {
+export function resolveConfiguredWebSearch(
+  settings: Pick<Settings, 'readSettings' | 'readCredential'>,
+): WebSearch | undefined {
   const resolved = settings.readSettings();
   if (resolved.status === 'rejected') throw new Error(resolved.error.message);
   const config = resolved.settings.config.webSearch;

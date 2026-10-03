@@ -7,6 +7,29 @@ import { fauxAssistantMessage, fauxToolCall } from '@megumi/ai';
 import { type SaveMessageRequest, type AgentTool } from '@megumi/agent';
 import { fixture, deferred } from './agent-fixture';
 
+it('closes saved tool calls without executing them when the reply exceeds the execution limit', async () => {
+  const { agent, config, provider } = fixture();
+  provider.setResponses([fauxAssistantMessage([
+    fauxToolCall('write', {}, { id: 'write-1' }), fauxToolCall('write', {}, { id: 'write-2' }),
+  ], { stopReason: 'toolUse' })]);
+  const saved: SaveMessageRequest[] = [];
+  let changed = false;
+  const run = agent.startAgent({
+    config: { ...config, policy: { ...config.policy, maxToolCallsPerModelCall: 1 }, tools: [{
+      name: 'write', description: 'Write', parameters: { type: 'object' }, operations: () => [],
+      async execute() { changed = true; return { outputKind: 'text', content: 'Written' }; },
+    }] },
+    input: { role: 'user', content: 'Write', timestamp: 1 },
+    context: { async prepare({ runMessages, tools }) { return { systemPrompt: '', messages: runMessages, tools }; } },
+    async saveMessage(message) { saved.push(message); },
+  });
+  expect(await run.completion).toMatchObject({ status: 'failed', error: { code: 'EXECUTION_LIMIT_REACHED' } });
+  expect(changed).toBe(false);
+  expect(saved.filter(item => item.message.role === 'toolResult').map(item => item.message)).toMatchObject([
+    { toolCallId: 'write-1', isError: true }, { toolCallId: 'write-2', isError: true },
+  ]);
+});
+
 it('records cancelled results for saved calls when cancellation arrives during the assistant save', async () => {
   const { agent, config, provider } = fixture();
   provider.setResponses([fauxAssistantMessage(fauxToolCall('write', {}, { id: 'write-1' }), { stopReason: 'toolUse' })]);
@@ -258,4 +281,55 @@ it('waits for overflow compaction to update the source, then prepares the retrie
   expect(seen).toHaveLength(1);
   expect(seen[0]).toContain('Summary');
   expect(seen[0]).not.toContain('History');
+});
+
+
+it('keeps the configured tool metadata fixed when the caller changes its source object', async () => {
+  const { agent, config } = fixture();
+  const guidelines = ['Original guidance'];
+  const tool: AgentTool = { name: 'read', description: 'Read', parameters: { type: 'object' },
+    promptGuidelines: guidelines, operations: () => [], async execute() { return { outputKind: 'text', content: 'Read' }; } };
+  let seen: readonly string[] | undefined;
+  const run = agent.startAgent({ config: { ...config, tools: [tool] },
+    input: { role: 'user', content: 'Hello', timestamp: 1 },
+    context: { async prepare({ tools, runMessages }) {
+      seen = tools[0].promptGuidelines;
+      return { systemPrompt: '', messages: runMessages, tools };
+    } },
+  });
+  guidelines.push('Changed after start');
+  expect(await run.completion).toMatchObject({ status: 'completed' });
+  expect(seen).toEqual(['Original guidance']);
+});
+
+
+it('isolates failing observers without repeating the model or skipping required saves', async () => {
+  const { agent, config, provider } = fixture({ diagnostics: {
+    async observe(_scope, operation) { await operation(); throw new Error('Trace failed'); },
+    report() {},
+  } });
+  const saved: string[] = [];
+  const run = agent.startAgent({ config, input: { role: 'user', content: 'Hello', timestamp: 1 },
+    context: { async prepare({ runMessages, tools }) { return { systemPrompt: '', messages: runMessages, tools }; } },
+    onEvent() { throw new Error('Display failed'); }, async saveMessage({ message }) { saved.push(message.role); },
+  });
+  expect(await run.completion).toMatchObject({ status: 'completed' });
+  expect(saved).toEqual(['user', 'assistant']);
+  expect(provider.state.callCount).toBe(1);
+});
+
+it('rejects duplicate model tool-call IDs before executing any effects', async () => {
+  const { agent, config, provider } = fixture();
+  let changed = false;
+  provider.setResponses([fauxAssistantMessage([
+    fauxToolCall('write', {}, { id: 'same' }), fauxToolCall('write', {}, { id: 'same' }),
+  ], { stopReason: 'toolUse' })]);
+  const run = agent.startAgent({ config: { ...config, tools: [{
+    name: 'write', description: 'Write', parameters: { type: 'object' }, operations: () => [],
+    async execute() { changed = true; return { outputKind: 'text', content: 'Written' }; },
+  }] }, input: { role: 'user', content: 'Write', timestamp: 1 },
+    context: { async prepare({ runMessages, tools }) { return { systemPrompt: '', messages: runMessages, tools }; } },
+  });
+  expect(await run.completion).toMatchObject({ status: 'failed', error: { code: 'MODEL_PROTOCOL_ERROR' } });
+  expect(changed).toBe(false);
 });

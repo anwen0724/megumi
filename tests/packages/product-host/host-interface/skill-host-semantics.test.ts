@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createSkills } from '@megumi/agent-runtime/resources/skills/index';
+import { createSkills } from '@megumi/application/skill-operations';
 import { createSkillOperations } from '@megumi/application/skill-operations';
 
 let homePath: string;

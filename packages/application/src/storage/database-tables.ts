@@ -65,7 +65,7 @@ export const databaseTableOwnership = {
   discovery: {
     module: 'discovery-agent',
     repository: 'DiscoveryRepository',
-    modulePath: 'packages/application/src/discovery',
+    modulePath: 'packages/application/src/recommendation',
     tables: [
       'discovery_interests',
       'discovery_interest_evidence',

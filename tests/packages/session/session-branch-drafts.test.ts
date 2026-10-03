@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createEventBus, type AnyEvent } from '@megumi/agent-runtime/events';
-import { createSessionBranchDrafts } from '@megumi/agent-runtime/sessions/index';
+import { createEventBus } from '@megumi/application/application';
+import { type AnyEvent } from '@megumi/application/coding/session-events';
+import { createSessionBranchDrafts } from '@megumi/application/coding/sessions/session-branches';
 
 describe('SessionBranchDrafts', () => {
   it('creates explicit branch drafts and publishes the branch fact on the bus', () => {

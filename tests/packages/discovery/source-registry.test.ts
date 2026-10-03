@@ -1,11 +1,7 @@
 /* Verifies extensible source registration and mode validation. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createSourceRegistry,
-  type DiscoverySource,
-  type SourceSearchMode,
-} from '@megumi/application/discovery/index';
+import { createSourceRegistry, type DiscoverySource, type SourceSearchMode } from '@megumi/application/recommendation/sources/source-catalog';
 
 function source(id: string, modes: readonly SourceSearchMode[] = ['relevance']): DiscoverySource {
   return {

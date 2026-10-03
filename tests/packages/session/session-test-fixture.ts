@@ -14,7 +14,7 @@ import { createWorkspaceStore } from '@megumi/application/workspace/workspace-st
 export const savedAt = '2026-07-31T00:00:00.000Z';
 
 /** Opens an isolated workspace and session through their public capabilities. */
-export async function createSessionFixture() {
+export async function createSessionFixture(options: { beforeAttachmentWrite?: () => Promise<void> } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'megumi-session-behavior-'));
   const workspaceRoot = path.join(root, 'workspace');
   mkdirSync(workspaceRoot);
@@ -39,7 +39,7 @@ export async function createSessionFixture() {
       attachmentsPath: path.join(root, 'attachments'),
       fileSystem: {
         ensureDirectory: async directory => { await mkdir(directory, { recursive: true }); },
-        writeFile,
+        async writeFile(file, bytes) { await options.beforeAttachmentWrite?.(); await writeFile(file, bytes); },
         moveFile: rename,
         readFile,
         removeFile: filename => rm(filename, { force: true }),

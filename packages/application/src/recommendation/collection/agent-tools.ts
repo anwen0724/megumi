@@ -2,11 +2,30 @@
 import type { AgentTool, RawToolResult } from '@megumi/agent';
 import { Type } from '@megumi/ai';
 import { randomUUID } from 'node:crypto';
-import type { Observability, OperationCompletion, TraceCorrelation } from '../../observability/index';
+import type {
+  Observability,
+  OperationCompletion,
+  TraceCorrelation,
+} from '../../observability/index';
 import type { SettingsConfiguration } from '../../settings/settings-schema';
-import type { CandidatePoolSettings, CandidatePoolSnapshot, CandidateSupplyRepository, CandidateSupplyTrigger } from '../candidates/candidate-pool';
-import { CandidateSupplySearchInputSchema, CandidateSupplySubmitInputSchema, SourceContentDetailSchema, SourceContentSchema } from '../candidates/candidate-pool';
-import type { DiscoverySource, SourceContent, SourceContentDetail, SourceRegistry } from '../sources/source-catalog';
+import type {
+  CandidatePoolSettings,
+  CandidatePoolSnapshot,
+  CandidateSupplyRepository,
+  CandidateSupplyTrigger,
+} from '../candidates/candidate-pool';
+import {
+  CandidateSupplySearchInputSchema,
+  CandidateSupplySubmitInputSchema,
+  SourceContentDetailSchema,
+  SourceContentSchema,
+} from '../candidates/candidate-pool';
+import type {
+  DiscoverySource,
+  SourceContent,
+  SourceContentDetail,
+  SourceRegistry,
+} from '../sources/source-catalog';
 
 interface SourceResult {
   readonly resultId: string;
@@ -78,10 +97,18 @@ interface ToolRequest {
 /** Binds three complete tools and their transient search state to one collection task. */
 export function createCollectionTools(options: CreateCollectionToolsOptions): CollectionTools {
   const attempt: CandidateSupplyAttempt = {
-    ...options, enabledSourceIds: new Set(options.enabledSourceIds),
-    results: new Map(), sourceTails: new Map(), twitterSearchCalls: 0, twitterResults: 0,
-    searchesSucceeded: 0, sourceFailureCount: 0, searchResultCount: 0,
-    submissionCount: 0, addedCandidateCount: 0, addedInterestMatchCount: 0,
+    ...options,
+    enabledSourceIds: new Set(options.enabledSourceIds),
+    results: new Map(),
+    sourceTails: new Map(),
+    twitterSearchCalls: 0,
+    twitterResults: 0,
+    searchesSucceeded: 0,
+    sourceFailureCount: 0,
+    searchResultCount: 0,
+    submissionCount: 0,
+    addedCandidateCount: 0,
+    addedInterestMatchCount: 0,
   };
   const operations = {
     async searchContent(request: ToolRequest) {
@@ -292,42 +319,68 @@ export function createCollectionTools(options: CreateCollectionToolsOptions): Co
           targetInterestIds: Type.Array(Type.String()),
         }),
         operations: () => [],
-        execute: (input, execution) => operations.searchContent({ input, executionId: execution.runId, signal: execution.signal }),
+        execute: (input, execution) =>
+          operations.searchContent({
+            input,
+            executionId: execution.runId,
+            signal: execution.signal,
+          }),
       } satisfies AgentTool,
       {
         name: 'read_source_candidate',
-        description: 'Read optional detail for one Source result in the current Candidate Supply execution.',
-        promptSnippet: 'Read additional Source detail only when the search metadata is insufficient.',
+        description:
+          'Read optional detail for one Source result in the current Candidate Supply execution.',
+        promptSnippet:
+          'Read additional Source detail only when the search metadata is insufficient.',
         parameters: Type.Object({ resultId: Type.String() }),
         operations: () => [],
-        execute: (input, execution) => operations.readSourceCandidate({ input, executionId: execution.runId, signal: execution.signal }),
+        execute: (input, execution) =>
+          operations.readSourceCandidate({
+            input,
+            executionId: execution.runId,
+            signal: execution.signal,
+          }),
       } satisfies AgentTool,
       {
         name: 'submit_candidates',
         description: 'Submit Source results that are related to one or more active Interests.',
-        promptSnippet: 'Submit related Source results with a grounded content summary and a concrete reason for each Interest match.',
+        promptSnippet:
+          'Submit related Source results with a grounded content summary and a concrete reason for each Interest match.',
         parameters: Type.Object({
-          items: Type.Array(Type.Object({
-            resultId: Type.String(),
-            contentSummary: Type.String(),
-            matches: Type.Array(Type.Object({
-              interestId: Type.String(),
-              relevance: Type.Union([
-                Type.Literal('direct'),
-                Type.Literal('adjacent'),
-                Type.Literal('exploration'),
-              ]),
-              matchReason: Type.String(),
-            }), { minItems: 1 }),
-          }), { minItems: 1, maxItems: 50 }),
+          items: Type.Array(
+            Type.Object({
+              resultId: Type.String(),
+              contentSummary: Type.String(),
+              matches: Type.Array(
+                Type.Object({
+                  interestId: Type.String(),
+                  relevance: Type.Union([
+                    Type.Literal('direct'),
+                    Type.Literal('adjacent'),
+                    Type.Literal('exploration'),
+                  ]),
+                  matchReason: Type.String(),
+                }),
+                { minItems: 1 },
+              ),
+            }),
+            { minItems: 1, maxItems: 50 },
+          ),
         }),
         operations: () => [],
-        execute: (input, execution) => operations.submitCandidates({ input, executionId: execution.runId, signal: execution.signal }),
-      } satisfies AgentTool
+        execute: (input, execution) =>
+          operations.submitCandidates({
+            input,
+            executionId: execution.runId,
+            signal: execution.signal,
+          }),
+      } satisfies AgentTool,
     ],
     readContextState: () => ({
-      startedAt: attempt.startedAt, trigger: attempt.trigger,
-      snapshot: attempt.repository.getCandidatePoolSnapshot(attempt.settings), enabledSourceIds: [...attempt.enabledSourceIds]
+      startedAt: attempt.startedAt,
+      trigger: attempt.trigger,
+      snapshot: attempt.repository.getCandidatePoolSnapshot(attempt.settings),
+      enabledSourceIds: [...attempt.enabledSourceIds],
     }),
     summarize: () => summary(attempt),
   };

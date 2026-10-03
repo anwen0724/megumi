@@ -3,11 +3,8 @@
  */
 // @vitest-environment node
 import { afterEach, expect, it, vi } from 'vitest';
-import {
-  createPreferenceLearning,
-  type PreferenceLearningFacts,
-  type PreferenceLearning,
-} from '@megumi/application/discovery/index';
+import { createPreferenceLearning, type PreferenceLearning } from '@megumi/application/recommendation/preferences/preference-learning';
+import { type PreferenceLearningFacts } from '@megumi/application/recommendation/preferences/preference-rules';
 import type { DatabaseConnection } from '@megumi/application/storage/index';
 import { completedMessage, model } from '../context/context-test-fixtures';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
@@ -20,7 +17,7 @@ afterEach(async () => {
   }
 });
 
-function setup() {
+function setup(selectedModel = model) {
   const { database, repository } = createLearningFixture();
   seedRecommendation(database, 1);
   repository.updateState({
@@ -28,14 +25,16 @@ function setup() {
     action: 'set_reaction',
     reaction: 'liked',
   });
-  let facts: PreferenceLearningFacts | undefined;
+  let facts: { currentPreferences: Array<{ preferenceSetId: string; revision: number }>; reviewedPreferenceIds: string[];
+    reactionChanges: Array<{ recommendationId: string }> } | undefined;
   const models = {
-    completeSimple: vi.fn(async () => {
+    completeSimple: vi.fn(async (_model, context) => {
+      facts = JSON.parse(context.messages[0].content);
       if (!facts) throw new Error('Missing facts');
       return completedMessage(
         JSON.stringify({
-          scopes: facts.currentPreferences.map(({ preferenceSet }) => ({
-            preferenceSetId: preferenceSet.id,
+          scopes: facts.currentPreferences.map(preferenceSet => ({
+            preferenceSetId: preferenceSet.preferenceSetId,
             baseRevision: preferenceSet.revision,
             reviewedPreferenceIds: facts?.reviewedPreferenceIds,
             outcome: 'changed',
@@ -59,31 +58,16 @@ function setup() {
       );
     }),
   };
-  const prepareModel = vi.fn(async () => ({
-    status: 'ok' as const,
-    model,
-    client: models,
-    compactionThresholdRatio: 0.8,
-  }));
-  const context = {
-    build: vi.fn(async () => {
-      facts = runtime.getActivePreferenceLearningFacts('batch');
-      return {
-        status: 'ready' as const,
-        prompt: { systemPrompt: 'Learn from feedback.', messages: [], tools: [] },
-      };
-    }),
-  };
   const runtime = createPreferenceLearning({
     repository,
-    models,
-    context,
-    prepareModel,
+    ai: models,
+    resolveModel: async () => selectedModel,
+    instructionDocuments: [],
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' },
     now: () => now,
   });
   resources.push({ database, runtime });
-  return { database, repository, runtime, models, context, prepareModel };
+  return { database, repository, runtime, models };
 }
 
 it('commits generated identities and releases the active snapshot', async () => {
@@ -139,17 +123,13 @@ it('cancels a non-cooperative model and prevents a late response from committing
   });
   await vi.waitFor(() => expect(models.completeSimple).toHaveBeenCalledOnce());
   controller.abort();
-  expect((await operation).status).toBe('cancelled');
   release?.(completedMessage('{"scopes":[]}'));
+  expect((await operation).status).toBe('cancelled');
   expect(repository.listPreferenceSetDetails()[0].preferences).toEqual([]);
 });
 
 it('rejects required context that exceeds its budget before paying for a model call', async () => {
-  const { runtime, models, context } = setup();
-  context.build.mockImplementation(async () => ({
-    status: 'ready',
-    prompt: { systemPrompt: '证据'.repeat(100000), messages: [], tools: [] },
-  }));
+  const { runtime, models } = setup({ ...model, contextWindow: 100, maxTokens: 20 });
   const result = await runtime.preparePreferencesForRecommendation({ requestId: 'r' });
   expect(result).toMatchObject({ status: 'degraded', failures: [{ code: 'input_too_large' }] });
   expect(models.completeSimple).not.toHaveBeenCalled();
@@ -168,9 +148,9 @@ it('keeps a user edit when an older model result arrives after the correction', 
   const original = models.completeSimple.getMockImplementation();
   let release: (() => void) | undefined;
   models.completeSimple
-    .mockImplementationOnce(async () => {
+    .mockImplementationOnce(async (...args) => {
       if (!original) throw new Error('Missing scripted provider.');
-      const stale = await original();
+      const stale = await original(...args);
       await new Promise<void>((resolve) => {
         release = resolve;
       });

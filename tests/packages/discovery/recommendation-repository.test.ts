@@ -2,7 +2,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createRecommendationRepository, createDiscoveryRepository, type RecommendationRepository } from '@megumi/application/discovery/index';
+import { createRecommendationRepository, createDiscoveryRepository, type RecommendationRepository } from '@megumi/application/recommendation/recommendation-storage';
 
 const snapshotAt = '2026-09-03T00:00:00.000Z';
 const publishedAt = '2026-09-03T00:10:00.000Z';

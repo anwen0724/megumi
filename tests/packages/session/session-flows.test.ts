@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createSessionCatalog,
-  createSessionEntryGraph,
-  createSessionHistory,
-  type SessionStore,
-} from '@megumi/agent-runtime/sessions/index';
-import { createSessionStore } from '@megumi/application/storage/session-store';
+import { createSessionCatalog } from '@megumi/application/coding/sessions/session-catalog';
+import { createSessionEntryGraph } from '@megumi/application/coding/sessions/session-branches';
+import { createSessionHistory } from '@megumi/application/coding/sessions/session-history';
+import { type SessionStore } from '@megumi/application/coding/sessions/session-storage';
+import { createSessionStore } from '@megumi/application/coding/sessions/session-storage';
 import {
   createDatabase,
   migrateDatabase,

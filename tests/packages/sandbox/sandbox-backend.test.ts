@@ -1,15 +1,10 @@
 /* Verifies platform Backend resolution and the generic Sandbox seam. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import {
-  type SandboxCapabilities,
-  type SandboxProcess,
-} from '@megumi/agent-runtime/tools/sandbox/index';
-import {
-  resolveSandboxBackend,
-  type SandboxBackend
-} from '@megumi/agent-runtime/tools/sandbox/sandbox-backend';
-import { createSandboxWithBackend } from '@megumi/agent-runtime/tools/sandbox/sandbox-scope';
+import { type SandboxCapabilities } from '@megumi/agent/sandbox/sandbox-scope';
+import { type SandboxProcess } from '@megumi/agent/sandbox/windows-process';
+import { resolveSandboxBackend, type SandboxBackend } from '@megumi/agent/sandbox/sandbox-scope';
+import { createSandboxWithBackend } from '@megumi/agent/sandbox/sandbox-scope';
 
 const workspaceAccess = {
   fileSystem: { mode: 'workspace' as const },

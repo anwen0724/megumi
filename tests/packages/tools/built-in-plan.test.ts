@@ -1,58 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import {
-  createBuiltInToolRegistry,
-  createToolRouter,
-  updatePlanToolHandler,
-} from '@megumi/agent-runtime/tools/index';
+import { expect, it } from 'vitest';
+import { updatePlanTool } from '@megumi/agent';
+import { executeToolThroughAgent } from './built-in-test-harness';
 
-function planRouter() {
-  const registry = createBuiltInToolRegistry({});
-  return createToolRouter({
-    scope: {
-      executionId: 'run:plan',
-      sessionId: 'session:plan',
-      workspaceId: 'workspace:plan',
-      modelCallId: 'model-call:plan',
-    },
-    tools: [registry.get('update_plan')!],
+it.each([
+  {}, { plan: [{ step: 'Inspect', status: 'doing' }] }, { plan: [], unexpected: true },
+  { plan: [{ step: 'Inspect', status: 'in_progress' }, { step: 'Implement', status: 'in_progress' }] },
+])('rejects invalid plan snapshots without publishing them', async input => {
+  const notifications: unknown[] = [];
+  const result = await executeToolThroughAgent(updatePlanTool, input, {
+    onEvent: event => { if (event.type === 'tool_notification') notifications.push(event.notification); },
   });
-}
+  expect(result).toMatchObject({ type: 'failed', error: { code: 'invalid_tool_input' } });
+  expect(notifications).toEqual([]);
+});
 
-describe('update_plan built-in Tool', () => {
-  it('rejects malformed snapshots before creating a ToolInvocation', () => {
-    const router = planRouter();
-    expect(router.route({
-      toolCallId: 'call:missing', toolName: 'update_plan', input: {},
-    })).toMatchObject({ status: 'failed', error: { code: 'invalid_tool_input' } });
-    expect(router.route({
-      toolCallId: 'call:status',
-      toolName: 'update_plan',
-      input: { plan: [{ step: 'Inspect', status: 'doing' }] },
-    })).toMatchObject({ status: 'failed', error: { code: 'invalid_tool_input' } });
-    expect(router.route({
-      toolCallId: 'call:extra',
-      toolName: 'update_plan',
-      input: { plan: [], unexpected: true },
-    })).toMatchObject({ status: 'failed', error: { code: 'invalid_tool_input' } });
+it('publishes the complete plan snapshot without requiring workspace access or approval', async () => {
+  const notifications: unknown[] = [];
+  const plan = [{ step: 'Inspect', status: 'completed' }, { step: 'Implement', status: 'in_progress' }];
+  const result = await executeToolThroughAgent(updatePlanTool, { plan }, {
+    onEvent: event => { if (event.type === 'tool_notification') notifications.push(event.notification); },
   });
-
-  it('rejects more than one in_progress step without publishing a notification', async () => {
-    const router = planRouter();
-    const routed = router.route({
-      toolCallId: 'call:multiple',
-      toolName: 'update_plan',
-      input: {
-        plan: [
-          { step: 'Inspect', status: 'in_progress' },
-          { step: 'Implement', status: 'in_progress' },
-        ],
-      },
-    });
-    if (routed.status !== 'routed') throw new Error('Expected schema-valid plan');
-    const notifications: unknown[] = [];
-    await expect(updatePlanToolHandler.execute({} as never, routed.invocation, {
-      onNotification: (notification) => notifications.push(notification),
-    })).rejects.toMatchObject({ code: 'invalid_tool_input' });
-    expect(notifications).toEqual([]);
-  });
+  expect(result.type).toBe('succeeded');
+  expect(notifications).toEqual([{ type: 'plan_updated', plan }]);
 });

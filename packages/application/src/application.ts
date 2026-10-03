@@ -53,8 +53,7 @@ export function bindApplicationLifecycle(input: {
         const settings = input.operations.settings.readSettings();
         if (settings.status === 'rejected')
           throw new Error('Settings are invalid; product background startup was blocked.');
-        if (stopping)
-          throw new Error('Product runtime has already begun disposal or stopping.');
+        if (stopping) throw new Error('Product runtime has already begun disposal or stopping.');
         await input.start({ backgroundTriggers });
       })();
       return startPromise;
@@ -188,11 +187,7 @@ export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
         createdAt: input.createdAt ?? now(),
       } as AnyEvent;
 
-      retainRecentEvent(
-        recentEventsBySession,
-        recentEventPolicy,
-        event,
-      );
+      retainRecentEvent(recentEventsBySession, recentEventPolicy, event);
 
       const report = (error: unknown): void => {
         try {
@@ -226,7 +221,11 @@ export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
     subscribe(filter: EventFilter, handler: EventHandler): EventSubscription {
       const subscriber: RegisteredSubscriber = { filter, handler };
       subscribers.add(subscriber);
-      return { unsubscribe: () => { subscribers.delete(subscriber); } };
+      return {
+        unsubscribe: () => {
+          subscribers.delete(subscriber);
+        },
+      };
     },
 
     read(request: ReadEventsRequest): ReadEventsResult {
@@ -240,12 +239,11 @@ export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
       const retained = buffer.values();
       const firstSequence = retained[0]?.sequence;
       const lastSequence = retained.at(-1)?.sequence;
-      const requestedFirstSequence = request.afterSequence === undefined
-        ? 1
-        : request.afterSequence + 1;
-      const events = retained.filter((event) => (
-        request.afterSequence === undefined || event.sequence > request.afterSequence
-      ));
+      const requestedFirstSequence =
+        request.afterSequence === undefined ? 1 : request.afterSequence + 1;
+      const events = retained.filter(
+        (event) => request.afterSequence === undefined || event.sequence > request.afterSequence,
+      );
       return {
         events: structuredClone(events),
         ...(firstSequence === undefined ? {} : { firstSequence }),
@@ -320,8 +318,8 @@ function validateReadRequest(request: ReadEventsRequest): void {
     throw new TypeError('sessionId must be a non-empty string.');
   }
   if (
-    request.afterSequence !== undefined
-    && (!Number.isInteger(request.afterSequence) || request.afterSequence < 0)
+    request.afterSequence !== undefined &&
+    (!Number.isInteger(request.afterSequence) || request.afterSequence < 0)
   ) {
     throw new TypeError('afterSequence must be a non-negative integer.');
   }

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSettings, type Settings } from '@megumi/application/settings/settings-store';
-import { readModelCatalog } from '@megumi/agent-runtime/runs/model-resolution';
+import { readModelCatalog } from '@megumi/application/application-capabilities';
 import { useSetupWizardStore } from '@megumi/desktop/renderer/features/setup-wizard';
 import { useModelSelectionStore } from '@megumi/desktop/renderer/entities/model-selection';
 

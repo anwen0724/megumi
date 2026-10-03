@@ -67,7 +67,10 @@ it('cancels approval waiting and ignores a late allow decision', async () => {
 
 it('excludes approval waiting from timeout and waits for an expired operation to stop', async () => {
   vi.useFakeTimers();
-  const { agent, config, provider } = fixture();
+  const spans: string[] = [];
+  const { agent, config, provider } = fixture({ diagnostics: {
+    async observe(scope, operation) { spans.push(scope.name); return operation(); }, report() {},
+  } });
   const waiting = deferred();
   const approved = deferred();
   const started = deferred();
@@ -89,6 +92,7 @@ it('excludes approval waiting from timeout and waits for an expired operation to
     async awaitApproval() { waiting.resolve(); await approved.promise; return { status: 'allowed' }; },
   });
   await waiting.promise;
+  expect(spans).toContain('permission.await');
   await vi.advanceTimersByTimeAsync(5_000);
   approved.resolve();
   await started.promise;
@@ -127,4 +131,33 @@ it('writes and reads through the real file scope and retains the committed effec
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
+});
+
+
+it('bounds parallel tools and waits for a serial barrier before starting later work', async () => {
+  const { agent, config, provider } = fixture();
+  const started = Array.from({ length: 4 }, () => deferred());
+  const release = Array.from({ length: 4 }, () => deferred());
+  const order: number[] = [];
+  const tools = Array.from({ length: 4 }, (_, index): AgentTool => ({
+    name: `task_${index}`, description: 'Task', parameters: { type: 'object' }, operations: () => [],
+    executionMode: index === 2 ? 'serial' : 'parallel',
+    async execute() { order.push(index); started[index].resolve(); await release[index].promise; return { outputKind: 'text', content: String(index) }; },
+  }));
+  provider.setResponses([fauxAssistantMessage(tools.map(tool => fauxToolCall(tool.name, {})), { stopReason: 'toolUse' }), fauxAssistantMessage('Done.')]);
+  const run = agent.startAgent({ config: { ...config, tools }, input: { role: 'user', content: 'Tasks', timestamp: 1 },
+    context: { async prepare({ runMessages, tools }) { return { systemPrompt: '', messages: runMessages, tools }; } } });
+  try {
+    await Promise.all([started[0].promise, started[1].promise]);
+    expect(order).toEqual([0, 1]);
+    release[1].resolve();
+    expect(order).not.toContain(2);
+    release[0].resolve();
+    await started[2].promise;
+    expect(order).toEqual([0, 1, 2]);
+    release[2].resolve();
+    await started[3].promise;
+    release[3].resolve();
+    expect(await run.completion).toMatchObject({ status: 'completed' });
+  } finally { release.forEach(gate => gate.resolve()); await run.completion; }
 });

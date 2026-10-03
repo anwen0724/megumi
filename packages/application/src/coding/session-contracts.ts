@@ -747,10 +747,12 @@ export const ListUserMessagesByExecutionIdsResultSchema = z.discriminatedUnion('
   z.object({ status: z.literal('failed'), failure: HostFailureSchema }).strict(),
 ]);
 
-export const CancelUserInputPayloadSchema = z.object({
-  status: z.enum(['cancellation_requested', 'not_active']),
-  requestId: z.string().min(1),
-}).strict();
+export const CancelUserInputPayloadSchema = z
+  .object({
+    status: z.enum(['cancellation_requested', 'not_active']),
+    requestId: z.string().min(1),
+  })
+  .strict();
 
 export const CreateBranchDraftPayloadSchema = z
   .object({
@@ -840,19 +842,22 @@ export type HostFailure = {
 };
 
 export type CreateSessionResult =
-  { status: 'created'; session: SessionDto } | { status: 'failed'; failure: HostFailure };
+  | { status: 'created'; session: SessionDto }
+  | { status: 'failed'; failure: HostFailure };
 
 export interface ListSessionsRequest {}
 
 export type ListSessionsResult =
-  { status: 'ok'; sessions: SessionDto[] } | { status: 'failed'; failure: HostFailure };
+  | { status: 'ok'; sessions: SessionDto[] }
+  | { status: 'failed'; failure: HostFailure };
 
 export interface ListUserMessagesByExecutionIdsRequest {
   executionIds: string[];
 }
 
 export type ListUserMessagesByExecutionIdsResult =
-  { status: 'ok'; messages: UserMessageSummaryDto[] } | { status: 'failed'; failure: HostFailure };
+  | { status: 'ok'; messages: UserMessageSummaryDto[] }
+  | { status: 'failed'; failure: HostFailure };
 
 export type ReadSessionRequest = z.infer<typeof SessionReadPayloadSchema>;
 
@@ -968,7 +973,10 @@ export interface CancelBranchDraftResult {
   payload: {
     cancelled: boolean;
     reason?:
-      'branch_has_new_sources' | 'branch_marker_not_active' | 'branch_marker_not_found' | string;
+      | 'branch_has_new_sources'
+      | 'branch_marker_not_active'
+      | 'branch_marker_not_found'
+      | string;
   };
 }
 

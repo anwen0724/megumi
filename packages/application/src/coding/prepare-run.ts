@@ -3,7 +3,8 @@ import {
   copyPathTool,
   createDirectoryTool,
   createFetchPageTool,
-  createRunCommandTool, createSearchWebTool,
+  createRunCommandTool,
+  createSearchWebTool,
   deletePathTool,
   editFileTool,
   globTool,
@@ -13,7 +14,11 @@ import {
   searchTextTool,
   updatePlanTool,
   writeFileTool,
-  type AgentConfig, type AgentExecutionPolicy, type AgentTool, type ExecutionEnvironment, type PermissionMode,
+  type AgentConfig,
+  type AgentExecutionPolicy,
+  type AgentTool,
+  type ExecutionEnvironment,
+  type PermissionMode,
 } from '@megumi/agent';
 import type { Sandbox } from '@megumi/agent/sandbox/sandbox-scope';
 import type { WebFetch } from '@megumi/agent/tools/builtin/web/fetch-page';
@@ -36,13 +41,18 @@ export interface CodingRunPreparation {
 export type CodingConfig = AgentConfig & { readonly environment: ExecutionEnvironment };
 
 /** Freezes the chosen model, environment, policy and tool selection before starting Agent. */
-export async function prepareCodingRun(request: {
-  readonly session: Session;
-  readonly model: Model<Api>;
-  readonly permissionMode: PermissionMode;
-  readonly signal: AbortSignal;
-}, dependencies: CodingRunPreparation): Promise<CodingConfig> {
-  const workspace = await dependencies.workspaces.getWorkspace({ workspace_id: request.session.workspace_id });
+export async function prepareCodingRun(
+  request: {
+    readonly session: Session;
+    readonly model: Model<Api>;
+    readonly permissionMode: PermissionMode;
+    readonly signal: AbortSignal;
+  },
+  dependencies: CodingRunPreparation,
+): Promise<CodingConfig> {
+  const workspace = await dependencies.workspaces.getWorkspace({
+    workspace_id: request.session.workspace_id,
+  });
   request.signal.throwIfAborted();
   if (workspace.status !== 'found') throw new Error('The Coding workspace is unavailable.');
   const capabilities = dependencies.sandbox.capabilities();
@@ -56,37 +66,67 @@ export async function prepareCodingRun(request: {
       shell: capabilities.shellName ?? 'Unavailable shell',
     },
     policy: { ...dependencies.policy },
-    tools: tools.map(tool => ({
+    tools: tools.map((tool) => ({
       ...tool,
-      execute: (input, execution) => dependencies.workspaceChanges.trackToolExecution({
-        scope: {
-          workspace_id: request.session.workspace_id, session_id: request.session.session_id,
-          execution_id: execution.runId, tool_call_id: execution.toolCallId, tool_execution_id: execution.toolCallId
-        },
-        execute: () => tool.execute(input, execution),
-      }),
+      execute: (input, execution) =>
+        dependencies.workspaceChanges.trackToolExecution({
+          scope: {
+            workspace_id: request.session.workspace_id,
+            session_id: request.session.session_id,
+            execution_id: execution.runId,
+            tool_call_id: execution.toolCallId,
+            tool_execution_id: execution.toolCallId,
+          },
+          execute: () => tool.execute(input, execution),
+        }),
     })),
   };
 }
 
-const fileAndPlanTools = [readFileTool, writeFileTool, editFileTool, listDirectoryTool, globTool,
-  searchTextTool, createDirectoryTool, copyPathTool, movePathTool, deletePathTool, updatePlanTool];
+const fileAndPlanTools = [
+  readFileTool,
+  writeFileTool,
+  editFileTool,
+  listDirectoryTool,
+  globTool,
+  searchTextTool,
+  createDirectoryTool,
+  copyPathTool,
+  movePathTool,
+  deletePathTool,
+  updatePlanTool,
+];
 
 /** Selects the available tools before execution; later context preparation may narrow this set. */
-export function selectCodingTools(dependencies: Pick<CodingRunPreparation,
-  'sandbox' | 'webSearch' | 'webFetch' | 'toolAvailability'>, workspaceId?: string): AgentTool[] {
+export function selectCodingTools(
+  dependencies: Pick<
+    CodingRunPreparation,
+    'sandbox' | 'webSearch' | 'webFetch' | 'toolAvailability'
+  >,
+  workspaceId?: string,
+): AgentTool[] {
   const capabilities = dependencies.sandbox.capabilities();
   const tools: AgentTool[] = [...fileAndPlanTools, createFetchPageTool(dependencies.webFetch)];
   if (capabilities.shellKind && capabilities.shellName) {
-    tools.push(createRunCommandTool({
-      shellKind: capabilities.shellKind,
-      shellName: capabilities.shellName, executionMethod: 'shell'
-    }));
+    tools.push(
+      createRunCommandTool({
+        shellKind: capabilities.shellKind,
+        shellName: capabilities.shellName,
+        executionMethod: 'shell',
+      }),
+    );
   }
   const webSearch = dependencies.webSearch?.(workspaceId);
   if (webSearch) tools.push(createSearchWebTool(webSearch));
-  return tools.filter(tool => dependencies.toolAvailability?.isAvailable({ toolName: tool.name }) ?? true);
+  return tools.filter(
+    (tool) => dependencies.toolAvailability?.isAvailable({ toolName: tool.name }) ?? true,
+  );
 }
 
 /** The permission editor also lists tools that are currently unavailable. */
-export const codingToolNames = [...fileAndPlanTools.map(tool => tool.name), 'web_fetch', 'web_search', 'run_command'];
+export const codingToolNames = [
+  ...fileAndPlanTools.map((tool) => tool.name),
+  'web_fetch',
+  'web_search',
+  'run_command',
+];

@@ -8,22 +8,42 @@ import type { ToolExecutionAccess } from '../sandbox/sandbox-scope';
 import type { PlanStep } from './builtin/update-plan';
 import type { WebSearch } from './builtin/web/search-web';
 import type { WebFetch } from './builtin/web/fetch-page';
-import type { ApprovalOption, ApprovalSubject, PermissionDecision } from '../permissions/authorize-tool';
+import type {
+  ApprovalOption,
+  ApprovalSubject,
+  PermissionDecision,
+} from '../permissions/authorize-tool';
 
 export interface ToolDefinition extends Tool {
   readonly executionMode?: 'parallel' | 'serial';
   readonly promptSnippet?: string;
   readonly label?: string;
   readonly outputSchema?: JsonObject;
-  readonly annotations?: { readonly readOnlyHint?: boolean; readonly destructiveHint?: boolean; readonly idempotentHint?: boolean; readonly openWorldHint?: boolean };
+  readonly annotations?: {
+    readonly readOnlyHint?: boolean;
+    readonly destructiveHint?: boolean;
+    readonly idempotentHint?: boolean;
+    readonly openWorldHint?: boolean;
+  };
   readonly promptGuidelines?: readonly string[];
 }
 
 export interface PermissionOperation {
-  readonly action: 'workspace.read' | 'workspace.write' | 'process.execute'
-    | 'network.search' | 'network.fetch' | 'agent.context.activate' | 'external.invoke';
+  readonly action:
+    | 'workspace.read'
+    | 'workspace.write'
+    | 'process.execute'
+    | 'network.search'
+    | 'network.fetch'
+    | 'agent.context.activate'
+    | 'external.invoke';
   readonly resource?: {
-    readonly type: 'workspace.path' | 'process.command' | 'network.public_web' | 'network.url' | 'tool.identity';
+    readonly type:
+      | 'workspace.path'
+      | 'process.command'
+      | 'network.public_web'
+      | 'network.url'
+      | 'tool.identity';
     readonly id?: string;
     readonly attributes?: JsonObject;
   };
@@ -42,7 +62,11 @@ export interface ToolExecutionContext {
 }
 
 export interface AgentTool<Input = unknown> extends ToolDefinition {
-  readonly identity?: { readonly sourceId: string; readonly namespace: string; readonly sourceToolName: string };
+  readonly identity?: {
+    readonly sourceId: string;
+    readonly namespace: string;
+    readonly sourceToolName: string;
+  };
   /** Describes the validated operation without performing it. */
   operations(input: Input): readonly PermissionOperation[];
   /** Resolves only after the actual operation and its cleanup have stopped. */
@@ -80,8 +104,6 @@ export interface ToolExecutionOptions {
   readonly signal?: AbortSignal;
   readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
   readonly onNotification?: (notification: ToolExecutionNotification) => void;
-  /** Observes the actual Handler result before normalization; callback failure is ignored. */
-  readonly onHandlerResult?: (result: RawToolResult) => void;
   readonly executionAccess?: ToolExecutionAccess;
 }
 
@@ -146,15 +168,43 @@ export interface ToolEffectPath {
 }
 
 export type ToolEffect =
-  | { readonly type: 'created'; readonly path: ToolEffectPath; readonly pathType: 'file' | 'directory' }
+  | {
+      readonly type: 'created';
+      readonly path: ToolEffectPath;
+      readonly pathType: 'file' | 'directory';
+    }
   | { readonly type: 'modified'; readonly path: ToolEffectPath; readonly pathType: 'file' }
-  | { readonly type: 'copied'; readonly source: ToolEffectPath; readonly destination: ToolEffectPath; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'moved'; readonly source: ToolEffectPath; readonly destination: ToolEffectPath; readonly pathType: 'file' | 'directory' }
-  | { readonly type: 'deleted'; readonly path: ToolEffectPath; readonly pathType: 'file' | 'directory'; readonly recoverable: true };
+  | {
+      readonly type: 'copied';
+      readonly source: ToolEffectPath;
+      readonly destination: ToolEffectPath;
+      readonly pathType: 'file' | 'directory';
+    }
+  | {
+      readonly type: 'moved';
+      readonly source: ToolEffectPath;
+      readonly destination: ToolEffectPath;
+      readonly pathType: 'file' | 'directory';
+    }
+  | {
+      readonly type: 'deleted';
+      readonly path: ToolEffectPath;
+      readonly pathType: 'file' | 'directory';
+      readonly recoverable: true;
+    };
 
 export type ToolEffectReport =
-  | { readonly coverage: 'complete'; readonly effects: readonly ToolEffect[]; readonly itemFailures: readonly ToolItemFailure[] }
-  | { readonly coverage: 'unknown'; readonly effects: readonly ToolEffect[]; readonly itemFailures: readonly ToolItemFailure[]; readonly reason: string };
+  | {
+      readonly coverage: 'complete';
+      readonly effects: readonly ToolEffect[];
+      readonly itemFailures: readonly ToolItemFailure[];
+    }
+  | {
+      readonly coverage: 'unknown';
+      readonly effects: readonly ToolEffect[];
+      readonly itemFailures: readonly ToolItemFailure[];
+      readonly reason: string;
+    };
 
 export type ToolExecutionResult =
   | {

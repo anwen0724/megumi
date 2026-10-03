@@ -1,5 +1,6 @@
 /* Resolves authored Case references into existing Discovery entities before runtime startup. */
-import { canonicalContentIdentity, normalizeContentUrl, type DiscoveryState } from '@megumi/discovery';
+import { canonicalContentIdentity, normalizeContentUrl } from '@megumi/application/recommendation/candidates/content-identity';
+import { type DiscoveryState } from '@megumi/application/recommendation/recommendation-storage';
 import type { CaseInitialState, InstalledInitialStateIds } from './initial-state';
 
 /** Resolves stable authored IDs and installs only declared business facts. */

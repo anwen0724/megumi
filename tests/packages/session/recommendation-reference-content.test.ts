@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SessionUserContentSchema, sessionMessageText } from '@megumi/agent-runtime/sessions/index';
+import { SessionUserContentSchema, sessionMessageText } from '@megumi/application/coding/sessions/session-history';
 
 const reference = {
   type: 'recommendation_reference' as const,

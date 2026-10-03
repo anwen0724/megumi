@@ -96,7 +96,6 @@ function createApplicationRuntime(
   const { capabilities, options } = input;
   const { coding, discovery } = capabilities;
   const {
-    homePaths,
     observability,
     logger,
     settings,
@@ -320,13 +319,13 @@ const unavailableSpeechInput: SpeechInputRuntime = {
       },
     };
   },
-  acceptFrame() { },
-  setMuted() { },
-  startManualUtterance() { },
-  finishManualUtterance() { },
-  async stop() { },
+  acceptFrame() {},
+  setMuted() {},
+  startManualUtterance() {},
+  finishManualUtterance() {},
+  async stop() {},
   subscribe() {
-    return () => { };
+    return () => {};
   },
 };
 

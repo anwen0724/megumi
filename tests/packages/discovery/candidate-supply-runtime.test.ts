@@ -3,16 +3,12 @@ import path from 'node:path';
 /* Verifies candidate supply against real runtime, tools and isolated storage. */
 // @vitest-environment node
 import { expect, it, onTestFinished } from 'vitest';
-import {
-  createCandidates,
-  createSourceRegistry,
-  type CreateCandidatesOptions,
-  type DiscoverySource,
-} from '@megumi/application/discovery/index';
+import { createCandidates, type CreateCandidatesOptions } from '@megumi/application/recommendation/collection/collect-candidates';
+import { createSourceRegistry, type DiscoverySource } from '@megumi/application/recommendation/sources/source-catalog';
 import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
-import { createRuntimeFixture } from '../agent-runtime/runtime-fixture';
-import { controlModelHttp, modelResponse } from '../agent-runtime/model-http-fixture';
+import { createHttpProductFixture } from '../recommendation/http-product-fixture';
+import { controlModelHttp, modelResponse } from '../recommendation/model-http-fixture';
 
 const now = '2026-09-03T00:00:00.000Z';
 
@@ -204,7 +200,7 @@ async function setup(
     overrides?: Partial<CreateCandidatesOptions>;
   } = {},
 ) {
-  const fixture = await createRuntimeFixture({ now: () => now });
+  const fixture = createHttpProductFixture(() => now);
   if (options.interest !== false)
     fixture.repository.applyInterestChange({
       action: 'create',
@@ -237,17 +233,15 @@ async function setup(
   let id = 0;
   const supply = createCandidates({
     repository: fixture.repository,
-    attempts: fixture.candidateSupplyAttempts,
-    runtime: fixture.runtime,
+    agent: fixture.agent,
+    preparation: fixture.preparation,
     sourceRegistry: createSourceRegistry([options.source ?? source()]),
     settings: fixture.settings,
-    resolveModel: async () => ({ status: 'ok', model: fixture.model }),
     now: () => now,
     ids: { createRequestId: () => 'supply:' + ++id },
     ...options.overrides,
   });
   onTestFinished(async () => {
-    await fixture.runtime.stop({ timeoutMs: 5000 });
     await supply.shutdown();
     await fixture.cleanup();
     http.restore();
@@ -264,7 +258,7 @@ async function setup(
   };
 }
 
-function addCandidate(fixture: Awaited<ReturnType<typeof createRuntimeFixture>>, url: string) {
+function addCandidate(fixture: Awaited<ReturnType<typeof createHttpProductFixture>>, url: string) {
   fixture.repository.submitCandidate({
     content: content(url),
     contentSummary: 'Related content.',

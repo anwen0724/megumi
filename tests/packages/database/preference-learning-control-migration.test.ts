@@ -8,7 +8,7 @@ import path from 'node:path';
 import { expect, it } from 'vitest';
 import { z } from 'zod';
 import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
-import { createDiscoveryRepository } from '@megumi/application/discovery/index';
+import { createDiscoveryRepository } from '@megumi/application/recommendation/recommendation-storage';
 import { seedRecommendation, setReaction, now } from '../discovery/preference-learning-fixtures';
 
 it('upgrades version 25 without losing preference identities, evidence or feedback', () => {

@@ -9,6 +9,11 @@
   "include": [
     "./**/*.ts",
     "./**/*.json",
-    "../../packages/agent/voice/src/sherpa-onnx-node.d.ts"
+    "../../packages/application/src/voice/sherpa-onnx-node.d.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/ai"
+    }
   ]
 }

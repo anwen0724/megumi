@@ -3,20 +3,21 @@
  */
 import { z } from 'zod';
 import type { JsonObject, JsonValue } from '@megumi/ai';
-import type { ToolExecutionAccess } from '../sandbox/sandbox-scope';
 import { classifyShellCommand, type ShellCommandAssessment } from './shell-policy';
 /*
  * Validates JSON at the Permissions boundary, including readonly AI values.
  */
 
-export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() => z.union([
-  z.string(),
-  z.number().finite(),
-  z.boolean(),
-  z.null(),
-  z.array(JsonValueSchema),
-  z.record(z.string(), JsonValueSchema),
-]));
+export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(JsonValueSchema),
+    z.record(z.string(), JsonValueSchema),
+  ]),
+);
 
 export const JsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), JsonValueSchema);
 
@@ -188,7 +189,8 @@ export interface PermissionRuleReader {
 }
 
 export type AddPermissionRulesResult =
-  { readonly status: 'saved' } | { readonly status: 'failed'; readonly failure: PermissionFailure };
+  | { readonly status: 'saved' }
+  | { readonly status: 'failed'; readonly failure: PermissionFailure };
 
 export interface PermissionRuleWriter {
   recordSessionPermissionGrant(request: {
@@ -439,48 +441,58 @@ export function recordConfiguredSessionGrant(
  * path and command safety facts before policy evaluation.
  */
 
-export const PermissionToolIdentitySchema = z.object({
-  sourceId: z.string().min(1),
-  namespace: z.string().min(1),
-  sourceToolName: z.string().min(1),
-  registeredToolName: z.string().min(1),
-}).strict();
+export const PermissionToolIdentitySchema = z
+  .object({
+    sourceId: z.string().min(1),
+    namespace: z.string().min(1),
+    sourceToolName: z.string().min(1),
+    registeredToolName: z.string().min(1),
+  })
+  .strict();
 export type PermissionToolIdentity = z.infer<typeof PermissionToolIdentitySchema>;
 
-export const PermissionOperationSchema = z.object({
-  action: PermissionActionIdSchema,
-  resource: z.object({
-    type: PermissionResourceTypeSchema,
-    id: z.string().min(1).optional(),
-    attributes: z.record(z.string(), JsonValueSchema).optional(),
-  }).strict().optional(),
-  context: z.object({
-    workspaceId: z.string().min(1).optional(),
-    sessionId: z.string().min(1).optional(),
-    executionId: z.string().min(1),
-    toolIdentity: PermissionToolIdentitySchema,
-  }).strict(),
-}).strict().superRefine((operation, context) => {
-  const expected: Record<
-    z.infer<typeof PermissionActionIdSchema>,
-    z.infer<typeof PermissionResourceTypeSchema> | undefined
-  > = {
-    'workspace.read': 'workspace.path',
-    'workspace.write': 'workspace.path',
-    'process.execute': 'process.command',
-    'network.search': 'network.public_web',
-    'network.fetch': 'network.url',
-    'agent.context.activate': undefined,
-    'external.invoke': 'tool.identity',
-  };
-  if (operation.resource && operation.resource.type !== expected[operation.action]) {
-    context.addIssue({
-      code: 'custom',
-      path: ['resource'],
-      message: `${operation.action} only supports ${expected[operation.action] ?? 'no resource'}`,
-    });
-  }
-});
+export const PermissionOperationSchema = z
+  .object({
+    action: PermissionActionIdSchema,
+    resource: z
+      .object({
+        type: PermissionResourceTypeSchema,
+        id: z.string().min(1).optional(),
+        attributes: z.record(z.string(), JsonValueSchema).optional(),
+      })
+      .strict()
+      .optional(),
+    context: z
+      .object({
+        workspaceId: z.string().min(1).optional(),
+        sessionId: z.string().min(1).optional(),
+        executionId: z.string().min(1),
+        toolIdentity: PermissionToolIdentitySchema,
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((operation, context) => {
+    const expected: Record<
+      z.infer<typeof PermissionActionIdSchema>,
+      z.infer<typeof PermissionResourceTypeSchema> | undefined
+    > = {
+      'workspace.read': 'workspace.path',
+      'workspace.write': 'workspace.path',
+      'process.execute': 'process.command',
+      'network.search': 'network.public_web',
+      'network.fetch': 'network.url',
+      'agent.context.activate': undefined,
+      'external.invoke': 'tool.identity',
+    };
+    if (operation.resource && operation.resource.type !== expected[operation.action]) {
+      context.addIssue({
+        code: 'custom',
+        path: ['resource'],
+        message: `${operation.action} only supports ${expected[operation.action] ?? 'no resource'}`,
+      });
+    }
+  });
 export type PermissionOperation = z.infer<typeof PermissionOperationSchema>;
 
 export interface WorkspacePathPermissionFacts {
@@ -513,16 +525,18 @@ export interface EvaluateToolCallRequest {
   readonly evaluatedAt: string;
 }
 
-export const EvaluateToolCallRequestSchema: z.ZodType<EvaluateToolCallRequest> = z.object({
-  executionId: z.string().min(1),
-  sessionId: z.string().min(1).optional(),
-  workspaceId: z.string().min(1).optional(),
-  toolCallId: z.string().min(1),
-  toolInput: JsonValueSchema,
-  operations: z.array(PermissionOperationSchema).min(1),
-  permissionMode: PermissionModeSchema,
-  evaluatedAt: z.string().min(1),
-}).strict();
+export const EvaluateToolCallRequestSchema: z.ZodType<EvaluateToolCallRequest> = z
+  .object({
+    executionId: z.string().min(1),
+    sessionId: z.string().min(1).optional(),
+    workspaceId: z.string().min(1).optional(),
+    toolCallId: z.string().min(1),
+    toolInput: JsonValueSchema,
+    operations: z.array(PermissionOperationSchema).min(1),
+    permissionMode: PermissionModeSchema,
+    evaluatedAt: z.string().min(1),
+  })
+  .strict();
 
 export interface ResolvedPermissionOperations {
   readonly operations: readonly PermissionOperation[];
@@ -539,18 +553,16 @@ interface WorkspacePathTarget {
 export function resolveWorkspacePathTargets(
   request: EvaluateToolCallRequest,
 ): readonly WorkspacePathTarget[] {
-  return request.operations.flatMap((operation, operationIndex) => (
-    (operation.action === 'workspace.read' || operation.action === 'workspace.write')
-      && operation.resource?.type === 'workspace.path'
-      && operation.resource.id
+  return request.operations.flatMap((operation, operationIndex) =>
+    (operation.action === 'workspace.read' || operation.action === 'workspace.write') &&
+    operation.resource?.type === 'workspace.path' &&
+    operation.resource.id
       ? [{ key: String(operationIndex), operationIndex, path: operation.resource.id }]
-      : []
-  ));
+      : [],
+  );
 }
 
-export function resolveWorkspacePathTarget(
-  request: EvaluateToolCallRequest,
-): string | undefined {
+export function resolveWorkspacePathTarget(request: EvaluateToolCallRequest): string | undefined {
   return resolveWorkspacePathTargets(request)[0]?.path;
 }
 
@@ -558,9 +570,9 @@ export function resolvePermissionOperations(request: {
   readonly evaluation: EvaluateToolCallRequest;
   readonly workspacePaths?: Readonly<Record<string, WorkspacePathPermissionFacts>>;
 }): ResolvedPermissionOperations {
-  const operations = request.evaluation.operations.map((operation, index) => (
-    enrichNetworkOperation(enrichOperation(operation, request.workspacePaths?.[String(index)]))
-  ));
+  const operations = request.evaluation.operations.map((operation, index) =>
+    enrichNetworkOperation(enrichOperation(operation, request.workspacePaths?.[String(index)])),
+  );
   const shellOperation = operations.find((operation) => operation.action === 'process.execute');
   const shellAssessment = shellOperation ? assessShellOperation(shellOperation) : undefined;
   const pathFacts = Object.fromEntries(
@@ -578,9 +590,11 @@ export function resolvePermissionOperations(request: {
 
   return {
     operations: shellAssessment
-      ? operations.map((operation) => (
-          operation === shellOperation ? enrichShellOperation(operation, shellAssessment) : operation
-        ))
+      ? operations.map((operation) =>
+          operation === shellOperation
+            ? enrichShellOperation(operation, shellAssessment)
+            : operation,
+        )
       : operations,
     criticalInput: normalizeJsonValue(request.evaluation.toolInput),
     riskFacts: {
@@ -588,16 +602,20 @@ export function resolvePermissionOperations(request: {
         action: operation.action,
         resourceType: operation.resource?.type ?? null,
       })),
-      ...(Object.keys(pathFacts).length > 0 ? {
-        paths: pathFacts,
-        ...(Object.keys(pathFacts).length === 1 ? { path: Object.values(pathFacts)[0] } : {}),
-      } : {}),
+      ...(Object.keys(pathFacts).length > 0
+        ? {
+            paths: pathFacts,
+            ...(Object.keys(pathFacts).length === 1 ? { path: Object.values(pathFacts)[0] } : {}),
+          }
+        : {}),
       ...(shellAssessment ? { shell: shellRiskFacts(shellAssessment) } : {}),
-      ...(networkFetch ? {
-        network: networkUrl
-          ? { kind: 'url', valid: true, hostname: networkUrl.hostname }
-          : { kind: 'url', valid: false },
-      } : {}),
+      ...(networkFetch
+        ? {
+            network: networkUrl
+              ? { kind: 'url', valid: true, hostname: networkUrl.hostname }
+              : { kind: 'url', valid: false },
+          }
+        : {}),
     },
   };
 }
@@ -606,10 +624,15 @@ function enrichOperation(
   operation: PermissionOperation,
   pathFacts: WorkspacePathPermissionFacts | undefined,
 ): PermissionOperation {
-  if ((operation.action !== 'workspace.read' && operation.action !== 'workspace.write')
-    || operation.resource?.type !== 'workspace.path') return operation;
+  if (
+    (operation.action !== 'workspace.read' && operation.action !== 'workspace.write') ||
+    operation.resource?.type !== 'workspace.path'
+  )
+    return operation;
   const id = pathFacts
-    ? (pathFacts.insideWorkspace ? pathFacts.workspacePath : pathFacts.absolutePath)
+    ? pathFacts.insideWorkspace
+      ? pathFacts.workspacePath
+      : pathFacts.absolutePath
     : operation.resource.id;
   return {
     ...operation,
@@ -619,11 +642,13 @@ function enrichOperation(
       attributes: {
         ...operation.resource.attributes,
         classified: Boolean(pathFacts),
-        ...(pathFacts ? {
-          insideWorkspace: pathFacts.insideWorkspace,
-          protected: pathFacts.protected,
-          sensitive: pathFacts.sensitive,
-        } : {}),
+        ...(pathFacts
+          ? {
+              insideWorkspace: pathFacts.insideWorkspace,
+              protected: pathFacts.protected,
+              sensitive: pathFacts.sensitive,
+            }
+          : {}),
       },
     },
   };
@@ -633,9 +658,10 @@ function assessShellOperation(operation: PermissionOperation): ShellCommandAsses
   const shellKind = operation.resource?.attributes?.shellKind;
   return classifyShellCommand({
     command: operation.resource?.id ?? '',
-    shellKind: shellKind === 'powershell' || shellKind === 'cmd' || shellKind === 'posix_shell'
-      ? shellKind
-      : 'unknown',
+    shellKind:
+      shellKind === 'powershell' || shellKind === 'cmd' || shellKind === 'posix_shell'
+        ? shellKind
+        : 'unknown',
   });
 }
 
@@ -661,9 +687,12 @@ function enrichShellOperation(
 }
 
 function enrichNetworkOperation(operation: PermissionOperation): PermissionOperation {
-  if (operation.action !== 'network.fetch'
-    || operation.resource?.type !== 'network.url'
-    || !operation.resource.id) return operation;
+  if (
+    operation.action !== 'network.fetch' ||
+    operation.resource?.type !== 'network.url' ||
+    !operation.resource.id
+  )
+    return operation;
   const normalized = normalizeUrl(operation.resource.id);
   if (!normalized) return operation;
   return {
@@ -679,7 +708,9 @@ function enrichNetworkOperation(operation: PermissionOperation): PermissionOpera
   };
 }
 
-function normalizeUrl(value: string): { readonly url: string; readonly hostname: string } | undefined {
+function normalizeUrl(
+  value: string,
+): { readonly url: string; readonly hostname: string } | undefined {
   try {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;

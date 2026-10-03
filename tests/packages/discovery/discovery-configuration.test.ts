@@ -5,12 +5,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { createSettings } from '@megumi/application/settings/settings-store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createDiscovery,
-  createDiscoveryConfiguration,
-  createSourceRegistry,
-  type DiscoverySource,
-} from '@megumi/application/discovery/index';
+import { createDiscovery } from '@megumi/application/recommendation/recommendation-api';
+import { createDiscoveryConfiguration } from '@megumi/application/recommendation/recommendation-settings';
+import { createSourceRegistry, type DiscoverySource } from '@megumi/application/recommendation/sources/source-catalog';
 
 function source(
   id: string,

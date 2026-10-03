@@ -3,7 +3,7 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
-import { getDiscoveryState, initializeDiscoveryState, type DiscoveryState } from '@megumi/application/discovery/index';
+import { getDiscoveryState, initializeDiscoveryState, type DiscoveryState } from '@megumi/application/recommendation/recommendation-storage';
 
 describe('Discovery state', () => {
   it('rejects dangling references atomically and never overwrites existing data', () => {

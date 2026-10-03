@@ -1,7 +1,7 @@
 /* Defines versioned continuous evidence independently of semantic review judgments. */
 import { z } from 'zod';
-import { DiscoveryStateSchema } from '@megumi/discovery';
-import { ObservabilityTraceMeasurementsSchema } from '@megumi/product-host/host';
+import { DiscoveryStateSchema } from '@megumi/application/recommendation/recommendation-storage';
+import { ObservabilityTraceMeasurementsSchema } from '@megumi/application/contracts';
 import { PreferenceSequenceStepSchema, StableEvaluationIdSchema } from './evaluation-dataset';
 
 export const SequenceTraceSchema = z.object({

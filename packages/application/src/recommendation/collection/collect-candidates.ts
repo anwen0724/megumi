@@ -2,7 +2,11 @@
 import type { Agent } from '@megumi/agent';
 import type { Observability, OperationCompletion } from '../../observability/index';
 import type { Settings } from '../../settings/settings-store';
-import type { CandidatePoolSnapshot, CandidateSupplyResult, CandidateSupplyTrigger } from '../candidates/candidate-pool';
+import type {
+  CandidatePoolSnapshot,
+  CandidateSupplyResult,
+  CandidateSupplyTrigger,
+} from '../candidates/candidate-pool';
 import { candidatePoolSettings } from '../candidates/candidate-pool';
 import type { DiscoveryConfigurationStore } from '../recommendation-settings';
 import type { DiscoveryRepository } from '../recommendation-storage';
@@ -13,21 +17,21 @@ import { prepareCollectionRun, type CollectionPreparation } from './prepare-run'
 
 export interface Candidates {
   /** Persists first-use consent before asynchronously checking supply conditions. */
-  confirm(): Promise<{ readonly status: 'confirmed' | 'already_confirmed'; }>;
+  confirm(): Promise<{ readonly status: 'confirmed' | 'already_confirmed' }>;
   /** Returns process-local progress without starting work. */
   getStatus(): CandidateSupplyStatus;
-  start(options?: { readonly automaticTriggers?: boolean; }): Promise<void>;
+  start(options?: { readonly automaticTriggers?: boolean }): Promise<void>;
   ensureSupply(trigger: CandidateSupplyTrigger): Promise<CandidateSupplyResult>;
   updateSchedule(): void;
   shutdown(): Promise<void>;
 }
 
 export type CandidateSupplyStatus =
-  | { readonly status: 'idle' | 'running'; }
+  | { readonly status: 'idle' | 'running' }
   | {
-    readonly status: 'failed';
-    readonly failure: Extract<CandidateSupplyResult, { status: 'failed'; }>['failure'];
-  };
+      readonly status: 'failed';
+      readonly failure: Extract<CandidateSupplyResult, { status: 'failed' }>['failure'];
+    };
 
 export interface CreateCandidatesOptions {
   readonly repository: DiscoveryRepository;
@@ -36,7 +40,7 @@ export interface CreateCandidatesOptions {
   readonly agent: Agent;
   readonly preparation: CollectionPreparation;
   readonly now: () => string;
-  readonly ids: { createRequestId(): string; };
+  readonly ids: { createRequestId(): string };
   readonly observability?: Observability;
   readonly timers?: {
     set(delayMs: number, callback: () => void): unknown;
@@ -53,7 +57,7 @@ export function createCandidates(options: CreateCandidatesOptions): Candidates {
   let activeController: AbortController | undefined;
   let automaticTriggers = false;
   let timer: unknown;
-  let confirmation: Promise<{ readonly status: 'confirmed' | 'already_confirmed'; }> | undefined;
+  let confirmation: Promise<{ readonly status: 'confirmed' | 'already_confirmed' }> | undefined;
   let lastResult: CandidateSupplyResult | undefined;
 
   function ensureSupply(trigger: CandidateSupplyTrigger): Promise<CandidateSupplyResult> {
@@ -74,7 +78,10 @@ export function createCandidates(options: CreateCandidatesOptions): Candidates {
         return result;
       })
       .finally(() => {
-        if (activeCompletion === completion) { activeCompletion = undefined; activeController = undefined; }
+        if (activeCompletion === completion) {
+          activeCompletion = undefined;
+          activeController = undefined;
+        }
         try {
           schedule();
         } catch (error) {
@@ -165,13 +172,16 @@ async function executeSupply(
   } catch (error) {
     return {
       ...baseResult(requestId, trigger, requestedAt, options.now(), 0, 0),
-      ...(signal.aborted ? { status: 'cancelled' as const } : {
-        status: 'failed' as const, failure: {
-          code: 'candidate_supply_failed',
-          message: messageOf(error),
-          retryable: true,
-        }
-      }),
+      ...(signal.aborted
+        ? { status: 'cancelled' as const }
+        : {
+            status: 'failed' as const,
+            failure: {
+              code: 'candidate_supply_failed',
+              message: messageOf(error),
+              retryable: true,
+            },
+          }),
     };
   }
 }
@@ -217,31 +227,45 @@ async function runCheck(
       reason: 'no_available_source',
     };
   }
-  const prepared = await prepareCollectionRun({
-    modelSelection: configuration.candidateSupplyModel, signal,
-    collection: {
-      observability: options.observability,
-      startedAt: options.now(),
-      trigger,
-      repository: options.repository,
-      sourceRegistry: options.sourceRegistry,
-      enabledSourceIds: readySourceIds,
-      settings: poolSettings,
-      twitterBudget: configuration.twitterBudget,
-      now: options.now,
+  const prepared = await prepareCollectionRun(
+    {
+      modelSelection: configuration.candidateSupplyModel,
+      signal,
+      collection: {
+        observability: options.observability,
+        startedAt: options.now(),
+        trigger,
+        repository: options.repository,
+        sourceRegistry: options.sourceRegistry,
+        enabledSourceIds: readySourceIds,
+        settings: poolSettings,
+        twitterBudget: configuration.twitterBudget,
+        now: options.now,
+      },
     },
-  }, options.preparation);
-  if (!prepared) return failureResult(requestId, trigger, requestedAt, options.now(), before, {
-    code: 'model_unavailable', message: 'Candidate collection model is unavailable.', retryable: true,
-  });
+    options.preparation,
+  );
+  if (!prepared)
+    return failureResult(requestId, trigger, requestedAt, options.now(), before, {
+      code: 'model_unavailable',
+      message: 'Candidate collection model is unavailable.',
+      retryable: true,
+    });
   const { config, collection } = prepared;
   signal.throwIfAborted();
   const run = options.agent.startAgent({
-    config, signal,
-    input: { role: 'user', content: 'Generate the candidate pool.', timestamp: Date.parse(requestedAt) },
+    config,
+    signal,
+    input: {
+      role: 'user',
+      content: 'Generate the candidate pool.',
+      timestamp: Date.parse(requestedAt),
+    },
     context: createCollectionContext({
-      collection, repository: options.repository, sources: options.sourceRegistry,
-      instructionDocuments: options.preparation.instructionDocuments
+      collection,
+      repository: options.repository,
+      sources: options.sourceRegistry,
+      instructionDocuments: options.preparation.instructionDocuments,
     }),
   });
   const executionId = run.runId;
@@ -318,7 +342,6 @@ async function runCheck(
   };
 }
 
-
 /** Captures why each registered Source enters or is excluded from this execution's context. */
 function readySources(
   registry: SourceRegistry,
@@ -353,7 +376,7 @@ function countAdditions(
   before: CandidatePoolSnapshot,
   after: CandidatePoolSnapshot | undefined,
   summary: CandidateSupplyAttemptSummary,
-): { readonly candidates: number; readonly matches: number; } {
+): { readonly candidates: number; readonly matches: number } {
   const beforeCandidateIds = new Set(before.candidates.map(({ candidate }) => candidate.id));
   const beforeMatchIds = new Set(
     before.candidates.flatMap(({ interestMatches }) => interestMatches.map(({ id }) => id)),
@@ -363,8 +386,8 @@ function countAdditions(
     : 0;
   const snapshotMatches = after
     ? after.candidates
-      .flatMap(({ interestMatches }) => interestMatches)
-      .filter(({ id }) => !beforeMatchIds.has(id)).length
+        .flatMap(({ interestMatches }) => interestMatches)
+        .filter(({ id }) => !beforeMatchIds.has(id)).length
     : 0;
   return {
     candidates: Math.max(snapshotCandidates, summary?.addedCandidateCount ?? 0),
@@ -389,7 +412,7 @@ function failureResult(
   requestedAt: string,
   completedAt: string,
   snapshot: CandidatePoolSnapshot,
-  failure: { readonly code: string; readonly message: string; readonly retryable: boolean; },
+  failure: { readonly code: string; readonly message: string; readonly retryable: boolean },
 ): CandidateSupplyResult {
   return {
     ...baseResult(requestId, trigger, requestedAt, completedAt, 0, 0),
@@ -405,7 +428,7 @@ function notNeeded(
   trigger: CandidateSupplyTrigger,
   requestedAt: string,
   completedAt: string,
-  reason: Extract<CandidateSupplyResult, { status: 'not_needed'; }>['reason'],
+  reason: Extract<CandidateSupplyResult, { status: 'not_needed' }>['reason'],
 ): CandidateSupplyResult {
   return {
     ...baseResult(requestId, trigger, requestedAt, completedAt, 0, 0),

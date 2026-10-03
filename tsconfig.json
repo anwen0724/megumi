@@ -34,12 +34,6 @@
       "@megumi/agent/*": [
         "packages/agent/src/*"
       ],
-      "@megumi/agent-runtime": [
-        "packages/agent-runtime/src/index.ts"
-      ],
-      "@megumi/agent-runtime/*": [
-        "packages/agent-runtime/src/*"
-      ],
       "@megumi/application": [
         "packages/application/src/index.ts"
       ],

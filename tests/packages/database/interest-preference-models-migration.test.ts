@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createDiscoveryRepository } from '@megumi/application/discovery/index';
+import { createDiscoveryRepository } from '@megumi/application/recommendation/recommendation-storage';
 
 const now = '2026-08-27T08:00:00.000Z';
 

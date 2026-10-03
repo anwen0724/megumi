@@ -1,13 +1,14 @@
 /* Verifies Recommendation's frozen Candidate reads, ordered expansion, and terminal publication tools. */
 // @vitest-environment node
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveRecommendationDiscussion } from '@megumi/application/discovery/recommendations/recommendation-discussion';
+import { resolveRecommendationDiscussion } from '@megumi/application/recommendation/recommendation-discussion';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 import {
-  createRecommendationAttempts,
   createRecommendationRepository,
-  type RecommendationCandidate,
-} from '@megumi/application/discovery/index';
+} from '@megumi/application/recommendation/recommendation-storage';
+
+import { createCandidateWorkset } from '@megumi/application/recommendation/daily/candidate-workset';
+import { publishRecommendations, type RecommendationCandidate } from '@megumi/application/recommendation/daily/publish-recommendations';
 
 const databases: DatabaseConnection[] = [];
 const now = '2026-09-03T00:00:00.000Z';
@@ -18,23 +19,23 @@ describe('Recommendation tools', () => {
   });
 
   it('exposes only the initial working set before deterministic expansion', async () => {
-    const { attempts } = setup();
+    const { workset } = setup();
 
-    await expect(attempts.readRecommendationCandidate(tool('execution:1', { candidateId: 'candidate:3' })))
+    await expect(workset.readRecommendationCandidate(tool('execution:1', { candidateId: 'candidate:3' })))
       .resolves.toMatchObject({ isError: true, content: { code: 'candidate_not_exposed' } });
-    await expect(attempts.expandRecommendationWorkingSet(tool('execution:1', {})))
+    await expect(workset.expandRecommendationWorkingSet(tool('execution:1', {})))
       .resolves.toMatchObject({ content: { status: 'expanded', candidateIds: ['candidate:3'] } });
-    await expect(attempts.readRecommendationCandidate(tool('execution:1', { candidateId: 'candidate:3' })))
+    await expect(workset.readRecommendationCandidate(tool('execution:1', { candidateId: 'candidate:3' })))
       .resolves.toMatchObject({ content: { status: 'read', candidate: { candidate: { id: 'candidate:3' } } } });
   });
 
   it('requires the actual target and accepts a draft without publishing it', async () => {
-    const { attempts, repository } = setup();
-    await expect(attempts.submitRecommendations(tool('execution:1', {
+    const { workset, repository } = setup();
+    await expect(workset.submitRecommendations(tool('execution:1', {
       items: [{ candidateId: 'candidate:1', recommendationReason: 'Relevant.' }],
     }))).resolves.toMatchObject({ isError: true, content: { code: 'selection_count_invalid' } });
 
-    const result = await attempts.submitRecommendations(tool('execution:1', {
+    const result = await workset.submitRecommendations(tool('execution:1', {
       items: [
         { candidateId: 'candidate:1', recommendationReason: 'Relevant one.' },
         { candidateId: 'candidate:2', recommendationReason: 'Relevant two.' },
@@ -46,12 +47,12 @@ describe('Recommendation tools', () => {
   });
 
   it('associates only a visible published recommendation with a new discussion', async () => {
-    const { attempts, repository } = setup();
-    await attempts.submitRecommendations(tool('execution:1', { items: [
+    const { workset, repository } = setup();
+    await workset.submitRecommendations(tool('execution:1', { items: [
       { candidateId: 'candidate:1', recommendationReason: 'Relevant one.' },
       { candidateId: 'candidate:2', recommendationReason: 'Relevant two.' },
     ] }));
-    const publication = attempts.publishDraft({ executionId: 'execution:1', signal: new AbortController().signal });
+    const publication = publishRecommendations({ workset, repository, publishedAt: now, signal: new AbortController().signal });
     if (publication.status !== 'published') throw new Error('Expected a published collection');
     const recommendationId = publication.collection.items[0].id;
     expect(resolveRecommendationDiscussion({ recommendationId }, repository)).toMatchObject({
@@ -77,10 +78,8 @@ function setup() {
     ids: { createId: () => `generated:${++id}` },
     clock: { now: () => now },
   });
-  const attempts = createRecommendationAttempts();
-  attempts.start({
+  const workset = createCandidateWorkset({
     requestId: 'request:1',
-    executionId: 'execution:1',
     localDate: '2026-09-03',
     snapshotAt: now,
     actualTarget: 2,
@@ -92,10 +91,8 @@ function setup() {
     interests: [],
     preferences: [],
     history: [],
-    repository,
-    now: () => now,
   });
-  return { attempts, repository };
+  return { workset, repository };
 }
 
 function candidate(index: number): RecommendationCandidate {

@@ -8,9 +8,6 @@
       "path": "./packages/agent"
     },
     {
-      "path": "./packages/agent-runtime"
-    },
-    {
       "path": "./packages/application"
     }
   ]

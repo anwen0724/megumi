@@ -1,7 +1,12 @@
 /* Defines run_command, its process interface, bounded capture, and safe Skill script mapping. */
 
-import type { JsonObject } from '@megumi/ai';
-import type { RawToolResult, AgentTool, ToolExecutionErrorCode, ToolExecutionOptions, ToolExecutionOutputChunk } from '../tool-contracts';
+import type {
+  RawToolResult,
+  AgentTool,
+  ToolExecutionErrorCode,
+  ToolExecutionOptions,
+  ToolExecutionOutputChunk,
+} from '../tool-contracts';
 import { normalizeRawToolContent, ToolExecutionFailure } from '../tool-result';
 import { inputRecord, optionalPositiveInteger, optionalString, requireString } from '../tool-input';
 import type { BuiltInToolContext } from '../tool-contracts';
@@ -19,10 +24,7 @@ export interface ToolProcessDescriptor {
 }
 
 export interface ToolProcessAdapter extends ToolProcessDescriptor {
-  run(
-    request: ToolProcessRequest,
-    options: ToolProcessOptions,
-  ): Promise<ToolProcessResult>;
+  run(request: ToolProcessRequest, options: ToolProcessOptions): Promise<ToolProcessResult>;
 }
 
 export interface ToolProcessRequest {
@@ -52,20 +54,29 @@ export function createRunCommandTool(process: ToolProcessDescriptor): AgentTool 
     name: 'run_command',
     executionMode: 'serial',
     operations: (input) => [
-      { action: 'process.execute', resource: {
-        type: 'process.command',
-        id: requireString(inputRecord(input), 'command'),
-        attributes: { shellKind: process.shellKind },
-      } },
-      { action: 'workspace.read', resource: {
-        type: 'workspace.path',
-        id: optionalString(inputRecord(input), 'cwd', '.'),
-      } },
+      {
+        action: 'process.execute',
+        resource: {
+          type: 'process.command',
+          id: requireString(inputRecord(input), 'command'),
+          attributes: { shellKind: process.shellKind },
+        },
+      },
+      {
+        action: 'workspace.read',
+        resource: {
+          type: 'workspace.path',
+          id: optionalString(inputRecord(input), 'cwd', '.'),
+        },
+      },
     ],
     execute: (input, execution) => executeRunCommand(fileContext(execution), input, execution),
-    description: 'Run a command and return output previews. Captures up to 20,000 bytes per stream (stdout and stderr).',
+    description:
+      'Run a command and return output previews. Captures up to 20,000 bytes per stream (stdout and stderr).',
     promptSnippet: 'Run a command and return redacted output previews.',
-    promptGuidelines: ['Command output is redacted; sensitive values are replaced before they reach you.'],
+    promptGuidelines: [
+      'Command output is redacted; sensitive values are replaced before they reach you.',
+    ],
     parameters: {
       type: 'object',
       properties: {
@@ -75,7 +86,8 @@ export function createRunCommandTool(process: ToolProcessDescriptor): AgentTool 
         },
         cwd: {
           type: 'string',
-          description: 'The working directory for the command. Relative paths are resolved from the current working directory.',
+          description:
+            'The working directory for the command. Relative paths are resolved from the current working directory.',
         },
         timeoutMs: { type: 'integer', description: 'Optional timeout in milliseconds.' },
       },
@@ -85,8 +97,10 @@ export function createRunCommandTool(process: ToolProcessDescriptor): AgentTool 
     outputSchema: {
       type: 'object',
       properties: {
-        exitCode: { type: 'integer' }, stdoutPreview: { type: 'string' },
-        stderrPreview: { type: 'string' }, durationMs: { type: 'integer' },
+        exitCode: { type: 'integer' },
+        stdoutPreview: { type: 'string' },
+        stderrPreview: { type: 'string' },
+        durationMs: { type: 'integer' },
         truncated: { type: 'boolean' },
       },
       required: ['exitCode', 'stdoutPreview', 'stderrPreview', 'durationMs', 'truncated'],
@@ -129,13 +143,15 @@ async function executeRunCommand(
     outputKind: 'command',
     content,
     isError: result.exitCode !== 0,
-    ...(result.exitCode !== 0 ? {
-      error: {
-        code: 'command_failed' as const,
-        message: `Command exited with code ${result.exitCode}.`,
-        details: { reason: 'non_zero_exit', exitCode: result.exitCode },
-      },
-    } : {}),
+    ...(result.exitCode !== 0
+      ? {
+          error: {
+            code: 'command_failed' as const,
+            message: `Command exited with code ${result.exitCode}.`,
+            details: { reason: 'non_zero_exit', exitCode: result.exitCode },
+          },
+        }
+      : {}),
     metadata: {
       shellKind: context.process.shellKind,
       executionMethod: context.process.executionMethod,
@@ -174,9 +190,15 @@ function buildBoundedCommandContent(input: {
       throw new Error('Unable to build a bounded run_command result.');
     }
     if (stdoutBytes >= stderrBytes && stdoutBytes > 0) {
-      stdoutPreview = trimUtf8(stdoutPreview, Math.max(0, stdoutBytes - Math.max(1, Math.ceil(stdoutBytes / 8))));
+      stdoutPreview = trimUtf8(
+        stdoutPreview,
+        Math.max(0, stdoutBytes - Math.max(1, Math.ceil(stdoutBytes / 8))),
+      );
     } else {
-      stderrPreview = trimUtf8(stderrPreview, Math.max(0, stderrBytes - Math.max(1, Math.ceil(stderrBytes / 8))));
+      stderrPreview = trimUtf8(
+        stderrPreview,
+        Math.max(0, stderrBytes - Math.max(1, Math.ceil(stderrBytes / 8))),
+      );
     }
     truncated = true;
   }
@@ -196,7 +218,12 @@ async function runShellCommand(input: {
   readonly signal?: AbortSignal;
   readonly onOutput?: (output: ToolExecutionOutputChunk) => void;
   readonly process: ToolProcessAdapter;
-}): Promise<{ readonly exitCode: number; readonly stdout: string; readonly stderr: string; readonly truncated: boolean }> {
+}): Promise<{
+  readonly exitCode: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly truncated: boolean;
+}> {
   input.signal?.throwIfAborted();
   const controller = new AbortController();
   const stdout = new BoundedByteCapture(MAX_STREAM_CAPTURE_BYTES);
@@ -213,8 +240,10 @@ async function runShellCommand(input: {
       { command: input.command, cwd: input.cwd },
       {
         signal: controller.signal,
-        onStdout: (chunk) => publishCapturedOutput('stdout', stdout.append(chunk), stdout.truncated, input.onOutput),
-        onStderr: (chunk) => publishCapturedOutput('stderr', stderr.append(chunk), stderr.truncated, input.onOutput),
+        onStdout: (chunk) =>
+          publishCapturedOutput('stdout', stdout.append(chunk), stdout.truncated, input.onOutput),
+        onStderr: (chunk) =>
+          publishCapturedOutput('stderr', stderr.append(chunk), stderr.truncated, input.onOutput),
       },
     );
     if (timedOut) throw timeoutFailure(input.timeoutMs);
@@ -226,16 +255,15 @@ async function runShellCommand(input: {
       truncated: stdout.truncated || stderr.truncated,
     };
   } catch (error) {
-    if (isStableProcessFailure(error) && error.code === 'termination_unconfirmed') throw processFailure(error);
+    if (isStableProcessFailure(error) && error.code === 'termination_unconfirmed')
+      throw processFailure(error);
     if (timedOut) throw timeoutFailure(input.timeoutMs);
     if (input.signal?.aborted) throw cancelledFailure();
     if (error instanceof ToolExecutionFailure) throw error;
     if (isStableProcessFailure(error)) throw processFailure(error);
-    throw new ToolExecutionFailure(
-      'Command process could not be started.',
-      'shell_unavailable',
-      { reason: 'spawn_failed' },
-    );
+    throw new ToolExecutionFailure('Command process could not be started.', 'shell_unavailable', {
+      reason: 'spawn_failed',
+    });
   } finally {
     clearTimeout(timeout);
     input.signal?.removeEventListener('abort', cancel);
@@ -255,37 +283,52 @@ function publishCapturedOutput(
 function redactCommandOutput(value: string): string {
   return value
     .replace(/\b(Authorization\s*:\s*Bearer)\s+[A-Za-z0-9._~+/=-]+/giu, '$1 [REDACTED]')
-    .replace(/\b(api[-_ ]?key|token|password|secret)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/giu, '$1=[REDACTED]');
+    .replace(
+      /\b(api[-_ ]?key|token|password|secret)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/giu,
+      '$1=[REDACTED]',
+    );
 }
 
 const STABLE_PROCESS_FAILURE_CODES = new Set<ToolExecutionErrorCode>([
-  'sandbox_unavailable', 'sandbox_denied', 'shell_unavailable',
-  'tool_cancelled', 'tool_timeout', 'termination_unconfirmed', 'output_limit',
+  'sandbox_unavailable',
+  'sandbox_denied',
+  'shell_unavailable',
+  'tool_cancelled',
+  'tool_timeout',
+  'termination_unconfirmed',
+  'output_limit',
 ]);
 
-function isStableProcessFailure(error: unknown): error is { readonly code: ToolExecutionErrorCode; readonly message: string } {
-  return Boolean(error && typeof error === 'object'
-    && 'code' in error && STABLE_PROCESS_FAILURE_CODES.has((error as { code: ToolExecutionErrorCode }).code)
-    && 'message' in error && typeof (error as { message: unknown }).message === 'string');
+function isStableProcessFailure(
+  error: unknown,
+): error is { readonly code: ToolExecutionErrorCode; readonly message: string } {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      STABLE_PROCESS_FAILURE_CODES.has((error as { code: ToolExecutionErrorCode }).code) &&
+      'message' in error &&
+      typeof (error as { message: unknown }).message === 'string',
+  );
 }
 
-function processFailure(error: { readonly code: ToolExecutionErrorCode; readonly message: string }): ToolExecutionFailure {
+function processFailure(error: {
+  readonly code: ToolExecutionErrorCode;
+  readonly message: string;
+}): ToolExecutionFailure {
   return new ToolExecutionFailure(error.message, error.code, { reason: 'sandbox_process' });
 }
 function timeoutFailure(timeoutMs: number): ToolExecutionFailure {
-  return new ToolExecutionFailure(
-    `Command timed out after ${timeoutMs}ms.`,
-    'tool_timeout',
-    { reason: 'timeout', timeoutMs },
-  );
+  return new ToolExecutionFailure(`Command timed out after ${timeoutMs}ms.`, 'tool_timeout', {
+    reason: 'timeout',
+    timeoutMs,
+  });
 }
 
 function cancelledFailure(): ToolExecutionFailure {
-  return new ToolExecutionFailure(
-    'Command execution was cancelled.',
-    'tool_cancelled',
-    { reason: 'cancelled' },
-  );
+  return new ToolExecutionFailure('Command execution was cancelled.', 'tool_cancelled', {
+    reason: 'cancelled',
+  });
 }
 
 class BoundedByteCapture {
@@ -323,11 +366,16 @@ function isCompleteUtf8Prefix(content: Buffer): boolean {
   let start = 0;
   while (start < content.byteLength) {
     const leading = content[start];
-    const expectedLength = leading < 0x80 ? 1
-      : (leading & 0xE0) === 0xC0 ? 2
-        : (leading & 0xF0) === 0xE0 ? 3
-          : (leading & 0xF8) === 0xF0 ? 4
-            : 1;
+    const expectedLength =
+      leading < 0x80
+        ? 1
+        : (leading & 0xe0) === 0xc0
+          ? 2
+          : (leading & 0xf0) === 0xe0
+            ? 3
+            : (leading & 0xf8) === 0xf0
+              ? 4
+              : 1;
     if (content.byteLength - start < expectedLength) return false;
     start += expectedLength;
   }

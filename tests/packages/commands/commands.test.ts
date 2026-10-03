@@ -3,10 +3,7 @@ import { createModels } from '@megumi/ai';
  * Protects explicit command handling and Input Interpretation integration.
  */
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createCommands,
-  createCommandInputInterpreter,
-} from '@megumi/agent-runtime/runs/commands/index';
+import { createCommands, createCommandInputInterpreter } from '@megumi/application/coding/input/execute-command';
 
 const client = createModels();
 const compactionThresholdRatio = 0.8;

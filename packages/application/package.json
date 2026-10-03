@@ -10,7 +10,6 @@
   "dependencies": {
     "@megumi/ai": "0.1.0",
     "@megumi/agent": "0.1.0",
-    "@megumi/agent-runtime": "0.1.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-orm": "^0.45.2",
     "zod": "^3.25.76",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnyEvent } from '@megumi/agent-runtime/events';
+import type { AnyEvent } from '@megumi/application/coding/session-events';
 import {
   createRuntimeTimeline,
   reduceRuntimeTimeline as reduceDesktopRuntimeTimeline,

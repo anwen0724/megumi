@@ -24,8 +24,9 @@ it('records the model request and response under the completed conversation trac
     if (traces.status !== 'ok') throw new Error('Trace query failed.');
     const detail = await app.runtime.observability.getTrace({ traceId: traces.traces[0].traceId });
     expect(detail).toMatchObject({ status: 'found', trace: { contents: expect.arrayContaining([
+      expect.objectContaining({ kind: 'input.received' }), expect.objectContaining({ kind: 'input.processed' }),
       expect.objectContaining({ kind: 'model.request' }), expect.objectContaining({ kind: 'model.response' }),
-    ]) } });
+    ]), spans: expect.arrayContaining([expect.objectContaining({ name: 'session.message.commit' })]) } });
   } finally {
     subscription.unsubscribe();
     await app.cleanup();

@@ -4,7 +4,6 @@ import type { AliasOptions } from 'vite';
 
 export const megumiPackageAliases: AliasOptions = [
   { find: '@megumi/ai', replacement: path.resolve(__dirname, 'packages/ai/src') },
-  { find: '@megumi/agent-runtime', replacement: path.resolve(__dirname, 'packages/agent-runtime/src') },
   { find: '@megumi/agent', replacement: path.resolve(__dirname, 'packages/agent/src') },
   { find: '@megumi/application', replacement: path.resolve(__dirname, 'packages/application/src') },
 ];

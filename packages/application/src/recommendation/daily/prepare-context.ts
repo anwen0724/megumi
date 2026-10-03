@@ -1,18 +1,30 @@
 /* Builds the daily recommendation prompt from its frozen product snapshot. */
-import { buildSystemPrompt, escapeXmlText, loadSystemInstructionDocuments, type AgentContext } from '@megumi/agent';
+import {
+  buildSystemPrompt,
+  escapeXmlText,
+  loadSystemInstructionDocuments,
+  type AgentContext,
+} from '@megumi/agent';
 import { contextPreference } from '../preferences/prepare-context';
 import type { CandidateWorksetSnapshot } from './candidate-workset';
 
 /** Projects the frozen business snapshot for prompt construction and diagnostics. */
 export function recommendationFacts(attempt: CandidateWorksetSnapshot) {
   const preferenceSnapshots = attempt.preferences;
-  const preferences = new Map(preferenceSnapshots.flatMap(snapshot => snapshot.preferenceSet.interestId
-    ? [[snapshot.preferenceSet.interestId, contextPreference(snapshot)] as const] : []));
+  const preferences = new Map(
+    preferenceSnapshots.flatMap((snapshot) =>
+      snapshot.preferenceSet.interestId
+        ? [[snapshot.preferenceSet.interestId, contextPreference(snapshot)] as const]
+        : [],
+    ),
+  );
   const interests = attempt.interests.map((interest) => ({
     interestId: interest.id,
     description: interest.description,
     status: interest.status,
-    ...(interest.descriptionUserEditedAt ? { descriptionUserEditedAt: interest.descriptionUserEditedAt } : {}),
+    ...(interest.descriptionUserEditedAt
+      ? { descriptionUserEditedAt: interest.descriptionUserEditedAt }
+      : {}),
     interestRevision: interest.revision,
     ...(preferences.has(interest.id) ? { preference: preferences.get(interest.id)! } : {}),
   }));
@@ -68,27 +80,47 @@ export function recommendationFacts(attempt: CandidateWorksetSnapshot) {
 /** Supplies the initial workset and all subsequent replies and tool results. */
 export function createRecommendationContext(options: {
   readonly snapshot: CandidateWorksetSnapshot;
-  readonly instructionDocuments: readonly { instructionId: string; sourcePath: string; }[];
+  readonly instructionDocuments: readonly { instructionId: string; sourcePath: string }[];
 }): AgentContext {
   const facts = recommendationFacts(options.snapshot);
   const material = {
-    execution: facts.execution, interests: facts.interests,
-    preferences: facts.preferences, candidates: facts.candidates,
-    recent_recommendations: facts.recentRecommendations.slice(0, 50)
+    execution: facts.execution,
+    interests: facts.interests,
+    preferences: facts.preferences,
+    candidates: facts.candidates,
+    recent_recommendations: facts.recentRecommendations.slice(0, 50),
   };
   const content = [
-    'Execute the following Recommendation task.', '', '<recommendation_material>',
+    'Execute the following Recommendation task.',
+    '',
+    '<recommendation_material>',
     `  <local_date>${escapeXmlText(options.snapshot.localDate)}</local_date>`,
-    ...Object.entries(material).map(([key, value]) => `  <${key}>${escapeXmlText(JSON.stringify(value))}</${key}>`),
+    ...Object.entries(material).map(
+      ([key, value]) => `  <${key}>${escapeXmlText(JSON.stringify(value))}</${key}>`,
+    ),
     '</recommendation_material>',
   ].join('\n');
   return {
     async prepare({ runMessages, tools, signal }) {
-      const documents = await loadSystemInstructionDocuments({ documents: options.instructionDocuments, signal });
+      const documents = await loadSystemInstructionDocuments({
+        documents: options.instructionDocuments,
+        signal,
+      });
       signal.throwIfAborted();
       return {
-        systemPrompt: buildSystemPrompt({ systemInstructions: documents, tools, includeAvailableTools: false }),
-        messages: [{ role: 'user', content, timestamp: runMessages[0]?.timestamp ?? Date.parse(options.snapshot.snapshotAt) }, ...runMessages.slice(1)],
+        systemPrompt: buildSystemPrompt({
+          systemInstructions: documents,
+          tools,
+          includeAvailableTools: false,
+        }),
+        messages: [
+          {
+            role: 'user',
+            content,
+            timestamp: runMessages[0]?.timestamp ?? Date.parse(options.snapshot.snapshotAt),
+          },
+          ...runMessages.slice(1),
+        ],
         tools,
       };
     },
@@ -124,7 +156,11 @@ function candidateSummary(candidate: {
     contentSummary: candidate.contentSummary,
     contentTruncated: candidate.contentTruncated,
     evidenceCompleteness: candidate.contentExcerpt
-      ? candidate.contentTruncated ? 'partial' as const : 'full' as const
-      : candidate.description ? 'partial' as const : 'metadata_only' as const,
+      ? candidate.contentTruncated
+        ? ('partial' as const)
+        : ('full' as const)
+      : candidate.description
+        ? ('partial' as const)
+        : ('metadata_only' as const),
   };
 }
