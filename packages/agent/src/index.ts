@@ -26,8 +26,12 @@ export { movePathTool } from './tools/builtin/files/move-path';
 export { deletePathTool } from './tools/builtin/files/delete-path';
 export { createRunCommandTool } from './tools/builtin/run-command';
 export { updatePlanTool } from './tools/builtin/update-plan';
-export { createSearchWebTool, createWebSearch, createFallbackWebSearch } from './tools/builtin/web/search-web';
+export { createSearchWebTool, createWebSearch, createFallbackWebSearch, createBingRssWebSearch } from './tools/builtin/web/search-web';
 export { createFetchPageTool, createWebFetch } from './tools/builtin/web/fetch-page';
 export { createSandbox } from './sandbox/sandbox-scope';
 export type { AgentPermissionRules } from './permissions/authorize-tool';
 export type { AgentDiagnostics } from './diagnostics';
+
+export type { WebSearch } from './tools/builtin/web/search-web';
+export type { WebFetch } from './tools/builtin/web/fetch-page';
+export { ToolExecutionFailure } from './tools/tool-result';
