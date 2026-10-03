@@ -343,7 +343,7 @@ export function registerSessionHandlers(
         >,
         event,
       ) => {
-        const result = await service.host.session.cancelUserInput(request.payload);
+        const result = await service.host.session.cancelUserInput({ requestId: request.payload.requestId });
         return result.payload;
       },
       mapError: mapSessionIpcError,

@@ -13,7 +13,7 @@ export function resolveProductSystemSkillsPath(input: {
 }): string {
   return input.isPackaged
     ? path.resolve(input.resourcesPath, PRODUCT_SYSTEM_SKILLS_RESOURCE_PATH)
-    : path.resolve(input.cwd, 'packages/agent-runtime/resources/skills');
+    : path.resolve(input.cwd, 'packages/application/resources/skills');
 }
 
 export function resolveProductInstructionsPath(input: {
@@ -23,13 +23,13 @@ export function resolveProductInstructionsPath(input: {
 }): string {
   return input.isPackaged
     ? path.resolve(input.resourcesPath, PRODUCT_INSTRUCTIONS_RESOURCE_PATH)
-    : path.resolve(input.cwd, 'packages/agent-runtime/resources/instructions');
+    : path.resolve(input.cwd, 'packages/application/resources/instructions');
 }
 
 /** Lists the required runtime resources; the build fails if any source is absent. */
 export function getProductPackagingResources(cwd: string): Array<{ source: string; target: string }> {
-  const systemSkillsPath = path.resolve(cwd, 'packages/agent-runtime/resources/skills');
-  const instructionsPath = path.resolve(cwd, 'packages/agent-runtime/resources/instructions');
+  const systemSkillsPath = path.resolve(cwd, 'packages/application/resources/skills');
+  const instructionsPath = path.resolve(cwd, 'packages/application/resources/instructions');
   const voiceManifestPath = path.resolve(cwd, 'packages/application/resources/voice/model-manifest.json');
   const vadResourcePath = path.resolve(cwd, 'packages/application/resources/voice/vad');
   return [

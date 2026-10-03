@@ -497,6 +497,7 @@ export function toSessionDto(session: Session): SessionDto {
 
 export function toRunDto(execution: CodingRunSnapshot): RunDto {
   return {
+    requestId: execution.requestId,
     executionId: execution.runId,
     sessionId: execution.sessionId,
     status: execution.status,

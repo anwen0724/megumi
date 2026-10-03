@@ -189,7 +189,7 @@ export const SessionMessageSendPayloadSchema = z
   });
 
 export const SessionMessageCancelPayloadSchema = z
-  .object({ executionId: z.string().min(1) })
+  .object({ requestId: z.string().min(1) })
   .strict();
 
 export const SessionBranchDraftCreatePayloadSchema = z
@@ -320,6 +320,7 @@ export const SessionDtoSchema = z
 
 export const RunDtoSchema = z
   .object({
+    requestId: z.string().min(1),
     executionId: z.string().min(1),
     sessionId: z.string().min(1),
     status: z.enum(['running', 'waiting', 'cancelling', 'completed', 'failed', 'cancelled']),

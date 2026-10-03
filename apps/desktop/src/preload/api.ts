@@ -6,7 +6,7 @@ import type {
   CredentialValue,
   UpdateCredentialRequest,
 } from '@megumi/application/settings/settings-contracts';
-import type { ModelCatalogResult } from '@megumi/agent-runtime/runs/model-resolution';
+import type { ModelCatalogResult } from '@megumi/application/contracts';
 /*
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */

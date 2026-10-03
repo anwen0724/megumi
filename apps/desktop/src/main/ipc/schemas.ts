@@ -56,6 +56,7 @@ export const SessionMessageSendRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.sessionMessageSend,
   host.SessionMessageSendPayloadSchema,
 );
+/** The payload identifies the original submission; the envelope identifies this cancel command. */
 export const SessionMessageCancelRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.sessionMessageCancel,
   host.SessionMessageCancelPayloadSchema,

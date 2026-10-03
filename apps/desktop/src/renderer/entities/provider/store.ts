@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import type {
   ConfiguredProvider,
   ConfiguredModel,
-} from '@megumi/agent-runtime/runs/model-resolution';
+} from '@megumi/application/contracts';
 import type {
   SettingsSnapshot,
   SettingsPatch,

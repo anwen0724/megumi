@@ -7,7 +7,6 @@ import type { SessionMessageSendPayload } from '@megumi/desktop/main/ipc/schemas
 import type { SessionDto } from '@megumi/application/contracts';
 import { useChatUiStore } from '../../../entities/chat-ui/store';
 import { useProjectStore } from '../../../entities/project/store';
-import { useRunStore } from '../../../entities/run/store';
 import { useSessionStore } from '../../../entities/session/store';
 import { useSessionTimelineStore } from '../../session-timeline/session-timeline-store';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc/runtime-request';
@@ -148,8 +147,11 @@ export function useSessionActions() {
   const [branchDraft, setBranchDraft] = useState<BranchDraftState | null>(null);
   const branchDraftRef = useRef<BranchDraftState | null>(null);
   const branchDraftCreateSequenceRef = useRef(0);
-  const submittedExecutionIdRef = useRef<string | null>(null);
-  const submittedSessionIdRef = useRef<string | null>(null);
+  const preparingRequestRef = useRef<{
+    requestId: string;
+    sessionId: string | null;
+    projectId: string;
+  } | null>(null);
   const lastPayloadRef = useRef<ComposerSubmitPayload | null>(null);
 
   const updateBranchDraft = useCallback((draft: BranchDraftState | null) => {
@@ -205,7 +207,6 @@ export function useSessionActions() {
   const sendSessionMessage = useCallback(async (payload: ComposerSubmitPayload): Promise<boolean> => {
     lastPayloadRef.current = payload;
     const target = resolveSessionMessageTarget();
-    submittedSessionIdRef.current = target?.sessionId ?? null;
 
     if (!target) {
       failSessionMessageSend('Select a project before sending a message.');
@@ -235,7 +236,7 @@ export function useSessionActions() {
       ),
       { requestId },
     );
-    submittedExecutionIdRef.current = null;
+    preparingRequestRef.current = { requestId, sessionId: target.sessionId ?? null, projectId: target.projectId };
 
     const state = useChatUiStore.getState();
     state.setAgentStatus('sending', target.sessionId ?? null);
@@ -249,6 +250,8 @@ export function useSessionActions() {
         target.sessionId ?? null,
       );
       return false;
+    } finally {
+      if (preparingRequestRef.current?.requestId === requestId) preparingRequestRef.current = null;
     }
 
     if (!result.ok) {
@@ -268,17 +271,14 @@ export function useSessionActions() {
       failSessionMessageSend('The product did not return a session for this request.');
       return false;
     }
-    submittedSessionIdRef.current = runSessionId;
     useChatUiStore.getState().setActiveSession(runSessionId);
     useChatUiStore.getState().setLastError(null, runSessionId);
 
     if (result.data.type !== 'agent_run') {
-      submittedExecutionIdRef.current = null;
       useChatUiStore.getState().setAgentStatus('idle', runSessionId);
       return true;
     }
 
-    submittedExecutionIdRef.current = result.data.run.executionId;
     useChatUiStore.getState().setAgentStatus('sending', runSessionId);
     if (result.data.branchCommit) {
       useSessionTimelineStore.getState().addCommittedBranch(
@@ -307,21 +307,28 @@ export function useSessionActions() {
   }, [sendSessionMessage]);
 
   const cancelSessionMessage = useCallback(async () => {
-    const runState = useRunStore.getState();
-    const executionId = submittedExecutionIdRef.current ?? runState.activeExecutionId;
-    if (!executionId) {
-      showToast({
-        tone: 'warning',
-        title: rendererI18n.t('chat:notifications.nothingToStop.title'),
-        message: rendererI18n.t('chat:notifications.nothingToStop.message'),
-      });
-      return;
-    }
-
     try {
+      const target = resolveSessionMessageTarget();
+      const preparing = preparingRequestRef.current;
+      let requestId = preparing && target && preparing.projectId === target.projectId
+        && preparing.sessionId === (target.sessionId ?? null) ? preparing.requestId : undefined;
+      if (!requestId && target?.sessionId) {
+        const current = await window.megumi.session.read(createRendererRuntimeIpcRequest(
+          IPC_CHANNELS.session.sessionRead, { sessionId: target.sessionId },
+        ));
+        if (!current.ok) throw new Error(current.data.message);
+        if (current.data.status === 'failed') throw new Error(current.data.failure.message);
+        if (current.data.status === 'ok') requestId = current.data.activeRun?.requestId;
+      }
+      if (!requestId) {
+        showToast({ tone: 'warning', title: rendererI18n.t('chat:notifications.nothingToStop.title'),
+          message: rendererI18n.t('chat:notifications.nothingToStop.message') });
+        return;
+      }
+
       const result = await window.megumi.session.message.cancel(
         createRendererRuntimeIpcRequest(IPC_CHANNELS.session.sessionMessageCancel, {
-          executionId,
+          requestId,
         }),
       );
 
@@ -336,13 +343,9 @@ export function useSessionActions() {
 
       if (result.data.status !== 'cancellation_requested') {
         showToast({
-          tone: result.data.status === 'failed' ? 'error' : 'warning',
-          title: rendererI18n.t(result.data.status === 'failed'
-            ? 'chat:notifications.stopFailed.title'
-            : 'chat:notifications.stopDidNotApply.title'),
-          message: result.data.status === 'failed'
-            ? rendererI18n.t('chat:notifications.stopFailed.message')
-            : rendererI18n.t('chat:notifications.stopDidNotApply.message'),
+          tone: 'warning',
+          title: rendererI18n.t('chat:notifications.stopDidNotApply.title'),
+          message: rendererI18n.t('chat:notifications.stopDidNotApply.message'),
         });
         return;
       }

@@ -6,7 +6,7 @@ import type {
   EmbeddedBrowserProfileId,
   EmbeddedBrowserSnapshot,
   EmbeddedBrowserSnapshotResult,
-} from '@megumi/application/discovery/index';
+} from '@megumi/application/recommendation/sources/browser-access';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_SETTLE_DELAY_MS = 1_500;

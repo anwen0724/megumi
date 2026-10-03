@@ -7,7 +7,7 @@ import {
   PERMISSION_RULE_CATALOG,
   PermissionRuleSchema,
   type PermissionRule,
-} from '@megumi/agent-runtime/permissions';
+} from '@megumi/agent/permissions/permission-rules';
 import type { SettingsSnapshot } from '@megumi/application/settings/settings-contracts';
 import { useProjectStore } from '../../entities/project';
 import { useSessionStore } from '../../entities/session';

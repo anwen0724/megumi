@@ -120,6 +120,51 @@ describe('useChatPageController', () => {
     vi.useRealTimers();
   });
 
+  it('sends cancellation for the admitted request while message preparation is still pending', async () => {
+    let release!: (value: Awaited<ReturnType<typeof window.megumi.session.message.send>>) => void;
+    const pending = new Promise<Awaited<ReturnType<typeof window.megumi.session.message.send>>>(resolve => { release = resolve; });
+    vi.mocked(window.megumi.session.message.send).mockReturnValue(pending);
+    vi.mocked(window.megumi.session.message.cancel).mockResolvedValue({
+      ok: true, data: { status: 'cancellation_requested', requestId: 'pending' },
+      meta: { requestId: 'cancel:1', channel: IPC_CHANNELS.session.sessionMessageCancel, handledAt: createdAt },
+    });
+    const { result } = renderHook(() => useChatPageController());
+    let sending!: Promise<boolean>;
+    act(() => {
+      sending = result.current.handleSubmit({ message: 'Read the attached image.',
+        providerId: 'provider', model: 'model', permissionMode: 'ask' });
+    });
+    const request = vi.mocked(window.megumi.session.message.send).mock.calls[0][0];
+    try {
+      await act(async () => { result.current.handleStop(); });
+      expect(window.megumi.session.message.cancel).toHaveBeenCalledWith(expect.objectContaining({
+        payload: { requestId: request.requestId },
+      }));
+    } finally {
+      await act(async () => {
+        release({ ok: true, data: { type: 'error', requestId: request.requestId, message: 'Cancelled.' },
+          meta: { requestId: request.requestId, channel: IPC_CHANNELS.session.sessionMessageSend, handledAt: createdAt } });
+        await sending;
+      });
+    }
+  });
+
+  it('cancels the active request returned by a reopened session', async () => {
+    Object.assign(window.megumi.session, { read: vi.fn().mockResolvedValue({
+      ok: true, data: { status: 'ok', activeRun: { executionId: 'run:existing', requestId: 'request:existing',
+        sessionId: 'session-1', status: 'waiting', createdAt } },
+    }) });
+    vi.mocked(window.megumi.session.message.cancel).mockResolvedValue({
+      ok: true, data: { status: 'cancellation_requested', requestId: 'request:existing' },
+      meta: { requestId: 'cancel:existing', channel: IPC_CHANNELS.session.sessionMessageCancel, handledAt: createdAt },
+    });
+    const { result } = renderHook(() => useChatPageController());
+    await act(async () => { result.current.handleStop(); });
+    expect(window.megumi.session.message.cancel).toHaveBeenCalledWith(expect.objectContaining({
+      payload: { requestId: 'request:existing' },
+    }));
+  });
+
   it('shows a top toast when approval resume fails', async () => {
     const { result } = renderHook(() => useChatPageController());
 

@@ -301,7 +301,7 @@ function composeCapabilitiesWithDatabase(
   const models = createApplicationModels({ settingsForWorkspace, apiImplementations: options.modelStreams });
   const ai = models.ai;
   const instructionRoot = options.instructionContentRoot
-    ?? path.resolve(process.cwd(), 'packages/agent-runtime/resources/instructions');
+    ?? path.resolve(process.cwd(), 'packages/application/resources/instructions');
   const documents = (profile: string) => ['common', profile].map(name => ({
     instructionId: `megumi.${name}`, sourcePath: path.join(instructionRoot, `${name}.md`),
   }));

@@ -1,6 +1,6 @@
 /* Exposes the runtime model catalog for global settings or an existing workspace. */
 import { z } from 'zod';
-import { ModelCatalogResultSchema } from '@megumi/agent-runtime/runs/model-resolution';
+import { ModelCatalogResultSchema } from '@megumi/application/contracts';
 import type { ApplicationOperations } from '@megumi/application/contracts';
 import type { DesktopIpcMain } from '../../adapters/electron-ipc-main-adapter';
 import { createIpcRequestHandler } from '../create-request-handler';
