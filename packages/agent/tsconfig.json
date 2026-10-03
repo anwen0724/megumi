@@ -6,18 +6,6 @@
     "outDir": "./dist/types",
     "tsBuildInfoFile": "./dist/types/.tsbuildinfo"
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "references": [
-    {
-      "path": "../ai"
-    },
-    {
-      "path": "../agent"
-    },
-    {
-      "path": "../agent-runtime"
-    }
-  ]
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../ai" }]
 }

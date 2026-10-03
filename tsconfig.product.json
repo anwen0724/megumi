@@ -5,6 +5,7 @@
   },
   "include": [
     "apps/**/*",
+    "packages/agent/src/**/*",
     "packages/agent-runtime/src/**/*",
     "packages/application/src/**/*"
   ],
