@@ -19,7 +19,7 @@ export function fixture(options: Omit<CreateAgentRequest, 'ai'> = {}) {
       providerRequestMaxRetries: 0, providerRequestMaxRetryDelayMs: 0,
     },
   };
-  return { agent: createAgent({ ai, ...options }), config, provider };
+  return { ai, agent: createAgent({ ai, ...options }), config, provider };
 }
 
 

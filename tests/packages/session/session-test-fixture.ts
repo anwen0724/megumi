@@ -4,9 +4,10 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createSessionCatalog, createSessionHistory } from '@megumi/agent-runtime/sessions/index';
-import { createSessionStore } from '@megumi/application/storage/session-store';
-import { createSessionAttachmentFileStore } from '@megumi/application/storage/session-attachment-store';
+import { createSessionCatalog } from '@megumi/application/coding/sessions/session-catalog';
+import { createSessionHistory } from '@megumi/application/coding/sessions/session-history';
+import { createSessionStore } from '@megumi/application/coding/sessions/session-storage';
+import { createSessionAttachmentFileStore } from '@megumi/application/coding/sessions/session-storage';
 import { createWorkspaceCatalog } from '@megumi/application/workspace/index';
 import { createWorkspaceStore } from '@megumi/application/workspace/workspace-store';
 

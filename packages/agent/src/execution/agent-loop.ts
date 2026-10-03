@@ -32,8 +32,12 @@ export async function runAgentLoop(run: RunExecution): Promise<'model_response' 
       () => prepareContext(run), current => compactContext(run, current, 'overflow'));
     const { message } = called;
     await run.record(message, messageId);
-    run.signal.throwIfAborted();
     const calls = message.content.filter(block => block.type === 'toolCall');
+    if (run.signal.aborted) {
+      // Saved calls must receive cancelled results even though none may start.
+      await callTools(run, calls, called.context.tools);
+      run.signal.throwIfAborted();
+    }
     if (!calls.length) return 'model_response';
     toolRounds += 1;
     toolCalls += calls.length;

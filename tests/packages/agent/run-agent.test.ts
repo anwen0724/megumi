@@ -7,6 +7,32 @@ import { fauxAssistantMessage, fauxToolCall } from '@megumi/ai';
 import { type SaveMessageRequest, type AgentTool } from '@megumi/agent';
 import { fixture, deferred } from './agent-fixture';
 
+it('records cancelled results for saved calls when cancellation arrives during the assistant save', async () => {
+  const { agent, config, provider } = fixture();
+  provider.setResponses([fauxAssistantMessage(fauxToolCall('write', {}, { id: 'write-1' }), { stopReason: 'toolUse' })]);
+  const saving = deferred();
+  const release = deferred();
+  const saved: SaveMessageRequest[] = [];
+  let changed = false;
+  const run = agent.startAgent({
+    config: { ...config, tools: [{ name: 'write', description: 'Write', parameters: { type: 'object' },
+      operations: () => [], async execute() { changed = true; return { outputKind: 'text', content: 'Written' }; } }] },
+    input: { role: 'user', content: 'Write', timestamp: 1 },
+    context: { async prepare({ runMessages, tools }) { return { systemPrompt: '', messages: runMessages, tools }; } },
+    async saveMessage(request) {
+      saved.push(request);
+      if (request.message.role === 'assistant') { saving.resolve(); await release.promise; }
+    },
+  });
+  await saving.promise;
+  run.cancel();
+  release.resolve();
+  expect(await run.completion).toMatchObject({ status: 'cancelled' });
+  expect(saved.map(item => item.message.role)).toEqual(['user', 'assistant', 'toolResult']);
+  expect(saved[2].message).toMatchObject({ toolCallId: 'write-1', isError: true });
+  expect(changed).toBe(false);
+});
+
 it('fails before context preparation when saving the input fails', async () => {
   const { agent, config } = fixture();
   let prepared = false;
