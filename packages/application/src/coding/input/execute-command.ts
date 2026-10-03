@@ -1,5 +1,5 @@
 /* Owns Coding command discovery, suggestions and execution. */
-import type { Skills } from '../../skill-operations';
+import type { Skills } from '../../skills/manage-skills';
 import type { Api, Model, Models } from '@megumi/ai';
 import type { CommandInputSuggestion, InputSuggestionGroup, InputSuggestionQueryResult, SkillInputSuggestion } from '../session-contracts';
 import type { InputContext, InputInterpreter, InputOperationOptions, UserInput } from './parse-message';

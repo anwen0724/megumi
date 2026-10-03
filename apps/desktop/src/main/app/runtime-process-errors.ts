@@ -1,5 +1,5 @@
 /* Registers process-level failures against the Product runtime logger. */
-import { redactHostRuntimeValue } from '@megumi/application/contracts';
+import { redactRuntimeDetails } from '@megumi/application/observability/redaction';
 import { normalizeRuntimeIpcError } from '../ipc/errors';
 import type { DesktopRuntimeLogger as ApplicationLogger } from '../runtime-logger';
 
@@ -33,7 +33,7 @@ export function registerRuntimeProcessErrorHandlers(
 }
 
 function createDetails(error: unknown): Record<string, unknown> {
-  return redactHostRuntimeValue({
+  return redactRuntimeDetails({
     error: normalizeRuntimeIpcError(error, 'Megumi runtime encountered an unexpected error.'),
-  });
+  }) ?? {};
 }

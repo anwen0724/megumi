@@ -1,9 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
 /* Protects idempotent startup and disposal on a real composed Application. */
 // @vitest-environment node
-import { describe, expect, it, vi } from 'vitest';
-import { bindApplicationLifecycle } from '@megumi/application/application';
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { composeTestApplication } from './compose-test-application';
 
 describe('Application lifecycle', () => {
@@ -33,21 +32,15 @@ describe('Application lifecycle', () => {
   });
   it('blocks background startup on invalid settings while retaining the settings host', async () => {
     const application = composeTestApplication();
-    const start = vi.fn(async () => undefined);
-    fs.writeFileSync(path.join(application.home, 'settings.json'), '{ invalid');
-    const runtime = bindApplicationLifecycle({
-      operations: application.runtime,
-      logger: application.runtime.logger,
-      start,
-      subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
-      subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
-      stop: async () => undefined,
-      dispose: async () => undefined,
-    });
+    const settingsPath = path.join(application.home, 'settings.json');
+    const validSettings = fs.readFileSync(settingsPath, 'utf8');
+    fs.writeFileSync(settingsPath, '{ invalid');
     try {
-      await expect(runtime.start()).rejects.toThrow('Settings');
-      expect(start).not.toHaveBeenCalled();
-      expect(runtime.settings.readSettings().status).toBe('rejected');
+      await expect(application.runtime.start()).rejects.toThrow();
+      expect(application.runtime.settings.readSettings().status).toBe('rejected');
+      fs.writeFileSync(settingsPath, validSettings);
+      expect(await application.runtime.discovery.getHome({ mode: 'timeline' }))
+        .not.toHaveProperty('nextScheduledAt');
     } finally {
       await application.cleanup();
     }
@@ -63,25 +56,23 @@ describe('Application lifecycle', () => {
     await application.cleanup();
   });
 
-  it('uses the first background trigger mode for the complete runtime lifetime', async () => {
+  it.each([
+    ['manual', 'automatic'],
+    ['automatic', 'manual'],
+  ] as const)('retains the first trigger mode %s when later started with %s', async (firstMode, laterMode) => {
     const application = composeTestApplication();
-    const start = vi.fn(async () => undefined);
-    const runtime = bindApplicationLifecycle({
-      operations: application.runtime,
-      logger: application.runtime.logger,
-      start,
-      subscribeRuntimeEvents: application.runtime.subscribeRuntimeEvents,
-      subscribeSpeechOutputEvents: application.runtime.subscribeSpeechOutputEvents,
-      stop: async () => undefined,
-      dispose: async () => undefined,
-    });
-
-    const first = runtime.start({ backgroundTriggers: 'manual' });
-    expect(runtime.start({ backgroundTriggers: 'automatic' })).toBe(first);
-    await first;
-
-    expect(start).toHaveBeenCalledOnce();
-    expect(start).toHaveBeenCalledWith({ backgroundTriggers: 'manual' });
-    await application.cleanup();
+    try {
+      const first = application.runtime.start({ backgroundTriggers: firstMode });
+      expect(application.runtime.start({ backgroundTriggers: laterMode })).toBe(first);
+      await first;
+      const home = await application.runtime.discovery.getHome({ mode: 'timeline' });
+      if (firstMode === 'automatic') {
+        expect(home.nextScheduledAt).toEqual(expect.any(String));
+      } else {
+        expect(home.nextScheduledAt).toBeUndefined();
+      }
+    } finally {
+      await application.cleanup();
+    }
   });
 });

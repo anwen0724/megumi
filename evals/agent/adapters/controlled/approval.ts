@@ -1,6 +1,6 @@
 /* Drives the real approval Host from a deterministic Controlled decision. */
 import type { Application } from '@megumi/application/index';
-import type { EventSubscription } from '@megumi/application/application';
+import type { EventSubscription } from '@megumi/application/contracts';
 import type { CaseInitialState } from '../../run/initial-state';
 
 export function controlledPermissionSettings(initialState: Pick<CaseInitialState, 'approvalDecisions'>): {

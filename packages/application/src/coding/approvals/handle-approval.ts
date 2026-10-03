@@ -1,10 +1,12 @@
-/* Connects Agent approval waits to product events and user decisions. */
+/*
+ * Connects Agent approval waits to Coding session events and user decisions.
+ */
 import type { ApprovalDecision, ApprovalRequest } from '@megumi/agent';
 import type { JsonObject } from '@megumi/ai';
-import type { EventBus } from './application';
-import type { ApprovalHost, ApprovalResolvedPayload } from './approval-contracts';
-import type { Session } from './coding/sessions/session-catalog';
-import type { CodingRunSnapshot } from './coding/submit-message';
+import type { EventBus } from '../events/event-bus';
+import type { ApprovalHost, ApprovalResolvedPayload } from './contracts';
+import type { Session } from '../sessions/session-catalog';
+import type { CodingRunSnapshot } from '../submit-message';
 
 export interface ApprovalOperations extends ApprovalHost {
   awaitApproval(request: ApprovalRequest, session: Session): Promise<ApprovalDecision>;

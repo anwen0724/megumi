@@ -1,4 +1,6 @@
-/* Composes AI, Agent, Coding and Recommendation with application settings and platform services. */
+/*
+ * Creates and connects AI, Agent, Coding and Recommendation with application settings and platform services.
+ */
 import {
   recordConfiguredSessionGrant,
   resolveConfiguredPermissionRules,
@@ -17,7 +19,6 @@ import {
   createModels,
   type Api,
   type Model,
-  type Provider,
   type ProviderStreams,
 } from '@megumi/ai';
 import { anthropicMessagesApi } from '@megumi/ai/api/anthropic-messages.lazy';
@@ -28,15 +29,15 @@ import { builtinProviders } from '@megumi/ai/providers/all';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { createEventBus, type ApplicationLogger, type EventBus } from './application';
+import { createEventBus, type EventBus } from './coding/events/event-bus';
+import type { ApplicationLogger, ApplicationOperations } from './contracts';
 import {
   PRODUCT_EXECUTION_POLICY,
   PRODUCT_RECENT_EVENT_BUFFER,
-  PRODUCT_SHUTDOWN_TIMEOUT_MS,
   PRODUCT_TERMINAL_RETENTION_MS,
   resolveModelVisibleOperatingSystem,
 } from './application-policy';
-import { createApprovalOperations, type ApprovalOperations } from './approval-operations';
+import { createApprovalOperations, type ApprovalOperations } from './coding/approvals/handle-approval';
 import { compactCodingHistory } from './coding/compact-history';
 import {
   createCommandInputInterpreter,
@@ -64,14 +65,9 @@ import {
 } from './coding/sessions/session-storage';
 import { createCoding, type Coding } from './coding/submit-message';
 import type {
-  ConfiguredModel,
-  ConfiguredProvider,
-  ModelCatalogResult,
-  ModelParameters,
   ModelSelection,
   ModelSettingsAccess,
   ProductWorkspaceFileSystem,
-  ProviderConfiguration,
 } from './contracts';
 import {
   captureRuntimeLogData,
@@ -91,8 +87,9 @@ import {
   createDiscoverySourceRegistry,
   type SourceRegistry,
 } from './recommendation/sources/source-catalog';
+import { readModelCatalog, resolveModel as resolveConfiguredModel } from './settings/resolve-model';
 import { createSettings, type Settings } from './settings/settings-store';
-import { createSkills, type Skills } from './skill-operations';
+import { createSkills, type Skills } from './skills/manage-skills';
 import {
   initializeMegumiHomeSync,
   type InitializeMegumiHomeSyncOptions,
@@ -113,7 +110,7 @@ import {
 } from './workspace/index';
 import { createWorkspaceStore } from './workspace/workspace-store';
 
-export interface ProductCapabilitiesOptions {
+export interface ModuleOptions {
   /** Supplies a previously prepared result; callers must bind it to unchanged business state. */
   consumePreparedPreferences?: () => PreparePreferencesResult | undefined;
   /** Supplies a read-only projection at the recommendation input boundary. */
@@ -148,7 +145,7 @@ export interface ProductCapabilitiesOptions {
   instructionContentRoot?: string;
 }
 
-export interface ProductCapabilities {
+export interface ApplicationModules {
   readonly homePaths: MegumiHomePaths;
   readonly observability: ComposedObservability;
   readonly logger: ApplicationLogger;
@@ -168,15 +165,7 @@ export interface ProductCapabilities {
   readonly skills: Skills;
   readonly input: ReturnType<typeof createInputProcessor<CommandTerminalResult>>;
   readonly commands: Commands;
-  readonly tools: {
-    listAvailableTools(request?: { includeDisabled?: boolean }): {
-      tools: readonly {
-        identity: { sourceId: string; namespace: string; sourceToolName: string };
-        registeredToolName: string;
-        definition: { name: string };
-      }[];
-    };
-  };
+  readonly tools: ApplicationOperations['tools'];
   readonly branches: ReturnType<typeof createSessionBranchDrafts>;
   readonly coding: Coding;
   readonly approval: ApprovalOperations;
@@ -185,9 +174,9 @@ export interface ProductCapabilities {
 }
 
 /** Composes the capability instances once per Host process. */
-export function composeProductCapabilities(
-  options: ProductCapabilitiesOptions,
-): ProductCapabilities {
+export function composeModules(
+  options: ModuleOptions,
+): ApplicationModules {
   const homePaths = initializeMegumiHomeSync(options.home);
   const observabilityRoot = path.join(homePaths.logsPath, 'observability');
   const observability = composeObservability({
@@ -231,12 +220,12 @@ export function composeProductCapabilities(
 }
 
 function composeCapabilitiesWithDatabase(
-  options: ProductCapabilitiesOptions,
+  options: ModuleOptions,
   homePaths: MegumiHomePaths,
-  observability: ProductCapabilities['observability'],
-  logger: ProductCapabilities['logger'],
+  observability: ApplicationModules['observability'],
+  logger: ApplicationModules['logger'],
   database: DatabaseConnection,
-): ProductCapabilities {
+): ApplicationModules {
   const settings = createSettings({
     globalSettingsPath: homePaths.settingsPath,
     credentialsPath: homePaths.credentialsPath,
@@ -401,7 +390,7 @@ function composeCapabilitiesWithDatabase(
       },
     },
   });
-  const tools: ProductCapabilities['tools'] = {
+  const tools: ApplicationModules['tools'] = {
     listAvailableTools(request = {}) {
       const names = request.includeDisabled
         ? codingToolNames
@@ -731,7 +720,7 @@ function composeCapabilitiesWithDatabase(
     },
   });
 
-  const capabilities: ProductCapabilities = {
+  const modules: ApplicationModules = {
     homePaths,
     observability,
     logger,
@@ -758,11 +747,8 @@ function composeCapabilitiesWithDatabase(
     approval,
     discovery,
   };
-  return capabilities;
+  return modules;
 }
-
-/** Re-exposed so Product and the Host compositions share the same shutdown budget. */
-export { PRODUCT_SHUTDOWN_TIMEOUT_MS };
 
 function discoveryCredential(
   settings: ReturnType<typeof createSettings>,
@@ -865,6 +851,7 @@ const noopObservabilityStorage: ObservabilityPersistenceStorage = {
   removeFile: async () => undefined,
 };
 
+/** Initializes AI providers and workspace-scoped credentials once for the application. */
 export function createApplicationModels(options: {
   readonly settingsForWorkspace: (workspaceId?: string) => ModelSettingsAccess;
   readonly apiImplementations?: Partial<Record<Api, ProviderStreams>>;
@@ -920,18 +907,14 @@ export function createApplicationModels(options: {
 
   async function resolveModel(request: { workspaceId?: string; selection?: ModelSelection }) {
     return withWorkspace(request.workspaceId, async () => {
-      const read = options.settingsForWorkspace(request.workspaceId).readSettings();
-      if (read.status === 'rejected') return { status: 'failed' as const, failure: read.error };
-      const catalog = configuredCatalog(read.settings.config.providers, builtins);
-      if (catalog.status === 'failed') return catalog;
-      const selection = request.selection ?? read.settings.config.general.lastSelectedModel;
-      const provider = catalog.providers.find((item) => item.id === selection?.providerId);
-      const selected = provider?.models.find((item) => item.model.id === selection?.modelId);
-      if (!provider || !selected) return modelUnavailable('Select an added model.');
-      const model = selected.model;
-      if (model.maxTokens > model.contextWindow)
-        return modelUnavailable('Model output capacity exceeds its context window.');
-      const builtin = builtins.find((item) => item.id === provider.id);
+      const resolved = resolveConfiguredModel({
+        settings: options.settingsForWorkspace(request.workspaceId),
+        selection: request.selection,
+        builtins,
+      });
+      if (resolved.status === 'failed') return resolved;
+      const { model, providerId, providerName, compactionThresholdRatio } = resolved;
+      const builtin = builtins.find((item) => item.id === providerId);
       if (
         !options.apiImplementations?.[model.api] &&
         !defaultApiImplementations[model.api] &&
@@ -939,18 +922,14 @@ export function createApplicationModels(options: {
       ) {
         return modelUnavailable(`Unsupported model API: ${model.api}`);
       }
-      register(provider.id);
+      register(providerId);
       try {
-        if (!(await ai.getAuth(provider.id)))
-          return modelUnavailable(`Credentials are missing for ${provider.name}.`);
+        if (!(await ai.getAuth(providerId)))
+          return modelUnavailable(`Credentials are missing for ${providerName}.`);
       } catch {
-        return modelUnavailable(`Credentials could not be read for ${provider.name}.`);
+        return modelUnavailable(`Credentials could not be read for ${providerName}.`);
       }
-      return {
-        status: 'ok' as const,
-        model,
-        compactionThresholdRatio: read.settings.config.context.compactionThresholdRatio,
-      };
+      return { status: 'ok' as const, model, compactionThresholdRatio };
     });
   }
 
@@ -967,113 +946,6 @@ function modelUnavailable(message: string) {
   return { status: 'failed' as const, failure: { code: 'MODEL_UNAVAILABLE', message } };
 }
 
-/** Lists configured models without materializing the AI catalog into settings. */
-export function readModelCatalog(settings: ModelSettingsAccess): ModelCatalogResult {
-  const read = settings.readSettings();
-  if (read.status === 'rejected') return { status: 'failed', failure: read.error };
-  return configuredCatalog(read.settings.config.providers, builtinProviders());
-}
-
-/** Combines only added models with current builtins; the catalog remains available for adding. */
-function configuredCatalog(
-  configuration: Record<string, ProviderConfiguration>,
-  builtins: readonly Provider[],
-): ModelCatalogResult {
-  const catalog: ConfiguredProvider[] = builtins.map((provider) => {
-    const models = provider.getModels();
-    return {
-      id: provider.id,
-      name: provider.name,
-      enabled: true,
-      api: models[0]?.api,
-      baseUrl: provider.baseUrl,
-      models: models.map((model) => configuredModel(model, undefined, false)),
-    };
-  });
-  const providers: ConfiguredProvider[] = [];
-  for (const [id, settings] of Object.entries(configuration)) {
-    const builtin = builtins.find((provider) => provider.id === id);
-    const originals = builtin?.getModels() ?? [];
-    const models: ConfiguredModel[] = [];
-    for (const [modelId, parameters] of Object.entries(settings.models)) {
-      const original = originals.find((model) => model.id === modelId);
-      const api = settings.api ?? original?.api ?? originals[0]?.api;
-      const baseUrl = settings.baseUrl ?? original?.baseUrl ?? builtin?.baseUrl;
-      if (!api || !baseUrl)
-        return {
-          status: 'failed',
-          failure: {
-            code: 'MODEL_UNAVAILABLE',
-            message: `Provider ${id} requires an API and URL.`,
-          },
-        };
-      if (
-        !original &&
-        (parameters.contextWindowTokens === undefined || parameters.maxOutputTokens === undefined)
-      ) {
-        return {
-          status: 'failed',
-          failure: {
-            code: 'MODEL_UNAVAILABLE',
-            message: `Model ${id}/${modelId} requires capacity parameters.`,
-          },
-        };
-      }
-      const model: Model<Api> = original
-        ? { ...original, api, baseUrl }
-        : {
-            id: modelId,
-            provider: id,
-            api,
-            baseUrl,
-            name: modelId,
-            contextWindow: parameters.contextWindowTokens!,
-            maxTokens: parameters.maxOutputTokens!,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            reasoning: false,
-            input: ['text'],
-          };
-      models.push(configuredModel(model, parameters, !original));
-    }
-    providers.push({
-      id,
-      name: settings.name ?? builtin?.name ?? id,
-      enabled: true,
-      api: settings.api ?? originals[0]?.api,
-      baseUrl: settings.baseUrl ?? builtin?.baseUrl,
-      models,
-    });
-  }
-  return { status: 'ok', providers, catalog };
-}
-
-function configuredModel(
-  model: Model<Api>,
-  overrides: ModelParameters | undefined,
-  custom: boolean,
-): ConfiguredModel {
-  const capabilities = {
-    streaming: custom ? ('unknown' as const) : true,
-    toolCalls: custom ? ('unknown' as const) : true,
-    thinking: custom ? ('unknown' as const) : model.reasoning,
-    imageInput: custom ? ('unknown' as const) : model.input.includes('image'),
-    ...overrides?.capabilities,
-  };
-  return {
-    enabled: true,
-    custom,
-    capabilities,
-    model: {
-      ...model,
-      name: overrides?.name ?? model.name,
-      contextWindow: overrides?.contextWindowTokens ?? model.contextWindow,
-      maxTokens: overrides?.maxOutputTokens ?? model.maxTokens,
-      reasoning: capabilities.thinking === true,
-      input: capabilities.imageInput === true ? ['text', 'image'] : ['text'],
-    },
-  };
-}
-
 const defaultApiImplementations: Readonly<Record<string, ProviderStreams>> = {
   'openai-completions': openAICompletionsApi(),
   'openai-responses': openAIResponsesApi(),
@@ -1081,6 +953,7 @@ const defaultApiImplementations: Readonly<Record<string, ProviderStreams>> = {
   'anthropic-messages': anthropicMessagesApi(),
 };
 
+/** Binds the configured web search provider to its current credential. */
 export function resolveConfiguredWebSearch(
   settings: Pick<Settings, 'readSettings' | 'readCredential'>,
 ): WebSearch | undefined {

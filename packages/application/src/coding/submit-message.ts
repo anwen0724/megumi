@@ -9,14 +9,14 @@ import type {
 } from '@megumi/agent';
 import type { Api, Model, Models } from '@megumi/ai';
 import { isDeepStrictEqual } from 'node:util';
-import type { EventBus } from '../application';
+import type { EventBus } from './events/event-bus';
 import type { CommandTerminalResult } from './input/execute-command';
 import type { InputProcessor, RawUserInput } from './input/parse-message';
 import type { CodingContextOptions } from './prepare-context';
 import { createCodingContext } from './prepare-context';
 import type { CodingRunPreparation } from './prepare-run';
 import { prepareCodingRun } from './prepare-run';
-import { createSessionEventObserver } from './session-events';
+import { createSessionEventObserver } from './events/map-agent-events';
 import type { SessionBranchDrafts } from './sessions/session-branches';
 import type { Session, SessionCatalog } from './sessions/session-catalog';
 import type {

@@ -1,83 +1,7 @@
-/* Owns the application lifecycle and bounded session event delivery. */
-import type { AnyEvent, Event, EventPayloadByType, EventType } from './coding/session-events';
-import type { ApplicationOperations } from './contracts';
-import type { SpeechOutputEventListener, SpeechOutputSubscription } from './voice/index';
-
-export interface ApplicationLogger {
-  info?(event: string, details?: Record<string, unknown>): void;
-  warn(event: string, details?: Record<string, unknown>): void;
-  error?(event: string, details?: Record<string, unknown>): void;
-}
-
-export type BackgroundTriggerMode = 'automatic' | 'manual';
-
-export interface ApplicationStartOptions {
-  readonly backgroundTriggers?: BackgroundTriggerMode;
-}
-
-export interface ResolvedApplicationStartOptions {
-  readonly backgroundTriggers: BackgroundTriggerMode;
-}
-
-export interface Application extends ApplicationOperations {
-  readonly logger: ApplicationLogger;
-  /** Starts Host-ready product behavior exactly once using the first caller's trigger mode. */
-  start(options?: ApplicationStartOptions): Promise<void>;
-  /** Stops business execution while retaining resources for final read-only capture. */
-  stop(): Promise<void>;
-  subscribeRuntimeEvents(filter: EventFilter, handler: EventHandler): EventSubscription;
-  subscribeSpeechOutputEvents(handler: SpeechOutputEventListener): SpeechOutputSubscription;
-  dispose(): Promise<void>;
-}
-
-export function bindApplicationLifecycle(input: {
-  readonly operations: ApplicationOperations;
-  readonly logger: ApplicationLogger;
-  readonly start: (options: ResolvedApplicationStartOptions) => Promise<void>;
-  readonly subscribeRuntimeEvents: Application['subscribeRuntimeEvents'];
-  readonly subscribeSpeechOutputEvents: Application['subscribeSpeechOutputEvents'];
-  readonly dispose: () => Promise<void>;
-  readonly stop: () => Promise<void>;
-}): Application {
-  let startPromise: Promise<void> | undefined;
-  let disposePromise: Promise<void> | undefined;
-  let stopPromise: Promise<void> | undefined;
-  let stopping = false;
-  return {
-    ...input.operations,
-    logger: input.logger,
-    start(options = {}) {
-      const backgroundTriggers = options.backgroundTriggers ?? 'automatic';
-      // The Host remains available for recovery, but no automatic business may use fallback settings.
-      startPromise ??= (async () => {
-        const settings = input.operations.settings.readSettings();
-        if (settings.status === 'rejected')
-          throw new Error('Settings are invalid; product background startup was blocked.');
-        if (stopping) throw new Error('Product runtime has already begun disposal or stopping.');
-        await input.start({ backgroundTriggers });
-      })();
-      return startPromise;
-    },
-    subscribeRuntimeEvents: input.subscribeRuntimeEvents,
-    subscribeSpeechOutputEvents: input.subscribeSpeechOutputEvents,
-    stop() {
-      stopping = true;
-      stopPromise ??= input.stop().catch((error: unknown) => {
-        stopPromise = undefined;
-        throw error;
-      });
-      return stopPromise;
-    },
-    dispose() {
-      stopping = true;
-      disposePromise ??= input.dispose().catch((error: unknown) => {
-        disposePromise = undefined;
-        throw error;
-      });
-      return disposePromise;
-    },
-  };
-}
+/*
+ * Delivers session events and retains a bounded replay window for Coding consumers.
+ */
+import type { AnyEvent, Event, EventPayloadByType, EventType } from './contracts';
 
 export interface PublishEventInput {
   readonly type: EventType;
@@ -161,6 +85,7 @@ const DEFAULT_RECENT_EVENT_BUFFER: RecentEventBufferOptions = {
   maxEventsPerSession: 1_024,
 };
 
+/** Creates session-scoped delivery with isolated subscribers and bounded replay. */
 export function createEventBus(options: CreateEventBusOptions = {}): EventBus {
   const id = options.id ?? (() => crypto.randomUUID());
   const now = options.now ?? (() => new Date().toISOString());

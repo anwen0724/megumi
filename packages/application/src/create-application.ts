@@ -2,18 +2,17 @@
  * Composes the complete Host-neutral Megumi application runtime.
  * Concrete hosts only inject environmental adapters and consume Application.
  */
-import { bindApplicationLifecycle, type Application } from './application';
+import type { Application, ApplicationOperations } from './contracts';
 import {
-  composeProductCapabilities,
-  type ProductCapabilities,
-  type ProductCapabilitiesOptions,
-} from './application-capabilities';
-import type { ApplicationOperations } from './application-operations';
+  composeModules,
+  type ApplicationModules,
+  type ModuleOptions,
+} from './compose-modules';
 import { PRODUCT_SHUTDOWN_TIMEOUT_MS } from './application-policy';
 import {
-  createApplicationResourceManager,
-  type ApplicationResourceManager,
-} from './application-resource-manager';
+  createApplicationLifecycle,
+  type ApplicationLifecycle,
+} from './manage-lifecycle';
 import type {
   AttachmentPicker,
   DiagnosticBundleSaver,
@@ -21,16 +20,13 @@ import type {
   FileOpener,
   LocalFileAvailability,
 } from './contracts';
-import {
-  createDiscoveryOperations,
-  createInputSuggestionQuery,
-  createObservabilityOperations,
-  createSessionOperations,
-  createSessionReader,
-  createSkillOperations,
-  createVoiceOperations,
-  createWorkspaceOperations,
-} from './operations';
+import { createInputSuggestionQuery } from './coding/input/execute-command';
+import { createSessionOperations, createSessionReader } from './coding/session-api';
+import { createObservabilityOperations } from './observability/observability-operations';
+import { createDiscoveryOperations } from './recommendation/recommendation-api';
+import { createSkillOperations } from './skills/handle-requests';
+import { createVoiceOperations } from './voice/voice-operations';
+import { createWorkspaceOperations } from './workspace/workspace-operations';
 import {
   createSpeechOutputRuntime,
   createVoice,
@@ -57,44 +53,44 @@ interface ApplicationPlatformOptions {
   readonly voice?: ApplicationVoiceOptions;
 }
 
-export type CreateApplicationOptions = ProductCapabilitiesOptions & ApplicationPlatformOptions;
-export type ProductCapabilitiesInput = ProductCapabilitiesOptions;
-export type ProductInputSourceAccess = NonNullable<ProductCapabilitiesOptions['inputSourceAccess']>;
+export type CreateApplicationOptions = ModuleOptions & ApplicationPlatformOptions;
+export type ProductInputSourceAccess = NonNullable<ModuleOptions['inputSourceAccess']>;
 export type ProductSessionAttachmentFileSystem = NonNullable<
-  ProductCapabilitiesOptions['sessionAttachmentFileSystem']
+  ModuleOptions['sessionAttachmentFileSystem']
 >;
 export type ProductObservabilityStorage = NonNullable<
-  ProductCapabilitiesOptions['observabilityStorage']
+  ModuleOptions['observabilityStorage']
 >;
-export type ProductEnvironment = NonNullable<ProductCapabilitiesOptions['productEnvironment']>;
-export type ProductSettingsEnvironment = NonNullable<ProductCapabilitiesOptions['readEnvironment']>;
+export type ProductEnvironment = NonNullable<ModuleOptions['productEnvironment']>;
+export type ProductSettingsEnvironment = NonNullable<ModuleOptions['readEnvironment']>;
 
 /**
  * Builds the complete Product in dependency order and rolls back every resource
  * registered before a synchronous composition failure.
  */
 export function createApplication(options: CreateApplicationOptions): Application {
-  const resources = createApplicationResourceManager({
+  const lifecycle = createApplicationLifecycle({
     shutdownTimeoutMs: PRODUCT_SHUTDOWN_TIMEOUT_MS + 2_000,
   });
   try {
-    const capabilities = composeProductCapabilities(options);
-    return createApplicationRuntime({ options, capabilities }, resources);
+    const modules = composeModules(options);
+    return createApplicationInterface({ options, modules }, lifecycle);
   } catch (error) {
-    resources.rollbackStartup();
+    lifecycle.rollbackStartup();
     throw error;
   }
 }
 
-function createApplicationRuntime(
+/** Creates public request handlers and binds application-owned subscriptions to its lifecycle. */
+function createApplicationInterface(
   input: {
     readonly options: ApplicationPlatformOptions;
-    readonly capabilities: ProductCapabilities;
+    readonly modules: ApplicationModules;
   },
-  resources: ApplicationResourceManager,
+  lifecycle: ApplicationLifecycle,
 ): Application {
-  const { capabilities, options } = input;
-  const { coding, discovery } = capabilities;
+  const { modules, options } = input;
+  const { coding, discovery } = modules;
   const {
     observability,
     logger,
@@ -110,9 +106,9 @@ function createApplicationRuntime(
     branches,
     skills,
     commands,
-  } = capabilities;
+  } = modules;
 
-  resources.registerDatabase(capabilities.database);
+  lifecycle.registerDatabase(modules.database);
 
   const suggestions = createInputSuggestionQuery({
     commands,
@@ -126,7 +122,7 @@ function createApplicationRuntime(
     workspaceChanges,
   });
   const session = createSessionOperations({
-    settingsForWorkspace: capabilities.settingsForWorkspace,
+    settingsForWorkspace: modules.settingsForWorkspace,
     reader: sessionReader,
     recommendations: discovery,
     coding,
@@ -137,7 +133,7 @@ function createApplicationRuntime(
     branches,
     workspaces,
     resolveModel: async (selection, workspaceId) => {
-      const resolved = await capabilities.models.resolveModel({
+      const resolved = await modules.models.resolveModel({
         workspaceId,
         selection: { providerId: selection.provider_id, modelId: selection.model_id },
       });
@@ -157,13 +153,13 @@ function createApplicationRuntime(
   });
   // The speech-output chain is a separate subscriber of the same fact: it
   // never enters the execution lifecycle, and its failures stay inside the chain.
-  resources.registerEventSubscription(
+  lifecycle.registerEventSubscription(
     events.subscribe({ eventTypes: ['run.ended'] }, (event) => {
       if (event.type !== 'run.ended') return;
       try {
         const result = onRunEndedForSpeechOutput(
           {
-            settings: capabilities.settingsForWorkspace(
+            settings: modules.settingsForWorkspace(
               sessionStore.findSessionById(event.sessionId)?.workspace_id,
             ),
             findAssistantReplyBySessionIdAndExecutionId: (request) =>
@@ -202,7 +198,7 @@ function createApplicationRuntime(
   // Lifecycle observability: synthesis, first audio (first-audio latency
   // against the read record above), completion, stops, and failures all
   // leave a trace in runtime.jsonl for offline diagnosis.
-  resources.registerEventSubscription(
+  lifecycle.registerEventSubscription(
     speechOutput.subscribe((event) => {
       if (event.type === 'synthesis-started') {
         observability.runtimeLogger.write({
@@ -266,14 +262,14 @@ function createApplicationRuntime(
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
       workspaceService: workspaces,
-      workspaceFilesService: capabilities.workspaceFiles,
+      workspaceFilesService: modules.workspaceFiles,
       ...(options.directoryPicker ? { directoryPicker: options.directoryPicker } : {}),
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
     settings,
-    models: capabilities.models,
+    models: modules.models,
     tools,
-    approval: capabilities.approval,
+    approval: modules.approval,
     observability: createObservabilityOperations({
       queries: observability.queries,
       flush: observability.flush,
@@ -283,11 +279,11 @@ function createApplicationRuntime(
       voice,
       speechOutput,
       settings: (sessionId) =>
-        capabilities.settingsForWorkspace(sessionStore.findSessionById(sessionId)?.workspace_id),
+        modules.settingsForWorkspace(sessionStore.findSessionById(sessionId)?.workspace_id),
     }),
   };
 
-  return bindApplicationLifecycle({
+  return lifecycle.bind({
     operations,
     logger,
     start: ({ backgroundTriggers }) =>
@@ -296,15 +292,11 @@ function createApplicationRuntime(
       }),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
-    stop: () => resources.stop({ discovery, coding }),
-    dispose: () =>
-      resources.dispose({
-        discovery,
-        coding,
-        voice,
-        speechOutput,
-        observability,
-      }),
+    discovery,
+    coding,
+    voice,
+    speechOutput,
+    observability,
   });
 }
 

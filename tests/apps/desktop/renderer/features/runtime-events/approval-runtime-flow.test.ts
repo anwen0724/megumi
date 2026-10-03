@@ -2,7 +2,7 @@
 /* Projects real product approval events into the desktop timeline. */
 import { expect, it } from 'vitest';
 import type { AnyEvent } from '@megumi/application/contracts';
-import { EventSchema } from '@megumi/application/coding/session-events';
+import { EventSchema } from '@megumi/application/coding/events/contracts';
 import { reduceRuntimeTimelineEvent } from '@megumi/desktop/renderer/features/session-timeline';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
 import { composeTestApplication } from '../../../../../packages/composition/compose-test-application';

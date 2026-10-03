@@ -1,4 +1,6 @@
-/* Defines product approval requests, choices and session events. */
+/*
+ * Defines Coding approval requests, user decisions and their session event payloads.
+ */
 import { z } from 'zod';
 
 export interface ApprovalHost {

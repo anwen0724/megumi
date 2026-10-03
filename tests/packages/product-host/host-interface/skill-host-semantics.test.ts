@@ -6,8 +6,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createSkills } from '@megumi/application/skill-operations';
-import { createSkillOperations } from '@megumi/application/skill-operations';
+import { createSkills } from '@megumi/application/skills/manage-skills';
+import { createSkillOperations } from '@megumi/application/skills/handle-requests';
 
 let homePath: string;
 let database: DatabaseConnection;

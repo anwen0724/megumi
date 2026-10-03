@@ -16,9 +16,9 @@ import type {
   TextContent,
   ToolResultMessage,
 } from '@megumi/ai';
-import type { EventBus } from '../application';
+import type { EventBus } from './events/event-bus';
 import type { Observability } from '../observability/index';
-import type { Skills } from '../skill-operations';
+import type { Skills } from '../skills/manage-skills';
 import { compactCodingHistory } from './compact-history';
 import { materializeSessionImage, UNSUPPORTED_IMAGE_TEXT } from './input/image-content';
 import type {

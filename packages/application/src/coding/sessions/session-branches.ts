@@ -1,5 +1,5 @@
 /* Owns session entry paths and pending branch selections. */
-import type { EventBus } from '../../application';
+import type { EventBus } from '../events/event-bus';
 import type { SessionMessageAttachment } from './session-attachments';
 import type { Session, SessionFailure } from './session-catalog';
 import { sessionFailure } from './session-catalog';

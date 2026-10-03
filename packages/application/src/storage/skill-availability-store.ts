@@ -1,6 +1,6 @@
 /* Persists skill availability through the application-owned database. */
 import crypto from 'node:crypto';
-import type { SkillAvailability, SkillAvailabilityStore } from '../skill-operations';
+import type { SkillAvailability, SkillAvailabilityStore } from '../skills/manage-skills';
 import type { DatabaseConnection, DatabaseRow } from './index';
 
 type SkillAvailabilityRow = DatabaseRow & {

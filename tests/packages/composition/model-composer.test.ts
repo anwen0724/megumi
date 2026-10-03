@@ -1,6 +1,7 @@
 /* Verifies model preparation against real settings files and injected external model streams. */
 // @vitest-environment node
-import { createApplicationModels, readModelCatalog } from '@megumi/application/application-capabilities';
+import { createApplicationModels } from '@megumi/application/compose-modules';
+import { readModelCatalog } from '@megumi/application/settings/resolve-model';
 import { createSettings } from '@megumi/application/settings/settings-store';
 import fs from 'node:fs';
 import os from 'node:os';

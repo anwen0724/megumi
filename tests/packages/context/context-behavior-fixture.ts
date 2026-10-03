@@ -2,8 +2,8 @@
 import type { Models } from '@megumi/ai';
 import { contextBudget, type AgentConfig } from '@megumi/agent';
 import { PRODUCT_EXECUTION_POLICY } from '@megumi/application/application-policy';
-import { createEventBus } from '@megumi/application/application';
-import { createSkills } from '@megumi/application/skill-operations';
+import { createEventBus } from '@megumi/application/coding/events/event-bus';
+import { createSkills } from '@megumi/application/skills/manage-skills';
 import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
 import { createSessionAttachmentReader } from '@megumi/application/coding/sessions/session-attachments';
 import { createCodingContext, type CodingContextOptions } from '@megumi/application/coding/prepare-context';

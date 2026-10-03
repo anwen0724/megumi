@@ -6,7 +6,7 @@ import type { Models } from '@megumi/ai';
 import { createCodingContext } from '@megumi/application/coding/prepare-context';
 import { compactCodingHistory } from '@megumi/application/coding/compact-history';
 import { sessionMessageText } from '@megumi/application/coding/sessions/session-history';
-import { type AnyEvent } from '@megumi/application/coding/session-events';
+import { type AnyEvent } from '@megumi/application/coding/events/contracts';
 import { createSessionFixture, savedAt } from '../session/session-test-fixture';
 import { completedMessage } from './context-test-fixtures';
 import { createContextFixture, contextModel as compactingModel } from './context-behavior-fixture';

@@ -1,4 +1,6 @@
-/* Manages discovered Skills, persisted availability, selections and the model-facing catalog. */
+/*
+ * Manages discovered Skills, persisted availability, selections and the model-facing catalog.
+ */
 import {
   comparableSkillPath,
   DEFAULT_SKILLS_POLICY,
@@ -8,12 +10,10 @@ import {
   type Skill as LoadedSkill,
   type SkillDiagnostic,
   type SkillRoot,
-  type SkillSource,
   type SkillsPolicy,
 } from '@megumi/agent';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { SkillDetailUiDto, SkillHost, SkillListUiItem } from './skill-contracts';
 
 export interface Skill extends LoadedSkill {
   readonly available: boolean;
@@ -40,20 +40,6 @@ export interface SkillAvailability {
   readonly updatedAt: string;
 }
 
-/** Management-view package overview; never a model-facing execution contract. */
-export interface SkillPackageOverview {
-  readonly name: string;
-  readonly description: string;
-  readonly skillPath: string;
-  readonly packagePath: string;
-  readonly source: SkillSource;
-  readonly available: boolean;
-  readonly disableModelInvocation: boolean;
-  readonly hasReferences: boolean;
-  readonly hasAssets: boolean;
-  readonly hasScripts: boolean;
-}
-
 export type SkillsFailure =
   | { readonly code: 'skills_unavailable'; readonly message: string }
   | { readonly code: 'skill_not_found'; readonly skillPath: string }
@@ -64,6 +50,7 @@ export type SkillsFailure =
   | { readonly code: 'cancelled' }
   | { readonly code: 'internal'; readonly message: string };
 
+/** Describes a Skill failure for callers without exposing discovery internals. */
 export function skillsFailureMessage(failure: SkillsFailure): string {
   switch (failure.code) {
     case 'skills_unavailable':
@@ -87,101 +74,17 @@ export function skillsFailureMessage(failure: SkillsFailure): string {
   }
 }
 
-export class SkillsCancelledError extends Error {
+class SkillsCancelledError extends Error {
   constructor() {
     super('Skills operation was cancelled.');
     this.name = 'SkillsCancelledError';
   }
 }
 
-export function throwIfAborted(signal?: AbortSignal): void {
+function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw new SkillsCancelledError();
   }
-}
-
-export function createSkillOperations(input: { readonly skills: Skills }): SkillHost {
-  return {
-    async listSkills(request) {
-      const result = await input.skills.list({ workspaceId: request.workspaceId });
-      return result.status === 'failed'
-        ? toSkillFailure(result.failure)
-        : { status: 'ok', skills: result.skills.map(toSkillListUiItem) };
-    },
-    async getSkillDetail(request) {
-      const result = await input.skills.get({ skillPath: request.skillPath, workspaceId: request.workspaceId });
-      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
-        return { status: 'not_found', skillPath: request.skillPath };
-      }
-      if (result.status === 'failed') return toSkillFailure(result.failure);
-      return { status: 'ok', skill: toSkillDetailUiDto(result.skill) };
-    },
-    async enableSkill(request) {
-      const result = await input.skills.enable({ skillPath: request.skillPath, workspaceId: request.workspaceId });
-      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
-        return { status: 'not_found', skillPath: request.skillPath };
-      }
-      if (result.status === 'failed') return toSkillFailure(result.failure);
-      return { status: 'ok', skillPath: result.availability.skillPath };
-    },
-    async disableSkill(request) {
-      const result = await input.skills.disable({ skillPath: request.skillPath, workspaceId: request.workspaceId });
-      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
-        return { status: 'not_found', skillPath: request.skillPath };
-      }
-      if (result.status === 'failed') return toSkillFailure(result.failure);
-      return { status: 'ok', skillPath: result.availability.skillPath };
-    },
-    async deleteSkill(request) {
-      const result = await input.skills.delete({ skillPath: request.skillPath, workspaceId: request.workspaceId });
-      if (result.status === 'failed' && result.failure.code === 'skill_not_found') {
-        return { status: 'not_found', skillPath: request.skillPath };
-      }
-      if (result.status === 'failed' && result.failure.code === 'delete_not_allowed') {
-        return { status: 'not_allowed', skillPath: request.skillPath, reason: result.failure.reason };
-      }
-      if (result.status === 'failed') return toSkillFailure(result.failure);
-      return { status: 'ok', skillPath: result.skillPath };
-    },
-    async refreshSkills(request) {
-      const result = await input.skills.refresh({ workspaceId: request.workspaceId });
-      return result.status === 'failed' ? toSkillFailure(result.failure) : { status: 'ok' };
-    },
-  };
-}
-
-function toSkillListUiItem(skill: Skill): SkillListUiItem {
-  const overview = buildSkillPackageOverview(skill);
-  return {
-    name: skill.name,
-    description: skill.description,
-    skillPath: skill.skillPath,
-    sourceLabel: skill.source.owner === 'system' ? 'System' : 'User',
-    available: skill.available,
-    hasResources: overview.hasReferences || overview.hasAssets,
-    hasScripts: overview.hasScripts,
-    diagnostics: skill.diagnostics.map(({ level, message }) => ({ level, message })),
-  };
-}
-
-function toSkillDetailUiDto(skill: Skill): SkillDetailUiDto {
-  const overview = buildSkillPackageOverview(skill);
-  return {
-    ...toSkillListUiItem(skill),
-    content: skill.content,
-    resourcePaths: [
-      ...(overview.hasReferences ? ['references/'] : []),
-      ...(overview.hasAssets ? ['assets/'] : []),
-    ],
-    scriptNames: overview.hasScripts ? ['scripts/'] : [],
-  };
-}
-
-function toSkillFailure(failure: SkillsFailure) {
-  return {
-    status: 'failed' as const,
-    failure: { code: failure.code, message: skillsFailureMessage(failure) },
-  };
 }
 
 export interface SkillRootResolver {
@@ -265,13 +168,21 @@ export type DeleteSkillResult =
   | { readonly status: 'failed'; readonly failure: SkillsFailure };
 
 export interface Skills {
+  /** Reloads discovered packages in the selected workspace scope. */
   refresh(request: RefreshSkillsRequest): Promise<RefreshSkillsResult>;
+  /** Lists discovered packages with their persisted availability. */
   list(request: ListSkillsRequest): Promise<ListSkillsResult>;
+  /** Reads one discovered package within the selected scope. */
   get(request: GetSkillRequest): Promise<GetSkillResult>;
+  /** Persists availability for a discovered package. */
   enable(request: EnableSkillRequest): Promise<ChangeSkillAvailabilityResult>;
+  /** Persists unavailability for a discovered package. */
   disable(request: DisableSkillRequest): Promise<ChangeSkillAvailabilityResult>;
+  /** Removes an eligible user package and its availability record. */
   delete(request: DeleteSkillRequest): Promise<DeleteSkillResult>;
+  /** Resolves a user selection, rejecting missing, unavailable or renamed packages. */
   resolveSelection(request: ResolveSkillSelectionRequest): Promise<ResolveSkillSelectionResult>;
+  /** Builds the model-facing catalog for this workspace. */
   createView(request: CreateSkillViewRequest): Promise<CreateSkillViewResult>;
 }
 
@@ -289,6 +200,7 @@ interface MergedSnapshot {
   readonly unavailable: boolean;
 }
 
+/** Creates discovery and availability management shared by all workspace Skill views. */
 export function createSkills(options: CreateSkillsOptions): Skills {
   const policy: SkillsPolicy = { ...DEFAULT_SKILLS_POLICY, ...options.policy };
   const problems = validateSkillsPolicy(policy);
@@ -299,21 +211,6 @@ export function createSkills(options: CreateSkillsOptions): Skills {
     ...options,
     policy,
   });
-}
-
-export function buildSkillPackageOverview(skill: Skill): SkillPackageOverview {
-  return {
-    name: skill.name,
-    description: skill.description,
-    skillPath: skill.skillPath,
-    packagePath: skill.packagePath,
-    source: { ...skill.source },
-    available: skill.available,
-    disableModelInvocation: skill.disableModelInvocation,
-    hasReferences: directoryExists(path.join(skill.packagePath, 'references')),
-    hasAssets: directoryExists(path.join(skill.packagePath, 'assets')),
-    hasScripts: directoryExists(path.join(skill.packagePath, 'scripts')),
-  };
 }
 
 class SkillsImpl implements Skills {
@@ -755,14 +652,6 @@ function isInsideRoot(realRoot: string, candidate: string): boolean {
   return relative !== '' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
-function directoryExists(targetPath: string): boolean {
-  try {
-    return fs.statSync(targetPath).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
 export interface SkillAvailabilityStore {
   /** Finds one persisted availability row by its database identity. */
   findSkillAvailabilityById(
@@ -780,7 +669,8 @@ export interface SkillAvailabilityStore {
   deleteSkillAvailabilityById(skillAvailabilityId: string): boolean;
 }
 
-export function mergeSkillAvailability(
+/** Combines discovery facts with persisted user availability. */
+function mergeSkillAvailability(
   skills: readonly LoadedSkill[],
   records: readonly SkillAvailability[],
 ): readonly Skill[] {
@@ -791,7 +681,8 @@ export function mergeSkillAvailability(
   });
 }
 
-export function cleanupStaleAvailability(input: {
+/** Identifies availability records whose package no longer exists under the known roots. */
+function cleanupStaleAvailability(input: {
   roots: readonly SkillRoot[];
   records: readonly SkillAvailability[];
   signal?: AbortSignal;
@@ -853,7 +744,8 @@ export type CreateSkillViewResult =
   | { readonly status: 'ok'; readonly view: SkillView }
   | { readonly status: 'failed'; readonly failure: SkillsFailure };
 
-export function resolveSelectedSkill(input: {
+/** Validates that the selected package remains available under the selected name. */
+function resolveSelectedSkill(input: {
   skills: readonly Skill[];
   skillSelection: SkillSelection;
 }): { status: 'ok'; skill: Skill } | { status: 'failed'; failure: SkillsFailure } {
@@ -880,7 +772,8 @@ export function resolveSelectedSkill(input: {
   return { status: 'ok', skill };
 }
 
-export function buildSkillView(input: {
+/** Projects only available and model-invocable packages into context. */
+function buildSkillView(input: {
   skills: readonly Skill[];
   diagnostics: readonly SkillDiagnostic[];
   policy: Readonly<SkillsPolicy>;

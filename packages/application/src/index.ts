@@ -8,7 +8,7 @@ export {
   type ApplicationStartOptions, type BackgroundTriggerMode, type EventFilter,
   type EventHandler,
   type EventSubscription
-} from './application';
+} from './contracts';
 export {
   createApplication, type ApplicationVoiceOptions, type CreateApplicationOptions, type ProductEnvironment,
   type ProductInputSourceAccess,
@@ -17,5 +17,5 @@ export {
   type ProductSettingsEnvironment
 } from './create-application';
 
-export type { ApplicationOperations } from './application-operations';
+export type { ApplicationOperations } from './contracts';
 export type { ModelCatalogResult, ModelSelection } from './contracts';

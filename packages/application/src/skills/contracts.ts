@@ -1,4 +1,6 @@
-/* Defines application-owned Skill availability and management requests for host UIs. */
+/*
+ * Defines requests and results for application Skill management.
+ */
 import { z } from 'zod';
 
 export interface SkillHost {

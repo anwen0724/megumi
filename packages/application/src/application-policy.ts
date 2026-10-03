@@ -3,7 +3,7 @@
  * It does not reimplement the policies enforced by those modules.
  */
 import type { AgentExecutionPolicy } from '@megumi/agent';
-import type { RecentEventBufferOptions } from './application';
+import type { RecentEventBufferOptions } from './coding/events/event-bus';
 
 export const PRODUCT_RECENT_EVENT_BUFFER = {
   maxSessions: 64,

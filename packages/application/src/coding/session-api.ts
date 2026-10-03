@@ -1,5 +1,5 @@
 /* Exposes Coding session operations and projects committed history for the desktop. */
-import type { EventBus } from '../application';
+import type { EventBus } from './events/event-bus';
 import { estimateContextTokens } from '@megumi/ai/utils/estimate';
 import { resolveRecommendationDiscussion } from '../recommendation/recommendation-discussion';
 import type { AttachmentPicker } from '../platform/attachment-picker';

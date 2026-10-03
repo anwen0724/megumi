@@ -59,7 +59,7 @@ export const databaseTableOwnership = {
   skill: {
     module: 'skills',
     repository: 'SkillRepository',
-    modulePath: 'packages/application/src/skill-operations.ts',
+    modulePath: 'packages/application/src/skills/manage-skills.ts',
     tables: ['skill_availability'],
   },
   discovery: {

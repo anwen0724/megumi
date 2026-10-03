@@ -12,7 +12,7 @@ import { createSessionBranchDrafts } from '@megumi/application/coding/sessions/s
 import { createSessionAttachmentReader } from '@megumi/application/coding/sessions/session-attachments';
 import { createWorkspaceChanges } from '@megumi/application/workspace/workspace-changes';
 import { createWorkspaceStore } from '@megumi/application/workspace/workspace-store';
-import { createEventBus } from '@megumi/application/application';
+import { createEventBus } from '@megumi/application/coding/events/event-bus';
 import { fixture, deferred } from '../agent/agent-fixture';
 import { createSessionFixture } from './session-test-fixture';
 

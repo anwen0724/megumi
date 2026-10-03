@@ -1,7 +1,7 @@
 /* Defines the validated host contracts for Coding sessions. */
 import { z } from 'zod';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from './input/parse-message';
-import { EventSchema } from './session-events';
+import { EventSchema } from './events/contracts';
 import { SessionModelSelectionSchema } from './sessions/session-catalog';
 
 export interface SessionHost {

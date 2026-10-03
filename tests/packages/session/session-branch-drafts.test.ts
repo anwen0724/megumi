@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createEventBus } from '@megumi/application/application';
-import { type AnyEvent } from '@megumi/application/coding/session-events';
+import { createEventBus } from '@megumi/application/coding/events/event-bus';
+import { type AnyEvent } from '@megumi/application/coding/events/contracts';
 import { createSessionBranchDrafts } from '@megumi/application/coding/sessions/session-branches';
 
 describe('SessionBranchDrafts', () => {
