@@ -1,6 +1,6 @@
 /* Interprets user text, explicit skills and attachments for Coding requests. */
-import type { SelectedSkillContent, SkillSelection } from '@megumi/agent-runtime/resources/skills/skill';
-import type { ResolveSkillSelectionRequest, ResolveSkillSelectionResult } from '@megumi/agent-runtime/resources/skills/skill-view';
+import type { SelectedSkillContent, SkillSelection } from '../../skill-operations';
+import type { ResolveSkillSelectionRequest, ResolveSkillSelectionResult } from '../../skill-operations';
 import type { Api, Model, Models, TextContent } from '@megumi/ai';
 import type { InputAttachment, InputSourceAccess, RawDocumentSource, RawImageSource } from './read-attachments';
 import { processInputAttachments } from './read-attachments';

@@ -1,8 +1,9 @@
 /* Owns Coding request admission, preparation, cancellation and product completion. */
+import type { Observability } from '../observability/index';
 import type { Agent, AgentRun, ApprovalDecision, ApprovalRequest, PermissionMode } from '@megumi/agent';
-import type { EventBus } from '@megumi/agent-runtime/events';
 import type { Api, Model, Models } from '@megumi/ai';
 import { isDeepStrictEqual } from 'node:util';
+import type { EventBus } from '../application';
 import type { CommandTerminalResult } from './input/execute-command';
 import type { InputProcessor, RawUserInput } from './input/parse-message';
 import type { CodingContextOptions } from './prepare-context';
@@ -12,8 +13,17 @@ import { prepareCodingRun } from './prepare-run';
 import { createSessionEventObserver } from './session-events';
 import type { SessionBranchDrafts } from './sessions/session-branches';
 import type { Session, SessionCatalog } from './sessions/session-catalog';
-import type { RecommendationReferenceContent, SessionBranchConversationItem, SessionHistory, SessionMessageWithAttachments } from './sessions/session-history';
-import { createSessionMessageSaver, saveInterruptedReply, type SaveUserMessageResult } from './sessions/session-history';
+import type {
+  RecommendationReferenceContent,
+  SessionBranchConversationItem,
+  SessionHistory,
+  SessionMessageWithAttachments,
+} from './sessions/session-history';
+import {
+  createSessionMessageSaver,
+  saveInterruptedReply,
+  type SaveUserMessageResult,
+} from './sessions/session-history';
 
 export interface SubmitCodingInputRequest extends RawUserInput {
   readonly requestId?: string;
@@ -51,9 +61,11 @@ export interface CodingRunHandle {
 }
 
 export type SubmitCodingInputResult =
-  | { readonly status: 'started'; readonly requestId: string; readonly session: Session;
-      readonly userMessage: SessionMessageWithAttachments; readonly run: CodingRunHandle;
-      readonly branchCommit?: { readonly branchMarkerId: string; readonly branch: SessionBranchConversationItem } }
+  | {
+    readonly status: 'started'; readonly requestId: string; readonly session: Session;
+    readonly userMessage: SessionMessageWithAttachments; readonly run: CodingRunHandle;
+    readonly branchCommit?: { readonly branchMarkerId: string; readonly branch: SessionBranchConversationItem }
+  }
   | { readonly status: 'completed'; readonly requestId: string; readonly session?: Session; readonly message?: string }
   | { readonly status: 'host_interaction_requested'; readonly requestId: string; readonly session?: Session; readonly request: { readonly kind: string } }
   | { readonly status: 'rejected'; readonly requestId: string; readonly session?: Session; readonly error: { readonly code: string; readonly message: string } };
@@ -70,6 +82,7 @@ export interface Coding {
 }
 
 export interface CreateCodingOptions {
+  readonly observability?: Observability;
   readonly ai: Pick<Models, 'streamSimple' | 'completeSimple'>;
   readonly agent: Agent;
   readonly sessions: SessionCatalog;
@@ -86,6 +99,10 @@ export interface CreateCodingOptions {
   >;
   readonly awaitApproval?: (request: ApprovalRequest, session: Session) => Promise<ApprovalDecision>;
   readonly finalize: (run: CodingRunSnapshot) => Promise<void>;
+  readonly onCompleted?: (turn: {
+    sessionId: string; executionId: string; userMessageId: string;
+    assistantMessageId: string; completedAt: string
+  }) => void;
 }
 
 /** Creates the Coding product around the already-bound Agent service. */
@@ -110,24 +127,41 @@ export function createCoding(options: CreateCodingOptions): Coding {
     const submission = deferred<SubmitCodingInputResult>();
     const entry: CodingRequest = {
       request: owned, controller: new AbortController(), createdAt: new Date().toISOString(),
-      submission: submission.promise, completion: Promise.resolve(),
+      submission: submission.promise, completion: Promise.resolve({ status: 'cancelled' }),
     };
     requests.set(requestId, entry);
     if (request.sessionId) occupied.set(request.sessionId, entry);
-    entry.completion = (async () => {
+    const executeRequest = async (): Promise<CodingOutcome> => {
       try {
         const started = await prepareAndStart(entry);
         submission.resolve(started);
-        if (started.status === 'started') await started.run.completion;
+        if (started.status === 'started') return await started.run.completion;
+        return started.status === 'rejected'
+          ? { status: 'failed', error: { ...started.error, retryable: false } } : { status: 'completed' };
       } catch (cause) {
-        submission.resolve(rejected(requestId, entry.controller.signal.aborted ? 'INPUT_CANCELLED' : 'INPUT_REJECTED',
-          cause instanceof Error ? cause.message : 'Coding input could not be prepared.', entry.session));
+        const error = {
+          code: 'INPUT_REJECTED', retryable: false,
+          message: cause instanceof Error ? cause.message : 'Coding input could not be prepared.'
+        };
+        submission.resolve(rejected(requestId, entry.controller.signal.aborted ? 'INPUT_CANCELLED' : error.code, error.message, entry.session));
+        return entry.controller.signal.aborted ? { status: 'cancelled' } : { status: 'failed', error };
       } finally {
         entry.completedAt = Date.now();
         const sessionId = entry.session?.session_id ?? entry.request.sessionId;
         if (sessionId && occupied.get(sessionId) === entry) occupied.delete(sessionId);
       }
-    })();
+    };
+    entry.completion = options.observability
+      ? options.observability.withTrace({
+        kind: 'conversation',
+        correlation: { requestId, workspaceId: owned.workspaceId, sessionId: owned.sessionId },
+        classifyResult: outcome => ({
+          outcome: outcome.status === 'failed' ? { status: 'error', ...outcome.error }
+            : { status: outcome.status === 'completed' ? 'ok' : 'cancelled' },
+          correlation: { executionId: entry.run?.runId, sessionId: entry.session?.session_id },
+        }),
+      }, executeRequest)
+      : executeRequest();
     return submission.promise;
   }
 
@@ -145,10 +179,12 @@ export function createCoding(options: CreateCodingOptions): Coding {
     const selected = await options.resolveModel(request.workspaceId, request.modelSelection ?? entry.session?.model_selection);
     signal.throwIfAborted();
     if (selected.status === 'failed') return rejected(request.requestId, selected.failure.code, selected.failure.message, entry.session);
-    const processed = await options.input.process({ input: request, context: {
-      workspaceId: request.workspaceId, sessionId: entry.session?.session_id,
-      model: selected.model, client: options.ai, compactionThresholdRatio: selected.compactionThresholdRatio,
-    } }, { signal });
+    const processed = await options.input.process({
+      input: request, context: {
+        workspaceId: request.workspaceId, sessionId: entry.session?.session_id,
+        model: selected.model, client: options.ai, compactionThresholdRatio: selected.compactionThresholdRatio,
+      }
+    }, { signal });
     signal.throwIfAborted();
     if (processed.status === 'failed') return rejected(request.requestId, processed.failure.code, processed.failure.message, entry.session);
     if (processed.status === 'completed') {
@@ -158,21 +194,27 @@ export function createCoding(options: CreateCodingOptions): Coding {
       return rejected(request.requestId, 'INPUT_REJECTED', result.type === 'error' ? result.message : 'Input was cancelled.', entry.session);
     }
     if (!entry.session) {
-      const created = options.sessions.createSession({ workspace_id: request.workspaceId, title: request.sessionTitle,
+      const created = options.sessions.createSession({
+        workspace_id: request.workspaceId, title: request.sessionTitle,
         initial_user_text: processed.input.displayContent.map(block => block.text).join(''),
-        model_selection: { providerId: selected.model.provider, modelId: selected.model.id } });
+        model_selection: { providerId: selected.model.provider, modelId: selected.model.id }
+      });
       if (created.status === 'failed') return rejected(request.requestId, created.failure.code, created.failure.message);
       entry.session = created.session;
       occupied.set(created.session.session_id, entry);
     } else if (request.modelSelection || !entry.session.model_selection) {
-      const updated = options.sessions.updateModelSelection({ session_id: entry.session.session_id,
-        model_selection: { providerId: selected.model.provider, modelId: selected.model.id } });
+      const updated = options.sessions.updateModelSelection({
+        session_id: entry.session.session_id,
+        model_selection: { providerId: selected.model.provider, modelId: selected.model.id }
+      });
       if (updated.status !== 'found') throw new Error('Session model selection could not be saved.');
       entry.session = updated.session;
     }
     const session = entry.session;
-    const branch = request.branchMarkerId ? options.branches.resolveBranchDraft({ request_id: request.requestId,
-      session_id: session.session_id, branch_marker_id: request.branchMarkerId }) : undefined;
+    const branch = request.branchMarkerId ? options.branches.resolveBranchDraft({
+      request_id: request.requestId,
+      session_id: session.session_id, branch_marker_id: request.branchMarkerId
+    }) : undefined;
     if (branch && branch.status !== 'resolved') return rejected(request.requestId, 'INPUT_REJECTED', 'Branch draft is unavailable.', session);
     const config = await prepareCodingRun({ session, model: selected.model, permissionMode: request.permissionMode ?? 'ask', signal }, options.preparation);
     signal.throwIfAborted();
@@ -184,21 +226,27 @@ export function createCoding(options: CreateCodingOptions): Coding {
       config, signal,
       onEvent: createSessionEventObserver({ sessionId: session.session_id, events: options.events, userText: input.displayContent.map(block => block.text).join('') }),
       input: { role: 'user', content: input.modelContent.map(block => ({ ...block })), timestamp: Date.now() },
-      context: createCodingContext({ ...options.context, sessionId: session.session_id, workspaceId: session.workspace_id,
-        config, history: options.history, ai: options.ai, compactionThresholdRatio: selected.compactionThresholdRatio, events: options.events }),
-      saveMessage: createSessionMessageSaver({ history: options.history, onUserSaved: accepted.resolve, user: {
-        session_id: session.session_id, parent_entry_id: branch?.status === 'resolved' ? branch.branch_draft.source_entry_id : undefined,
-        display_content: [...reference, ...input.displayContent], model_content: [...reference, ...input.modelContent],
-        skill_selection: input.skillSelection && { name: input.skillSelection.name, skill_path: input.skillSelection.skillPath },
-        attachments: input.attachments.map(attachment => attachment.type === 'image'
-          ? { type: 'image', name: attachment.name, media_type: attachment.mediaType, byte_length: attachment.byteLength, bytes: attachment.bytes }
-          : { type: 'file', name: attachment.name, media_type: attachment.mediaType, local_path: attachment.localPath, size_bytes: attachment.sizeBytes }),
-      } }),
+      context: createCodingContext({
+        ...options.context, sessionId: session.session_id, workspaceId: session.workspace_id,
+        config, history: options.history, ai: options.ai, compactionThresholdRatio: selected.compactionThresholdRatio, events: options.events
+      }),
+      saveMessage: createSessionMessageSaver({
+        history: options.history, onUserSaved: accepted.resolve, user: {
+          session_id: session.session_id, parent_entry_id: branch?.status === 'resolved' ? branch.branch_draft.source_entry_id : undefined,
+          display_content: [...reference, ...input.displayContent], model_content: [...reference, ...input.modelContent],
+          skill_selection: input.skillSelection && { name: input.skillSelection.name, skill_path: input.skillSelection.skillPath },
+          attachments: input.attachments.map(attachment => attachment.type === 'image'
+            ? { type: 'image', name: attachment.name, media_type: attachment.mediaType, byte_length: attachment.byteLength, bytes: attachment.bytes }
+            : { type: 'file', name: attachment.name, media_type: attachment.mediaType, local_path: attachment.localPath, size_bytes: attachment.sizeBytes }),
+        }
+      }),
       awaitApproval: awaitApproval && (approval => awaitApproval(approval, session)),
     });
     const run = entry.run;
-    options.events.publish({ type: 'run.started', sessionId: session.session_id, executionId: run.runId,
-      payload: { requestId: request.requestId, providerId: config.model.provider, modelId: config.model.id } });
+    options.events.publish({
+      type: 'run.started', sessionId: session.session_id, executionId: run.runId,
+      payload: { requestId: request.requestId, providerId: config.model.provider, modelId: config.model.id }
+    });
     const completion = completeRequest(entry, run);
     const saved = await Promise.race([accepted.promise, completion.then(() => undefined)]);
     if (!saved) {
@@ -212,8 +260,10 @@ export function createCoding(options: CreateCodingOptions): Coding {
       const committed = options.history.getCommittedBranch({ sessionId: session.session_id, targetEntryId: saved.entry.entry_id });
       if (committed.status === 'found') branchCommit = { branchMarkerId: request.branchMarkerId, branch: committed.branch };
     }
-    return { status: 'started', requestId: request.requestId, session, userMessage: saved.message, branchCommit,
-      run: { runId: run.runId, snapshot: runSnapshot(entry, run, session), completion } };
+    return {
+      status: 'started', requestId: request.requestId, session, userMessage: saved.message, branchCommit,
+      run: { runId: run.runId, snapshot: runSnapshot(entry, run, session), completion }
+    };
   }
 
   /** Agent completion precedes mandatory product finalization and release of the session. */
@@ -224,13 +274,19 @@ export function createCoding(options: CreateCodingOptions): Coding {
     let outcome: CodingOutcome = result.status === 'failed' ? { status: 'failed', error: result.error } : { status: result.status };
     try { saveInterruptedReply({ history: options.history, sessionId: session.session_id, result }); }
     catch (cause) {
-      outcome = { status: 'failed', error: { code: 'MESSAGE_SAVE_FAILED',
-        message: cause instanceof Error ? cause.message : 'Could not save the interrupted reply.', retryable: false } };
+      outcome = {
+        status: 'failed', error: {
+          code: 'MESSAGE_SAVE_FAILED',
+          message: cause instanceof Error ? cause.message : 'Could not save the interrupted reply.', retryable: false
+        }
+      };
     }
     try { await options.finalize(runSnapshot(entry, run, session)); }
     catch (cause) {
-      outcome = { status: 'failed',
-        error: { code: 'CLEANUP_FAILED', message: cause instanceof Error ? cause.message : 'Coding finalization failed.', retryable: false } };
+      outcome = {
+        status: 'failed',
+        error: { code: 'CLEANUP_FAILED', message: cause instanceof Error ? cause.message : 'Coding finalization failed.', retryable: false }
+      };
     }
     if (outcome.status !== 'failed' && entry.controller.signal.aborted) outcome = { status: 'cancelled' };
     entry.completedAt = Date.now();
@@ -239,9 +295,20 @@ export function createCoding(options: CreateCodingOptions): Coding {
     const reply = committed.status === 'ok' ? committed.messages.find(item => item.message.message_kind === 'assistant_reply') : undefined;
     if (outcome.status === 'completed') outcome = { ...outcome, assistantMessageId: reply?.message.message_id };
     entry.outcome = outcome;
-    options.events.publish({ type: 'run.ended', sessionId: session.session_id, executionId: run.runId,
-      payload: { status: outcome.status, error: outcome.status === 'failed' ? outcome.error : undefined,
-        assistantMessageId: reply?.message.message_id } });
+    const user = committed.status === 'ok'
+      ? committed.messages.find(item => item.message.message_kind === 'user_message') : undefined;
+    if (outcome.status === 'completed' && user && reply) options.onCompleted?.({
+      sessionId: session.session_id, executionId: run.runId,
+      userMessageId: user.message.message_id, assistantMessageId: reply.message.message_id,
+      completedAt: new Date(entry.completedAt).toISOString(),
+    });
+    options.events.publish({
+      type: 'run.ended', sessionId: session.session_id, executionId: run.runId,
+      payload: {
+        status: outcome.status, error: outcome.status === 'failed' ? outcome.error : undefined,
+        assistantMessageId: reply?.message.message_id
+      }
+    });
     return outcome;
   }
 
@@ -251,8 +318,10 @@ export function createCoding(options: CreateCodingOptions): Coding {
       const entry = requests.get(requestId);
       if (!entry || entry.completedAt) return false;
       entry.controller.abort();
-      if (entry.run && entry.session) options.events.publish({ type: 'run.cancel.requested', sessionId: entry.session.session_id,
-        executionId: entry.run.runId, payload: { requestedBy: 'user', reason: 'user_cancelled', scope: 'run' } });
+      if (entry.run && entry.session) options.events.publish({
+        type: 'run.cancel.requested', sessionId: entry.session.session_id,
+        executionId: entry.run.runId, payload: { requestedBy: 'user', reason: 'user_cancelled', scope: 'run' }
+      });
       return true;
     },
     getRun(runId) {
@@ -276,7 +345,7 @@ interface CodingRequest {
   readonly controller: AbortController;
   readonly createdAt: string;
   readonly submission: Promise<SubmitCodingInputResult>;
-  completion: Promise<void>;
+  completion: Promise<CodingOutcome>;
   session?: Session;
   run?: AgentRun;
   outcome?: CodingOutcome;
@@ -286,11 +355,13 @@ interface CodingRequest {
 /** The run status is a projection; this product never advances Agent's mutable state. */
 function runSnapshot(entry: CodingRequest, run: AgentRun, session: Session): CodingRunSnapshot {
   const snapshot = run.snapshot();
-  return { runId: run.runId, requestId: entry.request.requestId, kind: 'conversation',
+  return {
+    runId: run.runId, requestId: entry.request.requestId, kind: 'conversation',
     sessionId: session.session_id, workspaceId: session.workspace_id,
     status: entry.outcome?.status ?? snapshot.status, createdAt: entry.createdAt, startedAt: entry.createdAt,
     completedAt: entry.completedAt ? new Date(entry.completedAt).toISOString() : undefined,
-    error: entry.outcome?.status === 'failed' ? entry.outcome.error : undefined };
+    error: entry.outcome?.status === 'failed' ? entry.outcome.error : undefined
+  };
 }
 
 function rejected(requestId: string, code: string, message: string, session?: Session): SubmitCodingInputResult {

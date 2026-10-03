@@ -28,7 +28,8 @@ export interface CodingRunPreparation {
   readonly sandbox: Pick<Sandbox, 'capabilities'>;
   readonly policy: AgentExecutionPolicy;
   readonly operatingSystem: string;
-  readonly webSearch?: WebSearch;
+  readonly webSearch?: (workspaceId?: string) => WebSearch | undefined;
+  readonly toolAvailability?: { isAvailable(request: { toolName: string }): boolean };
   readonly webFetch: WebFetch;
 }
 
@@ -45,13 +46,7 @@ export async function prepareCodingRun(request: {
   request.signal.throwIfAborted();
   if (workspace.status !== 'found') throw new Error('The Coding workspace is unavailable.');
   const capabilities = dependencies.sandbox.capabilities();
-  const tools: AgentTool[] = [readFileTool, writeFileTool, editFileTool, listDirectoryTool, globTool,
-    searchTextTool, createDirectoryTool, copyPathTool, movePathTool, deletePathTool, updatePlanTool,
-    createFetchPageTool(dependencies.webFetch)];
-  if (capabilities.shellKind && capabilities.shellName) {
-    tools.push(createRunCommandTool({ shellKind: capabilities.shellKind, shellName: capabilities.shellName, executionMethod: 'shell' }));
-  }
-  if (dependencies.webSearch) tools.push(createSearchWebTool(dependencies.webSearch));
+  const tools = selectCodingTools(dependencies, request.session.workspace_id);
   return {
     model: request.model,
     permissionMode: request.permissionMode,
@@ -64,10 +59,34 @@ export async function prepareCodingRun(request: {
     tools: tools.map(tool => ({
       ...tool,
       execute: (input, execution) => dependencies.workspaceChanges.trackToolExecution({
-        scope: { workspace_id: request.session.workspace_id, session_id: request.session.session_id,
-          execution_id: execution.runId, tool_call_id: execution.toolCallId, tool_execution_id: execution.toolCallId },
+        scope: {
+          workspace_id: request.session.workspace_id, session_id: request.session.session_id,
+          execution_id: execution.runId, tool_call_id: execution.toolCallId, tool_execution_id: execution.toolCallId
+        },
         execute: () => tool.execute(input, execution),
       }),
     })),
   };
 }
+
+const fileAndPlanTools = [readFileTool, writeFileTool, editFileTool, listDirectoryTool, globTool,
+  searchTextTool, createDirectoryTool, copyPathTool, movePathTool, deletePathTool, updatePlanTool];
+
+/** Selects the available tools before execution; later context preparation may narrow this set. */
+export function selectCodingTools(dependencies: Pick<CodingRunPreparation,
+  'sandbox' | 'webSearch' | 'webFetch' | 'toolAvailability'>, workspaceId?: string): AgentTool[] {
+  const capabilities = dependencies.sandbox.capabilities();
+  const tools: AgentTool[] = [...fileAndPlanTools, createFetchPageTool(dependencies.webFetch)];
+  if (capabilities.shellKind && capabilities.shellName) {
+    tools.push(createRunCommandTool({
+      shellKind: capabilities.shellKind,
+      shellName: capabilities.shellName, executionMethod: 'shell'
+    }));
+  }
+  const webSearch = dependencies.webSearch?.(workspaceId);
+  if (webSearch) tools.push(createSearchWebTool(webSearch));
+  return tools.filter(tool => dependencies.toolAvailability?.isAvailable({ toolName: tool.name }) ?? true);
+}
+
+/** The permission editor also lists tools that are currently unavailable. */
+export const codingToolNames = [...fileAndPlanTools.map(tool => tool.name), 'web_fetch', 'web_search', 'run_command'];

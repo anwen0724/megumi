@@ -379,8 +379,8 @@ export interface CodingContextOptions {
   readonly ai: Pick<import('@megumi/ai').Models, 'completeSimple'>;
   readonly megumiHomePath: string;
   readonly instructionDocuments: readonly { instructionId: string; sourcePath: string }[];
-  readonly skills?: Pick<import('@megumi/agent-runtime/resources/skills/skills').Skills, 'createView'>;
-  readonly events?: Pick<import('@megumi/agent-runtime/events').EventBus, 'publish'>;
+  readonly skills?: Pick<import('../skill-operations').Skills, 'createView'>;
+  readonly events?: Pick<import('../application').EventBus, 'publish'>;
 }
 
 /** Reads complete committed context for each model request. */

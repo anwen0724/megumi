@@ -1,90 +1,88 @@
-/*
- * Composes the shared Harness capability instances (Models, Context, Tools,
- * Permissions, Session, Events, Observability, Workspace and Sandbox), then
- * composes the shared Execution, conversation, and Discovery operation owners.
- */
-import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
-import path from 'node:path';
+/* Composes AI, Agent, Coding and Recommendation with application settings and platform services. */
+import {
+  recordConfiguredSessionGrant,
+  resolveConfiguredPermissionRules,
+} from '@megumi/agent/permissions/permission-rules';
+import type { InputSourceAccess } from './coding/input/read-attachments';
+import {
+  createAgent, createSandbox, createWebFetch, createWebSearch,
+  type Agent,
+  type WebFetch,
+  type WebSearch
+} from '@megumi/agent';
+import { createModels, type Api, type Model, type Provider, type ProviderStreams } from '@megumi/ai';
+import { anthropicMessagesApi } from '@megumi/ai/api/anthropic-messages.lazy';
+import { openAICodexResponsesApi } from '@megumi/ai/api/openai-codex-responses.lazy';
+import { openAICompletionsApi } from '@megumi/ai/api/openai-completions.lazy';
+import { openAIResponsesApi } from '@megumi/ai/api/openai-responses.lazy';
+import { builtinProviders } from '@megumi/ai/providers/all';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import crypto from 'node:crypto';
-import type { Api, Model, ProviderStreams } from '@megumi/ai';
+import path from 'node:path';
+import { createEventBus, type ApplicationLogger, type EventBus } from './application';
 import {
-  createCommands,
+  PRODUCT_EXECUTION_POLICY, PRODUCT_RECENT_EVENT_BUFFER, PRODUCT_SHUTDOWN_TIMEOUT_MS,
+  PRODUCT_TERMINAL_RETENTION_MS, resolveModelVisibleOperatingSystem
+} from './application-policy';
+import { createApprovalOperations, type ApprovalOperations } from './approval-operations';
+import { compactCodingHistory } from './coding/compact-history';
+import {
   createCommandInputInterpreter,
-  type CommandTerminalResult,
+  createCommands,
   type Commands,
-} from '@megumi/agent-runtime/runs/commands/index';
+  type CommandTerminalResult,
+} from './coding/input/execute-command';
+import { createInputProcessor } from './coding/input/parse-message';
 import {
-  createContext,
-  deriveContextUsage,
-  type ContextDiscoverySourceRegistry,
-  type ContextWorkspaceSource,
-  type DiscoveryFactsReader,
-} from '@megumi/agent-runtime/context/index';
+  codingToolNames,
+  prepareCodingRun,
+  selectCodingTools,
+  type CodingRunPreparation,
+} from './coding/prepare-run';
+import {
+  createSessionAttachmentReader,
+  type SessionAttachmentFileSystem,
+} from './coding/sessions/session-attachments';
+import { createSessionBranchDrafts } from './coding/sessions/session-branches';
+import { createSessionCatalog } from './coding/sessions/session-catalog';
+import { createSessionHistory, type SessionHistory } from './coding/sessions/session-history';
+import { createSessionAttachmentFileStore, createSessionStore } from './coding/sessions/session-storage';
+import { createCoding, type Coding } from './coding/submit-message';
+import type {
+  ConfiguredModel,
+  ConfiguredProvider,
+  ModelCatalogResult,
+  ModelParameters,
+  ModelSelection,
+  ModelSettingsAccess,
+  ProductWorkspaceFileSystem,
+  ProviderConfiguration
+} from './contracts';
+import {
+  captureRuntimeLogData, composeObservability, createProviderCapture, type ComposedObservability,
+  type ObservabilityPersistenceStorage, type StructuredRuntimeLogger
+} from './observability/index';
+import { createInterestExtractor } from './recommendation/interests/extract-interests';
+import type { PreparePreferencesResult } from './recommendation/preferences/preference-learning';
+import type { PreferenceSetDetail } from './recommendation/preferences/preference-rules';
+import { createDiscovery, type Discovery } from './recommendation/recommendation-api';
+import { createDiscoveryRepository } from './recommendation/recommendation-storage';
+import type { EmbeddedBrowser } from './recommendation/sources/browser-access';
+import { createDiscoverySourceRegistry, type SourceRegistry } from './recommendation/sources/source-catalog';
+import { createSettings, type Settings } from './settings/settings-store';
+import { createSkills, type Skills } from './skill-operations';
+import {
+  initializeMegumiHomeSync,
+  type InitializeMegumiHomeSyncOptions,
+  type MegumiHomePaths,
+} from './storage/home';
 import {
   createDatabase,
   migrateDatabase,
   type DatabaseConnection,
   type ResolveDatabaseMigrationsFolderRequest,
 } from './storage/index';
-import {
-  createDiscoverySourceRegistry,
-  createDiscoveryRepository,
-  createCandidateSupplyAttempts,
-  createRecommendationAttempts,
-  createDiscovery,
-  createContextDiscoverySourceRegistry,
-  createDiscoveryFactsReader,
-  createInterestExtractor,
-  type Discovery,
-  type PreferenceSetDetail,
-  type PreparePreferencesResult,
-  type EmbeddedBrowser,
-  type SourceRegistry,
-} from './discovery/index';
-import { createAgentRuntime, type AgentRuntime } from '@megumi/agent-runtime/agent-runtime';
-import { createEventBus, type EventBus } from '@megumi/agent-runtime/events';
-import {
-  createInputProcessor,
-  type InputSourceAccess,
-} from '@megumi/agent-runtime/runs/input/index';
-import { createInstructionReader } from '@megumi/agent-runtime/resources/instructions/index';
-import {
-  captureRuntimeLogData,
-  createContentDigest,
-  createProviderCapture,
-  composeObservability,
-  type ComposedObservability,
-  type ObservabilityPersistenceStorage,
-  type StructuredRuntimeLogger,
-} from './observability/index';
-import {
-  createPermissions,
-  type Permissions,
-  resolveConfiguredPermissionRules,
-  recordConfiguredSessionGrant,
-} from '@megumi/agent-runtime/permissions/index';
-import { createSandbox } from '@megumi/agent-runtime/tools/sandbox/index';
-import {
-  createSessionAttachmentReader,
-  createSessionBranchDrafts,
-  createSessionCatalog,
-  createSessionHistory,
-  type SessionAttachmentFileSystem,
-  type SessionHistory,
-} from '@megumi/agent-runtime/sessions/index';
-import { createSessionAttachmentFileStore } from './storage/session-attachment-store';
-import { createSessionStore } from './storage/session-store';
-import { createSettings, type Settings } from './settings/settings-store';
-import { createSkills, type Skills } from '@megumi/agent-runtime/resources/skills/index';
-import {
-  createWebFetch,
-  createTools,
-  resolveConfiguredWebSearch,
-  type BuiltInToolAvailability,
-  type Tools,
-  type WebFetch,
-  type WebSearch,
-} from '@megumi/agent-runtime/tools/index';
+import { createDatabaseSkillAvailabilityStore } from './storage/skill-availability-store';
 import {
   createWorkspaceCatalog,
   createWorkspaceChanges,
@@ -92,20 +90,6 @@ import {
   createWorkspacePathPolicy,
 } from './workspace/index';
 import { createWorkspaceStore } from './workspace/workspace-store';
-import {
-  initializeMegumiHomeSync,
-  type InitializeMegumiHomeSyncOptions,
-  type MegumiHomePaths,
-} from './storage/home';
-import {
-  PRODUCT_EXECUTION_POLICY,
-  PRODUCT_RECENT_EVENT_BUFFER,
-  PRODUCT_SHUTDOWN_TIMEOUT_MS,
-  PRODUCT_TERMINAL_RETENTION_MS,
-  resolveModelVisibleOperatingSystem,
-} from './application-policy';
-import type { ProductWorkspaceFileSystem } from './contracts';
-import type { ApplicationLogger } from './application';
 
 export interface ProductCapabilitiesOptions {
   /** Supplies a previously prepared result; callers must bind it to unchanged business state. */
@@ -127,7 +111,7 @@ export interface ProductCapabilitiesOptions {
   readEnvironment?: (name: string) => string | undefined;
   inputSourceAccess?: InputSourceAccess;
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
-  builtInToolAvailability?: BuiltInToolAvailability;
+  builtInToolAvailability?: CodingRunPreparation['toolAvailability'];
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
   embeddedBrowser?: EmbeddedBrowser;
   webSearch?: WebSearch;
@@ -160,15 +144,21 @@ export interface ProductCapabilities {
   readonly history: SessionHistory;
   readonly attachments: ReturnType<typeof createSessionAttachmentReader>;
   readonly skills: Skills;
-  readonly context: ReturnType<typeof createContext>;
-  readonly permissions: Permissions;
   readonly input: ReturnType<typeof createInputProcessor<CommandTerminalResult>>;
   readonly commands: Commands;
-  readonly tools: Tools;
+  readonly tools: {
+    listAvailableTools(request?: { includeDisabled?: boolean }): {
+      tools: readonly {
+        identity: { sourceId: string; namespace: string; sourceToolName: string };
+        registeredToolName: string; definition: { name: string };
+      }[]
+    }
+  };
   readonly branches: ReturnType<typeof createSessionBranchDrafts>;
-  readonly runtime: AgentRuntime;
+  readonly coding: Coding;
+  readonly approval: ApprovalOperations;
+  readonly models: ReturnType<typeof createApplicationModels>;
   readonly discovery: Discovery;
-  readonly discoveryFactsReader: DiscoveryFactsReader;
 }
 
 /** Composes the capability instances once per Host process. */
@@ -182,11 +172,11 @@ export function composeProductCapabilities(
     storage: options.observabilityStorage ?? noopObservabilityStorage,
     ...(options.observabilityStorage
       ? {
-          openIndexDatabase: () => {
-            options.home.fileSystem.ensureDirSync(observabilityRoot);
-            return createDatabase({ filename: path.join(observabilityRoot, 'index.sqlite') });
-          },
-        }
+        openIndexDatabase: () => {
+          options.home.fileSystem.ensureDirSync(observabilityRoot);
+          return createDatabase({ filename: path.join(observabilityRoot, 'index.sqlite') });
+        },
+      }
       : {}),
   });
   const logger = createApplicationLogger(observability.runtimeLogger);
@@ -282,9 +272,9 @@ function composeCapabilitiesWithDatabase(
   const sessionStore = createSessionStore({ database });
   const attachmentContentStore = options.sessionAttachmentFileSystem
     ? createSessionAttachmentFileStore({
-        attachmentsPath: homePaths.attachmentsPath,
-        fileSystem: options.sessionAttachmentFileSystem,
-      })
+      attachmentsPath: homePaths.attachmentsPath,
+      fileSystem: options.sessionAttachmentFileSystem,
+    })
     : undefined;
   const sessions = createSessionCatalog({ store: sessionStore });
   const history = createSessionHistory({
@@ -308,130 +298,41 @@ function composeCapabilitiesWithDatabase(
       },
     },
   });
-  const instructions = createInstructionReader({
-    megumiHomePath: homePaths.homePath,
-    ...(options.instructionContentRoot
-      ? { systemContentRoot: options.instructionContentRoot }
-      : {}),
-  });
-  const sandboxCapabilities = sandbox.capabilities();
-  // Context resolves its own prompt sources; Product only wires the seams.
-  const workspaceSource: ContextWorkspaceSource = {
-    async readWorkspace({ workspaceId }) {
-      const workspace = workspaces.getWorkspace({ workspace_id: workspaceId });
-      return workspace.status === 'found'
-        ? {
-            status: 'ok',
-            workspaceRoot: workspace.workspace.root_path,
-            environment: {
-              workingDirectory: workspace.workspace.root_path,
-              operatingSystem: resolveModelVisibleOperatingSystem(sandboxCapabilities.platform),
-              shell: sandboxCapabilities.shellName ?? 'Unavailable',
-            },
-          }
-        : {
-            status: 'failed',
-            failure: {
-              code: 'workspace_not_found',
-              message: `Workspace ${workspaceId} was not found.`,
-            },
-          };
-    },
+  const models = createApplicationModels({ settingsForWorkspace, apiImplementations: options.modelStreams });
+  const ai = models.ai;
+  const instructionRoot = options.instructionContentRoot
+    ?? path.resolve(process.cwd(), 'packages/agent-runtime/resources/instructions');
+  const documents = (profile: string) => ['common', profile].map(name => ({
+    instructionId: `megumi.${name}`, sourcePath: path.join(instructionRoot, `${name}.md`),
+  }));
+  const preparation: CodingRunPreparation = {
+    workspaces, workspaceChanges, sandbox, policy: PRODUCT_EXECUTION_POLICY,
+    operatingSystem: resolveModelVisibleOperatingSystem(sandbox.capabilities().platform),
+    webSearch: workspaceId => options.webSearch ?? resolveConfiguredWebSearch(settingsForWorkspace(workspaceId)),
+    webFetch: options.webFetch ?? createWebFetch(), toolAvailability: options.builtInToolAvailability,
   };
-  let discoveryFactsReaderDelegate: DiscoveryFactsReader | undefined;
-  let discoverySourceRegistryDelegate: ContextDiscoverySourceRegistry | undefined;
-  const discoveryFactsReader: DiscoveryFactsReader = {
-    readCandidateSupplyFacts: (request) =>
-      discoveryFactsReaderDelegate
-        ? discoveryFactsReaderDelegate.readCandidateSupplyFacts(request)
-        : Promise.resolve(discoveryFactsUnavailable()),
-    readRecommendationFacts: (request) =>
-      discoveryFactsReaderDelegate
-        ? discoveryFactsReaderDelegate.readRecommendationFacts(request)
-        : Promise.resolve(discoveryFactsUnavailable()),
-    readPreferenceLearningFacts: (request) =>
-      discoveryFactsReaderDelegate
-        ? discoveryFactsReaderDelegate.readPreferenceLearningFacts(request)
-        : Promise.resolve(discoveryFactsUnavailable()),
+  const context = {
+    attachments, megumiHomePath: homePaths.homePath,
+    instructionDocuments: documents('conversation'), skills
   };
-  const discoveryContextSources: ContextDiscoverySourceRegistry = {
-    listContextSources: (request) =>
-      discoverySourceRegistryDelegate?.listContextSources(request) ?? [],
-  };
-  const context = createContext({
-    sessionHistory: history,
-    attachmentReader: attachments,
-    workspaceSource,
-    instructionReader: instructions,
-    skills,
-    observability: observability.observability,
-    events,
-    discoveryFactsReader,
-    discoverySourceRegistry: discoveryContextSources,
-  });
-  const permissions = createPermissions({
-    ruleReader: {
-      resolvePermissionRules(request) {
-        return resolveConfiguredPermissionRules(settingsForWorkspace(request.workspaceId), request);
-      },
-    },
-    ruleWriter: {
-      recordSessionPermissionGrant(request) {
-        const session = sessions.getSession({ session_id: request.sessionId });
-        if (session.status !== 'found')
-          return {
-            status: 'failed',
-            failure: { code: 'session_not_found', message: 'Session was not found.' },
-          };
-        return recordConfiguredSessionGrant(
-          settingsForWorkspace(session.session.workspace_id),
-          settings,
-          request,
-        );
-      },
-    },
-    workspacePathClassifier: {
-      async classifyWorkspacePath(request) {
-        const workspace = workspaces.getWorkspace({ workspace_id: request.workspaceId });
-        if (workspace.status !== 'found') {
-          return {
-            status: 'failed',
-            failure: { code: 'workspace_not_found', message: 'Workspace was not found.' },
-          };
-        }
-        const canonical = await workspacePathPolicy.classifyCanonicalPath({
-          workspace_root: workspace.workspace.root_path,
-          target_path: request.targetPath,
-          file_system: workspaceFileSystem,
-        });
-        return {
-          status: 'classified',
-          workspacePath: {
-            absolutePath: canonical.absolute_path,
-            workspacePath: canonical.workspace_path,
-            insideWorkspace: canonical.inside_workspace,
-            protected: canonical.protected,
-            sensitive: canonical.sensitive,
-          },
-        };
-      },
-    },
-  });
-
   const commands: Commands = createCommands({
-    compact: async (request, operationOptions) => {
-      // Manual /compact delegates all source resolution to Context and always
-      // compacts the tools-less Prompt; the bus was injected at creation.
-      return context.compact({
-        sessionId: request.sessionId,
-        workspaceId: request.workspaceId,
-        model: request.model,
-        client: request.client,
-        compactionThresholdRatio: request.compactionThresholdRatio,
-        trigger: 'manual',
-        tools: [],
-        ...(operationOptions?.signal ? { signal: operationOptions.signal } : {}),
+    async compact(request, operationOptions) {
+      const session = sessions.getSession({ session_id: request.sessionId });
+      if (session.status !== 'found') return { status: 'failed', failure: { message: 'Session was not found.' } };
+      const signal = operationOptions?.signal ?? new AbortController().signal;
+      const config = await prepareCodingRun({
+        session: session.session, model: request.model,
+        permissionMode: 'ask', signal
+      }, preparation);
+      const result = await compactCodingHistory({
+        trigger: 'manual', signal, options: {
+          ...context, sessionId: request.sessionId, workspaceId: request.workspaceId,
+          config: { ...config, tools: [] }, compactionThresholdRatio: request.compactionThresholdRatio,
+          ai, history, events,
+        }
       });
+      if (result.status === 'nothing_to_compact') return { ...result, reason: 'No earlier messages can be summarized while preserving the recent context.' };
+      return result.status === 'failed' ? { status: 'failed', failure: result.error } : result;
     },
   });
   const input = createInputProcessor<CommandTerminalResult>({
@@ -446,30 +347,17 @@ function composeCapabilitiesWithDatabase(
       },
     },
   });
-  const recommendationAttempts = createRecommendationAttempts({
-    observability: observability.observability,
-  });
-  const candidateSupplyAttempts = createCandidateSupplyAttempts({
-    observability: observability.observability,
-  });
-  const tools = createTools({
-    settings: settingsForWorkspace,
-    workspaces,
-    workspaceChanges,
-    sandbox,
-    executionPolicy: {
-      maxExecutionTimeMs: PRODUCT_EXECUTION_POLICY.toolExecutionTimeoutMs,
-      maxOutputBytes: 20_000,
-      maxProcessCount: 16,
+  const tools: ProductCapabilities['tools'] = {
+    listAvailableTools(request = {}) {
+      const names = request.includeDisabled ? codingToolNames : selectCodingTools(preparation).map(tool => tool.name);
+      return {
+        tools: names.map(name => ({
+          identity: { sourceId: 'built_in', namespace: 'megumi', sourceToolName: name },
+          registeredToolName: name, definition: { name },
+        }))
+      };
     },
-    recommendationTools: recommendationAttempts,
-    candidateSupplyTools: candidateSupplyAttempts,
-    ...(options.builtInToolAvailability
-      ? { builtInToolAvailability: options.builtInToolAvailability }
-      : {}),
-    ...(options.webSearch ? { webSearch: options.webSearch } : {}),
-    ...(options.webFetch ? { webFetch: options.webFetch } : {}),
-  });
+  };
   // The bus is the second producer's entry point too: branch facts publish here.
   const branches = createSessionBranchDrafts({
     events,
@@ -490,6 +378,7 @@ function composeCapabilitiesWithDatabase(
     },
   });
   const interestExtractor = createInterestExtractor({
+    ai,
     observability: observability.observability,
   });
   const discoverySources =
@@ -523,80 +412,81 @@ function composeCapabilitiesWithDatabase(
       },
     });
 
-  const ids = {
-    createExecutionId: () => createId('execution'),
-    createModelCallId: () => createId('model-call'),
-    createToolExecutionId: () => createId('tool-execution'),
-    createApprovalId: () => createId('approval'),
-    createSessionMessageId: () => createId('message'),
-  };
+  let coding: Coding;
   let discovery: Discovery;
-  const runtime = createAgentRuntime({
-    modelResolution: (workspaceId) => ({
-      settings: settingsForWorkspace(workspaceId),
-      apiImplementations: options.modelStreams,
-    }),
-    createRunId: ids.createExecutionId,
+  const approval = createApprovalOperations({
+    events, getRun: runId => coding.getRun(runId),
+    terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS
+  });
+  const agent = createAgent({
+    ai, sandbox, permissionRules: {
+      async resolve(runId) {
+        const scope = coding.getRun(runId);
+        if (!scope) throw new Error('No Coding permission scope exists for this run.');
+        const resolved = resolveConfiguredPermissionRules(settingsForWorkspace(scope.workspaceId), scope);
+        if (resolved.status === 'failed') throw new Error(resolved.failure.message);
+        return { ...resolved, workspaceId: scope.workspaceId, sessionId: scope.sessionId };
+      },
+      async saveGrant(request) {
+        const scope = coding.getRun(request.runId);
+        if (!scope) throw new Error('No Coding session exists for this grant.');
+        const saved = recordConfiguredSessionGrant(settingsForWorkspace(scope.workspaceId), settings,
+          { sessionId: scope.sessionId, rules: [request.rule] });
+        if (saved.status === 'failed') throw new Error(saved.failure.message);
+      },
+    }, diagnostics: {
+      report(failure) { logger.warn('agent_diagnostic_failed', { ...failure }); },
+      observe(scope, operation, classify) {
+        return observability.observability.withSpan({
+          name: scope.name,
+          correlation: { executionId: scope.runId, modelCallId: scope.modelCallId, toolCallId: scope.toolCallId },
+          metadata: scope.toolName ? { kind: 'tool_call', toolName: scope.toolName } : undefined,
+          classifyResult: classify ? result => ({ outcome: classify(result) }) : undefined,
+        }, operation);
+      },
+      content(input) {
+        observability.observability.recordContent({
+          kind: input.kind, value: input.value,
+          correlation: { executionId: input.runId, modelCallId: input.modelCallId, toolCallId: input.toolCallId }
+        });
+      },
+      modelCapture(scope) {
+        return createProviderCapture({
+          observability: observability.observability,
+          correlation: { executionId: scope.runId, modelCallId: scope.modelCallId }
+        });
+      },
+    }
+  });
+  const ownedCoding = createCoding({
+    ai, agent, sessions, history, branches, input, preparation, context, events,
+    observability: observability.observability,
     terminalRetentionMs: PRODUCT_TERMINAL_RETENTION_MS,
-    execution: {
-      createContentDigest,
-      createProviderCapture: (input) =>
-        createProviderCapture({ ...input, observability: observability.observability }),
-      ids,
-      clock,
-      events,
-      context,
-      tools,
-      permissions,
-      session: history,
-      observability: observability.observability,
-      runtimeLogger: observability.runtimeLogger,
-      policy: PRODUCT_EXECUTION_POLICY,
-    },
-    finalizeRun(execution) {
-      if (execution.kind !== 'conversation' || !execution.workspaceId || !execution.sessionId)
-        return;
+    resolveModel: (workspaceId, selection) => models.resolveModel({ workspaceId, selection }),
+    awaitApproval: approval.awaitApproval,
+    async finalize(run) {
       workspaceChanges.finalizeChangeSet({
-        workspace_id: execution.workspaceId,
-        session_id: execution.sessionId,
-        execution_id: execution.runId,
-        finalized_at: clock.now(),
+        workspace_id: run.workspaceId, session_id: run.sessionId,
+        execution_id: run.runId, finalized_at: clock.now()
       });
     },
-    onSettled(execution, outcome) {
-      if (
-        execution.kind !== 'conversation' ||
-        outcome.status !== 'completed' ||
-        !outcome.assistantMessageId ||
-        !execution.completedAt
-      )
-        return;
-      discovery.observeConversationTurn({
-        sessionId: execution.sessionId,
-        executionId: execution.executionId,
-        userMessageId: execution.userMessageId,
-        assistantMessageId: outcome.assistantMessageId,
-        completedAt: execution.completedAt,
-      });
-    },
-    input: {
-      input,
-      sessions,
-      history,
-      branches,
-      observability: observability.observability,
+    onCompleted(turn) {
+      try { models.withWorkspace(undefined, () => discovery.observeConversationTurn(turn)); }
+      catch (error) { logger.warn('interest_extraction_enqueue_failed', { error }); }
     },
   });
-  discoveryFactsReaderDelegate = createDiscoveryFactsReader({
-    repository: discoveryRepository,
-    candidateSupplyAttempts,
-    recommendationAttempts,
-    getActivePreferenceLearningFacts: (batchId) =>
-      discovery.getActivePreferenceLearningFacts(batchId),
-  });
-  discoverySourceRegistryDelegate = createContextDiscoverySourceRegistry({
-    sourceRegistry: discoverySources,
-  });
+  coding = {
+    ...ownedCoding, submitInput: request =>
+      models.withWorkspace(request.workspaceId, () => ownedCoding.submitInput(request))
+  };
+  const backgroundAgent: Agent = {
+    startAgent: request =>
+      models.withWorkspace(undefined, () => agent.startAgent(request))
+  };
+  const resolveBackgroundModel = async (selection?: ModelSelection) => {
+    const result = await models.resolveModel({ selection });
+    return result.status === 'ok' ? result.model : undefined;
+  };
   discovery = createDiscovery({
     ...(options.consumePreparedPreferences
       ? { consumePreparedPreferences: options.consumePreparedPreferences }
@@ -618,8 +508,14 @@ function composeCapabilitiesWithDatabase(
       settings,
       sessions,
       history,
-      prepareModel: (request) => runtime.prepareModel(request),
-      extractor: (input) => interestExtractor.extract(input),
+      resolveModel: async request => {
+        const result = await models.resolveModel(request);
+        return result.status === 'ok' ? result.model : undefined;
+      },
+      extractor: input => models.withWorkspace(
+        sessionStore.findSessionById(input.job.sessionId)?.workspace_id,
+        () => interestExtractor.extract(input),
+      ),
       ids: {
         createInterestId: () => crypto.randomUUID(),
         createEvidenceId: () => crypto.randomUUID(),
@@ -647,9 +543,9 @@ function composeCapabilitiesWithDatabase(
         : {}),
       observability: observability.observability,
       repository: discoveryRepository,
-      attempts: recommendationAttempts,
+      preparation: { policy: PRODUCT_EXECUTION_POLICY, instructionDocuments: documents('recommendation'), resolveModel: resolveBackgroundModel },
       sourceRegistry: discoverySources,
-      runtime,
+      agent: backgroundAgent,
       settings,
       clock,
       timezone: { get: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
@@ -676,20 +572,17 @@ function composeCapabilitiesWithDatabase(
     },
     preferenceLearning: {
       repository: discoveryRepository,
-      context,
+      ai, instructionDocuments: documents('preference-learning'),
       now: clock.now,
       observability: observability.observability,
-      prepareModel: () => {
+      resolveModel: () => {
         const read = settings.readSettings();
-        if (read.status === 'rejected')
-          return Promise.resolve({ status: 'failed' as const, failure: read.error });
-        return runtime.prepareModel({
-          selection: read.settings.config.discovery.recommendationModel,
-        });
+        if (read.status === 'rejected') return Promise.resolve(undefined);
+        return resolveBackgroundModel(read.settings.config.discovery.recommendationModel);
       },
       ids: {
         createBatchId: () => createId('preference-batch'),
-        createModelCallId: ids.createModelCallId,
+        createModelCallId: () => createId('model-call'),
       },
       onBackgroundError(error) {
         observability.runtimeLogger.write({
@@ -703,21 +596,21 @@ function composeCapabilitiesWithDatabase(
     },
     candidateSupply: {
       repository: discoveryRepository,
-      attempts: candidateSupplyAttempts,
+      preparation: { policy: PRODUCT_EXECUTION_POLICY, instructionDocuments: documents('candidate-supply'), resolveModel: resolveBackgroundModel },
       sourceRegistry: discoverySources,
       settings,
-      runtime,
+      agent: backgroundAgent,
       now: clock.now,
       ids: { createRequestId: () => createId('candidate-supply-request') },
       observability: observability.observability,
       ...(options.timers
         ? {
-            timers: {
-              set: (delayMs: number, callback: () => void) =>
-                options.timers!.setTimeout(callback, delayMs),
-              clear: (handle: unknown) => options.timers!.clearTimeout(handle),
-            },
-          }
+          timers: {
+            set: (delayMs: number, callback: () => void) =>
+              options.timers!.setTimeout(callback, delayMs),
+            clear: (handle: unknown) => options.timers!.clearTimeout(handle),
+          },
+        }
         : {}),
       onBackgroundError(error) {
         observability.runtimeLogger.write({
@@ -753,15 +646,14 @@ function composeCapabilitiesWithDatabase(
     history,
     attachments,
     skills,
-    context,
-    permissions,
     input,
     commands,
     tools,
     branches,
-    runtime,
+    coding,
+    models,
+    approval,
     discovery,
-    discoveryFactsReader,
   };
   return capabilities;
 }
@@ -778,16 +670,6 @@ function discoveryCredential(
     defaultEnvNames: sourceId === 'twitter' ? ['TWITTERAPI_IO_API_KEY'] : ['ZHIHU_ACCESS_SECRET'],
   });
   return result.status === 'found' ? result.value : undefined;
-}
-
-function discoveryFactsUnavailable() {
-  return {
-    status: 'failed' as const,
-    failure: {
-      code: 'discovery_context_not_composed',
-      message: 'Discovery Context sources have not finished composition.',
-    },
-  };
 }
 
 const unavailableEmbeddedBrowser: EmbeddedBrowser = {
@@ -879,3 +761,229 @@ const noopObservabilityStorage: ObservabilityPersistenceStorage = {
   move: async () => undefined,
   removeFile: async () => undefined,
 };
+
+
+export function createApplicationModels(options: {
+  readonly settingsForWorkspace: (workspaceId?: string) => ModelSettingsAccess;
+  readonly apiImplementations?: Partial<Record<Api, ProviderStreams>>;
+}) {
+  const ai = createModels();
+  // Credential resolution follows the caller workspace without mutating shared providers.
+  const workspaceScope = new AsyncLocalStorage<string | undefined>();
+  const builtins = builtinProviders();
+  const registered = new Set<string>();
+  const withWorkspace = <T>(workspaceId: string | undefined, operation: () => T): T =>
+    workspaceScope.run(workspaceId, operation);
+
+  function register(providerId: string): void {
+    if (registered.has(providerId)) return;
+    const builtin = builtins.find(item => item.id === providerId);
+    const implementation = (model: Model<Api>): ProviderStreams => {
+      const injected = options.apiImplementations?.[model.api];
+      if (injected) return injected;
+      if (builtin?.getModels().some(item => item.api === model.api)) return builtin;
+      const api = defaultApiImplementations[model.api];
+      if (!api) throw new Error(`Unsupported model API: ${model.api}`);
+      return api;
+    };
+    ai.setProvider({
+      id: providerId,
+      name: builtin?.name ?? providerId,
+      getModels: () => builtin?.getModels() ?? [],
+      auth: {
+        apiKey: {
+          name: `${providerId} credentials`,
+          async resolve(input) {
+            const settings = options.settingsForWorkspace(workspaceScope.getStore());
+            const read = settings.readSettings();
+            if (read.status === 'rejected') throw new Error(read.error.message);
+            const apiKeyEnv = read.settings.config.providers[providerId]?.apiKeyEnv;
+            const credential = settings.readCredential({ target: { kind: 'provider', providerId }, apiKeyEnv });
+            if (credential.status === 'rejected') throw new Error(credential.error.message);
+            if (credential.status === 'found') return { auth: { apiKey: credential.value }, source: credential.source };
+            return apiKeyEnv ? undefined : builtin?.auth.apiKey?.resolve(input);
+          },
+        }
+      },
+      stream: (model, context, request) => implementation(model).stream(model, context, request),
+      streamSimple: (model, context, request) => implementation(model).streamSimple(model, context, request),
+    });
+    registered.add(providerId);
+  }
+
+  async function resolveModel(request: { workspaceId?: string; selection?: ModelSelection }) {
+    return withWorkspace(request.workspaceId, async () => {
+      const read = options.settingsForWorkspace(request.workspaceId).readSettings();
+      if (read.status === 'rejected') return { status: 'failed' as const, failure: read.error };
+      const catalog = configuredCatalog(read.settings.config.providers, builtins);
+      if (catalog.status === 'failed') return catalog;
+      const provider = catalog.providers.find(item => item.id === request.selection?.providerId);
+      const selected = provider?.models.find(item => item.model.id === request.selection?.modelId);
+      if (!provider || !selected) return modelUnavailable('Select an added model.');
+      const model = selected.model;
+      if (model.maxTokens > model.contextWindow) return modelUnavailable('Model output capacity exceeds its context window.');
+      const builtin = builtins.find(item => item.id === provider.id);
+      if (!options.apiImplementations?.[model.api] && !defaultApiImplementations[model.api]
+        && !builtin?.getModels().some(item => item.api === model.api)) {
+        return modelUnavailable(`Unsupported model API: ${model.api}`);
+      }
+      register(provider.id);
+      try {
+        if (!(await ai.getAuth(provider.id))) return modelUnavailable(`Credentials are missing for ${provider.name}.`);
+      } catch {
+        return modelUnavailable(`Credentials could not be read for ${provider.name}.`);
+      }
+      return { status: 'ok' as const, model, compactionThresholdRatio: read.settings.config.context.compactionThresholdRatio };
+    });
+  }
+
+  return {
+    ai, withWorkspace, resolveModel,
+    readModelCatalog: (request: { workspaceId?: string } = {}) =>
+      readModelCatalog(options.settingsForWorkspace(request.workspaceId)),
+  };
+}
+
+function modelUnavailable(message: string) {
+  return { status: 'failed' as const, failure: { code: 'MODEL_UNAVAILABLE', message } };
+}
+
+/** Lists configured models without materializing the AI catalog into settings. */
+export function readModelCatalog(settings: ModelSettingsAccess): ModelCatalogResult {
+  const read = settings.readSettings();
+  if (read.status === 'rejected') return { status: 'failed', failure: read.error };
+  return configuredCatalog(read.settings.config.providers, builtinProviders());
+}
+
+/** Combines only added models with current builtins; the catalog remains available for adding. */
+function configuredCatalog(
+  configuration: Record<string, ProviderConfiguration>,
+  builtins: readonly Provider[],
+): ModelCatalogResult {
+  const catalog: ConfiguredProvider[] = builtins.map((provider) => {
+    const models = provider.getModels();
+    return {
+      id: provider.id,
+      name: provider.name,
+      enabled: true,
+      api: models[0]?.api,
+      baseUrl: provider.baseUrl,
+      models: models.map((model) => configuredModel(model, undefined, false)),
+    };
+  });
+  const providers: ConfiguredProvider[] = [];
+  for (const [id, settings] of Object.entries(configuration)) {
+    const builtin = builtins.find((provider) => provider.id === id);
+    const originals = builtin?.getModels() ?? [];
+    const models: ConfiguredModel[] = [];
+    for (const [modelId, parameters] of Object.entries(settings.models)) {
+      const original = originals.find((model) => model.id === modelId);
+      const api = settings.api ?? original?.api ?? originals[0]?.api;
+      const baseUrl = settings.baseUrl ?? original?.baseUrl ?? builtin?.baseUrl;
+      if (!api || !baseUrl)
+        return {
+          status: 'failed',
+          failure: {
+            code: 'MODEL_UNAVAILABLE',
+            message: `Provider ${id} requires an API and URL.`,
+          },
+        };
+      if (
+        !original &&
+        (parameters.contextWindowTokens === undefined || parameters.maxOutputTokens === undefined)
+      ) {
+        return {
+          status: 'failed',
+          failure: {
+            code: 'MODEL_UNAVAILABLE',
+            message: `Model ${id}/${modelId} requires capacity parameters.`,
+          },
+        };
+      }
+      const model: Model<Api> = original
+        ? { ...original, api, baseUrl }
+        : {
+          id: modelId,
+          provider: id,
+          api,
+          baseUrl,
+          name: modelId,
+          contextWindow: parameters.contextWindowTokens!,
+          maxTokens: parameters.maxOutputTokens!,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          reasoning: false,
+          input: ['text'],
+        };
+      models.push(configuredModel(model, parameters, !original));
+    }
+    providers.push({
+      id,
+      name: settings.name ?? builtin?.name ?? id,
+      enabled: true,
+      api: settings.api ?? originals[0]?.api,
+      baseUrl: settings.baseUrl ?? builtin?.baseUrl,
+      models,
+    });
+  }
+  return { status: 'ok', providers, catalog };
+}
+
+function configuredModel(
+  model: Model<Api>,
+  overrides: ModelParameters | undefined,
+  custom: boolean,
+): ConfiguredModel {
+  const capabilities = {
+    streaming: custom ? ('unknown' as const) : true,
+    toolCalls: custom ? ('unknown' as const) : true,
+    thinking: custom ? ('unknown' as const) : model.reasoning,
+    imageInput: custom ? ('unknown' as const) : model.input.includes('image'),
+    ...overrides?.capabilities,
+  };
+  return {
+    enabled: true,
+    custom,
+    capabilities,
+    model: {
+      ...model,
+      name: overrides?.name ?? model.name,
+      contextWindow: overrides?.contextWindowTokens ?? model.contextWindow,
+      maxTokens: overrides?.maxOutputTokens ?? model.maxTokens,
+      reasoning: capabilities.thinking === true,
+      input: capabilities.imageInput === true ? ['text', 'image'] : ['text'],
+    },
+  };
+}
+
+
+const defaultApiImplementations: Readonly<Record<string, ProviderStreams>> = {
+  'openai-completions': openAICompletionsApi(),
+  'openai-responses': openAIResponsesApi(),
+  'openai-codex-responses': openAICodexResponsesApi(),
+  'anthropic-messages': anthropicMessagesApi(),
+};
+
+
+export function resolveConfiguredWebSearch(settings: Pick<Settings, 'readSettings' | 'readCredential'>): WebSearch | undefined {
+  const resolved = settings.readSettings();
+  if (resolved.status === 'rejected') throw new Error(resolved.error.message);
+  const config = resolved.settings.config.webSearch;
+  if (!config.provider) return undefined;
+  const environmentNames = {
+    brave: 'BRAVE_SEARCH_API_KEY',
+    tavily: 'TAVILY_API_KEY',
+    exa: 'EXA_API_KEY',
+  };
+  const credential = settings.readCredential({
+    target: { kind: 'webSearch' },
+    apiKeyEnv: config.apiKeyEnv,
+    defaultEnvNames: config.provider === 'custom' ? [] : [environmentNames[config.provider]],
+  });
+  if (credential.status === 'rejected') throw new Error(credential.error.message);
+  if (credential.status === 'missing') return undefined;
+  return createWebSearch({
+    provider: config.provider,
+    apiKey: credential.value,
+    baseUrl: config.baseUrl,
+  });
+}

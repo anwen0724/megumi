@@ -1,14 +1,21 @@
 /*
  * Binds AI once and owns the state, cancellation and final result of each independent run.
  */
-import { randomUUID } from 'node:crypto';
 import type { Api, AssistantMessage, Message, Model, Models } from '@megumi/ai';
+import { randomUUID } from 'node:crypto';
 import type { AgentContext, ExecutionEnvironment } from '../context/context-contracts';
-import type { AgentTool, ApprovalDecision, ApprovalRequest, PermissionMode, ToolExecutionResult, ToolExecutionNotification } from '../tools/tool-contracts';
-import { runAgentLoop } from './agent-loop';
-import { reportDiagnostic, type AgentDiagnostics } from '../diagnostics';
-import { createSandbox, type Sandbox } from '../sandbox/sandbox-scope';
+import { observeOperation, reportDiagnostic, type AgentDiagnostics } from '../diagnostics';
 import type { AgentPermissionRules } from '../permissions/authorize-tool';
+import { createSandbox, type Sandbox } from '../sandbox/sandbox-scope';
+import type {
+  AgentTool,
+  ApprovalDecision,
+  ApprovalRequest,
+  PermissionMode,
+  ToolExecutionNotification,
+  ToolExecutionResult,
+} from '../tools/tool-contracts';
+import { runAgentLoop } from './agent-loop';
 
 export interface AgentExecutionPolicy {
   readonly maxModelCallsPerExecution: number;
@@ -45,7 +52,7 @@ export type AgentPhase = 'saving_message' | 'preparing_context' | 'compacting_co
 
 export interface AgentError {
   readonly code: 'MESSAGE_SAVE_FAILED' | 'CONTEXT_FAILED' | 'CONTEXT_OVERFLOW' | 'MODEL_CALL_FAILED'
-    | 'MODEL_TIMEOUT' | 'MODEL_PROTOCOL_ERROR' | 'TOOL_SYSTEM_FAILED' | 'EXECUTION_LIMIT_REACHED' | 'CLEANUP_FAILED';
+  | 'MODEL_TIMEOUT' | 'MODEL_PROTOCOL_ERROR' | 'TOOL_SYSTEM_FAILED' | 'EXECUTION_LIMIT_REACHED' | 'CLEANUP_FAILED';
   readonly message: string;
   readonly retryable: boolean;
 }
@@ -54,10 +61,10 @@ export type AgentResult = {
   readonly runId: string;
   readonly runMessages: readonly Message[];
 } & (
-  | { readonly status: 'completed'; readonly reason: 'model_response' | 'tool_completed' }
-  | { readonly status: 'cancelled' }
-  | { readonly status: 'failed'; readonly phase: AgentPhase; readonly error: AgentError; readonly cancellationRequested: boolean }
-);
+    | { readonly status: 'completed'; readonly reason: 'model_response' | 'tool_completed' }
+    | { readonly status: 'cancelled' }
+    | { readonly status: 'failed'; readonly phase: AgentPhase; readonly error: AgentError; readonly cancellationRequested: boolean }
+  );
 
 export interface AgentSnapshot {
   readonly runId: string;
@@ -130,6 +137,7 @@ export interface RunExecution {
   readonly runId: string;
   readonly request: StartAgentRequest;
   readonly ai: CreateAgentRequest['ai'];
+  readonly diagnostics?: AgentDiagnostics;
   readonly signal: AbortSignal;
   readonly messages: Message[];
   readonly sandbox: Sandbox;
@@ -183,7 +191,7 @@ function startRun(options: CreateAgentRequest & { readonly sandbox: Sandbox }, s
   };
   signal.addEventListener('abort', onAbort, { once: true });
   const execution: RunExecution = {
-    runId, request, ai: options.ai, signal, messages, progress, emit,
+    runId, request, ai: options.ai, diagnostics: options.diagnostics, signal, messages, progress, emit,
     sandbox: options.sandbox, permissionRules: options.permissionRules,
     approvalWaiting(approvalId, waiting) {
       if (waiting) approvals.add(approvalId);
@@ -207,7 +215,7 @@ function startRun(options: CreateAgentRequest & { readonly sandbox: Sandbox }, s
       emit({ type: 'message_saved', runId, messageId });
     },
   };
-  const completion = Promise.resolve().then(async (): Promise<AgentResult> => {
+  const completion = Promise.resolve().then(() => observeOperation(options.diagnostics, { runId, name: 'agent.execution' }, async (): Promise<AgentResult> => {
     let result: AgentResult;
     try {
       const reason = await runAgentLoop(execution);
@@ -237,7 +245,8 @@ function startRun(options: CreateAgentRequest & { readonly sandbox: Sandbox }, s
     const final = freezeResult(structuredClone(result));
     emit({ type: 'ended', runId, result: final });
     return final;
-  });
+  }, result => result.status === 'failed' ? { status: 'error', ...result.error }
+    : { status: result.status === 'completed' ? 'ok' : 'cancelled' }));
   return { runId, snapshot, completion, cancel() { if (!settled) controller.abort(); } };
 }
 

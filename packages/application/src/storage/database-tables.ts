@@ -41,7 +41,7 @@ export const databaseTableOwnership = {
   session: {
     module: 'session',
     repository: 'SessionStore',
-    modulePath: 'packages/agent-runtime/src/sessions',
+    modulePath: 'packages/application/src/coding/sessions',
     tables: [
       'sessions',
       'session_entries',
@@ -59,7 +59,7 @@ export const databaseTableOwnership = {
   skill: {
     module: 'skills',
     repository: 'SkillRepository',
-    modulePath: 'packages/agent-runtime/src/resources/skills',
+    modulePath: 'packages/application/src/skill-operations.ts',
     tables: ['skill_availability'],
   },
   discovery: {

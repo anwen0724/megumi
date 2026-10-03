@@ -2,20 +2,20 @@
  * Owns application startup rollback and ordered shutdown. It records only
  * resources created by Composition and never decides module business state.
  */
-import type { EventSubscription } from '@megumi/agent-runtime/events';
+import type { EventSubscription } from './application';
 import type { Voice } from './voice/index';
 
 export interface ApplicationResourceManager {
   stop(input: {
-    readonly discovery: Pick<import('./discovery/index').Discovery, 'shutdown'>;
-    readonly runtime: Pick<import('@megumi/agent-runtime/agent-runtime').AgentRuntime, 'stop'>;
+    readonly discovery: Pick<import('./recommendation/recommendation-api').Discovery, 'shutdown'>;
+    readonly coding: Pick<import('./coding/submit-message').Coding, 'shutdown'>;
   }): Promise<void>;
   registerDatabase(database: Pick<import('./storage/index').DatabaseConnection, 'close'>): void;
   registerEventSubscription(subscription: EventSubscription): void;
   rollbackStartup(): void;
   dispose(input: {
-    readonly discovery: Pick<import('./discovery/index').Discovery, 'shutdown'>;
-    readonly runtime: Pick<import('@megumi/agent-runtime/agent-runtime').AgentRuntime, 'stop'>;
+    readonly discovery: Pick<import('./recommendation/recommendation-api').Discovery, 'shutdown'>;
+    readonly coding: Pick<import('./coding/submit-message').Coding, 'shutdown'>;
     readonly voice: Pick<Voice, 'dispose'>;
     readonly speechOutput: { dispose(): void };
     readonly observability: { shutdown(): Promise<void> };
@@ -24,14 +24,14 @@ export interface ApplicationResourceManager {
 
 interface ProductDisposeFailure {
   readonly resource:
-    | 'discovery'
-    | 'execution'
-    | 'conversation'
-    | 'voice'
-    | 'speech-output'
-    | 'events'
-    | 'observability'
-    | 'database';
+  | 'discovery'
+  | 'execution'
+  | 'conversation'
+  | 'voice'
+  | 'speech-output'
+  | 'events'
+  | 'observability'
+  | 'database';
   readonly error: unknown;
 }
 
@@ -45,11 +45,9 @@ export function createApplicationResourceManager(input: {
   const stop: ApplicationResourceManager['stop'] = (owners) => {
     stopPromise ??= (async () => {
       const discovery = owners.discovery.shutdown();
-      const execution = owners.runtime.stop({ timeoutMs: input.shutdownTimeoutMs });
+      const execution = owners.coding.shutdown();
       const work = Promise.allSettled([discovery, execution]).then((results) => {
         const failures: unknown[] = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : []);
-        const execution = results[1];
-        if (execution?.status === 'fulfilled' && execution.value?.status === 'timed_out') failures.push(new Error('Agent Execution shutdown timed out.'));
         if (failures.length) throw new AggregateError(failures, 'Product business shutdown failed.');
       });
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -58,7 +56,10 @@ export function createApplicationResourceManager(input: {
           timer = setTimeout(() => reject(new Error('Product business shutdown timed out.')), input.shutdownTimeoutMs);
         })]);
       } finally { if (timer) clearTimeout(timer); }
-    })();
+    })().catch((error: unknown) => {
+      stopPromise = undefined;
+      throw error;
+    });
     return stopPromise;
   };
 
@@ -89,14 +90,10 @@ export function createApplicationResourceManager(input: {
       }
     },
 
-    /** Attempts every shutdown step and reports all failures only after cleanup. */
-    async dispose({ discovery, runtime, voice, speechOutput, observability }) {
+    /** Releases dependent resources only after business work has actually stopped. */
+    async dispose({ discovery, coding, voice, speechOutput, observability }) {
+      await stop({ discovery, coding });
       const failures: ProductDisposeFailure[] = [];
-      try {
-        await stop({ discovery, runtime });
-      } catch (error) {
-        failures.push({ resource: 'execution', error });
-      }
 
       try {
         await voice.dispose();

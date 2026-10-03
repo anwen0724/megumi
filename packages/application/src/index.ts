@@ -3,18 +3,19 @@
  * Internal capability instances stay private behind Application.
  */
 export {
-  createApplication,
-  type CreateApplicationOptions,
-  type ApplicationVoiceOptions,
-  type ProductEnvironment,
+  type Application,
+  type ApplicationLogger,
+  type ApplicationStartOptions, type BackgroundTriggerMode, type EventFilter,
+  type EventHandler,
+  type EventSubscription
+} from './application';
+export {
+  createApplication, type ApplicationVoiceOptions, type CreateApplicationOptions, type ProductEnvironment,
   type ProductInputSourceAccess,
   type ProductObservabilityStorage,
   type ProductSessionAttachmentFileSystem,
-  type ProductSettingsEnvironment,
+  type ProductSettingsEnvironment
 } from './create-application';
-export {
-  type BackgroundTriggerMode,
-  type Application,
-  type ApplicationLogger,
-  type ApplicationStartOptions,
-} from './application';
+
+export type { ApplicationOperations } from './application-operations';
+export type { ModelCatalogResult, ModelSelection } from './contracts';

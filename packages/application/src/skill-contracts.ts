@@ -1,4 +1,4 @@
-/* Defines stable, host-neutral Skill management operations exposed by Product. */
+/* Defines application-owned Skill availability and management requests for host UIs. */
 import { z } from 'zod';
 
 export interface SkillHost {

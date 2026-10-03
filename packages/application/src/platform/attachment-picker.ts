@@ -1,5 +1,5 @@
 /* Defines the host-provided attachment selection capability used by Product. */
-import type { SelectedDocumentDto, SelectedImageDto } from '../session-contracts';
+import type { SelectedDocumentDto, SelectedImageDto } from '../coding/session-contracts';
 
 export interface AttachmentPicker {
   selectImages(): Promise<

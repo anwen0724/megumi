@@ -1,6 +1,7 @@
 /*
  * Authorizes one tool call, contains its execution scope and preserves its actual result.
  */
+import { captureContent, observeOperation } from '../diagnostics';
 import type { ToolCall } from '@megumi/ai';
 import { AgentFailure, type RunExecution } from '../execution/run-agent';
 import { authorizeTool } from '../permissions/authorize-tool';
@@ -8,7 +9,12 @@ import type { SandboxScope, ToolExecutionAccess } from '../sandbox/sandbox-scope
 import { SandboxProcessError } from '../sandbox/windows-process';
 import type { AgentTool, ToolExecutionResult } from './tool-contracts';
 import { validateToolInput } from './tool-input';
-import { createCancelledToolResult, createFailedToolResult, normalizeRawToolResult, ToolExecutionFailure } from './tool-result';
+import {
+  createCancelledToolResult,
+  createFailedToolResult,
+  normalizeRawToolResult,
+  ToolExecutionFailure,
+} from './tool-result';
 
 export interface ExecutedTool {
   readonly result: ToolExecutionResult;
@@ -25,6 +31,7 @@ export async function executeTool(
   if (!input.ok) return { result: createFailedToolResult({ toolName: call.name, code: 'invalid_tool_input', message: input.errorMessage }) };
   try {
     signal.throwIfAborted();
+    captureContent(run.diagnostics, { runId: run.runId, toolCallId: call.id, kind: 'tool.arguments', value: input.value });
     const operations = tool.operations(input.value);
     const permission = await authorizeTool({ run, tool, toolCallId: call.id, input: call.arguments, operations, signal });
     if (permission.status === 'denied') {
@@ -33,7 +40,10 @@ export async function executeTool(
     signal.throwIfAborted();
     const needsScope = operations.some(operation => operation.action === 'workspace.read'
       || operation.action === 'workspace.write' || operation.action === 'process.execute');
-    return await executeAuthorizedTool(run, call, tool, permission.access, needsScope, signal);
+    return await observeOperation(run.diagnostics, { runId: run.runId, name: 'tool.call', toolCallId: call.id, toolName: call.name },
+      () => executeAuthorizedTool(run, call, tool, permission.access, needsScope, signal),
+      execution => execution.result.type === 'failed'
+        ? { status: 'error', ...execution.result.error } : { status: 'ok' });
   } catch (cause) {
     if (signal.aborted && !(cause instanceof AgentFailure)) return { result: createCancelledToolResult({ toolName: call.name }) };
     return {
@@ -82,6 +92,7 @@ async function executeAuthorizedTool(
       onOutput: output => run.emit({ type: 'tool_output', runId: run.runId, toolCallId: call.id, output }),
       onNotification: notification => run.emit({ type: 'tool_notification', runId: run.runId, toolCallId: call.id, notification }),
     });
+    captureContent(run.diagnostics, { runId: run.runId, toolCallId: call.id, kind: 'tool.handler_result', value: rawResult });
     result = normalizeRawToolResult({
       toolName: call.name,
       rawResult: timeout.signal.aborted && rawResult.error?.code !== 'termination_unconfirmed'
@@ -92,8 +103,9 @@ async function executeAuthorizedTool(
     const known = cause instanceof ToolExecutionFailure || cause instanceof SandboxProcessError;
     const code = known && cause.code === 'termination_unconfirmed' ? cause.code
       : timeout.signal.aborted ? 'tool_timeout' : signal.aborted ? 'tool_cancelled'
-      : known ? cause.code : 'tool_execution_failed';
-    result = createFailedToolResult({ toolName: call.name, code,
+        : known ? cause.code : 'tool_execution_failed';
+    result = createFailedToolResult({
+      toolName: call.name, code,
       message: cause instanceof Error ? cause.message : 'Tool execution failed.',
       details: cause instanceof ToolExecutionFailure ? cause.details : undefined,
     });
@@ -109,5 +121,6 @@ async function executeAuthorizedTool(
   if (result.type === 'failed' && result.error.code === 'termination_unconfirmed') {
     failure ??= new AgentFailure('cleanup', { code: 'CLEANUP_FAILED', message: result.error.message, retryable: false });
   }
+  captureContent(run.diagnostics, { runId: run.runId, toolCallId: call.id, kind: 'tool.result', value: result });
   return { result, failure };
 }

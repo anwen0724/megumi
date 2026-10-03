@@ -1,9 +1,9 @@
 /* Defines persisted permission configuration using the permission module's rules. */
-import { z } from 'zod';
 import {
   PermissionModeSchema,
   PermissionRuleSchema,
-} from '@megumi/agent-runtime/permissions/index';
+} from '@megumi/agent/permissions/permission-rules';
+import { z } from 'zod';
 
 export const PermissionsConfigurationSchema = z
   .object({

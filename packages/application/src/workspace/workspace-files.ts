@@ -1,9 +1,9 @@
 /*
  * Provides canonical Workspace directory reads and safe file-reference resolution.
  */
+import type { WorkspacePathPolicy } from '@megumi/agent/sandbox/file-access';
 import path from 'node:path';
 import type { WorkspaceCatalog } from './workspace-catalog';
-import type { WorkspacePathPolicy } from '@megumi/agent-runtime/permissions/workspace-path-policy';
 
 export const DEFAULT_WORKSPACE_FILE_IGNORE_NAMES = [
   '.git',
@@ -30,23 +30,23 @@ export interface WorkspaceFileEntry {
 export interface ListWorkspaceDirectoryRequest { workspace_id: string; directory_path: string }
 export type ListWorkspaceDirectoryResult =
   | {
-      status: 'ok';
-      workspace_id: string;
-      workspace_root: string;
-      directory_path: string;
-      entries: WorkspaceFileEntry[];
-    }
+    status: 'ok';
+    workspace_id: string;
+    workspace_root: string;
+    directory_path: string;
+    entries: WorkspaceFileEntry[];
+  }
   | { status: 'workspace_not_found'; workspace_id: string }
   | { status: 'path_rejected'; reason: 'absolute_path' | 'outside_workspace' };
 export interface ResolveWorkspaceFileRequest { workspace_id: string; file_path: string }
 export type ResolveWorkspaceFileResult =
   | {
-      status: 'ok';
-      workspace_id: string;
-      workspace_root: string;
-      file_path: string;
-      absolute_path: string;
-    }
+    status: 'ok';
+    workspace_id: string;
+    workspace_root: string;
+    file_path: string;
+    absolute_path: string;
+  }
   | { status: 'workspace_not_found'; workspace_id: string }
   | { status: 'path_rejected'; reason: 'absolute_path' | 'outside_workspace' };
 
@@ -129,12 +129,12 @@ export function createWorkspaceFiles(options: CreateWorkspaceFilesRequest): Work
       });
       return resolved.status === 'ok'
         ? {
-            status: 'ok',
-            workspace_id: request.workspace_id,
-            workspace_root: workspace.workspace.root_path,
-            file_path: resolved.relativePath,
-            absolute_path: resolved.absolutePath,
-          }
+          status: 'ok',
+          workspace_id: request.workspace_id,
+          workspace_root: workspace.workspace.root_path,
+          file_path: resolved.relativePath,
+          absolute_path: resolved.absolutePath,
+        }
         : resolved;
     },
   };
@@ -170,10 +170,10 @@ async function resolveRelativePath(input: {
   }
   return resolved.status === 'resolved'
     ? {
-        status: 'ok',
-        absolutePath: resolved.absolute_path,
-        relativePath: resolved.workspace_path === '.' ? '' : resolved.workspace_path,
-      }
+      status: 'ok',
+      absolutePath: resolved.absolute_path,
+      relativePath: resolved.workspace_path === '.' ? '' : resolved.workspace_path,
+    }
     : { status: 'path_rejected', reason: 'outside_workspace' };
 }
 

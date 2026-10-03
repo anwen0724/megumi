@@ -1,12 +1,13 @@
 /*
  * Advances one run and awaits mandatory message saves before dependent operations.
  */
+import { captureContent, observeOperation } from '../diagnostics';
 import { randomUUID } from 'node:crypto';
-import { AgentFailure, type RunExecution } from './run-agent';
+import { calculatePromptUsage, contextBudget } from '../context/context-budget';
 import type { PreparedContext } from '../context/context-contracts';
 import { callModel } from './call-model';
 import { callTools } from './call-tools';
-import { calculatePromptUsage, contextBudget } from '../context/context-budget';
+import { AgentFailure, type RunExecution } from './run-agent';
 
 /** Runs the model/tool sequence using the product's complete context. */
 export async function runAgentLoop(run: RunExecution): Promise<'model_response' | 'tool_completed'> {
@@ -61,17 +62,18 @@ async function prepareContext(run: RunExecution): Promise<PreparedContext> {
   const tools = config.tools.map(({ name, description, parameters, executionMode, promptSnippet, promptGuidelines, label }) => ({
     name, description, parameters, executionMode, promptSnippet, promptGuidelines, label,
   }));
-  const context = await run.request.context.prepare({
+  const context = await observeOperation(run.diagnostics, { runId: run.runId, name: 'context.build' }, () => run.request.context.prepare({
     runMessages: structuredClone(run.messages), tools: structuredClone(tools),
     budget: contextBudget(config.model),
     signal: run.signal,
-  });
+  }));
   const names = new Set(tools.map(tool => tool.name));
   if (context.tools.some(tool => !names.has(tool.name))) {
     throw new AgentFailure('preparing_context', {
       code: 'CONTEXT_FAILED', message: 'Prepared context contains a tool outside this run.', retryable: false,
     });
   }
+  captureContent(run.diagnostics, { runId: run.runId, kind: 'prompt.final', value: context });
   return structuredClone(context);
 }
 

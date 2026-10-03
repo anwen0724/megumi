@@ -1,77 +1,102 @@
-/* Implements Product approval submission using Agent Execution-owned state. */
-import type { AgentRuntime, AgentRunSnapshot } from '@megumi/agent-runtime/agent-runtime';
-import type { ApprovalDecisionRequest } from '@megumi/agent-runtime/agent-runtime';
-import type { ApprovalHost, ApprovalResolvePayload, ApprovalRunUiDto } from './approval-contracts';
+/* Connects Agent approval waits to product events and user decisions. */
+import type { ApprovalDecision, ApprovalRequest } from '@megumi/agent';
+import type { JsonObject } from '@megumi/ai';
+import type { EventBus } from './application';
+import type { ApprovalHost, ApprovalResolvedPayload } from './approval-contracts';
+import type { Session } from './coding/sessions/session-catalog';
+import type { CodingRunSnapshot } from './coding/submit-message';
 
-/** Creates the Product operations exposed through ApprovalHost. */
-export function createApprovalOperations(
-  executions: Pick<AgentRuntime, 'resolveApproval'>,
-): ApprovalHost {
-  return {
-    async resolve(request) {
-      const result = await executions.resolveApproval({
-        approvalId: request.approvalRequestId,
-        decision: toApprovalDecision(request),
-      });
-      if (result.status === 'failed') {
-        return {
-          payload: {
-            status: 'failed',
-            approvalRequestId: request.approvalRequestId,
-            failure: result.error,
-          },
-        };
-      }
-      if (result.status === 'not_found') {
-        return {
-          payload: {
-            status: 'not_found',
-            approvalRequestId: result.approvalId,
-          },
-        };
-      }
-      if (result.status === 'not_waiting' || result.status === 'already_resolved') {
-        return {
-          payload: {
-            status: 'not_waiting',
-            approvalRequestId: request.approvalRequestId,
-            run: toApprovalRunDto(result.run),
-          },
-        };
-      }
-      return {
-        payload: {
-          status: 'resumed',
-          approvalRequestId: request.approvalRequestId,
-          run: toApprovalRunDto(result.run),
-        },
-      };
-    },
-  };
+export interface ApprovalOperations extends ApprovalHost {
+  awaitApproval(request: ApprovalRequest, session: Session): Promise<ApprovalDecision>;
 }
 
-function toApprovalDecision(decision: ApprovalResolvePayload): ApprovalDecisionRequest {
-  return decision.decision === 'approved'
-    ? {
-        decision: 'approved',
-        optionId: decision.optionId,
-        ...(decision.reason ? { reason: decision.reason } : {}),
-      }
-    : {
-        decision: 'denied',
-        ...(decision.reason ? { reason: decision.reason } : {}),
-      };
+interface PendingApproval {
+  readonly request: ApprovalRequest;
+  readonly sessionId: string;
+  settle?: (decision: ApprovalDecision) => void;
+  settledAt?: number;
 }
 
-function toApprovalRunDto(execution: AgentRunSnapshot): ApprovalRunUiDto {
-  if (execution.kind !== 'conversation' || !execution.sessionId) {
-    throw new Error('Approval resolution returned a non-conversation execution.');
+/** Owns interaction promises only; permission rules and tool execution remain in Agent. */
+export function createApprovalOperations(input: {
+  readonly events: EventBus;
+  readonly getRun: (runId: string) => CodingRunSnapshot | undefined;
+  readonly terminalRetentionMs: number;
+}): ApprovalOperations {
+  const approvals = new Map<string, PendingApproval>();
+
+  function prune(): void {
+    for (const [id, item] of approvals) {
+      if (item.settledAt && Date.now() - item.settledAt >= input.terminalRetentionMs) approvals.delete(id);
+    }
   }
+
   return {
-    executionId: execution.runId,
-    sessionId: execution.sessionId,
-    status: execution.status,
-    createdAt: execution.createdAt,
-    ...(execution.completedAt ? { completedAt: execution.completedAt } : {}),
+    awaitApproval(request, session) {
+      if (request.signal.aborted) return Promise.resolve({ status: 'cancelled' });
+      prune();
+      const item: PendingApproval = { request, sessionId: session.session_id };
+      approvals.set(request.approvalId, item);
+      return new Promise(resolve => {
+        const abort = () => item.settle?.({ status: 'cancelled' });
+        item.settle = decision => {
+          item.settle = undefined;
+          item.settledAt = Date.now();
+          request.signal.removeEventListener('abort', abort);
+          const resolved: ApprovalResolvedPayload = {
+            approvalRequestId: request.approvalId,
+            toolCallId: request.toolCallId,
+            decision: decision.status === 'allowed' ? 'approved' : decision.status,
+            decidedAt: new Date().toISOString(),
+            ...(decision.status === 'allowed' ? { optionId: decision.optionId } : {}),
+          };
+          input.events.publish({
+            type: 'approval.resolved', sessionId: item.sessionId,
+            executionId: request.runId, payload: resolved
+          });
+          resolve(decision);
+        };
+        request.signal.addEventListener('abort', abort, { once: true });
+        const { registeredToolName, ...toolIdentity } = request.subject.toolIdentity;
+        const args = request.subject.criticalInput;
+        input.events.publish({
+          type: 'approval.requested', sessionId: item.sessionId,
+          executionId: request.runId, payload: {
+            approvalRequestId: request.approvalId, toolCallId: request.toolCallId,
+            toolName: registeredToolName, toolIdentity, reason: request.decision.reason,
+            args: args !== null && typeof args === 'object' && !Array.isArray(args) ? args as JsonObject : { value: args },
+            operations: request.operations.map(operation => ({ ...operation })),
+            options: request.decision.options.map(option => ({
+              optionId: option.optionId, scope: option.scope, ...option.display,
+            })),
+            defaultOptionId: request.decision.defaultOptionId,
+          }
+        });
+      });
+    },
+    async resolve(request) {
+      prune();
+      const item = approvals.get(request.approvalRequestId);
+      const run = item && input.getRun(item.request.runId);
+      if (!item || !run) return { payload: { status: 'not_found', approvalRequestId: request.approvalRequestId } };
+      const projection = {
+        executionId: run.runId, sessionId: run.sessionId,
+        status: run.status, createdAt: run.createdAt, completedAt: run.completedAt
+      };
+      if (!item.settle || item.request.signal.aborted) {
+        return { payload: { status: 'not_waiting', approvalRequestId: request.approvalRequestId, run: projection } };
+      }
+      if (request.decision === 'approved' && !item.request.decision.options.some(option => option.optionId === request.optionId)) {
+        return {
+          payload: {
+            status: 'failed', approvalRequestId: request.approvalRequestId,
+            failure: { code: 'PERMISSION_FAILED', message: 'The selected approval option is unavailable.', retryable: false }
+          }
+        };
+      }
+      item.settle(request.decision === 'approved'
+        ? { status: 'allowed', optionId: request.optionId } : { status: 'denied' });
+      return { payload: { status: 'resumed', approvalRequestId: request.approvalRequestId, run: projection } };
+    },
   };
 }

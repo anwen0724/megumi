@@ -1,7 +1,7 @@
 /* Exposes Coding session operations and projects committed history for the desktop. */
-import type { EventBus } from '@megumi/agent-runtime/events';
+import type { EventBus } from '../application';
 import { estimateContextTokens } from '@megumi/ai/utils/estimate';
-import { resolveRecommendationDiscussion } from '../discovery/recommendations/recommendation-discussion';
+import { resolveRecommendationDiscussion } from '../recommendation/recommendation-discussion';
 import type { AttachmentPicker } from '../platform/attachment-picker';
 import type { LocalFileAvailability } from '../platform/local-file-availability';
 import type { WorkspaceCatalog, WorkspaceChanges, WorkspaceChangeSummary } from '../workspace/index';
@@ -24,7 +24,7 @@ export function createSessionOperations(options: {
     workspaceId?: string,
   ) => Pick<import('../settings/settings-store').Settings, 'readSettings'>;
   reader: SessionReader;
-  recommendations: Pick<import('../discovery/discovery').Discovery, 'getRecommendationReference'>;
+  recommendations: Pick<import('../recommendation/recommendation-api').Discovery, 'getRecommendationReference'>;
   coding: Pick<Coding, 'cancelInput' | 'submitInput'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
@@ -247,7 +247,7 @@ export function createSessionOperations(options: {
 async function submitUserInput(
   coding: Pick<Coding, 'submitInput'>,
   request: SendUserInputRequest,
-  recommendations: Pick<import('../discovery/discovery').Discovery, 'getRecommendationReference'>,
+  recommendations: Pick<import('../recommendation/recommendation-api').Discovery, 'getRecommendationReference'>,
 ): Promise<SendUserInputResult> {
   const reference = request.recommendationId
     ? resolveRecommendationDiscussion(

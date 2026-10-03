@@ -1,8 +1,9 @@
 /*
  * Consumes the configured AI service's stream and projects model output for one turn.
  */
-import { setTimeout as delay } from 'node:timers/promises';
+import { captureContent, createModelCapture, observeModelCapture, observeOperation } from '../diagnostics';
 import { isContextOverflow, isRetryableAssistantError, type AssistantMessage } from '@megumi/ai';
+import { setTimeout as delay } from 'node:timers/promises';
 import type { PreparedContext } from '../context/context-contracts';
 import { AgentFailure, type RunExecution } from './run-agent';
 
@@ -19,7 +20,12 @@ export async function callModel(
     run.progress({ phase: 'calling_model', attempt });
     run.emit({ type: 'model_attempt', runId: run.runId, turn, attempt, outcome: 'started' });
     try {
-      const message = await callAttempt(run, context, messageId);
+      const modelCallId = `${messageId}:${attempt}`;
+      const message = await observeOperation(run.diagnostics, { runId: run.runId, name: 'model.call', modelCallId },
+        () => callAttempt(run, context, messageId, modelCallId),
+        result => result.stopReason === 'error'
+          ? { status: 'error', code: 'MODEL_CALL_FAILED', message: result.errorMessage ?? 'Model request failed.' }
+          : { status: result.stopReason === 'aborted' ? 'cancelled' : 'ok' });
       if (isContextOverflow(message, run.request.config.model.contextWindow)) {
         if (overflowRecoveries >= policy.maxContextOverflowRecoveries) {
           throw new AgentFailure('compacting_context', { code: 'CONTEXT_OVERFLOW', message: 'Context overflow recovery limit reached.', retryable: false });
@@ -31,7 +37,7 @@ export async function callModel(
       }
       if (message.stopReason === 'error') {
         throw new AgentFailure('calling_model', {
-          code: 'MODEL_CALL_FAILED', message: 'Model request failed.',
+          code: 'MODEL_CALL_FAILED', message: message.errorMessage ?? 'Model request failed.',
           retryable: isRetryableAssistantError(message),
         });
       }
@@ -51,20 +57,24 @@ export async function callModel(
 }
 
 /** Timeout requests provider cancellation; stream closure is still awaited. */
-async function callAttempt(run: RunExecution, context: PreparedContext, messageId: string): Promise<AssistantMessage> {
+async function callAttempt(run: RunExecution, context: PreparedContext, messageId: string, modelCallId: string): Promise<AssistantMessage> {
   const { model, policy } = run.request.config;
   const timeout = new AbortController();
   const signal = AbortSignal.any([run.signal, timeout.signal]);
   const timer = setTimeout(() => timeout.abort(), policy.modelCallTimeoutMs);
+  const capture = createModelCapture(run.diagnostics, { runId: run.runId, name: 'model.call', modelCallId });
+  captureContent(run.diagnostics, { runId: run.runId, modelCallId, kind: 'model.request', value: { model, context } });
   let message: AssistantMessage | undefined;
   try {
     const stream = run.ai.streamSimple(model, {
       systemPrompt: context.systemPrompt, messages: [...context.messages], tools: [...context.tools],
     }, {
+      ...capture?.options,
       signal, timeoutMs: policy.modelCallTimeoutMs,
       maxRetries: policy.providerRequestMaxRetries, maxRetryDelayMs: policy.providerRequestMaxRetryDelayMs,
     });
     for await (const event of stream) {
+      observeModelCapture(run.diagnostics, run.runId, () => capture?.observe(event));
       if (event.type === 'done') message = event.message;
       else if (event.type === 'error') message = event.error;
       else {
@@ -80,6 +90,8 @@ async function callAttempt(run: RunExecution, context: PreparedContext, messageI
     throw new AgentFailure('calling_model', { code: 'MODEL_CALL_FAILED', message: 'Model stream failed.', retryable: false }, { cause });
   } finally {
     clearTimeout(timer);
+    observeModelCapture(run.diagnostics, run.runId, () => capture?.complete(message));
+    captureContent(run.diagnostics, { runId: run.runId, modelCallId, kind: 'model.response', value: message });
   }
   run.signal.throwIfAborted();
   if (timeout.signal.aborted) {

@@ -2,16 +2,18 @@
  * Composes the complete Host-neutral Megumi application runtime.
  * Concrete hosts only inject environmental adapters and consume Application.
  */
-import { deriveContextUsage } from '@megumi/agent-runtime/context/index';
+import { bindApplicationLifecycle, type Application } from './application';
 import {
-  createSpeechOutputRuntime,
-  createVoice,
-  type SpeechInputRuntime,
-  type SpeechSynthesizer,
-  type VoiceModels,
-  onRunEndedForSpeechOutput,
-} from './voice/index';
+  composeProductCapabilities,
+  type ProductCapabilities,
+  type ProductCapabilitiesOptions,
+} from './application-capabilities';
 import type { ApplicationOperations } from './application-operations';
+import { PRODUCT_SHUTDOWN_TIMEOUT_MS } from './application-policy';
+import {
+  createApplicationResourceManager,
+  type ApplicationResourceManager,
+} from './application-resource-manager';
 import type {
   AttachmentPicker,
   DiagnosticBundleSaver,
@@ -20,7 +22,6 @@ import type {
   LocalFileAvailability,
 } from './contracts';
 import {
-  createApprovalOperations,
   createDiscoveryOperations,
   createInputSuggestionQuery,
   createObservabilityOperations,
@@ -31,16 +32,13 @@ import {
   createWorkspaceOperations,
 } from './operations';
 import {
-  composeProductCapabilities,
-  type ProductCapabilities,
-  type ProductCapabilitiesOptions,
-} from './application-capabilities';
-import { PRODUCT_SHUTDOWN_TIMEOUT_MS } from './application-policy';
-import {
-  createApplicationResourceManager,
-  type ApplicationResourceManager,
-} from './application-resource-manager';
-import { bindApplicationLifecycle, type Application } from './application';
+  createSpeechOutputRuntime,
+  createVoice,
+  onRunEndedForSpeechOutput,
+  type SpeechInputRuntime,
+  type SpeechSynthesizer,
+  type VoiceModels,
+} from './voice/index';
 
 export interface ApplicationVoiceOptions {
   /** A host injects the single Voice Input Adapter that owns its speech resource. */
@@ -96,7 +94,7 @@ function createApplicationRuntime(
   resources: ApplicationResourceManager,
 ): Application {
   const { capabilities, options } = input;
-  const { runtime, discovery } = capabilities;
+  const { coding, discovery } = capabilities;
   const {
     homePaths,
     observability,
@@ -124,7 +122,7 @@ function createApplicationRuntime(
   const sessionReader = createSessionReader({
     sessions,
     history,
-    runtime,
+    coding,
     events,
     workspaceChanges,
   });
@@ -132,18 +130,15 @@ function createApplicationRuntime(
     settingsForWorkspace: capabilities.settingsForWorkspace,
     reader: sessionReader,
     recommendations: discovery,
-    runtime,
+    coding,
     suggestions,
     sessions,
     history,
     attachments,
     branches,
     workspaces,
-    context: {
-      deriveUsage: (historyItems, model) => deriveContextUsage({ history: historyItems, model }),
-    },
     resolveModel: async (selection, workspaceId) => {
-      const resolved = await runtime.prepareModel({
+      const resolved = await capabilities.models.resolveModel({
         workspaceId,
         selection: { providerId: selection.provider_id, modelId: selection.model_id },
       });
@@ -267,7 +262,7 @@ function createApplicationRuntime(
     }),
   );
   const operations: ApplicationOperations = {
-    discovery: createDiscoveryOperations(discovery, capabilities.discoveryFactsReader),
+    discovery: createDiscoveryOperations(discovery),
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
@@ -277,9 +272,9 @@ function createApplicationRuntime(
       ...(options.fileOpen ? { fileOpen: options.fileOpen } : {}),
     }),
     settings,
-    models: runtime,
+    models: capabilities.models,
     tools,
-    approval: createApprovalOperations(runtime),
+    approval: capabilities.approval,
     observability: createObservabilityOperations({
       queries: observability.queries,
       flush: observability.flush,
@@ -302,11 +297,11 @@ function createApplicationRuntime(
       }),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
-    stop: () => resources.stop({ discovery, runtime }),
+    stop: () => resources.stop({ discovery, coding }),
     dispose: () =>
       resources.dispose({
         discovery,
-        runtime,
+        coding,
         voice,
         speechOutput,
         observability,
@@ -325,13 +320,13 @@ const unavailableSpeechInput: SpeechInputRuntime = {
       },
     };
   },
-  acceptFrame() {},
-  setMuted() {},
-  startManualUtterance() {},
-  finishManualUtterance() {},
-  async stop() {},
+  acceptFrame() { },
+  setMuted() { },
+  startManualUtterance() { },
+  finishManualUtterance() { },
+  async stop() { },
   subscribe() {
-    return () => {};
+    return () => { };
   },
 };
 

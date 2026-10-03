@@ -1,6 +1,22 @@
 /*
  * Exposes stable Workspace facts, ports, and creation entry points.
  */
+export {
+  DEFAULT_PROTECTED_WORKSPACE_PATHS,
+  DEFAULT_SENSITIVE_WORKSPACE_PATHS,
+  createWorkspacePathPolicy
+} from '@megumi/agent/sandbox/file-access';
+export type {
+  AssertOrdinaryWorkspacePathRequest,
+  AssertOrdinaryWorkspacePathResult,
+  ClassifyWorkspacePathRequest,
+  ResolveCanonicalWorkspacePathRequest,
+  ResolveWorkspacePathRequest,
+  ResolveWorkspacePathResult,
+  WorkspaceCanonicalPathFileSystem,
+  WorkspacePathClassification,
+  WorkspacePathPolicy
+} from '@megumi/agent/sandbox/file-access';
 export type {
   ActivateWorkspaceRequest,
   ActivateWorkspaceResult,
@@ -15,33 +31,37 @@ export type {
   RemoveWorkspaceResult,
   Workspace,
   WorkspaceFailure,
-  WorkspaceStatus,
+  WorkspaceStatus
 } from './workspace';
 export { createWorkspaceCatalog } from './workspace-catalog';
 export type {
   CreateWorkspaceCatalogRequest,
   WorkspaceCatalog,
-  WorkspaceCatalogFileSystem,
+  WorkspaceCatalogFileSystem
 } from './workspace-catalog';
-export {
-  DEFAULT_PROTECTED_WORKSPACE_PATHS,
-  DEFAULT_SENSITIVE_WORKSPACE_PATHS,
-  createWorkspacePathPolicy,
-} from '@megumi/agent-runtime/permissions/workspace-path-policy';
+export { createWorkspaceChanges } from './workspace-changes';
 export type {
-  AssertOrdinaryWorkspacePathRequest,
-  AssertOrdinaryWorkspacePathResult,
-  ClassifyWorkspacePathRequest,
-  ResolveCanonicalWorkspacePathRequest,
-  ResolveWorkspacePathRequest,
-  ResolveWorkspacePathResult,
-  WorkspaceCanonicalPathFileSystem,
-  WorkspacePathClassification,
-  WorkspacePathPolicy,
-} from '@megumi/agent-runtime/permissions/workspace-path-policy';
+  CreateWorkspaceChangesRequest,
+  FinalizeWorkspaceChangeSetRequest,
+  FinalizeWorkspaceChangeSetResult,
+  GetWorkspaceChangeSummaryRequest,
+  GetWorkspaceChangeSummaryResult, ListWorkspaceChangeSummariesRequest,
+  ListWorkspaceChangeSummariesResult, ListWorkspaceChangedFilesRequest,
+  ListWorkspaceChangedFilesResult, TrackWorkspaceToolExecutionRequest,
+  WorkspaceChangeDiagnostic,
+  WorkspaceChangeDiagnosticReason,
+  WorkspaceChangeExecutionScope,
+  WorkspaceChangeKind, WorkspaceChangeSet,
+  WorkspaceChangeSetStatus,
+  WorkspaceChangeSummary,
+  WorkspaceChangedFile,
+  WorkspaceChanges, WorkspaceEffectCoverage,
+  WorkspaceEffectType,
+  WorkspaceToolEffectReport
+} from './workspace-changes';
 export {
   DEFAULT_WORKSPACE_FILE_IGNORE_NAMES,
-  createWorkspaceFiles,
+  createWorkspaceFiles
 } from './workspace-files';
 export type {
   CreateWorkspaceFilesRequest,
@@ -51,31 +71,6 @@ export type {
   ResolveWorkspaceFileResult,
   WorkspaceFileEntry,
   WorkspaceFiles,
-  WorkspaceFilesFileSystem,
+  WorkspaceFilesFileSystem
 } from './workspace-files';
-export { createWorkspaceChanges } from './workspace-changes';
-export type {
-  CreateWorkspaceChangesRequest,
-  FinalizeWorkspaceChangeSetRequest,
-  FinalizeWorkspaceChangeSetResult,
-  GetWorkspaceChangeSummaryRequest,
-  GetWorkspaceChangeSummaryResult,
-  ListWorkspaceChangedFilesRequest,
-  ListWorkspaceChangedFilesResult,
-  ListWorkspaceChangeSummariesRequest,
-  ListWorkspaceChangeSummariesResult,
-  TrackWorkspaceToolExecutionRequest,
-  WorkspaceChangeDiagnostic,
-  WorkspaceChangeDiagnosticReason,
-  WorkspaceChangeExecutionScope,
-  WorkspaceChangeKind,
-  WorkspaceEffectCoverage,
-  WorkspaceEffectType,
-  WorkspaceToolEffectReport,
-  WorkspaceChangeSet,
-  WorkspaceChangeSetStatus,
-  WorkspaceChangeSummary,
-  WorkspaceChangedFile,
-  WorkspaceChanges,
-} from './workspace-changes';
 export type { WorkspaceStore } from './workspace-store';
