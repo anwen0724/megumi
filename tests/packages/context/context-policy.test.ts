@@ -1,7 +1,7 @@
 /* Verifies Policy merging, validation, threshold and final Context Window rules. */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_COMPACTION_POLICY } from '@megumi/agent-runtime/context/index';
-import type { ContextCapacity } from '@megumi/agent-runtime/context/index';
+import { DEFAULT_COMPACTION_POLICY } from '@megumi/agent/context/context-budget';
+import type { ContextCapacity } from '@megumi/agent/context/context-budget';
 import {
   compactionPolicyFailure,
   finalContextWindowProblem,
@@ -9,7 +9,7 @@ import {
   shouldAutoCompact,
   validateTokenCount,
   type CompactionPolicy,
-} from '@megumi/agent-runtime/context/context-policy';
+} from '@megumi/agent/context/context-budget';
 
 const capacity: ContextCapacity = {
   providerId: 'openai',

@@ -5,7 +5,7 @@ import {
   buildCompactionSummaryRequest,
   COMPACTION_SUMMARY_SYSTEM_PROMPT,
   generateCompactionSummary,
-} from '@megumi/agent-runtime/context/compaction/compaction-summary-generator';
+} from '@megumi/agent/context/summarize-history';
 import { model } from './context-test-fixtures';
 
 const conversation: Message[] = [
@@ -99,7 +99,7 @@ describe('generateCompactionSummary', () => {
       stopReason: 'stop' as const,
     }));
     await generateCompactionSummary({
-      models: { completeSimple } as unknown as Pick<Models, 'completeSimple'>,
+      ai: { completeSimple } as unknown as Pick<Models, 'completeSimple'>,
       ...summaryInput,
     });
     const request = completeSimple.mock.calls[0]![1] as { messages: Array<{ content: string }> };
@@ -114,7 +114,7 @@ describe('generateCompactionSummary', () => {
       usage: { input: 10, output: 5, cacheRead: 0, cacheWrite: 0, totalTokens: 15, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
     }));
     const result = await generateCompactionSummary({
-      models: { completeSimple } as unknown as Pick<Models, 'completeSimple'>,
+      ai: { completeSimple } as unknown as Pick<Models, 'completeSimple'>,
       ...summaryInput,
     });
     expect(result).toMatchObject({ status: 'generated', content: 'new summary', usage: { totalTokens: 15 } });
@@ -122,13 +122,13 @@ describe('generateCompactionSummary', () => {
 
   it('keeps empty results, errors and length failures as stable failures', async () => {
     const empty = await generateCompactionSummary({
-      models: { completeSimple: vi.fn(async () => ({ content: [], stopReason: 'stop' as const })) } as unknown as Pick<Models, 'completeSimple'>,
+      ai: { completeSimple: vi.fn(async () => ({ content: [], stopReason: 'stop' as const })) } as unknown as Pick<Models, 'completeSimple'>,
       ...summaryInput,
     });
     expect(empty.status).toBe('failed');
 
     const errored = await generateCompactionSummary({
-      models: { completeSimple: vi.fn(async () => ({
+      ai: { completeSimple: vi.fn(async () => ({
         content: [], stopReason: 'error' as const, errorMessage: 'provider error',
       })) } as unknown as Pick<Models, 'completeSimple'>,
       ...summaryInput,
@@ -136,7 +136,7 @@ describe('generateCompactionSummary', () => {
     expect(errored).toEqual({ status: 'failed', failure: 'provider error' });
 
     const truncated = await generateCompactionSummary({
-      models: { completeSimple: vi.fn(async () => ({ content: [], stopReason: 'length' as const })) } as unknown as Pick<Models, 'completeSimple'>,
+      ai: { completeSimple: vi.fn(async () => ({ content: [], stopReason: 'length' as const })) } as unknown as Pick<Models, 'completeSimple'>,
       ...summaryInput,
     });
     expect(truncated.status).toBe('failed');
@@ -146,7 +146,7 @@ describe('generateCompactionSummary', () => {
     const controller = new AbortController();
     controller.abort();
     const result = await generateCompactionSummary({
-      models: { completeSimple: vi.fn(async () => ({ content: [], stopReason: 'stop' as const })) } as unknown as Pick<Models, 'completeSimple'>,
+      ai: { completeSimple: vi.fn(async () => ({ content: [], stopReason: 'stop' as const })) } as unknown as Pick<Models, 'completeSimple'>,
       ...summaryInput,
       signal: controller.signal,
     });

@@ -219,3 +219,41 @@ it('isolates callback and snapshot messages and fixes one immutable completion r
   expect(await run.completion).toBe(result);
   expect(run.snapshot().status).toBe('completed');
 });
+
+it('waits for overflow compaction to update the source, then prepares the retried context', async () => {
+  const { agent, config, provider } = fixture();
+  let compacted = false;
+  const compactionStarted = deferred();
+  const compactionSaved = deferred();
+  const seen: string[] = [];
+  provider.setResponses([
+    fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'maximum context length exceeded' }),
+    context => {
+      seen.push(JSON.stringify(context.messages));
+      return fauxAssistantMessage('Continued after compaction.');
+    },
+  ]);
+  const run = agent.startAgent({
+    config: { ...config, policy: { ...config.policy, maxContextOverflowRecoveries: 1 } },
+    input: { role: 'user', content: 'Continue', timestamp: 1 },
+    context: {
+      async prepare({ tools }) {
+        return { systemPrompt: '', tools, messages: [{ role: 'user', content: compacted ? 'Summary' : 'History', timestamp: 1 }] };
+      },
+      async compact({ reason }) {
+        expect(reason).toBe('overflow');
+        compactionStarted.resolve();
+        await compactionSaved.promise;
+        compacted = true;
+        return { status: 'compacted' };
+      },
+    },
+  });
+  await compactionStarted.promise;
+  expect(provider.state.callCount).toBe(1);
+  compactionSaved.resolve();
+  expect(await run.completion).toMatchObject({ status: 'completed' });
+  expect(seen).toHaveLength(1);
+  expect(seen[0]).toContain('Summary');
+  expect(seen[0]).not.toContain('History');
+});

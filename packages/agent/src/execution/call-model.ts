@@ -2,7 +2,7 @@
  * Consumes the configured AI service's stream and projects model output for one turn.
  */
 import { setTimeout as delay } from 'node:timers/promises';
-import { isRetryableAssistantError, type AssistantMessage } from '@megumi/ai';
+import { isContextOverflow, isRetryableAssistantError, type AssistantMessage } from '@megumi/ai';
 import type { PreparedContext } from '../context/context-contracts';
 import { AgentFailure, type RunExecution } from './run-agent';
 
@@ -10,14 +10,25 @@ import { AgentFailure, type RunExecution } from './run-agent';
 export async function callModel(
   run: RunExecution, context: PreparedContext, messageId: string, turn: number,
   prepare: () => Promise<PreparedContext>,
-): Promise<AssistantMessage> {
+  recoverOverflow: (context: PreparedContext) => Promise<PreparedContext>,
+): Promise<{ readonly message: AssistantMessage; readonly context: PreparedContext }> {
   const { policy } = run.request.config;
+  let overflowRecoveries = 0;
   for (let attempt = 1; ; attempt += 1) {
     run.signal.throwIfAborted();
     run.progress({ phase: 'calling_model', attempt });
     run.emit({ type: 'model_attempt', runId: run.runId, turn, attempt, outcome: 'started' });
     try {
       const message = await callAttempt(run, context, messageId);
+      if (isContextOverflow(message, run.request.config.model.contextWindow)) {
+        if (overflowRecoveries >= policy.maxContextOverflowRecoveries) {
+          throw new AgentFailure('compacting_context', { code: 'CONTEXT_OVERFLOW', message: 'Context overflow recovery limit reached.', retryable: false });
+        }
+        overflowRecoveries += 1;
+        run.emit({ type: 'model_attempt', runId: run.runId, turn, attempt, outcome: 'retrying' });
+        context = await recoverOverflow(context);
+        continue;
+      }
       if (message.stopReason === 'error') {
         throw new AgentFailure('calling_model', {
           code: 'MODEL_CALL_FAILED', message: 'Model request failed.',
@@ -26,7 +37,7 @@ export async function callModel(
       }
       validateMessage(message);
       run.emit({ type: 'model_attempt', runId: run.runId, turn, attempt, outcome: 'completed' });
-      return message;
+      return { message, context };
     } catch (error) {
       const retry = error instanceof AgentFailure && error.detail.retryable
         && attempt < policy.maxModelCallAttempts && !run.signal.aborted;

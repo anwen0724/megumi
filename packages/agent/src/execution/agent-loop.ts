@@ -6,6 +6,7 @@ import { AgentFailure, type RunExecution } from './run-agent';
 import type { PreparedContext } from '../context/context-contracts';
 import { callModel } from './call-model';
 import { callTools } from './call-tools';
+import { calculatePromptUsage, contextBudget } from '../context/context-budget';
 
 /** Runs the model/tool sequence using the product's complete context. */
 export async function runAgentLoop(run: RunExecution): Promise<'model_response' | 'tool_completed'> {
@@ -16,11 +17,20 @@ export async function runAgentLoop(run: RunExecution): Promise<'model_response' 
   for (let turn = 1; turn <= config.policy.maxModelCallsPerExecution; turn += 1) {
     run.signal.throwIfAborted();
     run.progress({ turn, phase: 'preparing_context', streamingMessage: undefined });
-    const context = await prepareContext(run);
+    let context = await prepareContext(run);
+    const budget = contextBudget(config.model);
+    if (calculatePromptUsage({ prompt: context }).tokens > budget.inputTokens) {
+      context = await compactContext(run, context, 'threshold');
+      if (calculatePromptUsage({ prompt: context }).tokens > budget.inputTokens) {
+        throw new AgentFailure('compacting_context', { code: 'CONTEXT_OVERFLOW', message: 'Prepared context exceeds the model input budget.', retryable: false });
+      }
+    }
     run.signal.throwIfAborted();
     run.progress({ phase: 'calling_model' });
     const messageId = randomUUID();
-    const message = await callModel(run, context, messageId, turn, () => prepareContext(run));
+    const called = await callModel(run, context, messageId, turn,
+      () => prepareContext(run), current => compactContext(run, current, 'overflow'));
+    const { message } = called;
     await run.record(message, messageId);
     run.signal.throwIfAborted();
     const calls = message.content.filter(block => block.type === 'toolCall');
@@ -33,7 +43,7 @@ export async function runAgentLoop(run: RunExecution): Promise<'model_response' 
       throw limitFailure();
     }
     run.progress({ phase: 'executing_tools', pendingToolCallIds: calls.map(call => call.id) });
-    const results = await callTools(run, calls, context.tools);
+    const results = await callTools(run, calls, called.context.tools);
     run.signal.throwIfAborted();
     if (config.completeAfterTool && results.some(result =>
       result.toolName === config.completeAfterTool && !result.isError)) return 'tool_completed';
@@ -49,11 +59,7 @@ async function prepareContext(run: RunExecution): Promise<PreparedContext> {
   }));
   const context = await run.request.context.prepare({
     runMessages: structuredClone(run.messages), tools: structuredClone(tools),
-    budget: {
-      contextWindowTokens: config.model.contextWindow,
-      reservedOutputTokens: config.model.maxTokens,
-      inputTokens: config.model.contextWindow - config.model.maxTokens,
-    },
+    budget: contextBudget(config.model),
     signal: run.signal,
   });
   const names = new Set(tools.map(tool => tool.name));
@@ -63,6 +69,25 @@ async function prepareContext(run: RunExecution): Promise<PreparedContext> {
     });
   }
   return structuredClone(context);
+}
+
+/** A successful compaction updates the product source before it is read again. */
+async function compactContext(
+  run: RunExecution, context: PreparedContext, reason: 'threshold' | 'overflow',
+): Promise<PreparedContext> {
+  run.progress({ phase: 'compacting_context' });
+  const result = await run.request.context.compact?.({
+    context: structuredClone(context), budget: contextBudget(run.request.config.model), reason, signal: run.signal,
+  });
+  run.signal.throwIfAborted();
+  if (!result || result.status !== 'compacted') {
+    throw new AgentFailure('compacting_context', {
+      code: result?.status === 'failed' ? 'CONTEXT_FAILED' : 'CONTEXT_OVERFLOW',
+      message: result?.status === 'failed' ? result.error.message : 'Context cannot be compacted further.', retryable: false,
+    });
+  }
+  run.progress({ phase: 'preparing_context' });
+  return prepareContext(run);
 }
 
 function limitFailure(): AgentFailure {

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createInstructionReader } from '@megumi/agent-runtime/resources/instructions/index';
+import { createNodeInstructionSource, loadInstructionFiles } from '@megumi/agent/resources/load-instructions';
 
 const temporaryDirectories: string[] = [];
 
@@ -32,21 +32,20 @@ describe('Node InstructionSource', () => {
       writeFile(path.join(workingDirectory, 'AGENTS.md'), `${'complete '.repeat(10_000)}rules`, 'utf8'),
     ]);
 
-    const reader = createInstructionReader({ megumiHomePath: home });
-    const result = await reader.getEffectiveInstructions({ workspaceRoot, workingDirectory });
+    const result = await loadInstructionFiles({
+      megumiHomePath: home, workspaceRoot, workingDirectory, source: createNodeInstructionSource(),
+    });
 
     expect(result).toMatchObject({
       status: 'ok',
-      instructions: {
-        sources: [
+      sources: [
           { sourcePath: path.join(home, 'AGENTS.md'), content: 'home rules' },
           { sourcePath: path.join(workingDirectory, 'AGENTS.md') },
-        ],
-      },
+      ],
     });
     if (result.status === 'ok') {
-      expect(result.instructions.sources[1]?.content.endsWith('rules')).toBe(true);
-      expect(result.instructions.sources[1]?.content.length).toBeGreaterThan(64 * 1024);
+      expect(result.sources[1]?.content.endsWith('rules')).toBe(true);
+      expect(result.sources[1]?.content.length).toBeGreaterThan(64 * 1024);
     }
   });
 });
