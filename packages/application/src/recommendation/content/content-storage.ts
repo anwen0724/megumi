@@ -35,6 +35,12 @@ export interface NormalizedContentInput {
 export interface ContentStorage {
   /** Returns the existing content for a canonical URL, if any. */
   findByCanonicalUrl(canonicalUrl: string): Content | undefined;
+  /** Returns one content by id, for work resumed after a restart. */
+  findById(contentId: string): Content | undefined;
+  /** Analyses that failed and are due for another attempt, least-attempted first. */
+  listAnalysesDueForRetry(input: { limit: number; now: number }): readonly string[];
+  /** Records a failed analysis attempt and when it may be tried again. */
+  markAnalysisFailure(input: { contentId: string; retryAt: number; errorCode: string }): void;
   /** Returns the first content whose normalized text is exactly equal. */
   findIdByExactText(input: { text: string; excludeId: string }): string | undefined;
   /**
@@ -75,6 +81,34 @@ export function createContentStorage(database: DatabaseConnection): ContentStora
         .prepare<ContentRow>({ sql: `${CONTENT_SELECT} WHERE canonical_url = ?` })
         .get([canonicalUrl]);
       return row ? toContent(row) : undefined;
+    },
+
+    findById(contentId) {
+      const row = database
+        .prepare<ContentRow>({ sql: `${CONTENT_SELECT} WHERE id = ?` })
+        .get([contentId]);
+      return row ? toContent(row) : undefined;
+    },
+
+    listAnalysesDueForRetry(input) {
+      return database
+        .prepare<{ content_id: string }>({
+          sql: `SELECT content_id FROM content_analysis
+                WHERE status = 'failed' AND (retry_at IS NULL OR retry_at <= ?)
+                ORDER BY attempts, content_id LIMIT ?`,
+        })
+        .all([input.now, input.limit])
+        .map((row) => row.content_id);
+    },
+
+    markAnalysisFailure(input) {
+      database
+        .prepare({
+          sql: `UPDATE content_analysis
+                SET status = 'failed', attempts = attempts + 1, retry_at = ?, last_error_code = ?
+                WHERE content_id = ?`,
+        })
+        .run([input.retryAt, input.errorCode, input.contentId]);
     },
 
     findIdByExactText(input) {

@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import type { DatabaseConnection, DatabaseRow } from '../../storage/index';
+import type { RawItem } from '../sources/source-connector';
 
 /** The scope one search actually used; kept as validated JSON. */
 export const SearchScopeSchema = z
@@ -57,6 +58,13 @@ export interface SupplyCheckpoint {
 
 export interface SearchStorage {
   recordSearch(input: SearchRecordInput): void;
+  /**
+   * Discoveries saved but not yet normalized, plus failed ones whose retry is
+   * due. This is how a round resumes after an earlier process stopped.
+   */
+  listDueDiscoveries(input: { limit: number; now: number }): readonly DueDiscovery[];
+  /** Marks a failed discovery as waiting until `retryAt`. */
+  scheduleDiscoveryRetry(input: { resultId: string; retryAt: number; errorCode: string }): void;
   /** Searches newer than `since`, newest first. */
   listRecentSearches(input: { since: number }): readonly SearchRecord[];
   /** Marks a query as used now; failed searches still count as use. */
@@ -86,6 +94,41 @@ export function createSearchStorage(database: DatabaseConnection): SearchStorage
           input.outcome === 'success' ? (input.resultCount ?? 0) : null,
           input.outcome === 'success' ? (input.newItemCount ?? 0) : null,
         ]);
+    },
+
+    listDueDiscoveries(input) {
+      return database
+        .prepare<DiscoveryRow>({
+          sql: `SELECT id, source, external_id, url, title, description, author, published_at
+                FROM search_results
+                WHERE status = 'pending'
+                   OR (status = 'failed' AND (retry_at IS NULL OR retry_at <= ?))
+                ORDER BY first_seen_at, id
+                LIMIT ?`,
+        })
+        .all([input.now, input.limit])
+        .map((row) => ({
+          resultId: row.id,
+          item: {
+            source: row.source,
+            url: row.url,
+            ...(row.external_id ? { externalId: row.external_id } : {}),
+            ...(row.title ? { title: row.title } : {}),
+            ...(row.description ? { text: row.description } : {}),
+            ...(row.author ? { author: row.author } : {}),
+            ...(row.published_at !== null ? { publishedAt: row.published_at } : {}),
+          },
+        }));
+    },
+
+    scheduleDiscoveryRetry(input) {
+      database
+        .prepare({
+          sql: `UPDATE search_results
+                SET status = 'failed', attempts = attempts + 1, retry_at = ?, last_error_code = ?
+                WHERE id = ?`,
+        })
+        .run([input.retryAt, input.errorCode, input.resultId]);
     },
 
     listRecentSearches(input) {
@@ -164,6 +207,23 @@ export function createSearchStorage(database: DatabaseConnection): SearchStorage
         .run([input.lastFinishedAt ?? null, input.nextInterestId ?? null]);
     },
   };
+}
+
+/** One stored discovery a round still has to process. */
+export interface DueDiscovery {
+  readonly resultId: string;
+  readonly item: RawItem;
+}
+
+interface DiscoveryRow extends DatabaseRow {
+  readonly id: string;
+  readonly source: string;
+  readonly external_id: string | null;
+  readonly url: string;
+  readonly title: string | null;
+  readonly description: string | null;
+  readonly author: string | null;
+  readonly published_at: number | null;
 }
 
 const SourceCooldownsSchema = z.record(z.number().int().nonnegative());

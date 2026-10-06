@@ -13,6 +13,7 @@ import { matchPendingInterests } from '../candidates/match-interests';
 import type { CandidatePool, SupplyHealth } from '../candidates/candidate-contracts';
 import type { CandidateStorage } from '../candidates/candidate-storage';
 import { intakeContent } from '../content/intake-content';
+import { analyzeContent } from '../content/analyze-content';
 import type { ContentStorage } from '../content/content-storage';
 import { pruneUnusedContent } from '../content/prune-content';
 import { executePlannedSearch, type PlannedSearch, type StoredDiscovery } from '../discovery/execute-searches';
@@ -90,6 +91,8 @@ export async function runMaintenance(
     { database: dependencies.database, contents: dependencies.contents, retention: dependencies.retention },
     { batchSize: 50 },
   );
+  // Resume whatever an earlier process left unfinished before planning new work.
+  await resumePendingWork(dependencies, input, evaluations, savedCounts, issues);
 
   const poolHealth = evaluations.map((evaluation) => evaluation.health);
   const hasGap = evaluations.some(
@@ -214,12 +217,12 @@ async function intake(
   evaluations: readonly PoolEvaluation[],
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
-): Promise<void> {
-  if (!input.budget.reserve('analysisCalls')) return;
+): Promise<string | undefined> {
+  if (!input.budget.reserve('analysisCalls')) return 'budget';
   const interests = (await dependencies.interests.listInterests()).interests.filter(
     (entry) => entry.enabled,
   );
-  if (!interests.some((entry) => entry.id === interestId)) return;
+  if (!interests.some((entry) => entry.id === interestId)) return 'interest_changed';
   const expiresAt = expiresAtFor(discovery, dependencies);
 
   const outcome = await intakeContent(
@@ -250,7 +253,7 @@ async function intake(
       savedCounts.normalizedContents += 1;
       savedCounts.analyzedContents += 1;
       savedCounts.newCandidates += outcome.committedPools.length;
-      return;
+      return undefined;
     case 'failed':
       issues.push({
         stage: outcome.code === 'MATERIAL_TOO_LONG' ? 'material' : 'analysis',
@@ -258,13 +261,135 @@ async function intake(
         subjectId: discovery.resultId,
         message: outcome.message,
       });
-      return;
+      return outcome.code;
     case 'rejected':
-      issues.push({ stage: 'material', code: outcome.reason, subjectId: discovery.resultId, message: outcome.message });
-      return;
+      // Rejected material stays rejected: a retry would read the same text.
+      issues.push({
+        stage: 'material',
+        code: outcome.reason,
+        subjectId: discovery.resultId,
+        message: outcome.message,
+      });
+      return undefined;
     default:
-      return;
+      return undefined;
   }
+}
+
+/**
+ * Resumes work an earlier process left unfinished: discoveries saved but never
+ * normalized, and analyses that failed and are due for another attempt. Both
+ * follow persisted state, never an in-memory queue or a Trace.
+ */
+async function resumePendingWork(
+  dependencies: MaintenanceDependencies,
+  input: MaintenanceRunInput,
+  evaluations: readonly PoolEvaluation[],
+  savedCounts: MaintenanceCounts,
+  issues: SupplyIssue[],
+): Promise<void> {
+  const retryAt = dependencies.now() + dependencies.config.limits.retryIntervalSeconds * 1_000;
+  const dueDiscoveries = dependencies.search.listDueDiscoveries({
+    limit: dependencies.config.limits.maxAnalysisCalls,
+    now: dependencies.now(),
+  });
+  if (dueDiscoveries.length > 0) {
+    const enabled = (await dependencies.interests.listInterests()).interests.filter(
+      (entry) => entry.enabled,
+    );
+    const interestId = enabled[0]?.id;
+    if (interestId) {
+      for (const discovery of dueDiscoveries) {
+        if (input.signal.aborted || input.budget.expired) return;
+        const failure = await intake(
+          dependencies,
+          input,
+          discovery,
+          interestId,
+          evaluations,
+          savedCounts,
+          issues,
+        );
+        if (failure !== undefined && isRetryableFailure(failure)) {
+          dependencies.search.scheduleDiscoveryRetry({
+            resultId: discovery.resultId,
+            retryAt,
+            errorCode: failure,
+          });
+        }
+        await input.deliver();
+      }
+    }
+  }
+
+  const dueAnalyses = dependencies.contents.listAnalysesDueForRetry({
+    limit: dependencies.config.limits.maxAnalysisCalls,
+    now: dependencies.now(),
+  });
+  for (const contentId of dueAnalyses) {
+    if (input.signal.aborted || input.budget.expired) return;
+    if (!input.budget.reserve('analysisCalls')) return;
+    const failure = await reanalyze(dependencies, input, contentId);
+    if (failure !== undefined && isRetryableFailure(failure)) {
+      dependencies.contents.markAnalysisFailure({ contentId, retryAt, errorCode: failure });
+    }
+    await input.deliver();
+  }
+}
+
+/** Retries the text analysis for content whose earlier attempt failed. */
+async function reanalyze(
+  dependencies: MaintenanceDependencies,
+  input: MaintenanceRunInput,
+  contentId: string,
+): Promise<string | undefined> {
+  const content = dependencies.contents.findById(contentId);
+  if (!content) return undefined;
+  const interests = (await dependencies.interests.listInterests()).interests.filter(
+    (entry) => entry.enabled,
+  );
+  if (interests.length === 0) return undefined;
+
+  const analyzed = await analyzeContent(
+    dependencies.client,
+    {
+      contentId,
+      text: content.text,
+      ...(content.title ? { title: content.title } : {}),
+      interests,
+      model: dependencies.model,
+      maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
+      maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
+      signal: input.signal,
+    },
+    dependencies.observability ? { observability: dependencies.observability } : {},
+  );
+  if (analyzed.status !== 'analyzed') {
+    return analyzed.status === 'material_too_long' ? 'MATERIAL_TOO_LONG' : analyzed.code;
+  }
+
+  dependencies.contents.saveAnalysisResult({
+    contentId,
+    result: analyzed.analysis,
+    now: dependencies.now(),
+  });
+  dependencies.candidates.commitRelations({
+    contentId,
+    matches: analyzed.matches.map((match) => ({
+      interestId: match.interestId,
+      expectedText: interests.find((entry) => entry.id === match.interestId)?.text ?? '',
+      relation: match.relation,
+      ...(match.basis ? { basis: match.basis } : {}),
+    })),
+    pools: [],
+    now: dependencies.now(),
+  });
+  return undefined;
+}
+
+/** Only transport and result-shape failures are worth another attempt. */
+function isRetryableFailure(code: string): boolean {
+  return code === 'TRANSPORT' || code === 'INVALID_RESULT' || code === 'rate_limited';
 }
 
 /** The pool a fresh discovery should qualify for; the longer-lived one wins. */
