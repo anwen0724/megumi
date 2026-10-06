@@ -125,6 +125,14 @@ export async function runMaintenance(
     );
 
     if (planned.status === 'planned') {
+      // A plan the program refused is a reported gap, not a silent empty round.
+      if (planned.invalidItems > 0) {
+        issues.push({
+          stage: 'search',
+          code: 'plan_items_invalid',
+          message: `${planned.invalidItems} planned searches were refused because they named an unknown interest, an unknown source, an unknown stored query, or no query expression.`,
+        });
+      }
       await consumePlan(dependencies, input, planned.items, evaluations, savedCounts, issues);
     } else {
       issues.push({
@@ -223,7 +231,6 @@ async function intake(
     (entry) => entry.enabled,
   );
   if (!interests.some((entry) => entry.id === interestId)) return 'interest_changed';
-  const expiresAt = expiresAtFor(discovery, dependencies);
 
   const outcome = await intakeContent(
     {
@@ -241,8 +248,7 @@ async function intake(
       contentLanguages: dependencies.config.contentLanguages,
       maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
       maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
-      pool: poolFor(discovery, evaluations),
-      ...(expiresAt !== undefined ? { expiresAt } : {}),
+      freshnessDays: dependencies.config.freshnessDays,
       now: dependencies.now(),
       signal: input.signal,
     },
@@ -390,18 +396,6 @@ async function reanalyze(
 /** Only transport and result-shape failures are worth another attempt. */
 function isRetryableFailure(code: string): boolean {
   return code === 'TRANSPORT' || code === 'INVALID_RESULT' || code === 'rate_limited';
-}
-
-/** The pool a fresh discovery should qualify for; the longer-lived one wins. */
-function poolFor(discovery: StoredDiscovery, evaluations: readonly PoolEvaluation[]): CandidatePool {
-  const longTerm = evaluations.some((evaluation) => evaluation.snapshot.pool === 'long_term');
-  return longTerm && discovery.item.publishedAt === undefined ? 'long_term' : 'daily';
-}
-
-function expiresAtFor(discovery: StoredDiscovery, dependencies: MaintenanceDependencies): number | undefined {
-  const publishedAt = discovery.item.publishedAt;
-  if (publishedAt === undefined) return undefined;
-  return publishedAt + dependencies.config.freshnessDays * 24 * 60 * 60 * 1_000;
 }
 
 async function evaluateAll(

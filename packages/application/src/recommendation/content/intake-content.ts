@@ -32,9 +32,8 @@ export interface IntakeInput {
   readonly contentLanguages: readonly string[];
   readonly maxInputTokens: number;
   readonly maxOutputTokens: number;
-  /** Pool this intake qualifies the content for. */
-  readonly pool: CandidatePool;
-  readonly expiresAt?: number;
+  /** Recent window the daily pool uses; the long-term pool has no date rule. */
+  readonly freshnessDays: number;
   readonly now: number;
   readonly signal?: AbortSignal;
 }
@@ -132,12 +131,12 @@ export async function intakeContent(
       relation: match.relation,
       ...(match.basis ? { basis: match.basis } : {}),
     })),
-    pools: [
-      {
-        pool: input.pool,
-        ...(input.expiresAt !== undefined ? { expiresAt: input.expiresAt } : {}),
-      },
-    ],
+    pools: qualifyingPools({
+      ...(content.publishedAt !== undefined ? { publishedAt: content.publishedAt } : {}),
+      longTermValue: step.result.longTermValue,
+      freshnessDays: input.freshnessDays,
+      now: input.now,
+    }),
     now: input.now,
   });
 
@@ -153,6 +152,31 @@ export async function intakeContent(
 type AnalysisStep =
   | { status: 'ok'; result: ContentAnalysisResult; matches: readonly ContentAnalysisMatch[] }
   | { status: 'failed'; outcome: Extract<IntakeOutcome, { status: 'failed' }> };
+
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+/**
+ * The pools one analyzed content actually qualifies for. The daily pool needs a
+ * source-declared publication time inside `[publishedAt, publishedAt +
+ * freshnessDays)`; a future date does not take effect early. The long-term pool
+ * has no date rule and only excludes content the analysis judged worthless, so
+ * an older but valuable document stays available there instead of becoming an
+ * already-expired daily relation.
+ */
+function qualifyingPools(input: {
+  readonly publishedAt?: number;
+  readonly longTermValue: ContentAnalysisResult['longTermValue'];
+  readonly freshnessDays: number;
+  readonly now: number;
+}): { pool: CandidatePool; expiresAt?: number }[] {
+  const pools: { pool: CandidatePool; expiresAt?: number }[] = [];
+  if (input.publishedAt !== undefined && input.publishedAt <= input.now) {
+    const expiresAt = input.publishedAt + input.freshnessDays * DAY_MS;
+    if (input.now < expiresAt) pools.push({ pool: 'daily', expiresAt });
+  }
+  if (input.longTermValue !== 'none') pools.push({ pool: 'long_term' });
+  return pools;
+}
 
 async function analyze(
   dependencies: IntakeDependencies,

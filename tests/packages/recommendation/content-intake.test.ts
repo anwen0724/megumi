@@ -109,17 +109,17 @@ describe('content analysis', () => {
       };
     }
 
-    function intakeInput(url: string, text = MATERIAL) {
+    function intakeInput(url: string, text = MATERIAL, publishedAt: number | null = 0) {
       insertSearchResult(database, 'r1', url);
       return {
-        item: { source: 'zhihu', url, title: '标题', text },
+        item: { source: 'zhihu', url, title: '标题', text, ...(publishedAt === null ? {} : { publishedAt }) },
         sourceResultId: 'r1',
         interests: [{ id: 'i1', text: '摄影' }],
         model,
         contentLanguages: [] as readonly string[],
         maxInputTokens: 10_000,
         maxOutputTokens: 500,
-        pool: 'daily' as const,
+        freshnessDays: 7,
         now: 2,
       };
     }
@@ -134,11 +134,56 @@ describe('content analysis', () => {
 
       expect(outcome.status).toBe('candidate');
       if (outcome.status !== 'candidate') throw new Error('expected a candidate');
-      expect(outcome.committedPools).toEqual(['daily']);
+      // A dated, valuable document qualifies for both pools; they may overlap.
+      expect(outcome.committedPools).toEqual(['daily', 'long_term']);
       expect(countRows(database, 'contents')).toBe(1);
       expect(countRows(database, 'content_analysis')).toBe(1);
       expect(countRows(database, 'content_interest_matches')).toBe(1);
-      expect(countRows(database, 'recommendation_candidates')).toBe(1);
+      expect(countRows(database, 'recommendation_candidates')).toBe(2);
+    });
+
+    it('keeps a document published before the recent window out of the daily pool', async () => {
+      faux.setResponses([fauxAssistantMessage(analysisJson())]);
+
+      const outcome = await intakeContent(
+        dependencies(),
+        // Eight days before `now`, so the recent window has already closed.
+        intakeInput('https://zhuanlan.zhihu.com/p/old', MATERIAL, 2 - 8 * 24 * 60 * 60 * 1_000),
+      );
+
+      expect(outcome.status).toBe('candidate');
+      if (outcome.status !== 'candidate') throw new Error('expected a candidate');
+      expect(outcome.committedPools).toEqual(['long_term']);
+      expect(poolsOf(database)).toEqual(['long_term']);
+    });
+
+    it('does not let a future publication date take effect early', async () => {
+      faux.setResponses([fauxAssistantMessage(analysisJson())]);
+
+      const outcome = await intakeContent(
+        dependencies(),
+        intakeInput('https://zhuanlan.zhihu.com/p/future', MATERIAL, 1_000),
+      );
+
+      expect(outcome.status).toBe('candidate');
+      if (outcome.status !== 'candidate') throw new Error('expected a candidate');
+      expect(outcome.committedPools).toEqual(['long_term']);
+    });
+
+    it('enters no pool when the document has no usable date and no long-term value', async () => {
+      faux.setResponses([fauxAssistantMessage(analysisJson({ longTermValue: 'none' }))]);
+
+      const outcome = await intakeContent(
+        dependencies(),
+        intakeInput('https://zhuanlan.zhihu.com/p/undated', MATERIAL, null),
+      );
+
+      expect(outcome.status).toBe('candidate');
+      if (outcome.status !== 'candidate') throw new Error('expected a candidate');
+      expect(outcome.committedPools).toEqual([]);
+      expect(countRows(database, 'recommendation_candidates')).toBe(0);
+      // The analysis itself is still kept as a content fact.
+      expect(countRows(database, 'content_analysis')).toBe(1);
     });
 
     it('reuses the stored content when the same canonical URL is discovered again', async () => {
@@ -219,4 +264,11 @@ function countRows(database: DatabaseConnection, table: string): number {
     .prepare<{ total: number }>({ sql: `SELECT count(*) AS total FROM ${table}` })
     .all();
   return rows[0]?.total ?? 0;
+}
+
+function poolsOf(database: DatabaseConnection): string[] {
+  return database
+    .prepare<{ pool: string }>({ sql: 'SELECT pool FROM recommendation_candidates ORDER BY pool' })
+    .all()
+    .map((row) => row.pool);
 }

@@ -23,6 +23,8 @@ import {
   type MaintenanceHandle,
   type MaintenanceResult,
   type PreparationResult,
+  type StopReason,
+  type SupplyIssue,
   type UnavailableCode,
   type UsageReader,
 } from './supply-contracts';
@@ -67,6 +69,10 @@ interface ActiveRound {
   readonly waiters: Set<Waiter>;
   /** True once a background trigger asked for this round. */
   background: boolean;
+  /** How the finished round stopped, reported to waiters it could not satisfy. */
+  stopReason?: StopReason;
+  /** What the finished round reported, so an insufficient caller sees the cause. */
+  issues?: readonly SupplyIssue[];
   readonly promise: Promise<MaintenanceResult>;
 }
 
@@ -182,12 +188,16 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
         startedAt: options.local.now(),
         now: options.local.now,
       });
-      return await runMaintenance(resolvedRound.dependencies, {
+      const result = await runMaintenance(resolvedRound.dependencies, {
         trigger: background ? 'startup' : 'periodic',
         budget,
         signal: controller.signal,
         deliver: () => deliver(round, resolvedConfig.config),
       });
+      // A waiter that is still unsatisfied must learn why this round ended.
+      round.stopReason = result.stopReason;
+      round.issues = result.issues;
+      return result;
     } finally {
       active = undefined;
       await releaseRemaining(round, controller);
@@ -229,8 +239,8 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
       settle(round, waiter, {
         status: 'insufficient',
         snapshot,
-        stopReason: controller.signal.aborted ? 'cancelled' : 'budget_exhausted',
-        issues: [],
+        stopReason: round.stopReason ?? (controller.signal.aborted ? 'cancelled' : 'budget_exhausted'),
+        issues: [...(round.issues ?? [])],
       });
     }
   }

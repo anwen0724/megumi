@@ -122,7 +122,7 @@ describe('interest intake flow', () => {
         contentLanguages: [],
         maxInputTokens: 10_000,
         maxOutputTokens: 500,
-        pool: 'daily',
+        freshnessDays: 7,
         now: 3,
       },
     );
