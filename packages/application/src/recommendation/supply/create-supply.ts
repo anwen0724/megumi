@@ -297,6 +297,7 @@ async function readSnapshot(
       requirement,
       thresholds: requirement.pool === 'daily' ? config.daily : config.longTerm,
       freshnessDays: config.freshnessDays,
+      searchHistoryDays: config.searchHistoryDays,
       now: local.now(),
     },
   ).snapshot;

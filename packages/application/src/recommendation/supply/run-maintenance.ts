@@ -454,6 +454,7 @@ async function evaluateAll(
           requirement: { pool, minimumCount: 1, coverage: [] },
           thresholds: pool === 'daily' ? dependencies.config.daily : dependencies.config.longTerm,
           freshnessDays: dependencies.config.freshnessDays,
+          searchHistoryDays: dependencies.config.searchHistoryDays,
           now: dependencies.now(),
         },
       ),

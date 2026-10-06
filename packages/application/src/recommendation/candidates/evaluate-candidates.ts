@@ -38,6 +38,8 @@ export interface PoolEvaluationInput {
   readonly thresholds: CandidatePoolThresholds;
   /** Daily-pool freshness window in days; it fixes each candidate's expiry. */
   readonly freshnessDays: number;
+  /** How far back the planning signal counts first-discovered items. */
+  readonly searchHistoryDays: number;
   readonly now: number;
 }
 
@@ -218,6 +220,7 @@ export function evaluatePool(
     .filter((row) => qualifies(row, input, excluded, interestById, matchesByContent))
     .flatMap((row) => toItem(row, matchesByContent.get(row.id) ?? []));
   const candidates = deduplicateByGroup(rows, dependencies.database);
+  const recentNewItems = readRecentNewItems(dependencies.database, input);
 
   const deficits: InterestCount[] = requirement.coverage.map((entry) => ({
     interestId: entry.interestId,
@@ -241,11 +244,44 @@ export function evaluatePool(
       },
       matchingPending: dependencies.candidates.listContentsMissingMatches({ limit: 1 }).length > 0,
     },
-    health: toHealth(input.pool, undefined, candidates, input),
+    health: toHealth(input.pool, undefined, candidates, input, recentNewItems),
     interestHealth: input.interests.map((interest) =>
-      toHealth(input.pool, interest.id, candidates, input),
+      toHealth(input.pool, interest.id, candidates, input, recentNewItems),
     ),
   };
+}
+
+/**
+ * Items the observation window first discovered, per interest. A query may have
+ * no interest, so its discoveries belong to no interest and only count towards
+ * the pool total.
+ */
+interface RecentNewItems {
+  readonly total: number;
+  readonly byInterest: ReadonlyMap<string, number>;
+}
+
+function readRecentNewItems(
+  database: DatabaseConnection,
+  input: PoolEvaluationInput,
+): RecentNewItems {
+  const rows = database
+    .prepare<{ interest_id: string | null; total: number }>({
+      sql: `SELECT q.interest_id, COALESCE(SUM(h.new_item_count), 0) AS total
+            FROM search_history h
+            JOIN search_queries q ON q.id = h.query_id
+            WHERE h.searched_at >= ?
+            GROUP BY q.interest_id`,
+    })
+    .all([input.now - input.searchHistoryDays * 24 * 60 * 60 * 1_000]);
+
+  const byInterest = new Map<string, number>();
+  let total = 0;
+  for (const row of rows) {
+    total += row.total;
+    if (row.interest_id !== null) byInterest.set(row.interest_id, row.total);
+  }
+  return { total, byInterest };
 }
 
 /** Summary counts for one content once qualification has been decided. */
@@ -345,6 +381,7 @@ function toHealth(
   interestId: string | undefined,
   candidates: readonly CandidateSnapshotItem[],
   input: PoolEvaluationInput,
+  recentNewItems: RecentNewItems,
 ): SupplyHealth {
   const scoped =
     interestId === undefined
@@ -369,7 +406,8 @@ function toHealth(
     freshCandidates: pool === 'daily' ? active : null,
     avgQuality: quality.length === 0 ? null : quality.reduce((sum, value) => sum + value, 0) / quality.length,
     newestPublishedAt: published.length === 0 ? null : Math.max(...published),
-    recentNewItems: 0,
+    recentNewItems:
+      interestId === undefined ? recentNewItems.total : (recentNewItems.byInterest.get(interestId) ?? 0),
     supplyLevel: active === 0 ? 'empty' : active < minimum ? 'low' : 'healthy',
     minimumDeficit: Math.max(0, minimum - active),
     targetDeficit: Math.max(0, target - active),

@@ -131,6 +131,32 @@ describe('pool qualification', () => {
     expect(evaluation.snapshot.candidates[0].duplicateContentIds).toEqual(['dup-a', 'dup-b']);
   });
 
+  it('reports how many items the observation window first discovered', () => {
+    seedInterest(database, 'i1');
+    seedQuery(database, 'q1', 'i1');
+    seedSearch(database, 'h1', 'q1', NOW - DAY, 7);
+    seedSearch(database, 'h2', 'q1', NOW - 2 * DAY, 5);
+    // Outside the configured observation window, so it must not be counted.
+    seedSearch(database, 'h3', 'q1', NOW - 40 * DAY, 100);
+
+    const evaluation = evaluatePool(dependencies(database), input('daily'));
+
+    expect(evaluation.health.recentNewItems).toBe(12);
+    expect(evaluation.interestHealth[0].recentNewItems).toBe(12);
+  });
+
+  it('reports no recent discoveries when nothing was searched', () => {
+    seedInterest(database, 'i1');
+    seedContentWithAnalysis(database, 'c1', NOW - DAY, 'learning');
+    seedCandidate(database, 'c1', 'daily', NOW + 6 * DAY);
+    seedMatch(database, 'c1', 'i1', 'direct');
+
+    const evaluation = evaluatePool(dependencies(database), input('daily'));
+
+    expect(evaluation.health.recentNewItems).toBe(0);
+    expect(evaluation.interestHealth[0].recentNewItems).toBe(0);
+  });
+
   it('leaves long-term candidates out when the content has no long-term value', () => {    seedInterest(database, 'i1');
     seedContentWithAnalysis(database, 'c1', NOW - 400 * DAY, 'none');
     seedCandidate(database, 'c1', 'long_term', null);
@@ -245,8 +271,34 @@ function input(pool: 'daily' | 'long_term') {
     requirement: { pool, minimumCount: 2, coverage: [{ interestId: 'i1', minimumCount: 1 }] },
     thresholds: THRESHOLDS,
     freshnessDays: 7,
+    searchHistoryDays: 30,
     now: NOW,
   };
+}
+
+function seedQuery(database: DatabaseConnection, id: string, interestId: string): void {
+  database
+    .prepare({
+      sql: `INSERT INTO search_queries (id, interest_id, query, category, origin, status, created_at)
+            VALUES (?, ?, '摄影', 'core', 'ai', 'active', 0)`,
+    })
+    .run([id, interestId]);
+}
+
+function seedSearch(
+  database: DatabaseConnection,
+  id: string,
+  queryId: string,
+  searchedAt: number,
+  newItemCount: number,
+): void {
+  database
+    .prepare({
+      sql: `INSERT INTO search_history
+              (id, query_id, source, search_scope, searched_at, outcome, result_count, new_item_count)
+            VALUES (?, ?, 'zhihu', '{"query":"摄影","limit":10}', ?, 'success', ?, ?)`,
+    })
+    .run([id, queryId, searchedAt, newItemCount, newItemCount]);
 }
 
 function seedInterest(database: DatabaseConnection, id: string): void {
