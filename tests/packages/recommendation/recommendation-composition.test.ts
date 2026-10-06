@@ -212,7 +212,7 @@ describe('candidate supply composition', () => {
 });
 
 /** Reads the revision the settings document is currently at. */
-function readRevision(settings: ReturnType<typeof createSettings>): number {
+function readRevision(settings: ReturnType<typeof createSettings>): string {
   const read = settings.readSettings();
   if (read.status === 'rejected') throw new Error(read.error.message);
   return read.settings.revision;

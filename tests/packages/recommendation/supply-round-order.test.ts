@@ -5,7 +5,7 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import type { Api, Context, Model } from '@megumi/ai';
+import { fauxAssistantMessage, type Api, type Context, type Model } from '@megumi/ai';
 import type { TextModelClient } from '@megumi/application/recommendation/call-text-model';
 import { createCandidateStorage } from '@megumi/application/recommendation/candidates/candidate-storage';
 import { createContentStorage } from '@megumi/application/recommendation/content/content-storage';
@@ -122,7 +122,7 @@ describe('one maintenance round', () => {
         counters.modelCalls += 1;
         const system = context.systemPrompt ?? '';
         if (system.includes('You judge how each listed interest')) {
-          return reply(
+          return fauxAssistantMessage(
             JSON.stringify({
               matches: [
                 { contentId: 'c1', interestId: 'i1', relation: 'direct', basis: '直接讨论 Tokio' },
@@ -132,7 +132,7 @@ describe('one maintenance round', () => {
         }
         if (system.includes('You plan searches')) {
           counters.planCalls += 1;
-          return reply(JSON.stringify({ items: [] }));
+          return fauxAssistantMessage(JSON.stringify({ items: [] }));
         }
         throw new Error(`unexpected model task: ${system.slice(0, 60)}`);
       },
@@ -194,14 +194,3 @@ describe('one maintenance round', () => {
     };
   }
 });
-
-/** A minimal assistant message carrying one JSON answer. */
-function reply(text: string) {
-  return {
-    role: 'assistant' as const,
-    content: [{ type: 'text' as const, text }],
-    stopReason: 'stop' as const,
-    usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, total: 2 },
-    timestamp: NOW,
-  };
-}

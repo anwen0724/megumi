@@ -14,6 +14,7 @@ import {
   type MaintenanceRunInput,
 } from '@megumi/application/recommendation/supply/run-maintenance';
 import { CandidateSupplyConfigurationSchema } from '@megumi/application/settings/definitions/discovery';
+import type { SupplyExecutionConfig } from '@megumi/application/recommendation/supply/read-supply-config';
 import {
   createDatabase,
   migrateDatabase,
@@ -90,7 +91,7 @@ describe('resume after an interrupted process', () => {
       now: () => NOW,
     });
     return {
-      config: { ...CandidateSupplyConfigurationSchema.parse({}), model: { providerId: 'faux', modelId: 'faux-supply' } },
+      config: supplyConfig(),
       database,
       model,
       source: stubSource(),
@@ -110,7 +111,7 @@ describe('resume after an interrupted process', () => {
     return {
       trigger: 'startup',
       budget: createExecutionBudget({
-        limits: CandidateSupplyConfigurationSchema.parse({}).limits,
+        limits: supplyConfig().limits,
         startedAt: NOW,
         now: () => NOW,
       }),
@@ -119,6 +120,21 @@ describe('resume after an interrupted process', () => {
     };
   }
 });
+
+/** The execution configuration slice one round reads. */
+function supplyConfig(): SupplyExecutionConfig {
+  const parsed = CandidateSupplyConfigurationSchema.parse({});
+  return {
+    daily: parsed.daily,
+    longTerm: parsed.longTerm,
+    freshnessDays: parsed.freshnessDays,
+    maintenanceIntervalMinutes: parsed.maintenanceIntervalMinutes,
+    contentLanguages: parsed.contentLanguages,
+    searchHistoryDays: parsed.searchHistoryDays,
+    searchReuseIntervalMinutes: parsed.searchReuseIntervalMinutes,
+    limits: parsed.limits,
+  };
+}
 
 function stubSource(): SourceConnector {
   return {
