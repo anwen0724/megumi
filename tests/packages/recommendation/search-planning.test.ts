@@ -73,7 +73,42 @@ describe('search planning', () => {
     if (outcome.status !== 'planned') throw new Error('expected a plan');
     expect(outcome.items).toHaveLength(1);
     expect(outcome.items[0].limit).toBe(10);
-    expect(outcome.droppedItems).toBe(3);
+    expect(outcome.invalidItems).toBe(3);
+    expect(outcome.droppedItems).toBe(0);
+  });
+
+  it('writes each identifier so the model can copy it back verbatim', async () => {
+    const prompts: string[] = [];
+    const client = {
+      async completeSimple(
+        _model: Model<Api>,
+        context: { messages: readonly { content: unknown }[] },
+      ) {
+        prompts.push(String(context.messages[0]?.content));
+        return fauxAssistantMessage(JSON.stringify({ items: [] }));
+      },
+    };
+
+    const outcome = await planSearches(
+      { database, client },
+      {
+        interests: [{ id: 'interest:abc', text: 'Rust 异步运行时', enabled: true }],
+        poolHealth: [],
+        recentSearches: [],
+        sources: ['zhihu'],
+        model,
+        maxInputTokens: 10_000,
+        maxOutputTokens: 1_000,
+        maxResultsPerSearch: 10,
+        maxItems: 5,
+      },
+    );
+
+    expect(outcome.status).toBe('planned');
+    // The id itself contains the separator the old plain-text line used, so the
+    // prompt must delimit it as data.
+    expect(prompts[0]).toContain('{"interestId":"interest:abc","text":"Rust 异步运行时"}');
+    expect(prompts[0]).toContain('{"queryId":"q1","interestId":"i1","category":"core","query":"摄影"}');
   });
 
   it('plans only when a minimum gap, a pending request, or an interest change exists', () => {

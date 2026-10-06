@@ -47,13 +47,15 @@ const SearchPlanSchema = z
 
 const SYSTEM_PROMPT = [
   'You plan searches for one recommendation supply round and reply with one JSON object.',
-  'Rules:',
-  '- Use only the listed interests, the listed stored queries, and the listed sources.',
-  '- Reuse a stored query by returning its queryId; propose a new expression only when no stored query covers the direction.',
-  '- A new expression needs a category: core, entity, technical, exploratory, or trend.',
-  '- Order items by priority so the largest gaps are addressed first.',
-  '- Respect the per-search result limit you are given.',
-  '- Reply with JSON only: {"items":[{"interestId":"...","pools":["daily"],"source":"zhihu","priority":1,"limit":10}]}.',
+  'Reply with JSON only, shaped exactly like this:',
+  '{"items":[{"interestId":"...","pools":["daily"],"source":"zhihu","priority":1,"limit":10,"queryId":"..."}]}',
+  'Every item has: interestId, pools (one or both of "daily", "long_term"), source, priority (a number; lower runs first), limit (results to request, at most the maximum you are given).',
+  'Every item is either a reuse or a new expression, never both:',
+  '- Reuse a stored query by adding "queryId", copied verbatim from the stored queries.',
+  '- Propose a new expression by adding "query" (the search text) and "category" instead of "queryId".',
+  'category is one of: core, entity, technical, exploratory, trend.',
+  'Do not add any other key. Never invent, shorten, translate, or reformat an identifier.',
+  'Use only the listed interests, the listed stored queries, and the listed sources.',
 ].join('\n');
 
 export interface QueryRecord {
@@ -90,7 +92,10 @@ export type PlanSearchesOutcome =
       status: 'planned';
       items: readonly PlannedSearch[];
       record: TextModelCallRecord;
+      /** Items the round could not pay for inside `maxItems`. */
       droppedItems: number;
+      /** Items refused because a reference was unknown or no expression was given. */
+      invalidItems: number;
     }
   | { status: 'failed'; code: string; message: string };
 
@@ -167,21 +172,22 @@ export async function planSearches(
 
   const items: PlannedSearch[] = [];
   let droppedItems = 0;
+  let invalidItems = 0;
   for (const item of [...call.result.items].sort((left, right) => left.priority - right.priority)) {
     if (items.length >= input.maxItems) {
       droppedItems += 1;
       continue;
     }
     if (!interestIds.has(item.interestId) || !sources.has(item.source)) {
-      droppedItems += 1;
+      invalidItems += 1;
       continue;
     }
     if (item.queryId !== undefined && !queryById.has(item.queryId)) {
-      droppedItems += 1;
+      invalidItems += 1;
       continue;
     }
     if (item.queryId === undefined && item.query === undefined) {
-      droppedItems += 1;
+      invalidItems += 1;
       continue;
     }
     items.push({
@@ -195,13 +201,22 @@ export async function planSearches(
     });
   }
 
-  return { status: 'planned', items, record: call.record, droppedItems };
+  return { status: 'planned', items, record: call.record, droppedItems, invalidItems };
 }
 
 function buildPrompt(input: PlanSearchesInput, queries: readonly QueryRecord[]): string {
-  const interests = input.interests.map((interest) => `- ${interest.id}: ${interest.text}`);
-  const storedQueries = queries.map(
-    (query) => `- ${query.id} (${query.interestId ?? 'unassigned'}, ${query.category}): ${query.query}`,
+  // Identifiers are emitted as JSON so an id that contains the display
+  // separator can still be copied back verbatim.
+  const interests = input.interests.map((interest) =>
+    JSON.stringify({ interestId: interest.id, text: interest.text }),
+  );
+  const storedQueries = queries.map((query) =>
+    JSON.stringify({
+      queryId: query.id,
+      interestId: query.interestId,
+      category: query.category,
+      query: query.query,
+    }),
   );
   const health = input.poolHealth.map(
     (entry) =>
@@ -215,11 +230,11 @@ function buildPrompt(input: PlanSearchesInput, queries: readonly QueryRecord[]):
     );
 
   return [
-    'Interests:',
-    ...(interests.length > 0 ? interests : ['- (none)']),
+    'Interests (copy interestId verbatim):',
+    ...(interests.length > 0 ? interests.map((line) => `- ${line}`) : ['- (none)']),
     '',
-    'Stored queries:',
-    ...(storedQueries.length > 0 ? storedQueries : ['- (none)']),
+    'Stored queries (copy queryId verbatim):',
+    ...(storedQueries.length > 0 ? storedQueries.map((line) => `- ${line}`) : ['- (none)']),
     '',
     'Supply health:',
     ...(health.length > 0 ? health : ['- (none)']),

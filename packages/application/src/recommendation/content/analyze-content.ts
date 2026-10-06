@@ -24,7 +24,10 @@ import {
 
 const SYSTEM_PROMPT = [
   'You analyze exactly one source document and reply with one JSON object.',
+  'Reply with JSON only, shaped exactly like this:',
+  '{"summary":"...","keyPoints":[{"text":"...","evidence":"..."}],"topics":["..."],"entities":["..."],"contentType":"article","qualityScore":0.5,"spamScore":0,"longTermValue":"learning","matches":[{"interestId":"...","relation":"direct","basis":"..."}]}',
   'Rules:',
+  '- Do not add any other key.',
   '- Use only the supplied document text. Never invent facts, dates, numbers, or quotes.',
   '- The document may be an excerpt or a truncated opening; judge what is present and never assume the rest.',
   '- summary: one paragraph covering the main fact, claim, or method.',
@@ -35,8 +38,8 @@ const SYSTEM_PROMPT = [
   '- qualityScore: 0..1 for information density, facts, examples, and method detail; it does not mean fit for a reader.',
   '- spamScore: 0..1 for advertising, boilerplate, and title-body mismatch.',
   '- longTermValue: one of none, learning, reference, practical.',
-  '- matches: judge every listed interest as direct, related, or none, with a short "basis".',
-  "- Reply with JSON only, and write text fields in the document's own language.",
+  '- matches: exactly one entry per listed interest, each with "interestId" copied verbatim, "relation" one of direct, related, none, and a short "basis".',
+  "- Write text fields in the document's own language.",
 ].join('\n');
 
 const AnalysisResponseSchema = ContentAnalysisResultSchema.extend({
@@ -120,10 +123,14 @@ export async function analyzeContent(
 }
 
 function buildPrompt(input: AnalyzeContentInput): string {
-  const interestLines = input.interests.map((interest) => `- ${interest.id}: ${interest.text}`);
+  // Identifiers are emitted as JSON so an id that contains the display
+  // separator can still be copied back verbatim.
+  const interestLines = input.interests.map((interest) =>
+    JSON.stringify({ interestId: interest.id, text: interest.text }),
+  );
   return [
-    'Interests:',
-    ...(interestLines.length > 0 ? interestLines : ['- (none)']),
+    'Interests (copy interestId verbatim):',
+    ...(interestLines.length > 0 ? interestLines.map((line) => `- ${line}`) : ['- (none)']),
     '',
     ...(input.title ? [`Title: ${input.title}`] : []),
     'Document text:',
