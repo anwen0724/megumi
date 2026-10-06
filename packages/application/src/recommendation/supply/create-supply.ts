@@ -59,6 +59,8 @@ export interface CreateSupplyOptions {
 interface Waiter {
   readonly requirement: CandidateRequirement;
   readonly resolve: (result: PreparationResult) => void;
+  /** Reports a failed round; storage failures must not read as a shortage. */
+  readonly reject: (error: unknown) => void;
   readonly signal?: AbortSignal;
   readonly onAbort?: () => void;
 }
@@ -73,12 +75,15 @@ interface ActiveRound {
   stopReason?: StopReason;
   /** What the finished round reported, so an insufficient caller sees the cause. */
   issues?: readonly SupplyIssue[];
+  /** Set when the round failed unexpectedly; waiters are rejected with it. */
+  failure?: unknown;
   readonly promise: Promise<MaintenanceResult>;
 }
 
 export function createCandidateSupply(options: CreateSupplyOptions): CandidateSupply {
   let closed = false;
   let active: ActiveRound | undefined;
+  let closing: Promise<void> | undefined;
 
   return {
     startMaintenance({ reason }): MaintenanceHandle {
@@ -127,13 +132,17 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
       return readSnapshot(options.local, resolved.config, parsed.data);
     },
 
-    async close(): Promise<void> {
-      if (closed) return;
+    close(): Promise<void> {
+      // Repeated calls wait for the same closing process instead of returning early.
+      if (closing) return closing;
       closed = true;
-      const round = active;
-      if (!round) return;
-      round.controller.abort();
-      await round.promise.catch(() => undefined);
+      closing = (async () => {
+        const round = active;
+        if (!round) return;
+        round.controller.abort();
+        await round.promise.catch(() => undefined);
+      })();
+      return closing;
     },
   };
 
@@ -198,6 +207,10 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
       round.stopReason = result.stopReason;
       round.issues = result.issues;
       return result;
+    } catch (error) {
+      // Storage and contract failures reject the caller instead of reading as a gap.
+      round.failure = error;
+      throw error;
     } finally {
       active = undefined;
       await releaseRemaining(round, controller);
@@ -225,6 +238,16 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
 
   async function releaseRemaining(round: ActiveRound, controller: AbortController): Promise<void> {
     if (round.waiters.size === 0) return;
+    // A round that failed did not fall short: the caller must see the failure.
+    if (round.failure !== undefined) {
+      rejectWaiters(round, round.failure);
+      return;
+    }
+    // A cancelled round never did its work, so a shortage would be a false report.
+    if (controller.signal.aborted) {
+      releaseWaiters(round, { status: 'cancelled' });
+      return;
+    }
     const resolved = await options.readConfig();
     if (resolved.status === 'unavailable') {
       releaseWaiters(round, {
@@ -239,7 +262,7 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
       settle(round, waiter, {
         status: 'insufficient',
         snapshot,
-        stopReason: round.stopReason ?? (controller.signal.aborted ? 'cancelled' : 'budget_exhausted'),
+        stopReason: round.stopReason ?? 'budget_exhausted',
         issues: [...(round.issues ?? [])],
       });
     }
@@ -249,12 +272,20 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
     for (const waiter of [...round.waiters]) settle(round, waiter, result);
   }
 
+  function rejectWaiters(round: ActiveRound, error: unknown): void {
+    for (const waiter of [...round.waiters]) {
+      if (!round.waiters.delete(waiter)) continue;
+      if (waiter.signal && waiter.onAbort) waiter.signal.removeEventListener('abort', waiter.onAbort);
+      waiter.reject(error);
+    }
+  }
+
   function waitFor(
     round: ActiveRound,
     requirement: CandidateRequirement,
     signal?: AbortSignal,
   ): Promise<PreparationResult> {
-    return new Promise<PreparationResult>((resolve) => {
+    return new Promise<PreparationResult>((resolve, reject) => {
       if (signal?.aborted) {
         resolve({ status: 'cancelled' });
         return;
@@ -264,6 +295,7 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
       waiter = {
         requirement,
         resolve,
+        reject,
         ...(signal ? { signal, onAbort } : {}),
       };
       signal?.addEventListener('abort', onAbort, { once: true });
