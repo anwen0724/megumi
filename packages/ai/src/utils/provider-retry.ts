@@ -4,6 +4,13 @@ interface ProviderRetryOptions {
 	maxRetries?: number;
 	maxRetryDelayMs?: number;
 	signal?: AbortSignal;
+	onRetryScheduled?: (event: ProviderRetryScheduledEvent) => void;
+}
+
+export interface ProviderRetryScheduledEvent {
+	readonly currentAttempt: number;
+	readonly nextAttempt: number;
+	readonly reasonCode: string;
 }
 
 interface ProviderError extends Error {
@@ -103,23 +110,46 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
  * disable the limit.
  */
 export async function retryProviderRequest<T>(
-	request: () => Promise<T>,
+	request: (attempt: number) => Promise<T>,
 	options: ProviderRetryOptions = {},
 ): Promise<T> {
 	const maxRetries = options.maxRetries ?? 0;
 	let retriesRemaining = maxRetries;
+	let attempt = 1;
 
 	for (;;) {
 		try {
 			// Each retry is a fresh SDK request, so X-Stainless-Retry-Count remains zero.
-			return await request();
+			return await request(attempt);
 		} catch (error) {
 			if (options.signal?.aborted) throw createAbortError();
 			if (retriesRemaining <= 0 || !isProviderError(error) || !isRetryableProviderError(error)) throw error;
 
 			const retryIndex = maxRetries - retriesRemaining;
+			const delayMs = getRetryDelayMs(error, retryIndex, options.maxRetryDelayMs);
 			retriesRemaining--;
-			await abortableSleep(getRetryDelayMs(error, retryIndex, options.maxRetryDelayMs), options.signal);
+			notifyRetryScheduled(options.onRetryScheduled, {
+				currentAttempt: attempt,
+				nextAttempt: attempt + 1,
+				reasonCode: providerRetryReasonCode(error),
+			});
+			await abortableSleep(delayMs, options.signal);
+			attempt += 1;
 		}
+	}
+}
+
+function providerRetryReasonCode(error: ProviderError): string {
+	return error.status === undefined ? "network_error" : `http_${error.status}`;
+}
+
+function notifyRetryScheduled(
+	listener: ProviderRetryOptions["onRetryScheduled"],
+	event: ProviderRetryScheduledEvent,
+): void {
+	try {
+		listener?.(event);
+	} catch {
+		// Retry scheduling and dispatch are independent of diagnostic callbacks.
 	}
 }

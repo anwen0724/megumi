@@ -1,96 +1,36 @@
-import type { ModelClient } from '@megumi/agent-runtime';
-/* Assembles Context with real Session, Instructions, Skills, and file storage. */
+/* Builds the Coding context from real session, instruction and Skill storage. */
+import type { Models } from '@megumi/ai';
+import { contextBudget, type AgentConfig } from '@megumi/agent';
+import { PRODUCT_EXECUTION_POLICY } from '@megumi/application/application-policy';
+import { createEventBus } from '@megumi/application/coding/events/event-bus';
+import { createSkills } from '@megumi/application/skills/manage-skills';
 import { createDatabaseSkillAvailabilityStore } from '@megumi/application/storage/skill-availability-store';
-import {
-  type BuildContextRequest,
-  type CompactContextRequest,
-  type CreateContextOptions,
-} from '@megumi/agent-runtime/context/index';
-import { createEventBus } from '@megumi/agent-runtime/events';
-import { createInstructionReader } from '@megumi/agent-runtime/resources/instructions/index';
-import { createSessionAttachmentReader } from '@megumi/agent-runtime/sessions/index';
-import { createSkills } from '@megumi/agent-runtime/resources/skills/index';
-import { createSessionFixture, savedAt } from '../session/session-test-fixture';
+import { createSessionAttachmentReader } from '@megumi/application/coding/sessions/session-attachments';
+import { createCodingContext, type CodingContextOptions } from '@megumi/application/coding/prepare-context';
+import { createSessionFixture } from '../session/session-test-fixture';
 import { completedMessage, model } from './context-test-fixtures';
 
-export const contextModel = { ...model, contextWindow: 16_000, maxTokens: 512 };
+export const contextModel = { ...model, contextWindow: 100_000, maxTokens: 1024 };
 
-/** Replaces only the external model service; all owner capabilities run normally. */
 export async function createContextFixture(
-  completeSimple: ModelClient['completeSimple'] = async () =>
-    completedMessage('Earlier conversation summary'),
+  completeSimple: Models['completeSimple'] = async () => completedMessage('Earlier conversation summary'),
 ) {
   const storage = await createSessionFixture();
-  const {
-    root,
-    store,
-    history,
-    database,
-    workspaceId,
-    workspaceRoot,
-    sessionId,
-    workspaceCatalog,
-    contentStore,
-  } = storage;
   const events = createEventBus();
-  const options: CreateContextOptions = {
-    sessionHistory: history,
-    attachmentReader: createSessionAttachmentReader({ store, contentStore }),
-    workspaceSource: {
-      async readWorkspace(request) {
-        const workspace = workspaceCatalog.getWorkspace({ workspace_id: request.workspaceId });
-        if (workspace.status !== 'found') {
-          return {
-            status: 'failed',
-            failure: { code: 'workspace_not_found', message: 'Missing workspace' },
-          };
-        }
-        return {
-          status: 'ok',
-          workspaceRoot: workspace.workspace.root_path,
-          environment: {
-            workingDirectory: workspace.workspace.root_path,
-            operatingSystem: process.platform,
-            shell: 'powershell',
-          },
-        };
-      },
-    },
-    instructionReader: createInstructionReader({ megumiHomePath: root }),
-    skills: createSkills({
-      homePath: root,
-      availabilityStore: createDatabaseSkillAvailabilityStore(database),
-      workspaceRootResolver: { resolveWorkspaceRoot: async () => workspaceRoot },
-    }),
-    events,
-    policy: { enabled: true, reserveTokens: 1024, keepRecentTokens: 1, minimumRecentMessages: 3 },
-    clock: { now: () => savedAt },
+  const config: AgentConfig & { environment: NonNullable<AgentConfig['environment']> } = {
+    model: contextModel, tools: [], policy: PRODUCT_EXECUTION_POLICY, permissionMode: 'ask',
+    environment: { workingDirectory: storage.workspaceRoot, operatingSystem: 'Windows', shell: 'powershell' },
   };
-  const request: CompactContextRequest = {
-    client: { completeSimple },
-    compactionThresholdRatio: 1 - 1024 / contextModel.contextWindow,
-    sessionId,
-    workspaceId,
-    model: contextModel,
-    trigger: 'manual',
-    tools: [],
+  const options: CodingContextOptions = {
+    config, sessionId: storage.sessionId, workspaceId: storage.workspaceId,
+    history: storage.history,
+    attachments: createSessionAttachmentReader({ store: storage.store, contentStore: storage.contentStore }),
+    ai: { completeSimple }, megumiHomePath: storage.root, instructionDocuments: [],
+    compactionThresholdRatio: 0.65, events,
+    skills: createSkills({ homePath: storage.root, availabilityStore: createDatabaseSkillAvailabilityStore(storage.database),
+      workspaceRootResolver: { resolveWorkspaceRoot: async () => storage.workspaceRoot } }),
   };
-  const buildRequest: BuildContextRequest = {
-    currentMessages: [],
-    modelCallContext: {
-      modelCallId: 'current-call',
-      tools: [],
-      run: {
-        kind: 'conversation',
-        executionId: 'current-execution',
-        sessionId,
-        workspaceId,
-        client: { completeSimple },
-        compactionThresholdRatio: 1 - 1024 / contextModel.contextWindow,
-        model: contextModel,
-        userInput: { displayContent: [], modelContent: [], attachments: [] },
-      },
-    },
-  };
-  return { ...storage, options, events, request, buildRequest };
+  const request = { options, trigger: 'manual' as const, signal: new AbortController().signal };
+  const prepareRequest = { tools: [], runMessages: [], budget: contextBudget(contextModel), signal: request.signal };
+  return { ...storage, options, events, request, prepareRequest, context: createCodingContext(options) };
 }

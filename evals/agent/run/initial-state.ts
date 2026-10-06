@@ -2,14 +2,15 @@
  * Normalizes one validated Case and installs its pre-run state through real Owner contracts.
  */
 import path from 'node:path';
-import { createDatabase, migrateDatabase } from '@megumi/database';
-import { initializeDiscoveryState, type DiscoveryState } from '@megumi/discovery';
+import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
+import { initializeDiscoveryState, type DiscoveryState } from '@megumi/application/recommendation/recommendation-storage';
 import { resolveInitialDiscoveryState } from './initial-discovery-state';
-import { createSessionCatalog, createSessionHistory } from '@megumi/session';
-import { createSessionStore } from '@megumi/session/store';
-import { createWorkspaceCatalog } from '@megumi/workspace';
-import { createNodeWorkspaceFileSystem } from '@megumi/workspace/node';
-import { createWorkspaceStore } from '@megumi/workspace/store';
+import { createSessionCatalog } from '@megumi/application/coding/sessions/session-catalog';
+import { createSessionHistory } from '@megumi/application/coding/sessions/session-history';
+import { createSessionStore } from '@megumi/application/coding/sessions/session-storage';
+import { createWorkspaceCatalog } from '@megumi/application/workspace/index';
+import { createNodeWorkspaceFileSystem } from '@megumi/application/workspace/node-workspace-file-system';
+import { createWorkspaceStore } from '@megumi/application/workspace/workspace-store';
 import type { EvaluationCase, WorkspaceFileData } from '../contracts/evaluation-dataset';
 
 type ConversationCase = Extract<EvaluationCase, { readonly type: 'conversation' }>;

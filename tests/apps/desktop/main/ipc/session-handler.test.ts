@@ -108,6 +108,7 @@ function agentRunPayload() {
       completedAt: '2026-08-14T00:00:00.000Z',
     },
     run: {
+      requestId: 'request:voice:1',
       executionId: 'run:1',
       sessionId: 'session:1',
       status: 'running' as const,

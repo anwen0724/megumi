@@ -1,6 +1,6 @@
 /* Drives the real approval Host from a deterministic Controlled decision. */
-import type { ProductRuntime } from '@megumi/composition';
-import type { EventSubscription } from '@megumi/events';
+import type { Application } from '@megumi/application/index';
+import type { EventSubscription } from '@megumi/application/contracts';
 import type { CaseInitialState } from '../../run/initial-state';
 
 export function controlledPermissionSettings(initialState: Pick<CaseInitialState, 'approvalDecisions'>): {
@@ -10,7 +10,7 @@ export function controlledPermissionSettings(initialState: Pick<CaseInitialState
 }
 
 export function driveControlledApprovals(
-  runtime: ProductRuntime,
+  runtime: Application,
   decisions: CaseInitialState['approvalDecisions'],
 ): EventSubscription {
   const occurrences = new Map<string, number>();
@@ -34,7 +34,7 @@ export function driveControlledApprovals(
           decision: 'approved' as const,
           optionId: event.payload.defaultOptionId,
         };
-    void runtime.host.approval.resolve(request).catch((error: unknown) => {
+    void runtime.approval.resolve(request).catch((error: unknown) => {
       runtime.logger.warn('evaluation_approval_resolution_failed', {
         message: error instanceof Error ? error.message : String(error),
       });

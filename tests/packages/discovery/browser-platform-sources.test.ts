@@ -1,12 +1,9 @@
 /* Verifies browser-session Sources own platform URLs, page interpretation, and content normalization. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createDouyinSource,
-  createXiaohongshuSource,
-  type EmbeddedBrowser,
-  type EmbeddedBrowserSnapshot,
-} from '@megumi/application/discovery/index';
+import { createDouyinSource } from '@megumi/application/recommendation/sources/douyin-source';
+import { createXiaohongshuSource } from '@megumi/application/recommendation/sources/xiaohongshu-source';
+import { type EmbeddedBrowser, type EmbeddedBrowserSnapshot } from '@megumi/application/recommendation/sources/browser-access';
 
 describe('embedded-browser platform sources', () => {
   it('recognizes the captured Douyin verification interstitial with an empty body', async () => {

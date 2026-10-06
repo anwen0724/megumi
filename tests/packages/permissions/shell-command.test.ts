@@ -1,7 +1,7 @@
 // @vitest-environment node
 /* Verifies shell-aware conservative parsing without making the parser public API. */
 import { describe, expect, it } from 'vitest';
-import { classifyShellCommand } from '@megumi/agent-runtime/permissions/shell-command';
+import { classifyShellCommand } from '@megumi/agent/permissions/shell-policy';
 
 describe('Shell Command classification', () => {
   it('does not treat operators inside quotes as shell control flow', () => {

@@ -4,10 +4,7 @@
  * current strict payload shapes on read.
  */
 import { describe, expect, it } from 'vitest';
-import {
-  normalizeLegacyAssistantContent,
-  normalizeLegacyUserMessagePayload,
-} from '@megumi/agent-runtime/sessions/legacy-content-normalizer';
+import { normalizeLegacyAssistantContent, normalizeLegacyUserMessagePayload } from '@megumi/application/coding/sessions/session-history';
 
 describe('legacy content normalizer', () => {
   it('projects a single legacy user content onto display and model content', () => {

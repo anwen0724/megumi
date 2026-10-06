@@ -2,15 +2,15 @@
  * Defines application defaults injected by concrete Host composition roots.
  * It does not reimplement the policies enforced by those modules.
  */
-import type { RecentEventBufferOptions } from '@megumi/agent-runtime/events';
-import type { AgentExecutionPolicy } from '@megumi/agent-runtime/runs/index';
+import type { AgentExecutionPolicy } from '@megumi/agent';
+import type { RecentEventBufferOptions } from './coding/events/event-bus';
 
 export const PRODUCT_RECENT_EVENT_BUFFER = {
   maxSessions: 64,
   maxEventsPerSession: 2_048,
 } satisfies RecentEventBufferOptions;
 
-/** The Discovery Agent execution policy the Host compositions inject. */
+/** Execution limits supplied to each product configuration snapshot. */
 export const PRODUCT_EXECUTION_POLICY = {
   maxModelCallsPerExecution: 80,
   maxToolRoundsPerExecution: 50,
@@ -26,10 +26,10 @@ export const PRODUCT_EXECUTION_POLICY = {
   providerRequestMaxRetryDelayMs: 60_000,
 } satisfies AgentExecutionPolicy;
 
-/** The terminal execution retention budget handed to the Execution Registry. */
+/** How long Coding retains completed request identities and approval results. */
 export const PRODUCT_TERMINAL_RETENTION_MS = 300_000;
 
-/** The Product shutdown wait budget handed to the Discovery Agent shutdown. */
+/** How long application shutdown waits before reporting unfinished business work. */
 export const PRODUCT_SHUTDOWN_TIMEOUT_MS = 10_000;
 
 /** Converts the host platform identifier into the stable value shown to models. */

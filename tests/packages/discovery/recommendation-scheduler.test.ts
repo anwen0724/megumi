@@ -1,7 +1,7 @@
 /* Verifies Recommendation wall-clock scheduling delegates every trigger to one Runtime entry. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createRecommendationScheduler } from '@megumi/application/discovery/scheduling/recommendation-scheduler';
+import { createRecommendationScheduler } from '@megumi/application/recommendation/recommendation-schedule';
 
 describe('RecommendationScheduler', () => {
   it('runs startup catch-up after today generation time and schedules the next local day', async () => {

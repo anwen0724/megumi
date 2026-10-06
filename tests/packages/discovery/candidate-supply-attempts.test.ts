@@ -6,14 +6,32 @@ import {
   migrateDatabase,
   type DatabaseConnection,
 } from '@megumi/application/storage/index';
+import { createCandidateSupplyRepository } from '@megumi/application/recommendation/candidates/candidate-storage';
+import { createDiscoveryRepository } from '@megumi/application/recommendation/recommendation-storage';
 import {
-  createCandidateSupplyAttempts,
-  createCandidateSupplyRepository,
-  createDiscoveryRepository,
   createSourceRegistry,
-  type CandidateSupplyRepository,
   type DiscoverySource,
-} from '@megumi/application/discovery/index';
+} from '@megumi/application/recommendation/sources/source-catalog';
+import { type CandidateSupplyRepository } from '@megumi/application/recommendation/candidates/candidate-pool';
+
+import {
+  createCollectionTools,
+  type CollectionTools,
+} from '@megumi/application/recommendation/collection/agent-tools';
+
+function invoke(
+  collection: CollectionTools,
+  name: string,
+  request: ReturnType<typeof toolRequest>,
+) {
+  const tool = collection.tools.find((tool) => tool.name === name)!;
+  return tool.execute(request.input, {
+    runId: request.executionId,
+    toolCallId: 'call',
+    signal: request.signal,
+    onOutput() {},
+  });
+}
 
 const now = '2026-09-03T00:00:00.000Z';
 const settings = {
@@ -24,7 +42,7 @@ const settings = {
   candidateContentExcerptMaxCharacters: 8_000,
 };
 
-describe('CandidateSupplyAttempts', () => {
+describe('Collection tools', () => {
   let database: DatabaseConnection;
   let repository: CandidateSupplyRepository;
 
@@ -52,10 +70,11 @@ describe('CandidateSupplyAttempts', () => {
   afterEach(() => database.close());
 
   it('keeps Source search results out of business tables until the Agent submits them', async () => {
-    const attempts = createCandidateSupplyAttempts();
-    attempts.start(attemptInput(repository, source()));
+    const collection = createCollectionTools(attemptInput(repository, source()));
 
-    const searched = await attempts.searchContent(
+    const searched = await invoke(
+      collection,
+      'search_content',
       toolRequest({
         sourceId: 'source:1',
         query: 'Agent architecture',
@@ -86,7 +105,9 @@ describe('CandidateSupplyAttempts', () => {
 
     const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!
       .resultId;
-    const submitted = await attempts.submitCandidates(
+    const submitted = await invoke(
+      collection,
+      'submit_candidates',
       toolRequest({
         items: [
           {
@@ -122,9 +143,10 @@ describe('CandidateSupplyAttempts', () => {
   });
 
   it('keeps Source detail transient until submission and then persists bounded evidence', async () => {
-    const attempts = createCandidateSupplyAttempts();
-    attempts.start(attemptInput(repository, source()));
-    const searched = await attempts.searchContent(
+    const collection = createCollectionTools(attemptInput(repository, source()));
+    const searched = await invoke(
+      collection,
+      'search_content',
       toolRequest({
         sourceId: 'source:1',
         query: 'Agent',
@@ -136,7 +158,7 @@ describe('CandidateSupplyAttempts', () => {
     const resultId = (searched.content as { results: Array<{ resultId: string }> }).results[0]!
       .resultId;
 
-    const read = await attempts.readSourceCandidate(toolRequest({ resultId }));
+    const read = await invoke(collection, 'read_source_candidate', toolRequest({ resultId }));
 
     expect(read).toMatchObject({
       content: {
@@ -155,7 +177,9 @@ describe('CandidateSupplyAttempts', () => {
         .get()?.count,
     ).toBe(0);
 
-    await attempts.submitCandidates(
+    await invoke(
+      collection,
+      'submit_candidates',
       toolRequest({
         items: [
           {
@@ -193,15 +217,16 @@ describe('CandidateSupplyAttempts', () => {
       status: 'failed',
       failure: { code: 'network_error', message: 'Unavailable.', retryable: true },
     });
-    const attempts = createCandidateSupplyAttempts();
-    attempts.start({
+    const collection = createCollectionTools({
       ...attemptInput(repository, source()),
       sourceRegistry: createSourceRegistry([failing, source()]),
       enabledSourceIds: ['source:failed', 'source:1'],
     });
 
     await expect(
-      attempts.searchContent(
+      invoke(
+        collection,
+        'search_content',
         toolRequest({
           sourceId: 'source:failed',
           query: 'Agent',
@@ -212,7 +237,9 @@ describe('CandidateSupplyAttempts', () => {
       ),
     ).resolves.toMatchObject({ isError: true, content: { code: 'network_error' } });
     await expect(
-      attempts.searchContent(
+      invoke(
+        collection,
+        'search_content',
         toolRequest({
           sourceId: 'source:1',
           query: 'Agent',
@@ -222,7 +249,7 @@ describe('CandidateSupplyAttempts', () => {
         }),
       ),
     ).resolves.toMatchObject({ content: { status: 'success' } });
-    expect(attempts.summarize('execution:1')).toMatchObject({
+    expect(collection.summarize()).toMatchObject({
       sourceFailureCount: 1,
       searchResultCount: 1,
     });
@@ -230,7 +257,8 @@ describe('CandidateSupplyAttempts', () => {
 
   it('records Source provider responses and normalized results as Trace evidence', async () => {
     const recordContent = vi.fn();
-    const attempts = createCandidateSupplyAttempts({
+    const collection = createCollectionTools({
+      ...attemptInput(repository, source()),
       observability: {
         withTrace: async (_request, operation) => operation(),
         withSpan: async (_request, operation) => operation(),
@@ -239,9 +267,10 @@ describe('CandidateSupplyAttempts', () => {
         linkTrace: () => undefined,
       },
     });
-    attempts.start(attemptInput(repository, source()));
 
-    await attempts.searchContent(
+    await invoke(
+      collection,
+      'search_content',
       toolRequest({
         sourceId: 'source:1',
         query: 'Agent',
@@ -286,10 +315,14 @@ describe('CandidateSupplyAttempts', () => {
           })),
         };
       };
-      const attempts = createCandidateSupplyAttempts();
-      attempts.start({ ...attemptInput(repository, twitter), twitterBudget: budget });
+      const collection = createCollectionTools({
+        ...attemptInput(repository, twitter),
+        twitterBudget: budget,
+      });
       for (const limit of limits) {
-        const result = await attempts.searchContent(
+        const result = await invoke(
+          collection,
+          'search_content',
           toolRequest({
             sourceId: 'twitter',
             query: 'Agent',
@@ -302,7 +335,9 @@ describe('CandidateSupplyAttempts', () => {
         expect((result.content as { results: unknown[] }).results).toHaveLength(limit);
       }
       expect(
-        await attempts.searchContent(
+        await invoke(
+          collection,
+          'search_content',
           toolRequest({
             sourceId: 'twitter',
             query: 'More',
@@ -317,12 +352,13 @@ describe('CandidateSupplyAttempts', () => {
   );
 
   it('does not implement a Candidate Supply search or read budget', async () => {
-    const attempts = createCandidateSupplyAttempts();
-    attempts.start(attemptInput(repository, source()));
+    const collection = createCollectionTools(attemptInput(repository, source()));
 
     for (let index = 0; index < 13; index += 1) {
       await expect(
-        attempts.searchContent(
+        invoke(
+          collection,
+          'search_content',
           toolRequest({
             sourceId: 'source:1',
             query: `Agent ${index}`,

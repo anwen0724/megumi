@@ -5,12 +5,12 @@
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SKILLS_POLICY, loadSkills } from '@megumi/agent-runtime/resources/skills/skill-loader';
+import { DEFAULT_SKILLS_POLICY, loadSkills } from '@megumi/agent/resources/load-skills';
 
 const BUILT_IN_SKILLS_ROOT = path.resolve(
   process.cwd(),
   'packages',
-  'agent-runtime',
+  'application',
   'resources',
   'skills',
 );
@@ -38,7 +38,6 @@ describe('built-in study Skills', () => {
     for (const skill of result.skills) {
       expect(skill).toMatchObject({
         source: { owner: 'system', scope: 'global' },
-        available: true,
         disableModelInvocation: false,
         diagnostics: [],
       });

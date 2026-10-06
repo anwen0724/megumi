@@ -10,7 +10,7 @@
   "author": "Megumi contributors",
   "workspaces": [
     "packages/ai",
-    "packages/agent-runtime",
+    "packages/agent",
     "packages/application"
   ],
   "main": ".vite/build/index.js",

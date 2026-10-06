@@ -2,8 +2,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import type { Api, Model } from '@megumi/ai';
-import { createInterestExtractor } from '@megumi/application/discovery/index';
-import { createInterestExtractionQueue } from '@megumi/application/discovery/interests/interest-extraction-queue';
+import { createInterestExtractor } from '@megumi/application/recommendation/interests/extract-interests';
+import { createInterestExtractionQueue } from '@megumi/application/recommendation/interests/extraction-queue';
 
 const model = {
   id: 'test-model',
@@ -32,9 +32,9 @@ describe('Interest extractor', () => {
           ],
         }) as any,
     );
-    const extractor = createInterestExtractor({});
+    const extractor = createInterestExtractor({ ai: { completeSimple } });
 
-    await expect(extractor.extract({ ...input(), client: { completeSimple } })).resolves.toEqual({
+    await expect(extractor.extract(input())).resolves.toEqual({
       evidence: [{ description: 'Agent 工程化', effect: 'support', confidence: 'high' }],
     });
     const context = completeSimple.mock.calls[0]![1];
@@ -44,12 +44,12 @@ describe('Interest extractor', () => {
   });
 
   it('rejects invalid model JSON instead of persisting a partial interpretation', async () => {
-    const extractor = createInterestExtractor({});
     const completeSimple = async () => ({
       stopReason: 'stop',
       content: [{ type: 'text', text: '{"evidence":[{"confidence":"certain"}]}' }],
     });
-    await expect(extractor.extract({ ...input(), client: { completeSimple } })).rejects.toThrow();
+    const extractor = createInterestExtractor({ ai: { completeSimple } });
+    await expect(extractor.extract(input())).rejects.toThrow();
   });
 });
 

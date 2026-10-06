@@ -1,15 +1,11 @@
 /* Verifies recommendation admission and publication through the real shared runtime and storage. */
 // @vitest-environment node
 import type { DatabaseConnection } from '@megumi/application/storage/index';
-import {
-  createRecommendations,
-  createSourceRegistry,
-  type CreateRecommendationsOptions,
-  type DiscoverySource,
-} from '@megumi/application/discovery/index';
+import { createRecommendations, type CreateRecommendationsOptions } from '@megumi/application/recommendation/daily/generate-recommendations';
+import { createSourceRegistry, type DiscoverySource } from '@megumi/application/recommendation/sources/source-catalog';
 import { expect, it, onTestFinished, vi } from 'vitest';
-import { createRuntimeFixture } from '../agent-runtime/runtime-fixture';
-import { controlModelHttp, modelResponse } from '../agent-runtime/model-http-fixture';
+import { createHttpProductFixture } from '../recommendation/http-product-fixture';
+import { controlModelHttp, modelResponse } from '../recommendation/model-http-fixture';
 
 const now = '2026-09-03T00:00:00.000Z';
 
@@ -114,12 +110,25 @@ it('does not restore manual waiting on restart before the scheduled time', async
 });
 
 it('does not launch a model request after shutdown during model resolution', async () => {
-  const { fixture, http } = await setup(1);
-  const business = createRecommendations(optionsFor(fixture));
-  const accepted = business.generate({ trigger: 'manual' });
-  await business.shutdown();
-  expect(await accepted).toMatchObject({ status: 'failed' });
-  expect(http.requests).toHaveLength(0);
+  const gate = Promise.withResolvers<void>();
+  const resolving = Promise.withResolvers<void>();
+  const fixture = createHttpProductFixture(() => now);
+  seedInterest(fixture.database);
+  seedCandidate(fixture.database, 1);
+  const http = controlModelHttp();
+  const options = optionsFor(fixture);
+  const business = createRecommendations({ ...options, preparation: { ...fixture.preparation,
+    resolveModel: async () => { resolving.resolve(); await gate.promise; return fixture.model; } } });
+  try {
+    const accepted = await business.generate({ trigger: 'manual' });
+    if (accepted.status !== 'started') throw new Error('Expected admission');
+    await resolving.promise;
+    const shutdown = business.shutdown();
+    gate.resolve();
+    await shutdown;
+    expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 1000 })).toMatchObject({ status: 'cancelled' });
+    expect(http.requests).toHaveLength(0);
+  } finally { gate.resolve(); await business.shutdown(); fixture.cleanup(); http.restore(); }
 });
 
 it('publishes the configured ordered selection after successful run completion', async () => {
@@ -127,10 +136,6 @@ it('publishes the configured ordered selection after successful run completion',
   const accepted = await business.generate({ trigger: 'manual' });
   if (accepted.status !== 'started') throw new Error('Expected admission');
   await http.waitForRequest();
-  expect(fixture.recommendationAttempts.getSnapshot(accepted.executionId!)).toMatchObject({
-    actualTarget: 2,
-    workingSetCount: 2,
-  });
   http.respond(modelResponse(selection));
   expect(await business.wait({ requestId: accepted.requestId, timeoutMs: 2000 })).toMatchObject({
     status: 'published',
@@ -138,8 +143,6 @@ it('publishes the configured ordered selection after successful run completion',
       items: [{ candidateId: 'candidate:1' }, { candidateId: 'candidate:2' }],
     },
   });
-  expect(fixture.runtime.getRun(accepted.executionId!)?.status).toBe('completed');
-  expect(fixture.recommendationAttempts.getSnapshot(accepted.executionId!)).toBeUndefined();
   expect(http.requests).toHaveLength(1);
 });
 
@@ -247,7 +250,6 @@ it('keeps the business request while retrying failed runs with new snapshots', a
   );
   const scheduled = await retry.promise;
   expect(scheduled.delay).toBe(5000);
-  expect(fixture.runtime.getRun(first.executionId!)?.status).toBe('failed');
   scheduled.callback();
   await http.waitForRequest(2);
   const current = business.getToday();
@@ -289,7 +291,7 @@ const selection = {
 };
 
 async function setup(candidates: number, overrides: Partial<CreateRecommendationsOptions> = {}) {
-  const fixture = await createRuntimeFixture({ now: () => now });
+  const fixture = createHttpProductFixture(() => now);
   seedInterest(fixture.database);
   for (let index = 1; index <= candidates; index++) seedCandidate(fixture.database, index);
   const http = controlModelHttp();
@@ -303,7 +305,7 @@ async function setup(candidates: number, overrides: Partial<CreateRecommendation
 }
 
 function optionsFor(
-  fixture: Awaited<ReturnType<typeof createRuntimeFixture>>,
+  fixture: Awaited<ReturnType<typeof createHttpProductFixture>>,
 ): CreateRecommendationsOptions {
   const baseline = fixture.settings.readSettings();
   if (baseline.status !== 'ok') throw new Error('Invalid test configuration');
@@ -320,8 +322,8 @@ function optionsFor(
   let id = 0;
   return {
     repository: fixture.repository,
-    attempts: fixture.recommendationAttempts,
-    runtime: fixture.runtime,
+    agent: fixture.agent,
+    preparation: fixture.preparation,
     sourceRegistry: createSourceRegistry([source()]),
     settings: fixture.settings,
     clock: { now: () => now },

@@ -1,7 +1,7 @@
 /* Supplies an isolated Node-backed Megumi Home to Evaluation composition. */
 import fs from 'fs-extra';
 import path from 'node:path';
-import type { InitializeMegumiHomeSyncOptions, MegumiHomeSyncFileSystem } from '@megumi/home';
+import type { InitializeMegumiHomeSyncOptions, MegumiHomeSyncFileSystem } from '@megumi/application/storage/home-initializer';
 
 export function createEvaluationHomeOptions(input: {
   readonly homePath: string;

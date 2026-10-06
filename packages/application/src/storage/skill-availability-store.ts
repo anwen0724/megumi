@@ -1,8 +1,7 @@
 /* Persists skill availability through the application-owned database. */
 import crypto from 'node:crypto';
+import type { SkillAvailability, SkillAvailabilityStore } from '../skills/manage-skills';
 import type { DatabaseConnection, DatabaseRow } from './index';
-import type { SkillAvailability } from '@megumi/agent-runtime/resources/skills/skill';
-import type { SkillAvailabilityStore } from '@megumi/agent-runtime/resources/skills/skill-availability';
 
 type SkillAvailabilityRow = DatabaseRow & {
   skill_availability_id: string;

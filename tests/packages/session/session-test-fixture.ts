@@ -4,16 +4,17 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createSessionCatalog, createSessionHistory } from '@megumi/agent-runtime/sessions/index';
-import { createSessionStore } from '@megumi/application/storage/session-store';
-import { createSessionAttachmentFileStore } from '@megumi/application/storage/session-attachment-store';
+import { createSessionCatalog } from '@megumi/application/coding/sessions/session-catalog';
+import { createSessionHistory } from '@megumi/application/coding/sessions/session-history';
+import { createSessionStore } from '@megumi/application/coding/sessions/session-storage';
+import { createSessionAttachmentFileStore } from '@megumi/application/coding/sessions/session-storage';
 import { createWorkspaceCatalog } from '@megumi/application/workspace/index';
 import { createWorkspaceStore } from '@megumi/application/workspace/workspace-store';
 
 export const savedAt = '2026-07-31T00:00:00.000Z';
 
 /** Opens an isolated workspace and session through their public capabilities. */
-export async function createSessionFixture() {
+export async function createSessionFixture(options: { beforeAttachmentWrite?: () => Promise<void> } = {}) {
   const root = mkdtempSync(path.join(tmpdir(), 'megumi-session-behavior-'));
   const workspaceRoot = path.join(root, 'workspace');
   mkdirSync(workspaceRoot);
@@ -38,7 +39,7 @@ export async function createSessionFixture() {
       attachmentsPath: path.join(root, 'attachments'),
       fileSystem: {
         ensureDirectory: async directory => { await mkdir(directory, { recursive: true }); },
-        writeFile,
+        async writeFile(file, bytes) { await options.beforeAttachmentWrite?.(); await writeFile(file, bytes); },
         moveFile: rename,
         readFile,
         removeFile: filename => rm(filename, { force: true }),

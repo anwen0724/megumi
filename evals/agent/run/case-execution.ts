@@ -1,8 +1,8 @@
 /*
- * Sends one Evaluation Case through the existing ProductRuntime Host and preserves
+ * Sends one Evaluation Case through the existing Application Host and preserves
  * the owning product operation's returned result without inventing a shared status.
  */
-import type { ProductRuntime } from '@megumi/composition';
+import type { Application } from '@megumi/application/index';
 import { z } from 'zod';
 import type { EvaluationCase } from '../contracts/evaluation-dataset';
 import type { InstalledInitialStateIds } from './initial-state';
@@ -54,9 +54,8 @@ interface CaseExecutionInput {
 }
 
 type CaseExecutionRuntime = {
-  readonly host: {
-    readonly session: Pick<ProductRuntime['host']['session'], 'sendUserInput' | 'readCommittedRun'>;
-    readonly discovery: Pick<ProductRuntime['host']['discovery'],
+    readonly session: Pick<Application['session'], 'sendUserInput' | 'readCommittedRun'>;
+    readonly discovery: Pick<Application['discovery'],
       | 'getInterestFacts'
       | 'requestCandidateSupply'
       | 'getCandidatePool'
@@ -67,9 +66,8 @@ type CaseExecutionRuntime = {
       | 'waitPreferenceLearning'
       | 'getPreferenceLearning'
       | 'getPreferenceLearningStatus' | 'preparePreferencesForRecommendation'>;
-    readonly observability: Pick<ProductRuntime['host']['observability'],
+    readonly observability: Pick<Application['observability'],
       'flush' | 'listTraces' | 'getTrace' | 'getContent'>;
-  };
 };
 
 /** Calls the same public Product Host operation used by a normal Host. */
@@ -109,7 +107,7 @@ async function executeConversation(input: CaseExecutionInput): Promise<CaseExecu
     if (Date.now() >= input.safetyDeadlineMs) return {
       ...structuredClone(input.progress.current), caseType: 'conversation', terminalState: 'interrupted', interruption: safetyInterruption(input),
     };
-    const accepted = await input.runtime.host.session.sendUserInput({
+    const accepted = await input.runtime.session.sendUserInput({
       ...(sessionId ? { sessionId } : {}),
       projectId: input.initialStateIds.workspaceId,
       text: step.userInput,
@@ -169,7 +167,7 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
   if (input.evaluationCase.type !== 'interest_understanding') throw new Error('Interest Understanding Case is required.');
   const sessionId = Object.values(input.initialStateIds.sessions)[0];
   if (!sessionId) throw new Error('Interest Understanding requires one initial Session.');
-  const accepted = await input.runtime.host.session.sendUserInput({
+  const accepted = await input.runtime.session.sendUserInput({
     sessionId,
     projectId: input.initialStateIds.workspaceId,
     text: input.evaluationCase.input.text,
@@ -236,7 +234,7 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
   const outcome = understanding.value.outcome;
   input.progress.current = { ...input.progress.current, productResult: { sourceConversation: conversation.result, understandingTrace: understanding.value.trace, ...(outcome ? { outcome } : {}) } };
   const ownerFacts = outcome
-    ? await input.runtime.host.discovery.getInterestFacts({
+    ? await input.runtime.discovery.getInterestFacts({
         interestIds: outcome.changedInterestIds,
         evidenceIds: outcome.evidenceIds,
       })
@@ -264,7 +262,7 @@ async function executeInterestUnderstanding(input: CaseExecutionInput): Promise<
 async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseExecutionResult> {
   if (input.evaluationCase.type !== 'candidate_supply') throw new Error('Candidate Supply Case is required.');
   const completion = await waitForProductResult(
-    input.runtime.host.discovery.requestCandidateSupply({
+    input.runtime.discovery.requestCandidateSupply({
       trigger: input.evaluationCase.input.trigger,
     }),
     input.safetyDeadlineMs,
@@ -285,7 +283,7 @@ async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseEx
     businessIds: { requestId: result.requestId, ...(executionId ? { executionId } : {}) },
     traceTargets: [{ traceKind: 'candidate_supply', correlation: { requestId: result.requestId }, expectation: 'required' }],
   };
-  const pool = await input.runtime.host.discovery.getCandidatePool();
+  const pool = await input.runtime.discovery.getCandidatePool();
   return execution({
     caseType: 'candidate_supply', terminalState: 'settled',
     productResult: result,
@@ -304,7 +302,7 @@ async function executeCandidateSupply(input: CaseExecutionInput): Promise<CaseEx
 
 async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExecutionResult> {
   if (input.evaluationCase.type !== 'recommendation') throw new Error('Recommendation Case is required.');
-  const accepted = await input.runtime.host.discovery.requestRecommendation({
+  const accepted = await input.runtime.discovery.requestRecommendation({
     trigger: input.evaluationCase.input.trigger,
   });
   if (accepted.status !== 'started' && accepted.status !== 'in_progress') {
@@ -323,7 +321,7 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
   };
   let completion;
   do {
-    completion = await waitForProductResult(input.runtime.host.discovery.waitRecommendation({
+    completion = await waitForProductResult(input.runtime.discovery.waitRecommendation({
       requestId: accepted.requestId,
       timeoutMs: Math.min(300_000, Math.max(1, input.safetyDeadlineMs - Date.now())),
     }),
@@ -348,7 +346,7 @@ async function executeRecommendation(input: CaseExecutionInput): Promise<CaseExe
   }
   input.progress.current = { ...input.progress.current, productResult: { accepted, completion: completion.value } };
   const facts = completion.value.status === 'published'
-    ? await input.runtime.host.discovery.getRecommendationCollection({
+    ? await input.runtime.discovery.getRecommendationCollection({
         localDate: accepted.localDate,
         includeHidden: true,
       })
@@ -374,7 +372,7 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
   if (!recommendationId) {
     throw new Error(`Initial Recommendation was not installed: ${input.evaluationCase.input.recommendationReferenceId}.`);
   }
-  const updated = await input.runtime.host.discovery.updateRecommendationState({
+  const updated = await input.runtime.discovery.updateRecommendationState({
     recommendationId,
     action: 'set_reaction',
     reaction: input.evaluationCase.input.reaction === 'none' ? null : input.evaluationCase.input.reaction,
@@ -405,14 +403,14 @@ async function executePreferenceLearning(input: CaseExecutionInput): Promise<Cas
       throw error;
     }
   }
-  const prepared = await waitForProductResult(input.runtime.host.discovery.preparePreferencesForRecommendation({ requestId: `evaluation:${input.evaluationCase.caseId}` }), input.safetyDeadlineMs);
+  const prepared = await waitForProductResult(input.runtime.discovery.preparePreferencesForRecommendation({ requestId: `evaluation:${input.evaluationCase.caseId}` }), input.safetyDeadlineMs);
   if (prepared.status === 'interrupted') return finish('interrupted', { status: 'safety_interrupted' }, {});
-  const facts = await input.runtime.host.discovery.getPreferenceLearning({ recommendationId });
+  const facts = await input.runtime.discovery.getPreferenceLearning({ recommendationId });
   if (prepared.value.status !== 'unchanged') traceTargets.push({ traceKind: 'preference_learning', correlation: { recommendationIds: [recommendationId] }, expectation: 'required' });
   return finish('settled', prepared.value, facts, facts?.preferences.map(({ preferenceSet }) => preferenceSet.id) ?? []);
 }
 
-type CommittedRunResult = Awaited<ReturnType<ProductRuntime['host']['session']['readCommittedRun']>>;
+type CommittedRunResult = Awaited<ReturnType<Application['session']['readCommittedRun']>>;
 type ConversationSettlement =
   | { readonly status: 'completed' | 'failed' | 'cancelled'; readonly result: CommittedRunResult }
   | { readonly status: 'interrupted'; readonly result: Readonly<Record<string, string>> };
@@ -424,7 +422,7 @@ async function waitForCommittedConversation(input: {
   readonly deadlineMs: number;
 }): Promise<ConversationSettlement> {
   while (Date.now() <= input.deadlineMs) {
-    const result = await input.runtime.host.session.readCommittedRun({
+    const result = await input.runtime.session.readCommittedRun({
       sessionId: input.sessionId,
       executionId: input.executionId,
     });
@@ -486,7 +484,7 @@ const InterestUnderstandingOutcomeSchema = z.object({
   evidenceIds: z.array(z.string().min(1)),
 }).strict();
 type InterestTraceDetail = Extract<
-  Awaited<ReturnType<CaseExecutionRuntime['host']['observability']['getTrace']>>,
+  Awaited<ReturnType<CaseExecutionRuntime['observability']['getTrace']>>,
   { readonly status: 'found' }
 >['trace'];
 
@@ -499,8 +497,8 @@ async function waitForInterestUnderstandingTrace(input: {
   readonly outcome?: z.infer<typeof InterestUnderstandingOutcomeSchema>;
 }>> {
   while (Date.now() <= input.deadlineMs) {
-    await input.runtime.host.observability.flush();
-    const listed = await input.runtime.host.observability.listTraces({
+    await input.runtime.observability.flush();
+    const listed = await input.runtime.observability.listTraces({
       traceKind: 'interest_understanding',
       correlation: { executionId: input.executionId },
       limit: 5,
@@ -508,7 +506,7 @@ async function waitForInterestUnderstandingTrace(input: {
     if (listed.status === 'failed') throw new Error(listed.message);
     const settled = listed.traces.find((trace) => trace.status !== 'incomplete');
     if (settled) {
-      const detail = await input.runtime.host.observability.getTrace({ traceId: settled.traceId });
+      const detail = await input.runtime.observability.getTrace({ traceId: settled.traceId });
       if (detail.status === 'failed') throw new Error(detail.message);
       if (detail.status === 'found') {
         const outcomeCheckpoint = [...detail.trace.contents].reverse().find(
@@ -536,7 +534,7 @@ async function readInterestUnderstandingOutcome(
   traceId: string,
   sequence: number,
 ): Promise<z.infer<typeof InterestUnderstandingOutcomeSchema> | undefined> {
-  const result = await runtime.host.observability.getContent({ traceId, sequence });
+  const result = await runtime.observability.getContent({ traceId, sequence });
   if (result.status === 'failed') throw new Error(result.message);
   if (result.status !== 'available' || result.content.encoding === 'binary') return undefined;
   const serialized = result.content.encoding === 'json' ? result.content.json : result.content.text;

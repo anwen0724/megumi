@@ -28,11 +28,11 @@
       "@megumi/ai/*": [
         "packages/ai/src/*"
       ],
-      "@megumi/agent-runtime": [
-        "packages/agent-runtime/src/index.ts"
+      "@megumi/agent": [
+        "packages/agent/src/index.ts"
       ],
-      "@megumi/agent-runtime/*": [
-        "packages/agent-runtime/src/*"
+      "@megumi/agent/*": [
+        "packages/agent/src/*"
       ],
       "@megumi/application": [
         "packages/application/src/index.ts"

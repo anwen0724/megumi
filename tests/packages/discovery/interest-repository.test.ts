@@ -10,10 +10,7 @@ import {
 } from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  createInterestRepository,
-  type InterestRepository,
-} from '@megumi/application/discovery/interests/interest-repository';
+import { createInterestRepository, type InterestRepository } from '@megumi/application/recommendation/interests/interest-storage';
 
 describe('InterestRepository', () => {
   let database: DatabaseConnection;

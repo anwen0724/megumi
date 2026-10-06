@@ -4,11 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createSessionCatalog,
-  createSessionHistory,
-} from '@megumi/agent-runtime/sessions/index';
-import { createSessionStore } from '@megumi/application/storage/session-store';
+import { createSessionCatalog } from '@megumi/application/coding/sessions/session-catalog';
+import { createSessionHistory } from '@megumi/application/coding/sessions/session-history';
+import { createSessionStore } from '@megumi/application/coding/sessions/session-storage';
 import {
   createDatabase,
   migrateDatabase,

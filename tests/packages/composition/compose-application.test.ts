@@ -2,10 +2,12 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import path from 'node:path';
+import fs from 'fs-extra';
+import { deferred } from '../agent/agent-fixture';
 import { createDatabase } from '@megumi/application/storage/index';
 import { DiscoveryHomeUiResultSchema } from '@megumi/application/contracts';
-import { createInterestRepository } from '@megumi/application/discovery/interests/interest-repository';
-import { createRecommendationRepository } from '@megumi/application/discovery/recommendations/recommendation-repository';
+import { createInterestRepository } from '@megumi/application/recommendation/interests/interest-storage';
+import { createRecommendationRepository } from '@megumi/application/recommendation/recommendation-storage';
 import { composeTestApplication, type TestApplication } from './compose-test-application';
 
 let application: TestApplication | undefined;
@@ -103,4 +105,27 @@ describe('createApplication', () => {
     });
     expect(application.contexts.length).toBeGreaterThanOrEqual(1);
   });
+});
+
+
+it('pins the session model when a later application default changes', async () => {
+  application = composeTestApplication();
+  const app = application;
+  let ended = deferred();
+  app.runtime.subscribeRuntimeEvents({ eventTypes: ['run.ended'] }, () => ended.resolve());
+  const opened = await app.runtime.workspace.useExistingProject();
+  if (opened.status !== 'opened' || !opened.project) throw new Error('Workspace unavailable');
+  const first = await app.runtime.session.sendUserInput({ projectId: opened.project.projectId, text: 'First' });
+  if (first.payload.type !== 'agent_run') throw new Error(JSON.stringify(first));
+  await ended.promise;
+  const settingsPath = path.join(app.home, 'settings.json');
+  const settings = fs.readJsonSync(settingsPath);
+  settings.general.lastSelectedModel = { providerId: 'test', modelId: 'other' };
+  settings.providers.test.models.other = { contextWindowTokens: 64000, maxOutputTokens: 2048 };
+  fs.writeJsonSync(settingsPath, settings);
+  ended = deferred();
+  const second = await app.runtime.session.sendUserInput({ projectId: opened.project.projectId, sessionId: first.payload.session.id, text: 'Second' });
+  if (second.payload.type !== 'agent_run') throw new Error('Expected second run');
+  await ended.promise;
+  expect(second.payload.session.modelSelection).toEqual({ providerId: 'test', modelId: 'model' });
 });

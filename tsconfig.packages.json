@@ -5,7 +5,7 @@
       "path": "./packages/ai"
     },
     {
-      "path": "./packages/agent-runtime"
+      "path": "./packages/agent"
     },
     {
       "path": "./packages/application"

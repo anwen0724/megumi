@@ -8,7 +8,7 @@ import { lstat, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/pr
 import path from 'node:path';
 import { z } from 'zod';
 import { createTraceReader, nodeObservabilityStorage, type ObservabilityPersistenceStorage,
-  type TraceMeasurements, type TraceProjection } from '@megumi/observability';
+  type TraceMeasurements, type TraceProjection } from '@megumi/application/observability/index';
 import { CaseRunResultSchema, CaseSnapshotSchema, EvaluationRunRecordSchema } from '../contracts/evaluation-run';
 
 export interface CaseEvidence {

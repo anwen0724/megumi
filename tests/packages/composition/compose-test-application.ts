@@ -1,13 +1,13 @@
 /* Builds an isolated Application with scripted model streams for Composition tests. */
+import type { Api, AssistantMessage, Model, ProviderStreams } from '@megumi/ai';
+import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
+import { createApplication, type Application, type CreateApplicationOptions } from '@megumi/application/index';
+import { nodeObservabilityStorage } from '@megumi/application/observability/index';
+import { createNodeWorkspaceFileSystem } from '@megumi/application/workspace/node-workspace-file-system';
+import fs from 'fs-extra';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import fs from 'fs-extra';
-import { createApplication, type Application } from '@megumi/application/index';
-import type { Api, AssistantMessage, Model, ProviderStreams } from '@megumi/ai';
-import { AssistantMessageEventStream } from '@megumi/ai/utils/event-stream';
-import { nodeObservabilityStorage } from '@megumi/application/observability/index';
-import { createNodeWorkspaceFileSystem } from '@megumi/application/workspace/node-workspace-file-system';
 
 export interface TestApplication {
   readonly runtime: Application;
@@ -19,7 +19,8 @@ export interface TestApplication {
 }
 
 export function composeTestApplication(
-  responses: readonly string[] = ['Test reply.'],
+  responses: readonly (string | AssistantMessage['content'])[] = ['Test reply.'],
+  platform: Pick<CreateApplicationOptions, 'inputSourceAccess' | 'modelStreams'> = {},
 ): TestApplication {
   const root = mkdtempSync(path.join(tmpdir(), 'megumi-composition-'));
   const home = path.join(root, 'home');
@@ -47,6 +48,7 @@ export function composeTestApplication(
   });
   fs.writeJsonSync(path.join(home, 'credentials.json'), { providers: { test: 'test-key' } });
   const runtime = createApplication({
+    ...platform,
     home: {
       env: { MEGUMI_HOME: home },
       homeDirectory: root,
@@ -61,7 +63,7 @@ export function composeTestApplication(
     },
     workspaceFileSystem: createNodeWorkspaceFileSystem(),
     observabilityStorage: nodeObservabilityStorage,
-    modelStreams: { 'openai-completions': scripted.streams },
+    modelStreams: platform.modelStreams ?? { 'openai-completions': scripted.streams },
     directoryPicker: { chooseDirectory: async () => ({ canceled: false, filePaths: [workspace] }) },
     clock: { now: () => '2026-01-01T00:00:00.000Z' },
     createApplicationId: createTestId,
@@ -79,7 +81,7 @@ export function composeTestApplication(
   };
 }
 
-export function createScriptedStreams(responses: readonly string[]): {
+export function createScriptedStreams(responses: readonly (string | AssistantMessage['content'])[]): {
   readonly streams: ProviderStreams;
   readonly contexts: unknown[];
 } {
@@ -94,11 +96,14 @@ export function createScriptedStreams(responses: readonly string[]): {
   return { streams: { stream, streamSimple: stream }, contexts };
 }
 
-function assistantStream(model: Model<Api>, text: string): AssistantMessageEventStream {
+function assistantStream(model: Model<Api>, response: string | AssistantMessage['content']): AssistantMessageEventStream {
+  const text = typeof response === 'string' ? response : '';
+  const content: AssistantMessage['content'] = typeof response === 'string' ? [{ type: 'text', text }] : response;
+  const reason = content.some(block => block.type === 'toolCall') ? 'toolUse' : 'stop';
   const events = new AssistantMessageEventStream();
   const message: AssistantMessage = {
     role: 'assistant',
-    content: [{ type: 'text', text }],
+    content,
     api: model.api,
     provider: model.provider,
     model: model.id,
@@ -110,7 +115,7 @@ function assistantStream(model: Model<Api>, text: string): AssistantMessageEvent
       totalTokens: 15,
       cost: { input: 0.001, output: 0.001, cacheRead: 0, cacheWrite: 0, total: 0.002 },
     },
-    stopReason: 'stop',
+    stopReason: reason,
     timestamp: Date.now(),
   };
   events.push({ type: 'start', partial: { ...message, content: [] } });
@@ -120,7 +125,7 @@ function assistantStream(model: Model<Api>, text: string): AssistantMessageEvent
     delta: text,
     partial: message,
   });
-  events.push({ type: 'done', reason: 'stop', message });
+  events.push({ type: 'done', reason, message });
   return events;
 }
 

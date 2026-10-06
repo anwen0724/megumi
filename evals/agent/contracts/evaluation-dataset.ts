@@ -2,7 +2,7 @@
  * Defines the author-facing Dataset and business Case contracts used by Evaluation.
  */
 import { z } from 'zod';
-import { DiscoveryContentTypeSchema } from '@megumi/discovery';
+import { DiscoveryContentTypeSchema } from '@megumi/application/recommendation/sources/source-catalog';
 
 export const StableEvaluationIdSchema = z.string().regex(/^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u);
 export const EvaluationEnvironmentKindSchema = z.enum(['controlled', 'live']);

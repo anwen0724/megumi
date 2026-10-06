@@ -1,8 +1,10 @@
 /* Verifies the Open Web adapter over the existing Web Search and Web Fetch seams. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { ToolExecutionFailure, type WebFetch, type WebSearch } from '@megumi/agent-runtime/tools/index';
-import { createOpenWebSource } from '@megumi/application/discovery/index';
+import { ToolExecutionFailure } from '@megumi/agent/tools/tool-result';
+import { type WebFetch } from '@megumi/agent/tools/builtin/web/fetch-page';
+import { type WebSearch } from '@megumi/agent/tools/builtin/web/search-web';
+import { createOpenWebSource } from '@megumi/application/recommendation/sources/web-source';
 
 describe('Open Web discovery source', () => {
   it('preserves the actual website name instead of presenting Open Web as the publisher', async () => {

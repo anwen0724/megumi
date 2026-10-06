@@ -2,12 +2,9 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import {
-  createCandidateSupplyRepository,
-  createDiscoveryRepository,
-  type CandidateSupplyRepository,
-  type DiscoveryRepository,
-} from '@megumi/application/discovery/index';
+import { createCandidateSupplyRepository } from '@megumi/application/recommendation/candidates/candidate-storage';
+import { createDiscoveryRepository, type DiscoveryRepository } from '@megumi/application/recommendation/recommendation-storage';
+import { type CandidateSupplyRepository } from '@megumi/application/recommendation/candidates/candidate-pool';
 
 const now = '2026-09-03T00:00:00.000Z';
 const settings = {

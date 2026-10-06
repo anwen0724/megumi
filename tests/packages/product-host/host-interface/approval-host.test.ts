@@ -1,132 +1,91 @@
-/*
- * Verifies Product approval operations against Agent Execution-owned state.
- */
-import { describe, expect, it, vi } from 'vitest';
-import { createApprovalOperations } from '@megumi/application/approval-operations';
+/* Verifies user approval and cancellation through the real composed Coding product. */
+// @vitest-environment node
+import type { AnyEvent } from '@megumi/application/contracts';
+import fs from 'node:fs';
+import path from 'node:path';
+import { expect, it } from 'vitest';
+import { deferred } from '../../agent/agent-fixture';
+import { composeTestApplication } from '../../composition/compose-test-application';
 
-describe('ApprovalHost', () => {
-  it('maps an approved decision to Agent Execution', async () => {
-    const resolveApproval = vi.fn(async () => ({
-      status: 'accepted' as const,
-      run: executionFixture('waiting'),
-    }));
-    const host = createApprovalOperations({ resolveApproval } as never);
+type ApprovalEvent = Extract<AnyEvent, { type: 'approval.requested' }>;
 
-    const result = await host.resolve({
-      approvalRequestId: 'approval:1',
-      decision: 'approved',
-      optionId: 'allow_once',
-      reason: 'Needed for this task.',
-    });
-
-    expect(resolveApproval).toHaveBeenCalledWith({
-      approvalId: 'approval:1',
-      decision: {
-        decision: 'approved',
-        optionId: 'allow_once',
-        reason: 'Needed for this task.',
-      },
-    });
-    // Desktop keeps the previous success behavior: an accepted decision reads
-    // as 'resumed' with the execution facts.
-    expect(result.payload).toEqual({
-      status: 'resumed',
-      approvalRequestId: 'approval:1',
-      run: {
-        executionId: 'execution:1',
-        sessionId: 'session:1',
-        status: 'waiting',
-        createdAt: '2026-07-10T00:00:00.000Z',
-      },
-    });
+async function startWrite() {
+  const app = composeTestApplication([[{
+    type: 'toolCall', id: 'write:1', name: 'write_file',
+    arguments: { path: 'approved.txt', content: 'Approved content.' }
+  }], 'Saved.']);
+  const approval = deferred<ApprovalEvent>();
+  const ended = deferred();
+  const events: AnyEvent[] = [];
+  app.runtime.subscribeRuntimeEvents({}, event => {
+    events.push(event);
+    if (event.type === 'approval.requested') approval.resolve(event);
+    if (event.type === 'run.ended') ended.resolve();
   });
-
-  it('maps a denied decision without inventing decision metadata', async () => {
-    const resolveApproval = vi.fn(async () => ({
-      status: 'accepted' as const,
-      run: executionFixture('waiting'),
-    }));
-    const host = createApprovalOperations({ resolveApproval } as never);
-
-    await host.resolve({
-      approvalRequestId: 'approval:1',
-      decision: 'denied',
-      reason: 'Not allowed.',
+  try {
+    const opened = await app.runtime.workspace.useExistingProject();
+    if (opened.status !== 'opened' || !opened.project) throw new Error('Workspace unavailable.');
+    const started = await app.runtime.session.sendUserInput({
+      requestId: 'write-request',
+      projectId: opened.project.projectId, text: 'Write approved.txt.', permissionMode: 'ask',
+      modelSelection: { provider_id: 'test', model_id: 'model' },
     });
+    if (started.payload.type !== 'agent_run') throw new Error('Coding did not start.');
+    return {
+      app, approval: await approval.promise, ended: ended.promise, events,
+      sessionId: started.payload.session.id, executionId: started.payload.run.executionId
+    };
+  } catch (error) {
+    await app.cleanup();
+    throw error;
+  }
+}
 
-    expect(resolveApproval).toHaveBeenCalledWith({
-      approvalId: 'approval:1',
-      decision: { decision: 'denied', reason: 'Not allowed.' },
+it('waits for a valid user choice before changing a file and commits the tool result', async () => {
+  const fixture = await startWrite();
+  const { app, approval } = fixture;
+  try {
+    const target = path.join(app.workspace, 'approved.txt');
+    expect(fs.existsSync(target)).toBe(false);
+    expect(await app.runtime.approval.resolve({
+      approvalRequestId: approval.payload.approvalRequestId,
+      decision: 'approved', optionId: 'unknown-option'
+    })).toMatchObject({ payload: { status: 'failed' } });
+    expect(fs.existsSync(target)).toBe(false);
+    expect(await app.runtime.approval.resolve({
+      approvalRequestId: approval.payload.approvalRequestId,
+      decision: 'approved', optionId: approval.payload.defaultOptionId
+    })).toMatchObject({ payload: { status: 'resumed' } });
+    await fixture.ended;
+    expect(fs.readFileSync(target, 'utf8')).toBe('Approved content.');
+    const history = await app.runtime.session.readCommittedRun({ sessionId: fixture.sessionId, executionId: fixture.executionId });
+    expect(history).toMatchObject({
+      status: 'ok', messages: expect.arrayContaining([
+        expect.objectContaining({ message: expect.objectContaining({ kind: 'toolResult', status: 'success' }) }),
+      ])
     });
-  });
-
-  it.each([
-    [
-      { status: 'not_found' as const, approvalId: 'approval:missing' },
-      { status: 'not_found', approvalRequestId: 'approval:missing' },
-    ],
-    [
-      { status: 'not_waiting' as const, approvalId: 'approval:1', run: executionFixture('completed') },
-      {
-        status: 'not_waiting',
-        approvalRequestId: 'approval:1',
-        run: expect.objectContaining({ status: 'completed' }),
-      },
-    ],
-    [
-      { status: 'already_resolved' as const, approvalId: 'approval:1', run: executionFixture('completed') },
-      {
-        status: 'not_waiting',
-        approvalRequestId: 'approval:1',
-        run: expect.objectContaining({ status: 'completed' }),
-      },
-    ],
-    [
-      {
-        status: 'failed' as const,
-        error: {
-          code: 'PERMISSION_FAILED' as const,
-          message: 'Permission decision failed.',
-          retryable: false,
-        },
-      },
-      {
-        status: 'failed',
-        approvalRequestId: 'approval:1',
-        failure: {
-          code: 'PERMISSION_FAILED',
-          message: 'Permission decision failed.',
-          retryable: false,
-        },
-      },
-    ],
-  ])('projects Agent Execution approval result %s', async (agentResult, expectedPayload) => {
-    const host = createApprovalOperations({
-      resolveApproval: vi.fn(async () => agentResult),
-    } as never);
-
-    const result = await host.resolve({
-      approvalRequestId: 'approval:1',
-      decision: 'denied',
-    });
-
-    expect(result.payload).toEqual(expectedPayload);
-  });
+    const toolEnded = fixture.events.findIndex(event => event.type === 'tool_execution.ended');
+    const turnEnded = fixture.events.findIndex(event => event.type === 'turn.ended');
+    expect(turnEnded).toBeGreaterThan(toolEnded);
+  } finally { await app.cleanup(); }
 });
 
-function executionFixture(status: 'waiting' | 'completed') {
-  return {
-    kind: 'conversation',
-    runId: 'execution:1',
-    requestId: 'request:1',
-    workspaceId: 'workspace:1',
-    sessionId: 'session:1',
-    userMessageId: 'message:1',
-    model: {},
-    permissionMode: 'ask',
-    status,
-    createdAt: '2026-07-10T00:00:00.000Z',
-    startedAt: '2026-07-10T00:00:00.000Z',
-    ...(status === 'completed' ? { completedAt: '2026-07-10T00:01:00.000Z' } : {}),
-  } as never;
-}
+it('saves cancellation without executing the tool and ignores a late approval', async () => {
+  const fixture = await startWrite();
+  const { app, approval } = fixture;
+  try {
+    await app.runtime.session.cancelUserInput({ requestId: 'write-request' });
+    await fixture.ended;
+    expect(await app.runtime.approval.resolve({
+      approvalRequestId: approval.payload.approvalRequestId,
+      decision: 'approved', optionId: approval.payload.defaultOptionId
+    })).toMatchObject({ payload: { status: 'not_waiting' } });
+    expect(fs.existsSync(path.join(app.workspace, 'approved.txt'))).toBe(false);
+    const history = await app.runtime.session.readCommittedRun({ sessionId: fixture.sessionId, executionId: fixture.executionId });
+    expect(history).toMatchObject({
+      status: 'ok', messages: expect.arrayContaining([
+        expect.objectContaining({ message: expect.objectContaining({ kind: 'toolResult', status: 'cancelled' }) }),
+      ])
+    });
+  } finally { await app.cleanup(); }
+});

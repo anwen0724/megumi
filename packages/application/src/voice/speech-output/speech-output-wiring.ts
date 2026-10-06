@@ -10,7 +10,7 @@
 import {
   sessionMessageText,
   type SessionAssistantReplyMessage,
-} from '@megumi/agent-runtime/sessions/index';
+} from '../../coding/sessions/session-history';
 import type { Settings } from '../../settings/settings-store';
 import type { SpeechOutputRuntime } from './speech-output-runtime';
 

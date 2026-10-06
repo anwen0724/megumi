@@ -6,7 +6,7 @@ import {
   createFailedToolResult,
   isSuccessfulToolExecutionResult,
   normalizeRawToolResult,
-} from '@megumi/agent-runtime/tools/tool-result';
+} from '@megumi/agent/tools/tool-result';
 
 describe('Tool result normalization', () => {
   it('preserves structured effects on both successful and failed results', () => {

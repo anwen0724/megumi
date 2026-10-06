@@ -6,7 +6,7 @@ import {
   DEFAULT_PROTECTED_WORKSPACE_PATHS,
   DEFAULT_SENSITIVE_WORKSPACE_PATHS,
   createWorkspacePathPolicy,
-} from '@megumi/application/workspace/index';
+} from '@megumi/agent/sandbox/file-access';
 
 describe('WorkspacePathPolicy', () => {
   const policy = createWorkspacePathPolicy();

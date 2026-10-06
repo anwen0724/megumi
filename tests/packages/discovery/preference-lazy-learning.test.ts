@@ -3,10 +3,8 @@
  */
 // @vitest-environment node
 import { expect, it, vi } from 'vitest';
-import {
-  createPreferenceLearning,
-  type PreferenceLearningFacts,
-} from '@megumi/application/discovery/index';
+import { createPreferenceLearning } from '@megumi/application/recommendation/preferences/preference-learning';
+import { type PreferenceLearningFacts } from '@megumi/application/recommendation/preferences/preference-rules';
 import { completedMessage, model } from '../context/context-test-fixtures';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
@@ -18,14 +16,16 @@ it('learns only on demand and reuses inconclusive historical feedback on the nex
     action: 'set_reaction',
     reaction: 'liked',
   });
-  let facts: PreferenceLearningFacts | undefined;
+  let facts: { currentPreferences: Array<{ preferenceSetId: string; revision: number }>; reviewedPreferenceIds: string[];
+    reactionChanges: Array<{ recommendationId: string }> } | undefined;
   const models = {
-    completeSimple: vi.fn(async () => {
+    completeSimple: vi.fn(async (_model, context) => {
+      facts = JSON.parse(context.messages[0].content);
       if (!facts) throw new Error('Missing learning context');
       return completedMessage(
         JSON.stringify({
-          scopes: facts.currentPreferences.map(({ preferenceSet }) => ({
-            preferenceSetId: preferenceSet.id,
+          scopes: facts.currentPreferences.map(preferenceSet => ({
+            preferenceSetId: preferenceSet.preferenceSetId,
             baseRevision: preferenceSet.revision,
             changes: [],
             reviewedPreferenceIds: [],
@@ -37,21 +37,9 @@ it('learns only on demand and reuses inconclusive historical feedback on the nex
   };
   const runtime = createPreferenceLearning({
     repository,
-    models,
-    prepareModel: async () => ({
-      status: 'ok' as const,
-      model,
-      client: models,
-      compactionThresholdRatio: 0.8,
-    }),
+    ai: models, instructionDocuments: [], resolveModel: async () => model,
     now: () => now,
     ids: { createBatchId: () => 'batch', createModelCallId: () => 'call' },
-    context: {
-      build: async () => {
-        facts = runtime.getActivePreferenceLearningFacts('batch');
-        return { status: 'ready', prompt: { systemPrompt: 'learn', messages: [], tools: [] } };
-      },
-    },
   });
   try {
     await runtime.start();

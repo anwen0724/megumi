@@ -10,9 +10,7 @@ import {
 } from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  type SkillAvailabilityStore,
-} from '@megumi/agent-runtime/resources/skills/skill-availability';
+import { type SkillAvailabilityStore } from '@megumi/application/skills/manage-skills';
 
 describe('SkillAvailabilityStore', () => {
   let database: DatabaseConnection;

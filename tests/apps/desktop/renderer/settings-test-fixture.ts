@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { onTestFinished } from 'vitest';
 import { createSettings, type Settings } from '@megumi/application/settings/settings-store';
-import { readModelCatalog } from '@megumi/agent-runtime/runs/model-resolution';
+import { readModelCatalog } from '@megumi/application/settings/resolve-model';
 
 /** Replaces Electron transport only; configuration parsing, merging and saving remain real. */
 export function createSettingsFixture(initial: object = {}) {

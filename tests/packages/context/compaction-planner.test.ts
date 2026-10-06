@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { Message } from '@megumi/ai';
 import {
   planCompaction,
-} from '@megumi/agent-runtime/context/compaction/compaction-planner';
-import type { CompactionMessageSource } from '@megumi/agent-runtime/context/prompt/context-message-builder';
-import { DEFAULT_COMPACTION_POLICY } from '@megumi/agent-runtime/context/index';
+} from '@megumi/agent/context/compaction-plan';
+import type { CompactionMessageSource } from '@megumi/agent/context/compaction-plan';
+import { DEFAULT_COMPACTION_POLICY } from '@megumi/agent/context/context-budget';
 
 function source(entryId: string, message: Message): CompactionMessageSource {
   return { entryId, message };

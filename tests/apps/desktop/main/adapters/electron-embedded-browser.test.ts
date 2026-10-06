@@ -4,7 +4,8 @@ import { runInNewContext } from 'node:vm';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { BrowserWindowConstructorOptions } from 'electron';
-import { createDouyinSource, createXiaohongshuSource } from '@megumi/application/discovery/index';
+import { createDouyinSource } from '@megumi/application/recommendation/sources/douyin-source';
+import { createXiaohongshuSource } from '@megumi/application/recommendation/sources/xiaohongshu-source';
 import {
   createElectronEmbeddedBrowser,
   embeddedBrowserWindowOptions,

@@ -110,41 +110,10 @@ describe('Product Host runtime schemas', () => {
     ).toBe(false);
   });
 
-  it('validates structured Chat cancel results', () => {
-    expect(CancelUserInputPayloadSchema.safeParse({ cancelled: false }).success).toBe(false);
-    expect(
-      CancelUserInputPayloadSchema.safeParse({
-        status: 'cancellation_requested',
-        run: {
-          executionId: 'run:1',
-          sessionId: 'session:1',
-          status: 'cancelling',
-          createdAt: '2026-07-10T00:00:00.000Z',
-        },
-      }).success,
-    ).toBe(true);
-    expect(
-      CancelUserInputPayloadSchema.safeParse({ status: 'not_found', executionId: 'run:1' }).success,
-    ).toBe(true);
-    expect(
-      CancelUserInputPayloadSchema.safeParse({
-        status: 'not_cancellable',
-        reason: 'already_terminal',
-        run: {
-          executionId: 'run:1',
-          sessionId: 'session:1',
-          status: 'completed',
-          createdAt: '2026-07-10T00:00:00.000Z',
-          completedAt: '2026-07-10T00:01:00.000Z',
-        },
-      }).success,
-    ).toBe(true);
-    expect(
-      CancelUserInputPayloadSchema.safeParse({
-        status: 'failed',
-        failure: { code: 'cancel_failed', message: 'cannot cancel', retryable: true },
-      }).success,
-    ).toBe(true);
+  it('validates cancellation responses by product request identity, including preparation before a run exists', () => {
+    expect(CancelUserInputPayloadSchema.safeParse({ status: 'cancellation_requested', requestId: 'request:1' }).success).toBe(true);
+    expect(CancelUserInputPayloadSchema.safeParse({ status: 'not_active', requestId: 'request:1' }).success).toBe(true);
+    expect(CancelUserInputPayloadSchema.safeParse({ status: 'cancellation_requested', executionId: 'run:1' }).success).toBe(false);
   });
 
   it('rejects renderer-provided branch draft canonical fields and rerun mode', () => {

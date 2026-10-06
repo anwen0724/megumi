@@ -1,5 +1,6 @@
 /* Returns deterministic external Web Search and Fetch facts from one validated initial state. */
-import type { WebFetch, WebSearch } from '@megumi/tools';
+import type { WebFetch } from '@megumi/agent/tools/builtin/web/fetch-page';
+import type { WebSearch } from '@megumi/agent/tools/builtin/web/search-web';
 import type { CaseInitialState } from '../../run/initial-state';
 
 export function createControlledWebTools(initialState: CaseInitialState): {

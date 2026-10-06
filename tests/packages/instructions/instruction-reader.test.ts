@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  createInstructionReader,
+  loadInstructionFiles,
+  loadSystemInstructionDocuments,
   type InstructionSource,
   type InstructionSourceOperationOptions,
   type ReadInstructionDirectoryRequest,
@@ -14,7 +15,7 @@ import {
   type ReadInstructionFileResult,
   type ResolveInstructionPathRequest,
   type ResolveInstructionPathResult,
-} from '@megumi/agent-runtime/resources/instructions/index';
+} from '@megumi/agent/resources/load-instructions';
 
 const temporaryInstructionRoots: string[] = [];
 
@@ -25,58 +26,19 @@ afterEach(() => {
 });
 
 describe('InstructionReader', () => {
-  it('combines common instructions with the requested execution profile', async () => {
-    const contentRoot = createInstructionContentRoot({
-      common: 'Shared guidance',
-      conversation: 'Conversation guidance',
-      recommendation: 'Recommendation guidance',
-    });
-    const reader = createInstructionReader({
-      megumiHomePath: testPath('home', '.megumi'),
-      systemContentRoot: contentRoot,
-    });
-    expect((await reader.getSystemInstructions('conversation')).map(document => document.content))
-      .toEqual(['Shared guidance', 'Conversation guidance']);
-    expect((await reader.getSystemInstructions('recommendation')).map(document => document.content))
-      .toEqual(['Shared guidance', 'Recommendation guidance']);
+  it('loads the selected documents in order and normalizes BOM and line endings', async () => {
+    const root = createInstructionContentRoot({ common: '\uFEFFIdentity\r\nline two', conversation: 'Behavior\r\n', recommendation: 'Unused' });
+    const documents = ['common', 'conversation'].map(name => ({ instructionId: name, sourcePath: path.join(root, `${name}.md`) }));
+    expect((await loadSystemInstructionDocuments({ documents })).map(document => document.content))
+      .toEqual(['Identity\nline two', 'Behavior']);
   });
 
-  it('normalizes BOM and Windows line endings in replaceable instruction files', async () => {
-    const contentRoot = createInstructionContentRoot({
-      common: '\uFEFFIdentity\r\nline two\r\n',
-      conversation: 'Behavior guidelines:\r- one\r\n- two\r\n',
-      recommendation: 'Recommendation.\r\n',
-    });
-    const reader = createInstructionReader({
-      megumiHomePath: testPath('home', '.megumi'),
-      systemContentRoot: contentRoot,
-    });
-
-    await expect(reader.getSystemInstructions('conversation')).resolves.toMatchObject([
-      { content: 'Identity\nline two' },
-      { content: 'Behavior guidelines:\n- one\n- two' },
-    ]);
-  });
-
-  it('rejects missing and empty profile instruction files', async () => {
-    const missingRoot = createInstructionContentRoot({
-      common: 'Identity',
-      recommendation: 'Recommendation.',
-    });
-    const emptyRoot = createInstructionContentRoot({
-      common: 'Identity',
-      conversation: ' \r\n ',
-      recommendation: 'Recommendation.',
-    });
-
-    await expect(createInstructionReader({
-      megumiHomePath: testPath('home', '.megumi'),
-      systemContentRoot: missingRoot,
-    }).getSystemInstructions('conversation')).rejects.toThrow('conversation.md');
-    await expect(createInstructionReader({
-      megumiHomePath: testPath('home', '.megumi'),
-      systemContentRoot: emptyRoot,
-    }).getSystemInstructions('conversation')).rejects.toThrow('System instruction document is empty');
+  it('rejects missing and empty selected documents', async () => {
+    const root = createInstructionContentRoot({ common: ' \r\n ' });
+    await expect(loadSystemInstructionDocuments({ documents: [{ instructionId: 'missing', sourcePath: path.join(root, 'missing.md') }] }))
+      .rejects.toThrow('missing.md');
+    await expect(loadSystemInstructionDocuments({ documents: [{ instructionId: 'empty', sourcePath: path.join(root, 'common.md') }] }))
+      .rejects.toThrow('System instruction document is empty');
   });
 
   it('reads Home, Workspace, and nested exact AGENTS.md sources from far to near', async () => {
@@ -92,18 +54,16 @@ describe('InstructionReader', () => {
       [path.join(workingDirectory, 'AGENTS.MD'), 'must be ignored'],
       [path.join(workingDirectory, 'AGENTS.md'), 'working instructions'],
     ]));
-    const reader = createInstructionReader({ megumiHomePath: home, source });
+    const request = ({ megumiHomePath: home, source });
 
-    await expect(reader.getEffectiveInstructions({ workspaceRoot, workingDirectory })).resolves.toEqual({
+    await expect(loadInstructionFiles({ ...request, workspaceRoot, workingDirectory })).resolves.toEqual({
       status: 'ok',
-      instructions: {
-        sources: [
+      sources: [
           instruction(path.join(home, 'AGENTS.md'), 'home instructions'),
           instruction(path.join(workspaceRoot, 'AGENTS.md'), 'workspace instructions'),
           instruction(path.join(workspaceRoot, 'packages', 'AGENTS.md'), 'packages instructions'),
           instruction(path.join(workingDirectory, 'AGENTS.md'), 'working instructions'),
-        ],
-      },
+      ],
     });
     expect(source.readDirectory).toHaveBeenCalledTimes(4);
     expect(source.readFile).toHaveBeenCalledTimes(4);
@@ -112,15 +72,15 @@ describe('InstructionReader', () => {
   it('treats missing AGENTS.md files as an empty successful result', async () => {
     const workspaceRoot = testPath('workspace');
     const source = new FakeInstructionSource();
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
 
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot,
       workingDirectory: path.join(workspaceRoot, 'src'),
-    })).resolves.toEqual({ status: 'ok', instructions: { sources: [] } });
+    })).resolves.toEqual({ status: 'ok', sources: [] });
     expect(source.readFile).not.toHaveBeenCalled();
   });
 
@@ -128,26 +88,26 @@ describe('InstructionReader', () => {
     const workspaceRoot = testPath('workspace');
     const filePath = path.join(workspaceRoot, 'AGENTS.md');
     const source = new FakeInstructionSource(new Map([[filePath, 'one source']]));
-    const reader = createInstructionReader({ megumiHomePath: workspaceRoot, source });
+    const request = ({ megumiHomePath: workspaceRoot, source });
 
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot,
       workingDirectory: workspaceRoot,
     })).resolves.toEqual({
       status: 'ok',
-      instructions: { sources: [instruction(filePath, 'one source')] },
+      sources: [instruction(filePath, 'one source')],
     });
     expect(source.readFile).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a lexical working directory outside the Workspace before source access', async () => {
     const source = new FakeInstructionSource();
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
 
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot: testPath('workspace'),
       workingDirectory: testPath('outside'),
     })).resolves.toEqual({
@@ -165,12 +125,12 @@ describe('InstructionReader', () => {
     const workingDirectory = path.join(workspaceRoot, 'linked');
     const source = new FakeInstructionSource();
     source.realPaths.set(path.resolve(workingDirectory), testPath('outside'));
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
 
-    await expect(reader.getEffectiveInstructions({ workspaceRoot, workingDirectory })).resolves.toMatchObject({
+    await expect(loadInstructionFiles({ ...request, workspaceRoot, workingDirectory })).resolves.toMatchObject({
       status: 'failed',
       failure: { code: 'working_directory_outside_workspace' },
     });
@@ -182,12 +142,12 @@ describe('InstructionReader', () => {
     const sourcePath = path.join(workspaceRoot, 'AGENTS.md');
     const source = new FakeInstructionSource(new Map([[sourcePath, 'outside contents']]));
     source.realPaths.set(path.resolve(sourcePath), testPath('outside', 'AGENTS.md'));
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
 
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot,
       workingDirectory: workspaceRoot,
     })).resolves.toEqual({
@@ -206,12 +166,12 @@ describe('InstructionReader', () => {
     const sourcePath = path.join(workspaceRoot, 'AGENTS.md');
     const source = new FakeInstructionSource(new Map([[sourcePath, 'unreadable']]));
     source.failedFiles.add(path.resolve(sourcePath));
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
 
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot,
       workingDirectory: workspaceRoot,
     })).resolves.toEqual({
@@ -228,12 +188,12 @@ describe('InstructionReader', () => {
     const workspaceRoot = testPath('workspace');
     const source = new FakeInstructionSource();
     source.failedDirectories.add(path.resolve(workspaceRoot));
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
 
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot,
       workingDirectory: workspaceRoot,
     })).resolves.toEqual({
@@ -250,21 +210,21 @@ describe('InstructionReader', () => {
     const workspaceRoot = testPath('workspace');
     const sourcePath = path.join(workspaceRoot, 'AGENTS.md');
     const source = new FakeInstructionSource(new Map([[sourcePath, 'cancelled']]));
-    const reader = createInstructionReader({
+    const request = ({
       megumiHomePath: testPath('home', '.megumi'),
       source,
     });
     const controller = new AbortController();
     controller.abort();
 
-    await expect(reader.getEffectiveInstructions(
-      { workspaceRoot, workingDirectory: workspaceRoot },
+    await expect(loadInstructionFiles(
+      { ...request, workspaceRoot, workingDirectory: workspaceRoot },
       { signal: controller.signal },
     )).resolves.toEqual({ status: 'cancelled' });
     expect(source.realPath).not.toHaveBeenCalled();
 
     source.cancelledFiles.add(path.resolve(sourcePath));
-    await expect(reader.getEffectiveInstructions({
+    await expect(loadInstructionFiles({ ...request,
       workspaceRoot,
       workingDirectory: workspaceRoot,
     })).resolves.toEqual({ status: 'cancelled' });
@@ -275,15 +235,15 @@ describe('InstructionReader', () => {
     async () => {
       const workspaceRoot = 'C:\\MEGUMI-WORKSPACE';
       const source = new FakeInstructionSource();
-      const reader = createInstructionReader({
+      const request = ({
         megumiHomePath: 'C:\\MEGUMI-HOME',
         source,
       });
 
-      await expect(reader.getEffectiveInstructions({
+      await expect(loadInstructionFiles({ ...request,
         workspaceRoot,
         workingDirectory: 'c:\\megumi-workspace\\src',
-      })).resolves.toEqual({ status: 'ok', instructions: { sources: [] } });
+      })).resolves.toEqual({ status: 'ok', sources: [] });
     },
   );
 });

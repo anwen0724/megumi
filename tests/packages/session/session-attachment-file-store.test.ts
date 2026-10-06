@@ -1,7 +1,7 @@
 /* Verifies atomic, root-safe managed image storage owned by Session. */
 import { describe, expect, it, vi } from 'vitest';
 import path from 'node:path';
-import { createSessionAttachmentFileStore } from '@megumi/application/storage/session-attachment-store';
+import { createSessionAttachmentFileStore } from '@megumi/application/coding/sessions/session-storage';
 
 describe('SessionAttachmentFileStore', () => {
   it('writes through a temporary file, reads the canonical reference, and deletes it', async () => {

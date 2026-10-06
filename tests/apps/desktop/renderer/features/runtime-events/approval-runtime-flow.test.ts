@@ -1,91 +1,35 @@
-/*
- * Protects the complete Megumi Agent Event to Desktop approval-control projection.
- */
-import { EventSchema } from '@megumi/agent-runtime/events';
-import type { PermissionDecision } from '@megumi/agent-runtime/permissions/index';
+// @vitest-environment node
+/* Projects real product approval events into the desktop timeline. */
+import { expect, it } from 'vitest';
+import type { AnyEvent } from '@megumi/application/contracts';
+import { EventSchema } from '@megumi/application/coding/events/contracts';
 import { reduceRuntimeTimelineEvent } from '@megumi/desktop/renderer/features/session-timeline';
-import { describe, expect, it, vi } from 'vitest';
 import { collectPendingApprovalActivities } from '../../../../../../apps/desktop/src/renderer/features/chat/approval-overlay';
-import {
-  assistantStream,
-  collectEvents,
-  createExecutionFixture,
-  launchedExecution,
-} from '../../../../../packages/execution/execution-test-fixtures';
-import {
-  permissionService,
-  registeredTool,
-} from '../../../../../packages/execution/tool-call-test-fixtures';
+import { composeTestApplication } from '../../../../../packages/composition/compose-test-application';
+import { deferred } from '../../../../../packages/agent/agent-fixture';
 
-describe('approval Runtime flow', () => {
-  it('projects a Megumi Agent approval event into a resolvable Desktop approval activity', async () => {
-    const tool = registeredTool('approval-tool');
-    const fixture = createExecutionFixture({
-      tools: [tool],
-      streams: [
-        assistantStream('needs approval', {
-          id: 'provider-call:1',
-          name: tool.registeredToolName,
-          arguments: { value: 'x' },
-        }),
-        assistantStream('done'),
-      ],
-      permissions: permissionService(approvalDecisionFor),
-    });
-    let resolveApproval!: (resolution: { readonly status: 'cancelled' }) => void;
-    const approval = new Promise<{ readonly status: 'cancelled' }>((resolve) => { resolveApproval = resolve; });
-    const launched = await launchedExecution(fixture, { awaitApproval: async () => approval });
-    const completion = launched.execute();
-
-    await vi.waitFor(() => {
-      expect(fixture.published.some((event) => event.type === 'approval.requested')).toBe(true);
-    });
-
-    const events = collectEvents(fixture, 'execution:1');
-    const approvalEvent = events.find((event) => event.type === 'approval.requested');
-    expect(approvalEvent).toBeDefined();
-    expect(EventSchema.safeParse(approvalEvent).success).toBe(true);
-
-    const messages = events.reduce(
-      (current, event) => reduceRuntimeTimelineEvent(current, event, 'project-1'),
-      [],
-    );
-    expect(collectPendingApprovalActivities(messages)).toEqual([
-      expect.objectContaining({
-        toolCallId: 'provider-call:1',
-        toolName: tool.registeredToolName,
-        status: 'awaiting_approval',
-        approval: expect.objectContaining({
-          approvalRequestId: expect.any(String),
-          summary: expect.any(String),
-        }),
-      }),
-    ]);
-
-    resolveApproval({ status: 'cancelled' });
-    await completion;
+it('projects a real approval request into a resolvable desktop activity', async () => {
+  const app = composeTestApplication([[{ type: 'toolCall', id: 'write:1', name: 'write_file', arguments: { path: 'note.md', content: 'Hello' } }]]);
+  const approval = deferred<Extract<AnyEvent, { type: 'approval.requested' }>>();
+  const ended = deferred();
+  const events: AnyEvent[] = [];
+  app.runtime.subscribeRuntimeEvents({}, event => {
+    events.push(event);
+    if (event.type === 'approval.requested') approval.resolve(event);
+    if (event.type === 'run.ended') ended.resolve();
   });
+  try {
+    const opened = await app.runtime.workspace.useExistingProject();
+    if (opened.status !== 'opened' || !opened.project) throw new Error('Workspace unavailable');
+    await app.runtime.session.sendUserInput({ requestId: 'write', projectId: opened.project.projectId,
+      text: 'Write note.md', permissionMode: 'ask', modelSelection: { provider_id: 'test', model_id: 'model' } });
+    expect(EventSchema.safeParse(await approval.promise).success).toBe(true);
+    const messages = events.reduce((messages, event) => reduceRuntimeTimelineEvent(messages, event, opened.project!.projectId), []);
+    expect(collectPendingApprovalActivities(messages)).toEqual([expect.objectContaining({
+      toolCallId: 'write:1', toolName: 'write_file', status: 'awaiting_approval',
+      approval: expect.objectContaining({ approvalRequestId: expect.any(String), summary: expect.any(String) }),
+    })]);
+    await app.runtime.session.cancelUserInput({ requestId: 'write' });
+    await ended.promise;
+  } finally { await app.cleanup(); }
 });
-
-function approvalDecisionFor(
-  request: import('@megumi/agent-runtime/permissions/index').EvaluateToolCallRequest,
-): Extract<PermissionDecision, { type: 'requires_approval' }> {
-  const identity = request.operations[0]?.context.toolIdentity ?? {
-    sourceId: 'built_in', namespace: 'megumi', sourceToolName: 'internal', registeredToolName: 'internal',
-  };
-  return {
-    type: 'requires_approval',
-    operations: [...request.operations],
-    safetyAssessment: 'safe',
-    safetySummary: 'Safe in test.',
-    reason: 'Approval required.',
-    options: [{
-      optionId: `once:${request.toolCallId}`,
-      scope: 'once',
-      display: { label: 'Once', description: 'Allow once.' },
-      effect: { type: 'current_tool_call' },
-    }],
-    defaultOptionId: `once:${request.toolCallId}`,
-    subjectFingerprint: `test-subject:${request.toolCallId}:${identity.registeredToolName}`,
-  };
-}

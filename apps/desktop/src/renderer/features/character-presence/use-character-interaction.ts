@@ -72,13 +72,18 @@ export function useCharacterInteraction(selectedSessionId: string | null) {
   }, []);
 
   const cancelRun = useCallback(async (): Promise<boolean> => {
-    if (!activeExecutionId) return false;
+    if (!activeExecutionId || !selectedSessionId) return false;
+    const current = await window.megumi.session.read(createRendererRuntimeIpcRequest(
+      IPC_CHANNELS.session.sessionRead, { sessionId: selectedSessionId },
+    ));
+    if (!current.ok || current.data.status !== 'ok'
+      || current.data.activeRun?.executionId !== activeExecutionId) return false;
     const result = await window.megumi.session.message.cancel(createRendererRuntimeIpcRequest(
       IPC_CHANNELS.session.sessionMessageCancel,
-      { executionId: activeExecutionId },
+      { requestId: current.data.activeRun.requestId },
     ));
     return Boolean(result.ok && result.data.status === 'cancellation_requested');
-  }, [activeExecutionId]);
+  }, [activeExecutionId, selectedSessionId]);
 
   return { projectId, interaction, activeExecutionId, runStatus, resolveApproval, cancelRun };
 }

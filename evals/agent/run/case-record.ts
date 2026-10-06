@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto';
 import { copyFile, cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { ProductRuntime } from '@megumi/composition';
+import type { Application } from '@megumi/application/index';
 import type { CaseRunResult } from '../contracts/evaluation-run';
 import type { CaseTraceTarget } from './case-execution';
 
@@ -13,13 +13,13 @@ export type ArtifactManifest = CaseRunResult['artifacts'];
 
 /** Flushes accepted Trace writes and checks every business correlation returned by the Case driver. */
 export async function collectTraceIntegrity(input: {
-  readonly runtime: ProductRuntime;
+  readonly runtime: Application;
   readonly targets: readonly CaseTraceTarget[];
 }): Promise<TraceIntegrity> {
   const issues: string[] = [];
-  await input.runtime.host.observability.flush();
+  await input.runtime.observability.flush();
   const [healthResult, allTraces, ...targetResults] = await Promise.all([
-    input.runtime.host.observability.getHealth({}),
+    input.runtime.observability.getHealth({}),
     listAllTraces(input.runtime, {}),
     ...input.targets.map((target) => listAllTraces(input.runtime, { traceKind: target.traceKind, correlation: target.correlation })),
   ]);
@@ -103,11 +103,11 @@ export async function archiveCaseEvidence(input: {
   return { files, deletedFiles, initialFiles: initialFiles.map((file) => ({ ...file, path: file.path.replace(/^workspace\//u, 'initial-workspace/') })) };
 }
 
-async function listAllTraces(runtime: ProductRuntime, query: Parameters<ProductRuntime['host']['observability']['listTraces']>[0]) {
-  const traces: Extract<Awaited<ReturnType<ProductRuntime['host']['observability']['listTraces']>>, { status: 'ok' }>['traces'] = [];
+async function listAllTraces(runtime: Application, query: Parameters<Application['observability']['listTraces']>[0]) {
+  const traces: Extract<Awaited<ReturnType<Application['observability']['listTraces']>>, { status: 'ok' }>['traces'] = [];
   const seen = new Set<string>();
   for (let offset = 0; ; offset += 200) {
-    const result = await runtime.host.observability.listTraces({ ...query, limit: 200, offset });
+    const result = await runtime.observability.listTraces({ ...query, limit: 200, offset });
     if (result.status === 'failed') return result;
     if (result.traces.some(({ traceId }) => seen.has(traceId))) return { status: 'failed' as const, message: 'Trace pagination repeated a page; capture is not stable.' };
     for (const trace of result.traces) { seen.add(trace.traceId); traces.push(trace); }

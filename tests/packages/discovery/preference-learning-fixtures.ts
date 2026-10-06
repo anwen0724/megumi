@@ -3,7 +3,7 @@
  */
 // @vitest-environment node
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
-import { createDiscoveryRepository } from '@megumi/application/discovery/index';
+import { createDiscoveryRepository } from '@megumi/application/recommendation/recommendation-storage';
 
 export const now = '2026-08-27T08:00:00.000Z';
 

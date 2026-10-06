@@ -1,7 +1,8 @@
 /* Verifies configured provider sources normalize public content without leaking credentials. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { createTwitterSource, createZhihuSource } from '@megumi/application/discovery/index';
+import { createTwitterSource } from '@megumi/application/recommendation/sources/twitter-source';
+import { createZhihuSource } from '@megumi/application/recommendation/sources/zhihu-source';
 import { createTraceRecorder } from '@megumi/application/observability/trace/trace-recorder';
 import type { TraceJournalRecord } from '@megumi/application/observability/persistence/trace-journal-record';
 

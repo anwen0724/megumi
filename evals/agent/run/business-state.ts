@@ -1,7 +1,7 @@
 /* Reads actual isolated business facts through their owning persistence contracts. */
-import { createDatabase } from '@megumi/database';
-import { getDiscoveryState } from '@megumi/discovery';
-import { createSessionStore } from '@megumi/session/store';
+import { createDatabase } from '@megumi/application/storage/index';
+import { getDiscoveryState } from '@megumi/application/recommendation/recommendation-storage';
+import { createSessionStore } from '@megumi/application/coding/sessions/session-storage';
 
 /** Captures Session and Discovery facts without applying active-pool or other mutating read policies. */
 export function getCaseBusinessState(databasePath: string, workspaceId: string) {

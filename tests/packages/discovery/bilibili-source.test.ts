@@ -1,10 +1,7 @@
 /* Verifies Bilibili WBI signing, public search normalization and bounded failure handling. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createBilibiliSource,
-  signBilibiliWbiParameters,
-} from '@megumi/application/discovery/index';
+import { createBilibiliSource, signBilibiliWbiParameters } from '@megumi/application/recommendation/sources/bilibili-source';
 
 const navPayload = {
   code: 0,

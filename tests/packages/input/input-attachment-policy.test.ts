@@ -2,11 +2,8 @@
  * Protects image signatures, declared media types, and document references.
  */
 import { describe, expect, it } from "vitest";
-import {
-  createInputProcessor,
-  type InputPolicy,
-  type InputSourceAccess,
-} from "@megumi/agent-runtime/runs/input/index";
+import { createInputProcessor, type InputPolicy } from '@megumi/application/coding/input/parse-message';
+import { type InputSourceAccess } from '@megumi/application/coding/input/read-attachments';
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 

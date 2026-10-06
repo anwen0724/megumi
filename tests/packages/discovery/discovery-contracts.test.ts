@@ -1,17 +1,10 @@
 /* Verifies strict owner contracts for Discovery's durable and source-facing facts. */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import {
-  DiscoveryHomeViewSchema,
-  InterestSchema,
-  RecommendationContentSchema,
-  RecommendationDecisionSchema,
-  RecommendationSchema,
-  RecommendationStateSchema,
-  UpdateRecommendationStateRequestSchema,
-  SourceContentSchema,
-  SourceDescriptorSchema,
-} from '@megumi/application/discovery/index';
+import { DiscoveryHomeViewSchema } from '@megumi/application/recommendation/recommendation-feed';
+import { InterestSchema } from '@megumi/application/recommendation/interests/interest-catalog';
+import { RecommendationContentSchema, RecommendationDecisionSchema, RecommendationSchema, RecommendationStateSchema, UpdateRecommendationStateRequestSchema } from '@megumi/application/recommendation/daily/publish-recommendations';
+import { SourceContentSchema, SourceDescriptorSchema } from '@megumi/application/recommendation/sources/source-catalog';
 
 const now = '2026-08-22T00:00:00.000Z';
 

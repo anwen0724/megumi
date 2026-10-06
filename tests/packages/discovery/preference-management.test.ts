@@ -3,7 +3,7 @@
  */
 // @vitest-environment node
 import { expect, it } from 'vitest';
-import { createDiscovery } from '@megumi/application/discovery/index';
+import { createDiscovery } from '@megumi/application/recommendation/recommendation-api';
 import { createLearningFixture, seedRecommendation, now } from './preference-learning-fixtures';
 
 it('protects an edited requirement after its original feedback is withdrawn', () => {
