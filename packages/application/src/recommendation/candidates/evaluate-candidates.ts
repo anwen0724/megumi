@@ -10,6 +10,7 @@ import {
   type CandidatePool,
   type CandidateSnapshot,
   type CandidateSnapshotItem,
+  type InactiveReason,
   type InterestCount,
   type SupplyHealth,
 } from './candidate-contracts';
@@ -72,6 +73,78 @@ export function qualifyingPools(input: {
     pools.push({ pool: 'long_term' });
   }
   return pools;
+}
+
+/**
+ * Confirms and reclaims the pool relations that no longer qualify. One pass
+ * marks an exiting relation `inactive` with its reason and deletes relations an
+ * earlier pass already confirmed, so a relation that becomes valid again before
+ * the next pass can still return to `active` and the table does not grow without
+ * bound. An unfinished analysis leaves qualification undetermined, and usage
+ * exclusion is a read filter rather than an exit, so neither retires anything.
+ */
+export function retireExitedCandidates(
+  dependencies: PoolEvaluationDependencies,
+  input: { readonly pool: CandidatePool; readonly freshnessDays: number; readonly now: number },
+): { readonly markedInactive: number; readonly removed: number } {
+  const rows = dependencies.database
+    .prepare<RelationRow>({
+      sql: `SELECT rc.content_id, rc.status, c.published_at,
+                   ca.status AS analysis_status, ca.long_term_value,
+                   EXISTS (
+                     SELECT 1 FROM content_interest_matches m
+                     JOIN interests i ON i.id = m.interest_id AND i.enabled = 1
+                     WHERE m.content_id = rc.content_id AND m.relation IN ('direct','related')
+                   ) AS matched
+            FROM recommendation_candidates rc
+            JOIN contents c ON c.id = rc.content_id
+            LEFT JOIN content_analysis ca ON ca.content_id = rc.content_id
+            WHERE rc.pool = ?`,
+    })
+    .all([input.pool]);
+
+  let markedInactive = 0;
+  let removed = 0;
+  for (const row of rows) {
+    const reason = exitReason(row, input);
+    if (reason === undefined) continue;
+    if (row.status === 'inactive') {
+      dependencies.candidates.removeRelation({ contentId: row.content_id, pool: input.pool });
+      removed += 1;
+      continue;
+    }
+    dependencies.candidates.markInactive({
+      contentId: row.content_id,
+      pool: input.pool,
+      reason,
+      now: input.now,
+    });
+    markedInactive += 1;
+  }
+  return { markedInactive, removed };
+}
+
+interface RelationRow extends DatabaseRow {
+  readonly content_id: string;
+  readonly status: string;
+  readonly published_at: number | null;
+  readonly analysis_status: string | null;
+  readonly long_term_value: string | null;
+  readonly matched: number;
+}
+
+function exitReason(
+  row: RelationRow,
+  input: { readonly pool: CandidatePool; readonly freshnessDays: number; readonly now: number },
+): InactiveReason | undefined {
+  if (row.analysis_status !== 'ready') return undefined;
+  if (row.matched !== 1) return 'unrelated';
+  if (input.pool === 'long_term') {
+    return row.long_term_value === null || row.long_term_value === 'none' ? 'unsuitable' : undefined;
+  }
+  if (row.published_at === null || row.published_at > input.now) return 'expired';
+  const expiresAt = row.published_at + input.freshnessDays * DAY_MS;
+  return input.now >= expiresAt ? 'expired' : undefined;
 }
 
 /**

@@ -51,6 +51,8 @@ export interface CandidateStorage {
     reason: InactiveReason;
     now: number;
   }): void;
+  /** Deletes one confirmed-exited pool relation. The content itself is untouched. */
+  removeRelation(input: { contentId: string; pool: CandidatePool }): void;
   /**
    * Copies the representative's relations onto a duplicate member. Equal text
    * means equal relations, so the member never pays for another judgement.
@@ -157,6 +159,14 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
                 WHERE content_id = ? AND pool = ?`,
         })
         .run([input.reason, input.now, input.contentId, input.pool]);
+    },
+
+    removeRelation(input) {
+      database
+        .prepare({
+          sql: 'DELETE FROM recommendation_candidates WHERE content_id = ? AND pool = ?',
+        })
+        .run([input.contentId, input.pool]);
     },
 
     copyRelations(input) {

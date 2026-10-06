@@ -8,7 +8,12 @@ import type { Api, Model } from '@megumi/ai';
 import type { DatabaseConnection } from '../../storage/index';
 import type { Observability } from '../../observability/index';
 import type { TextModelClient } from '../call-text-model';
-import { evaluatePool, qualifyMatchedContent, type PoolEvaluation } from '../candidates/evaluate-candidates';
+import {
+  evaluatePool,
+  qualifyMatchedContent,
+  retireExitedCandidates,
+  type PoolEvaluation,
+} from '../candidates/evaluate-candidates';
 import { matchPendingInterests } from '../candidates/match-interests';
 import type { CandidatePool, SupplyHealth } from '../candidates/candidate-contracts';
 import type { CandidateStorage } from '../candidates/candidate-storage';
@@ -127,6 +132,16 @@ export async function runMaintenance(
   evaluations = await evaluateAll(dependencies, interests, usage);
   // Tidy only after qualification is settled, so a relation that just became
   // valid is never mistaken for one that exited.
+  for (const pool of POOLS) {
+    retireExitedCandidates(
+      { database: dependencies.database, candidates: dependencies.candidates },
+      {
+        pool,
+        freshnessDays: dependencies.config.freshnessDays,
+        now: dependencies.now(),
+      },
+    );
+  }
   await pruneUnusedContent(
     {
       database: dependencies.database,
