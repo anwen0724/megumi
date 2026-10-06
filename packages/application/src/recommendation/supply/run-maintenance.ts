@@ -8,7 +8,7 @@ import type { Api, Model } from '@megumi/ai';
 import type { DatabaseConnection } from '../../storage/index';
 import type { Observability } from '../../observability/index';
 import type { TextModelClient } from '../call-text-model';
-import { evaluatePool, type PoolEvaluation } from '../candidates/evaluate-candidates';
+import { evaluatePool, qualifyMatchedContent, type PoolEvaluation } from '../candidates/evaluate-candidates';
 import { matchPendingInterests } from '../candidates/match-interests';
 import type { CandidatePool, SupplyHealth } from '../candidates/candidate-contracts';
 import type { CandidateStorage } from '../candidates/candidate-storage';
@@ -87,6 +87,46 @@ export async function runMaintenance(
   for (const pool of POOLS) usage.set(pool, await dependencies.usage.readUsageSnapshot(pool));
 
   let evaluations = await evaluateAll(dependencies, interests, usage);
+
+  // Reuse whatever an earlier process left unfinished before spending the round
+  // on new work: retry what is due, judge saved analyses for the current
+  // interests, and commit the pool relations that judgement already justifies.
+  await resumePendingWork(dependencies, input, evaluations, savedCounts, issues);
+
+  const matched = await matchPendingInterests(
+    {
+      client: dependencies.client,
+      contents: dependencies.contents,
+      candidates: dependencies.candidates,
+      ...(dependencies.observability ? { observability: dependencies.observability } : {}),
+    },
+    {
+      interests,
+      model: dependencies.model,
+      batchSize: dependencies.config.limits.maxAnalysisCalls,
+      maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
+      maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
+      now: dependencies.now(),
+      signal: input.signal,
+    },
+  );
+  if (matched.status === 'failed') {
+    issues.push({ stage: 'matching', code: matched.code, message: matched.message });
+  }
+  const qualified = qualifyMatchedContent(
+    { database: dependencies.database, candidates: dependencies.candidates },
+    {
+      limit: dependencies.config.limits.maxAnalysisCalls,
+      freshnessDays: dependencies.config.freshnessDays,
+      now: dependencies.now(),
+    },
+  );
+  savedCounts.newCandidates += qualified.committedPools.length;
+  await input.deliver();
+
+  evaluations = await evaluateAll(dependencies, interests, usage);
+  // Tidy only after qualification is settled, so a relation that just became
+  // valid is never mistaken for one that exited.
   await pruneUnusedContent(
     {
       database: dependencies.database,
@@ -96,8 +136,6 @@ export async function runMaintenance(
     },
     { batchSize: 50 },
   );
-  // Resume whatever an earlier process left unfinished before planning new work.
-  await resumePendingWork(dependencies, input, evaluations, savedCounts, issues);
 
   const poolHealth = evaluations.map((evaluation) => evaluation.health);
   const hasGap = evaluations.some(
@@ -148,28 +186,7 @@ export async function runMaintenance(
     }
   }
 
-  const matched = await matchPendingInterests(
-    {
-      client: dependencies.client,
-      contents: dependencies.contents,
-      candidates: dependencies.candidates,
-      ...(dependencies.observability ? { observability: dependencies.observability } : {}),
-    },
-    {
-      interests,
-      model: dependencies.model,
-      batchSize: dependencies.config.limits.maxAnalysisCalls,
-      maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
-      maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
-      now: dependencies.now(),
-      signal: input.signal,
-    },
-  );
-  if (matched.status === 'failed') {
-    issues.push({ stage: 'matching', code: matched.code, message: matched.message });
-  }
   await input.deliver();
-
   evaluations = await evaluateAll(dependencies, interests, usage);
   return finish(
     dependencies,

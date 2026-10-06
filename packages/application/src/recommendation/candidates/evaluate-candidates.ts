@@ -47,6 +47,63 @@ export interface PoolEvaluation {
   readonly interestHealth: readonly SupplyHealth[];
 }
 
+const DAY_MS = 24 * 60 * 60 * 1_000;
+
+/**
+ * The pools one analyzed content actually qualifies for. The daily pool needs a
+ * source-declared publication time inside `[publishedAt, publishedAt +
+ * freshnessDays)`; a future date does not take effect early. The long-term pool
+ * has no date rule and only excludes content the analysis judged worthless, so an
+ * older but valuable document stays available there instead of becoming an
+ * already-expired daily relation. Both owners of a pool relation use this rule.
+ */
+export function qualifyingPools(input: {
+  readonly publishedAt?: number;
+  readonly longTermValue?: string;
+  readonly freshnessDays: number;
+  readonly now: number;
+}): { pool: CandidatePool; expiresAt?: number }[] {
+  const pools: { pool: CandidatePool; expiresAt?: number }[] = [];
+  if (input.publishedAt !== undefined && input.publishedAt <= input.now) {
+    const expiresAt = input.publishedAt + input.freshnessDays * DAY_MS;
+    if (input.now < expiresAt) pools.push({ pool: 'daily', expiresAt });
+  }
+  if (input.longTermValue !== undefined && input.longTermValue !== 'none') {
+    pools.push({ pool: 'long_term' });
+  }
+  return pools;
+}
+
+/**
+ * Commits the pool relations that a saved analysis and current matches already
+ * justify. Content an earlier process analyzed but never qualified becomes usable
+ * here without paying for another judgement or another search.
+ */
+export function qualifyMatchedContent(
+  dependencies: PoolEvaluationDependencies,
+  input: { readonly limit: number; readonly freshnessDays: number; readonly now: number },
+): { readonly qualifiedContents: number; readonly committedPools: readonly CandidatePool[] } {
+  const rows = dependencies.candidates.listMatchedContentsWithoutActivePool({ limit: input.limit });
+  const committedPools: CandidatePool[] = [];
+  let qualifiedContents = 0;
+  for (const row of rows) {
+    const commit = dependencies.candidates.commitRelations({
+      contentId: row.contentId,
+      matches: [],
+      pools: qualifyingPools({
+        ...(row.publishedAt !== undefined ? { publishedAt: row.publishedAt } : {}),
+        ...(row.longTermValue !== undefined ? { longTermValue: row.longTermValue } : {}),
+        freshnessDays: input.freshnessDays,
+        now: input.now,
+      }),
+      now: input.now,
+    });
+    if (commit.committedPools.length > 0) qualifiedContents += 1;
+    committedPools.push(...commit.committedPools);
+  }
+  return { qualifiedContents, committedPools };
+}
+
 const PoolRowSchema = z
   .object({
     id: z.string(),

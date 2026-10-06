@@ -68,6 +68,21 @@ export interface CandidateStorage {
    * leave work that is merely unfinished alone.
    */
   filterPendingMatchContentIds(contentIds: readonly string[]): readonly string[];
+  /**
+   * Content whose ready analysis already carries a current positive relation but
+   * that holds no active pool relation. The judgement exists; only the pool
+   * relation was never committed, so this is unfinished work, not new work.
+   */
+  listMatchedContentsWithoutActivePool(input: {
+    limit: number;
+  }): readonly MatchedContentRow[];
+}
+
+/** The facts the pool rules need for content that only lacks a pool relation. */
+export interface MatchedContentRow {
+  readonly contentId: string;
+  readonly publishedAt?: number;
+  readonly longTermValue?: string;
 }
 
 export function createCandidateStorage(database: DatabaseConnection): CandidateStorage {
@@ -192,6 +207,34 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
         })
         .all([...contentIds])
         .map((row) => row.id);
+    },
+
+    listMatchedContentsWithoutActivePool(input) {
+      return database
+        .prepare<
+          DatabaseRow & { content_id: string; published_at: number | null; long_term_value: string | null }
+        >({
+          sql: `SELECT c.id AS content_id, c.published_at, ca.long_term_value
+                FROM contents c
+                JOIN content_analysis ca ON ca.content_id = c.id AND ca.status = 'ready'
+                WHERE EXISTS (
+                  SELECT 1 FROM content_interest_matches m
+                  JOIN interests i ON i.id = m.interest_id AND i.enabled = 1
+                  WHERE m.content_id = c.id AND m.relation IN ('direct','related')
+                )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM recommendation_candidates rc
+                    WHERE rc.content_id = c.id AND rc.status = 'active'
+                  )
+                ORDER BY c.created_at, c.id
+                LIMIT ?`,
+        })
+        .all([input.limit])
+        .map((row) => ({
+          contentId: row.content_id,
+          ...(row.published_at !== null ? { publishedAt: row.published_at } : {}),
+          ...(row.long_term_value !== null ? { longTermValue: row.long_term_value } : {}),
+        }));
     },
 
     listForContent(contentId) {      return database
