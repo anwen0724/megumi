@@ -1,16 +1,18 @@
 /*
  * Removes content that no business purpose keeps any more. Retention belongs to
  * the referencing modules: a failing query rejects instead of reading as "no
- * references", and pending analysis or a referenced duplicate representative is
+ * references", and unfinished work or a referenced duplicate representative is
  * never deleted.
  */
 import type { DatabaseConnection } from '../../storage/index';
+import type { CandidateStorage } from '../candidates/candidate-storage';
 import type { ContentStorage } from '../content/content-storage';
 import type { ContentRetentionReader } from '../supply/supply-contracts';
 
 export interface PruneDependencies {
   readonly database: DatabaseConnection;
   readonly contents: ContentStorage;
+  readonly candidates: CandidateStorage;
   readonly retention: ContentRetentionReader;
 }
 
@@ -27,7 +29,9 @@ export interface PruneOutcome {
 /**
  * Deletes content whose analysis finished, that holds no active pool relation,
  * that no other content duplicates, and that no business record still needs.
- * Search history and referencing-module records are left untouched.
+ * Content that is merely waiting for interest matches is unfinished work, not
+ * unused content, so it stays. Search history and referencing-module records are
+ * left untouched.
  */
 export async function pruneUnusedContent(
   dependencies: PruneDependencies,
@@ -52,10 +56,11 @@ export async function pruneUnusedContent(
     .map((row) => row.id);
   if (ids.length === 0) return { examined: 0, removedContents: 0, retainedContents: 0 };
 
+  const pending = new Set(dependencies.candidates.filterPendingMatchContentIds(ids));
   const retained = new Set(await dependencies.retention.findRetainedContentIds(ids));
   let removedContents = 0;
   for (const id of ids) {
-    if (retained.has(id)) continue;
+    if (pending.has(id) || retained.has(id)) continue;
     dependencies.contents.removeContent(id);
     removedContents += 1;
   }

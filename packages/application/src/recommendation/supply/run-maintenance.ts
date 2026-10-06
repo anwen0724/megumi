@@ -88,7 +88,12 @@ export async function runMaintenance(
 
   let evaluations = await evaluateAll(dependencies, interests, usage);
   await pruneUnusedContent(
-    { database: dependencies.database, contents: dependencies.contents, retention: dependencies.retention },
+    {
+      database: dependencies.database,
+      contents: dependencies.contents,
+      candidates: dependencies.candidates,
+      retention: dependencies.retention,
+    },
     { batchSize: 50 },
   );
   // Resume whatever an earlier process left unfinished before planning new work.

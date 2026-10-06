@@ -132,9 +132,15 @@ describe('content pruning', () => {
 
   it('removes content with no active pool relation and no retention', async () => {
     seedContentWithAnalysis(database, 'c1', NOW - DAY, 'learning');
+    seedJudgedMatch(database, 'c1', 'i1');
 
     const outcome = await pruneUnusedContent(
-      { database, contents: createContentStorage(database), retention: { findRetainedContentIds: async () => [] } },
+      {
+        database,
+        contents: createContentStorage(database),
+        candidates: createCandidateStorage(database),
+        retention: { findRetainedContentIds: async () => [] },
+      },
       { batchSize: 10 },
     );
 
@@ -144,11 +150,13 @@ describe('content pruning', () => {
 
   it('keeps content that a business record still references', async () => {
     seedContentWithAnalysis(database, 'c1', NOW - DAY, 'learning');
+    seedJudgedMatch(database, 'c1', 'i1');
 
     const outcome = await pruneUnusedContent(
       {
         database,
         contents: createContentStorage(database),
+        candidates: createCandidateStorage(database),
         retention: { findRetainedContentIds: async (ids) => ids },
       },
       { batchSize: 10 },
@@ -163,7 +171,32 @@ describe('content pruning', () => {
     seedCandidate(database, 'c1', 'daily', NOW + 6 * DAY);
 
     const outcome = await pruneUnusedContent(
-      { database, contents: createContentStorage(database), retention: { findRetainedContentIds: async () => [] } },
+      {
+        database,
+        contents: createContentStorage(database),
+        candidates: createCandidateStorage(database),
+        retention: { findRetainedContentIds: async () => [] },
+      },
+      { batchSize: 10 },
+    );
+
+    expect(outcome.removedContents).toBe(0);
+    expect(countRows(database, 'contents')).toBe(1);
+  });
+
+  it('keeps content whose interest matches are still pending', async () => {
+    seedContentWithAnalysis(database, 'c1', NOW - DAY, 'learning');
+    const candidates = createCandidateStorage(database);
+    // The analysis finished but the process stopped before committing relations.
+    expect(candidates.listContentsMissingMatches({ limit: 10 })).toEqual(['c1']);
+
+    const outcome = await pruneUnusedContent(
+      {
+        database,
+        contents: createContentStorage(database),
+        candidates,
+        retention: { findRetainedContentIds: async () => [] },
+      },
       { batchSize: 10 },
     );
 
@@ -225,8 +258,17 @@ function seedContentWithAnalysis(
     .run([id, longTermValue]);
 }
 
-function seedCandidate(
-  database: DatabaseConnection,
+/** Records that the interest was judged and did not match, so the pair is settled. */
+function seedJudgedMatch(database: DatabaseConnection, contentId: string, interestId: string): void {
+  database
+    .prepare({
+      sql: `INSERT INTO content_interest_matches (content_id, interest_id, relation, matched_at)
+            VALUES (?, ?, 'none', 0)`,
+    })
+    .run([contentId, interestId]);
+}
+
+function seedCandidate(  database: DatabaseConnection,
   contentId: string,
   pool: string,
   expiresAt: number | null,

@@ -62,6 +62,12 @@ export interface CandidateStorage {
    * enabled interest. Newest discoveries come first.
    */
   listContentsMissingMatches(input: { limit: number }): readonly string[];
+  /**
+   * Of the given contents, those whose ready analysis still lacks a relation for
+   * an enabled interest. Callers that are about to delete content use this to
+   * leave work that is merely unfinished alone.
+   */
+  filterPendingMatchContentIds(contentIds: readonly string[]): readonly string[];
 }
 
 export function createCandidateStorage(database: DatabaseConnection): CandidateStorage {
@@ -168,8 +174,27 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
         .map((row) => row.id);
     },
 
-    listForContent(contentId) {
+    filterPendingMatchContentIds(contentIds) {
+      if (contentIds.length === 0) return [];
+      const placeholders = contentIds.map(() => '?').join(', ');
       return database
+        .prepare<{ id: string }>({
+          sql: `SELECT c.id FROM contents c
+                JOIN content_analysis ca ON ca.content_id = c.id AND ca.status = 'ready'
+                WHERE c.id IN (${placeholders})
+                  AND EXISTS (
+                    SELECT 1 FROM interests i
+                    WHERE i.enabled = 1 AND NOT EXISTS (
+                      SELECT 1 FROM content_interest_matches m
+                      WHERE m.content_id = c.id AND m.interest_id = i.id
+                    )
+                  )`,
+        })
+        .all([...contentIds])
+        .map((row) => row.id);
+    },
+
+    listForContent(contentId) {      return database
         .prepare<CandidateRow>({
           sql: `SELECT pool, content_id, status, inactive_reason, expires_at, created_at, updated_at
                 FROM recommendation_candidates WHERE content_id = ? ORDER BY pool`,
