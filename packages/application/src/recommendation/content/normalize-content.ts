@@ -27,6 +27,24 @@ const TRACKING_PARAMETERS = new Set([
   'src',
 ]);
 
+/**
+ * Characters of material a body must keep besides its links to count as more
+ * than a list of links. Ten characters is about one short clause that states a
+ * fact ("该版本把超时改成 30 秒。"), while a link list with a purchase call to
+ * action ("点击购买") stays below it. The value is deliberately low: the Spec
+ * forbids rejecting content for being short, so this must never grow into a
+ * length rule.
+ */
+const MIN_MATERIAL_CHARACTERS = 10;
+
+/**
+ * One plain-text link: a scheme URL or a `www.` host. The body stops at CJK
+ * punctuation and ideographs, so Chinese prose written right after a link
+ * without a space is not mistaken for part of that link. An HTML anchor is not
+ * matched here: converting it already dropped the href and kept only its label.
+ */
+const LINK_PATTERN = /(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]+/giu;
+
 export interface NormalizedContent {
   readonly source: string;
   readonly canonicalUrl: string;
@@ -38,7 +56,7 @@ export interface NormalizedContent {
   readonly language?: string;
 }
 
-export type NormalizeRejection = 'invalid_url' | 'no_text' | 'language';
+export type NormalizeRejection = 'invalid_url' | 'no_text' | 'link_only' | 'language';
 
 export type NormalizeResult =
   | { status: 'ok'; content: NormalizedContent }
@@ -135,8 +153,9 @@ export function detectContentLanguage(text: string): string | undefined {
 }
 
 /**
- * Maps one discovery onto normalized content. Entries without usable text are
- * rejected here: they stay as discovery records and never reach analysis.
+ * Maps one discovery onto normalized content. Entries without usable text, and
+ * entries whose text is nothing but links, are rejected here: they stay as
+ * discovery records and never reach analysis.
  */
 export function normalizeRawItem(item: RawItem, options: NormalizeOptions = {}): NormalizeResult {
   const canonicalUrl = normalizeContentUrl(item.url);
@@ -150,6 +169,14 @@ export function normalizeRawItem(item: RawItem, options: NormalizeOptions = {}):
       status: 'rejected',
       reason: 'no_text',
       message: 'Source returned no usable content text.',
+    };
+  }
+
+  if (isLinkOnlyText(text)) {
+    return {
+      status: 'rejected',
+      reason: 'link_only',
+      message: 'Source content is only links, with no fact, method, or example to extract.',
     };
   }
 
@@ -182,6 +209,31 @@ export function normalizeRawItem(item: RawItem, options: NormalizeOptions = {}):
 function isTrackingParameter(name: string): boolean {
   const key = name.trim().toLowerCase();
   return key.startsWith('utm_') || TRACKING_PARAMETERS.has(key);
+}
+
+/**
+ * Detects a body that is nothing but its links: it carries at least one
+ * plain-text link and, once those links and all whitespace are removed, keeps
+ * fewer than `MIN_MATERIAL_CHARACTERS` characters. Such a body is a link dump
+ * or an ad funnel with no fact, method, or example, so it is rejected before
+ * the model runs. Measured on already-normalized text only: no model call and
+ * no analysis field takes part.
+ *
+ * Requiring a link is what keeps the Spec's "short is not a reason to reject"
+ * rule safe: a body is never rejected for its length alone, only when its
+ * links are the whole content.
+ *
+ * This rule does NOT catch promotional prose that carries substantial text and
+ * no facts. Nothing available here can tell that prose from real content: the
+ * Spec forbids turning `spamScore` into an admission threshold, and the eight
+ * model results in `content-contracts.ts` contain no "has an independent fact,
+ * method, or example" verdict. Closing that gap needs a Spec data-contract
+ * change; until then it is an accepted limitation.
+ */
+function isLinkOnlyText(text: string): boolean {
+  const withoutLinks = text.replace(LINK_PATTERN, '');
+  if (withoutLinks === text) return false;
+  return withoutLinks.replace(/\s+/gu, '').length < MIN_MATERIAL_CHARACTERS;
 }
 
 function stripTags(value: string): string {

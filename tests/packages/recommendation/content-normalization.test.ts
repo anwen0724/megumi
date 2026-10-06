@@ -42,6 +42,67 @@ describe('content normalization', () => {
     expect(result.reason).toBe('no_text');
   });
 
+  it('keeps a whitespace-only body as missing text rather than as a link list', () => {
+    const result = normalizeRawItem({
+      source: 'zhihu',
+      url: 'https://zhuanlan.zhihu.com/p/2',
+      text: '  \n\t ',
+    });
+
+    expect(result.status).toBe('rejected');
+    if (result.status !== 'rejected') throw new Error('expected a rejection');
+    expect(result.reason).toBe('no_text');
+  });
+
+  it('rejects a body whose text is only links', () => {
+    const result = normalizeRawItem({
+      source: 'zhihu',
+      url: 'https://zhuanlan.zhihu.com/p/3',
+      title: '限时优惠',
+      text: 'https://shop.example.com/item/1\nhttps://shop.example.com/item/2',
+    });
+
+    expect(result.status).toBe('rejected');
+    if (result.status !== 'rejected') throw new Error('expected a rejection');
+    expect(result.reason).toBe('link_only');
+  });
+
+  it('rejects a body that is links plus a purchase call to action', () => {
+    const result = normalizeRawItem({
+      source: 'zhihu',
+      url: 'https://zhuanlan.zhihu.com/p/4',
+      text: 'https://shop.example.com/item/1 点击购买\nhttps://shop.example.com/item/2 立即下单',
+    });
+
+    expect(result.status).toBe('rejected');
+    if (result.status !== 'rejected') throw new Error('expected a rejection');
+    expect(result.reason).toBe('link_only');
+  });
+
+  it('keeps a short material that still states one fact', () => {
+    const result = normalizeRawItem({
+      source: 'zhihu',
+      url: 'https://zhuanlan.zhihu.com/p/5',
+      text: '该版本把超时改成 30 秒。',
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('expected normalized content');
+    expect(result.content.text).toBe('该版本把超时改成 30 秒。');
+  });
+
+  it('keeps a short body whose links are not the whole content', () => {
+    const result = normalizeRawItem({
+      source: 'zhihu',
+      url: 'https://zhuanlan.zhihu.com/p/6',
+      text: '发布说明见 https://example.com/notes，该版本把超时改成 30 秒。',
+    });
+
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') throw new Error('expected normalized content');
+    expect(result.content.text).toBe('发布说明见 https://example.com/notes，该版本把超时改成 30 秒。');
+  });
+
   it('rejects content whose detected language is outside the configured set', () => {
     const result = normalizeRawItem(
       { source: 'zhihu', url: 'https://example.com/a', text: '这是一段足够长的中文内容，用于判断语言归属并触发配置检查。' },
