@@ -217,7 +217,7 @@ export function evaluatePool(
   const rows = readPoolRows(dependencies.database, input.pool)
     .filter((row) => qualifies(row, input, excluded, interestById, matchesByContent))
     .flatMap((row) => toItem(row, matchesByContent.get(row.id) ?? []));
-  const candidates = deduplicateByGroup(rows);
+  const candidates = deduplicateByGroup(rows, dependencies.database);
 
   const deficits: InterestCount[] = requirement.coverage.map((entry) => ({
     interestId: entry.interestId,
@@ -281,7 +281,10 @@ function qualifies(
 }
 
 /** Keeps one member per duplicate group: the representative, else the smallest id. */
-function deduplicateByGroup(rows: readonly QualifiedRow[]): CandidateSnapshotItem[] {
+function deduplicateByGroup(
+  rows: readonly QualifiedRow[],
+  database: DatabaseConnection,
+): CandidateSnapshotItem[] {
   // A representative carries no group id of its own, so the group key is the
   // representative id for members and the content id for everything else.
   const groups = new Map<string, QualifiedRow[]>();
@@ -294,17 +297,31 @@ function deduplicateByGroup(rows: readonly QualifiedRow[]): CandidateSnapshotIte
 
   const chosen: QualifiedRow[] = [];
   for (const [groupId, members] of groups) {
-    const groupIds = members.map((member) => member.contentId).sort();
     const picked =
       members.find((member) => member.contentId === groupId) ??
       [...members].sort((left, right) => (left.contentId <= right.contentId ? -1 : 1))[0];
     if (picked) {
-      chosen.push({ ...picked, item: { ...picked.item, duplicateContentIds: groupIds } });
+      // The whole group travels with the candidate, including members this pool
+      // does not qualify right now, so a caller can exclude the article once.
+      chosen.push({
+        ...picked,
+        item: { ...picked.item, duplicateContentIds: duplicateGroupIds(database, groupId) },
+      });
     }
   }
   return chosen
     .sort((left, right) => (left.contentId <= right.contentId ? -1 : 1))
     .map((row) => row.item);
+}
+
+/** Every content id in one duplicate group, representative included. */
+function duplicateGroupIds(database: DatabaseConnection, representativeId: string): string[] {
+  return database
+    .prepare<{ id: string }>({
+      sql: 'SELECT id FROM contents WHERE id = ? OR duplicate_group_id = ? ORDER BY id',
+    })
+    .all([representativeId, representativeId])
+    .map((row) => row.id);
 }
 
 function countFor(candidates: readonly CandidateSnapshotItem[], interestId: string): number {

@@ -108,8 +108,30 @@ describe('pool qualification', () => {
     expect(evaluation.snapshot.candidates[0].duplicateContentIds).toEqual(['dup-a', 'dup-b']);
   });
 
-  it('leaves long-term candidates out when the content has no long-term value', () => {
+  it('reports the whole duplicate group even when only a member is qualified', () => {
     seedInterest(database, 'i1');
+    // Two mirrors of one article, published far enough apart that only the
+    // newer one is inside the daily window.
+    seedContentWithAnalysis(database, 'dup-a', NOW - 30 * DAY, 'learning');
+    seedContentWithAnalysis(database, 'dup-b', NOW - DAY, 'learning');
+    for (const id of ['dup-a', 'dup-b']) {
+      seedCandidate(database, id, 'daily', NOW + 6 * DAY);
+      seedMatch(database, id, 'i1', 'direct');
+    }
+    database
+      .prepare({ sql: "UPDATE contents SET duplicate_group_id = 'dup-a', duplicate_confidence = 1 WHERE id = 'dup-b'" })
+      .run();
+
+    const evaluation = evaluatePool(dependencies(database), input('daily'));
+
+    expect(evaluation.snapshot.candidates).toHaveLength(1);
+    expect(evaluation.snapshot.candidates[0].contentId).toBe('dup-b');
+    // The caller needs every member so a later read of any of them can be
+    // recognised as already seen.
+    expect(evaluation.snapshot.candidates[0].duplicateContentIds).toEqual(['dup-a', 'dup-b']);
+  });
+
+  it('leaves long-term candidates out when the content has no long-term value', () => {    seedInterest(database, 'i1');
     seedContentWithAnalysis(database, 'c1', NOW - 400 * DAY, 'none');
     seedCandidate(database, 'c1', 'long_term', null);
     seedMatch(database, 'c1', 'i1', 'direct');
