@@ -152,14 +152,18 @@ export async function runMaintenance(
     { batchSize: 50 },
   );
 
-  const poolHealth = evaluations.map((evaluation) => evaluation.health);
-  const hasGap = evaluations.some(
-    (evaluation) =>
-      evaluation.health.minimumDeficit > 0 ||
-      evaluation.interestHealth.some((health) => health.minimumDeficit > 0),
-  );
+  const poolHealth: SupplyHealth[] = [
+    ...evaluations.map((evaluation) => evaluation.health),
+    ...evaluations.flatMap((evaluation) => evaluation.interestHealth),
+  ];
 
-  if (hasGap && needsSearchPlanning({ poolHealth, hasPendingRequest: false, interestsChanged: false })) {
+  // A cancelled or expired round starts no further model request.
+  const canPlan =
+    !input.signal.aborted &&
+    !input.budget.expired &&
+    needsSearchPlanning({ poolHealth, hasPendingRequest: false, interestsChanged: false });
+
+  if (canPlan) {
     const planned = await planSearches(
       {
         database: dependencies.database,
