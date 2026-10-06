@@ -43,7 +43,7 @@ describe('Settings IPC', () => {
         payload,
         meta: { channel, source: 'renderer', createdAt: new Date().toISOString() },
       });
-    const target = { kind: 'discoverySource', sourceId: 'twitter' };
+    const target = { kind: 'discoverySource', sourceId: 'zhihu' };
     const saved = await invoke(IPC_CHANNELS.credentials.update, { target, value: 'test-secret' });
     expect(saved).toMatchObject({ ok: true, data: { status: 'updated' } });
     expect(JSON.stringify(saved)).not.toContain('test-secret');
@@ -67,7 +67,7 @@ describe('Settings IPC', () => {
     });
     await invoke(IPC_CHANNELS.credentials.update, { target, value: null });
     expect(
-      settings.readCredential({ target: { kind: 'discoverySource', sourceId: 'twitter' } }),
+      settings.readCredential({ target: { kind: 'discoverySource', sourceId: 'zhihu' } }),
     ).toEqual({ status: 'missing' });
   });
 });

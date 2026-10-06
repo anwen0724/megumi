@@ -10,7 +10,7 @@ import type {
   ApplicationOperations,
   BackgroundTriggerMode,
 } from './contracts';
-import type { Discovery } from './recommendation/recommendation-api';
+import type { Recommendation } from './recommendation/recommendation-api';
 import type { DatabaseConnection } from './storage/index';
 import type { Voice } from './voice/index';
 
@@ -20,7 +20,7 @@ interface ApplicationBindings {
   readonly start: (options: { backgroundTriggers: BackgroundTriggerMode }) => Promise<void>;
   readonly subscribeRuntimeEvents: Application['subscribeRuntimeEvents'];
   readonly subscribeSpeechOutputEvents: Application['subscribeSpeechOutputEvents'];
-  readonly discovery: Pick<Discovery, 'shutdown'>;
+  readonly recommendation: Pick<Recommendation, 'shutdown'>;
   readonly coding: Pick<Coding, 'shutdown'>;
   readonly voice: Pick<Voice, 'dispose'>;
   readonly speechOutput: { dispose(): void };
@@ -158,12 +158,12 @@ export function createApplicationLifecycle(options: {
 
 /** Waits for both product owners; timeout reports unfinished work without disposing resources. */
 async function stopBusiness(
-  owners: Pick<ApplicationBindings, 'discovery' | 'coding'>,
+  owners: Pick<ApplicationBindings, 'recommendation' | 'coding'>,
   timeoutMs: number,
 ): Promise<void> {
-  const discovery = owners.discovery.shutdown();
+  const recommendation = owners.recommendation.shutdown();
   const coding = owners.coding.shutdown();
-  const work = Promise.allSettled([discovery, coding]).then((results) => {
+  const work = Promise.allSettled([recommendation, coding]).then((results) => {
     const failures = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : []);
     if (failures.length) throw new AggregateError(failures, 'Product business shutdown failed.');
   });

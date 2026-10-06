@@ -11,7 +11,6 @@ import {
   createSandbox,
   createWebFetch,
   createWebSearch,
-  type Agent,
   type WebFetch,
   type WebSearch,
 } from '@megumi/agent';
@@ -77,16 +76,7 @@ import {
   type ObservabilityPersistenceStorage,
   type StructuredRuntimeLogger,
 } from './observability/index';
-import { createInterestExtractor } from './recommendation/interests/extract-interests';
-import type { PreparePreferencesResult } from './recommendation/preferences/preference-learning';
-import type { PreferenceSetDetail } from './recommendation/preferences/preference-rules';
-import { createDiscovery, type Discovery } from './recommendation/recommendation-api';
-import { createDiscoveryRepository } from './recommendation/recommendation-storage';
-import type { EmbeddedBrowser } from './recommendation/sources/browser-access';
-import {
-  createDiscoverySourceRegistry,
-  type SourceRegistry,
-} from './recommendation/sources/source-catalog';
+import { createRecommendation, type Recommendation } from './recommendation/recommendation-api';
 import { readModelCatalog, resolveModel as resolveConfiguredModel } from './settings/resolve-model';
 import { createSettings, type Settings } from './settings/settings-store';
 import { createSkills, type Skills } from './skills/manage-skills';
@@ -111,12 +101,6 @@ import {
 import { createWorkspaceStore } from './workspace/workspace-store';
 
 export interface ModuleOptions {
-  /** Supplies a previously prepared result; callers must bind it to unchanged business state. */
-  consumePreparedPreferences?: () => PreparePreferencesResult | undefined;
-  /** Supplies a read-only projection at the recommendation input boundary. */
-  recommendationPreferenceSource?: (
-    effective: readonly PreferenceSetDetail[],
-  ) => readonly PreferenceSetDetail[];
   home: InitializeMegumiHomeSyncOptions;
   migrationsFolder?: string;
   migrationEnvironment?: Omit<ResolveDatabaseMigrationsFolderRequest, 'migrationsFolder'>;
@@ -132,10 +116,8 @@ export interface ModuleOptions {
   sessionAttachmentFileSystem?: SessionAttachmentFileSystem;
   builtInToolAvailability?: CodingRunPreparation['toolAvailability'];
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
-  embeddedBrowser?: EmbeddedBrowser;
   webSearch?: WebSearch;
   webFetch?: WebFetch;
-  discoverySourceRegistry?: SourceRegistry;
   clock?: { now(): string };
   createApplicationId?: (scope: string) => string;
   timers?: {
@@ -170,7 +152,7 @@ export interface ApplicationModules {
   readonly coding: Coding;
   readonly approval: ApprovalOperations;
   readonly models: ReturnType<typeof createApplicationModels>;
-  readonly discovery: Discovery;
+  readonly recommendation: Recommendation;
 }
 
 /** Composes the capability instances once per Host process. */
@@ -415,51 +397,8 @@ function composeCapabilitiesWithDatabase(
   const clock = options.clock ?? { now: () => new Date().toISOString() };
   const createId = (scope: string) =>
     options.createApplicationId?.(scope) ?? `${scope}:${crypto.randomUUID()}`;
-  const discoveryRepository = createDiscoveryRepository({
-    database,
-    clock,
-    candidateIds: {
-      createCandidateId: () => createId('candidate'),
-      createInterestMatchId: () => createId('candidate-interest-match'),
-    },
-  });
-  const interestExtractor = createInterestExtractor({
-    ai,
-    observability: observability.observability,
-  });
-  const discoverySources =
-    options.discoverySourceRegistry ??
-    createDiscoverySourceRegistry({
-      webSearch: () => options.webSearch ?? resolveConfiguredWebSearch(settings),
-      webFetch: options.webFetch ?? createWebFetch(),
-      embeddedBrowser: options.embeddedBrowser ?? unavailableEmbeddedBrowser,
-      zhihuAccessSecret: () => discoveryCredential(settings, 'zhihu'),
-      twitterApiKey: () => discoveryCredential(settings, 'twitter'),
-      observability: observability.observability,
-      onCheckResult(sourceId, availability) {
-        observability.runtimeLogger.write({
-          level: availability.state === 'ready' ? 'info' : 'warn',
-          module: 'discovery',
-          code: 'discovery_source_checked',
-          message: 'Discovery Source availability was checked.',
-          correlation: { sourceId },
-          data: { ...availability },
-        });
-      },
-      onCheckError(error, sourceId) {
-        observability.runtimeLogger.write({
-          level: 'warn',
-          module: 'discovery',
-          code: 'discovery_source_check_failed',
-          message: 'A Discovery Source availability check failed.',
-          correlation: { sourceId },
-          data: { errorMessage: error instanceof Error ? error.message : String(error) },
-        });
-      },
-    });
 
   let coding: Coding;
-  let discovery: Discovery;
   const approval = createApprovalOperations({
     events,
     getRun: (runId) => coding.getRun(runId),
@@ -550,173 +489,37 @@ function composeCapabilitiesWithDatabase(
         finalized_at: clock.now(),
       });
     },
-    onCompleted(turn) {
-      try {
-        models.withWorkspace(undefined, () => discovery.observeConversationTurn(turn));
-      } catch (error) {
-        logger.warn('interest_extraction_enqueue_failed', { error });
-      }
-    },
   });
   coding = {
     ...ownedCoding,
     submitInput: (request) =>
       models.withWorkspace(request.workspaceId, () => ownedCoding.submitInput(request)),
   };
-  const backgroundAgent: Agent = {
-    startAgent: (request) => models.withWorkspace(undefined, () => agent.startAgent(request)),
-  };
-  const resolveBackgroundModel = async (selection?: ModelSelection) => {
-    const result = await models.resolveModel({ selection });
-    return result.status === 'ok' ? result.model : undefined;
-  };
-  discovery = createDiscovery({
-    ...(options.consumePreparedPreferences
-      ? { consumePreparedPreferences: options.consumePreparedPreferences }
-      : {}),
-    onBackgroundError(error, context) {
+  const recommendation = createRecommendation({
+    database,
+    settings,
+    observability: observability.observability,
+    client: ai,
+    resolveModel: async (reference) => {
+      const result = await models.resolveModel({
+        selection: { providerId: reference.providerId, modelId: reference.modelId },
+      });
+      return result.status === 'ok' ? result.model : undefined;
+    },
+    accessSecret: () => discoveryCredential(settings, 'zhihu'),
+    newId: createId,
+    ...(options.timers ? { timers: options.timers } : {}),
+    onBackgroundError(error, operation) {
       observability.runtimeLogger.write({
         level: 'warn',
         module: 'discovery',
-        code: 'discovery_background_step_failed',
-        message: 'A Discovery background startup step failed.',
+        code: 'candidate_supply_background_failed',
+        message: 'Candidate Supply background work failed.',
         data: {
-          operation: context.operation,
+          operation,
           errorMessage: error instanceof Error ? error.message : String(error),
         },
       });
-    },
-    interests: {
-      repository: discoveryRepository,
-      settings,
-      sessions,
-      history,
-      resolveModel: async (request) => {
-        const result = await models.resolveModel(request);
-        return result.status === 'ok' ? result.model : undefined;
-      },
-      extractor: (input) =>
-        models.withWorkspace(sessionStore.findSessionById(input.job.sessionId)?.workspace_id, () =>
-          interestExtractor.extract(input),
-        ),
-      ids: {
-        createInterestId: () => crypto.randomUUID(),
-        createEvidenceId: () => crypto.randomUUID(),
-      },
-      clock,
-      observability: observability.observability,
-      onError(error, job) {
-        observability.runtimeLogger.write({
-          level: 'warn',
-          module: 'discovery',
-          code: 'interest_extraction_failed',
-          message: 'Conversation interest extraction failed.',
-          correlation: {
-            ...(job ? { executionId: job.executionId, sessionId: job.sessionId } : {}),
-          },
-          data: {
-            errorMessage: error instanceof Error ? error.message : String(error),
-          },
-        });
-      },
-    },
-    recommendation: {
-      ...(options.recommendationPreferenceSource
-        ? { preferenceSource: options.recommendationPreferenceSource }
-        : {}),
-      observability: observability.observability,
-      repository: discoveryRepository,
-      preparation: {
-        policy: PRODUCT_EXECUTION_POLICY,
-        instructionDocuments: documents('recommendation'),
-        resolveModel: resolveBackgroundModel,
-      },
-      sourceRegistry: discoverySources,
-      agent: backgroundAgent,
-      settings,
-      clock,
-      timezone: { get: () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' },
-      ids: {
-        createRequestId: () => createId('recommendation-request'),
-      },
-      ...(options.timers ? { timers: options.timers } : {}),
-      onBackgroundError(error, context) {
-        observability.runtimeLogger.write({
-          level: 'warn',
-          module: 'discovery',
-          code: 'recommendation_background_failed',
-          message: 'Recommendation background work failed.',
-          correlation: {
-            ...(context.requestId ? { requestId: context.requestId } : {}),
-            ...(context.executionId ? { executionId: context.executionId } : {}),
-          },
-          data: {
-            operation: context.operation,
-            errorMessage: error instanceof Error ? error.message : String(error),
-          },
-        });
-      },
-    },
-    preferenceLearning: {
-      repository: discoveryRepository,
-      ai,
-      instructionDocuments: documents('preference-learning'),
-      now: clock.now,
-      observability: observability.observability,
-      resolveModel: () => {
-        const read = settings.readSettings();
-        if (read.status === 'rejected') return Promise.resolve(undefined);
-        return resolveBackgroundModel(read.settings.config.discovery.recommendationModel);
-      },
-      ids: {
-        createBatchId: () => createId('preference-batch'),
-        createModelCallId: () => createId('model-call'),
-      },
-      onBackgroundError(error) {
-        observability.runtimeLogger.write({
-          level: 'warn',
-          module: 'discovery',
-          code: 'preference_learning_background_failed',
-          message: 'Preference Learning background work failed.',
-          data: { errorMessage: error instanceof Error ? error.message : String(error) },
-        });
-      },
-    },
-    candidateSupply: {
-      repository: discoveryRepository,
-      preparation: {
-        policy: PRODUCT_EXECUTION_POLICY,
-        instructionDocuments: documents('candidate-supply'),
-        resolveModel: resolveBackgroundModel,
-      },
-      sourceRegistry: discoverySources,
-      settings,
-      agent: backgroundAgent,
-      now: clock.now,
-      ids: { createRequestId: () => createId('candidate-supply-request') },
-      observability: observability.observability,
-      ...(options.timers
-        ? {
-            timers: {
-              set: (delayMs: number, callback: () => void) =>
-                options.timers!.setTimeout(callback, delayMs),
-              clear: (handle: unknown) => options.timers!.clearTimeout(handle),
-            },
-          }
-        : {}),
-      onBackgroundError(error) {
-        observability.runtimeLogger.write({
-          level: 'warn',
-          module: 'discovery',
-          code: 'candidate_supply_background_failed',
-          message: 'Candidate Supply background work failed.',
-          data: { errorMessage: error instanceof Error ? error.message : String(error) },
-        });
-      },
-    },
-    configuration: {
-      sourceRegistry: discoverySources,
-      settings,
     },
   });
 
@@ -745,32 +548,22 @@ function composeCapabilitiesWithDatabase(
     coding,
     models,
     approval,
-    discovery,
+    recommendation,
   };
   return modules;
 }
 
+/** Reads the stored credential for a supply source, or the environment when none is saved. */
 function discoveryCredential(
   settings: ReturnType<typeof createSettings>,
-  sourceId: 'zhihu' | 'twitter',
+  sourceId: 'zhihu',
 ): string | undefined {
   const result = settings.readCredential({
     target: { kind: 'discoverySource', sourceId },
-    defaultEnvNames: sourceId === 'twitter' ? ['TWITTERAPI_IO_API_KEY'] : ['ZHIHU_ACCESS_SECRET'],
+    defaultEnvNames: ['ZHIHU_ACCESS_SECRET'],
   });
   return result.status === 'found' ? result.value : undefined;
 }
-
-const unavailableEmbeddedBrowser: EmbeddedBrowser = {
-  openLogin: async () => {
-    throw new Error('Embedded browser is unavailable.');
-  },
-  snapshot: async () => ({
-    status: 'failed',
-    failure: { code: 'network_error', message: 'Embedded browser is unavailable.' },
-  }),
-  shutdown: async () => undefined,
-};
 
 /**
  * Reconciles unfinished Session facts left by a prior process before startup

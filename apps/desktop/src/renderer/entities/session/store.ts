@@ -1,7 +1,6 @@
 /* Stores canonical Product Host Session projections plus renderer selection state. */
 import { create } from 'zustand';
 import type { SessionDto } from '@megumi/application/contracts';
-import type { DiscoveryRecommendationUiDto } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest, getRuntimeIpcErrorMessage } from '../../shared/ipc';
 import { useChatUiStore } from '../chat-ui/store';
@@ -10,13 +9,11 @@ interface SessionState {
   sessions: SessionDto[];
   activeSessionId: string | null;
   newSessionDraftTargetProjectId: string | null;
-  newSessionDraftRecommendation: DiscoveryRecommendationUiDto | null;
   setSessions: (sessions: SessionDto[]) => void;
   loadSessions: () => Promise<void>;
   upsertSession: (session: SessionDto) => void;
   setActiveSession: (id: string | null) => void;
   startNewSessionDraft: (projectId: string | null) => void;
-  startRecommendationSessionDraft: (projectId: string, recommendation: DiscoveryRecommendationUiDto) => void;
   clearNewSessionDraft: () => void;
   setNewSessionDraftTargetProject: (projectId: string | null) => void;
 }
@@ -25,7 +22,6 @@ export const useSessionStore = create<SessionState>((set) => ({
   sessions: [],
   activeSessionId: null,
   newSessionDraftTargetProjectId: null,
-  newSessionDraftRecommendation: null,
   setSessions: (sessions) => set({ sessions }),
   /** Refreshes durable Session summaries without loading presentation history. */
   loadSessions: async () => {
@@ -57,25 +53,15 @@ export const useSessionStore = create<SessionState>((set) => ({
   })),
   setActiveSession: (activeSessionId) => set({
     activeSessionId,
-    ...(activeSessionId ? {
-      newSessionDraftTargetProjectId: null,
-      newSessionDraftRecommendation: null,
-    } : {}),
+    ...(activeSessionId ? { newSessionDraftTargetProjectId: null } : {}),
   }),
   startNewSessionDraft: (projectId) => set({
     activeSessionId: null,
     newSessionDraftTargetProjectId: projectId,
-    newSessionDraftRecommendation: null,
-  }),
-  startRecommendationSessionDraft: (projectId, newSessionDraftRecommendation) => set({
-    activeSessionId: null,
-    newSessionDraftTargetProjectId: projectId,
-    newSessionDraftRecommendation,
   }),
   clearNewSessionDraft: () => set({
     activeSessionId: null,
     newSessionDraftTargetProjectId: null,
-    newSessionDraftRecommendation: null,
   }),
   setNewSessionDraftTargetProject: (newSessionDraftTargetProjectId) => set({
     newSessionDraftTargetProjectId,

@@ -11,16 +11,6 @@ import type { ModelCatalogResult } from '@megumi/application/contracts';
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */
 import { ipcRenderer } from 'electron';
-import type {
-  DiscoveryPreferenceDetailsPayload,
-  DiscoveryPreferenceDetailsResult,
-  DiscoveryPreferenceEvidencePayload,
-  DiscoveryPreferenceEvidenceResult,
-  DiscoveryPreferenceEditPayload,
-  DiscoveryPreferenceEditResult,
-  DiscoveryPreferenceDeletePayload,
-  DiscoveryPreferenceDeleteResult,
-} from '@megumi/application/contracts';
 import type { AnyEvent } from '@megumi/application/contracts';
 import type {
   ApprovalHostResult,
@@ -65,17 +55,11 @@ import type {
   VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
   VoiceHostSnapshot,
-  DiscoveryInterestUiDto,
-  DiscoveryInterestSessionSettingUiDto,
-  DiscoveryRecommendationRequestResult,
-  DiscoveryCandidateSupplyConfirmResult,
-  DiscoveryHomeUiResult,
-  DiscoveryRecommendationSearchUiResult,
-  DiscoveryRecommendationUiDto,
-  DiscoveryRecommendationStateResult,
-  DiscoveryConfigurationUiDto,
-  DiscoveryConfigurationUpdateUiResult,
-  DiscoverySourceUiDto,
+  DiscoveryEmptyPayload,
+  DiscoveryInterestChangeResult,
+  DiscoveryInterestListResult,
+  SupplyConfigurationView,
+  SupplyConfirmResult,
 } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type {
@@ -119,16 +103,7 @@ import type {
   VoiceSessionStartPayload,
   VoiceModelCapabilityPayload,
   DiscoveryInterestChangePayload,
-  DiscoveryInterestSessionSettingPayload,
-  DiscoveryRecommendationRequestPayload,
-  DiscoveryHomePayload,
-  DiscoveryRecommendationSearchPayload,
-  DiscoveryRecommendationStatePayload,
-  DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
-  DiscoverySourceConnectPayload,
-  DiscoverySourceRefreshPayload,
-  DiscoverySourcesRefreshPayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -524,63 +499,26 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   discovery: {
-    getPreferenceDetails: (
+    listInterests: (
       request: BusinessRequest<
-        DiscoveryPreferenceDetailsPayload,
-        typeof IPC_CHANNELS.discovery.preferenceDetails
+        DiscoveryEmptyPayload,
+        typeof IPC_CHANNELS.discovery.interestList
       >,
     ): Promise<
-      RuntimeIpcResult<
-        DiscoveryPreferenceDetailsResult,
-        typeof IPC_CHANNELS.discovery.preferenceDetails
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDetails, request),
-    getPreferenceEvidence: (
+      RuntimeIpcResult<DiscoveryInterestListResult, typeof IPC_CHANNELS.discovery.interestList>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.interestList, request),
+    changeInterest: (
       request: BusinessRequest<
-        DiscoveryPreferenceEvidencePayload,
-        typeof IPC_CHANNELS.discovery.preferenceEvidence
+        DiscoveryInterestChangePayload,
+        typeof IPC_CHANNELS.discovery.interestChange
       >,
     ): Promise<
-      RuntimeIpcResult<
-        DiscoveryPreferenceEvidenceResult,
-        typeof IPC_CHANNELS.discovery.preferenceEvidence
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEvidence, request),
-    editPreference: (
-      request: BusinessRequest<
-        DiscoveryPreferenceEditPayload,
-        typeof IPC_CHANNELS.discovery.preferenceEdit
-      >,
-    ): Promise<
-      RuntimeIpcResult<DiscoveryPreferenceEditResult, typeof IPC_CHANNELS.discovery.preferenceEdit>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceEdit, request),
-    deletePreference: (
-      request: BusinessRequest<
-        DiscoveryPreferenceDeletePayload,
-        typeof IPC_CHANNELS.discovery.preferenceDelete
-      >,
-    ): Promise<
-      RuntimeIpcResult<
-        DiscoveryPreferenceDeleteResult,
-        typeof IPC_CHANNELS.discovery.preferenceDelete
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.preferenceDelete, request),
-
-    confirmCandidateSupply: (
-      request: BusinessRequest<EmptyPayload, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>,
-    ): Promise<
-      RuntimeIpcResult<
-        DiscoveryCandidateSupplyConfirmResult,
-        typeof IPC_CHANNELS.discovery.candidateSupplyConfirm
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.candidateSupplyConfirm, request),
+      RuntimeIpcResult<DiscoveryInterestChangeResult, typeof IPC_CHANNELS.discovery.interestChange>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
     getConfiguration: (
-      request: BusinessRequest<
-        DiscoveryConfigurationGetPayload,
-        typeof IPC_CHANNELS.discovery.configurationGet
-      >,
+      request: BusinessRequest<DiscoveryEmptyPayload, typeof IPC_CHANNELS.discovery.configurationGet>,
     ): Promise<
-      RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.configurationGet>
+      RuntimeIpcResult<SupplyConfigurationView, typeof IPC_CHANNELS.discovery.configurationGet>
     > => invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationGet, request),
     updateConfiguration: (
       request: BusinessRequest<
@@ -588,91 +526,16 @@ export const api = {
         typeof IPC_CHANNELS.discovery.configurationUpdate
       >,
     ): Promise<
-      RuntimeIpcResult<
-        DiscoveryConfigurationUpdateUiResult,
-        typeof IPC_CHANNELS.discovery.configurationUpdate
-      >
+      RuntimeIpcResult<SupplyConfigurationView, typeof IPC_CHANNELS.discovery.configurationUpdate>
     > => invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationUpdate, request),
-    connectSource: (
+    confirmCandidateSupply: (
       request: BusinessRequest<
-        DiscoverySourceConnectPayload,
-        typeof IPC_CHANNELS.discovery.sourceConnect
+        DiscoveryEmptyPayload,
+        typeof IPC_CHANNELS.discovery.candidateSupplyConfirm
       >,
     ): Promise<
-      RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceConnect>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceConnect, request),
-    refreshSource: (
-      request: BusinessRequest<
-        DiscoverySourceRefreshPayload,
-        typeof IPC_CHANNELS.discovery.sourceRefresh
-      >,
-    ): Promise<
-      RuntimeIpcResult<DiscoverySourceUiDto, typeof IPC_CHANNELS.discovery.sourceRefresh>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceRefresh, request),
-    refreshSources: (
-      request: BusinessRequest<
-        DiscoverySourcesRefreshPayload,
-        typeof IPC_CHANNELS.discovery.sourcesRefresh
-      >,
-    ): Promise<
-      RuntimeIpcResult<DiscoveryConfigurationUiDto, typeof IPC_CHANNELS.discovery.sourcesRefresh>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourcesRefresh, request),
-    changeInterest: (
-      request: BusinessRequest<
-        DiscoveryInterestChangePayload,
-        typeof IPC_CHANNELS.discovery.interestChange
-      >,
-    ): Promise<
-      RuntimeIpcResult<DiscoveryInterestUiDto, typeof IPC_CHANNELS.discovery.interestChange>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
-    setInterestSessionSetting: (
-      request: BusinessRequest<
-        DiscoveryInterestSessionSettingPayload,
-        typeof IPC_CHANNELS.discovery.sessionParticipationSet
-      >,
-    ): Promise<
-      RuntimeIpcResult<
-        DiscoveryInterestSessionSettingUiDto,
-        typeof IPC_CHANNELS.discovery.sessionParticipationSet
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.sessionParticipationSet, request),
-    requestRecommendation: (
-      request: BusinessRequest<
-        DiscoveryRecommendationRequestPayload,
-        typeof IPC_CHANNELS.discovery.recommendationRequest
-      >,
-    ): Promise<
-      RuntimeIpcResult<
-        DiscoveryRecommendationRequestResult,
-        typeof IPC_CHANNELS.discovery.recommendationRequest
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationRequest, request),
-    getHome: (
-      request: BusinessRequest<DiscoveryHomePayload, typeof IPC_CHANNELS.discovery.homeGet>,
-    ): Promise<RuntimeIpcResult<DiscoveryHomeUiResult, typeof IPC_CHANNELS.discovery.homeGet>> =>
-      invokeRuntimeIpc(IPC_CHANNELS.discovery.homeGet, request),
-    searchRecommendations: (
-      request: BusinessRequest<
-        DiscoveryRecommendationSearchPayload,
-        typeof IPC_CHANNELS.discovery.recommendationsSearch
-      >,
-    ): Promise<
-      RuntimeIpcResult<
-        DiscoveryRecommendationSearchUiResult,
-        typeof IPC_CHANNELS.discovery.recommendationsSearch
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationsSearch, request),
-    updateRecommendationState: (
-      request: BusinessRequest<
-        DiscoveryRecommendationStatePayload,
-        typeof IPC_CHANNELS.discovery.recommendationStateUpdate
-      >,
-    ): Promise<
-      RuntimeIpcResult<
-        DiscoveryRecommendationStateResult,
-        typeof IPC_CHANNELS.discovery.recommendationStateUpdate
-      >
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.recommendationStateUpdate, request),
+      RuntimeIpcResult<SupplyConfirmResult, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>
+    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.candidateSupplyConfirm, request),
   },
   voiceInput: {
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {

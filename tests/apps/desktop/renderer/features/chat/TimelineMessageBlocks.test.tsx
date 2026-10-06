@@ -123,6 +123,35 @@ describe('TimelineMessage canonical block rendering', () => {
     expect(screen.getByText('error.png')).toBeInTheDocument();
   });
 
+  it('renders a persisted recommendation reference block above the user text', () => {
+    render(<TimelineMessage message={{
+      ...userMessage(),
+      blocks: [
+        {
+          blockId: 'user-recommendation:message-user-1:recommendation:1',
+          kind: 'user_recommendation_reference',
+          recommendationId: 'recommendation:1',
+          sourceName: 'GitHub',
+          canonicalUrl: 'https://example.com/agent',
+          title: 'Agent runtime',
+          description: 'A concrete implementation.',
+          recommendationReason: 'Relevant to your interests.',
+        },
+        {
+          blockId: 'user-text-1',
+          kind: 'user_text',
+          text: '聊聊它的实现',
+          format: 'plain',
+        },
+      ],
+    }} />);
+
+    expect(screen.getByTestId('conversation-recommendation-recommendation:1')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Agent runtime' })).toBeInTheDocument();
+    expect(screen.getByText('Relevant to your interests.')).toBeInTheDocument();
+    expect(screen.getByText('聊聊它的实现')).toBeInTheDocument();
+  });
+
   it('renders workspace change footer outside timeline message blocks', () => {
     render(<TimelineMessage
       message={assistantMessage()}

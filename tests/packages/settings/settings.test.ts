@@ -132,14 +132,14 @@ describe('Configuration files', () => {
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
     const first = files.settings.updateSettings({
-      patch: { discovery: { recommendationModel: { providerId: 'deepseek', modelId: 'first' } } },
+      patch: { discovery: { candidateSupplyModel: { providerId: 'deepseek', modelId: 'first' } } },
       expectedRevision: read.settings.revision,
     });
     expect(first.status).toBe('updated');
     expect(
       files.settings.updateSettings({
         patch: {
-          discovery: { recommendationModel: { providerId: 'deepseek', modelId: 'second' } },
+          discovery: { candidateSupplyModel: { providerId: 'deepseek', modelId: 'second' } },
         },
         expectedRevision: read.settings.revision,
       }),
@@ -160,23 +160,27 @@ describe('Configuration files', () => {
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
     fs.writeFileSync(
       files.projectSettingsPath,
-      JSON.stringify({ discovery: { recommendationTargetCount: 30 } }),
+      JSON.stringify({ discovery: { candidateSupply: { freshnessDays: 30 } } }),
     );
     expect(
       files.settings.updateSettings({
-        patch: { discovery: { recommendationWorkingSetCount: 90 } },
+        patch: { discovery: { candidateSupply: { maintenanceIntervalMinutes: 90 } } },
         expectedRevision: read.settings.revision,
       }),
     ).toMatchObject({
       status: 'updated',
       settings: {
-        config: { discovery: { recommendationTargetCount: 30, recommendationWorkingSetCount: 90 } },
+        config: {
+          discovery: {
+            candidateSupply: { freshnessDays: 30, maintenanceIntervalMinutes: 90 },
+          },
+        },
       },
     });
     const preserved = fs.readFileSync(files.projectSettingsPath, 'utf8');
     expect(
       files.settings.updateSettings({
-        patch: { discovery: { recommendationTargetCount: 40 } },
+        patch: { discovery: { candidateSupply: { freshnessDays: 40 } } },
         expectedRevision: read.settings.revision,
       }),
     ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
@@ -194,7 +198,7 @@ describe('Configuration files', () => {
       error: { code: 'SETTINGS_INVALID' },
     });
     const incomplete = JSON.parse(
-      '{"patch":{"discovery":{"recommendationModel":{"providerId":"deepseek"}}}}',
+      '{"patch":{"discovery":{"candidateSupplyModel":{"providerId":"deepseek"}}}}',
     );
     incomplete.expectedRevision = read.settings.revision;
     expect(files.settings.updateSettings(incomplete).status).toBe('rejected');
@@ -315,35 +319,53 @@ describe('Configuration files', () => {
       files.globalSettingsPath,
       JSON.stringify({
         discovery: {
-          recommendationTargetCount: 20,
-          recommendationWorkingSetCount: 40,
-          candidatePoolMinimumCount: 20,
-          candidatePoolMaximumCount: 60,
+          candidateSupply: {
+            daily: {
+              minimumCount: 20,
+              targetCount: 60,
+              interestMinimumCount: 5,
+              interestTargetCount: 15,
+            },
+          },
         },
       }),
     );
     fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
     fs.writeFileSync(
       files.projectSettingsPath,
-      JSON.stringify({ discovery: { recommendationTargetCount: 50 } }),
+      JSON.stringify({ discovery: { candidateSupply: { daily: { targetCount: 10 } } } }),
     );
     expect(files.settings.readSettings()).toMatchObject({
       status: 'rejected',
       error: {
         code: 'SETTINGS_INVALID',
         issues: expect.arrayContaining([
-          { path: ['discovery', 'recommendationTargetCount'], message: expect.any(String) },
+          {
+            path: ['discovery', 'candidateSupply', 'daily', 'targetCount'],
+            message: expect.any(String),
+          },
         ]),
       },
     });
     fs.writeFileSync(
       files.projectSettingsPath,
-      JSON.stringify({ discovery: { recommendationTargetCount: 35 } }),
+      JSON.stringify({ discovery: { candidateSupply: { daily: { targetCount: 35 } } } }),
     );
     expect(files.settings.readSettings()).toMatchObject({
       status: 'ok',
       settings: {
-        config: { discovery: { recommendationTargetCount: 35, recommendationWorkingSetCount: 40 } },
+        config: {
+          discovery: {
+            candidateSupply: {
+              daily: {
+                minimumCount: 20,
+                targetCount: 35,
+                interestMinimumCount: 5,
+                interestTargetCount: 15,
+              },
+            },
+          },
+        },
       },
     });
   });
@@ -463,7 +485,26 @@ describe('Configuration files', () => {
           general: { language: 'zh-CN', theme: 'midnight-blue', setupCompleted: false },
           providers: {},
           context: { compactionThresholdRatio: 0.8 },
-          discovery: { recommendationTargetCount: 20, enabledSources: ['bilibili', 'open_web'] },
+          discovery: {
+            candidateSupplyConfirmed: false,
+            enabledSources: ['zhihu'],
+            candidateSupply: {
+              daily: {
+                minimumCount: 100,
+                targetCount: 200,
+                interestMinimumCount: 10,
+                interestTargetCount: 30,
+              },
+              longTerm: {
+                minimumCount: 100,
+                targetCount: 300,
+                interestMinimumCount: 10,
+                interestTargetCount: 40,
+              },
+              freshnessDays: 7,
+              maintenanceIntervalMinutes: 60,
+            },
+          },
           voice: { inputDeviceId: 'default', outputDeviceId: 'default', readAloudEnabled: false },
           webSearch: {},
           permissions: { mode: 'ask', allow: [], ask: [], deny: [] },

@@ -204,6 +204,13 @@
       "when": 1791277984806,
       "tag": "0028_candidate_supply",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1791364384806,
+      "tag": "0029_remove_legacy_discovery",
+      "breakpoints": true
     }
   ]
 }

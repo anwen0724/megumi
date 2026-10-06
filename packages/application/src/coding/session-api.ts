@@ -1,7 +1,6 @@
 /* Exposes Coding session operations and projects committed history for the desktop. */
 import type { EventBus } from './events/event-bus';
 import { estimateContextTokens } from '@megumi/ai/utils/estimate';
-import { resolveRecommendationDiscussion } from '../recommendation/recommendation-discussion';
 import type { AttachmentPicker } from '../platform/attachment-picker';
 import type { LocalFileAvailability } from '../platform/local-file-availability';
 import type {
@@ -61,10 +60,6 @@ export function createSessionOperations(options: {
     workspaceId?: string,
   ) => Pick<import('../settings/settings-store').Settings, 'readSettings'>;
   reader: SessionReader;
-  recommendations: Pick<
-    import('../recommendation/recommendation-api').Discovery,
-    'getRecommendationReference'
-  >;
   coding: Pick<Coding, 'cancelInput' | 'submitInput'>;
   suggestions: InputSuggestionQuery;
   sessions: SessionCatalog;
@@ -94,7 +89,7 @@ export function createSessionOperations(options: {
         ? result
         : { status: 'updated', session: toSessionDto(result.session) };
     },
-    sendUserInput: (request) => submitUserInput(options.coding, request, options.recommendations),
+    sendUserInput: (request) => submitUserInput(options.coding, request),
     readSession: (request) => options.reader.readSession(request),
     readCommittedRun: (request) => options.reader.readCommittedRun(request),
     async createSession(request) {
@@ -292,30 +287,11 @@ export function createSessionOperations(options: {
 async function submitUserInput(
   coding: Pick<Coding, 'submitInput'>,
   request: SendUserInputRequest,
-  recommendations: Pick<
-    import('../recommendation/recommendation-api').Discovery,
-    'getRecommendationReference'
-  >,
 ): Promise<SendUserInputResult> {
-  const reference = request.recommendationId
-    ? resolveRecommendationDiscussion(
-        { recommendationId: request.recommendationId, sessionId: request.sessionId },
-        recommendations,
-      )
-    : undefined;
-  if (reference?.status === 'rejected')
-    return {
-      payload: {
-        type: 'error',
-        requestId: request.requestId ?? crypto.randomUUID(),
-        message: reference.error.message,
-      },
-    };
   const result = await coding.submitInput({
     ...(request.requestId ? { requestId: request.requestId } : {}),
     workspaceId: request.projectId,
     ...(request.sessionId ? { sessionId: request.sessionId } : {}),
-    ...(reference?.status === 'resolved' ? { recommendationReference: reference.reference } : {}),
     ...(request.sessionTitle ? { sessionTitle: request.sessionTitle } : {}),
     ...(request.branchMarkerId ? { branchMarkerId: request.branchMarkerId } : {}),
     text: request.text,

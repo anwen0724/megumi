@@ -7,7 +7,6 @@ import { useSessionStore } from '../entities/session/store';
 import { useWorkspaceFilesStore } from '../entities/workspace-files';
 import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
-import type { DiscoveryRecommendationUiDto } from '@megumi/application/contracts';
 import { useApplicationUpdateStore } from '../features/application-update';
 import type { SettingsCategory } from './SettingsPage';
 
@@ -24,9 +23,6 @@ export function useAppBodyController() {
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const setActiveSession = useSessionStore((state) => state.setActiveSession);
   const startNewSessionDraft = useSessionStore((state) => state.startNewSessionDraft);
-  const startRecommendationSessionDraft = useSessionStore(
-    (state) => state.startRecommendationSessionDraft,
-  );
   const clearNewSessionDraft = useSessionStore((state) => state.clearNewSessionDraft);
 
   const currentProject = projects.find((project) => project.id === currentProjectId) ?? null;
@@ -34,7 +30,7 @@ export function useAppBodyController() {
   const pageTitle = settingsOpen
     ? 'Settings'
     : activePage === 'discovery'
-      ? "Today's discoveries"
+      ? 'Interests'
       : (activeSession?.title ?? 'New session');
 
   useEffect(() => {
@@ -144,19 +140,6 @@ export function useAppBodyController() {
     clearNewSessionDraft();
   }, [clearNewSessionDraft]);
 
-  const handleStartRecommendationConversation = useCallback(
-    (recommendation: DiscoveryRecommendationUiDto) => {
-      void (async () => {
-        const project = currentProject ?? (await useProjectStore.getState().useExistingProject());
-        if (!project) return;
-        setSettingsOpen(false);
-        setActivePage('chat');
-        startRecommendationSessionDraft(project.id, recommendation);
-      })();
-    },
-    [currentProject, startRecommendationSessionDraft],
-  );
-
   useEffect(() => window.megumi.character.onOpenSettingsRequested?.(openSettings), [openSettings]);
 
   const closeSettings = useCallback(() => {
@@ -188,7 +171,6 @@ export function useAppBodyController() {
     openModelSettings: () => showSettingsCategory('models'),
     openContentSources,
     openDiscovery,
-    handleStartRecommendationConversation,
     closeSettings,
     toggleRightSidebar: toggleWorkspaceSidebar,
   };

@@ -79,7 +79,6 @@ export function AppBody() {
             rightSidebarOpen={controller.rightSidebarOpen}
             onToggleRightSidebar={controller.toggleRightSidebar}
             page={controller.activePage}
-            onStartRecommendationConversation={controller.handleStartRecommendationConversation}
             onOpenModelSettings={controller.openModelSettings}
             onOpenContentSources={controller.openContentSources}
           />

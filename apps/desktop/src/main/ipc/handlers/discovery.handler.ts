@@ -1,19 +1,9 @@
-/* Desktop IPC handlers for Discovery interests, Recommendation, and configuration. */
+/* Desktop IPC handlers for Discovery interests and Candidate Supply configuration. */
 import {
-  DiscoveryPreferenceDetailsResultSchema,
-  DiscoveryPreferenceEvidenceResultSchema,
-  DiscoveryPreferenceEditResultSchema,
-  DiscoveryPreferenceDeleteResultSchema,
-  DiscoveryRecommendationRequestResultSchema,
-  DiscoveryCandidateSupplyConfirmResultSchema,
-  DiscoveryConfigurationUiDtoSchema,
-  DiscoveryConfigurationUpdateUiResultSchema,
-  DiscoveryHomeUiResultSchema,
-  DiscoveryInterestUiDtoSchema,
-  DiscoveryRecommendationSearchUiResultSchema,
-  DiscoveryRecommendationStateResultSchema,
-  DiscoveryInterestSessionSettingUiDtoSchema,
-  DiscoverySourceUiDtoSchema,
+  DiscoveryInterestListResultSchema,
+  DiscoveryInterestChangeResultSchema,
+  SupplyConfigurationViewSchema,
+  SupplyConfirmResultSchema,
   type ApplicationOperations,
 } from '@megumi/application/contracts';
 import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
@@ -22,22 +12,11 @@ import { createIpcRequestHandler } from '../create-request-handler';
 import { IPC_CHANNELS } from '../channels';
 import type { RuntimeIpcError } from '../contracts';
 import {
-  DiscoveryPreferenceDetailsRequestSchema,
-  DiscoveryPreferenceEvidenceRequestSchema,
-  DiscoveryPreferenceEditRequestSchema,
-  DiscoveryPreferenceDeleteRequestSchema,
-  DiscoveryRecommendationRequestSchema,
-  DiscoveryCandidateSupplyConfirmRequestSchema,
+  DiscoveryInterestListRequestSchema,
+  DiscoveryInterestChangeRequestSchema,
   DiscoveryConfigurationGetRequestSchema,
   DiscoveryConfigurationUpdateRequestSchema,
-  DiscoveryHomeRequestSchema,
-  DiscoveryInterestChangeRequestSchema,
-  DiscoveryRecommendationSearchRequestSchema,
-  DiscoveryRecommendationStateRequestSchema,
-  DiscoveryInterestSessionSettingRequestSchema,
-  DiscoverySourceConnectRequestSchema,
-  DiscoverySourceRefreshRequestSchema,
-  DiscoverySourcesRefreshRequestSchema,
+  DiscoveryCandidateSupplyConfirmRequestSchema,
 } from '../schemas';
 
 export interface DiscoveryHandlersService {
@@ -56,61 +35,27 @@ export function registerDiscoveryHandlers(
   const ipcMain = options.ipcMain ?? electronIpcMain;
 
   ipcMain.handle(
-    IPC_CHANNELS.discovery.preferenceDetails,
+    IPC_CHANNELS.discovery.interestList,
     createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.preferenceDetails,
-      requestSchema: DiscoveryPreferenceDetailsRequestSchema,
-      responseSchema: DiscoveryPreferenceDetailsResultSchema,
+      channel: IPC_CHANNELS.discovery.interestList,
+      requestSchema: DiscoveryInterestListRequestSchema,
+      responseSchema: DiscoveryInterestListResultSchema,
+      responseValidation: 'dev-only',
       logger: options.logger,
-      handle: (request) => service.host.discovery.getPreferenceDetails(request.payload),
+      handle: () => service.host.discovery.listInterests(),
       mapError: mapDiscoveryIpcError,
     }),
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.discovery.preferenceEvidence,
+    IPC_CHANNELS.discovery.interestChange,
     createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.preferenceEvidence,
-      requestSchema: DiscoveryPreferenceEvidenceRequestSchema,
-      responseSchema: DiscoveryPreferenceEvidenceResultSchema,
+      channel: IPC_CHANNELS.discovery.interestChange,
+      requestSchema: DiscoveryInterestChangeRequestSchema,
+      responseSchema: DiscoveryInterestChangeResultSchema,
+      responseValidation: 'dev-only',
       logger: options.logger,
-      handle: (request) => service.host.discovery.getPreferenceEvidence(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.preferenceEdit,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.preferenceEdit,
-      requestSchema: DiscoveryPreferenceEditRequestSchema,
-      responseSchema: DiscoveryPreferenceEditResultSchema,
-      logger: options.logger,
-      handle: (request) => service.host.discovery.editPreference(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.preferenceDelete,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.preferenceDelete,
-      requestSchema: DiscoveryPreferenceDeleteRequestSchema,
-      responseSchema: DiscoveryPreferenceDeleteResultSchema,
-      logger: options.logger,
-      handle: (request) => service.host.discovery.deletePreference(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.candidateSupplyConfirm,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.candidateSupplyConfirm,
-      requestSchema: DiscoveryCandidateSupplyConfirmRequestSchema,
-      responseSchema: DiscoveryCandidateSupplyConfirmResultSchema,
-      logger: options.logger,
-      handle: () => service.host.discovery.confirmCandidateSupply(),
+      handle: (request) => service.host.discovery.changeInterest(request.payload),
       mapError: mapDiscoveryIpcError,
     }),
   );
@@ -120,130 +65,35 @@ export function registerDiscoveryHandlers(
     createIpcRequestHandler({
       channel: IPC_CHANNELS.discovery.configurationGet,
       requestSchema: DiscoveryConfigurationGetRequestSchema,
-      responseSchema: DiscoveryConfigurationUiDtoSchema,
+      responseSchema: SupplyConfigurationViewSchema,
       responseValidation: 'dev-only',
       logger: options.logger,
       handle: () => service.host.discovery.getConfiguration(),
       mapError: mapDiscoveryIpcError,
     }),
   );
+
   ipcMain.handle(
     IPC_CHANNELS.discovery.configurationUpdate,
     createIpcRequestHandler({
       channel: IPC_CHANNELS.discovery.configurationUpdate,
       requestSchema: DiscoveryConfigurationUpdateRequestSchema,
-      responseSchema: DiscoveryConfigurationUpdateUiResultSchema,
+      responseSchema: SupplyConfigurationViewSchema,
       responseValidation: 'dev-only',
       logger: options.logger,
       handle: (request) => service.host.discovery.updateConfiguration(request.payload),
       mapError: mapDiscoveryIpcError,
     }),
   );
+
   ipcMain.handle(
-    IPC_CHANNELS.discovery.sourceConnect,
+    IPC_CHANNELS.discovery.candidateSupplyConfirm,
     createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.sourceConnect,
-      requestSchema: DiscoverySourceConnectRequestSchema,
-      responseSchema: DiscoverySourceUiDtoSchema,
-      responseValidation: 'dev-only',
+      channel: IPC_CHANNELS.discovery.candidateSupplyConfirm,
+      requestSchema: DiscoveryCandidateSupplyConfirmRequestSchema,
+      responseSchema: SupplyConfirmResultSchema,
       logger: options.logger,
-      handle: (request) => service.host.discovery.connectSource(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.sourceRefresh,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.sourceRefresh,
-      requestSchema: DiscoverySourceRefreshRequestSchema,
-      responseSchema: DiscoverySourceUiDtoSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.refreshSource(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.sourcesRefresh,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.sourcesRefresh,
-      requestSchema: DiscoverySourcesRefreshRequestSchema,
-      responseSchema: DiscoveryConfigurationUiDtoSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: () => service.host.discovery.refreshSources(),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.interestChange,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.interestChange,
-      requestSchema: DiscoveryInterestChangeRequestSchema,
-      responseSchema: DiscoveryInterestUiDtoSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.changeInterest(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.sessionParticipationSet,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.sessionParticipationSet,
-      requestSchema: DiscoveryInterestSessionSettingRequestSchema,
-      responseSchema: DiscoveryInterestSessionSettingUiDtoSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.setInterestSessionSetting(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.recommendationRequest,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.recommendationRequest,
-      requestSchema: DiscoveryRecommendationRequestSchema,
-      responseSchema: DiscoveryRecommendationRequestResultSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.requestRecommendation(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.homeGet,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.homeGet,
-      requestSchema: DiscoveryHomeRequestSchema,
-      responseSchema: DiscoveryHomeUiResultSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.getHome(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.recommendationsSearch,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.recommendationsSearch,
-      requestSchema: DiscoveryRecommendationSearchRequestSchema,
-      responseSchema: DiscoveryRecommendationSearchUiResultSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.searchRecommendations(request.payload),
-      mapError: mapDiscoveryIpcError,
-    }),
-  );
-  ipcMain.handle(
-    IPC_CHANNELS.discovery.recommendationStateUpdate,
-    createIpcRequestHandler({
-      channel: IPC_CHANNELS.discovery.recommendationStateUpdate,
-      requestSchema: DiscoveryRecommendationStateRequestSchema,
-      responseSchema: DiscoveryRecommendationStateResultSchema,
-      responseValidation: 'dev-only',
-      logger: options.logger,
-      handle: (request) => service.host.discovery.updateRecommendationState(request.payload),
+      handle: () => service.host.discovery.confirmCandidateSupply(),
       mapError: mapDiscoveryIpcError,
     }),
   );

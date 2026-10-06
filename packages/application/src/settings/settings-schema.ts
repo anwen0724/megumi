@@ -23,12 +23,7 @@ export type SettingsConfiguration = z.output<typeof ConfigurationSchema>;
 export const GlobalOnlySettingsFields = {
   general: ['setupCompleted', 'language', 'theme', 'lastSelectedModel'],
   voice: ['inputDeviceId', 'outputDeviceId'],
-  discovery: [
-    'candidateSupplyConfirmed',
-    'recommendationGenerationTime',
-    'recommendationCandidateCheckIntervalSeconds',
-    'candidateSupplyCheckIntervalMinutes',
-  ],
+  discovery: ['candidateSupplyConfirmed'],
 } satisfies { [K in keyof SettingsConfiguration]?: readonly (keyof SettingsConfiguration[K])[] };
 
 export const ConfigurationFileSchema = z.object(

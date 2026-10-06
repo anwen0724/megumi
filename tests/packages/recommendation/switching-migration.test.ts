@@ -1,7 +1,5 @@
-/* Verifies the supply migration creates the nine new tables and the switch drops the legacy ones. */
+/* Verifies the switch: one migration run creates the nine supply tables and drops the legacy ones. */
 // @vitest-environment node
-import fs from 'node:fs';
-import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabase,
@@ -45,10 +43,26 @@ describe('candidate supply migrations', () => {
 
   afterEach(() => database.close());
 
-  it('creates every supply table and keeps the legacy tables until the switch', () => {
+  it('creates every supply table and drops the legacy tables in the same run', () => {
     for (const table of SUPPLY_TABLES) expect(tableExists(database, table)).toBe(true);
-    for (const table of LEGACY_TABLES) expect(tableExists(database, table)).toBe(true);
+    for (const table of LEGACY_TABLES) expect(tableExists(database, table)).toBe(false);
     expect(database.prepare({ sql: 'PRAGMA foreign_key_check' }).all()).toEqual([]);
+  });
+
+  it('keeps the unrelated tables and data across the switch', () => {
+    for (const table of [
+      'workspaces',
+      'sessions',
+      'session_entries',
+      'session_messages',
+      'session_message_attachments',
+      'session_compactions',
+      'workspace_changes',
+      'workspace_changed_files',
+      'skill_availability',
+    ]) {
+      expect(tableExists(database, table)).toBe(true);
+    }
   });
 
   it('keeps one content per canonical URL and one qualification per pool and content', () => {
@@ -100,27 +114,7 @@ describe('candidate supply migrations', () => {
     ).toEqual([{ interest_id: 'i2' }]);
     expect(tableRowCount(database, 'contents')).toBe(1);
   });
-
-  it('removes the legacy tables and keeps the supply tables when the switch runs', () => {
-    applyLegacyRemoval(database);
-
-    for (const table of LEGACY_TABLES) expect(tableExists(database, table)).toBe(false);
-    for (const table of SUPPLY_TABLES) expect(tableExists(database, table)).toBe(true);
-    expect(database.prepare({ sql: 'PRAGMA foreign_key_check' }).all()).toEqual([]);
-  });
 });
-
-/** Applies the not-yet-registered switch migration the way the release will. */
-function applyLegacyRemoval(database: DatabaseConnection): void {
-  const file = path.join(
-    process.cwd(),
-    'packages/application/resources/migrations/0029_remove_legacy_discovery.sql',
-  );
-  for (const statement of fs.readFileSync(file, 'utf8').split('--> statement-breakpoint')) {
-    const sql = statement.trim();
-    if (sql) database.prepare({ sql }).run();
-  }
-}
 
 function insertInterest(database: DatabaseConnection, id: string): void {
   database

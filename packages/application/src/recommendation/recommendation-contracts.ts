@@ -1,113 +1,29 @@
-/* Defines Recommendation product request schemas and response contracts. */
+/*
+ * Defines the renderer-safe Candidate Supply request schemas and the Product
+ * Host contract consumed by Desktop. The area keeps its historical `discovery`
+ * name in the IPC namespace and the Application operations key; every type
+ * below describes the current behaviour, not the removed recommendation flow.
+ */
 import { z } from 'zod';
-import { CandidatePoolSnapshotSchema, CandidateSupplyResultSchema } from './candidates/candidate-pool';
-import type { recommendationFacts } from './daily/prepare-context';
-import { RecommendationCollectionSchema, RecommendationSchema, RecommendationStateSchema, UpdateRecommendationStateRequestSchema } from './daily/publish-recommendations';
-import { InterestEvidenceSchema, InterestSchema, InterestSessionSettingSchema } from './interests/interest-catalog';
-import type { PreferenceLearningStatus, PreparePreferencesRequest, PreparePreferencesResult } from './preferences/preference-learning';
-import { PreferenceEvidenceViewSchema, PreferenceLearningCompletionSchema, PreferenceManagementDetailsSchema, PreferenceSchema, PreferenceScopeRequestSchema } from './preferences/preference-rules';
-import { DiscoveryHomeViewSchema, GetDiscoveryHomeRequestSchema, RecommendationViewSchema, SearchRecommendationsRequestSchema, SearchRecommendationsResultSchema } from './recommendation-feed';
-import { ConnectDiscoverySourceRequestSchema, DiscoveryConfigurationUpdateResultSchema, DiscoveryConfigurationViewSchema, DiscoverySourceViewSchema, RefreshDiscoverySourceRequestSchema, UpdateDiscoveryConfigurationRequestSchema } from './recommendation-settings';
+import { InterestSnapshotEntrySchema } from './interests/interest-contracts';
 
-const LocalDateSchema = z.string().date();
+/** One interest as the product shows it: the saved description and enable state. */
+export const InterestUiSchema = InterestSnapshotEntrySchema;
+export type InterestUi = z.infer<typeof InterestUiSchema>;
 
-export const DiscoveryPreferenceDetailsPayloadSchema = PreferenceScopeRequestSchema;
+/** Empty payload used by the read-only Host requests. */
+export const DiscoveryEmptyPayloadSchema = z.object({}).strict();
+export type DiscoveryEmptyPayload = z.infer<typeof DiscoveryEmptyPayloadSchema>;
 
-export const DiscoveryPreferenceEvidencePayloadSchema = z
-  .object({ preferenceId: z.string().min(1) })
+export const DiscoveryInterestListResultSchema = z
+  .object({ interests: z.array(InterestUiSchema) })
   .strict();
+export type DiscoveryInterestListResult = z.infer<typeof DiscoveryInterestListResultSchema>;
 
-export const DiscoveryPreferenceDeletePayloadSchema = z
-  .object({ preferenceId: z.string().min(1), expectedRevision: z.number().int().positive() })
-  .strict();
-
-export const DiscoveryPreferenceEditPayloadSchema = DiscoveryPreferenceDeletePayloadSchema.extend({
-  statement: z
-    .string()
-    .trim()
-    .refine((value) => [...value].length >= 1 && [...value].length <= 1000),
-}).strict();
-
-export const DiscoveryPreferenceDetailsResultSchema = z
-  .object({ details: PreferenceManagementDetailsSchema.nullable() })
-  .strict();
-
-export const DiscoveryPreferenceEvidenceResultSchema = z
-  .object({ details: PreferenceEvidenceViewSchema.nullable() })
-  .strict();
-
-export const DiscoveryPreferenceEditResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.enum(['updated', 'unchanged']), preference: PreferenceSchema }).strict(),
-  z.object({ status: z.enum(['not_found', 'revision_conflict', 'invalid_input']) }).strict(),
-]);
-
-export const DiscoveryPreferenceDeleteResultSchema = z
-  .object({ status: z.enum(['deleted', 'already_deleted', 'not_found', 'revision_conflict']) })
-  .strict();
-
-export type DiscoveryPreferenceDetailsPayload = z.infer<
-  typeof DiscoveryPreferenceDetailsPayloadSchema
->;
-
-export type DiscoveryPreferenceEvidencePayload = z.infer<
-  typeof DiscoveryPreferenceEvidencePayloadSchema
->;
-
-export type DiscoveryPreferenceEditPayload = z.infer<typeof DiscoveryPreferenceEditPayloadSchema>;
-
-export type DiscoveryPreferenceDeletePayload = z.infer<
-  typeof DiscoveryPreferenceDeletePayloadSchema
->;
-
-export type DiscoveryPreferenceDetailsResult = z.infer<
-  typeof DiscoveryPreferenceDetailsResultSchema
->;
-
-export type DiscoveryPreferenceEvidenceResult = z.infer<
-  typeof DiscoveryPreferenceEvidenceResultSchema
->;
-
-export type DiscoveryPreferenceEditResult = z.infer<typeof DiscoveryPreferenceEditResultSchema>;
-
-export type DiscoveryPreferenceDeleteResult = z.infer<typeof DiscoveryPreferenceDeleteResultSchema>;
-
-export const DiscoveryCandidateSupplyConfirmPayloadSchema = z.object({}).strict();
-
-export const DiscoveryCandidateSupplyConfirmResultSchema = z
-  .object({
-    status: z.enum(['confirmed', 'already_confirmed']),
-  })
-  .strict();
-
-export type DiscoveryCandidateSupplyConfirmResult = z.infer<
-  typeof DiscoveryCandidateSupplyConfirmResultSchema
->;
-
-const FailureSchema = z
-  .object({
-    code: z.string().min(1),
-    message: z.string(),
-    retryable: z.boolean(),
-  })
-  .strict();
-
-const RecommendationTerminalSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('published'), collection: RecommendationCollectionSchema }).strict(),
-  z.object({ status: z.literal('waiting_for_candidates'), localDate: LocalDateSchema }).strict(),
-  z.object({ status: z.literal('model_unavailable'), localDate: LocalDateSchema }).strict(),
-  z
-    .object({ status: z.literal('failed'), localDate: LocalDateSchema, failure: FailureSchema })
-    .strict(),
-  z.object({ status: z.literal('cancelled'), localDate: LocalDateSchema }).strict(),
-  z
-    .object({
-      status: z.literal('timed_out'),
-      localDate: LocalDateSchema,
-      requestId: z.string().min(1),
-    })
-    .strict(),
-]);
-
+/**
+ * One user edit. `pause` and `resume` are enable-state updates of the same
+ * interest, so the desktop keeps one operation instead of two code paths.
+ */
 export const DiscoveryInterestChangePayloadSchema = z.discriminatedUnion('action', [
   z
     .object({ action: z.literal('create'), description: z.string().trim().min(1).max(1_000) })
@@ -123,380 +39,71 @@ export const DiscoveryInterestChangePayloadSchema = z.discriminatedUnion('action
   z.object({ action: z.literal('resume'), interestId: z.string().min(1) }).strict(),
   z.object({ action: z.literal('delete'), interestId: z.string().min(1) }).strict(),
 ]);
-
-export const DiscoveryInterestSessionSettingPayloadSchema = z
-  .object({
-    sessionId: z.string().min(1),
-    participation: z.enum(['included', 'excluded']),
-  })
-  .strict();
-
-export const DiscoveryRecommendationRequestPayloadSchema = z
-  .object({
-    trigger: z.enum(['scheduled', 'startup_catchup', 'manual']),
-  })
-  .strict();
-
-export const DiscoveryRecommendationWaitSchema = z
-  .object({
-    requestId: z.string().min(1),
-    timeoutMs: z.number().int().min(1).max(300_000).default(120_000),
-  })
-  .strict();
-
-export const DiscoveryRecommendationRequestResultSchema = z.discriminatedUnion('status', [
-  z
-    .object({
-      status: z.literal('started'),
-      localDate: LocalDateSchema,
-      requestId: z.string().min(1),
-      phase: z.enum(['preparing_preferences', 'executing']),
-      executionId: z.string().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal('in_progress'),
-      localDate: LocalDateSchema,
-      requestId: z.string().min(1),
-      phase: z.enum(['preparing_preferences', 'executing']),
-      executionId: z.string().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({ status: z.literal('already_published'), collection: RecommendationCollectionSchema })
-    .strict(),
-  z.object({ status: z.literal('waiting_for_candidates'), localDate: LocalDateSchema }).strict(),
-  z.object({ status: z.literal('model_unavailable'), localDate: LocalDateSchema }).strict(),
-  z
-    .object({ status: z.literal('failed'), localDate: LocalDateSchema, failure: FailureSchema })
-    .strict(),
-]);
-
-export const DiscoveryRecommendationWaitResultSchema = RecommendationTerminalSchema;
-
-export const DiscoveryTodayRecommendationResultSchema = z.union([
-  z.object({ status: z.literal('not_generated'), localDate: LocalDateSchema }).strict(),
-  z
-    .object({
-      status: z.literal('running'),
-      localDate: LocalDateSchema,
-      requestId: z.string().min(1),
-      phase: z.enum(['preparing_preferences', 'executing']),
-      executionId: z.string().min(1).optional(),
-    })
-    .strict(),
-  RecommendationTerminalSchema,
-]);
-
-export const DiscoveryRecommendationCollectionQuerySchema = z
-  .object({
-    localDate: LocalDateSchema,
-    includeHidden: z.boolean().default(false),
-  })
-  .strict();
-
-export const DiscoveryRecommendationIdQuerySchema = z
-  .object({ recommendationId: z.string().min(1) })
-  .strict();
-
-export const DiscoveryHomePayloadSchema = GetDiscoveryHomeRequestSchema;
-
-export const DiscoveryRecommendationSearchPayloadSchema = SearchRecommendationsRequestSchema;
-
-export const DiscoveryRecommendationStatePayloadSchema = UpdateRecommendationStateRequestSchema;
-
-export const DiscoveryInterestFactsPayloadSchema = z
-  .object({
-    interestIds: z.array(z.string().min(1)),
-    evidenceIds: z.array(z.string().min(1)),
-  })
-  .strict();
-
-export const DiscoveryCandidateSupplyRequestSchema = z
-  .object({
-    trigger: z
-      .enum(['startup', 'scheduled', 'interest_changed', 'supply_conditions_changed'])
-      .default('supply_conditions_changed'),
-  })
-  .strict();
-
-export const DiscoveryPreferenceLearningQuerySchema = z
-  .object({ recommendationId: z.string().min(1) })
-  .strict();
-
-export const DiscoveryRecommendationFactsQuerySchema = z
-  .object({
-    executionId: z.string().min(1),
-    requestId: z.string().min(1),
-    localDate: LocalDateSchema,
-  })
-  .strict();
-
-const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(JsonValueSchema),
-    z.record(z.string(), JsonValueSchema),
-  ]),
-);
-
-export const DiscoveryFactsResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('ok'), facts: JsonValueSchema }).strict(),
-  z
-    .object({
-      status: z.literal('failed'),
-      failure: z.object({ code: z.string().min(1), message: z.string() }).strict(),
-    })
-    .strict(),
-  z.object({ status: z.literal('cancelled') }).strict(),
-]);
-
-export const DiscoveryBackgroundWaitOptionsSchema = z
-  .object({
-    timeoutMs: z.number().int().min(1).max(300_000).default(120_000),
-  })
-  .strict();
-
-export const DiscoveryConfigurationGetPayloadSchema = z.object({}).strict();
-
-export const DiscoverySourcesRefreshPayloadSchema = z.object({}).strict();
-
-export const DiscoveryConfigurationUpdatePayloadSchema = UpdateDiscoveryConfigurationRequestSchema;
-
-export const DiscoverySourceConnectPayloadSchema = ConnectDiscoverySourceRequestSchema;
-
-export const DiscoverySourceRefreshPayloadSchema = RefreshDiscoverySourceRequestSchema;
-
-export const DiscoveryConfigurationUpdateUiResultSchema = DiscoveryConfigurationUpdateResultSchema;
-
-export type DiscoveryConfigurationUpdateUiResult = z.infer<
-  typeof DiscoveryConfigurationUpdateUiResultSchema
->;
-
-export const DiscoveryConfigurationUiDtoSchema = DiscoveryConfigurationViewSchema;
-
-export const DiscoverySourceUiDtoSchema = DiscoverySourceViewSchema;
-
-export const DiscoveryInterestUiDtoSchema = InterestSchema;
-
-export const DiscoveryInterestSessionSettingUiDtoSchema = InterestSessionSettingSchema;
-
-export const DiscoveryHomeUiResultSchema = DiscoveryHomeViewSchema;
-
-export const DiscoveryRecommendationSearchUiResultSchema = SearchRecommendationsResultSchema;
-
-export const DiscoveryRecommendationUiDtoSchema = RecommendationViewSchema;
-
-export const DiscoveryRecommendationStateResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.enum(['updated', 'unchanged']), state: RecommendationStateSchema }).strict(),
-  z.object({ status: z.literal('not_found') }).strict(),
-]);
-
-export const DiscoveryInterestFactsResultSchema = z
-  .object({
-    interests: z.array(InterestSchema),
-    evidence: z.array(InterestEvidenceSchema),
-  })
-  .strict();
-
-export const DiscoveryCandidateSupplyResultSchema = CandidateSupplyResultSchema;
-
-export const DiscoveryCandidatePoolResultSchema = CandidatePoolSnapshotSchema.nullable();
-
-export const DiscoveryRecommendationCollectionResultSchema =
-  RecommendationCollectionSchema.nullable();
-
-export const DiscoveryRecommendationResultSchema = RecommendationSchema.nullable();
-
-export const DiscoveryPreferenceLearningResultSchema =
-  PreferenceLearningCompletionSchema.nullable();
-
 export type DiscoveryInterestChangePayload = z.infer<typeof DiscoveryInterestChangePayloadSchema>;
 
-export type DiscoveryInterestSessionSettingPayload = z.infer<
-  typeof DiscoveryInterestSessionSettingPayloadSchema
+/**
+ * The saved interests after one edit. Returning the list keeps the desktop from
+ * re-reading and racing its own change; a rejected edit stays visible as one.
+ */
+export const DiscoveryInterestChangeResultSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('changed'), interests: z.array(InterestUiSchema) }).strict(),
+  z.object({ status: z.literal('not_found') }).strict(),
+  z.object({ status: z.literal('invalid_request'), message: z.string().min(1) }).strict(),
+]);
+export type DiscoveryInterestChangeResult = z.infer<typeof DiscoveryInterestChangeResultSchema>;
+
+/**
+ * One source as the settings UI shows it. There is no availability probe: the
+ * first-version source is the Zhihu API, so the only facts are whether the user
+ * keeps it enabled and whether a credential is available.
+ */
+export const SupplySourceViewSchema = z
+  .object({
+    sourceId: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+    enabled: z.boolean(),
+    credentialConfigured: z.boolean(),
+  })
+  .strict();
+export type SupplySourceView = z.infer<typeof SupplySourceViewSchema>;
+
+export const SupplyConfigurationViewSchema = z
+  .object({
+    /** False until the user accepts the first supply run; supply starts no external work before that. */
+    candidateSupplyConfirmed: z.boolean(),
+    sources: z.array(SupplySourceViewSchema),
+  })
+  .strict();
+export type SupplyConfigurationView = z.infer<typeof SupplyConfigurationViewSchema>;
+
+export const SupplyConfigurationUpdatePayloadSchema = z
+  .object({ enabledSources: z.array(z.string().trim().min(1)).optional() })
+  .strict();
+export type SupplyConfigurationUpdatePayload = z.infer<
+  typeof SupplyConfigurationUpdatePayloadSchema
 >;
 
-export type DiscoveryRecommendationRequestPayload = z.infer<
-  typeof DiscoveryRecommendationRequestPayloadSchema
->;
+export const SupplyConfirmResultSchema = z
+  .object({ status: z.enum(['confirmed', 'already_confirmed']) })
+  .strict();
+export type SupplyConfirmResult = z.infer<typeof SupplyConfirmResultSchema>;
 
-export type DiscoveryRecommendationWait = z.infer<typeof DiscoveryRecommendationWaitSchema>;
-
-export type DiscoveryRecommendationRequestResult = z.infer<
-  typeof DiscoveryRecommendationRequestResultSchema
->;
-
-export type DiscoveryRecommendationWaitResult = z.infer<
-  typeof DiscoveryRecommendationWaitResultSchema
->;
-
-export type DiscoveryTodayRecommendationResult = z.infer<
-  typeof DiscoveryTodayRecommendationResultSchema
->;
-
-export type DiscoveryRecommendationCollectionQuery = z.infer<
-  typeof DiscoveryRecommendationCollectionQuerySchema
->;
-
-export type DiscoveryRecommendationIdQuery = z.infer<typeof DiscoveryRecommendationIdQuerySchema>;
-
-export type DiscoveryHomePayload = z.infer<typeof DiscoveryHomePayloadSchema>;
-
-export type DiscoveryRecommendationSearchPayload = z.infer<
-  typeof DiscoveryRecommendationSearchPayloadSchema
->;
-
-export type DiscoveryRecommendationStatePayload = z.infer<
-  typeof DiscoveryRecommendationStatePayloadSchema
->;
-
-export type DiscoveryInterestFactsPayload = z.infer<typeof DiscoveryInterestFactsPayloadSchema>;
-
-export type DiscoveryCandidateSupplyRequest = z.infer<typeof DiscoveryCandidateSupplyRequestSchema>;
-
-export type DiscoveryPreferenceLearningQuery = z.infer<
-  typeof DiscoveryPreferenceLearningQuerySchema
->;
-
-export type DiscoveryBackgroundWaitOptions = z.infer<typeof DiscoveryBackgroundWaitOptionsSchema>;
-
-export type DiscoveryConfigurationGetPayload = z.infer<
-  typeof DiscoveryConfigurationGetPayloadSchema
->;
-
-export type DiscoverySourcesRefreshPayload = z.infer<typeof DiscoverySourcesRefreshPayloadSchema>;
-
-export type DiscoveryConfigurationUpdatePayload = z.infer<
-  typeof DiscoveryConfigurationUpdatePayloadSchema
->;
-
-export type DiscoverySourceConnectPayload = z.infer<typeof DiscoverySourceConnectPayloadSchema>;
-
-export type DiscoverySourceRefreshPayload = z.infer<typeof DiscoverySourceRefreshPayloadSchema>;
-
-export type DiscoveryConfigurationUiDto = z.infer<typeof DiscoveryConfigurationUiDtoSchema>;
-
-export type DiscoverySourceUiDto = z.infer<typeof DiscoverySourceUiDtoSchema>;
-
-export type DiscoveryInterestUiDto = z.infer<typeof DiscoveryInterestUiDtoSchema>;
-
-export type DiscoveryInterestSessionSettingUiDto = z.infer<
-  typeof DiscoveryInterestSessionSettingUiDtoSchema
->;
-
-export type DiscoveryHomeUiResult = z.infer<typeof DiscoveryHomeUiResultSchema>;
-
-export type DiscoveryRecommendationSearchUiResult = z.infer<
-  typeof DiscoveryRecommendationSearchUiResultSchema
->;
-
-export type DiscoveryRecommendationUiDto = z.infer<typeof DiscoveryRecommendationUiDtoSchema>;
-
-export type DiscoveryRecommendationStateResult = z.infer<
-  typeof DiscoveryRecommendationStateResultSchema
->;
-
-export type DiscoveryInterestFactsResult = z.infer<typeof DiscoveryInterestFactsResultSchema>;
-
-export type DiscoveryCandidateSupplyResult = z.infer<typeof DiscoveryCandidateSupplyResultSchema>;
-
-export type DiscoveryCandidatePoolResult = z.infer<typeof DiscoveryCandidatePoolResultSchema>;
-
-export type DiscoveryRecommendationCollectionResult = z.infer<
-  typeof DiscoveryRecommendationCollectionResultSchema
->;
-
-export type DiscoveryRecommendationResult = z.infer<typeof DiscoveryRecommendationResultSchema>;
-
-export type DiscoveryPreferenceLearningResult = z.infer<
-  typeof DiscoveryPreferenceLearningResultSchema
->;
-
-export type DiscoveryRecommendationFactsResult =
-  | { readonly status: 'ok'; readonly facts: ReturnType<typeof recommendationFacts>; }
-  | { readonly status: 'failed'; readonly failure: { readonly code: string; readonly message: string; }; }
-  | { readonly status: 'cancelled'; };
-
-export type DiscoveryBackgroundWaitResult<T> =
-  { readonly status: 'completed'; readonly value: T; } | { readonly status: 'timed_out'; };
-
+/**
+ * The product surface of user interests and candidate supply. Candidate
+ * preparation and maintenance stay inside the main process: this contract adds
+ * no candidate-pool IPC, HTTP API, or UI event bus.
+ */
 export interface DiscoveryHost {
-  /** Reads the existing scope without model work. */
-  getPreferenceDetails(
-    request: DiscoveryPreferenceDetailsPayload,
-  ): Promise<DiscoveryPreferenceDetailsResult>;
-  /** Reads evidence and distinguishes current feedback from the original learning source. */
-  getPreferenceEvidence(
-    request: DiscoveryPreferenceEvidencePayload,
-  ): Promise<DiscoveryPreferenceEvidenceResult>;
-  /** Promotes a preference to the user's explicit requirement. */
-  editPreference(request: DiscoveryPreferenceEditPayload): Promise<DiscoveryPreferenceEditResult>;
-  /** Deletes a preference under revision protection. */
-  deletePreference(
-    request: DiscoveryPreferenceDeletePayload,
-  ): Promise<DiscoveryPreferenceDeleteResult>;
-  /** On-demand preparation for trusted Host workflows; no Desktop learning IPC. */
-  preparePreferencesForRecommendation(
-    request: PreparePreferencesRequest,
-  ): Promise<PreparePreferencesResult>;
-  /** Records explicit first-use consent and checks supply in the background. */
-  confirmCandidateSupply(): Promise<DiscoveryCandidateSupplyConfirmResult>;
-  getConfiguration(
-    request?: DiscoveryConfigurationGetPayload,
-  ): Promise<DiscoveryConfigurationUiDto>;
+  /** Reads the saved interests without model or source work. */
+  listInterests(request?: DiscoveryEmptyPayload): Promise<DiscoveryInterestListResult>;
+  /** Creates, edits, enables, disables, or deletes one interest. */
+  changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestChangeResult>;
+  /** Reads the supply enable state and the configured sources. */
+  getConfiguration(request?: DiscoveryEmptyPayload): Promise<SupplyConfigurationView>;
+  /** Applies one validated partial configuration update. */
   updateConfiguration(
-    request: DiscoveryConfigurationUpdatePayload,
-  ): Promise<DiscoveryConfigurationUpdateUiResult>;
-  connectSource(request: DiscoverySourceConnectPayload): Promise<DiscoverySourceUiDto>;
-  refreshSource(request: DiscoverySourceRefreshPayload): Promise<DiscoverySourceUiDto>;
-  refreshSources(request?: DiscoverySourcesRefreshPayload): Promise<DiscoveryConfigurationUiDto>;
-  changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestUiDto>;
-  /** Updates a Session's Interest participation setting and returns its durable identity. */
-  setInterestSessionSetting(
-    request: DiscoveryInterestSessionSettingPayload,
-  ): Promise<DiscoveryInterestSessionSettingUiDto>;
-  requestRecommendation(
-    request: DiscoveryRecommendationRequestPayload,
-  ): Promise<DiscoveryRecommendationRequestResult>;
-  waitRecommendation(
-    request: DiscoveryRecommendationWait,
-  ): Promise<DiscoveryRecommendationWaitResult>;
-  getTodayRecommendation(): Promise<DiscoveryTodayRecommendationResult>;
-  getRecommendationCollection(
-    request: DiscoveryRecommendationCollectionQuery,
-  ): Promise<DiscoveryRecommendationCollectionResult>;
-  getRecommendationById(
-    request: DiscoveryRecommendationIdQuery,
-  ): Promise<DiscoveryRecommendationResult>;
-  getHome(request: DiscoveryHomePayload): Promise<DiscoveryHomeUiResult>;
-  searchRecommendations(
-    request: DiscoveryRecommendationSearchPayload,
-  ): Promise<DiscoveryRecommendationSearchUiResult>;
-  updateRecommendationState(
-    request: DiscoveryRecommendationStatePayload,
-  ): Promise<DiscoveryRecommendationStateResult>;
-  getInterestFacts(request: DiscoveryInterestFactsPayload): Promise<DiscoveryInterestFactsResult>;
-  requestCandidateSupply(
-    request?: DiscoveryCandidateSupplyRequest,
-  ): Promise<DiscoveryCandidateSupplyResult>;
-  getCandidatePool(): Promise<DiscoveryCandidatePoolResult>;
-  getRecommendationFacts(
-    request: z.infer<typeof DiscoveryRecommendationFactsQuerySchema>,
-  ): Promise<DiscoveryRecommendationFactsResult>;
-  /** Returns current/learned feedback versions and persisted Preference details, not a run record. */
-  getPreferenceLearning(
-    request: DiscoveryPreferenceLearningQuery,
-  ): Promise<DiscoveryPreferenceLearningResult>;
-  getPreferenceLearningStatus(
-    request: DiscoveryPreferenceLearningQuery,
-  ): Promise<PreferenceLearningStatus>;
-  /** Waits for the current feedback revision to be learned, or returns a bounded timeout. */
-  waitPreferenceLearning(
-    request: DiscoveryPreferenceLearningQuery & DiscoveryBackgroundWaitOptions,
-  ): Promise<DiscoveryBackgroundWaitResult<NonNullable<DiscoveryPreferenceLearningResult>>>;
+    request: SupplyConfigurationUpdatePayload,
+  ): Promise<SupplyConfigurationView>;
+  /** Records the user's acceptance of the first supply run. */
+  confirmCandidateSupply(request?: DiscoveryEmptyPayload): Promise<SupplyConfirmResult>;
 }

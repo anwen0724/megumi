@@ -129,7 +129,6 @@ export const SessionMessageSendPayloadSchema = z
     sessionId: z.string().min(1).optional(),
     projectId: z.string().min(1),
     text: z.string(),
-    recommendationId: z.string().min(1).optional(),
     skillSelection: z
       .object({
         type: z.literal('skill'),
@@ -177,16 +176,7 @@ export const SessionMessageSendPayloadSchema = z
     permissionMode: z.enum(['ask', 'auto', 'full_access']).optional(),
     permissionSource: z.string().optional(),
   })
-  .strict()
-  .superRefine((payload, context) => {
-    if (payload.sessionId && payload.recommendationId) {
-      context.addIssue({
-        code: 'custom',
-        path: ['recommendationId'],
-        message: 'A Recommendation can only start a new Session.',
-      });
-    }
-  });
+  .strict();
 
 export const SessionMessageCancelPayloadSchema = z
   .object({ requestId: z.string().min(1) })
@@ -870,7 +860,6 @@ export type ReadCommittedRunResult = z.infer<typeof ReadCommittedRunResultSchema
 export interface SendUserInputRequest {
   requestId?: string;
   sessionId?: string;
-  recommendationId?: string;
   sessionTitle?: string;
   projectId: string;
   projectLabel?: string;

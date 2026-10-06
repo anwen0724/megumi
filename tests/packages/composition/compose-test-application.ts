@@ -40,9 +40,7 @@ export function composeTestApplication(
       },
     },
     discovery: {
-      conversationRecognitionEnabled: true,
-      enabledSources: ['open_web'],
-      recommendationModel: { providerId: 'test', modelId: 'model' },
+      enabledSources: ['zhihu'],
       candidateSupplyModel: { providerId: 'test', modelId: 'model' },
     },
   });

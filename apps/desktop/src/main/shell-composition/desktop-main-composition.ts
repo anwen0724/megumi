@@ -27,14 +27,12 @@ import {
   type ElectronVoiceInputAdapter,
 } from '../adapters/voice-input/electron-voice-input-adapter';
 import { IPC_CHANNELS } from '../ipc/channels';
-import { createElectronEmbeddedBrowser } from '../adapters/embedded-browser/electron-embedded-browser';
 import { resolveProductInstructionsPath } from '../packaging/product-resources';
 
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
   const homePath = resolveMegumiHomePath(home);
   if (app.isPackaged) assertSeparateHome(homePath, path.dirname(app.getPath('exe')));
-  const embeddedBrowser = createElectronEmbeddedBrowser();
   const voiceResources = createElectronVoiceOptions(home);
   // The single Voice Input Adapter: injected into Product/Voice composition
   // AND connected to the dedicated PCM IPC; there is no second runtime.
@@ -56,7 +54,6 @@ export function composeDesktopMain() {
     readEnvironment: createDesktopSettingsEnvironment(),
     inputSourceAccess: electronInputSourceAccess,
     sessionAttachmentFileSystem: electronSessionAttachmentFileSystem,
-    embeddedBrowser,
     instructionContentRoot: resolveProductInstructionsPath({
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
@@ -120,7 +117,6 @@ export function composeDesktopMain() {
       // Product ends the Voice Session (stopping speech input) before the
       // Adapter releases the Worker.
       await product.dispose();
-      await embeddedBrowser.shutdown();
       await voiceInputAdapter.dispose();
     },
   };

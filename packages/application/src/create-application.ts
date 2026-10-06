@@ -23,7 +23,6 @@ import type {
 import { createInputSuggestionQuery } from './coding/input/execute-command';
 import { createSessionOperations, createSessionReader } from './coding/session-api';
 import { createObservabilityOperations } from './observability/observability-operations';
-import { createDiscoveryOperations } from './recommendation/recommendation-api';
 import { createSkillOperations } from './skills/handle-requests';
 import { createVoiceOperations } from './voice/voice-operations';
 import { createWorkspaceOperations } from './workspace/workspace-operations';
@@ -90,7 +89,7 @@ function createApplicationInterface(
   lifecycle: ApplicationLifecycle,
 ): Application {
   const { modules, options } = input;
-  const { coding, discovery } = modules;
+  const { coding, recommendation } = modules;
   const {
     observability,
     logger,
@@ -124,7 +123,6 @@ function createApplicationInterface(
   const session = createSessionOperations({
     settingsForWorkspace: modules.settingsForWorkspace,
     reader: sessionReader,
-    recommendations: discovery,
     coding,
     suggestions,
     sessions,
@@ -257,7 +255,7 @@ function createApplicationInterface(
     }),
   );
   const operations: ApplicationOperations = {
-    discovery: createDiscoveryOperations(discovery),
+    discovery: recommendation.host,
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({
@@ -287,12 +285,12 @@ function createApplicationInterface(
     operations,
     logger,
     start: ({ backgroundTriggers }) =>
-      discovery.startBackground({
+      recommendation.startBackground({
         automaticTriggers: backgroundTriggers === 'automatic',
       }),
     subscribeRuntimeEvents: (filter, handler) => events.subscribe(filter, handler),
     subscribeSpeechOutputEvents: (handler) => speechOutput.subscribe(handler),
-    discovery,
+    recommendation,
     coding,
     voice,
     speechOutput,

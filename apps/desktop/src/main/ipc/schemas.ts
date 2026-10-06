@@ -101,53 +101,25 @@ export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.approval.resolve,
   host.ApprovalResolvePayloadSchema,
 );
+export const DiscoveryInterestListRequestSchema = createRuntimeIpcRequestSchema(
+  IPC_CHANNELS.discovery.interestList,
+  host.DiscoveryEmptyPayloadSchema,
+);
 export const DiscoveryInterestChangeRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.discovery.interestChange,
   host.DiscoveryInterestChangePayloadSchema,
 );
 export const DiscoveryConfigurationGetRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.discovery.configurationGet,
-  host.DiscoveryConfigurationGetPayloadSchema,
+  host.DiscoveryEmptyPayloadSchema,
 );
 export const DiscoveryConfigurationUpdateRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.discovery.configurationUpdate,
-  host.DiscoveryConfigurationUpdatePayloadSchema,
-);
-export const DiscoverySourceConnectRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.sourceConnect,
-  host.DiscoverySourceConnectPayloadSchema,
-);
-export const DiscoverySourceRefreshRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.sourceRefresh,
-  host.DiscoverySourceRefreshPayloadSchema,
-);
-export const DiscoverySourcesRefreshRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.sourcesRefresh,
-  host.DiscoverySourcesRefreshPayloadSchema,
-);
-export const DiscoveryInterestSessionSettingRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.sessionParticipationSet,
-  host.DiscoveryInterestSessionSettingPayloadSchema,
-);
-export const DiscoveryRecommendationRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.recommendationRequest,
-  host.DiscoveryRecommendationRequestPayloadSchema,
+  host.SupplyConfigurationUpdatePayloadSchema,
 );
 export const DiscoveryCandidateSupplyConfirmRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.discovery.candidateSupplyConfirm,
-  host.DiscoveryCandidateSupplyConfirmPayloadSchema,
-);
-export const DiscoveryHomeRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.homeGet,
-  host.DiscoveryHomePayloadSchema,
-);
-export const DiscoveryRecommendationSearchRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.recommendationsSearch,
-  host.DiscoveryRecommendationSearchPayloadSchema,
-);
-export const DiscoveryRecommendationStateRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.recommendationStateUpdate,
-  host.DiscoveryRecommendationStatePayloadSchema,
+  host.DiscoveryEmptyPayloadSchema,
 );
 export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.voice.snapshot,
@@ -294,33 +266,8 @@ export type ApprovalResolvePayload = z.infer<typeof host.ApprovalResolvePayloadS
 export type DiscoveryInterestChangePayload = z.infer<
   typeof host.DiscoveryInterestChangePayloadSchema
 >;
-export type DiscoveryConfigurationGetPayload = z.infer<
-  typeof host.DiscoveryConfigurationGetPayloadSchema
->;
 export type DiscoveryConfigurationUpdatePayload = z.infer<
-  typeof host.DiscoveryConfigurationUpdatePayloadSchema
->;
-export type DiscoverySourceConnectPayload = z.infer<
-  typeof host.DiscoverySourceConnectPayloadSchema
->;
-export type DiscoverySourceRefreshPayload = z.infer<
-  typeof host.DiscoverySourceRefreshPayloadSchema
->;
-export type DiscoverySourcesRefreshPayload = z.infer<
-  typeof host.DiscoverySourcesRefreshPayloadSchema
->;
-export type DiscoveryInterestSessionSettingPayload = z.infer<
-  typeof host.DiscoveryInterestSessionSettingPayloadSchema
->;
-export type DiscoveryRecommendationRequestPayload = z.infer<
-  typeof host.DiscoveryRecommendationRequestPayloadSchema
->;
-export type DiscoveryHomePayload = z.infer<typeof host.DiscoveryHomePayloadSchema>;
-export type DiscoveryRecommendationSearchPayload = z.infer<
-  typeof host.DiscoveryRecommendationSearchPayloadSchema
->;
-export type DiscoveryRecommendationStatePayload = z.infer<
-  typeof host.DiscoveryRecommendationStatePayloadSchema
+  typeof host.SupplyConfigurationUpdatePayloadSchema
 >;
 export type VoiceSessionStartPayload = z.infer<typeof host.VoiceSessionStartPayloadSchema>;
 export type VoiceModelCapabilityPayload = z.infer<typeof host.VoiceModelCapabilityPayloadSchema>;
@@ -333,23 +280,6 @@ export type ObservabilityListPayload = z.infer<typeof host.ObservabilityListPayl
 export type ObservabilityTracePayload = z.infer<typeof host.ObservabilityTracePayloadSchema>;
 export type ObservabilityContentPayload = z.infer<typeof host.ObservabilityContentPayloadSchema>;
 export type ObservabilityEmptyPayload = z.infer<typeof host.ObservabilityEmptyPayloadSchema>;
-
-export const DiscoveryPreferenceDetailsRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.preferenceDetails,
-  host.DiscoveryPreferenceDetailsPayloadSchema,
-);
-export const DiscoveryPreferenceEvidenceRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.preferenceEvidence,
-  host.DiscoveryPreferenceEvidencePayloadSchema,
-);
-export const DiscoveryPreferenceEditRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.preferenceEdit,
-  host.DiscoveryPreferenceEditPayloadSchema,
-);
-export const DiscoveryPreferenceDeleteRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.preferenceDelete,
-  host.DiscoveryPreferenceDeletePayloadSchema,
-);
 
 export const SessionModelSelectionRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.sessionModelSelection,

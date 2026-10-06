@@ -2,10 +2,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, it } from 'vitest';
-import { RecommendationModelSettings } from '@megumi/desktop/renderer/features/content-sources-settings/RecommendationModelSettings';
+import { SupplyModelSettings } from '@megumi/desktop/renderer/features/content-sources-settings';
 import { createSettingsFixture } from '../../settings-test-fixture';
 
-it('saves separate task models chosen from added models without changing the chat choice', async () => {
+it('saves the candidate supply model without changing the chat choice', async () => {
   const fixture = createSettingsFixture({
     general: { lastSelectedModel: { providerId: 'deepseek', modelId: 'deepseek-flash' } },
     providers: {
@@ -19,12 +19,9 @@ it('saves separate task models chosen from added models without changing the cha
   });
   window.megumi = { ...window.megumi, ...fixture.api };
   const user = userEvent.setup();
-  render(<RecommendationModelSettings />);
-  const recommendation = await screen.findByLabelText('Recommendation model');
-  const candidate = screen.getByLabelText('Candidate supply model');
-  await waitFor(() => expect(recommendation).not.toBeDisabled());
-  await user.click(recommendation);
-  await user.click(screen.getByRole('option', { name: 'DeepSeek V4.1 Flash', exact: true }));
+  render(<SupplyModelSettings />);
+  const candidate = await screen.findByLabelText('Candidate supply model');
+  await waitFor(() => expect(candidate).not.toBeDisabled());
   await user.click(candidate);
   await user.click(screen.getByRole('option', { name: 'custom-analysis', exact: true }));
   await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -35,7 +32,6 @@ it('saves separate task models chosen from added models without changing the cha
         config: {
           general: { lastSelectedModel: { providerId: 'deepseek', modelId: 'deepseek-flash' } },
           discovery: {
-            recommendationModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
             candidateSupplyModel: { providerId: 'deepseek', modelId: 'custom-analysis' },
           },
         },

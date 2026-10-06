@@ -12,15 +12,11 @@ import type {
   ListSkillsUiResponse,
   RefreshSkillsUiResponse,
   WorkspaceOpenFileUiResult,
-  DiscoveryRecommendationRequestResult,
-  DiscoveryHomeUiResult,
-  DiscoveryInterestUiDto,
-  DiscoveryRecommendationSearchUiResult,
-  DiscoveryRecommendationUiDto,
-  DiscoveryRecommendationStateResult,
-  DiscoveryInterestSessionSettingUiDto,
-  DiscoveryConfigurationUiDto,
-  DiscoverySourceUiDto,
+  DiscoveryEmptyPayload,
+  DiscoveryInterestChangeResult,
+  DiscoveryInterestListResult,
+  SupplyConfigurationView,
+  SupplyConfirmResult,
 } from '@megumi/application/contracts';
 import type {
   SessionBranchDraftCancelPayload,
@@ -36,16 +32,8 @@ import type {
   SkillListPayload,
   SkillRefreshPayload,
   WorkspaceFileOpenPayload,
-  DiscoveryRecommendationRequestPayload,
-  DiscoveryHomePayload,
   DiscoveryInterestChangePayload,
-  DiscoveryRecommendationSearchPayload,
-  DiscoveryRecommendationStatePayload,
-  DiscoveryInterestSessionSettingPayload,
-  DiscoveryConfigurationGetPayload,
   DiscoveryConfigurationUpdatePayload,
-  DiscoverySourceConnectPayload,
-  DiscoverySourceRefreshPayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
 
@@ -76,23 +64,13 @@ export type SkillDeletePreloadPayload = SkillDeletePayload;
 export type SkillDeletePreloadData = DeleteSkillUiResponse;
 export type SkillRefreshPreloadPayload = SkillRefreshPayload;
 export type SkillRefreshPreloadData = RefreshSkillsUiResponse;
+export type DiscoveryInterestListPreloadPayload = DiscoveryEmptyPayload;
+export type DiscoveryInterestListPreloadData = DiscoveryInterestListResult;
 export type DiscoveryInterestChangePreloadPayload = DiscoveryInterestChangePayload;
-export type DiscoveryConfigurationGetPreloadPayload = DiscoveryConfigurationGetPayload;
-export type DiscoveryConfigurationGetPreloadData = DiscoveryConfigurationUiDto;
+export type DiscoveryInterestChangePreloadData = DiscoveryInterestChangeResult;
+export type DiscoveryConfigurationGetPreloadPayload = DiscoveryEmptyPayload;
+export type DiscoveryConfigurationGetPreloadData = SupplyConfigurationView;
 export type DiscoveryConfigurationUpdatePreloadPayload = DiscoveryConfigurationUpdatePayload;
-export type DiscoveryConfigurationUpdatePreloadData = DiscoveryConfigurationUiDto;
-export type DiscoverySourceConnectPreloadPayload = DiscoverySourceConnectPayload;
-export type DiscoverySourceConnectPreloadData = DiscoverySourceUiDto;
-export type DiscoverySourceRefreshPreloadPayload = DiscoverySourceRefreshPayload;
-export type DiscoverySourceRefreshPreloadData = DiscoverySourceUiDto;
-export type DiscoveryInterestChangePreloadData = DiscoveryInterestUiDto;
-export type DiscoveryInterestSessionSettingPreloadPayload = DiscoveryInterestSessionSettingPayload;
-export type DiscoveryInterestSessionSettingPreloadData = DiscoveryInterestSessionSettingUiDto;
-export type DiscoveryRecommendationRequestPreloadPayload = DiscoveryRecommendationRequestPayload;
-export type DiscoveryRecommendationRequestPreloadData = DiscoveryRecommendationRequestResult;
-export type DiscoveryHomePreloadPayload = DiscoveryHomePayload;
-export type DiscoveryHomePreloadData = DiscoveryHomeUiResult;
-export type DiscoveryRecommendationSearchPreloadPayload = DiscoveryRecommendationSearchPayload;
-export type DiscoveryRecommendationSearchPreloadData = DiscoveryRecommendationSearchUiResult;
-export type DiscoveryRecommendationStatePreloadPayload = DiscoveryRecommendationStatePayload;
-export type DiscoveryRecommendationStatePreloadData = DiscoveryRecommendationStateResult;
+export type DiscoveryConfigurationUpdatePreloadData = SupplyConfigurationView;
+export type DiscoveryCandidateSupplyConfirmPreloadPayload = DiscoveryEmptyPayload;
+export type DiscoveryCandidateSupplyConfirmPreloadData = SupplyConfirmResult;

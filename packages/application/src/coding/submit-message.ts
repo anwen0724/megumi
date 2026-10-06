@@ -20,7 +20,6 @@ import { createSessionEventObserver } from './events/map-agent-events';
 import type { SessionBranchDrafts } from './sessions/session-branches';
 import type { Session, SessionCatalog } from './sessions/session-catalog';
 import type {
-  RecommendationReferenceContent,
   SessionBranchConversationItem,
   SessionHistory,
   SessionMessageWithAttachments,
@@ -37,7 +36,6 @@ export interface SubmitCodingInputRequest extends RawUserInput {
   readonly sessionId?: string;
   readonly sessionTitle?: string;
   readonly branchMarkerId?: string;
-  readonly recommendationReference?: RecommendationReferenceContent;
   readonly modelSelection?: { readonly providerId: string; readonly modelId: string };
   readonly permissionMode?: PermissionMode;
 }
@@ -358,7 +356,6 @@ export function createCoding(options: CreateCodingOptions): Coding {
     );
     signal.throwIfAborted();
     const accepted = deferred<Extract<SaveUserMessageResult, { status: 'saved' }>>();
-    const reference = request.recommendationReference ? [request.recommendationReference] : [];
     const input = processed.input;
     const awaitApproval = options.awaitApproval;
     const saveMessage = createSessionMessageSaver({
@@ -368,8 +365,8 @@ export function createCoding(options: CreateCodingOptions): Coding {
         session_id: session.session_id,
         parent_entry_id:
           branch?.status === 'resolved' ? branch.branch_draft.source_entry_id : undefined,
-        display_content: [...reference, ...input.displayContent],
-        model_content: [...reference, ...input.modelContent],
+        display_content: [...input.displayContent],
+        model_content: [...input.modelContent],
         skill_selection: input.skillSelection && {
           name: input.skillSelection.name,
           skill_path: input.skillSelection.skillPath,

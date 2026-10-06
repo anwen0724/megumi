@@ -1,8 +1,10 @@
 /*
  * Reads one round's Candidate Supply execution configuration from a Settings
  * snapshot. The snapshot already passed schema validation, so this module only
- * selects the supply fields and reports a missing model reference; it never
- * substitutes another model or another default.
+ * selects the supply fields and never substitutes another default.
+ *
+ * The model reference is read separately: a missing or unusable model must not
+ * make already sufficient local candidates look unavailable.
  */
 import type {
   CandidatePoolThresholds,
@@ -10,7 +12,7 @@ import type {
 } from '../../settings/definitions/discovery';
 import type { SettingsSnapshot } from '../../settings/settings-contracts';
 
-/** Provider and model the round must use; the AI runtime resolves it later. */
+/** Provider and model a round must use; the AI runtime resolves it later. */
 export interface SupplyModelReference {
   readonly providerId: string;
   readonly modelId: string;
@@ -26,39 +28,27 @@ export interface SupplyExecutionConfig {
   readonly searchHistoryDays: number;
   readonly searchReuseIntervalMinutes: number;
   readonly limits: CandidateSupplyLimits;
-  readonly model: SupplyModelReference;
 }
 
-export type ReadSupplyConfigResult =
-  | { status: 'ok'; config: SupplyExecutionConfig }
-  | { status: 'rejected'; code: 'MODEL_NOT_CONFIGURED'; message: string };
+/** Selects the supply slice of one Settings snapshot. */
+export function readSupplyConfig(snapshot: SettingsSnapshot): SupplyExecutionConfig {
+  const { candidateSupply } = snapshot.config.discovery;
+  return {
+    daily: candidateSupply.daily,
+    longTerm: candidateSupply.longTerm,
+    freshnessDays: candidateSupply.freshnessDays,
+    maintenanceIntervalMinutes: candidateSupply.maintenanceIntervalMinutes,
+    contentLanguages: candidateSupply.contentLanguages,
+    searchHistoryDays: candidateSupply.searchHistoryDays,
+    searchReuseIntervalMinutes: candidateSupply.searchReuseIntervalMinutes,
+    limits: candidateSupply.limits,
+  };
+}
 
 /**
- * Reads the supply slice of one Settings snapshot. A missing model reference is
- * a configuration problem; a stale reference is reported when the AI runtime
- * resolves it, not by silently choosing a different model here.
+ * Reads the model the user selected for supply. `undefined` means the user has
+ * not selected one; resolving a stale reference is the AI runtime's job.
  */
-export function readSupplyConfig(snapshot: SettingsSnapshot): ReadSupplyConfigResult {
-  const { candidateSupply, candidateSupplyModel } = snapshot.config.discovery;
-  if (!candidateSupplyModel) {
-    return {
-      status: 'rejected',
-      code: 'MODEL_NOT_CONFIGURED',
-      message: 'Candidate supply model is not selected.',
-    };
-  }
-  return {
-    status: 'ok',
-    config: {
-      daily: candidateSupply.daily,
-      longTerm: candidateSupply.longTerm,
-      freshnessDays: candidateSupply.freshnessDays,
-      maintenanceIntervalMinutes: candidateSupply.maintenanceIntervalMinutes,
-      contentLanguages: candidateSupply.contentLanguages,
-      searchHistoryDays: candidateSupply.searchHistoryDays,
-      searchReuseIntervalMinutes: candidateSupply.searchReuseIntervalMinutes,
-      limits: candidateSupply.limits,
-      model: candidateSupplyModel,
-    },
-  };
+export function readSupplyModel(snapshot: SettingsSnapshot): SupplyModelReference | undefined {
+  return snapshot.config.discovery.candidateSupplyModel;
 }

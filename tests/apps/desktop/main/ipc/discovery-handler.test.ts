@@ -1,157 +1,131 @@
-/* Protects the strict Desktop IPC boundary for Recommendation operations. */
+/* Protects the strict Desktop IPC boundary for Discovery interests and Candidate Supply. */
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { registerDiscoveryHandlers } from '@megumi/desktop/main/ipc/handlers/discovery.handler';
 
+const interest = { id: 'interest:1', text: 'Rust 异步运行时', enabled: true };
+const configuration = {
+  candidateSupplyConfirmed: false,
+  sources: [{ sourceId: 'zhihu', name: 'Zhihu', enabled: true, credentialConfigured: false }],
+};
+
 describe('registerDiscoveryHandlers', () => {
-  it('forwards a valid Recommendation request through the Product Host', async () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const handle = vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
-      handlers.set(channel, handler);
-    });
-    const requestRecommendation = vi.fn(async () => ({
-      status: 'started' as const,
-      phase: 'executing' as const,
-      localDate: '2026-08-22',
-      requestId: 'request:discovery:1',
-      executionId: 'execution:1',
-    }));
-    const confirmCandidateSupply = vi.fn(async () => ({ status: 'confirmed' as const }));
+  it('registers exactly the retained Discovery channels', () => {
+    const handle = vi.fn();
 
     registerDiscoveryHandlers(
-      { host: { discovery: { requestRecommendation, confirmCandidateSupply } } as never },
+      { host: { discovery: {} } as never },
       { ipcMain: { handle } as never },
     );
 
-    const response = await handlers.get(IPC_CHANNELS.discovery.recommendationRequest)?.({}, {
-      requestId: 'request:discovery:1',
-      payload: { trigger: 'manual' },
-      meta: {
-        channel: IPC_CHANNELS.discovery.recommendationRequest,
-        createdAt: '2026-08-22T10:00:00.000Z',
-        source: 'renderer',
-      },
+    expect(handle.mock.calls.map(([channel]) => channel)).toEqual([
+      IPC_CHANNELS.discovery.interestList,
+      IPC_CHANNELS.discovery.interestChange,
+      IPC_CHANNELS.discovery.configurationGet,
+      IPC_CHANNELS.discovery.configurationUpdate,
+      IPC_CHANNELS.discovery.candidateSupplyConfirm,
+    ]);
+  });
+
+  it('forwards interest reads and edits through the Product Host', async () => {
+    const listInterests = vi.fn(async () => ({ interests: [interest] }));
+    const changeInterest = vi.fn(async () => ({
+      status: 'changed' as const,
+      interests: [{ ...interest, enabled: false }],
+    }));
+    const ipc = createDiscoveryIpc({ listInterests, changeInterest });
+
+    expect(await ipc.invoke(IPC_CHANNELS.discovery.interestList, {})).toMatchObject({
+      ok: true,
+      data: { interests: [interest] },
+    });
+    expect(listInterests).toHaveBeenCalledOnce();
+
+    const changed = await ipc.invoke(IPC_CHANNELS.discovery.interestChange, {
+      action: 'pause',
+      interestId: 'interest:1',
     });
 
-    expect(requestRecommendation).toHaveBeenCalledWith({
-      trigger: 'manual',
-    });
-    expect(response).toMatchObject({
+    expect(changeInterest).toHaveBeenCalledWith({ action: 'pause', interestId: 'interest:1' });
+    expect(changed).toMatchObject({
       ok: true,
-      data: {
-        status: 'started',
-        localDate: '2026-08-22',
-        requestId: 'request:discovery:1',
-        executionId: 'execution:1',
-      },
+      data: { status: 'changed', interests: [{ enabled: false }] },
     });
-    const confirmationHandler = handlers.get(IPC_CHANNELS.discovery.candidateSupplyConfirm);
-    expect(await confirmationHandler?.({}, request(IPC_CHANNELS.discovery.candidateSupplyConfirm, { unexpected: true })))
-      .toMatchObject({ ok: false, data: { code: 'ipc_invalid_request' } });
-    expect(confirmCandidateSupply).not.toHaveBeenCalled();
-    expect(await confirmationHandler?.({}, request(IPC_CHANNELS.discovery.candidateSupplyConfirm, {})))
-      .toMatchObject({ ok: true, data: { status: 'confirmed' } });
+  });
+
+  it('forwards the supply configuration read, update, and confirmation', async () => {
+    const getConfiguration = vi.fn(async () => configuration);
+    const updateConfiguration = vi.fn(async () => ({
+      ...configuration,
+      candidateSupplyConfirmed: true,
+    }));
+    const confirmCandidateSupply = vi.fn(async () => ({ status: 'confirmed' as const }));
+    const ipc = createDiscoveryIpc({
+      getConfiguration,
+      updateConfiguration,
+      confirmCandidateSupply,
+    });
+
+    expect(await ipc.invoke(IPC_CHANNELS.discovery.configurationGet, {})).toMatchObject({
+      ok: true,
+      data: { sources: [{ sourceId: 'zhihu' }] },
+    });
+    expect(getConfiguration).toHaveBeenCalledOnce();
+
+    const updated = await ipc.invoke(IPC_CHANNELS.discovery.configurationUpdate, {
+      enabledSources: ['zhihu'],
+    });
+
+    expect(updateConfiguration).toHaveBeenCalledWith({ enabledSources: ['zhihu'] });
+    expect(updated).toMatchObject({ ok: true, data: { candidateSupplyConfirmed: true } });
+
+    expect(await ipc.invoke(IPC_CHANNELS.discovery.candidateSupplyConfirm, {})).toMatchObject({
+      ok: true,
+      data: { status: 'confirmed' },
+    });
     expect(confirmCandidateSupply).toHaveBeenCalledOnce();
   });
 
   it('rejects unknown payload fields before calling the Product Host', async () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const handle = vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
-      handlers.set(channel, handler);
-    });
-    const getHome = vi.fn();
+    const confirmCandidateSupply = vi.fn();
+    const ipc = createDiscoveryIpc({ confirmCandidateSupply });
 
-    registerDiscoveryHandlers(
-      { host: { discovery: { getHome } } as never },
-      { ipcMain: { handle } as never },
-    );
-
-    const response = await handlers.get(IPC_CHANNELS.discovery.homeGet)?.({}, {
-      requestId: 'request:discovery:invalid',
-      payload: { mode: 'timeline', unexpected: true },
-      meta: {
-        channel: IPC_CHANNELS.discovery.homeGet,
-        createdAt: '2026-08-22T10:00:00.000Z',
-        source: 'renderer',
-      },
+    const response = await ipc.invoke(IPC_CHANNELS.discovery.candidateSupplyConfirm, {
+      unexpected: true,
     });
 
-    expect(getHome).not.toHaveBeenCalled();
-    expect(response).toMatchObject({
-      ok: false,
-      data: { code: 'ipc_invalid_request' },
+    expect(confirmCandidateSupply).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ ok: false, data: { code: 'ipc_invalid_request' } });
+  });
+
+  it('rejects an interest edit that omits the fields its action requires', async () => {
+    const changeInterest = vi.fn();
+    const ipc = createDiscoveryIpc({ changeInterest });
+
+    const response = await ipc.invoke(IPC_CHANNELS.discovery.interestChange, {
+      action: 'update',
+      interestId: 'interest:1',
     });
-  });
 
-  it('forwards a browser source login request without platform-specific payloads', async () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const connectSource = vi.fn(async () => ({
-      sourceId: 'xiaohongshu', name: '小红书', access: 'browser_session' as const,
-      supportedModes: ['relevance' as const], supportsRead: true, enabled: true,
-      connectionState: 'unknown' as const,
-    }));
-    registerDiscoveryHandlers(
-      { host: { discovery: { connectSource } } as never },
-      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
-    );
-
-    const response = await handlers.get(IPC_CHANNELS.discovery.sourceConnect)?.({}, request(
-      IPC_CHANNELS.discovery.sourceConnect, { sourceId: 'xiaohongshu' },
-    ));
-
-    expect(connectSource).toHaveBeenCalledWith({ sourceId: 'xiaohongshu' });
-    expect(response).toMatchObject({ ok: true, data: { sourceId: 'xiaohongshu' } });
-  });
-
-  it('forwards an explicit source availability refresh', async () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const refreshSource = vi.fn(async () => ({
-      sourceId: 'xiaohongshu', name: '小红书', access: 'browser_session' as const,
-      supportedModes: ['relevance' as const], supportsRead: true, enabled: true,
-      connectionState: 'ready' as const, checkedAt: '2026-08-26T08:00:00.000Z',
-    }));
-    registerDiscoveryHandlers(
-      { host: { discovery: { refreshSource } } as never },
-      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
-    );
-
-    const response = await handlers.get(IPC_CHANNELS.discovery.sourceRefresh)?.({}, request(
-      IPC_CHANNELS.discovery.sourceRefresh, { sourceId: 'xiaohongshu' },
-    ));
-
-    expect(refreshSource).toHaveBeenCalledWith({ sourceId: 'xiaohongshu' });
-    expect(response).toMatchObject({ ok: true, data: { connectionState: 'ready' } });
-  });
-
-  it('refreshes every source through one configuration projection', async () => {
-    const handlers = new Map<string, (...args: unknown[]) => unknown>();
-    const refreshSources = vi.fn(async () => ({
-      recommendationCandidateCheckIntervalSeconds: 60,
-      conversationRecognitionEnabled: true,
-      recommendationGenerationTime: '08:00',
-      recommendationTargetCount: 20,
-      recommendationWorkingSetCount: 80,
-      candidatePoolMinimumCount: 100,
-      candidatePoolMaximumCount: 200,
-      candidateValidityDays: 30,
-      candidateContentExcerptMaxCharacters: 8_000,
-      candidateSupplyCheckIntervalMinutes: 360,
-      sources: [],
-    }));
-    registerDiscoveryHandlers(
-      { host: { discovery: { refreshSources } } as never },
-      { ipcMain: { handle: (channel, handler) => { handlers.set(channel, handler); } } as never },
-    );
-
-    const response = await handlers.get(IPC_CHANNELS.discovery.sourcesRefresh)?.({}, request(
-      IPC_CHANNELS.discovery.sourcesRefresh, {},
-    ));
-
-    expect(refreshSources).toHaveBeenCalledOnce();
-    expect(response).toMatchObject({ ok: true, data: { sources: [] } });
+    expect(changeInterest).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ ok: false, data: { code: 'ipc_invalid_request' } });
   });
 });
+
+/** Captures the installed handlers and invokes one the way the Renderer submits a request. */
+function createDiscoveryIpc(discovery: Record<string, unknown>) {
+  const handlers = new Map<string, (...args: unknown[]) => unknown>();
+  const handle = vi.fn((channel: string, handler: (...args: unknown[]) => unknown) => {
+    handlers.set(channel, handler);
+  });
+  registerDiscoveryHandlers({ host: { discovery } as never }, { ipcMain: { handle } as never });
+
+  return {
+    invoke: (channel: string, payload: unknown) =>
+      handlers.get(channel)?.({}, request(channel, payload)),
+  };
+}
 
 function request(channel: string, payload: unknown) {
   return {

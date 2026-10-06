@@ -2,14 +2,12 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { IconButton } from '../shared/ui';
 import { MainOverlays } from './MainOverlays';
 import { PageHost } from './PageHost';
-import type { DiscoveryRecommendationUiDto } from '@megumi/application/contracts';
 
 interface MainContentProps {
   title: string;
   rightSidebarOpen: boolean;
   onToggleRightSidebar: () => void;
   page: 'discovery' | 'chat';
-  onStartRecommendationConversation: (recommendation: DiscoveryRecommendationUiDto) => void;
   onOpenContentSources: () => void;
   onOpenModelSettings?: () => void;
 }
@@ -19,7 +17,6 @@ export function MainContent({
   rightSidebarOpen,
   onToggleRightSidebar,
   page,
-  onStartRecommendationConversation,
   onOpenContentSources,
   onOpenModelSettings,
 }: MainContentProps) {
@@ -55,7 +52,6 @@ export function MainContent({
         <PageHost
           onOpenModelSettings={onOpenModelSettings}
           page={page}
-          onStartRecommendationConversation={onStartRecommendationConversation}
           onOpenContentSources={onOpenContentSources}
         />
         <MainOverlays />

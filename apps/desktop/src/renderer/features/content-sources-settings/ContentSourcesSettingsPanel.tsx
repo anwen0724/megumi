@@ -1,183 +1,79 @@
 /*
- * Presents discovery-source availability, login actions, and local credentials.
+ * Presents the content-source credential and the model used to prepare candidates.
  */
 import { useEffect, useState } from 'react';
-import {
-  CheckCircle2,
-  ChevronDown,
-  CircleAlert,
-  ExternalLink,
-  KeyRound,
-  LogIn,
-  RefreshCw,
-  Settings2,
-} from 'lucide-react';
+import { ChevronDown, ExternalLink, KeyRound, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { DiscoveryConfigurationUiDto } from '@megumi/application/contracts';
-import { IPC_CHANNELS } from '../../shared/ipc/channels';
-import { createRendererRuntimeIpcRequest } from '../../shared/ipc';
 import { Button, SecretInput, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
-import { RecommendationModelSettings } from './RecommendationModelSettings';
+import { SupplyModelSettings } from './SupplyModelSettings';
 import { WebSettingsPanel } from '../web-settings';
 
-type ProviderSourceId = 'zhihu' | 'twitter';
-type BrowserSourceId = 'xiaohongshu' | 'douyin';
-type SourceView = DiscoveryConfigurationUiDto['sources'][number];
+const ZHIHU_SOURCE_ID = 'zhihu';
 
-const providerSourceIds = ['zhihu', 'twitter'] as const;
-
-/** Renders source availability, login actions, and API credential configuration. */
+/** Renders the single content-source credential and the candidate supply model. */
 export function ContentSourcesSettingsPanel() {
   const { t } = useTranslation(['settings', 'common']);
-  const [configuration, setConfiguration] = useState<DiscoveryConfigurationUiDto | null>(null);
-  const [configured, setConfigured] = useState<Record<ProviderSourceId, boolean>>({
-    zhihu: false,
-    twitter: false,
-  });
-  const [drafts, setDrafts] = useState<Record<ProviderSourceId, string>>({
-    zhihu: '',
-    twitter: '',
-  });
-  const [expandedSource, setExpandedSource] = useState<ProviderSourceId | null>(null);
-  const [busySource, setBusySource] = useState<string | null>(null);
+  const [configured, setConfigured] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [expanded, setExpanded] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([readConfiguration(), ...providerSourceIds.map(readCredential)])
-      .then(([configurationResult, ...credentialResults]) => {
+    void readCredential()
+      .then((credential) => {
         if (cancelled) return;
-        setConfiguration(configurationResult);
-        setConfigured({
-          zhihu: credentialResults[0].configured,
-          twitter: credentialResults[1].configured,
-        });
-        setDrafts({
-          zhihu: credentialResults[0].credential,
-          twitter: credentialResults[1].credential,
-        });
+        setConfigured(credential.configured);
+        setDraft(credential.credential);
       })
       .catch((reason: unknown) => {
         if (!cancelled)
-          setError(
-            reason instanceof Error ? reason.message : t('settings:contentSources.loadFailed'),
-          );
+          setError(reason instanceof Error ? reason.message : t('settings:contentSources.loadFailed'));
       });
     return () => {
       cancelled = true;
     };
   }, [t]);
 
-  const waitingForInitialChecks =
-    configuration?.sources.some(
-      (source) => source.connectionState === 'unknown' && !source.checkedAt,
-    ) ?? false;
-
-  useEffect(() => {
-    if (!waitingForInitialChecks) return undefined;
-    let attempts = 0;
-    const timer = window.setInterval(() => {
-      attempts += 1;
-      void readConfiguration()
-        .then(setConfiguration)
-        .catch((reason: unknown) => {
-          setError(
-            reason instanceof Error ? reason.message : t('settings:contentSources.loadFailed'),
-          );
-        });
-      if (attempts >= 20) window.clearInterval(timer);
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [waitingForInitialChecks, t]);
-
-  async function saveCredential(sourceId: ProviderSourceId) {
-    const credential = drafts[sourceId].trim();
+  async function saveCredential() {
+    const credential = draft.trim();
     if (!credential) return;
-    setBusySource(sourceId);
+    setBusy(true);
     setError(null);
     try {
       const result = await window.megumi.settings.updateCredential({
-        target: { kind: 'discoverySource', sourceId },
+        target: { kind: 'discoverySource', sourceId: ZHIHU_SOURCE_ID },
         value: credential,
       });
       if (!result.ok) throw new Error(result.data.message);
-      setConfigured((current) => ({ ...current, [sourceId]: true }));
-      setDrafts((current) => ({ ...current, [sourceId]: credential }));
-      await refreshConfiguration();
+      setConfigured(true);
+      setDraft(credential);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('settings:contentSources.saveFailed'));
     } finally {
-      setBusySource(null);
+      setBusy(false);
     }
   }
 
-  async function clearCredential(sourceId: ProviderSourceId) {
-    setBusySource(sourceId);
+  async function clearCredential() {
+    setBusy(true);
     setError(null);
     try {
       const result = await window.megumi.settings.updateCredential({
-        target: { kind: 'discoverySource', sourceId },
+        target: { kind: 'discoverySource', sourceId: ZHIHU_SOURCE_ID },
         value: null,
       });
       if (!result.ok) throw new Error(result.data.message);
-      const current = await readCredential(sourceId);
-      setConfigured((values) => ({ ...values, [sourceId]: current.configured }));
-      setDrafts((values) => ({ ...values, [sourceId]: current.credential }));
-      await refreshConfiguration();
+      const current = await readCredential();
+      setConfigured(current.configured);
+      setDraft(current.credential);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : t('settings:contentSources.clearFailed'));
     } finally {
-      setBusySource(null);
+      setBusy(false);
     }
   }
-
-  async function connectSource(sourceId: BrowserSourceId) {
-    setBusySource(sourceId);
-    setError(null);
-    try {
-      const result = await window.megumi.discovery.connectSource(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.sourceConnect, { sourceId }),
-      );
-      if (!result.ok) throw new Error(result.data.message);
-      setConfiguration((current) =>
-        current
-          ? {
-              ...current,
-              sources: current.sources.map((source) =>
-                source.sourceId === sourceId ? result.data : source,
-              ),
-            }
-          : current,
-      );
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('settings:contentSources.loginFailed'));
-    } finally {
-      setBusySource(null);
-    }
-  }
-
-  async function refreshSources() {
-    setBusySource('all');
-    setError(null);
-    try {
-      const result = await window.megumi.discovery.refreshSources(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.sourcesRefresh, {}),
-      );
-      if (!result.ok) throw new Error(result.data.message);
-      setConfiguration(result.data);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t('settings:contentSources.loadFailed'));
-    } finally {
-      setBusySource(null);
-    }
-  }
-
-  async function refreshConfiguration() {
-    setConfiguration(await readConfiguration());
-  }
-
-  const source = (sourceId: string) =>
-    configuration?.sources.find((item) => item.sourceId === sourceId);
 
   return (
     <div className="space-y-6">
@@ -186,82 +82,30 @@ export function ContentSourcesSettingsPanel() {
         description={t('settings:categories.sources.description')}
       />
 
-      <RecommendationModelSettings />
+      <SupplyModelSettings />
 
       <WebSettingsPanel showHeader={false} />
 
       <SettingsSection
         title={t('settings:contentSources.platformTitle')}
         description={t('settings:contentSources.platformDescription')}
-        headerAction={
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busySource !== null}
-            onClick={() => void refreshSources()}
-          >
-            <RefreshCw
-              size={14}
-              className={busySource === 'all' ? 'animate-spin' : undefined}
-              aria-hidden="true"
-            />
-            {busySource === 'all'
-              ? t('settings:contentSources.checking')
-              : t('settings:contentSources.recheckAll')}
-          </Button>
-        }
       >
-        <div className="divide-y divide-[var(--color-border)]">
-          <StatusSourceRow source={source('bilibili')} />
-          <BrowserSourceRow
-            source={source('xiaohongshu')}
-            disabled={busySource !== null}
-            opening={busySource === 'xiaohongshu'}
-            onLogin={() => void connectSource('xiaohongshu')}
-          />
-          <BrowserSourceRow
-            source={source('douyin')}
-            disabled={busySource !== null}
-            opening={busySource === 'douyin'}
-            onLogin={() => void connectSource('douyin')}
-          />
-          <CredentialSourceRow
-            source={source('zhihu')}
-            sourceId="zhihu"
-            label="知乎 Access Secret"
-            helpLink={{
-              href: 'https://developer.zhihu.com/',
-              label: t('settings:contentSources.zhihuApiLink'),
-            }}
-            configured={configured.zhihu}
-            value={drafts.zhihu}
-            expanded={expandedSource === 'zhihu'}
-            busy={busySource === 'zhihu'}
-            onToggle={() => setExpandedSource((current) => (current === 'zhihu' ? null : 'zhihu'))}
-            onChange={(value) => setDrafts((current) => ({ ...current, zhihu: value }))}
-            onSave={() => void saveCredential('zhihu')}
-            onClear={() => void clearCredential('zhihu')}
-          />
-          <CredentialSourceRow
-            source={source('twitter')}
-            sourceId="twitter"
-            label="TwitterAPI.io API Key"
-            helpLink={{
-              href: 'https://twitterapi.io/',
-              label: t('settings:contentSources.twitterApiLink'),
-            }}
-            configured={configured.twitter}
-            value={drafts.twitter}
-            expanded={expandedSource === 'twitter'}
-            busy={busySource === 'twitter'}
-            onToggle={() =>
-              setExpandedSource((current) => (current === 'twitter' ? null : 'twitter'))
-            }
-            onChange={(value) => setDrafts((current) => ({ ...current, twitter: value }))}
-            onSave={() => void saveCredential('twitter')}
-            onClear={() => void clearCredential('twitter')}
-          />
-        </div>
+        <CredentialSourceRow
+          sourceId={ZHIHU_SOURCE_ID}
+          label="知乎 Access Secret"
+          helpLink={{
+            href: 'https://developer.zhihu.com/',
+            label: t('settings:contentSources.zhihuApiLink'),
+          }}
+          configured={configured}
+          value={draft}
+          expanded={expanded}
+          busy={busy}
+          onToggle={() => setExpanded((current) => !current)}
+          onChange={setDraft}
+          onSave={() => void saveCredential()}
+          onClear={() => void clearCredential()}
+        />
       </SettingsSection>
 
       {error ? (
@@ -276,21 +120,10 @@ export function ContentSourcesSettingsPanel() {
   );
 }
 
-/** Reads one renderer-safe projection without initiating source work. */
-async function readConfiguration(): Promise<DiscoveryConfigurationUiDto> {
-  const result = await window.megumi.discovery.getConfiguration(
-    createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationGet, {}),
-  );
-  if (!result.ok) throw new Error(result.data.message);
-  return result.data;
-}
-
-/** Reads one source secret through the dedicated credential boundary. */
-async function readCredential(
-  sourceId: ProviderSourceId,
-): Promise<{ configured: boolean; credential: string }> {
+/** Reads the source secret through the dedicated credential boundary. */
+async function readCredential(): Promise<{ configured: boolean; credential: string }> {
   const result = await window.megumi.settings.readCredential({
-    target: { kind: 'discoverySource', sourceId },
+    target: { kind: 'discoverySource', sourceId: ZHIHU_SOURCE_ID },
   });
   if (!result.ok) throw new Error(result.data.message);
   return {
@@ -299,106 +132,9 @@ async function readCredential(
   };
 }
 
-function SourceIdentity({ source }: { source?: SourceView }) {
-  const { t } = useTranslation('settings');
-  if (!source)
-    return (
-      <span className="text-sm text-[var(--color-text-muted)]">{t('contentSources.loading')}</span>
-    );
-  const ready = source.connectionState === 'ready';
-  const stateLabel =
-    source.connectionState === 'unknown' && source.checkedAt
-      ? t('contentSources.checkFailed')
-      : t(`contentSources.states.${source.connectionState}`);
-  return (
-    <div className="min-w-0">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-[var(--color-text)]">{source.name}</span>
-        <span
-          className={cx(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-medium',
-            ready
-              ? 'bg-[var(--color-success-soft)] text-[var(--color-success)]'
-              : 'bg-[var(--color-surface-muted)] text-[var(--color-text-muted)]',
-          )}
-        >
-          {ready ? (
-            <CheckCircle2 size={11} aria-hidden="true" />
-          ) : (
-            <CircleAlert size={11} aria-hidden="true" />
-          )}
-          {stateLabel}
-          {ready && source.provider ? `（${source.provider}）` : ''}
-        </span>
-      </div>
-      {source.checkedAt ? (
-        <p className="mt-1 text-[0.7rem] text-[var(--color-text-subtle)]">
-          {t('contentSources.checkedAt', { time: formatSourceTime(source.checkedAt) })}
-        </p>
-      ) : null}
-      {source.retryAt ? (
-        <p className="mt-0.5 text-[0.7rem] text-[var(--color-text-subtle)]">
-          {t('contentSources.retryAt', { time: formatSourceTime(source.retryAt) })}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function StatusSourceRow({ source }: { source?: SourceView }) {
-  const { t } = useTranslation('settings');
-  return (
-    <div className="flex min-h-20 items-center justify-between gap-4 px-5 py-4">
-      <SourceIdentity source={source} />
-      <span className="text-xs font-medium text-[var(--color-text-muted)]">
-        {t('contentSources.noConfiguration')}
-      </span>
-    </div>
-  );
-}
-
-function BrowserSourceRow({
-  source,
-  disabled,
-  opening,
-  onLogin,
-}: {
-  source?: SourceView;
-  disabled: boolean;
-  opening: boolean;
-  onLogin(): void;
-}) {
-  const { t } = useTranslation('settings');
-  return (
-    <div
-      data-source-id={source?.sourceId}
-      className="flex min-h-20 items-center justify-between gap-4 px-5 py-4"
-    >
-      <SourceIdentity source={source} />
-      <Button
-        type="button"
-        variant="ghost"
-        disabled={disabled || !source}
-        onClick={onLogin}
-        aria-label={source ? t('contentSources.loginSource', { name: source.name }) : undefined}
-      >
-        <LogIn size={14} aria-hidden="true" />
-        {opening ? t('contentSources.opening') : t('contentSources.login')}
-      </Button>
-    </div>
-  );
-}
-
-function formatSourceTime(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'short', timeStyle: 'short' }).format(
-    new Date(value),
-  );
-}
-
-/** Keeps one provider source row stable while its credential editor expands inline. */
+/** Keeps the source row stable while its credential editor expands inline. */
 function CredentialSourceRow(props: {
-  source?: SourceView;
-  sourceId: ProviderSourceId;
+  sourceId: string;
   label: string;
   helpLink: { readonly href: string; readonly label: string };
   configured: boolean;
@@ -414,7 +150,7 @@ function CredentialSourceRow(props: {
   return (
     <div data-source-id={props.sourceId}>
       <div className="flex min-h-20 items-center justify-between gap-4 px-5 py-4">
-        <SourceIdentity source={props.source} />
+        <span className="text-sm font-medium text-[var(--color-text)]">{props.label}</span>
         <Button
           type="button"
           variant="ghost"
@@ -481,9 +217,7 @@ function CredentialSourceRow(props: {
                   variant="primary"
                   disabled={props.busy || !props.value.trim() || !props.expanded}
                   onClick={props.onSave}
-                  aria-label={t('contentSources.saveCredentialFor', {
-                    name: props.source?.name ?? props.sourceId,
-                  })}
+                  aria-label={t('contentSources.saveCredentialFor', { name: props.label })}
                 >
                   {t('contentSources.save')}
                 </Button>

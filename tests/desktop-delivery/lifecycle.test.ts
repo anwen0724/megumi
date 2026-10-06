@@ -56,8 +56,8 @@ it.each([false, true])('starts through packaged migrations with recoverable data
   await fs.cp(migrations, previous, { recursive: true });
   const journalPath = path.join(previous, 'meta/_journal.json');
   const journal = JSON.parse(await fs.readFile(journalPath, 'utf8'));
-  // Use the real preceding schema, before preference-learning control was added.
-  journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 26);
+  // Use the real schema of the preceding release, before the Candidate Supply switch was added.
+  journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 28);
   await fs.writeFile(journalPath, JSON.stringify(journal));
   const filename = path.join(environment.home, 'sqlite/megumi.sqlite');
   const old = createDatabase({ filename });
@@ -69,7 +69,7 @@ it.each([false, true])('starts through packaged migrations with recoverable data
     if (failRead) {
       const read = syncFs.readFileSync;
       vi.spyOn(syncFs, 'readFileSync').mockImplementation((...args: Parameters<typeof read>) => {
-        if (path.resolve(String(args[0])) === path.join(migrations, '0026_preference_learning_control.sql')) {
+        if (path.resolve(String(args[0])) === path.join(migrations, '0028_candidate_supply.sql')) {
           throw Object.assign(new Error('Disk I/O error'), { code: 'EIO' });
         }
         return read(...args);
@@ -85,8 +85,21 @@ it.each([false, true])('starts through packaged migrations with recoverable data
     const database = createDatabase({ filename });
     try {
       expect(database.prepare({ sql: "SELECT name FROM workspaces WHERE workspace_id='delivery-example'" }).get()).toEqual({ name: '用户资料' });
-      const columns = database.prepare({ sql: 'PRAGMA table_info(discovery_preference_sets)' }).all().map(row => row.name);
-      expect(columns.includes('policy_revision')).toBe(!failRead);
+      if (!failRead) {
+        expect(migrateDatabase({ database }).currentMigration).toBe('0029_remove_legacy_discovery');
+      }
+      const tables = database.prepare<{ name: string }>({
+        sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+      }).all().map(({ name }) => name);
+      if (failRead) {
+        // The interrupted upgrade applies nothing, so the pre-upgrade schema survives intact.
+        expect(tables).toContain('discovery_candidates');
+        expect(tables).not.toContain('candidate_supply_state');
+      } else {
+        // The completed upgrade reaches the switch migration, which drops every legacy Discovery table.
+        expect(tables.filter((name) => name.startsWith('discovery_'))).toEqual([]);
+        expect(tables).toContain('candidate_supply_state');
+      }
     } finally { database.close(); }
     const backups = await fs.readdir(path.join(environment.home, 'sqlite/backups'));
     expect(backups).toHaveLength(1);

@@ -13,7 +13,7 @@ describe('Application lifecycle', () => {
       const first = application.runtime.stop();
       expect(application.runtime.stop()).toBe(first);
       await first;
-      expect(await application.runtime.discovery.getCandidatePool()).toBeDefined();
+      expect(await application.runtime.discovery.listInterests()).toEqual({ interests: [] });
       expect((await application.runtime.observability.listTraces({ limit: 1 })).status).not.toBe(
         'failed',
       );
@@ -39,8 +39,8 @@ describe('Application lifecycle', () => {
       await expect(application.runtime.start()).rejects.toThrow();
       expect(application.runtime.settings.readSettings().status).toBe('rejected');
       fs.writeFileSync(settingsPath, validSettings);
-      expect(await application.runtime.discovery.getHome({ mode: 'timeline' }))
-        .not.toHaveProperty('nextScheduledAt');
+      expect(await application.runtime.discovery.getConfiguration())
+        .toMatchObject({ candidateSupplyConfirmed: false });
     } finally {
       await application.cleanup();
     }
@@ -54,25 +54,5 @@ describe('Application lifecycle', () => {
     expect(application.runtime.dispose()).toBe(firstDispose);
     await firstDispose;
     await application.cleanup();
-  });
-
-  it.each([
-    ['manual', 'automatic'],
-    ['automatic', 'manual'],
-  ] as const)('retains the first trigger mode %s when later started with %s', async (firstMode, laterMode) => {
-    const application = composeTestApplication();
-    try {
-      const first = application.runtime.start({ backgroundTriggers: firstMode });
-      expect(application.runtime.start({ backgroundTriggers: laterMode })).toBe(first);
-      await first;
-      const home = await application.runtime.discovery.getHome({ mode: 'timeline' });
-      if (firstMode === 'automatic') {
-        expect(home.nextScheduledAt).toEqual(expect.any(String));
-      } else {
-        expect(home.nextScheduledAt).toBeUndefined();
-      }
-    } finally {
-      await application.cleanup();
-    }
   });
 });
