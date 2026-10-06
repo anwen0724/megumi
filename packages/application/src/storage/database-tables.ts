@@ -20,6 +20,15 @@ export const databaseTables = [
   'discovery_preference_sets',
   'discovery_preferences',
   'discovery_preference_evidence',
+  'interests',
+  'contents',
+  'content_analysis',
+  'content_interest_matches',
+  'recommendation_candidates',
+  'search_queries',
+  'search_results',
+  'search_history',
+  'candidate_supply_state',
 ] as const;
 
 export type DatabaseTable = (typeof databaseTables)[number];
@@ -78,6 +87,22 @@ export const databaseTableOwnership = {
       'discovery_preference_sets',
       'discovery_preferences',
       'discovery_preference_evidence',
+    ],
+  },
+  candidateSupply: {
+    module: 'recommendation',
+    repository: 'CandidateSupplyStorage',
+    modulePath: 'packages/application/src/recommendation',
+    tables: [
+      'interests',
+      'contents',
+      'content_analysis',
+      'content_interest_matches',
+      'recommendation_candidates',
+      'search_queries',
+      'search_results',
+      'search_history',
+      'candidate_supply_state',
     ],
   },
 } as const satisfies Record<string, DatabaseTableOwner>;

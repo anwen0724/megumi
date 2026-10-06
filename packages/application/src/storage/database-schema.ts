@@ -1,6 +1,16 @@
 /* Defines the current physical Drizzle schema without owning business queries. */
 import { sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core';
 
 type JsonObject = Record<string, unknown>;
 type JsonArray = unknown[];
@@ -669,4 +679,255 @@ export const discoveryPreferenceEvidence = sqliteTable(
       table.reactionRevision,
     ),
   ],
+);
+
+/*
+ * Candidate Supply tables. Unlike the session and legacy discovery tables,
+ * these store UTC millisecond integers and JSON columns as validated text, as
+ * the supply Spec requires. Both pools share `contents` and `content_analysis`.
+ */
+
+export const interests = sqliteTable(
+  'interests',
+  {
+    id: text('id').primaryKey(),
+    text: text('text').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [check('check_interests_text', sql`length(trim(${table.text})) > 0`)],
+);
+
+export const contents = sqliteTable(
+  'contents',
+  {
+    id: text('id').primaryKey(),
+    source: text('source').notNull(),
+    canonicalUrl: text('canonical_url').notNull().unique(),
+    title: text('title'),
+    author: text('author'),
+    publishedAt: integer('published_at'),
+    text: text('text').notNull(),
+    language: text('language'),
+    duplicateGroupId: text('duplicate_group_id').references((): AnySQLiteColumn => contents.id),
+    duplicateConfidence: real('duplicate_confidence'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    check('check_contents_text', sql`length(${table.text}) > 0`),
+    check(
+      'check_contents_duplicate_group',
+      sql`${table.duplicateGroupId} IS NULL OR ${table.duplicateGroupId} <> ${table.id}`,
+    ),
+    check(
+      'check_contents_duplicate_confidence',
+      sql`${table.duplicateConfidence} IS NULL OR (${table.duplicateConfidence} >= 0 AND ${table.duplicateConfidence} <= 1)`,
+    ),
+    index('idx_contents_published_at').on(table.publishedAt),
+    index('idx_contents_duplicate_group').on(table.duplicateGroupId),
+  ],
+);
+
+export const contentAnalysis = sqliteTable(
+  'content_analysis',
+  {
+    contentId: text('content_id')
+      .primaryKey()
+      .references(() => contents.id, { onDelete: 'cascade' }),
+    summary: text('summary'),
+    keyPoints: jsonText('key_points'),
+    topics: jsonText('topics'),
+    entities: jsonText('entities'),
+    contentType: text('content_type'),
+    qualityScore: real('quality_score'),
+    spamScore: real('spam_score'),
+    longTermValue: text('long_term_value'),
+    embedding: jsonText('embedding'),
+    embeddingModel: text('embedding_model'),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    retryAt: integer('retry_at'),
+    lastErrorCode: text('last_error_code'),
+    analyzedAt: integer('analyzed_at'),
+    embeddingRetryAt: integer('embedding_retry_at'),
+    embeddingErrorCode: text('embedding_error_code'),
+  },
+  (table) => [
+    check('check_content_analysis_status', sql`${table.status} IN ('pending','ready','failed')`),
+    check('check_content_analysis_attempts', sql`${table.attempts} >= 0`),
+    check(
+      'check_content_analysis_ready',
+      sql`${table.status} <> 'ready' OR ${table.analyzedAt} IS NOT NULL`,
+    ),
+    check(
+      'check_content_analysis_quality',
+      sql`${table.qualityScore} IS NULL OR (${table.qualityScore} >= 0 AND ${table.qualityScore} <= 1)`,
+    ),
+    check(
+      'check_content_analysis_spam',
+      sql`${table.spamScore} IS NULL OR (${table.spamScore} >= 0 AND ${table.spamScore} <= 1)`,
+    ),
+    check(
+      'check_content_analysis_content_type',
+      sql`${table.contentType} IS NULL OR ${table.contentType} IN ('news','article','discussion','video','paper','project','tutorial','opinion')`,
+    ),
+    check(
+      'check_content_analysis_long_term_value',
+      sql`${table.longTermValue} IS NULL OR ${table.longTermValue} IN ('none','learning','reference','practical')`,
+    ),
+    index('idx_content_analysis_status_retry').on(table.status, table.retryAt),
+  ],
+);
+
+export const contentInterestMatches = sqliteTable(
+  'content_interest_matches',
+  {
+    contentId: text('content_id')
+      .notNull()
+      .references(() => contents.id, { onDelete: 'cascade' }),
+    interestId: text('interest_id')
+      .notNull()
+      .references(() => interests.id, { onDelete: 'cascade' }),
+    relation: text('relation').notNull(),
+    basis: text('basis'),
+    matchedAt: integer('matched_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.contentId, table.interestId] }),
+    check('check_content_interest_matches_relation', sql`${table.relation} IN ('direct','related','none')`),
+    index('idx_content_interest_matches_interest').on(table.interestId),
+  ],
+);
+
+export const recommendationCandidates = sqliteTable(
+  'recommendation_candidates',
+  {
+    pool: text('pool').notNull(),
+    contentId: text('content_id')
+      .notNull()
+      .references(() => contents.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(),
+    inactiveReason: text('inactive_reason'),
+    expiresAt: integer('expires_at'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.pool, table.contentId] }),
+    check('check_recommendation_candidates_pool', sql`${table.pool} IN ('daily','long_term')`),
+    check('check_recommendation_candidates_status', sql`${table.status} IN ('active','inactive')`),
+    check(
+      'check_recommendation_candidates_inactive_reason',
+      sql`(${table.status} = 'active' AND ${table.inactiveReason} IS NULL) OR (${table.status} = 'inactive' AND ${table.inactiveReason} IS NOT NULL AND ${table.inactiveReason} IN ('expired','unrelated','excluded','unsuitable'))`,
+    ),
+    index('idx_recommendation_candidates_pool_status_expires').on(
+      table.pool,
+      table.status,
+      table.expiresAt,
+    ),
+  ],
+);
+
+export const searchQueries = sqliteTable(
+  'search_queries',
+  {
+    id: text('id').primaryKey(),
+    interestId: text('interest_id').references(() => interests.id, { onDelete: 'set null' }),
+    query: text('query').notNull(),
+    category: text('category').notNull(),
+    origin: text('origin').notNull(),
+    status: text('status').notNull().default('active'),
+    lastUsedAt: integer('last_used_at'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (table) => [
+    check(
+      'check_search_queries_category',
+      sql`${table.category} IN ('core','entity','technical','exploratory','trend')`,
+    ),
+    check('check_search_queries_origin', sql`${table.origin} IN ('ai','interest')`),
+    check('check_search_queries_status', sql`${table.status} IN ('active','retired')`),
+    check('check_search_queries_length', sql`length(${table.query}) BETWEEN 1 AND 200`),
+    check(
+      'check_search_queries_active_interest',
+      sql`${table.status} <> 'active' OR ${table.interestId} IS NOT NULL`,
+    ),
+    uniqueIndex('idx_search_queries_active_identity')
+      .on(table.interestId, table.query)
+      .where(sql`${table.status} = 'active'`),
+    index('idx_search_queries_interest_status').on(table.interestId, table.status),
+  ],
+);
+
+export const searchResults = sqliteTable(
+  'search_results',
+  {
+    id: text('id').primaryKey(),
+    source: text('source').notNull(),
+    externalId: text('external_id'),
+    url: text('url').notNull(),
+    title: text('title'),
+    description: text('description'),
+    author: text('author'),
+    publishedAt: integer('published_at'),
+    rawPayload: jsonText('raw_payload'),
+    contentId: text('content_id').references(() => contents.id),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    retryAt: integer('retry_at'),
+    lastErrorCode: text('last_error_code'),
+    firstSeenAt: integer('first_seen_at').notNull(),
+    lastSeenAt: integer('last_seen_at').notNull(),
+  },
+  (table) => [
+    check(
+      'check_search_results_status',
+      sql`${table.status} IN ('pending','normalized','rejected','failed')`,
+    ),
+    check('check_search_results_attempts', sql`${table.attempts} >= 0`),
+    uniqueIndex('idx_search_results_source_url').on(table.source, table.url),
+    index('idx_search_results_status_retry').on(table.status, table.retryAt),
+    index('idx_search_results_content').on(table.contentId),
+  ],
+);
+
+export const searchHistory = sqliteTable(
+  'search_history',
+  {
+    id: text('id').primaryKey(),
+    queryId: text('query_id')
+      .notNull()
+      .references(() => searchQueries.id),
+    source: text('source').notNull(),
+    searchScope: jsonText('search_scope').notNull(),
+    searchedAt: integer('searched_at').notNull(),
+    outcome: text('outcome').notNull(),
+    resultCount: integer('result_count'),
+    newItemCount: integer('new_item_count'),
+  },
+  (table) => [
+    check('check_search_history_outcome', sql`${table.outcome} IN ('success','failed')`),
+    check(
+      'check_search_history_counts',
+      sql`(${table.resultCount} IS NULL OR ${table.resultCount} >= 0) AND (${table.newItemCount} IS NULL OR ${table.newItemCount} >= 0)`,
+    ),
+    index('idx_search_history_query_source_time').on(
+      table.queryId,
+      table.source,
+      table.searchedAt,
+    ),
+  ],
+);
+
+export const candidateSupplyState = sqliteTable(
+  'candidate_supply_state',
+  {
+    id: integer('id').primaryKey(),
+    lastFinishedAt: integer('last_finished_at'),
+    nextInterestId: text('next_interest_id'),
+    sourceCooldowns: jsonText('source_cooldowns').notNull(),
+  },
+  (table) => [check('check_candidate_supply_state_singleton', sql`${table.id} = 1`)],
 );
