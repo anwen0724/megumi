@@ -100,7 +100,6 @@ export const IssueStageSchema = z.enum([
   'configuration',
   'search',
   'material',
-  'screening',
   'analysis',
   'matching',
 ]);

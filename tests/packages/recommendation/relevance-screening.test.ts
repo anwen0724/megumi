@@ -297,11 +297,12 @@ describe('relevance screening', () => {
     const result = await runMaintenance(roundDependencies(), runInput());
 
     // The full analysis still runs, and the failure is reported rather than silent.
+    // The stage stays inside the Spec's fixed set: screening is a material filter.
     expect(tasks).toEqual(['screen', 'analyze']);
     expect(countRows(database, 'contents')).toBe(1);
     expect(result.issues).toEqual([
       {
-        stage: 'screening',
+        stage: 'material',
         code: 'INVALID_RESULT',
         subjectId: 'r1',
         message: expect.stringContaining('Relevance screening failed'),

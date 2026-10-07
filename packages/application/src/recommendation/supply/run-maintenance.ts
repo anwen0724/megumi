@@ -365,7 +365,7 @@ async function screenBatch(
   if (outcome.status === 'failed') {
     // A screening problem never discards discoveries: the batch keeps all of them.
     issues.push({
-      stage: 'screening',
+      stage: 'material',
       code: outcome.code,
       subjectId: discoveries[0]?.resultId,
       message: `Relevance screening failed, so its ${discoveries.length} discoveries were kept for analysis: ${outcome.message}`,
