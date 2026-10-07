@@ -6,7 +6,7 @@ export const shell = {
     collapseSidebar: 'Collapse sidebar',
     resizeSidebar: 'Resize chat sidebar',
     chats: 'Chats',
-    discovery: 'Interests',
+    discovery: 'Recommendations',
     newSession: 'New session',
     taskPlan: 'Task plan',
     settings: 'Settings',

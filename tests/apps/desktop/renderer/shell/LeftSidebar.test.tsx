@@ -67,7 +67,7 @@ describe('LeftSidebar', () => {
   it('identifies the current page for navigation', () => {
     render(<LeftSidebar {...defaultProps} activePage="discovery" />);
 
-    const discovery = screen.getByRole('button', { name: 'Interests' });
+    const discovery = screen.getByRole('button', { name: 'Recommendations' });
 
     expect(discovery).toHaveAttribute('aria-current', 'page');
   });

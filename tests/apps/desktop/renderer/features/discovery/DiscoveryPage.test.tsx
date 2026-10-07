@@ -38,9 +38,31 @@ describe('DiscoveryPage', () => {
       },
     });
   });
+  it('navigates between separate daily and curated pages without starting acquisition', async () => {
+    render(<DiscoveryPage />);
+    expect(await screen.findByRole('region', { name: '精选推荐' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '自定义兴趣动态' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '每日动态' }));
+    expect(await screen.findByRole('region', { name: '自定义兴趣动态' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '精选推荐' })).not.toBeInTheDocument();
+    expect(startDailyFeed).not.toHaveBeenCalled();
+  });
+  it('opens management in a keyboard-dismissible sidebar and returns focus to its button', async () => {
+    render(<DiscoveryPage />);
+    expect(screen.queryByRole('textbox', { name: '添加兴趣' })).not.toBeInTheDocument();
+    const button = screen.getByRole('button', { name: '管理兴趣与来源' });
+    await userEvent.click(button);
+    const drawer = await screen.findByRole('dialog', { name: '兴趣与内容来源' });
+    expect(await within(drawer).findByText('Agent 工程化')).toBeInTheDocument();
+    expect(within(drawer).getByRole('textbox', { name: '添加兴趣' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: '兴趣与内容来源' })).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+  });
   it('reads daily history without starting acquisition and distinguishes source failure from an empty day', async () => {
     listDailyFeed.mockResolvedValue(ok({ date: '2026-10-07', items: [], activeRuns: [], batches: [{ id: 'batch-1', interestId: 'interest:1', interestRevision: 1, interestText: 'Agent 工程化', status: 'failed', issues: [{ code: 'SOURCE_UNAVAILABLE', message: 'source unavailable' }] }] }));
     render(<DiscoveryPage />);
+    await userEvent.click(screen.getByRole('button', { name: '每日动态' }));
     expect(await screen.findByText('当日获取失败')).toBeInTheDocument();
     expect(screen.queryByText('当天没有符合条件的新内容')).not.toBeInTheDocument();
     expect(startDailyFeed).not.toHaveBeenCalled();
@@ -55,38 +77,42 @@ describe('DiscoveryPage', () => {
     const user = userEvent.setup();
     render(<DiscoveryPage onOpenContentSources={onOpenContentSources} />);
 
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     expect(await screen.findByText('Agent 工程化')).toBeInTheDocument();
     expect(screen.getByText('秋招信息')).toBeInTheDocument();
     expect(listInterests.mock.calls[0][0].payload).toEqual({});
     expect(listInterests.mock.calls[0][0].meta.channel).toBe('recommendation:list-interests');
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: '管理内容来源' }));
+    await user.click(screen.getByRole('tab', { name: '内容来源' }));
+    await user.click(screen.getByRole('button', { name: '配置' }));
 
     expect(onOpenContentSources).toHaveBeenCalledOnce();
   });
   it('creates an interest with the typed description', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
 
-    await user.type(screen.getByRole('textbox', { name: '添加 interest' }), '  秋招面试经验  ');
+    await user.type(screen.getByRole('textbox', { name: '添加兴趣' }), '  秋招面试经验  ');
     await user.click(screen.getByRole('button', { name: '添加' }));
 
     expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({
       text: '秋招面试经验',
     });
-    expect(screen.getByRole('textbox', { name: '添加 interest' })).toHaveValue('');
+    expect(screen.getByRole('textbox', { name: '添加兴趣' })).toHaveValue('');
   });
   it('edits an interest from its overflow menu and keeps the saved text on failure', async () => {
     const user = userEvent.setup();
     changeInterest.mockResolvedValue({ ok: false, data: { message: 'raw host detail' }, meta: {} });
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
 
     await user.click(screen.getByRole('button', { name: 'Agent 工程化的更多操作' }));
     await user.click(screen.getByRole('menuitem', { name: '编辑' }));
-    const editor = screen.getByRole('textbox', { name: '编辑 interest Agent 工程化' });
+    const editor = screen.getByRole('textbox', { name: '编辑兴趣 Agent 工程化' });
     await user.clear(editor);
     await user.type(editor, 'Agent 工程化与真实项目');
     await user.click(screen.getByRole('button', { name: '保存修改' }));
@@ -103,6 +129,7 @@ describe('DiscoveryPage', () => {
   it('enables, disables, and deletes an interest through one Host operation', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
 
     await user.click(screen.getByRole('switch', { name: '暂停 Agent 工程化' }));
@@ -126,22 +153,24 @@ describe('DiscoveryPage', () => {
   it('explains a conflicting edit and reloads current interests without discarding the draft', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
     await user.click(screen.getByRole('button', { name: 'Agent 工程化的更多操作' }));
     await user.click(screen.getByRole('menuitem', { name: '编辑' }));
-    const editor = screen.getByRole('textbox', { name: '编辑 interest Agent 工程化' });
+    const editor = screen.getByRole('textbox', { name: '编辑兴趣 Agent 工程化' });
     await user.clear(editor); await user.type(editor, '保留我的输入');
     changeInterest.mockResolvedValue({ok:false,data:{code:'REVISION_CONFLICT',message:'Interest changed'},meta:{}});
     listInterests.mockResolvedValue(ok({ interests: [{ id: 'interest:1', text: '其他设备的修改', enabled: true, revision: 2 }] }));
     await user.click(screen.getByRole('button', { name: '保存修改' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('已被修改');
     expect(editor).toHaveValue('保留我的输入');
-    expect(await screen.findByRole('textbox', { name: '编辑 interest 其他设备的修改' })).toHaveValue('保留我的输入');
+    expect(await screen.findByRole('textbox', { name: '编辑兴趣 其他设备的修改' })).toHaveValue('保留我的输入');
   });
   it('reloads authoritative interests after a successful edit', async () => {
     const user = userEvent.setup();
     listInterests.mockResolvedValueOnce(ok({interests:savedInterests()})).mockResolvedValue(ok({interests:[{id:'interest:3',text:'只有这一条',enabled:true,revision:1}]}));
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
 
     await user.click(screen.getByRole('switch', { name: '暂停 Agent 工程化' }));
@@ -154,6 +183,7 @@ describe('DiscoveryPage', () => {
     const user = userEvent.setup();
     changeInterest.mockResolvedValue({ok:false,data:{code:'INTEREST_NOT_FOUND',message:'Interest missing'},meta:{}});
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
 
     await user.click(screen.getByRole('switch', { name: '暂停 Agent 工程化' }));
@@ -168,6 +198,7 @@ describe('DiscoveryPage', () => {
     const user = userEvent.setup();
     updateConfiguration.mockResolvedValue(ok(configuration({ enabledSources: [] })));
     render(<DiscoveryPage />);
+    await user.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     await screen.findByText('Agent 工程化');
 
     await user.click(screen.getByRole('tab', { name: '内容来源' }));
@@ -182,13 +213,25 @@ describe('DiscoveryPage', () => {
       'false',
     );
   });
+  it('reloads a conflicting source configuration and uses its new revision on retry', async () => {
+    render(<DiscoveryPage />);
+    await userEvent.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
+    await screen.findByText('Agent 工程化');
+    await userEvent.click(screen.getByRole('tab', { name: '内容来源' }));
+    updateConfiguration.mockResolvedValueOnce({ ok: false, data: { code: 'REVISION_CONFLICT' } });
+    getConfiguration.mockResolvedValue(ok({ ...configuration(), revision: 'config-2' }));
+    await userEvent.click(screen.getByRole('switch', { name: '知乎' }));
+    await screen.findByRole('alert');
+    await userEvent.click(screen.getByRole('switch', { name: '知乎' }));
+    expect(updateConfiguration.mock.calls.at(-1)?.[0].payload.expectedRevision).toBe('config-2');
+  });
   it('asks for first-supply consent once an enabled interest exists and defers without confirming', async () => {
     getConfiguration.mockResolvedValue(ok(configuration({ candidateSupplyConfirmed: false })));
     const user = userEvent.setup();
     render(<DiscoveryPage />);
 
     const dialog = await screen.findByRole('dialog', { name: '启用推荐' });
-    expect(within(dialog).getByText(/启用后，Megumi 会将 interest/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/启用后，Megumi 会将兴趣/)).toBeInTheDocument();
 
     await user.click(within(dialog).getByRole('button', { name: '暂不开始' }));
 
@@ -241,6 +284,7 @@ describe('DiscoveryPage', () => {
 
     render(<DiscoveryPage />);
 
+    await userEvent.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
     expect(await screen.findByText('秋招信息')).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '启用推荐' })).not.toBeInTheDocument();
     expect(updateConfiguration).not.toHaveBeenCalled();
@@ -255,9 +299,10 @@ describe('DiscoveryPage', () => {
     render(<DiscoveryPage />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('无法加载 interest。');
+    expect(alert).toHaveTextContent('无法加载兴趣。');
     expect(alert).not.toHaveTextContent('raw discovery stack');
-    expect(screen.getByText('正在读取 interest…')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '管理兴趣与来源' }));
+    expect(screen.getByText('正在读取兴趣…')).toBeInTheDocument();
   });
 });
 function savedInterests() {

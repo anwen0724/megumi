@@ -17,6 +17,7 @@ export function CuratedSelectionList() {
   const [error, setError] = useState(false);
   const [shortage, setShortage] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const requestId = useRef<string | undefined>(undefined);
   const sequence = useRef(0);
   const load = useCallback(async () => {
@@ -85,8 +86,25 @@ export function CuratedSelectionList() {
       setStarting(false);
     }
   }
+  /** Requests cancellation without discarding the committed selection. */
+  async function cancel() {
+    const activeRunId = view?.activeRun ?? run?.id;
+    if (!activeRunId) return;
+    setCancelling(true);
+    try {
+      const response = await window.megumi.recommendation.cancelRun(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.cancelRun, { runId: activeRunId }),
+      );
+      if (!response.ok) setError(true);
+      else await load();
+    } catch {
+      setError(true);
+    } finally {
+      setCancelling(false);
+    }
+  }
   return <section aria-label={t('curatedTitle')} className="mt-8 space-y-4">
-    <header className="flex items-center justify-between gap-4"><h2 className="text-xl font-semibold">{t('curatedTitle')}</h2><Button disabled={starting || running} onClick={() => void swap()}>{t('swapCurated')}</Button></header>
+    <header className="flex flex-wrap items-center justify-between gap-4"><h2 className="text-xl font-semibold">{t('curatedTitle')}</h2><div className="flex gap-2">{running ? <Button variant="secondary" disabled={cancelling} onClick={() => void cancel()}>{t('cancelCurated')}</Button> : null}<Button disabled={starting || running} onClick={() => void swap()}>{t('swapCurated')}</Button></div></header>
     {error ? <p role="alert">{t('curatedFailed')}</p> : null}
     {running ? <p role="status">{t('curatedRunning')}</p> : null}
     {shortage ? <p role="status">{t('curatedShortage')}</p> : null}

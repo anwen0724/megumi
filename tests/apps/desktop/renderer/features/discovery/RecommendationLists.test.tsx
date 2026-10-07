@@ -41,6 +41,19 @@ beforeEach(async () => {
     }
   });
 });
+it('lets the user cancel a running selection while keeping the saved cards', async () => {
+  const cancel = vi.fn().mockResolvedValue({ ok: true, data: { status: 'cancelling' } });
+  Object.assign(window.megumi.recommendation, {
+    getCuratedSelection: vi.fn().mockResolvedValue({ ok: true, data: { selection: { id: 'selection-1', createdAt: '2026-10-07T00:00:00Z', items: [card] }, needsUpdate: true, activeRun: 'running-selection', supplyStatus: [] } }),
+    getRun: vi.fn().mockResolvedValue({ ok: true, data: { id: 'running-selection', kind: 'curated', status: 'running', startedAt: '2026-10-07T00:00:00Z', finishedAt: null, issues: [] } }),
+    cancelRun: cancel
+  });
+  render(<DiscoveryPage />);
+  await screen.findByText('给出可直接练习的具体方法');
+  await userEvent.click(await screen.findByRole('button', { name: '取消精选' }));
+  expect(cancel.mock.calls[0]?.[0].payload).toEqual({ runId: 'running-selection' });
+  expect(screen.getByText('面试准备实录')).toBeInTheDocument();
+});
 it('reads a saved selection without generating, and keeps it when a swap has no alternatives', async () => {
   render(<DiscoveryPage />);
   expect(await screen.findByText('给出可直接练习的具体方法')).toBeInTheDocument();
@@ -59,5 +72,7 @@ it('favorites the displayed material and opens only the saved content identity',
   expect(save.mock.calls[0]![0].payload).toEqual({ contentId: 'content-1', materialId: 'material-1', saved: true });
   await userEvent.click(within(article).getByRole('button', { name: '打开原文' }));
   expect(open.mock.calls[0]![0].payload).toEqual({ contentId: 'content-1' });
-  expect(await screen.findAllByRole('button', { name: '取消收藏' })).toHaveLength(2);
+  await userEvent.click(screen.getByRole('button', { name: '收藏' }));
+  expect(await screen.findByRole('button', { name: '取消收藏' })).toBeInTheDocument();
+  expect(screen.queryByText('给出可直接练习的具体方法')).not.toBeInTheDocument();
 });

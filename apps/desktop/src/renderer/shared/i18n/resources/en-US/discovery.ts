@@ -2,7 +2,13 @@
  * Defines source-language copy for the interests and content-supply page.
  */
 export const discovery = {
+  dailyNavigation: 'Daily feed',
+  resultNavigation: 'Recommendation pages',
+  manageInterestsAndSources: 'Manage interests and sources',
+  closeManagement: 'Close management',
+  managementDescription: 'Describe your interests and choose content sources.',
   curatedTitle:'Curated recommendations',swapCurated:'Show another selection',
+  cancelCurated: 'Cancel selection',
   curatedFailed:'The selection could not be updated. Saved results remain available.',
   curatedRunning:'Selecting from saved candidates…',curatedShortage:'No alternative candidates. Independent supply has been requested.',
   curatedNeedsUpdate:'Your interests changed. This saved selection is awaiting replacement.',
@@ -26,19 +32,19 @@ export const discovery = {
   material_transcript: 'Transcript',
   materialTruncated: 'Truncated',
   historicalInterest: 'Historical interest',
-  eyebrow: 'Content supply',
+  eyebrow: 'Your reading',
   title: 'Recommendations',
   subtitle:
-    'Save what deserves your attention. Megumi searches the enabled sources and prepares the content that recommendations draw on.',
+    'Discover content worth reading and keep up with daily news.',
   manageSources: 'Manage content sources',
   noInterestsTitle: 'Tell Megumi what deserves your attention',
   noInterestsDescription:
     'Add a word, phrase, or sentence. Megumi searches the enabled sources and prepares matching candidate content.',
-  firstSupplyTitle: 'First load',
+  firstSupplyTitle: 'Enable recommendations',
   firstSupplyDescription:
-    'The first load may take some time. Preparing candidates may call the model multiple times and incur charges. Please confirm whether to start.',
+    'When enabled, Megumi sends your interests and acquired material to configured sources and models. These services may incur charges.',
   deferFirstSupply: 'Not now',
-  startFirstSupply: 'Start',
+  startFirstSupply: 'Enable',
   firstSupplyFailed: 'Could not confirm the start. Please try again.',
   managementTitle: 'Interests and content sources',
   interestsTab: 'Interests {{count}}',
@@ -64,5 +70,6 @@ export const discovery = {
   loading: 'Loading interests…',
   loadFailed: 'Could not load your interests.',
   revisionConflict: 'This interest was changed. Your draft is preserved. Reopen the editor and review the current text.',
+  configurationConflict: 'Recommendation configuration changed. The latest configuration is loaded. Review it and try again.',
   actionFailed: 'The change could not be saved.',
 } as const;
