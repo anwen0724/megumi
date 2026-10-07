@@ -26,6 +26,15 @@ export const CandidateQualificationSchema = z.object({
   }
 });
 export type CandidateQualification = z.infer<typeof CandidateQualificationSchema>;
+export interface CandidateSelectionInput {
+  contentId: string;
+  materialId: string;
+  publisher: string;
+  publisherKeys: readonly string[];
+  qualifications: CandidateQualification[];
+  material: NonNullable<ReturnType<ReturnType<typeof createMaterialStorage>['readMaterial']>>;
+  analysis: NonNullable<ReturnType<ReturnType<typeof createMaterialStorage>['readAnalysis']>>;
+}
 // The same input predicate guards reads and commits; material changes need no cleanup job.
 const CURRENT_INPUT_WHERE = `EXISTS (SELECT 1 FROM interests i WHERE i.id = rc.interest_id AND i.enabled = 1 AND i.revision = rc.interest_revision)
   AND EXISTS (SELECT 1 FROM contents c WHERE c.id = rc.content_id AND c.current_material_id = rc.material_id)
@@ -34,6 +43,86 @@ const CURRENT_INPUT_WHERE = `EXISTS (SELECT 1 FROM interests i WHERE i.id = rc.i
 export function createCandidateQualificationStorage(database: DatabaseConnection, newId: () => string = randomUUID) {
   const materials = createMaterialStorage(database);
   const storage = {
+    /** Reports matching ownership through the Candidate boundary. */
+    activeRunIds() {
+      return database.prepare<{owner_run_id:string}>({sql:'SELECT DISTINCT owner_run_id FROM recommendation_candidates WHERE owner_run_id IS NOT NULL'}).all().map(row=>row.owner_run_id);
+    },
+    /** Releases old pending matching only when no displayed or qualified content protects it. */
+    abandonPending(before:number,protectedContentIds:ReadonlySet<string>):string[] {
+      const rows=database.prepare<{content_id:string;interest_id:string}>({sql:"SELECT content_id,interest_id FROM recommendation_candidates WHERE status='pending' AND owner_run_id IS NULL AND reviewed_at<? AND error_code IS NOT 'ABANDONED'"}).all([before]);
+      const abandoned=rows.filter(row=>!protectedContentIds.has(row.content_id));
+      for(const row of abandoned)database.prepare({sql:"UPDATE recommendation_candidates SET status='stale',attempts=3,retry_at=NULL,error_code='ABANDONED' WHERE content_id=? AND interest_id=? AND owner_run_id IS NULL"}).run([row.content_id,row.interest_id]);
+      return abandoned.map(row=>row.content_id);
+    },
+    /** Removes obsolete relationships, retaining current pending input for its owned retry. */
+    cleanup(now:number): void {
+      database.prepare({sql:"DELETE FROM recommendation_candidates WHERE owner_run_id IS NULL AND status<>'pending' AND (valid_until<=? OR NOT EXISTS(SELECT 1 FROM interests i WHERE i.id=interest_id AND i.revision=interest_revision) OR NOT EXISTS(SELECT 1 FROM contents c WHERE c.id=content_id AND c.current_material_id=material_id))"}).run([now-30*86400000]);
+      database.prepare({sql:'DELETE FROM candidate_selection_inputs WHERE recorded_at<?'}).run([now-30*86400000]);
+    },
+    /** Supplies retained candidate references without exposing qualification tables to Content. */
+    references() {
+      const rows=database.prepare<{content_id:string;material_id:string}>({sql:"SELECT content_id,material_id FROM recommendation_candidates WHERE error_code IS NOT 'ABANDONED'"}).all();
+      return {contentIds:rows.map(row=>row.content_id),materialIds:rows.map(row=>row.material_id)};
+    },
+    /** Builds a fair window before truncation; duplicate variants never exchange evidence. */
+    selectInputs(now: number, input: {
+      limit: number;
+      interestIds: readonly string[];
+      contentLanguages: readonly string[];
+      excludeContentIds?: readonly string[];
+      currentContentIds?: readonly string[];
+      candidates?: readonly CandidateSelectionInput[];
+    }): CandidateSelectionInput[] {
+      const history = database.prepare<{content_id: string; interest_id: string; count: number; last_at: number}>({
+        sql: 'SELECT content_id,interest_id,COUNT(*) AS count,MAX(recorded_at) AS last_at FROM candidate_selection_inputs WHERE recorded_at>=? GROUP BY content_id,interest_id'
+      }).all([now - 30 * 86400000]);
+      const interests = [...input.interestIds].sort((a, b) => {
+        const last = (id: string) => Math.max(0, ...history.filter(row => row.interest_id === id).map(row => row.last_at));
+        return last(a) - last(b) || input.interestIds.indexOf(a)-input.interestIds.indexOf(b);
+      });
+      const queues = interests.map(interestId => {
+        const candidates = (input.candidates ?? storage.listCandidates(now, {...input, interestIds: [interestId]}))
+          .filter(candidate => candidate.qualifications.some(pair => pair.interestId === interestId));
+        const count = (id: string) => history.find(row => row.content_id === id && row.interest_id === interestId)?.count ?? 0;
+        candidates.sort((a, b) => Number(input.currentContentIds?.includes(a.contentId)) - Number(input.currentContentIds?.includes(b.contentId)) || count(a.contentId) - count(b.contentId) ||
+          Math.max(...b.qualifications.map(pair => pair.reviewedAt)) - Math.max(...a.qualifications.map(pair => pair.reviewedAt)) || a.contentId.localeCompare(b.contentId));
+        const publishers = new Map<string, typeof candidates>();
+        for (const candidate of candidates) {
+          const group = publishers.get(candidate.publisher) ?? [];
+          group.push(candidate); publishers.set(candidate.publisher, group);
+        }
+        const ordered: typeof candidates = [];
+        while ([...publishers.values()].some(group => group.length)) {
+          for (const group of publishers.values()) { const candidate = group.shift(); if (candidate) ordered.push(candidate); }
+        }
+        return ordered;
+      });
+      const eligible=input.candidates?undefined:storage.listEligible(now,input);
+      const result: CandidateSelectionInput[] = [];
+      const groups = new Set<string>();
+      while (result.length < input.limit && queues.some(queue => queue.length)) {
+        for (const queue of queues) {
+          let candidate = queue.shift();
+          while (candidate && groups.has(storage.duplicateGroup(candidate.contentId))) candidate = queue.shift();
+          if (!candidate) continue;
+          groups.add(storage.duplicateGroup(candidate.contentId));
+          // Merge only qualification on the same immutable material, never on a duplicate variant.
+          const qualifications=eligible?.filter(pair => pair.contentId === candidate.contentId && pair.materialId === candidate.materialId)??candidate.qualifications;
+          result.push({...candidate,qualifications});
+          if (result.length === input.limit) break;
+        }
+      }
+      return result;
+    },
+    /** Counts each frozen input once per run; a retry cannot inflate rotation history. */
+    recordSelectionInputs(runId: string, inputs: readonly CandidateSelectionInput[], now: number): void {
+      database.transaction({operation: () => {
+        for (const candidate of inputs) for (const pair of candidate.qualifications) {
+          database.prepare({sql: 'INSERT OR IGNORE INTO candidate_selection_inputs(run_id,content_id,interest_id,interest_revision,recorded_at) VALUES(?,?,?,?,?)'})
+            .run([runId, candidate.contentId, pair.interestId, pair.interestRevision, now]);
+        }
+      }});
+    },
     /** Counts an in-request correction against this exact matching input. */
     retryMatching(contentId: string, interestId: string, attempt: DiscoveryAttempt, now: number): boolean {
       return database.prepare({ sql: 'UPDATE recommendation_candidates SET attempts=attempts+1 WHERE content_id=? AND interest_id=? AND owner_run_id=? AND attempt_token=? AND attempts<3 AND attempt_deadline_at>?' }).run([contentId, interestId, attempt.runId, attempt.token, now]).changes > 0;
@@ -43,7 +132,7 @@ export function createCandidateQualificationStorage(database: DatabaseConnection
       contentLanguages?: readonly string[];
       excludeContentIds?: readonly string[];
       interestIds?: readonly string[];
-    } = {}) {
+    } = {}): CandidateSelectionInput[] {
       const pairs = storage.listEligible(now, input).filter(pair => !input.interestIds || input.interestIds.includes(pair.interestId));
       const groups = new Map<string, {
         contentId: string;
@@ -65,9 +154,17 @@ export function createCandidateQualificationStorage(database: DatabaseConnection
             old.qualifications.push(pair);
         }
         else
-          groups.set(group, { contentId: pair.contentId, materialId: pair.materialId, publisher: row.author_id ?? row.author ?? new URL(row.canonical_url).hostname, qualifications: [pair] });
+          groups.set(group, { contentId: pair.contentId, materialId: pair.materialId, publisher: new URL(row.canonical_url).hostname, qualifications: [pair] });
       }
-      return [...groups.values()].map(item => ({ ...item, material: materials.readMaterial(item.materialId)!, analysis: materials.readAnalysis(item.contentId, item.materialId)! }));
+      return [...groups.values()].map(item => {
+        const material = materials.readMaterial(item.materialId)!;
+        const author = material.authorId ?? material.author?.trim().normalize('NFKC').toLowerCase();
+        const authorKey = author ? `${material.platform}:author:${author}` : `${material.platform}:content:${item.contentId}`;
+        const domainKey = `web:domain:${new URL(material.canonicalUrl).hostname.toLowerCase()}`;
+        return { ...item, publisher: material.platform === 'web' ? domainKey : authorKey,
+          publisherKeys: material.platform === 'web' ? author ? [authorKey, domainKey] : [domainKey] : [authorKey],
+          material, analysis: materials.readAnalysis(item.contentId, item.materialId)! };
+      });
     },
     /** Counts exactly the qualified input visible to result consumers. */
     inventory(now: number, interestId: string, contentLanguages: readonly string[]) {

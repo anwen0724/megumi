@@ -13,7 +13,7 @@ describe('Application lifecycle', () => {
       const first = application.runtime.stop();
       expect(application.runtime.stop()).toBe(first);
       await first;
-      expect(await application.runtime.discovery.listInterests()).toEqual({ interests: [] });
+      expect(await application.runtime.recommendation.listInterests()).toEqual({ interests: [] });
       expect((await application.runtime.observability.listTraces({ limit: 1 })).status).not.toBe(
         'failed',
       );
@@ -39,8 +39,8 @@ describe('Application lifecycle', () => {
       await expect(application.runtime.start()).rejects.toThrow();
       expect(application.runtime.settings.readSettings().status).toBe('rejected');
       fs.writeFileSync(settingsPath, validSettings);
-      expect(await application.runtime.discovery.getConfiguration())
-        .toMatchObject({ candidateSupplyConfirmed: false });
+      expect(await application.runtime.recommendation.getConfiguration())
+        .toMatchObject({ config:{enabled:false} });
     } finally {
       await application.cleanup();
     }

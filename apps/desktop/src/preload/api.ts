@@ -1,3 +1,6 @@
+/*
+ * Exposes validated, least-authority Desktop and Product operations to the Renderer.
+ */
 import type {
   SettingsSnapshot,
   UpdateSettingsRequest,
@@ -6,12 +9,9 @@ import type {
   CredentialValue,
   UpdateCredentialRequest,
 } from '@megumi/application/settings/settings-contracts';
-import type { ModelCatalogResult } from '@megumi/application/contracts';
-/*
- * Exposes validated, least-authority Desktop and Product operations to the Renderer.
- */
+import type { RecommendationHost, ModelCatalogResult } from '@megumi/application/contracts';
 import { ipcRenderer } from 'electron';
-import { RecommendationChangedSchema, type RecommendationChanged, type DailyFeedView, type StartDailyFeedResult, type RecommendationRunView } from '@megumi/application/contracts';
+import { RecommendationChangedSchema, type RecommendationChanged } from '@megumi/application/contracts';
 import type { AnyEvent } from '@megumi/application/contracts';
 import type {
   ApprovalHostResult,
@@ -56,11 +56,9 @@ import type {
   VoiceHostModelUpdateResult,
   VoiceHostMutationResult,
   VoiceHostSnapshot,
-  DiscoveryEmptyPayload,
-  DiscoveryInterestChangeResult,
-  DiscoveryInterestListResult,
-  SupplyConfigurationView,
-  SupplyConfirmResult,
+  RecommendationEmptyRequest,
+  InterestListResult,
+  RecommendationConfigurationView,
   SourceAccessRequest,
   SourceAccessView,
   SourceLoginResult,
@@ -106,8 +104,6 @@ import type {
   VoiceSessionMutedPayload,
   VoiceSessionStartPayload,
   VoiceModelCapabilityPayload,
-  DiscoveryInterestChangePayload,
-  DiscoveryConfigurationUpdatePayload,
 } from '../main/ipc/schemas';
 import {
   SessionMessagePresentationEventSchema,
@@ -492,68 +488,29 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   recommendation: {
-    listDailyFeed: (request: BusinessRequest<{
-      date?: string;
-    }, typeof IPC_CHANNELS.recommendation.listDailyFeed>): Promise<RuntimeIpcResult<DailyFeedView, typeof IPC_CHANNELS.recommendation.listDailyFeed>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.listDailyFeed, request),
-    startDailyFeed: (request: BusinessRequest<{
-      requestId: string;
-      interestIds?: string[];
-    }, typeof IPC_CHANNELS.recommendation.startDailyFeed>): Promise<RuntimeIpcResult<StartDailyFeedResult, typeof IPC_CHANNELS.recommendation.startDailyFeed>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.startDailyFeed, request),
-    getRun: (request: BusinessRequest<{
-      runId: string;
-    }, typeof IPC_CHANNELS.recommendation.getRun>): Promise<RuntimeIpcResult<RecommendationRunView | undefined, typeof IPC_CHANNELS.recommendation.getRun>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.getRun, request),
-    cancelRun: (request: BusinessRequest<{
-      runId: string;
-    }, typeof IPC_CHANNELS.recommendation.cancelRun>): Promise<RuntimeIpcResult<{
-      status: 'cancelling' | 'already_finished' | 'not_found';
-    }, typeof IPC_CHANNELS.recommendation.cancelRun>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.cancelRun, request),
+    listInterests: (request: BusinessRequest<RecommendationEmptyRequest, typeof IPC_CHANNELS.recommendation.interestList>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['listInterests']>>, typeof IPC_CHANNELS.recommendation.interestList>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.interestList, request),
+    createInterest: (request: BusinessRequest<Parameters<RecommendationHost['createInterest']>[0], typeof IPC_CHANNELS.recommendation.createInterest>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['createInterest']>>, typeof IPC_CHANNELS.recommendation.createInterest>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.createInterest, request),
+    updateInterest: (request: BusinessRequest<Parameters<RecommendationHost['updateInterest']>[0], typeof IPC_CHANNELS.recommendation.updateInterest>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['updateInterest']>>, typeof IPC_CHANNELS.recommendation.updateInterest>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.updateInterest, request),
+    deleteInterest: (request: BusinessRequest<Parameters<RecommendationHost['deleteInterest']>[0], typeof IPC_CHANNELS.recommendation.deleteInterest>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['deleteInterest']>>, typeof IPC_CHANNELS.recommendation.deleteInterest>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.deleteInterest, request),
+    listDailyFeed: (request: BusinessRequest<Parameters<RecommendationHost['listDailyFeed']>[0], typeof IPC_CHANNELS.recommendation.listDailyFeed>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['listDailyFeed']>>, typeof IPC_CHANNELS.recommendation.listDailyFeed>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.listDailyFeed, request),
+    getCuratedSelection: (request: BusinessRequest<RecommendationEmptyRequest, typeof IPC_CHANNELS.recommendation.getCuratedSelection>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['getCuratedSelection']>>, typeof IPC_CHANNELS.recommendation.getCuratedSelection>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.getCuratedSelection, request),
+    listFavorites: (request: BusinessRequest<Parameters<RecommendationHost['listFavorites']>[0], typeof IPC_CHANNELS.recommendation.listFavorites>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['listFavorites']>>, typeof IPC_CHANNELS.recommendation.listFavorites>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.listFavorites, request),
+    setFavorite: (request: BusinessRequest<Parameters<RecommendationHost['setFavorite']>[0], typeof IPC_CHANNELS.recommendation.setFavorite>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['setFavorite']>>, typeof IPC_CHANNELS.recommendation.setFavorite>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.setFavorite, request),
+    startDailyFeed: (request: BusinessRequest<Parameters<RecommendationHost['startDailyFeed']>[0], typeof IPC_CHANNELS.recommendation.startDailyFeed>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['startDailyFeed']>>, typeof IPC_CHANNELS.recommendation.startDailyFeed>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.startDailyFeed, request),
+    startCuratedSelection: (request: BusinessRequest<Parameters<RecommendationHost['startCuratedSelection']>[0], typeof IPC_CHANNELS.recommendation.startCuratedSelection>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['startCuratedSelection']>>, typeof IPC_CHANNELS.recommendation.startCuratedSelection>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.startCuratedSelection, request),
+    getRun: (request: BusinessRequest<Parameters<RecommendationHost['getRun']>[0], typeof IPC_CHANNELS.recommendation.getRun>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['getRun']>>, typeof IPC_CHANNELS.recommendation.getRun>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.getRun, request),
+    cancelRun: (request: BusinessRequest<Parameters<RecommendationHost['cancelRun']>[0], typeof IPC_CHANNELS.recommendation.cancelRun>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['cancelRun']>>, typeof IPC_CHANNELS.recommendation.cancelRun>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.cancelRun, request),
+    getConfiguration: (request: BusinessRequest<RecommendationEmptyRequest, typeof IPC_CHANNELS.recommendation.configurationGet>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['getConfiguration']>>, typeof IPC_CHANNELS.recommendation.configurationGet>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.configurationGet, request),
+    updateConfiguration: (request: BusinessRequest<Parameters<RecommendationHost['updateConfiguration']>[0], typeof IPC_CHANNELS.recommendation.configurationUpdate>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['updateConfiguration']>>, typeof IPC_CHANNELS.recommendation.configurationUpdate>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.configurationUpdate, request),
+    openSourceLogin: (request: BusinessRequest<Parameters<RecommendationHost['openSourceLogin']>[0], typeof IPC_CHANNELS.recommendation.sourceLogin>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['openSourceLogin']>>, typeof IPC_CHANNELS.recommendation.sourceLogin>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.sourceLogin, request),
+    checkSourceAccess: (request: BusinessRequest<Parameters<RecommendationHost['checkSourceAccess']>[0], typeof IPC_CHANNELS.recommendation.sourceAccess>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['checkSourceAccess']>>, typeof IPC_CHANNELS.recommendation.sourceAccess>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.sourceAccess, request),
+    openContent: (request: BusinessRequest<Parameters<RecommendationHost['openContent']>[0], typeof IPC_CHANNELS.recommendation.openContent>): Promise<RuntimeIpcResult<Awaited<ReturnType<RecommendationHost['openContent']>>, typeof IPC_CHANNELS.recommendation.openContent>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.openContent, request),
     onChanged(callback: (event: RecommendationChanged) => void) {
       const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
         const parsed = RecommendationChangedSchema.safeParse(raw); if (parsed.success)
           callback(parsed.data);
       }; ipcRenderer.on(IPC_CHANNELS.recommendation.changed, listener); return () => { ipcRenderer.removeListener(IPC_CHANNELS.recommendation.changed, listener); };
     },
-  },
-  discovery: {
-    openSourceLogin: (request: BusinessRequest<SourceAccessRequest, typeof IPC_CHANNELS.discovery.sourceLogin>): Promise<RuntimeIpcResult<SourceLoginResult, typeof IPC_CHANNELS.discovery.sourceLogin>> => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceLogin, request),
-    checkSourceAccess: (request: BusinessRequest<SourceAccessRequest, typeof IPC_CHANNELS.discovery.sourceAccess>): Promise<RuntimeIpcResult<SourceAccessView, typeof IPC_CHANNELS.discovery.sourceAccess>> => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceAccess, request),
-    listInterests: (
-      request: BusinessRequest<
-        DiscoveryEmptyPayload,
-        typeof IPC_CHANNELS.discovery.interestList
-      >,
-    ): Promise<
-      RuntimeIpcResult<DiscoveryInterestListResult, typeof IPC_CHANNELS.discovery.interestList>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.interestList, request),
-    changeInterest: (
-      request: BusinessRequest<
-        DiscoveryInterestChangePayload,
-        typeof IPC_CHANNELS.discovery.interestChange
-      >,
-    ): Promise<
-      RuntimeIpcResult<DiscoveryInterestChangeResult, typeof IPC_CHANNELS.discovery.interestChange>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.interestChange, request),
-    getConfiguration: (
-      request: BusinessRequest<DiscoveryEmptyPayload, typeof IPC_CHANNELS.discovery.configurationGet>,
-    ): Promise<
-      RuntimeIpcResult<SupplyConfigurationView, typeof IPC_CHANNELS.discovery.configurationGet>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationGet, request),
-    updateConfiguration: (
-      request: BusinessRequest<
-        DiscoveryConfigurationUpdatePayload,
-        typeof IPC_CHANNELS.discovery.configurationUpdate
-      >,
-    ): Promise<
-      RuntimeIpcResult<SupplyConfigurationView, typeof IPC_CHANNELS.discovery.configurationUpdate>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.configurationUpdate, request),
-    confirmCandidateSupply: (
-      request: BusinessRequest<
-        DiscoveryEmptyPayload,
-        typeof IPC_CHANNELS.discovery.candidateSupplyConfirm
-      >,
-    ): Promise<
-      RuntimeIpcResult<SupplyConfirmResult, typeof IPC_CHANNELS.discovery.candidateSupplyConfirm>
-    > => invokeRuntimeIpc(IPC_CHANNELS.discovery.candidateSupplyConfirm, request),
   },
   voiceInput: {
     onEvent: (callback: (event: SpeechInputEvent) => void): (() => void) => {

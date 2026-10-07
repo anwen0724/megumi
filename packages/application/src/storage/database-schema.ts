@@ -267,6 +267,8 @@ export const contentMaterials = sqliteTable('content_materials', {
     revision: integer('revision').notNull(),
     title: text('title'),
     author: text('author'),
+    authorId: text('author_id'),
+    language: text('language'),
     text: text('text').notNull(),
     textHash: text('text_hash').notNull(),
     kind: text('kind').notNull(),
@@ -621,6 +623,7 @@ export const candidateSupplyState = sqliteTable('candidate_supply_state', {
     id: integer('id').primaryKey(),
     sourceCooldowns: text('source_cooldowns').notNull(),
     searchBackoff: text('search_backoff').notNull(),
+    supplementRequests: text('supplement_requests').notNull().default(sql.raw("'[]'")),
     candidateNextInterestId: text('candidate_next_interest_id'),
     dailyFeedNextInterestId: text('daily_feed_next_interest_id'),
     lastFinishedAt: integer('last_finished_at'),
@@ -628,4 +631,5 @@ export const candidateSupplyState = sqliteTable('candidate_supply_state', {
   check('check_candidate_supply_state_1',sql.raw("id = 1")),
   check('check_candidate_supply_state_2',sql.raw("json_valid(source_cooldowns)")),
   check('check_candidate_supply_state_3',sql.raw("json_valid(search_backoff)")),
+  check('check_candidate_supply_state_4',sql.raw("json_valid(supplement_requests)")),
 ]);

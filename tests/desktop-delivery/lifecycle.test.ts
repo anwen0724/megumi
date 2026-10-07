@@ -86,7 +86,7 @@ it.each([false, true])('starts through packaged migrations with recoverable data
     try {
       expect(database.prepare({ sql: "SELECT name FROM workspaces WHERE workspace_id='delivery-example'" }).get()).toEqual({ name: '用户资料' });
       if (!failRead) {
-        expect(migrateDatabase({ database }).currentMigration).toBe('0033_source_materials');
+        expect(migrateDatabase({ database }).currentMigration).toBe('0037_recommendation_run_states');
       }
       const tables = database.prepare<{ name: string }>({
         sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
@@ -97,7 +97,7 @@ it.each([false, true])('starts through packaged migrations with recoverable data
         expect(tables).not.toContain('candidate_supply_state');
       } else {
         // The completed upgrade reaches the switch migration, which drops every legacy Discovery table.
-        expect(tables.filter((name) => name.startsWith('discovery_'))).toEqual([]);
+        expect(tables.filter((name) => name.startsWith('discovery_'))).toEqual(['discovery_runs']);
         expect(tables).toContain('candidate_supply_state');
       }
     } finally { database.close(); }

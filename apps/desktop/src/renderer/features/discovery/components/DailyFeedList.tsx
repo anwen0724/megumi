@@ -7,6 +7,7 @@ import type { DailyFeedView } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button } from '../../../shared/ui';
+import {RecommendationCard} from './RecommendationCard';
 /** Reads saved results on navigation; acquisition starts only after an explicit action. */
 export function DailyFeedList() {
   const { t } = useTranslation('discovery');
@@ -16,10 +17,14 @@ export function DailyFeedList() {
   const [error, setError] = useState(false);
   const [starting, setStarting] = useState(false);
   const sequence = useRef(0);
+  const retryRequestId=useRef<string|undefined>(undefined);
   const load = useCallback(async () => {
     const requestSequence = ++sequence.current;
     try {
-      const result = await window.megumi.recommendation.listDailyFeed(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.listDailyFeed, date ? { date } : {}));
+      const [result,current]=await Promise.all([
+        window.megumi.recommendation.listDailyFeed(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.listDailyFeed,date?{date}:{})),
+        date?window.megumi.recommendation.listDailyFeed(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.listDailyFeed,{})):Promise.resolve(undefined),
+      ]);
       if (requestSequence !== sequence.current)
         return;
       if (!result.ok) {
@@ -28,8 +33,8 @@ export function DailyFeedList() {
       }
       setError(false);
       setFeed(result.data);
-      if (!date)
-        setToday(result.data.date);
+      if (!date)setToday(result.data.date);
+      else if(current?.ok)setToday(current.data.date);
     }
     catch {
       if (requestSequence === sequence.current)
@@ -46,13 +51,12 @@ export function DailyFeedList() {
   }, [load]);
   async function retry() {
     setStarting(true);
-    const requestId = crypto.randomUUID();
     try {
-      const result = await window.megumi.recommendation.startDailyFeed(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.startDailyFeed, { requestId }));
+      retryRequestId.current??=crypto.randomUUID();
+      const result = await window.megumi.recommendation.startDailyFeed(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.startDailyFeed, { requestId:retryRequestId.current }));
       if (!result.ok)
         setError(true);
-      else
-        await load();
+      else {retryRequestId.current=undefined;await load();}
     }
     catch {
       setError(true);
@@ -86,14 +90,7 @@ export function DailyFeedList() {
     </p>))}
     {isToday && unfinished ? <Button disabled={starting || running} onClick={() => void retry()}>{t('dailyRetry')}</Button> : null}
     <div className="space-y-3">
-      {feed?.items.map(item => (<article key={item.contentId} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-        <div className="text-xs text-[var(--color-text-muted)]">{item.platform} · {item.publishedAt ?? t('dailyDateUnknown')} · {t(`material_${item.materialKind}`)}{item.truncated ? ` · ${t('materialTruncated')}` : ''}</div>
-        <h3 className="mt-2 font-semibold">{item.title}</h3>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{item.excerpt}</p>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--color-text-muted)]">
-          {item.interestLabels.map(label => <span key={`${label.interestId}:${label.revision}`}>{label.text}{label.historical ? ` (${t('historicalInterest')})` : ''}</span>)}
-        </div>
-      </article>))}
+      {feed?.items.map(item => <RecommendationCard key={item.contentId} item={item}/>)}
     </div>
   </section>);
 }

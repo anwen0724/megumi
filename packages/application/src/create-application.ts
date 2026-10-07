@@ -255,7 +255,7 @@ function createApplicationInterface(
     }),
   );
   const operations: ApplicationOperations = {
-    discovery: recommendation.host,
+    recommendation: recommendation.host,
     session,
     skill: createSkillOperations({ skills }),
     workspace: createWorkspaceOperations({

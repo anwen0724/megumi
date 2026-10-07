@@ -1,131 +1,93 @@
 /*
- * Defines the renderer-safe Candidate Supply request schemas and the Product
- * Host contract consumed by Desktop. The area keeps its historical `discovery`
- * name in the IPC namespace and the Application operations key; every type
- * below describes the current behaviour, not the removed recommendation flow.
+ * Defines the renderer-safe Recommendation Host and validated product operations.
  */
 import { z } from 'zod';
+import { RecommendationConfigurationSchema } from '../settings/definitions/recommendation';
+import { ModelReferenceSchema } from '../settings/definitions/providers';
+import { InterestSnapshotEntrySchema, CreateInterestRequestSchema, UpdateInterestRequestSchema, DeleteInterestRequestSchema } from './interests/interest-contracts';
+import type { CreateInterestRequest, UpdateInterestRequest, DeleteInterestRequest } from './interests/interest-contracts';
 import type { DailyFeedView, StartDailyFeedResult, RecommendationRunView, RecommendationChanged } from './feed-contracts';
-export * from './feed-contracts';
-import { InterestTextSchema, InterestSnapshotEntrySchema } from './interests/interest-contracts';
+import type { CuratedSelectionView, StartCuratedSelectionResult } from './curated-contracts';
+import type { SetFavoriteRequest, SetFavoriteResult, ListFavoritesRequest, FavoritesView } from './favorite-contracts';
 import { SourceAccessViewSchema, SourceIdSchema, type SourceAccessView, type SourceLoginResult } from './sources/source-access-contracts';
+export * from './feed-contracts';
+export * from './curated-contracts';
+export * from './favorite-contracts';
+export { CreateInterestRequestSchema, UpdateInterestRequestSchema, DeleteInterestRequestSchema };
 export { SourceAccessViewSchema, SourceLoginResultSchema, type SourceAccessView, type SourceLoginResult } from './sources/source-access-contracts';
+
+export const RecommendationEmptyRequestSchema = z.object({}).strict();
+export type RecommendationEmptyRequest = z.infer<typeof RecommendationEmptyRequestSchema>;
 export const SourceAccessRequestSchema = z.object({ sourceId: SourceIdSchema }).strict();
 export type SourceAccessRequest = z.infer<typeof SourceAccessRequestSchema>;
-/** One interest as the product shows it: the saved description and enable state. */
 export const InterestUiSchema = InterestSnapshotEntrySchema;
 export type InterestUi = z.infer<typeof InterestUiSchema>;
-/** Empty payload used by the read-only Host requests. */
-export const DiscoveryEmptyPayloadSchema = z.object({}).strict();
-export type DiscoveryEmptyPayload = z.infer<typeof DiscoveryEmptyPayloadSchema>;
-export const DiscoveryInterestListResultSchema = z
-  .object({ interests: z.array(InterestUiSchema) })
-  .strict();
-export type DiscoveryInterestListResult = z.infer<typeof DiscoveryInterestListResultSchema>;
-/**
- * One user edit. `pause` and `resume` are enable-state updates of the same
- * interest, so the desktop keeps one operation instead of two code paths.
- */
-export const DiscoveryInterestChangePayloadSchema = z.discriminatedUnion('action', [
-  z
-    .object({ action: z.literal('create'), description: InterestTextSchema })
-    .strict(),
-  z
-    .object({
-      action: z.literal('update'),
-      interestId: z.string().min(1),
-      expectedRevision: z.number().int().positive(),
-      description: InterestTextSchema,
-    })
-    .strict(),
-  z.object({ action: z.literal('pause'), interestId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict(),
-  z.object({ action: z.literal('resume'), interestId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict(),
-  z.object({ action: z.literal('delete'), interestId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict(),
-]);
-export type DiscoveryInterestChangePayload = z.infer<typeof DiscoveryInterestChangePayloadSchema>;
-/**
- * The saved interests after one edit. Returning the list keeps the desktop from
- * re-reading and racing its own change; a rejected edit stays visible as one.
- */
-export const DiscoveryInterestChangeResultSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('changed'), interests: z.array(InterestUiSchema) }).strict(),
-  z.object({ status: z.literal('not_found') }).strict(),
-  z.object({ status: z.literal('revision_conflict') }).strict(),
-  z.object({ status: z.literal('invalid_request'), message: z.string().min(1) }).strict(),
-]);
-export type DiscoveryInterestChangeResult = z.infer<typeof DiscoveryInterestChangeResultSchema>;
-/**
- * One source as the settings UI shows it. There is no availability probe: the
- * first-version source is the Zhihu API, so the only facts are whether the user
- * keeps it enabled and whether a credential is available.
- */
-export const SupplySourceViewSchema = SourceAccessViewSchema
-  .extend({
-    name: z.string().trim().min(1),
-    enabled: z.boolean(),
-    credentialConfigured: z.boolean(),
-  })
-  .strict();
+export const InterestListResultSchema = z.object({ interests: z.array(InterestUiSchema) }).strict();
+export type InterestListResult = z.infer<typeof InterestListResultSchema>;
+export const CreateInterestResultSchema = z.object({ status: z.literal('created'), interest: InterestUiSchema }).strict();
+export const UpdateInterestResultSchema = z.object({ status: z.enum(['updated', 'unchanged']), interest: InterestUiSchema }).strict();
+export const DeleteInterestResultSchema = z.object({ status: z.enum(['deleted', 'already_deleted']) }).strict();
+export const SupplySourceViewSchema = SourceAccessViewSchema.extend({
+  name: z.string().min(1), enabled: z.boolean(), credentialConfigured: z.boolean(),
+}).strict();
 export type SupplySourceView = z.infer<typeof SupplySourceViewSchema>;
-export const SupplyConfigurationViewSchema = z
-  .object({
-    /** False until the user accepts the first supply run; supply starts no external work before that. */
-    candidateSupplyConfirmed: z.boolean(),
-    sources: z.array(SupplySourceViewSchema),
-  })
-  .strict();
-export type SupplyConfigurationView = z.infer<typeof SupplyConfigurationViewSchema>;
-export const SupplyConfigurationUpdatePayloadSchema = z
-  .object({ enabledSources: z.array(z.enum(['tavily','bing_rss','zhihu','bilibili','xiaohongshu'])).optional() })
-  .strict();
-export type SupplyConfigurationUpdatePayload = z.infer<
-  typeof SupplyConfigurationUpdatePayloadSchema
->;
-export const SupplyConfirmResultSchema = z
-  .object({ status: z.enum(['confirmed', 'already_confirmed']) })
-  .strict();
-export type SupplyConfirmResult = z.infer<typeof SupplyConfirmResultSchema>;
-/**
- * The product surface of user interests and candidate supply. Candidate
- * preparation and maintenance stay inside the main process: this contract adds
- * no candidate-pool IPC, HTTP API, or UI event bus.
- */
-export interface DiscoveryHost {
-  /** Subscribes to committed result changes; listeners never own required writes. */
-  onChanged(listener: (event: RecommendationChanged) => void): () => void;
-  /** Reads retained daily cards without starting acquisition or model work. */
-  listDailyFeed(request: {
-    date?: string;
-  }): Promise<DailyFeedView>;
-  /** Accepts a daily run and returns before external work starts. */
-  startDailyFeed(request: {
-    requestId: string;
-    interestIds?: readonly string[];
-  }): Promise<StartDailyFeedResult>;
-  /** Reads the persisted result run without polling an external source. */
-  getRun(request: {
-    runId: string;
-  }): Promise<RecommendationRunView | undefined>;
-  /** Cancels only the named active result run. */
-  cancelRun(request: {
-    runId: string;
-  }): Promise<{
-    status: 'cancelling' | 'already_finished' | 'not_found';
-  }>;
-  /** Opens an isolated platform window; opening does not confirm login. */
+export const RecommendationConfigurationViewSchema = z.object({
+  revision: z.string().min(1), config: RecommendationConfigurationSchema, sources: z.array(SupplySourceViewSchema),
+}).strict();
+export type RecommendationConfigurationView = z.infer<typeof RecommendationConfigurationViewSchema>;
+export const RecommendationChangesSchema = z.object({
+  enabled: z.boolean().optional(),
+  enabledSources: RecommendationConfigurationSchema.shape.enabledSources.removeDefault().optional(),
+  candidateSupplyModel: ModelReferenceSchema.nullable().optional(),
+  recommendationModel: ModelReferenceSchema.nullable().optional(),
+  dailyFeed: RecommendationConfigurationSchema.shape.dailyFeed.removeDefault().innerType().partial().optional(),
+  candidateSupply: RecommendationConfigurationSchema.shape.candidateSupply.removeDefault().innerType().partial().optional(),
+  curated: RecommendationConfigurationSchema.shape.curated.removeDefault().innerType().partial().optional(),
+  limits: RecommendationConfigurationSchema.shape.limits.removeDefault().innerType().partial().optional(),
+}).strict();
+export const RecommendationConfigurationUpdateSchema = z.object({
+  expectedRevision: z.string().min(1), changes: RecommendationChangesSchema,
+}).strict();
+export type RecommendationConfigurationUpdate = z.infer<typeof RecommendationConfigurationUpdateSchema>;
+export const OpenContentRequestSchema = z.object({ contentId: z.string().min(1) }).strict();
+export const OpenContentResultSchema = z.object({ status: z.literal('accepted') }).strict();
+
+/** All result reads are local; start operations return acceptance before external execution. */
+export interface RecommendationHost {
+  /** Reads authoritative original interests and their current revisions. */
+  listInterests(): Promise<InterestListResult>;
+  /** Saves original text locally; invalid text raises INVALID_REQUEST. */
+  createInterest(request: CreateInterestRequest): Promise<z.infer<typeof CreateInterestResultSchema>>;
+  /** Checks the expected revision before applying a text or enable change. */
+  updateInterest(request: UpdateInterestRequest): Promise<z.infer<typeof UpdateInterestResultSchema>>;
+  /** Deletes only the interest; historical results and favorites remain readable. */
+  deleteInterest(request: DeleteInterestRequest): Promise<z.infer<typeof DeleteInterestResultSchema>>;
+  /** Reads saved daily batches without acquiring sources or evaluating material. */
+  listDailyFeed(request: { date?: string }): Promise<DailyFeedView>;
+  /** Returns saved selection, demand changes and local supply status. */
+  getCuratedSelection(): Promise<CuratedSelectionView>;
+  /** Reads pinned favorites with stable descending pagination. */
+  listFavorites(request: ListFavoritesRequest): Promise<FavoritesView>;
+  /** Commits the explicit favorite target state, retaining its first displayed material. */
+  setFavorite(request: SetFavoriteRequest): Promise<SetFavoriteResult>;
+  /** Accepts today's unfinished acquisition and returns its persisted run reference. */
+  startDailyFeed(request: { requestId: string; interestIds?: readonly string[] }): Promise<StartDailyFeedResult>;
+  /** Selects saved candidates; shortage registers independent supply without awaiting it. */
+  startCuratedSelection(request: { requestId: string }): Promise<StartCuratedSelectionResult>;
+  /** Reads the run from its owning module; no polling has external side effects. */
+  getRun(request: { runId: string }): Promise<RecommendationRunView | undefined>;
+  /** Accepts cancellation of the named run, without claiming external work already stopped. */
+  cancelRun(request: { runId: string }): Promise<{ status: 'cancelling' | 'already_finished' | 'not_found' }>;
+  /** Reads non-sensitive configuration and cached source access. */
+  getConfiguration(): Promise<RecommendationConfigurationView>;
+  /** Applies a Settings patch against the caller's configuration revision. */
+  updateConfiguration(request: RecommendationConfigurationUpdate): Promise<RecommendationConfigurationView>;
+  /** Opens the platform's isolated login window; opening does not prove login success. */
   openSourceLogin(request: SourceAccessRequest): Promise<SourceLoginResult>;
-  /** Makes one bounded read-only access check; configuration reads never probe. */
+  /** Makes one explicit bounded source access probe. */
   checkSourceAccess(request: SourceAccessRequest): Promise<SourceAccessView>;
-  /** Reads the saved interests without model or source work. */
-  listInterests(request?: DiscoveryEmptyPayload): Promise<DiscoveryInterestListResult>;
-  /** Creates, edits, enables, disables, or deletes one interest. */
-  changeInterest(request: DiscoveryInterestChangePayload): Promise<DiscoveryInterestChangeResult>;
-  /** Reads the supply enable state and the configured sources. */
-  getConfiguration(request?: DiscoveryEmptyPayload): Promise<SupplyConfigurationView>;
-  /** Applies one validated partial configuration update. */
-  updateConfiguration(
-    request: SupplyConfigurationUpdatePayload,
-  ): Promise<SupplyConfigurationView>;
-  /** Records the user's acceptance of the first supply run. */
-  confirmCandidateSupply(request?: DiscoveryEmptyPayload): Promise<SupplyConfirmResult>;
+  /** Opens the URL owned by saved content, never a renderer-supplied arbitrary URL. */
+  openContent(request: { contentId: string }): Promise<{ status: 'accepted' }>;
+  /** Notifies after committed changes; events are hints to re-read local state. */
+  onChanged(listener: (event: RecommendationChanged) => void): () => void;
 }

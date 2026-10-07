@@ -24,6 +24,7 @@ class ElectronAppBoundary extends EventEmitter {
 export const electronBoundary = {
   app: new ElectronAppBoundary(),
   autoUpdater: new EventEmitter(),
+  powerMonitor: new EventEmitter(),
   shell: { openExternal: async (_url: string) => undefined },
   session: { fromPartition: () => ({}) },
   net: { request: (options: http.RequestOptions) => http.request(options), fetch: globalThis.fetch },

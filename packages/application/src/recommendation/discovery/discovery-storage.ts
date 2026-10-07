@@ -23,6 +23,8 @@ export interface DiscoveryIssue {
   message: string;
   subjectId?: string;
 }
+const SupplementRequestSchema = z.object({interestId:z.string(),interestRevision:z.number().int().positive(),excludeContentIds:z.array(z.string()),requestedAt:z.number().int().nonnegative()}).strict();
+type SupplementRequest = z.infer<typeof SupplementRequestSchema>;
 export interface SavedDiscovery {
   resultId: string;
   item: RawItem;
@@ -41,7 +43,39 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
     const parsed = RawItemSchema.safeParse(JSON.parse(row.raw_payload));
     return parsed.success ? [{ resultId: row.id, item: parsed.data, ...(row.content_id ? { contentId: row.content_id } : {}) }] : [];
   });
-  return {
+  const storage = {
+    /** Settles abandoned dependencies, then expires history no longer needed for recovery. */
+    cleanup(now:number,protectedContentIds:ReadonlySet<string>,abandonedContentIds:readonly string[],protectedRunIds:ReadonlySet<string>) {
+      const abandoned=new Set(abandonedContentIds);
+      const waiting=database.prepare<{id:string;content_id:string|null}>({sql:"SELECT id,content_id FROM search_results WHERE status IN ('pending','failed') AND last_seen_at<? AND error_code IS NOT 'ABANDONED' AND NOT EXISTS(SELECT 1 FROM material_requests m WHERE m.content_id=search_results.content_id AND m.owner_run_id IS NOT NULL)"}).all([now-7*86400000]);
+      for(const row of waiting)if(!row.content_id||!protectedContentIds.has(row.content_id)){
+        database.prepare({sql:"UPDATE search_results SET status='failed',attempts=3,retry_at=NULL,error_code='ABANDONED',raw_payload=json_remove(raw_payload,'$.requestUrl') WHERE id=?"}).run([row.id]);
+        if(row.content_id)abandoned.add(row.content_id);
+      }
+      const requests=database.prepare<{id:string;content_id:string;request_url:string}>({sql:"SELECT m.id,m.content_id,m.request_url FROM material_requests m LEFT JOIN discovery_runs r ON r.id=m.discovery_run_id WHERE m.status IN ('pending','cancelled','failed') AND m.owner_run_id IS NULL AND m.error_code IS NOT 'ABANDONED' AND coalesce(r.started_at,0)<?"}).all([now-7*86400000]);
+      for(const row of requests)if(!protectedContentIds.has(row.content_id)){
+        database.prepare({sql:"UPDATE material_requests SET status='failed',attempts=3,retry_at=NULL,error_code='ABANDONED',request_url=? WHERE id=?"}).run([identifyContentUrl(row.request_url)?.url??row.request_url,row.id]);abandoned.add(row.content_id);
+      }
+      const byRun=new Map<string,SearchYield[]>();
+      for(const yielded of storage.pendingYields()){
+        const {runId,...row}=yielded;const rows=byRun.get(runId)??[];
+        if(row.status==='pending'&&readResults(row.historyId).some(result=>storage.resultFailed(result.resultId)||result.contentId&&abandoned.has(result.contentId))){row.status='incomplete';row.settledAt=now;}
+        rows.push(row);byRun.set(runId,rows);
+      }
+      for(const [runId,rows] of byRun)storage.saveYield(runId,rows);
+      const before=now-30*86400000;
+      database.prepare({sql:"DELETE FROM search_history WHERE searched_at<? AND NOT EXISTS(SELECT 1 FROM discovery_runs r WHERE r.id=search_history.run_id AND (r.status='running' OR EXISTS(SELECT 1 FROM json_each(r.yield_summary) y WHERE json_extract(y.value,'$.status')='pending')))"}).run([before]);
+      database.prepare({sql:"DELETE FROM material_requests WHERE owner_run_id IS NULL AND status NOT IN ('pending','running') AND discovery_run_id IN (SELECT id FROM discovery_runs WHERE status<>'running' AND finished_at<?)"}).run([before]);
+      const expiredRuns=database.prepare<{id:string}>({sql:"SELECT id FROM discovery_runs WHERE status<>'running' AND finished_at<? AND NOT EXISTS(SELECT 1 FROM search_history h WHERE h.run_id=discovery_runs.id) AND NOT EXISTS(SELECT 1 FROM material_requests m WHERE m.discovery_run_id=discovery_runs.id OR m.owner_run_id=discovery_runs.id) AND NOT EXISTS(SELECT 1 FROM json_each(yield_summary) y WHERE json_extract(y.value,'$.status')='pending')"}).all([before]);
+      for(const run of expiredRuns)if(!protectedRunIds.has(run.id))database.prepare({sql:'DELETE FROM discovery_runs WHERE id=?'}).run([run.id]);
+      database.prepare({sql:"DELETE FROM search_results WHERE last_seen_at<? AND (status NOT IN ('pending','failed') OR error_code='ABANDONED' OR attempts>=3) AND NOT EXISTS(SELECT 1 FROM search_result_links l WHERE l.search_result_id=search_results.id)"}).run([before]);
+      database.prepare({sql:'DELETE FROM search_queries WHERE coalesce(last_used_at,created_at)<? AND NOT EXISTS(SELECT 1 FROM search_history h WHERE h.query_id=search_queries.id)'}).run([before]);
+    },
+    /** Exposes recent discovered identities and unfinished material requests to Content retention. */
+    references(now:number) {
+      const rows=database.prepare<{content_id:string}>({sql:"SELECT content_id FROM search_results WHERE content_id IS NOT NULL AND last_seen_at>=? AND error_code IS NOT 'ABANDONED' UNION SELECT content_id FROM material_requests WHERE status IN ('pending','running') AND error_code IS NOT 'ABANDONED'"}).all([now-30*86400000]);
+      return {contentIds:rows.map(row=>row.content_id),materialIds:[] as string[]};
+    },
     /** Reuses durable zero-yield judgments as planning evidence, without inventing a profile. */
     planningHistory(interestId: string, revision: number, since: number) {
       const rows = database.prepare<{
@@ -255,8 +289,16 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
         source_cooldowns: string;
         candidate_next_interest_id: string | null;
         daily_feed_next_interest_id: string | null;
+        supplement_requests: string;
       }>({ sql: 'SELECT * FROM candidate_supply_state WHERE id = 1' }).get()!;
-      return { backoff: z.record(z.object({ revision: z.number().int().positive(), failures: z.number().int().nonnegative(), nextAt: z.number().int().nonnegative() }).strict()).parse(JSON.parse(row.search_backoff)), cooldowns: z.record(z.number().int().nonnegative()).parse(JSON.parse(row.source_cooldowns)), candidateCursor: row.candidate_next_interest_id, dailyCursor: row.daily_feed_next_interest_id };
+      return { supplements:z.array(SupplementRequestSchema).parse(JSON.parse(row.supplement_requests)),backoff: z.record(z.object({ revision: z.number().int().positive(), failures: z.number().int().nonnegative(), nextAt: z.number().int().nonnegative() }).strict()).parse(JSON.parse(row.search_backoff)), cooldowns: z.record(z.number().int().nonnegative()).parse(JSON.parse(row.source_cooldowns)), candidateCursor: row.candidate_next_interest_id, dailyCursor: row.daily_feed_next_interest_id };
+    },
+    /** Registers an independent demand; it does not execute or resume a selection. */
+    requestSupplement(interests:readonly InterestSnapshotEntry[],excludeContentIds:readonly string[],now:number) {
+      database.transaction({operation:()=>{
+        const pending=storage.state().supplements.filter(request=>!interests.some(interest=>interest.id===request.interestId));
+        storage.saveState({supplements:[...pending,...interests.map(interest=>({interestId:interest.id,interestRevision:interest.revision,excludeContentIds:[...excludeContentIds],requestedAt:now}))]});
+      }});
     },
     saveState(input: {
       backoff?: Record<string, {
@@ -267,7 +309,9 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
       cooldowns?: Record<string, number>;
       cursor?: string | null;
       purpose?: string;
+      supplements?: readonly SupplementRequest[];
     }) {
+      if(input.supplements)database.prepare({sql:'UPDATE candidate_supply_state SET supplement_requests=? WHERE id=1'}).run([JSON.stringify(input.supplements)]);
       if (input.backoff)
         database.prepare({ sql: 'UPDATE candidate_supply_state SET search_backoff = ? WHERE id = 1' }).run([JSON.stringify(input.backoff)]);
       if (input.cooldowns)
@@ -276,5 +320,6 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
         database.prepare({ sql: `UPDATE candidate_supply_state SET ${input.purpose === 'daily_feed' ? 'daily_feed_next_interest_id' : 'candidate_next_interest_id'} = ? WHERE id = 1` }).run([input.cursor ?? null]);
     },
   };
+  return storage;
 }
 export type DiscoveryStorage = ReturnType<typeof createDiscoveryStorage>;

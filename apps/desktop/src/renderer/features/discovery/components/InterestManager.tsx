@@ -6,16 +6,20 @@ import { useState, type FormEvent } from 'react';
 import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type {
-  DiscoveryInterestChangePayload,
   InterestUi,
   SupplySourceView,
 } from '@megumi/application/contracts';
 import { Button, cx } from '../../../shared/ui';
+/** Local form intent; transport uses separate create, update and delete operations. */
+export type InterestEdit =
+  | {action:'create';description:string}
+  | {action:'update';interestId:string;expectedRevision:number;description:string}
+  | {action:'pause'|'resume'|'delete';interestId:string;expectedRevision:number};
 
 interface InterestManagerProps {
   interests: InterestUi[] | null;
   sources: SupplySourceView[] | null;
-  onChangeInterest(request: DiscoveryInterestChangePayload): Promise<boolean>;
+  onChangeInterest(request: InterestEdit): Promise<boolean>;
   onChangeSources(enabledSources: SupplySourceView['sourceId'][]): Promise<boolean>;
   onOpenContentSources?(): void;
 }
@@ -41,7 +45,7 @@ export function InterestManager({
   const savedInterests = interests ?? [];
   const count = savedInterests.length;
 
-  async function change(request: DiscoveryInterestChangePayload): Promise<boolean> {
+  async function change(request: InterestEdit): Promise<boolean> {
     setBusy(true);
     try {
       return await onChangeInterest(request);

@@ -34,7 +34,7 @@ describe('LeftSidebar', () => {
     render(<LeftSidebar {...defaultProps} />);
 
     expect(screen.getByText('聊天')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '关注' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '推荐' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '新建会话' })).toBeInTheDocument();
     expect(screen.getByText('项目')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '设置' })).toBeInTheDocument();

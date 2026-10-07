@@ -1,12 +1,10 @@
 /*
- * Owns the interests and content-supply page: the saved interests, the source
- * enable state, and the first-supply consent.
+ * Connects saved interests, recommendation consent, daily results, selections and favorites.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Settings2, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type {
-  DiscoveryInterestChangePayload,
   InterestUi,
   SupplySourceView,
 } from '@megumi/application/contracts';
@@ -14,16 +12,20 @@ import { IPC_CHANNELS } from '../../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button } from '../../../shared/ui';
 import { FirstSupplyConfirmationDialog } from './FirstSupplyConfirmationDialog';
-import { InterestManager } from './InterestManager';
+import { InterestManager, type InterestEdit } from './InterestManager';
 import { DailyFeedList } from './DailyFeedList';
+import {CuratedSelectionList} from './CuratedSelectionList';
+import {FavoriteList} from './FavoriteList';
 interface DiscoveryPageProps {
   onOpenContentSources?(): void;
 }
+/** Reads saved state on mount and sends explicit edits through the Recommendation Host. */
 export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
   const { t } = useTranslation('discovery');
   const [interests, setInterests] = useState<InterestUi[] | null>(null);
   const [sources, setSources] = useState<SupplySourceView[] | null>(null);
   const [candidateSupplyConfirmed, setCandidateSupplyConfirmed] = useState(false);
+  const [configurationRevision,setConfigurationRevision]=useState('');
   const [error, setError] = useState<string | null>(null);
   const [supplyPromptOpen, setSupplyPromptOpen] = useState(false);
   const [supplyPromptShown, setSupplyPromptShown] = useState(false);
@@ -34,11 +36,11 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
     void (async () => {
       try {
         const [interestResult, configurationResult] = await Promise.all([
-          window.megumi.discovery.listInterests(
-            createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.interestList, {}),
+          window.megumi.recommendation.listInterests(
+            createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.interestList, {}),
           ),
-          window.megumi.discovery.getConfiguration(
-            createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationGet, {}),
+          window.megumi.recommendation.getConfiguration(
+            createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.configurationGet, {}),
           ),
         ]);
         if (!active) return;
@@ -48,7 +50,8 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
         }
         setInterests(interestResult.data.interests);
         setSources(configurationResult.data.sources);
-        setCandidateSupplyConfirmed(configurationResult.data.candidateSupplyConfirmed);
+        setCandidateSupplyConfirmed(configurationResult.data.config.enabled);
+        setConfigurationRevision(configurationResult.data.revision);
       } catch {
         if (active) setError(t('loadFailed'));
       }
@@ -69,27 +72,30 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
       setSupplyPromptOpen(true);
     }
   }, [needsSupplyConfirmation, supplyPromptShown]);
-  /** Saves one interest edit and adopts the saved list the Host returns. */
+  /** Saves one interest edit and re-reads the authoritative saved list. */
   const changeInterest = useCallback(
-    async (request: DiscoveryInterestChangePayload): Promise<boolean> => {
+    async (request: InterestEdit): Promise<boolean> => {
       setError(null);
       try {
-        const result = await window.megumi.discovery.changeInterest(
-          createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.interestChange, request),
-        );
-        if (result.ok && result.data.status === 'revision_conflict') {
+        const api=window.megumi.recommendation;
+        const result=await (request.action==='create'?api.createInterest(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.createInterest,{text:request.description})):
+          request.action==='delete'?api.deleteInterest(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.deleteInterest,{interestId:request.interestId,expectedRevision:request.expectedRevision})):
+          api.updateInterest(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.updateInterest,{interestId:request.interestId,expectedRevision:request.expectedRevision,...(request.action==='update'?{text:request.description}:{enabled:request.action==='resume'})})));
+        if (!result.ok && result.data.code === 'REVISION_CONFLICT') {
           setError(t('revisionConflict'));
-          const current = await window.megumi.discovery.listInterests(
-            createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.interestList, {}),
+          const current = await window.megumi.recommendation.listInterests(
+            createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.interestList, {}),
           );
           if (current.ok) setInterests(current.data.interests);
           return false;
         }
-        if (!result.ok || result.data.status !== 'changed') {
+        if (!result.ok) {
           setError(t('actionFailed'));
           return false;
         }
-        setInterests(result.data.interests);
+        const current=await api.listInterests(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.interestList,{}));
+        if(!current.ok){setError(t('loadFailed'));return false;}
+        setInterests(current.data.interests);
         return true;
       } catch {
         setError(t('actionFailed'));
@@ -103,9 +109,9 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
     async (enabledSources: SupplySourceView['sourceId'][]): Promise<boolean> => {
       setError(null);
       try {
-        const result = await window.megumi.discovery.updateConfiguration(
-          createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationUpdate, {
-            enabledSources,
+        const result = await window.megumi.recommendation.updateConfiguration(
+          createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.configurationUpdate, {
+            expectedRevision:configurationRevision,changes:{enabledSources},
           }),
         );
         if (!result.ok) {
@@ -113,14 +119,15 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
           return false;
         }
         setSources(result.data.sources);
-        setCandidateSupplyConfirmed(result.data.candidateSupplyConfirmed);
+        setCandidateSupplyConfirmed(result.data.config.enabled);
+        setConfigurationRevision(result.data.revision);
         return true;
       } catch {
         setError(t('actionFailed'));
         return false;
       }
     },
-    [t],
+    [t,configurationRevision],
   );
   /** Confirms through the Host before any supply work can start. */
   async function confirmFirstSupply() {
@@ -128,8 +135,8 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
     setConfirmingSupply(true);
     setConfirmationError(null);
     try {
-      const result = await window.megumi.discovery.confirmCandidateSupply(
-        createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.candidateSupplyConfirm, {}),
+      const result = await window.megumi.recommendation.updateConfiguration(
+        createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.configurationUpdate, {expectedRevision:configurationRevision,changes:{enabled:true}}),
       );
       if (!result.ok) {
         setConfirmationError(t('firstSupplyFailed'));
@@ -137,6 +144,7 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
       }
       setSupplyPromptOpen(false);
       setCandidateSupplyConfirmed(true);
+      setConfigurationRevision(result.data.revision);
     } catch {
       setConfirmationError(t('firstSupplyFailed'));
     } finally {
@@ -208,6 +216,8 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
           onOpenContentSources={onOpenContentSources}
         />
       <DailyFeedList />
+      <CuratedSelectionList />
+      <FavoriteList />
     </div>
 
     {supplyPromptOpen && needsSupplyConfirmation ? (

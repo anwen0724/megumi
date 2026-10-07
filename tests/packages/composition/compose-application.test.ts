@@ -12,21 +12,21 @@ afterEach(async () => { await application?.cleanup(); application = undefined; }
 describe('createApplication', () => {
   it('lists saved Interests with text, revision and enable state without leaking entity fields', async () => {
     application = composeTestApplication();
-    const active = await application.runtime.discovery.changeInterest({
-      action: 'create', description: 'Topic active',
+    const active = await application.runtime.recommendation.createInterest({
+      text: 'Topic active',
     });
-    if (active.status !== 'changed') throw new Error('Expected the active Interest to be saved.');
-    const second = await application.runtime.discovery.changeInterest({
-      action: 'create', description: 'Topic paused',
+    if (active.status !== 'created') throw new Error('Expected the active Interest to be saved.');
+    const second = await application.runtime.recommendation.createInterest({
+      text: 'Topic paused',
     });
-    if (second.status !== 'changed') throw new Error('Expected the paused Interest to be saved.');
-    const target = second.interests.find((interest) => interest.text === 'Topic paused');
+    if (second.status !== 'created') throw new Error('Expected the paused Interest to be saved.');
+    const target = second.interest;
     if (!target) throw new Error('Expected the created Interest in the returned snapshot.');
-    expect(await application.runtime.discovery.changeInterest({
-      action: 'pause', interestId: target.id, expectedRevision: target.revision,
-    })).toMatchObject({ status: 'changed' });
+    expect(await application.runtime.recommendation.updateInterest({
+      enabled:false, interestId: target.id, expectedRevision: target.revision,
+    })).toMatchObject({ status: 'updated' });
 
-    const interests = (await application.runtime.discovery.listInterests()).interests;
+    const interests = (await application.runtime.recommendation.listInterests()).interests;
     expect(interests).toEqual([
       { id: expect.any(String), text: 'Topic active', enabled: true, revision: 1 },
       { id: expect.any(String), text: 'Topic paused', enabled: false, revision: 2 },

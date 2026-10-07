@@ -52,7 +52,7 @@ export function migrateRecommendationSettings(filePath: string): {
     defaultedPaths.push('discovery.candidateSupply.interestMinimumCount', 'discovery.candidateSupply.interestTargetCount');
   }
   const limits: Record<string, unknown> = {};
-  for (const field of Object.keys(RecommendationLimitsSchema.shape)) if (oldLimits[field] !== undefined) limits[field] = oldLimits[field];
+  for (const field of Object.keys(RecommendationLimitsSchema.innerType().shape)) if (oldLimits[field] !== undefined) limits[field] = oldLimits[field];
   if (oldLimits.maxScreeningCalls !== undefined) limits.maxJudgmentCalls = oldLimits.maxScreeningCalls;
   if (oldLimits.maxConcurrentRequests !== undefined) {
     limits.maxConcurrentSourceRequests = oldLimits.maxConcurrentRequests;
@@ -73,7 +73,7 @@ export function migrateRecommendationSettings(filePath: string): {
   RecommendationConfigurationSchema.parse(discovery);
   for (const field of Object.keys(old)) if (!['candidateSupplyModel', 'enabledSources', 'candidateSupply'].includes(field)) removedPaths.push(`discovery.${field}`);
   for (const field of Object.keys(supply)) if (!Object.hasOwn(candidateSupply, field)) removedPaths.push(`discovery.candidateSupply.${field}`);
-  for (const field of Object.keys(oldLimits)) if (!Object.hasOwn(RecommendationLimitsSchema.shape, field)) removedPaths.push(`discovery.candidateSupply.limits.${field}`);
+  for (const field of Object.keys(oldLimits)) if (!Object.hasOwn(RecommendationLimitsSchema.innerType().shape, field)) removedPaths.push(`discovery.candidateSupply.limits.${field}`);
   writeJsonFile(filePath, { ...read.document, discovery, recommendationMigrationVersion: 1 });
   return { status: 'migrated', removedPaths, defaultedPaths };
 }

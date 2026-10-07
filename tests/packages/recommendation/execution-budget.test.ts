@@ -26,7 +26,7 @@ it('refunds unexecuted work and rejects requests after the round deadline', () =
 });
 it('settles actual tokens and refuses a request that would exceed the total', () => {
   const f = recommendationFixture();
-  const budget = createDiscoveryBudget(RecommendationLimitsSchema.parse({ maxModelInputTokens: 100, maxModelOutputTokens: 4000 }), f.now(), f.now);
+  const budget = createDiscoveryBudget(RecommendationLimitsSchema.parse({ maxRequestInputTokens:100,maxModelInputTokens: 100, maxModelOutputTokens: 4000 }), f.now(), f.now);
   const reservation = budget.reserveModel('analysisCalls', f.model, 'Analyze', 'text');
   if (typeof reservation === 'string')
     throw new Error('Expected reservation.');

@@ -1,114 +1,51 @@
-/* Verifies the Product Host exposes Interest and Candidate Supply configuration without owning their state. */
+/*
+ * Verifies the Recommendation Product Host delegates authoritative interests and versioned settings.
+ */
 // @vitest-environment node
-import { afterEach, describe, expect, it } from 'vitest';
-import { SupplyConfigurationViewSchema } from '@megumi/application/contracts';
-import {
-  composeTestApplication,
-  type TestApplication,
-} from '../composition/compose-test-application';
-
-let application: TestApplication | undefined;
-afterEach(async () => { await application?.cleanup(); application = undefined; });
-
-describe('Discovery Product Host operations', () => {
-  it('creates, edits, pauses, resumes, and deletes one Interest', async () => {
-    application = composeTestApplication();
-    await expect(application.runtime.discovery.listInterests()).resolves.toEqual({ interests: [] });
-
-    const created = await application.runtime.discovery.changeInterest({
-      action: 'create', description: 'TypeScript architecture',
-    });
-    if (created.status !== 'changed') throw new Error('Expected the Interest to be created.');
-    const [interest] = created.interests;
-    if (!interest) throw new Error('Expected one saved Interest.');
-    expect(interest).toMatchObject({ text: 'TypeScript architecture', enabled: true });
-    await expect(application.runtime.discovery.listInterests())
-      .resolves.toEqual({ interests: [interest] });
-
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'update', interestId: interest.id, expectedRevision: 1, description: 'TypeScript module design',
-    })).resolves.toEqual({
-      status: 'changed',
-      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: true, revision: 2 }],
-    });
-
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'pause', interestId: interest.id, expectedRevision: 2,
-    })).resolves.toEqual({
-      status: 'changed',
-      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: false, revision: 3 }],
-    });
-
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'resume', interestId: interest.id, expectedRevision: 3,
-    })).resolves.toEqual({
-      status: 'changed',
-      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: true, revision: 4 }],
-    });
-
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'delete', interestId: interest.id, expectedRevision: 4,
-    })).resolves.toEqual({ status: 'changed', interests: [] });
-    await expect(application.runtime.discovery.listInterests()).resolves.toEqual({ interests: [] });
-  });
-
-  it('separates an unknown Interest id from a payload the Interest rules reject', async () => {
-    application = composeTestApplication();
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'update', interestId: 'interest:missing', expectedRevision: 1, description: 'Anything',
-    })).resolves.toEqual({ status: 'not_found' });
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'pause', interestId: 'interest:missing', expectedRevision: 1,
-    })).resolves.toEqual({ status: 'not_found' });
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'resume', interestId: 'interest:missing', expectedRevision: 1,
-    })).resolves.toEqual({ status: 'not_found' });
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'delete', interestId: 'interest:missing', expectedRevision: 1,
-    })).resolves.toEqual({ status: 'changed', interests: [] });
-
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'create', description: '   ',
-    })).resolves.toMatchObject({ status: 'invalid_request' });
-    await expect(application.runtime.discovery.changeInterest({
-      action: 'update', interestId: 'interest:missing', expectedRevision: 1, description: '   ',
-    })).resolves.toMatchObject({ status: 'invalid_request' });
-    // A rejected payload never reaches saved state.
-    await expect(application.runtime.discovery.listInterests()).resolves.toEqual({ interests: [] });
-  });
-
-  it('reads and round-trips the Candidate Supply configuration', async () => {
-    application = composeTestApplication();
-    const initial = SupplyConfigurationViewSchema.parse(
-      await application.runtime.discovery.getConfiguration(),
-    );
-    expect(initial).toMatchObject({
-      candidateSupplyConfirmed: false,
-      sources: [
-        { sourceId: 'tavily', enabled: false, state: 'disabled' },
-        { sourceId: 'bing_rss', enabled: false, state: 'disabled' },
-        { sourceId: 'zhihu', enabled: true, credentialConfigured: false, state: 'unchecked' },
-        { sourceId: 'bilibili', enabled: false, state: 'disabled' },
-        { sourceId: 'xiaohongshu', enabled: false, state: 'disabled' },
-      ],
-    });
-    await expect(application.runtime.discovery.updateConfiguration({ enabledSources: ['zhihu'] }))
-      .resolves.toEqual(initial);
-    const disabled = await application.runtime.discovery.updateConfiguration({ enabledSources: [] });
-    expect(disabled.sources.every((source) => !source.enabled && source.state === 'disabled')).toBe(true);
-    expect(application.runtime.settings.readSettings()).toMatchObject({
-      status: 'ok',
-      settings: { config: { discovery: { enabledSources: [] } } },
-    });
-  });
-
-  it('confirms Candidate Supply once and reports every later confirmation as already confirmed', async () => {
-    application = composeTestApplication();
-    await expect(application.runtime.discovery.confirmCandidateSupply())
-      .resolves.toEqual({ status: 'confirmed' });
-    await expect(application.runtime.discovery.confirmCandidateSupply())
-      .resolves.toEqual({ status: 'already_confirmed' });
-    await expect(application.runtime.discovery.getConfiguration())
-      .resolves.toMatchObject({ candidateSupplyConfirmed: true });
-  });
+import {afterEach,describe,expect,it} from 'vitest';
+import {RecommendationConfigurationViewSchema} from '@megumi/application/contracts';
+import {composeTestApplication,type TestApplication} from '../composition/compose-test-application';
+let application:TestApplication|undefined;
+afterEach(async()=>{await application?.cleanup();application=undefined;});
+describe('Recommendation Product Host operations',()=>{
+ it('creates, edits, pauses, resumes and deletes an interest through its explicit operations',async()=>{
+  application=composeTestApplication();const host=application.runtime.recommendation;
+  expect(await host.listInterests()).toEqual({interests:[]});
+  const {interest}=await host.createInterest({text:'TypeScript architecture'});
+  expect(interest).toMatchObject({text:'TypeScript architecture',enabled:true,revision:1});
+  expect(await host.updateInterest({interestId:interest.id,expectedRevision:1,text:'TypeScript module design'})).toMatchObject({status:'updated',interest:{revision:2}});
+  expect(await host.updateInterest({interestId:interest.id,expectedRevision:2,enabled:false})).toMatchObject({status:'updated',interest:{enabled:false,revision:3}});
+  expect(await host.updateInterest({interestId:interest.id,expectedRevision:3,enabled:true})).toMatchObject({status:'updated',interest:{enabled:true,revision:4}});
+  expect(await host.deleteInterest({interestId:interest.id,expectedRevision:4})).toEqual({status:'deleted'});
+  expect(await host.deleteInterest({interestId:interest.id,expectedRevision:4})).toEqual({status:'already_deleted'});
+  expect(await host.listInterests()).toEqual({interests:[]});
+ });
+ it('distinguishes invalid input, missing interest and revision conflicts without inventing saved state',async()=>{
+  application=composeTestApplication();const host=application.runtime.recommendation;
+  await expect(host.createInterest({text:'   '})).rejects.toMatchObject({code:'INVALID_REQUEST'});
+  await expect(host.updateInterest({interestId:'missing',expectedRevision:1,text:'Anything'})).rejects.toMatchObject({code:'INTEREST_NOT_FOUND'});
+  await expect(host.updateInterest({interestId:'missing',expectedRevision:1,enabled:false})).rejects.toMatchObject({code:'INTEREST_NOT_FOUND'});
+  const {interest}=await host.createInterest({text:'Topic'});
+  await host.updateInterest({interestId:interest.id,expectedRevision:1,text:'Changed'});
+  await expect(host.deleteInterest({interestId:interest.id,expectedRevision:1})).rejects.toMatchObject({code:'REVISION_CONFLICT'});
+  expect((await host.listInterests()).interests).toHaveLength(1);
+ });
+ it('reads non-sensitive configuration and rejects a stale configuration update',async()=>{
+  application=composeTestApplication();const host=application.runtime.recommendation;
+  const initial=RecommendationConfigurationViewSchema.parse(await host.getConfiguration());
+  expect(initial.config.enabled).toBe(false);
+  expect(initial.sources).toHaveLength(5);
+  const updated=await host.updateConfiguration({expectedRevision:initial.revision,changes:{enabledSources:[]}});
+  expect(updated.sources.every(source=>!source.enabled&&source.state==='disabled')).toBe(true);
+  await expect(host.updateConfiguration({expectedRevision:initial.revision,changes:{enabledSources:['zhihu']}})).rejects.toMatchObject({code:'REVISION_CONFLICT'});
+  expect(application.runtime.settings.readSettings()).toMatchObject({status:'ok',settings:{config:{discovery:{enabledSources:[]}}}});
+ });
+ it('enables recommendation through the same versioned settings update and keeps repeated updates idempotent',async()=>{
+  application=composeTestApplication();const host=application.runtime.recommendation;
+  const initial=await host.getConfiguration();
+  const enabled=await host.updateConfiguration({expectedRevision:initial.revision,changes:{enabled:true}});
+  expect(enabled.config.enabled).toBe(true);
+  const repeated=await host.updateConfiguration({expectedRevision:enabled.revision,changes:{enabled:true}});
+  expect(repeated.revision).toBe(enabled.revision);
+ });
 });

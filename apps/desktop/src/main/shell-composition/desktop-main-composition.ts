@@ -1,5 +1,5 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
-import { app, BrowserWindow, powerMonitor } from 'electron';
+import { app, BrowserWindow, powerMonitor, shell } from 'electron';
 import path from 'node:path';
 import { assertSeparateHome } from '../installation/installation-environment';
 import { resolveMegumiHomePath } from '@megumi/application/storage/home';
@@ -47,6 +47,7 @@ export function composeDesktopMain() {
   // Desktop selects environment adapters; shared Composition owns the object graph.
   const product = createApplication({
     embeddedBrowser: createElectronEmbeddedBrowser(),
+    openExternal: url=>shell.openExternal(url),
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
     observabilityStorage: nodeObservabilityStorage,
@@ -73,7 +74,7 @@ export function composeDesktopMain() {
     void product.resume().catch(() => runtimeLogger.warn('recommendation_resume_failed'));
   };
   powerMonitor.on('resume', resumeRecommendation);
-  const unsubscribeRecommendation = product.discovery.onChanged(event => {
+  const unsubscribeRecommendation = product.recommendation.onChanged(event => {
     for (const window of BrowserWindow.getAllWindows())
       window.webContents.send(IPC_CHANNELS.recommendation.changed, event);
   });

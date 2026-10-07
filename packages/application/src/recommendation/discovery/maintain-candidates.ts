@@ -56,7 +56,8 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
   const deadline = AbortSignal.timeout(config.limits.maxDurationMinutes * 60000);
   const signal = AbortSignal.any([input.signal, deadline]);
   const issues: DiscoveryIssue[] = [];
-  const interests = (await input.interests.listInterests()).interests.filter(i => i.enabled && (!input.interestIds || input.interestIds.includes(i.id)));
+  const enabledInterests = (await input.interests.listInterests()).interests.filter(i=>i.enabled);
+  const interests = enabledInterests.filter(i => !input.interestIds || input.interestIds.includes(i.id));
   discovery.state();
   discovery.startRun({ id: input.runId, purpose: input.purpose, interests, configRevision: input.configRevision, now: now(), budget });
   const priority = input.purpose === 'daily_feed' ? 1 : 0;
@@ -86,7 +87,12 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
     for (const interest of rotated)
       if ((backlog.get(interest.id) ?? 0) >= 2 * config.candidateSupply.interestTargetCount && input.purpose === 'candidate_supply')
         issues.push({ code: 'backlog_limit', message: 'Existing actionable work has reached the interest backlog limit.', subjectId: interest.id });
-    const wanted = rotated.filter(i => input.purpose === 'daily_feed' || input.candidates.inventory(now(), i.id, config.candidateSupply.contentLanguages) < config.candidateSupply.interestMinimumCount && (backlog.get(i.id) ?? 0) < 2 * config.candidateSupply.interestTargetCount && (!state.backoff[i.id] || state.backoff[i.id]!.revision !== i.revision || state.backoff[i.id]!.nextAt <= now())).slice(0, Math.max(1, config.limits.maxSearchCalls - 5));
+    const supplements=state.supplements.filter(request=>{
+      const interest=enabledInterests.find(item=>item.id===request.interestId&&item.revision===request.interestRevision);
+      return interest&&input.candidates.listCandidates(now(),{contentLanguages:config.candidateSupply.contentLanguages,excludeContentIds:request.excludeContentIds,interestIds:[interest.id]}).length<config.candidateSupply.interestTargetCount;
+    });
+    discovery.saveState({supplements});
+    const wanted = rotated.filter(i => input.purpose === 'daily_feed' || (input.candidates.inventory(now(), i.id, config.candidateSupply.contentLanguages) < config.candidateSupply.interestMinimumCount||supplements.some(request=>request.interestId===i.id)) && (backlog.get(i.id) ?? 0) < 2 * config.candidateSupply.interestTargetCount && (!state.backoff[i.id] || state.backoff[i.id]!.revision !== i.revision || state.backoff[i.id]!.nextAt <= now())).slice(0, Math.max(1, config.limits.maxSearchCalls - 5));
     const available = input.sources.connectors().filter(s => (state.cooldowns[s.id] ?? 0) <= now());
     if (wanted.length && !available.length)
       issues.push({ code: 'SOURCE_UNAVAILABLE', message: 'No enabled search source is available for the current shortage.' });

@@ -246,6 +246,27 @@
       "when": 1791500000000,
       "tag": "0034_recommendation_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1791500000001,
+      "tag": "0035_curated_supplement_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1791500000002,
+      "tag": "0036_immutable_material_metadata",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1791500000003,
+      "tag": "0037_recommendation_run_states",
+      "breakpoints": true
     }
   ]
 }

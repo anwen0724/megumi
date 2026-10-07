@@ -75,9 +75,13 @@ it('preserves acquired material versions when the later foundation migration swi
   onTestFinished(() => { database.close(); fs.rmSync(folder, { recursive: true, force: true }); });
   migrateDatabase({ database, migrationsFolder: legacyMigrationFolder() });
   database.prepare({sql:"INSERT INTO contents(id,source,platform,external_id,canonical_url,text,created_at,updated_at) VALUES('c1','zhihu','zhihu','123','https://zhuanlan.zhihu.com/p/123','摘要',10,10)"}).run();
-  const contents = createMaterialStorage(database);
-  const original = contents.saveMaterial({platform:'zhihu',externalId:'123',canonicalUrl:'https://zhuanlan.zhihu.com/p/123',text:'摘要',kind:'excerpt',truncated:false,rangeEnd:2,method:'zhihu_search',acquiredAt:10,publicationEvidence:[]}).material;
-  const full = contents.saveMaterial({platform:'zhihu',externalId:'123',canonicalUrl:'https://zhuanlan.zhihu.com/p/123',text:'完整正文',kind:'full_text',truncated:false,rangeEnd:4,method:'zhihu_browser_detail',acquiredAt:20,publicationEvidence:[]}).material;
+  // Seed the historical schema directly; today's writer must not support a retired schema.
+  const original={id:'original-material'};const full={id:'full-material'};
+  for(const [id,revision,text,kind,method,time] of [[original.id,1,'摘要','excerpt','zhihu_search',10],[full.id,2,'完整正文','full_text','zhihu_browser_detail',20]] as const){
+    database.prepare({sql:"INSERT INTO content_materials(id,content_id,revision,text,text_hash,kind,truncated,range_end,method,acquired_at,publication_evidence) VALUES(?,'c1',?,?,sha256(?),?,0,?,?,?,'[]')"}).run([id,revision,text,text,kind,[...text].length,method,time]);
+    database.prepare({sql:'INSERT INTO material_acquisitions(id,material_id,method,acquired_at) VALUES(?,?,?,?)'}).run(['acquisition-'+id,id,method,time]);
+  }
+  database.prepare({sql:"UPDATE contents SET current_material_id=?,text='完整正文' WHERE id='c1'"}).run([full.id]);
   migrateDatabase({ database, migrationsFolder: folder });
   const materials = createMaterialStorage(database);
   expect(materials.readCurrentMaterial('c1')).toMatchObject({ id: full.id, revision: 2, text: '完整正文' });

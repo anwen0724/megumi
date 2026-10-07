@@ -16,7 +16,7 @@ export function SourceAccessSettings() {
     let active = true;
     async function read() {
       try {
-        const result = await window.megumi.discovery.getConfiguration(createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.configurationGet, {}));
+        const result = await window.megumi.recommendation.getConfiguration(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.configurationGet, {}));
         if (!result.ok) throw new Error(result.data.message);
         if (active) setSources(result.data.sources);
       } catch (reason) {
@@ -36,7 +36,7 @@ export function SourceAccessSettings() {
     setBusy(sourceId);
     setError(null);
     try {
-      const result = await window.megumi.discovery.checkSourceAccess(createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.sourceAccess, { sourceId }));
+      const result = await window.megumi.recommendation.checkSourceAccess(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.sourceAccess, { sourceId }));
       if (!result.ok) throw new Error(result.data.message);
       setSources((current) => current.map((source) => source.sourceId === sourceId ? { ...source, ...result.data } : source));
     } catch (reason) { setError(reason instanceof Error ? reason.message : t('contentSources.loadFailed')); }
@@ -48,7 +48,7 @@ export function SourceAccessSettings() {
     setError(null);
     setOpened(null);
     try {
-      const result = await window.megumi.discovery.openSourceLogin(createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.sourceLogin, { sourceId }));
+      const result = await window.megumi.recommendation.openSourceLogin(createRendererRuntimeIpcRequest(IPC_CHANNELS.recommendation.sourceLogin, { sourceId }));
       if (!result.ok) throw new Error(result.data.message);
       if (result.data.status === 'rejected') throw new Error(result.data.error.message);
       setOpened(sourceId);

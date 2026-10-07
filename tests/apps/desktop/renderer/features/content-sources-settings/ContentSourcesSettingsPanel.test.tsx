@@ -23,7 +23,7 @@ describe('ContentSourcesSettingsPanel', () => {
       value: {
         models: fixture.api.models,
         settings: { ...fixture.api.settings, updateCredential: setCredential },
-        discovery: {
+        recommendation: {
           async getConfiguration() { return { ok: true, data: { candidateSupplyConfirmed: false, sources: [{ sourceId: 'xiaohongshu', name: '小红书', enabled: true, credentialConfigured: false, state: 'login_required', checkedAt: null, retryAt: null, error: null }] } }; },
           checkSourceAccess,
           async openSourceLogin() { return { ok: true, data: { status: 'opened' } }; },

@@ -12,11 +12,9 @@ import type {
   ListSkillsUiResponse,
   RefreshSkillsUiResponse,
   WorkspaceOpenFileUiResult,
-  DiscoveryEmptyPayload,
-  DiscoveryInterestChangeResult,
-  DiscoveryInterestListResult,
-  SupplyConfigurationView,
-  SupplyConfirmResult,
+  RecommendationEmptyRequest,
+  InterestListResult,
+  RecommendationConfigurationView,
 } from '@megumi/application/contracts';
 import type {
   SessionBranchDraftCancelPayload,
@@ -32,8 +30,6 @@ import type {
   SkillListPayload,
   SkillRefreshPayload,
   WorkspaceFileOpenPayload,
-  DiscoveryInterestChangePayload,
-  DiscoveryConfigurationUpdatePayload,
 } from '../main/ipc/schemas';
 import type { api } from './api';
 
@@ -64,13 +60,3 @@ export type SkillDeletePreloadPayload = SkillDeletePayload;
 export type SkillDeletePreloadData = DeleteSkillUiResponse;
 export type SkillRefreshPreloadPayload = SkillRefreshPayload;
 export type SkillRefreshPreloadData = RefreshSkillsUiResponse;
-export type DiscoveryInterestListPreloadPayload = DiscoveryEmptyPayload;
-export type DiscoveryInterestListPreloadData = DiscoveryInterestListResult;
-export type DiscoveryInterestChangePreloadPayload = DiscoveryInterestChangePayload;
-export type DiscoveryInterestChangePreloadData = DiscoveryInterestChangeResult;
-export type DiscoveryConfigurationGetPreloadPayload = DiscoveryEmptyPayload;
-export type DiscoveryConfigurationGetPreloadData = SupplyConfigurationView;
-export type DiscoveryConfigurationUpdatePreloadPayload = DiscoveryConfigurationUpdatePayload;
-export type DiscoveryConfigurationUpdatePreloadData = SupplyConfigurationView;
-export type DiscoveryCandidateSupplyConfirmPreloadPayload = DiscoveryEmptyPayload;
-export type DiscoveryCandidateSupplyConfirmPreloadData = SupplyConfirmResult;

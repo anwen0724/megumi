@@ -7,7 +7,7 @@ import type { ApprovalHost } from './coding/approvals/contracts';
 import type { EventFilter, EventHandler, EventSubscription } from './coding/events/event-bus';
 import type { SessionHost } from './coding/session-contracts';
 import type { ObservabilityHost } from './observability/observability-contracts';
-import type { DiscoveryHost } from './recommendation/recommendation-contracts';
+import type { RecommendationHost } from './recommendation/recommendation-contracts';
 import type { Settings } from './settings/settings-store';
 import type { SkillHost } from './skills/contracts';
 import type { SpeechOutputEventListener, SpeechOutputSubscription } from './voice/index';
@@ -38,7 +38,7 @@ export interface ApplicationOperations {
   approval: ApprovalHost;
   observability: ObservabilityHost;
   voice: VoiceHost;
-  discovery: DiscoveryHost;
+  recommendation: RecommendationHost;
 }
 
 export interface ApplicationLogger {

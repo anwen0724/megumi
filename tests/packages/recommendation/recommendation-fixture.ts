@@ -21,6 +21,7 @@ export interface ModelPrompt {
     text?: string;
     interestId?: string;
     contentId?: string;
+    qualifications?: {interestId:string}[];
   }[];
   interests?: {
     id: string;
@@ -71,6 +72,18 @@ export function recommendationFixture(options: {
   return {
     database, settings, materials, candidates, requests, prompts, now, newId, defaultRespond, model, client: ownerOptions.client,
     get owner() { return owner; }, advance(ms: number) { time += ms; },
+    /** Saves real analyzed materials; tests still acquire qualification through its owner. */
+    saveAnalyzedMaterial(url: string, author?: string) {
+      const text = `完整正文包含面试的准备方法。来源：${url}`;
+      const material = materials.saveMaterial({ platform: 'web', canonicalUrl: url,
+        title: url, author, language: 'zh', text, kind: 'full_text', truncated: false,
+        rangeEnd: [...text].length, method: 'direct_web', acquiredAt: now(), publicationEvidence: [] }).material;
+      const evidence = [{ materialId: material.id, quote: '准备方法' }];
+      materials.saveAnalysis({ contentId: material.contentId, materialId: material.id, now: now(),
+        result: { summary: text, keyPoints: [{ text: '面试方法', evidence }], topics: ['面试'],
+          contentType: 'article', qualityScore: 0.8, spamScore: 0, timeScope: { kind: 'unknown', evidence: [] } } });
+      return material;
+    },
     async restart() { await owner.shutdown(); owner = createRecommendation(ownerOptions); return owner; }
   };
 }

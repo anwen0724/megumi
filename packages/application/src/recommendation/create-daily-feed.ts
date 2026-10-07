@@ -248,6 +248,7 @@ export function createDailyFeed(input: DailyFeedOptions) {
     },
     async completion() { await Promise.all([...background.values()].map(work => work.result)); },
     cancel(runId?: string) {
+      if(!runId){for(const work of background.values())work.controller.abort();}
       if (active && (!runId || active.id === runId)) {
         active.controller.abort();
         return 'cancelling' as const;

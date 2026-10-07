@@ -122,6 +122,7 @@ export interface ModuleOptions {
   webFetch?: WebFetch;
   embeddedBrowser?: EmbeddedBrowser;
   recommendationSourceFetch?: typeof globalThis.fetch;
+  openExternal?: (url:string)=>Promise<void>;
   clock?: { now(): string };
   createApplicationId?: (scope: string) => string;
   timers?: {
@@ -514,6 +515,7 @@ function composeCapabilitiesWithDatabase(
     accessSecret: (sourceId) => discoveryCredential(settings, sourceId),
     browser: options.embeddedBrowser,
     sourceFetch: options.recommendationSourceFetch,
+    openExternal: options.openExternal,
     sourceWebFetch: options.webFetch,
     newId: createId,
     ...(options.timers ? { timers: options.timers } : {}),

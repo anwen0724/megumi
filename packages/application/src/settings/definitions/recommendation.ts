@@ -19,7 +19,7 @@ export const RecommendationLimitsSchema = z.object({
   requestTimeoutSeconds: z.number().positive().default(30),
   maxConcurrentSourceRequests: z.number().int().positive().default(2),
   maxConcurrentModelRequests: z.number().int().positive().default(2),
-}).strict();
+}).strict().refine(limits=>limits.maxRequestInputTokens<=limits.maxModelInputTokens&&limits.maxRequestOutputTokens<=limits.maxModelOutputTokens,'Per-request tokens must not exceed the run budget.');
 
 export const RecommendationConfigurationSchema = z.object({
   enabled: z.boolean().default(false),
@@ -32,16 +32,16 @@ export const RecommendationConfigurationSchema = z.object({
   dailyFeed: z.object({
     runAt: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('08:00'),
     lookbackDays: z.number().int().min(1).max(7).default(3),
-    historyDays: z.number().int().positive().default(7),
+    historyDays: z.literal(7).default(7),
     maxItemsPerInterest: z.number().int().positive().default(10),
     maxItemsPerDay: z.number().int().positive().default(30)
-  }).strict().default({}),
+  }).strict().refine(feed=>feed.maxItemsPerDay>=feed.maxItemsPerInterest,'Daily total must not be less than the per-interest limit.').default({}),
   candidateSupply: z.object({
     interestMinimumCount: z.number().int().nonnegative().default(10),
     interestTargetCount: z.number().int().positive().default(30),
     maintenanceIntervalMinutes: z.number().int().positive().default(60),
-    maxSearchBackoffHours: z.number().positive().default(24),
-    reviewAfterDays: z.number().positive().default(30),
+    maxSearchBackoffHours: z.number().int().positive().default(24),
+    reviewAfterDays: z.number().int().positive().default(30),
     contentLanguages: z.array(z.string().trim().min(1)).default([]),
     searchReuseIntervalMinutes: z.number().int().positive().default(360),
     searchHistoryDays: z.number().int().positive().default(30)
@@ -55,7 +55,7 @@ export const RecommendationConfigurationSchema = z.object({
     shortlistCount: z.number().int().positive().default(30),
     maxItemsPerPublisher: z.number().int().positive().default(3),
     historyDays: z.number().int().positive().default(30)
-  }).strict().default({}),
+  }).strict().refine(curated=>curated.targetCount<=curated.shortlistCount&&curated.shortlistCount<=curated.maxCandidateCount,'Target must not exceed shortlist, and shortlist must not exceed the input window.').default({}),
   limits: RecommendationLimitsSchema.default({}),
 }).strict();
 export type RecommendationConfiguration = z.infer<typeof RecommendationConfigurationSchema>;

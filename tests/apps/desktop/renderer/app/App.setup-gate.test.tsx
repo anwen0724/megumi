@@ -22,6 +22,14 @@ function installMegumiMock() {
         close: vi.fn(),
       },
       models: fixture.api.models,
+      recommendation: {
+        listInterests:vi.fn().mockResolvedValue({ok:true,data:{interests:[]}}),
+        getConfiguration:vi.fn().mockResolvedValue({ok:true,data:{revision:'v1',config:{enabled:false},sources:[]}}),
+        listDailyFeed:vi.fn().mockResolvedValue({ok:true,data:{date:'2026-10-08',items:[],batches:[],activeRuns:[]}}),
+        getCuratedSelection:vi.fn().mockResolvedValue({ok:true,data:{needsUpdate:false,supplyStatus:[]}}),
+        listFavorites:vi.fn().mockResolvedValue({ok:true,data:{items:[]}}),
+        onChanged:vi.fn(()=>()=>undefined),
+      },
       settings: {
         ...fixture.api.settings,
         get: vi.fn(),

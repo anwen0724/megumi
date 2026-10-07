@@ -5,10 +5,6 @@ import { z } from 'zod';
 import * as host from '@megumi/application/contracts';
 import { createRuntimeIpcRequestSchema } from './contracts';
 import { IPC_CHANNELS } from './channels';
-export const DailyFeedListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.listDailyFeed, host.DailyFeedRequestSchema);
-export const DailyFeedStartRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.startDailyFeed, host.StartDailyFeedRequestSchema);
-export const RecommendationRunRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.getRun, host.RunRequestSchema);
-export const RecommendationCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.cancelRun, host.RunRequestSchema);
 export const InputSuggestionsRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.inputSuggestions,
   host.InputSuggestionsPayloadSchema,
@@ -106,28 +102,23 @@ export const ApprovalResolveRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.approval.resolve,
   host.ApprovalResolvePayloadSchema,
 );
-export const DiscoveryInterestListRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.interestList,
-  host.DiscoveryEmptyPayloadSchema,
-);
-export const DiscoveryInterestChangeRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.interestChange,
-  host.DiscoveryInterestChangePayloadSchema,
-);
-export const DiscoveryConfigurationGetRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.configurationGet,
-  host.DiscoveryEmptyPayloadSchema,
-);
-export const DiscoveryConfigurationUpdateRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.configurationUpdate,
-  host.SupplyConfigurationUpdatePayloadSchema,
-);
-export const DiscoveryCandidateSupplyConfirmRequestSchema = createRuntimeIpcRequestSchema(
-  IPC_CHANNELS.discovery.candidateSupplyConfirm,
-  host.DiscoveryEmptyPayloadSchema,
-);
-export const SourceLoginRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourceLogin, host.SourceAccessRequestSchema);
-export const SourceAccessCheckRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourceAccess, host.SourceAccessRequestSchema);
+export const ListInterestsRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.interestList, host.RecommendationEmptyRequestSchema);
+export const CreateInterestRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.createInterest, host.CreateInterestRequestSchema);
+export const UpdateInterestRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.updateInterest, host.UpdateInterestRequestSchema);
+export const DeleteInterestRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.deleteInterest, host.DeleteInterestRequestSchema);
+export const ListDailyFeedRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.listDailyFeed, host.DailyFeedRequestSchema);
+export const GetCuratedSelectionRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.getCuratedSelection, host.RecommendationEmptyRequestSchema);
+export const ListFavoritesRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.listFavorites, host.ListFavoritesRequestSchema);
+export const SetFavoriteRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.setFavorite, host.SetFavoriteRequestSchema);
+export const StartDailyFeedRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.startDailyFeed, host.StartDailyFeedRequestSchema);
+export const StartCuratedSelectionRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.startCuratedSelection, host.StartCuratedSelectionRequestSchema);
+export const GetRunRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.getRun, host.RunRequestSchema);
+export const CancelRunRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.cancelRun, host.RunRequestSchema);
+export const GetConfigurationRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.configurationGet, host.RecommendationEmptyRequestSchema);
+export const UpdateConfigurationRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.configurationUpdate, host.RecommendationConfigurationUpdateSchema);
+export const OpenSourceLoginRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.sourceLogin, host.SourceAccessRequestSchema);
+export const CheckSourceAccessRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.sourceAccess, host.SourceAccessRequestSchema);
+export const OpenContentRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.openContent, host.OpenContentRequestSchema);
 export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.voice.snapshot,
   host.VoiceEmptyPayloadSchema,
@@ -269,12 +260,6 @@ export type SessionBranchDraftCancelPayload = z.infer<
   typeof host.SessionBranchDraftCancelPayloadSchema
 >;
 export type ApprovalResolvePayload = z.infer<typeof host.ApprovalResolvePayloadSchema>;
-export type DiscoveryInterestChangePayload = z.infer<
-  typeof host.DiscoveryInterestChangePayloadSchema
->;
-export type DiscoveryConfigurationUpdatePayload = z.infer<
-  typeof host.SupplyConfigurationUpdatePayloadSchema
->;
 export type VoiceSessionStartPayload = z.infer<typeof host.VoiceSessionStartPayloadSchema>;
 export type VoiceModelCapabilityPayload = z.infer<typeof host.VoiceModelCapabilityPayloadSchema>;
 export type VoiceSessionMutedPayload = z.infer<typeof host.VoiceSessionMutedPayloadSchema>;

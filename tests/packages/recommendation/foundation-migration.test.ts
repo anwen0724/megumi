@@ -64,6 +64,16 @@ it('protects immutable material referenced by a favorite even after interest del
   expect(database.prepare({ sql: 'SELECT title_snapshot FROM favorites' }).all()).toEqual([{ title_snapshot: '标题' }]);
 });
 
+it('preserves historical author and language when later acquisition changes metadata', () => {
+  const materials=createMaterialStorage(openFoundation());
+  const input={platform:'web',canonicalUrl:'https://example.com/metadata',text:'材料',kind:'full_text' as const,truncated:false,rangeEnd:2,method:'direct_web',acquiredAt:10,publicationEvidence:[]};
+  const first=materials.saveMaterial({...input,authorId:'original-author',language:'zh'}).material;
+  const second=materials.saveMaterial({...input,authorId:'new-author',language:'en',acquiredAt:20}).material;
+  expect(second.id).not.toBe(first.id);
+  expect(materials.readMaterial(first.id)).toMatchObject({authorId:'original-author',language:'zh'});
+  expect(materials.readMaterial(second.id)).toMatchObject({authorId:'new-author',language:'en'});
+});
+
 it('requires complete attempt ownership and one active material request per method', () => {
   const database = openFoundation();
   database.prepare({

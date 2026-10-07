@@ -13,6 +13,8 @@ export interface CandidateSupplyOptions extends Omit<CandidateMaintenanceOptions
   };
   resolveModel(): Promise<Model<Api> | undefined>;
   newId(prefix: string): string;
+  /** Called after owned supply has settled; consumers only accept their independently due work. */
+  onFinished?(): void;
 }
 /** Starting twice joins the existing round; closing invalidates every pending writer. */
 export function createCandidateSupply(input: CandidateSupplyOptions) {
@@ -42,7 +44,7 @@ export function createCandidateSupply(input: CandidateSupplyOptions) {
         return { id: active.id, result: active.result };
       const id = input.newId('discovery');
       const controller = new AbortController();
-      const result = Promise.resolve().then(() => run(id, controller.signal));
+      const result = Promise.resolve().then(() => run(id, controller.signal)).finally(()=>input.onFinished?.());
       active = { id, controller, result };
       void result.finally(() => {
         if (active?.id === id)
@@ -89,6 +91,11 @@ export function createCandidateSupply(input: CandidateSupplyOptions) {
     async cancel() {
       active?.controller.abort(); if (active)
         await active.result;
+    },
+    /** Signals the named active run without waiting for external I/O to finish. */
+    requestCancel(runId:string) {
+      if(active?.id!==runId)return 'already_finished' as const;
+      active.controller.abort();return 'cancelling' as const;
     },
     close() {
       closing ??= (async () => {

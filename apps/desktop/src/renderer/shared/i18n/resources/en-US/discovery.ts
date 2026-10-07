@@ -2,6 +2,13 @@
  * Defines source-language copy for the interests and content-supply page.
  */
 export const discovery = {
+  curatedTitle:'Curated recommendations',swapCurated:'Show another selection',
+  curatedFailed:'The selection could not be updated. Saved results remain available.',
+  curatedRunning:'Selecting from saved candidates…',curatedShortage:'No alternative candidates. Independent supply has been requested.',
+  curatedNeedsUpdate:'Your interests changed. This saved selection is awaiting replacement.',
+  curatedWaiting:'Waiting for qualified candidates.',curatedPartial:'The selection is saved with fewer items than requested.',
+  favoriteTitle:'Favorites',favoriteEmpty:'No saved content yet.',favoriteFailed:'Could not read saved favorites.',loadMoreFavorites:'Load more',
+  openContent:'Open original',saveContent:'Save',unsaveContent:'Remove favorite',contentActionFailed:'The action could not be completed. Try again.',
   dailyTitle: 'Custom interest feed',
   dailyDate: 'Feed date',
   dailyLoadFailed: 'Could not read saved daily results.',
@@ -20,7 +27,7 @@ export const discovery = {
   materialTruncated: 'Truncated',
   historicalInterest: 'Historical interest',
   eyebrow: 'Content supply',
-  title: 'Interests',
+  title: 'Recommendations',
   subtitle:
     'Save what deserves your attention. Megumi searches the enabled sources and prepares the content that recommendations draw on.',
   manageSources: 'Manage content sources',

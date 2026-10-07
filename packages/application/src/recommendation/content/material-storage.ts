@@ -30,7 +30,7 @@ interface MaterialRow extends DatabaseRow {
 export function createMaterialStorage(database: DatabaseConnection, newId: () => string = randomUUID) {
   const readMaterial = (id: string): ContentMaterial | undefined => {
     const row = database.prepare<MaterialRow>({
-      sql: 'SELECT m.*, c.platform,c.external_id,c.canonical_url,c.author_id,c.language FROM content_materials m JOIN contents c ON c.id = m.content_id WHERE m.id = ?'
+      sql: 'SELECT m.*, c.platform,c.external_id,c.canonical_url FROM content_materials m JOIN contents c ON c.id = m.content_id WHERE m.id = ?'
     }).get([id]);
     if (!row)
       return undefined;
@@ -54,6 +54,43 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
     return { ...parsed, id: row.id, contentId: row.content_id, revision: row.revision };
   };
   return {
+    /** Reads a saved canonical identity URL even when material acquisition is unfinished. */
+    savedUrl(contentId:string) {
+      return database.prepare<{canonical_url:string}>({sql:'SELECT canonical_url FROM contents WHERE id=?'}).get([contentId])?.canonical_url;
+    },
+    /** Reports active analysis ownership without exposing Content tables to other owners. */
+    activeRunIds() {
+      return database.prepare<{owner_run_id:string}>({sql:'SELECT DISTINCT owner_run_id FROM content_analysis WHERE owner_run_id IS NOT NULL'}).all().map(row=>row.owner_run_id);
+    },
+    /** Old waiting work cannot protect itself; displayed and eligible content remains recoverable. */
+    abandonPending(before:number,protectedContentIds:ReadonlySet<string>):string[] {
+      const rows=database.prepare<{content_id:string;material_id:string}>({sql:"SELECT a.content_id,a.material_id FROM content_analysis a JOIN content_materials m ON m.id=a.material_id WHERE a.status IN ('pending','cancelled','failed') AND a.owner_run_id IS NULL AND a.error_code IS NOT 'ABANDONED' AND m.acquired_at<?"}).all([before]);
+      const abandoned=rows.filter(row=>!protectedContentIds.has(row.content_id));
+      for(const row of abandoned)database.prepare({sql:"UPDATE content_analysis SET status='failed',attempts=3,retry_at=NULL,error_code='ABANDONED' WHERE content_id=? AND material_id=? AND owner_run_id IS NULL"}).run([row.content_id,row.material_id]);
+      return abandoned.map(row=>row.content_id);
+    },
+    /** Deletes only Content-owned rows, after reference queries run inside the acquired write lock. */
+    cleanup(before:number,references:()=>{contentIds:readonly string[];materialIds:readonly string[]},limit=100) {
+      return database.transaction({operation:()=>{
+        database.prepare({sql:'UPDATE contents SET updated_at=updated_at WHERE id=?'}).run(['']);
+        const protectedIds=references();
+        const contentIds=new Set(protectedIds.contentIds);const materialIds=new Set(protectedIds.materialIds);
+        const pending=database.prepare<{content_id:string;material_id:string}>({sql:"SELECT content_id,material_id FROM content_analysis WHERE status IN ('pending','running') AND error_code IS NOT 'ABANDONED'"}).all();
+        for(const row of pending){contentIds.add(row.content_id);materialIds.add(row.material_id);}
+        const obsolete=database.prepare<{id:string}>({sql:'SELECT id FROM contents WHERE updated_at<? ORDER BY updated_at,id'}).all([before]).filter(row=>!contentIds.has(row.id)).slice(0,limit);
+        const deleting=new Set(obsolete.map(row=>row.id));
+        for(const row of obsolete){
+          const peers=database.prepare<{id:string}>({sql:'SELECT id FROM contents WHERE duplicate_group_id=? ORDER BY id'}).all([row.id]);
+          const replacement=peers.find(peer=>!deleting.has(peer.id))?.id??null;
+          database.prepare({sql:'UPDATE contents SET duplicate_group_id=? WHERE duplicate_group_id=?'}).run([replacement,row.id]);
+          database.prepare({sql:'UPDATE contents SET current_material_id=NULL WHERE id=?'}).run([row.id]);
+          database.prepare({sql:'DELETE FROM contents WHERE id=?'}).run([row.id]);
+        }
+        const historical=database.prepare<{id:string}>({sql:'SELECT m.id FROM content_materials m JOIN contents c ON c.id=m.content_id WHERE m.id<>c.current_material_id AND m.acquired_at<? ORDER BY m.acquired_at,m.id'}).all([before]).filter(row=>!materialIds.has(row.id)).slice(0,limit);
+        for(const row of historical)database.prepare({sql:'DELETE FROM content_materials WHERE id=?'}).run([row.id]);
+        return {contents:obsolete.length,materials:historical.length};
+      }});
+    },
     /** Reads identities and their current material for local diagnostics and recovery. */
     listIdentities(): readonly {
       contentId: string;
@@ -225,13 +262,15 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
               material.acquiredAt
             ]);
           database.prepare({
-            sql: 'INSERT INTO content_materials(id,content_id,revision,title,author,text,text_hash,kind,truncated,range_start,range_end,method,acquired_at,publication_evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+            sql: 'INSERT INTO content_materials(id,content_id,revision,title,author,author_id,language,text,text_hash,kind,truncated,range_start,range_end,method,acquired_at,publication_evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
           }).run([
             materialId,
             contentId,
             revision,
             material.title ?? null,
             material.author ?? null,
+            material.authorId ?? null,
+            material.language ?? null,
             material.text,
             createHash('sha256').update(material.text).digest('hex'),
             material.kind,
@@ -337,6 +376,8 @@ function sameMaterial(before: ContentMaterial, after: z.output<typeof MaterialIn
   const visible = (material: z.output<typeof MaterialInputSchema>) => [
     material.title ?? null,
     material.author ?? null,
+    material.authorId ?? null,
+    material.language ?? null,
     material.text,
     material.kind,
     material.truncated,
