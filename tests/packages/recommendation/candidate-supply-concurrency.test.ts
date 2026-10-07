@@ -201,7 +201,6 @@ function holdSupply(): HeldSupply {
                 pools: ['daily'],
                 source: 'zhihu',
                 priority: 1,
-                limit: 5,
                 query: 'Rust 异步运行时',
                 category: 'core',
               },

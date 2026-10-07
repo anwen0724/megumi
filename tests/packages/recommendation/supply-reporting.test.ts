@@ -89,7 +89,6 @@ describe('candidate supply reporting', () => {
               pools: ['daily'],
               source: 'zhihu',
               priority: 1,
-              limit: 5,
             },
           ],
         }),

@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { stubDescriptor } from './source-fixture';
 
 const NOW = 1_800_000_000_000;
+const DAY = 24 * 60 * 60 * 1_000;
 const limits = CandidateSupplyConfigurationSchema.parse({}).limits;
 
 describe('search planning', () => {
@@ -41,15 +42,15 @@ describe('search planning', () => {
 
   afterEach(() => database.close());
 
-  it('drops items that cite unknown interests, sources, or queries and clamps the limit', async () => {
+  it('drops items that cite unknown interests, sources, or queries and fills the request itself', async () => {
     faux.setResponses([
       fauxAssistantMessage(
         JSON.stringify({
           items: [
-            { interestId: 'i1', pools: ['daily'], source: 'zhihu', priority: 1, limit: 50, queryId: 'q1' },
-            { interestId: 'unknown', pools: ['daily'], source: 'zhihu', priority: 2, limit: 5 },
-            { interestId: 'i1', pools: ['daily'], source: 'bilibili', priority: 3, limit: 5 },
-            { interestId: 'i1', pools: ['daily'], source: 'zhihu', priority: 4, limit: 5, queryId: 'q-missing' },
+            { interestId: 'i1', pools: ['daily'], source: 'zhihu', priority: 1, queryId: 'q1' },
+            { interestId: 'unknown', pools: ['daily'], source: 'zhihu', priority: 2 },
+            { interestId: 'i1', pools: ['daily'], source: 'bilibili', priority: 3 },
+            { interestId: 'i1', pools: ['daily'], source: 'zhihu', priority: 4, queryId: 'q-missing' },
           ],
         }),
       ),
@@ -57,25 +58,38 @@ describe('search planning', () => {
 
     const outcome = await planSearches(
       { database, client: models },
-      {
-        interests: [{ id: 'i1', text: '摄影', enabled: true }],
-        poolHealth: [],
-        recentSearches: [],
-        sources: ['zhihu'],
-        model,
-        maxInputTokens: 10_000,
-        maxOutputTokens: 1_000,
-        maxResultsPerSearch: 10,
-        maxItems: 5,
-      },
+      planningInput(model, { interests: [{ id: 'i1', text: '摄影', enabled: true }] }),
     );
 
     expect(outcome.status).toBe('planned');
     if (outcome.status !== 'planned') throw new Error('expected a plan');
     expect(outcome.items).toHaveLength(1);
-    expect(outcome.items[0].limit).toBe(10);
+    // The program fills both values from the source declaration, not the model.
+    expect(outcome.items[0]?.limit).toBe(10);
+    expect(outcome.items[0]?.timeRange).toEqual({ from: NOW - 7 * DAY, to: NOW });
     expect(outcome.invalidItems).toBe(3);
     expect(outcome.droppedItems).toBe(0);
+  });
+
+  it('leaves the time range off an item that serves only the long-term pool', async () => {
+    faux.setResponses([
+      fauxAssistantMessage(
+        JSON.stringify({
+          items: [
+            { interestId: 'i1', pools: ['long_term'], source: 'zhihu', priority: 1, queryId: 'q1' },
+          ],
+        }),
+      ),
+    ]);
+
+    const outcome = await planSearches(
+      { database, client: models },
+      planningInput(model, { interests: [{ id: 'i1', text: '摄影', enabled: true }] }),
+    );
+
+    expect(outcome.status).toBe('planned');
+    if (outcome.status !== 'planned') throw new Error('expected a plan');
+    expect(outcome.items[0]?.timeRange).toBeUndefined();
   });
 
   it('writes each identifier so the model can copy it back verbatim', async () => {
@@ -92,17 +106,7 @@ describe('search planning', () => {
 
     const outcome = await planSearches(
       { database, client },
-      {
-        interests: [{ id: 'interest:abc', text: 'Rust 异步运行时', enabled: true }],
-        poolHealth: [],
-        recentSearches: [],
-        sources: ['zhihu'],
-        model,
-        maxInputTokens: 10_000,
-        maxOutputTokens: 1_000,
-        maxResultsPerSearch: 10,
-        maxItems: 5,
-      },
+      planningInput(model, { interests: [{ id: 'interest:abc', text: 'Rust 异步运行时', enabled: true }] }),
     );
 
     expect(outcome.status).toBe('planned');
@@ -112,7 +116,7 @@ describe('search planning', () => {
     expect(prompts[0]).toContain('{"queryId":"q1","interestId":"i1","category":"core","query":"摄影"}');
   });
 
-  it('plans only when a minimum gap, a pending request, or an interest change exists', () => {
+  it('plans only when a minimum gap or a waiting request exists', () => {
     const healthy = {
       pool: 'daily' as const,
       activeCandidates: 120,
@@ -126,9 +130,11 @@ describe('search planning', () => {
     };
     const low = { ...healthy, activeCandidates: 40, supplyLevel: 'low' as const, minimumDeficit: 60 };
 
-    expect(needsSearchPlanning({ poolHealth: [healthy], hasPendingRequest: false, interestsChanged: false })).toBe(false);
-    expect(needsSearchPlanning({ poolHealth: [low], hasPendingRequest: false, interestsChanged: false })).toBe(true);
-    expect(needsSearchPlanning({ poolHealth: [healthy], hasPendingRequest: true, interestsChanged: false })).toBe(true);
+    // Capacity above every minimum with nothing waiting must not spend a call.
+    expect(needsSearchPlanning({ poolHealth: [healthy], hasPendingRequest: false })).toBe(false);
+    expect(needsSearchPlanning({ poolHealth: [low], hasPendingRequest: false })).toBe(true);
+    // A waiting generation request plans even when every pool is above its minimum.
+    expect(needsSearchPlanning({ poolHealth: [healthy], hasPendingRequest: true })).toBe(true);
   });
 
   describe('execution', () => {
@@ -227,8 +233,29 @@ describe('search planning', () => {
   });
 });
 
-function stubSource(options: {
-  items?: readonly { source: string; url: string; text?: string }[];
+/** One planning input, so each test only states what it changes. */
+function planningInput(
+  model: Model<Api>,
+  overrides: Partial<Parameters<typeof planSearches>[1]> = {},
+): Parameters<typeof planSearches>[1] {
+  return {
+    interests: [],
+    poolHealth: [],
+    pendingGaps: [],
+    recentSearches: [],
+    sources: [stubDescriptor],
+    model,
+    maxInputTokens: 10_000,
+    maxOutputTokens: 1_000,
+    maxResultsPerSearch: 10,
+    maxItems: 5,
+    now: NOW,
+    freshnessDays: 7,
+    ...overrides,
+  };
+}
+
+function stubSource(options: {  items?: readonly { source: string; url: string; text?: string }[];
   failure?: { code: string; message: string; retryable: boolean };
   onCall?: () => void;
 }): SourceConnector {

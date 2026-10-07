@@ -22,12 +22,13 @@ import { analyzeContent } from '../content/analyze-content';
 import type { ContentStorage } from '../content/content-storage';
 import { pruneUnusedContent } from '../content/prune-content';
 import { executePlannedSearch, type PlannedSearch, type StoredDiscovery } from '../discovery/execute-searches';
-import { needsSearchPlanning, planSearches } from '../discovery/plan-searches';
+import { needsSearchPlanning, planSearches, type PendingGap } from '../discovery/plan-searches';
 import type { SearchStorage } from '../discovery/search-storage';
 import type { InterestManagement } from '../interests/interest-contracts';
 import type { SourceConnector } from '../sources/source-connector';
 import type { ExecutionBudget } from './execution-budget';
 import type {
+  CandidateRequirement,
   ContentRetentionReader,
   MaintenanceCounts,
   MaintenanceResult,
@@ -66,6 +67,8 @@ export interface MaintenanceRunInput {
   readonly signal: AbortSignal;
   /** Called after each commit so waiting requests can be satisfied early. */
   readonly deliver: () => Promise<void>;
+  /** Generation requests still waiting, so their gaps drive this round. */
+  readonly pendingRequirements: () => readonly CandidateRequirement[];
 }
 
 /**
@@ -169,12 +172,15 @@ export async function runMaintenance(
     ...evaluations.map((evaluation) => evaluation.health),
     ...evaluations.flatMap((evaluation) => evaluation.interestHealth),
   ];
+  // A waiting generation request drives planning even when every pool is above
+  // its minimum, so its own gaps are the round's highest priority.
+  const pendingGaps = pendingRequirementGaps(input.pendingRequirements(), evaluations);
 
   // A cancelled or expired round starts no further model request.
   const canPlan =
     !input.signal.aborted &&
     !input.budget.expired &&
-    needsSearchPlanning({ poolHealth, hasPendingRequest: false, interestsChanged: false });
+    needsSearchPlanning({ poolHealth, hasPendingRequest: pendingGaps.length > 0 });
 
   if (canPlan) {
     // Planning is counted work: reserve its call and its tokens before asking.
@@ -194,17 +200,20 @@ export async function runMaintenance(
       {
         interests,
         poolHealth,
+        pendingGaps,
         recentSearches: dependencies.search.listRecentSearches({
           since: dependencies.now() - dependencies.config.searchHistoryDays * 24 * 60 * 60 * 1_000,
         }),
         // Only sources with an assembled connector may be planned.
-        sources: dependencies.sources.map((source) => source.id),
+        sources: dependencies.sources.map((source) => source.descriptor),
         model: dependencies.model,
         maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
         maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
         maxResultsPerSearch: dependencies.config.limits.maxResultsPerSearch,
         // A plan may only contain searches the remaining round budget can pay for.
         maxItems: input.budget.remaining('searchCalls'),
+        now: dependencies.now(),
+        freshnessDays: dependencies.config.freshnessDays,
         signal: input.signal,
       },
     );
@@ -421,6 +430,36 @@ async function resumePendingWork(
     }
     await input.deliver();
   }
+}
+
+/** The gap each waiting generation request still has, as this round reads it. */
+function pendingRequirementGaps(
+  requirements: readonly CandidateRequirement[],
+  evaluations: readonly PoolEvaluation[],
+): PendingGap[] {
+  const gaps: PendingGap[] = [];
+  for (const requirement of requirements) {
+    const evaluation = evaluations.find((entry) => entry.snapshot.pool === requirement.pool);
+    if (!evaluation) continue;
+    const total = evaluation.snapshot.counts.total;
+    if (total < requirement.minimumCount) {
+      gaps.push({ pool: requirement.pool, missing: requirement.minimumCount - total });
+    }
+    for (const coverage of requirement.coverage) {
+      const count =
+        evaluation.snapshot.counts.byInterest.find(
+          (entry) => entry.interestId === coverage.interestId,
+        )?.count ?? 0;
+      if (count < coverage.minimumCount) {
+        gaps.push({
+          pool: requirement.pool,
+          interestId: coverage.interestId,
+          missing: coverage.minimumCount - count,
+        });
+      }
+    }
+  }
+  return gaps;
 }
 
 /** The retry time for a failure, or `undefined` when another attempt cannot help. */

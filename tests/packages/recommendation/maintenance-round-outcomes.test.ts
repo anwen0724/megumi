@@ -99,6 +99,23 @@ describe('what a finished round reports', () => {
     expect(prompt, prompt).toContain('- daily / i1: active=0 minimumDeficit=1');
     expect(prompt, prompt).toContain('- daily / i2: active=1 minimumDeficit=0');
   });
+
+  it('plans for a waiting request even when every pool is above its minimum', async () => {
+    const pool = composePool(database, {
+      daily: { minimumCount: 0, targetCount: 1, interestMinimumCount: 0, interestTargetCount: 1 },
+      longTerm: { minimumCount: 0, targetCount: 1, interestMinimumCount: 0, interestTargetCount: 1 },
+    });
+
+    // Nothing is short, so only demand that is already waiting justifies a plan.
+    await pool.supply.prepareCandidates({
+      requirement: { pool: 'daily', minimumCount: 1, coverage: [] },
+    });
+
+    expect(pool.planPrompts).toHaveLength(1);
+    const prompt = pool.planPrompts[0] ?? '';
+    expect(prompt, prompt).toContain('Waiting generation demand (highest priority):');
+    expect(prompt, prompt).toContain('- daily: missing=1');
+  });
 });
 
 describe('a round whose commit cannot be written', () => {
@@ -303,7 +320,6 @@ function openCommitFixture(): CommitFixture {
                 pools: ['daily'],
                 source: 'zhihu',
                 priority: 1,
-                limit: 5,
                 query: 'Rust 异步运行时',
                 category: 'core',
               },

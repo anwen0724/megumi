@@ -202,6 +202,8 @@ export function createCandidateSupply(options: CreateSupplyOptions): CandidateSu
         budget,
         signal: controller.signal,
         deliver: () => deliver(round, resolvedConfig.config),
+        // Waiting callers drive this round's highest-priority demand.
+        pendingRequirements: () => [...round.waiters].map((waiter) => waiter.requirement),
       });
       // A waiter that is still unsatisfied must learn why this round ended.
       round.stopReason = result.stopReason;

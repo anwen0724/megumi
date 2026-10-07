@@ -118,6 +118,7 @@ describe('resume after an interrupted process', () => {
       }),
       signal: new AbortController().signal,
       deliver: async () => undefined,
+      pendingRequirements: () => [],
     };
   }
 });

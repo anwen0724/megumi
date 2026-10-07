@@ -10,8 +10,9 @@ import { z } from 'zod';
 import type { DatabaseConnection, DatabaseRow } from '../../storage/index';
 import type { Observability } from '../../observability/index';
 import { callTextModel, type TextModelCallRecord, type TextModelClient } from '../call-text-model';
-import { CandidatePoolSchema, type SupplyHealth } from '../candidates/candidate-contracts';
+import { CandidatePoolSchema, type CandidatePool, type SupplyHealth } from '../candidates/candidate-contracts';
 import type { InterestSnapshotEntry } from '../interests/interest-contracts';
+import type { SourceDescriptor } from '../sources/source-connector';
 import type { PlannedSearch } from './execute-searches';
 import type { SearchRecord } from './search-storage';
 
@@ -28,17 +29,9 @@ const SearchPlanSchema = z
           pools: z.array(CandidatePoolSchema).min(1),
           source: z.string().trim().min(1),
           priority: z.number(),
-          limit: z.number().int().positive(),
           queryId: z.string().trim().min(1).optional(),
           query: z.string().trim().min(1).max(200).optional(),
           category: QueryCategorySchema.optional(),
-          timeRange: z
-            .object({
-              from: z.number().int().nonnegative().optional(),
-              to: z.number().int().nonnegative().optional(),
-            })
-            .strict()
-            .optional(),
         })
         .strict(),
     ),
@@ -48,14 +41,15 @@ const SearchPlanSchema = z
 const SYSTEM_PROMPT = [
   'You plan searches for one recommendation supply round and reply with one JSON object.',
   'Reply with JSON only, shaped exactly like this:',
-  '{"items":[{"interestId":"...","pools":["daily"],"source":"zhihu","priority":1,"limit":10,"queryId":"..."}]}',
-  'Every item has: interestId, pools (one or both of "daily", "long_term"), source, priority (a number; lower runs first), limit (results to request, at most the maximum you are given).',
+  '{"items":[{"interestId":"...","pools":["daily"],"source":"zhihu","priority":1,"queryId":"..."}]}',
+  'Every item has: interestId, pools (one or both of "daily", "long_term"), source, priority (a number; lower runs first).',
   'Every item is either a reuse or a new expression, never both:',
   '- Reuse a stored query by adding "queryId", copied verbatim from the stored queries.',
   '- Propose a new expression by adding "query" (the search text) and "category" instead of "queryId".',
   'category is one of: core, entity, technical, exploratory, trend.',
   'Do not add any other key. Never invent, shorten, translate, or reformat an identifier.',
   'Use only the listed interests, the listed stored queries, and the listed sources.',
+  'Do not choose a time range or a result count: the program fills both from the source capabilities.',
 ].join('\n');
 
 export interface QueryRecord {
@@ -72,18 +66,30 @@ export interface PlanSearchesDependencies {
   readonly observability?: Observability;
 }
 
+/** A generation request that is still short, as the round sees it now. */
+export interface PendingGap {
+  readonly pool: CandidatePool;
+  readonly interestId?: string;
+  readonly missing: number;
+}
+
 export interface PlanSearchesInput {
   readonly interests: readonly InterestSnapshotEntry[];
   readonly poolHealth: readonly SupplyHealth[];
+  /** Generation requests still waiting; they outrank background targets. */
+  readonly pendingGaps: readonly PendingGap[];
   readonly recentSearches: readonly SearchRecord[];
-  /** Enabled source ids the plan may use. */
-  readonly sources: readonly string[];
+  /** Enabled sources with a connector, described as the planner should see them. */
+  readonly sources: readonly SourceDescriptor[];
   readonly model: Model<Api>;
   readonly maxInputTokens: number;
   readonly maxOutputTokens: number;
   readonly maxResultsPerSearch: number;
   /** Upper bound on how many items the round can still pay for. */
   readonly maxItems: number;
+  /** Round time, so the program can fill the daily window itself. */
+  readonly now: number;
+  readonly freshnessDays: number;
   readonly signal?: AbortSignal;
 }
 
@@ -100,15 +106,16 @@ export type PlanSearchesOutcome =
   | { status: 'failed'; code: string; message: string };
 
 /**
- * Whether a round has anything worth planning. Capacity above the minimum with
- * no pending request and no interest change must not spend a planning call.
+ * Whether a round has anything worth planning. Capacity above every minimum with
+ * no waiting gap must not spend a planning call; an interest change shows up as
+ * a minimum gap once its cleared matches are re-judged, so it needs no trigger
+ * of its own.
  */
 export function needsSearchPlanning(input: {
   readonly poolHealth: readonly SupplyHealth[];
   readonly hasPendingRequest: boolean;
-  readonly interestsChanged: boolean;
 }): boolean {
-  if (input.hasPendingRequest || input.interestsChanged) return true;
+  if (input.hasPendingRequest) return true;
   return input.poolHealth.some((health) => health.minimumDeficit > 0);
 }
 
@@ -167,7 +174,9 @@ export async function planSearches(
   }
 
   const interestIds = new Set(input.interests.map((interest) => interest.id));
-  const sources = new Set(input.sources);
+  const sources = new Map(
+    input.sources.map((source) => [source.id, source] as const),
+  );
   const queryById = new Map(queries.map((query) => [query.id, query]));
 
   const items: PlannedSearch[] = [];
@@ -182,6 +191,11 @@ export async function planSearches(
       invalidItems += 1;
       continue;
     }
+    const descriptor = sources.get(item.source);
+    if (!descriptor) {
+      invalidItems += 1;
+      continue;
+    }
     if (item.queryId !== undefined && !queryById.has(item.queryId)) {
       invalidItems += 1;
       continue;
@@ -193,15 +207,33 @@ export async function planSearches(
     items.push({
       interestId: item.interestId,
       source: item.source,
-      limit: Math.min(item.limit, input.maxResultsPerSearch),
+      // Time range and result count come from the source declaration, never the
+      // model: a daily item asks for the recent window, a long-term-only item
+      // asks for everything, and a source without time filtering gets none.
+      limit: Math.min(descriptor.maxResultsPerSearch, input.maxResultsPerSearch),
       ...(item.queryId !== undefined ? { queryId: item.queryId } : {}),
       ...(item.query !== undefined ? { query: item.query } : {}),
       ...(item.category !== undefined ? { category: item.category } : {}),
-      ...(item.timeRange !== undefined ? { timeRange: item.timeRange } : {}),
+      ...(windowFor(item.pools, descriptor, input) ?? {}),
     });
   }
 
   return { status: 'planned', items, record: call.record, droppedItems, invalidItems };
+}
+
+/** The source-facing window a plan item asks for, or nothing when it has none. */
+function windowFor(
+  pools: readonly CandidatePool[],
+  descriptor: SourceDescriptor,
+  input: PlanSearchesInput,
+): { readonly timeRange: { readonly from: number; readonly to: number } } | undefined {
+  if (!descriptor.supportsTimeRange || !pools.includes('daily')) return undefined;
+  return {
+    timeRange: {
+      from: input.now - input.freshnessDays * 24 * 60 * 60 * 1_000,
+      to: input.now,
+    },
+  };
 }
 
 function buildPrompt(input: PlanSearchesInput, queries: readonly QueryRecord[]): string {
@@ -222,6 +254,20 @@ function buildPrompt(input: PlanSearchesInput, queries: readonly QueryRecord[]):
     (entry) =>
       `- ${entry.pool}${entry.interestId ? ` / ${entry.interestId}` : ''}: active=${entry.activeCandidates} minimumDeficit=${entry.minimumDeficit} targetDeficit=${entry.targetDeficit} level=${entry.supplyLevel}`,
   );
+  // A waiting generation request outranks the background targets.
+  const pending = input.pendingGaps.map(
+    (gap) => `- ${gap.pool}${gap.interestId ? ` / ${gap.interestId}` : ''}: missing=${gap.missing}`,
+  );
+  const sources = input.sources.map(
+    (source) =>
+      `- ${JSON.stringify({
+        source: source.id,
+        description: source.description,
+        maxResultsPerSearch: source.maxResultsPerSearch,
+        supportsTimeRange: source.supportsTimeRange,
+        material: source.material,
+      })}`,
+  );
   const history = input.recentSearches
     .slice(0, 20)
     .map(
@@ -239,11 +285,17 @@ function buildPrompt(input: PlanSearchesInput, queries: readonly QueryRecord[]):
     'Supply health:',
     ...(health.length > 0 ? health : ['- (none)']),
     '',
+    'Waiting generation demand (highest priority):',
+    ...(pending.length > 0 ? pending : ['- (none)']),
+    '',
     'Recent searches:',
     ...(history.length > 0 ? history : ['- (none)']),
     '',
-    `Enabled sources: ${input.sources.join(', ') || '(none)'}`,
-    `Maximum results per search: ${input.maxResultsPerSearch}`,
+    'Enabled sources:',
+    ...(sources.length > 0 ? sources : ['- (none)']),
+    '',
+    `Current time (UTC milliseconds): ${input.now}`,
+    `Daily recent window (days): ${input.freshnessDays}`,
     `Maximum items this round: ${input.maxItems}`,
   ].join('\n');
 }
