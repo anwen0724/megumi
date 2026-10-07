@@ -90,6 +90,18 @@ describe('web_search built-in Tool', () => {
     expect(JSON.stringify(result)).not.toContain('search-secret');
   });
 
+  it('rejects a verification page and malformed RSS instead of returning an empty search', async () => {
+    for (const body of ['<html>Verify</html>', '<rss><channel><item><title>Only title</title></item></channel></rss>']) {
+      const search = createBingRssWebSearch({ fetch: async () => new Response(body) });
+      await expect(search.search({ query: 'React', count: 5 })).rejects.toMatchObject({ details: { reason: 'invalid_response' } });
+    }
+  });
+
+  it('preserves an RSS date as a source claim for its caller to verify', async () => {
+    const search = createBingRssWebSearch({ fetch: async () => new Response('<rss><channel><item><title>React</title><link>https://example.com/react</link><description>渲染流程</description><pubDate>Tue, 06 Oct 2026 12:00:00 GMT</pubDate></item></channel></rss>') });
+    expect(await search.search({ query: 'React', count: 5 })).toMatchObject({ results: [{ publishedDate: 'Tue, 06 Oct 2026 12:00:00 GMT' }] });
+  });
+
   it('searches the public web through the no-key Bing RSS endpoint', async () => {
     const fetch = vi.fn(async () => new Response(`<?xml version="1.0" encoding="utf-8"?>
       <rss><channel><item>

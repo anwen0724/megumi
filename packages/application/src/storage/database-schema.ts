@@ -246,6 +246,10 @@ export const contents = sqliteTable(
   {
     id: text('id').primaryKey(),
     source: text('source').notNull(),
+    platform: text('platform').notNull().default('web'),
+    externalId: text('external_id'),
+    authorId: text('author_id'),
+    currentMaterialId: text('current_material_id'),
     canonicalUrl: text('canonical_url').notNull().unique(),
     title: text('title'),
     author: text('author'),
@@ -269,8 +273,34 @@ export const contents = sqliteTable(
     ),
     index('idx_contents_published_at').on(table.publishedAt),
     index('idx_contents_duplicate_group').on(table.duplicateGroupId),
+    uniqueIndex('idx_contents_platform_external').on(table.platform, table.externalId).where(sql`${table.externalId} IS NOT NULL AND ${table.externalId} <> ''`),
   ],
 );
+
+export const contentMaterials = sqliteTable('content_materials', {
+  id: text('id').primaryKey(),
+  contentId: text('content_id').notNull().references(() => contents.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(), title: text('title'), author: text('author'),
+  text: text('text').notNull(), textHash: text('text_hash').notNull(),
+  kind: text('kind').notNull(), truncated: integer('truncated').notNull(),
+  rangeStart: integer('range_start').notNull().default(0), rangeEnd: integer('range_end').notNull(),
+  method: text('method').notNull(), acquiredAt: integer('acquired_at').notNull(),
+  publicationEvidence: jsonText('publication_evidence').notNull(),
+}, (table) => [
+  uniqueIndex('idx_materials_content_revision').on(table.contentId, table.revision),
+  uniqueIndex('idx_materials_id_content').on(table.id, table.contentId),
+  check('check_materials_revision', sql`${table.revision} > 0`),
+  check('check_materials_text', sql`length(${table.text}) > 0`),
+  check('check_materials_kind', sql`${table.kind} IN ('full_text','excerpt','description','transcript')`),
+  check('check_materials_truncated', sql`${table.truncated} IN (0,1)`),
+  check('check_materials_range', sql`${table.rangeStart} >= 0 AND ${table.rangeEnd} > ${table.rangeStart}`),
+]);
+
+export const materialAcquisitions = sqliteTable('material_acquisitions', {
+  id: text('id').primaryKey(),
+  materialId: text('material_id').notNull().references(() => contentMaterials.id, { onDelete: 'cascade' }),
+  method: text('method').notNull(), acquiredAt: integer('acquired_at').notNull(),
+});
 
 export const contentAnalysis = sqliteTable(
   'content_analysis',

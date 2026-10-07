@@ -26,7 +26,7 @@ import { executePlannedSearch, type PlannedSearch, type StoredDiscovery } from '
 import { needsSearchPlanning, planSearches, type PendingGap } from '../discovery/plan-searches';
 import { searchBackoffKey, type SearchBackoffRecord, type SearchStorage } from '../discovery/search-storage';
 import type { InterestManagement } from '../interests/interest-contracts';
-import type { SourceConnector } from '../sources/source-connector';
+import { RawItemSchema, type RawItem, type SourceConnector, type SourceMaterialRequest, type SourceMaterialResult } from '../sources/source-connector';
 import type { ExecutionBudget } from './execution-budget';
 import {
   countInterestCandidates,
@@ -57,6 +57,7 @@ export interface MaintenanceDependencies {
   readonly model: Model<Api>;
   /** Connectors for the enabled sources; a plan item picks one by id. */
   readonly sources: readonly SourceConnector[];
+  readonly acquireMaterial?: (item: RawItem, request: Pick<SourceMaterialRequest, 'signal' | 'reserveRequest'>) => Promise<SourceMaterialResult>;
   readonly client: TextModelClient;
   readonly interests: InterestManagement;
   readonly contents: ContentStorage;
@@ -398,10 +399,38 @@ async function screenBatch(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
   interests: readonly AnalysisInterest[],
-  discoveries: readonly StoredDiscovery[],
+  incoming: readonly StoredDiscovery[],
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<{ status: 'continue'; verdicts: readonly DiscoveryVerdict[] } | { status: 'deferred' }> {
+  const discoveries: StoredDiscovery[] = [];
+  for (const discovery of incoming) {
+    if (input.signal.aborted || input.budget.expired) return { status: 'deferred' };
+    const item = discovery.item;
+    if (!dependencies.acquireMaterial || !item.kind || item.kind === 'full_text' || item.kind === 'transcript') {
+      discoveries.push(discovery);
+      continue;
+    }
+    const result = await dependencies.acquireMaterial(item, {
+      signal: input.signal,
+      reserveRequest: (kind) => input.budget.reserve(kind === 'search' ? 'searchCalls' : 'fetchCalls'),
+    });
+    if (result.status === 'failed') {
+      issues.push({ stage: 'material', code: result.failure.code.toUpperCase(), subjectId: discovery.resultId, message: result.failure.message });
+      if (result.failure.code === 'cancelled' || result.failure.code === 'budget_exhausted') return { status: 'deferred' };
+      discoveries.push(discovery);
+      continue;
+    }
+    if (input.signal.aborted) return { status: 'deferred' };
+    const hydrated: RawItem = {
+      ...item, ...result.material,
+      publicationEvidence: [...(item.publicationEvidence ?? []), ...(result.material.publicationEvidence ?? [])],
+      acquiredAt: dependencies.now(),
+    };
+    dependencies.database.prepare({ sql: 'UPDATE search_results SET raw_payload = ? WHERE id = ?' })
+      .run([JSON.stringify(RawItemSchema.parse(hydrated)), discovery.resultId]);
+    discoveries.push({ resultId: discovery.resultId, item: hydrated });
+  }
   // Nothing to judge: every discovery goes to the full analysis on its own merits.
   const bySelf = (): { status: 'continue'; verdicts: readonly DiscoveryVerdict[] } => ({
     status: 'continue',

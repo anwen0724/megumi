@@ -46,6 +46,8 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.discovery.configurationGet,
   IPC_CHANNELS.discovery.configurationUpdate,
   IPC_CHANNELS.discovery.candidateSupplyConfirm,
+  IPC_CHANNELS.discovery.sourceLogin,
+  IPC_CHANNELS.discovery.sourceAccess,
   IPC_CHANNELS.voice.snapshot,
   IPC_CHANNELS.voice.modelStatus,
   IPC_CHANNELS.voice.modelCapability,

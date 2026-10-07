@@ -1,10 +1,10 @@
-/*
- * Implements the Zhihu Open Platform source: authentication, search, and field
- * mapping. The platform returns content text but exposes full text only for the
- * credential owner's own posts, so `fetch` reports material unavailability
- * rather than scraping another page.
- */
+/* Uses Zhihu API excerpts and isolated browser search/detail fallback. */
 import { z } from 'zod';
+import { boundedMaterial, identifyContentUrl, publicationClaim } from './source-material';
+import { htmlToPlainText } from '../content/normalize-content';
+import type { EmbeddedBrowser } from './browser-access';
+import { budgetedSourceFetch, requestSourceJson, sourceFailure } from './source-http';
+import { searchPlatformPage } from './platform-search';
 import type {
   RawItem,
   SourceConnector,
@@ -48,35 +48,35 @@ const ZhihuResponseSchema = z
 
 export interface ZhihuSourceOptions {
   /** Reads the stored Access Secret at request time; never cached in a snapshot. */
+
   readonly accessSecret: () => string | undefined;
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
+  readonly browser?: EmbeddedBrowser;
 }
 
-/**
- * The Zhihu Open Platform capabilities. The search endpoint returns an excerpt
- * rather than full text, it filters by the same time it maps to `publishedAt`,
- * and the full-text endpoint only serves the credential owner's own posts, so
- * material cannot be completed on demand.
- */
+/** Search applies an EditTime window; detail supplies separate creation evidence. */
 const ZHIHU_DESCRIPTOR: SourceDescriptor = {
   id: 'zhihu',
   description: '中文问答与专栏文章。',
+  accessPaths: ['credential', 'browser_session'],
   maxResultsPerSearch: MAX_RESULTS_PER_SEARCH,
   supportsTimeRange: true,
   material: 'excerpt',
-  supportsFetch: false,
+  supportsFetch: true,
 };
 
 export function createZhihuSource(options: ZhihuSourceOptions): SourceConnector {
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const now = options.now ?? Date.now;
+  let apiCooldown: { until: number; failure: SourceFailure } | undefined;
 
-  return {
+  const primary: SourceConnector = {
+    managesRequestBudget: true,
     id: 'zhihu',
     descriptor: ZHIHU_DESCRIPTOR,
-
     async search(request): Promise<SourceSearchResult> {
+      if (apiCooldown && apiCooldown.until > now()) return { status: 'failed', failure: apiCooldown.failure };
       const accessSecret = options.accessSecret()?.trim();
       if (!accessSecret) {
         return failed('not_configured', 'Zhihu access secret is not configured.', false);
@@ -88,84 +88,117 @@ export function createZhihuSource(options: ZhihuSourceOptions): SourceConnector 
       const sortBy = editTimeFilter(request.timeRange);
       if (sortBy) url.searchParams.set('SortBy', sortBy);
 
-      let response: Response;
-      try {
-        response = await fetchImplementation(url, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${accessSecret}`,
-            'X-Request-Timestamp': String(Math.floor(now() / 1_000)),
-            'Content-Type': 'application/json',
-          },
-          ...(request.signal ? { signal: request.signal } : {}),
-        });
-      } catch (error) {
-        if (request.signal?.aborted) {
-          return failed('cancelled', 'Zhihu search was cancelled.', false);
-        }
-        return failed('network_error', describeError(error), true);
+      const response = await requestSourceJson(budgetedSourceFetch(fetchImplementation, request.reserveRequest, 'search'), url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessSecret}`,
+          'X-Request-Timestamp': String(Math.floor(now() / 1_000)),
+          'Content-Type': 'application/json',
+        },
+        signal: request.signal,
+      }, ZhihuResponseSchema, 30_000, protectLargeContentIds);
+      if (response.status === 'failed') {
+        if (response.failure.retryAfterMs !== undefined) apiCooldown = { until: now() + response.failure.retryAfterMs, failure: response.failure };
+        return response;
+      }
+      const envelope = response.payload;
+      if (envelope.Code !== 0) {
+        const result = codeFailure(envelope.Code, envelope.Message);
+        if (result.status === 'failed' && result.failure.code === 'rate_limited') apiCooldown = { until: now() + 300_000, failure: { ...result.failure, retryAfterMs: 300_000 } };
+        return result;
       }
 
-      if (!response.ok) return httpFailure(response.status);
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(protectLargeContentIds(await response.text()));
-      } catch {
-        return failed('invalid_response', 'Zhihu returned a non-JSON response.', false);
-      }
-
-      const envelope = ZhihuResponseSchema.safeParse(parsed);
-      if (!envelope.success) {
-        return failed('invalid_response', 'Zhihu returned an unrecognized response.', false);
-      }
-      if (envelope.data.Code !== 0) return codeFailure(envelope.data.Code, envelope.data.Message);
-
-      const items = envelope.data.Data?.Items ?? [];
+      const items = envelope.Data?.Items;
+      if (!items) return sourceFailure('invalid_response', 'Zhihu returned no result list.');
       return { status: 'success', items: items.flatMap((item) => toRawItem(item)) };
     },
-
-    async fetch(): Promise<SourceMaterialResult> {
+    async fetch(request): Promise<SourceMaterialResult> {
+      if (!options.browser) return sourceFailure('material_unavailable', 'Zhihu browser access is unavailable.');
+      const identity = identifyContentUrl(request.url);
+      if (!identity || identity.platform !== 'zhihu' || !identity.externalId) return sourceFailure('invalid_response', 'URL does not identify a Zhihu answer or article.');
+      if (request.signal?.aborted) return sourceFailure('cancelled', 'Zhihu detail was cancelled.');
+      if (request.reserveRequest && !request.reserveRequest('material')) return sourceFailure('budget_exhausted', 'Source request budget was exhausted.');
+      const result = await options.browser.readPlatform({
+        profileId: 'zhihu',
+        operation: 'detail',
+        url: identity.url,
+        signal: request.signal ?? new AbortController().signal
+      });
+      if (result.status === 'failed') return sourceFailure(result.failure.code, result.failure.message);
+      if (result.snapshot.pageState === 'login_required' || result.snapshot.pageState === 'challenge_required') return sourceFailure(result.snapshot.pageState, 'Zhihu requires user access verification.');
+      const state = ZhihuPageSchema.safeParse(result.snapshot.structuredData);
+      const entry = state.success ? (identity.url.includes('/answer/') ? state.data.answers : state.data.articles)[identity.externalId] : undefined;
+      if (!entry && identifyContentUrl(result.snapshot.finalUrl)?.url !== identity.url) return sourceFailure('invalid_response', 'Zhihu redirected to another content.');
+      const body = boundedMaterial(entry ? htmlToPlainText(entry.content) : result.snapshot.bodyText);
+      if (!body.text) return sourceFailure('material_unavailable', 'Zhihu returned no detail text.');
       return {
-        status: 'failed',
-        failure: {
-          code: 'material_unavailable',
-          message:
-            'Zhihu Open Platform exposes full text only for the credential owner\u2019s own posts.',
-          retryable: false,
-        },
+        status: 'success', material: {
+          ...body,
+          truncated: body.truncated || (!entry && result.snapshot.truncated === true),
+          kind: 'full_text',
+          method: 'zhihu_browser_detail',
+          platform: 'zhihu',
+          title: entry?.title,
+          author: entry?.author?.name,
+          authorId: entry?.author?.id,
+          publishedAt: entry?.createdTime === undefined ? undefined : entry?.createdTime * 1_000,
+          publicationEvidence: [
+            ...(entry?.createdTime === undefined ? [] : [publicationClaim(entry?.createdTime * 1_000, 'Zhihu.detail.createdTime', 'published', true)]),
+            ...(entry?.updatedTime === undefined ? [] : [publicationClaim(entry?.updatedTime * 1_000, 'Zhihu.detail.updatedTime', 'modified')]),
+          ],
+        }
       };
     },
   };
+  return {
+    ...primary,
+    async search(request) {
+      const result = await primary.search(request);
+      if (!options.browser || (result.status === 'success' && result.items.length > 0) || (result.status === 'failed' && ['cancelled', 'budget_exhausted'].includes(result.failure.code))) return result;
+      return searchPlatformPage(options.browser, 'zhihu', request);
+    },
+  };
 }
+
+const ZhihuPageEntrySchema = z.object({
+  content: z.string(),
+  title: z.string().optional(),
+  createdTime: z.number().nonnegative().optional(),
+  updatedTime: z.number().nonnegative().optional(),
+  author: z.object({ name: z.string().optional(), id: z.string().optional() }).optional(),
+});
+const ZhihuPageSchema = z.object({ answers: z.record(z.string(), ZhihuPageEntrySchema), articles: z.record(z.string(), ZhihuPageEntrySchema) });
 
 /** Maps one platform entry, dropping entries that carry no usable link. */
 function toRawItem(value: unknown): readonly RawItem[] {
   const parsed = ZhihuItemSchema.safeParse(value);
   if (!parsed.success) return [];
   const entry = parsed.data;
-  const url = entry.Url?.trim();
-  if (!url) return [];
+  const identity = entry.Url ? identifyContentUrl(entry.Url) : undefined;
+  if (!identity || identity.platform !== 'zhihu') return [];
 
   const title = entry.Title?.trim();
   const text = entry.ContentText?.trim();
   const author = entry.AuthorName?.trim();
-  const externalId = entry.ContentID === undefined ? undefined : String(entry.ContentID);
   return [
     {
       source: 'zhihu',
-      url,
+      ...identity,
+      method: 'zhihu_api_search',
+      serviceRecordId: String(entry.ContentID),
+      kind: 'excerpt',
+      truncated: false,
+      rangeStart: 0,
+      rangeEnd: [...(text ?? '')].length,
+      publicationEvidence: entry.EditTime === undefined ? [] : [publicationClaim(entry.EditTime * 1_000, 'Zhihu.Items.EditTime', 'modified')],
       ...(title ? { title } : {}),
       ...(text ? { text } : {}),
       ...(author ? { author } : {}),
-      ...(externalId ? { externalId } : {}),
-      // EditTime is the platform's publication timestamp in seconds.
-      ...(entry.EditTime !== undefined ? { publishedAt: entry.EditTime * 1_000 } : {}),
     },
   ];
 }
 
-/** Restricts the search to an inclusive publication window; the platform expects seconds. */
+/** Restricts the search to an inclusive modification window; the platform expects seconds. */
 function editTimeFilter(timeRange?: { readonly from?: number; readonly to?: number }): string | undefined {
   if (!timeRange || (timeRange.from === undefined && timeRange.to === undefined)) return undefined;
   const from = timeRange.from === undefined ? '' : String(Math.floor(timeRange.from / 1_000));
@@ -186,16 +219,6 @@ function clampLimit(limit: number): number {
   return Math.min(MAX_RESULTS_PER_SEARCH, Math.max(1, Math.floor(limit)));
 }
 
-function httpFailure(status: number): SourceSearchResult {
-  if (status === 401 || status === 403) {
-    return failed('unauthorized', `Zhihu rejected the credential (HTTP ${status}).`, false);
-  }
-  if (status === 429) {
-    return failed('rate_limited', 'Zhihu rate limited the request.', true);
-  }
-  return failed('unavailable', `Zhihu returned HTTP ${status}.`, status >= 500);
-}
-
 /** Maps platform business codes; only throttling is worth an in-round retry. */
 function codeFailure(code: number, message?: string): SourceSearchResult {
   const detail = message?.trim() || `Zhihu error code ${code}.`;
@@ -206,8 +229,4 @@ function codeFailure(code: number, message?: string): SourceSearchResult {
 
 function failed(code: SourceFailure['code'], message: string, retryable: boolean): SourceSearchResult {
   return { status: 'failed', failure: { code, message, retryable } };
-}
-
-function describeError(error: unknown): string {
-  return error instanceof Error ? error.message : 'Zhihu search failed.';
 }

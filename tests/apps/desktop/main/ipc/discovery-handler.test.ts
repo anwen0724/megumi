@@ -7,10 +7,19 @@ import { registerDiscoveryHandlers } from '@megumi/desktop/main/ipc/handlers/dis
 const interest = { id: 'interest:1', text: 'Rust 异步运行时', enabled: true, revision: 1 };
 const configuration = {
   candidateSupplyConfirmed: false,
-  sources: [{ sourceId: 'zhihu', name: 'Zhihu', enabled: true, credentialConfigured: false }],
+  sources: [{ sourceId: 'zhihu', name: '知乎', enabled: true, credentialConfigured: false, state: 'unchecked', checkedAt: null, retryAt: null, error: null }],
 };
 
 describe('registerDiscoveryHandlers', () => {
+  it('validates the source and forwards explicit login and access requests', async () => {
+    const openSourceLogin = vi.fn(async () => ({ status: 'opened' }));
+    const checkSourceAccess = vi.fn(async () => ({ sourceId: 'xiaohongshu', state: 'login_required', checkedAt: '2026-10-07T00:00:00.000Z', retryAt: null, error: { code: 'LOGIN_REQUIRED', message: '需要登录' } }));
+    const ipc = createDiscoveryIpc({ openSourceLogin, checkSourceAccess });
+    expect(await ipc.invoke('recommendation:open-source-login', { sourceId: 'xiaohongshu' })).toMatchObject({ ok: true, data: { status: 'opened' } });
+    expect(await ipc.invoke('recommendation:check-source-access', { sourceId: 'xiaohongshu' })).toMatchObject({ ok: true, data: { state: 'login_required' } });
+    expect(await ipc.invoke('recommendation:check-source-access', { sourceId: 'unknown' })).toMatchObject({ ok: false, data: { code: 'ipc_invalid_request' } });
+    expect(checkSourceAccess).toHaveBeenCalledOnce();
+  });
   it('registers exactly the retained Discovery channels', () => {
     const handle = vi.fn();
 
@@ -25,6 +34,8 @@ describe('registerDiscoveryHandlers', () => {
       IPC_CHANNELS.discovery.configurationGet,
       IPC_CHANNELS.discovery.configurationUpdate,
       IPC_CHANNELS.discovery.candidateSupplyConfirm,
+      IPC_CHANNELS.discovery.sourceLogin,
+      IPC_CHANNELS.discovery.sourceAccess,
     ]);
   });
 

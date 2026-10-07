@@ -55,10 +55,12 @@ export type WebFetchResult = {
   contentType: string;
   content: string;
   truncated: boolean;
+  /** Available only when the caller requests the bounded source document. */
+  document?: string;
 };
 
 export interface WebFetch {
-  fetch(request: { url: string; signal?: AbortSignal }): Promise<WebFetchResult>;
+  fetch(request: { url: string; signal?: AbortSignal; beforeRequest?: () => boolean }): Promise<WebFetchResult>;
 }
 
 /** Executes the validated built-in operation within its supplied access scope. */
@@ -77,15 +79,18 @@ async function executeWebFetch(
   };
 }
 
-export function createWebFetch(input: { timeoutMs?: number } = {}): WebFetch {
+export function createWebFetch(input: { timeoutMs?: number; maxResponseBytes?: number; maxContentBytes?: number; includeDocument?: boolean } = {}): WebFetch {
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return {
     async fetch(request) {
       try {
         const initial = parsePublicUrl(request.url);
-        const response = await fetchPublicUrl(initial, request.signal, timeoutMs, 0);
+        const response = await fetchPublicUrl(initial, request.signal, timeoutMs, 0, input.maxResponseBytes ?? MAX_RESPONSE_BYTES, request.beforeRequest);
+        if (input.includeDocument && response.bodyTruncated) {
+          throw new ToolExecutionFailure('Document exceeded its response limit.', 'tool_execution_failed', { reason: 'response_too_large' });
+        }
         const extracted = extractContent(response.body, response.contentType);
-        const truncated = truncateUtf8(extracted.content, MAX_CONTENT_BYTES);
+        const truncated = truncateUtf8(extracted.content, input.maxContentBytes ?? MAX_CONTENT_BYTES);
         return {
           requestedUrl: initial.toString(),
           finalUrl: response.finalUrl.toString(),
@@ -93,6 +98,7 @@ export function createWebFetch(input: { timeoutMs?: number } = {}): WebFetch {
           contentType: response.contentType,
           content: truncated.content,
           truncated: response.bodyTruncated || truncated.truncated,
+          ...(input.includeDocument ? { document: response.body.toString('utf8') } : {}),
         };
       } catch (error) {
         if (error instanceof ToolExecutionFailure) throw error;
@@ -110,6 +116,8 @@ async function fetchPublicUrl(
   signal: AbortSignal | undefined,
   timeoutMs: number,
   redirectCount: number,
+  maxResponseBytes = MAX_RESPONSE_BYTES,
+  beforeRequest?: () => boolean,
 ): Promise<{ finalUrl: URL; contentType: string; body: Buffer; bodyTruncated: boolean }> {
   if (redirectCount > MAX_REDIRECTS) {
     throw new ToolExecutionFailure('web_fetch exceeded the redirect limit.', 'tool_execution_failed', {
@@ -118,10 +126,10 @@ async function fetchPublicUrl(
     });
   }
   const address = await resolvePublicAddress(url.hostname);
-  const response = await requestAddress(url, address, signal, timeoutMs);
+  const response = await requestAddress(url, address, signal, timeoutMs, maxResponseBytes, beforeRequest);
   if (isRedirect(response.statusCode) && response.location) {
     const redirected = parsePublicUrl(new URL(response.location, url).toString());
-    return fetchPublicUrl(redirected, signal, timeoutMs, redirectCount + 1);
+    return fetchPublicUrl(redirected, signal, timeoutMs, redirectCount + 1, maxResponseBytes, beforeRequest);
   }
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new ToolExecutionFailure(
@@ -165,11 +173,17 @@ function requestAddress(
   resolved: { address: string; family: 4 | 6 },
   signal: AbortSignal | undefined,
   timeoutMs: number,
+  maxResponseBytes: number,
+  beforeRequest?: () => boolean,
 ): Promise<{ statusCode: number; location?: string; contentType?: string; body: Buffer; truncated: boolean }> {
   if (signal?.aborted) {
     return Promise.reject(new ToolExecutionFailure('web_fetch was cancelled.', 'tool_cancelled', { reason: 'cancelled' }));
   }
   return new Promise((resolve, reject) => {
+    if (beforeRequest && !beforeRequest()) {
+      reject(new ToolExecutionFailure('web_fetch budget exhausted.', 'tool_execution_failed', { reason: 'budget_exhausted' }));
+      return;
+    }
     const transport = url.protocol === 'https:' ? https : http;
     const request = transport.request(url, {
       method: 'GET',
@@ -191,7 +205,7 @@ function requestAddress(
           return;
         }
         const stream = decodedStream(response, firstHeader(response.headers['content-encoding']));
-        const collected = await collectLimited(stream, MAX_RESPONSE_BYTES, signal);
+        const collected = await collectLimited(stream, maxResponseBytes, signal);
         resolve({
           statusCode,
           ...(firstHeader(response.headers['content-type']) ? { contentType: firstHeader(response.headers['content-type']) } : {}),

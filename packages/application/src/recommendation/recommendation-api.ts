@@ -25,7 +25,10 @@ import type {
   SupplyConfigurationView,
   SupplyConfirmResult,
 } from './recommendation-contracts';
-import { createZhihuSource } from './sources/zhihu-source';
+import { createSourceAccess } from './sources/source-access';
+import { SOURCE_CATALOG } from './sources/source-access-contracts';
+import type { EmbeddedBrowser } from './sources/browser-access';
+import type { WebFetch } from '@megumi/agent';
 import { createCandidateSupply } from './supply/create-supply';
 import {
   readSupplyConfig,
@@ -37,9 +40,7 @@ import { createMaintenanceScheduler } from './supply/schedule-maintenance';
 import type { CandidateSupply, SupplyIssue, UnavailableCode } from './supply/supply-contracts';
 
 /** The first-version source catalog. Adding a source is a product decision, not a setting. */
-const SUPPLY_SOURCES = [{ sourceId: 'zhihu', name: 'Zhihu' }] as const;
-
-const ZHIHU_SOURCE_ID = 'zhihu';
+const SUPPLY_SOURCES = SOURCE_CATALOG;
 
 /**
  * Enabled values that have no connector. They never reach planning, and the
@@ -66,8 +67,11 @@ export interface RecommendationOptions {
   readonly client: TextModelClient;
   /** Resolves the selected supply model; `undefined` means it cannot be used now. */
   readonly resolveModel: (reference: SupplyModelReference) => Promise<Model<Api> | undefined>;
-  /** Reads the stored Zhihu access secret at request time; never cached here. */
-  readonly accessSecret: () => string | undefined;
+  /** Reads the selected source credential at request time; never cached here. */
+  readonly accessSecret: (sourceId: 'tavily' | 'zhihu') => string | undefined;
+  readonly browser?: EmbeddedBrowser;
+  readonly sourceFetch?: typeof globalThis.fetch;
+  readonly sourceWebFetch?: WebFetch;
   readonly newId: (prefix: string) => string;
   readonly now?: () => number;
   readonly timers?: {
@@ -79,6 +83,7 @@ export interface RecommendationOptions {
 
 /** The composed Candidate Supply owner, its interest surface, and the Host projection. */
 export interface Recommendation {
+  readonly sources: ReturnType<typeof createSourceAccess>;
   readonly supply: CandidateSupply;
   readonly interests: InterestManagement;
   /** The renderer-safe surface the Product Host exposes. */
@@ -91,6 +96,10 @@ export interface Recommendation {
 
 export function createRecommendation(options: RecommendationOptions): Recommendation {
   const now = options.now ?? Date.now;
+  const sources = createSourceAccess({
+    enabledSources: () => readSettings().enabledSources, accessSecret: options.accessSecret,
+    browser: options.browser, fetch: options.sourceFetch, webFetch: options.sourceWebFetch, now,
+  });
   const contents = createContentStorage(options.database);
   const candidates = createCandidateStorage(options.database);
   const search = createSearchStorage(options.database);
@@ -118,14 +127,8 @@ export function createRecommendation(options: RecommendationOptions): Recommenda
       }
       // Only an enabled source with an assembled connector may be planned; a user
       // who disabled every source keeps it disabled: no web-search fallback.
-      const enabled = new Set(settings.enabledSources);
-      const sources = SUPPLY_SOURCES.filter((source) => enabled.has(source.sourceId)).flatMap(
-        (source) =>
-          source.sourceId === ZHIHU_SOURCE_ID
-            ? [createZhihuSource({ accessSecret: options.accessSecret })]
-            : [],
-      );
-      if (sources.length === 0) {
+      const connectors = sources.connectors();
+      if (connectors.length === 0) {
         return unavailable('SOURCE_UNAVAILABLE', 'No candidate supply source is enabled.');
       }
       return {
@@ -135,7 +138,8 @@ export function createRecommendation(options: RecommendationOptions): Recommenda
           config,
           database: options.database,
           model,
-          sources,
+          sources: connectors,
+          acquireMaterial: sources.acquireMaterial,
           configIssues: sourceConfigurationIssues(settings.enabledSources),
           client: options.client,
           interests,
@@ -163,6 +167,7 @@ export function createRecommendation(options: RecommendationOptions): Recommenda
   });
   let shutdown: Promise<void> | undefined;
   const owner = {
+    sources,
     supply,
     interests,
 
@@ -174,7 +179,7 @@ export function createRecommendation(options: RecommendationOptions): Recommenda
     },
 
     shutdown() {
-      shutdown ??= scheduler.stop();
+      shutdown ??= (async () => { await scheduler.stop(); await sources.shutdown(); })();
       return shutdown;
     },
   };
@@ -230,9 +235,9 @@ function unavailable(code: UnavailableCode, message: string) {
 
 /** Projects the composed owner onto the renderer-safe Host contract. */
 export function createDiscoveryOperations(input: {
-  readonly recommendation: Pick<Recommendation, 'interests' | 'startBackground'>;
+  readonly recommendation: Pick<Recommendation, 'interests' | 'startBackground' | 'sources'>;
   readonly settings: Settings;
-  readonly accessSecret: () => string | undefined;
+  readonly accessSecret: (sourceId: 'tavily' | 'zhihu') => string | undefined;
 }): DiscoveryHost {
   const read = () => {
     const result = input.settings.readSettings();
@@ -244,16 +249,19 @@ export function createDiscoveryOperations(input: {
     const enabled = new Set(read().config.discovery.enabledSources);
     return {
       candidateSupplyConfirmed: read().config.discovery.candidateSupplyConfirmed,
-      sources: SUPPLY_SOURCES.map((source) => ({
+      sources: input.recommendation.sources.readStatuses().map((source) => ({
+        ...source,
         sourceId: source.sourceId,
-        name: source.name,
+        name: SUPPLY_SOURCES.find((entry) => entry.sourceId === source.sourceId)?.name ?? source.sourceId,
         enabled: enabled.has(source.sourceId),
-        credentialConfigured: input.accessSecret() !== undefined,
+        credentialConfigured: source.sourceId === 'tavily' || source.sourceId === 'zhihu' ? input.accessSecret(source.sourceId) !== undefined : false,
       })),
     };
   };
 
   return {
+    openSourceLogin: (request) => input.recommendation.sources.openSourceLogin(request.sourceId),
+    checkSourceAccess: (request) => input.recommendation.sources.checkSourceAccess(request.sourceId),
     async listInterests(): Promise<DiscoveryInterestListResult> {
       return { interests: [...(await list())] };
     },

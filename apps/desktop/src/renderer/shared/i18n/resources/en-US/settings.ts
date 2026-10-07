@@ -322,6 +322,13 @@ export const settings = {
     saving: 'Saving…',
   },
   contentSources: {
+    accessTitle: 'Source access',
+    checkAccess: 'Check access',
+    openLogin: 'Open login window',
+    loginOpened: 'Login window opened. Access has not been confirmed.',
+    lastChecked: 'Last checked',
+    retryAt: 'Retry after',
+    states: { disabled: 'Disabled', not_configured: 'Not configured', unchecked: 'Unchecked', available: 'Available', login_required: 'Login required', challenge_required: 'Verification required', cooling_down: 'Cooling down', unavailable: 'Unavailable' },
     platformTitle: 'Content source',
     platformDescription:
       'Configure the content-source credential used only to prepare candidate content.',

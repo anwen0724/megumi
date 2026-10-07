@@ -28,6 +28,7 @@ import {
 } from '../adapters/voice-input/electron-voice-input-adapter';
 import { IPC_CHANNELS } from '../ipc/channels';
 import { resolveProductInstructionsPath } from '../packaging/product-resources';
+import { createElectronEmbeddedBrowser } from '../adapters/embedded-browser/electron-embedded-browser';
 
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
@@ -46,6 +47,7 @@ export function composeDesktopMain() {
   });
   // Desktop selects environment adapters; shared Composition owns the object graph.
   const product = createApplication({
+    embeddedBrowser: createElectronEmbeddedBrowser(),
     home,
     migrationEnvironment: getElectronMigrationEnvironment(),
     observabilityStorage: nodeObservabilityStorage,

@@ -11,6 +11,8 @@ export const databaseTables = [
   'skill_availability',
   'interests',
   'contents',
+  'content_materials',
+  'material_acquisitions',
   'content_analysis',
   'content_interest_matches',
   'recommendation_candidates',
@@ -67,6 +69,8 @@ export const databaseTableOwnership = {
     tables: [
       'interests',
       'contents',
+      'content_materials',
+      'material_acquisitions',
       'content_analysis',
       'content_interest_matches',
       'recommendation_candidates',

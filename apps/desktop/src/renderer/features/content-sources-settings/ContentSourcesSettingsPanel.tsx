@@ -7,11 +7,25 @@ import { useTranslation } from 'react-i18next';
 import { Button, SecretInput, SettingsPageHeader, SettingsSection, cx } from '../../shared/ui';
 import { SupplyModelSettings } from './SupplyModelSettings';
 import { WebSettingsPanel } from '../web-settings';
+import { SourceAccessSettings } from './SourceAccessSettings';
 
-const ZHIHU_SOURCE_ID = 'zhihu';
-
-/** Renders the single content-source credential and the candidate supply model. */
+/** Renders independent recommendation credentials and the candidate supply model. */
 export function ContentSourcesSettingsPanel() {
+  const { t } = useTranslation('settings');
+  return <div className="space-y-6">
+    <SettingsPageHeader title={t('categories.sources.label')} description={t('categories.sources.description')} />
+    <SupplyModelSettings />
+    <WebSettingsPanel showHeader={false} />
+    <SettingsSection title={t('contentSources.platformTitle')} description={t('contentSources.platformDescription')}>
+      <SourceCredentialEditor sourceId="tavily" label="Tavily API Key" helpLink={{ href: 'https://app.tavily.com/home', label: 'Tavily' }} />
+      <SourceCredentialEditor sourceId="zhihu" label="知乎 Access Secret" helpLink={{ href: 'https://developer.zhihu.com/', label: t('contentSources.zhihuApiLink') }} />
+    </SettingsSection>
+    <SourceAccessSettings />
+  </div>;
+}
+
+/** Owns one credential editor so saving a key never changes another source. */
+function SourceCredentialEditor(props: { sourceId: 'tavily' | 'zhihu'; label: string; helpLink: { href: string; label: string } }) {
   const { t } = useTranslation(['settings', 'common']);
   const [configured, setConfigured] = useState(false);
   const [draft, setDraft] = useState('');
@@ -21,7 +35,7 @@ export function ContentSourcesSettingsPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    void readCredential()
+    void readCredential(props.sourceId)
       .then((credential) => {
         if (cancelled) return;
         setConfigured(credential.configured);
@@ -34,7 +48,7 @@ export function ContentSourcesSettingsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, props.sourceId]);
 
   async function saveCredential() {
     const credential = draft.trim();
@@ -43,7 +57,7 @@ export function ContentSourcesSettingsPanel() {
     setError(null);
     try {
       const result = await window.megumi.settings.updateCredential({
-        target: { kind: 'discoverySource', sourceId: ZHIHU_SOURCE_ID },
+        target: { kind: 'discoverySource', sourceId: props.sourceId },
         value: credential,
       });
       if (!result.ok) throw new Error(result.data.message);
@@ -61,11 +75,11 @@ export function ContentSourcesSettingsPanel() {
     setError(null);
     try {
       const result = await window.megumi.settings.updateCredential({
-        target: { kind: 'discoverySource', sourceId: ZHIHU_SOURCE_ID },
+        target: { kind: 'discoverySource', sourceId: props.sourceId },
         value: null,
       });
       if (!result.ok) throw new Error(result.data.message);
-      const current = await readCredential();
+      const current = await readCredential(props.sourceId);
       setConfigured(current.configured);
       setDraft(current.credential);
     } catch (reason) {
@@ -75,28 +89,11 @@ export function ContentSourcesSettingsPanel() {
     }
   }
 
-  return (
-    <div className="space-y-6">
-      <SettingsPageHeader
-        title={t('settings:categories.sources.label')}
-        description={t('settings:categories.sources.description')}
-      />
-
-      <SupplyModelSettings />
-
-      <WebSettingsPanel showHeader={false} />
-
-      <SettingsSection
-        title={t('settings:contentSources.platformTitle')}
-        description={t('settings:contentSources.platformDescription')}
-      >
+  return (<div>
         <CredentialSourceRow
-          sourceId={ZHIHU_SOURCE_ID}
-          label="知乎 Access Secret"
-          helpLink={{
-            href: 'https://developer.zhihu.com/',
-            label: t('settings:contentSources.zhihuApiLink'),
-          }}
+          sourceId={props.sourceId}
+          label={props.label}
+          helpLink={props.helpLink}
           configured={configured}
           value={draft}
           expanded={expanded}
@@ -106,8 +103,6 @@ export function ContentSourcesSettingsPanel() {
           onSave={() => void saveCredential()}
           onClear={() => void clearCredential()}
         />
-      </SettingsSection>
-
       {error ? (
         <p
           role="alert"
@@ -116,14 +111,13 @@ export function ContentSourcesSettingsPanel() {
           {error}
         </p>
       ) : null}
-    </div>
-  );
+  </div>);
 }
 
 /** Reads the source secret through the dedicated credential boundary. */
-async function readCredential(): Promise<{ configured: boolean; credential: string }> {
+async function readCredential(sourceId: 'tavily' | 'zhihu'): Promise<{ configured: boolean; credential: string }> {
   const result = await window.megumi.settings.readCredential({
-    target: { kind: 'discoverySource', sourceId: ZHIHU_SOURCE_ID },
+    target: { kind: 'discoverySource', sourceId },
   });
   if (!result.ok) throw new Error(result.data.message);
   return {

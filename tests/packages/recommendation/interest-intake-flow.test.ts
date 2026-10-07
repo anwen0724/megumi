@@ -5,6 +5,7 @@ import { createCandidateStorage } from '@megumi/application/recommendation/candi
 import { createContentStorage } from '@megumi/application/recommendation/content/content-storage';
 import { intakeContent } from '@megumi/application/recommendation/content/intake-content';
 import { executeInterestSearch } from '@megumi/application/recommendation/discovery/execute-searches';
+import { createSearchStorage } from '@megumi/application/recommendation/discovery/search-storage';
 import { createInterestStorage } from '@megumi/application/recommendation/interests/interest-storage';
 import { createZhihuSource } from '@megumi/application/recommendation/sources/zhihu-source';
 import {
@@ -66,6 +67,17 @@ describe('interest intake flow', () => {
 
     expect(countRows(database, 'search_queries')).toBe(1);
     expect(countRows(database, 'search_results')).toBe(1);
+  });
+
+  it('recovers source material facts and saves them through the public intake path', async () => {
+    const searched = await search();
+    if (searched.status !== 'success') throw new Error('Expected discoveries');
+    const recovered = createSearchStorage(database).listDueDiscoveries({ limit: 10, now: 3, maxAttempts: 3 });
+    expect(recovered[0]?.item).toMatchObject({ platform: 'zhihu', kind: 'excerpt', method: 'zhihu_api_search', publicationEvidence: [{ kind: 'modified', status: 'unverified' }] });
+    faux.setResponses([fauxAssistantMessage(analysisJson())]);
+    await intake(recovered[0]!.resultId, recovered[0]!.item);
+    const stored = database.prepare<{ id: string }>({ sql: 'SELECT id FROM contents' }).get();
+    expect(createContentStorage(database).readCurrentMaterial(stored!.id)).toMatchObject({ kind: 'excerpt', method: 'zhihu_api_search', publicationEvidence: [{ kind: 'modified', status: 'unverified' }] });
   });
 
   function source() {

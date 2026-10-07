@@ -77,6 +77,7 @@ import {
   type StructuredRuntimeLogger,
 } from './observability/index';
 import { createRecommendation, type Recommendation } from './recommendation/recommendation-api';
+import type { EmbeddedBrowser } from './recommendation/sources/browser-access';
 import { readModelCatalog, resolveModel as resolveConfiguredModel } from './settings/resolve-model';
 import { createSettings, type Settings } from './settings/settings-store';
 import { createSkills, type Skills } from './skills/manage-skills';
@@ -118,6 +119,8 @@ export interface ModuleOptions {
   modelStreams?: Partial<Record<Api, ProviderStreams>>;
   webSearch?: WebSearch;
   webFetch?: WebFetch;
+  embeddedBrowser?: EmbeddedBrowser;
+  recommendationSourceFetch?: typeof globalThis.fetch;
   clock?: { now(): string };
   createApplicationId?: (scope: string) => string;
   timers?: {
@@ -506,7 +509,10 @@ function composeCapabilitiesWithDatabase(
       });
       return result.status === 'ok' ? result.model : undefined;
     },
-    accessSecret: () => discoveryCredential(settings, 'zhihu'),
+    accessSecret: (sourceId) => discoveryCredential(settings, sourceId),
+    browser: options.embeddedBrowser,
+    sourceFetch: options.recommendationSourceFetch,
+    sourceWebFetch: options.webFetch,
     newId: createId,
     ...(options.timers ? { timers: options.timers } : {}),
     onBackgroundError(error, operation) {
@@ -556,11 +562,11 @@ function composeCapabilitiesWithDatabase(
 /** Reads the stored credential for a supply source, or the environment when none is saved. */
 function discoveryCredential(
   settings: ReturnType<typeof createSettings>,
-  sourceId: 'zhihu',
+  sourceId: 'zhihu' | 'tavily',
 ): string | undefined {
   const result = settings.readCredential({
     target: { kind: 'discoverySource', sourceId },
-    defaultEnvNames: ['ZHIHU_ACCESS_SECRET'],
+    defaultEnvNames: [sourceId === 'tavily' ? 'TAVILY_API_KEY' : 'ZHIHU_ACCESS_SECRET'],
   });
   return result.status === 'found' ? result.value : undefined;
 }

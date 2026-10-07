@@ -292,6 +292,13 @@ export const settings = {
     saving: '正在保存…',
   },
   contentSources: {
+    accessTitle: '来源访问',
+    checkAccess: '检查访问',
+    openLogin: '打开登录窗口',
+    loginOpened: '登录窗口已打开，尚未确认访问状态。',
+    lastChecked: '上次检查',
+    retryAt: '最早重试时间',
+    states: { disabled: '已停用', not_configured: '未配置', unchecked: '未检查', available: '可访问', login_required: '需要登录', challenge_required: '需要验证', cooling_down: '冷却中', unavailable: '暂时不可用' },
     platformTitle: '内容来源',
     platformDescription: '配置仅用于准备候选内容的内容来源凭据。',
     loadFailed: '无法加载内容来源。',

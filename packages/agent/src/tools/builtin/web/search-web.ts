@@ -75,7 +75,7 @@ export function createSearchWebTool(webSearch: WebSearch): AgentTool {
 }
 
 export type WebSearchRequest = { query: string; count: number; signal?: AbortSignal };
-export type WebSearchResultItem = { title: string; url: string; snippet: string };
+export type WebSearchResultItem = { title: string; url: string; snippet: string; publishedDate?: string };
 export type WebSearchResult = { query: string; results: WebSearchResultItem[] };
 
 export interface WebSearch {
@@ -330,17 +330,24 @@ function parseProviderResults(
 }
 
 function parseBingRssResults(payload: string): WebSearchResultItem[] {
+  if (!/<rss\b[^>]*>[\s\S]*<channel\b[^>]*>[\s\S]*<\/channel>\s*<\/rss>\s*$/i.test(payload)) {
+    throw new ToolExecutionFailure('Bing returned an invalid RSS response.', 'tool_execution_failed', { reason: 'invalid_response' });
+  }
   const items = payload.match(/<item\b[^>]*>[\s\S]*?<\/item>/gi) ?? [];
   return items
     .flatMap((item) => {
       const title = rssElement(item, 'title');
       const url = rssElement(item, 'link');
-      if (!title || !url || !isPublicHttpUrl(url)) return [];
+      if (!title || !url || !isPublicHttpUrl(url)) {
+        throw new ToolExecutionFailure('Bing returned an incomplete RSS item.', 'tool_execution_failed', { reason: 'invalid_response' });
+      }
+      const publishedDate = rssElement(item, 'pubDate');
       return [
         {
           title: plainText(decodeXml(title)),
           url,
           snippet: plainText(decodeXml(rssElement(item, 'description') ?? '')),
+          ...(publishedDate ? { publishedDate } : {}),
         },
       ];
     })
@@ -403,12 +410,29 @@ async function fetchWithTimeout(
   const cancel = () => controller.abort('cancelled');
   input.signal?.addEventListener('abort', cancel, { once: true });
   try {
-    return await fetchImplementation(url, {
+    const response = await cancellableSearch(fetchImplementation(url, {
       method: input.method,
       headers: input.headers,
       ...(input.body ? { body: input.body } : {}),
       signal: controller.signal,
-    });
+    }), controller.signal);
+    if (!response.ok || !response.body) return response;
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      while (true) {
+        const part = await cancellableSearch(reader.read(), controller.signal);
+        if (part.done) break;
+        bytes += part.value.byteLength;
+        if (bytes > 2 * 1024 * 1024) throw new ToolExecutionFailure('Web search response exceeded 2 MiB.', 'tool_execution_failed', { reason: 'response_too_large' });
+        chunks.push(part.value);
+      }
+      return new Response(Buffer.concat(chunks), { status: response.status, statusText: response.statusText, headers: response.headers });
+    } finally {
+      if (controller.signal.aborted || bytes > 2 * 1024 * 1024) void reader.cancel().catch(() => undefined);
+      reader.releaseLock();
+    }
   } catch (error) {
     if (input.signal?.aborted) {
       throw new ToolExecutionFailure('Web search was cancelled.', 'tool_cancelled', {
@@ -469,4 +493,16 @@ function webSearchHttpReason(status: number): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Stops header and body waits when the request owner cancels or times out. */
+async function cancellableSearch<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) { void work.catch(() => undefined); throw signal.reason; }
+  let cancel: () => void = () => undefined;
+  const stopped = new Promise<never>((_resolve, reject) => {
+    cancel = () => reject(signal.reason);
+    signal.addEventListener('abort', cancel, { once: true });
+  });
+  try { return await Promise.race([work, stopped]); }
+  finally { signal.removeEventListener('abort', cancel); }
 }

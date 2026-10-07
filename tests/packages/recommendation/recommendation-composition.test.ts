@@ -90,23 +90,26 @@ describe('candidate supply composition', () => {
 
   it('reports the enable state and the first-version source catalog', async () => {
     const configured = compose();
-    expect(await configured.host.getConfiguration()).toEqual({
+    expect(await configured.host.getConfiguration()).toMatchObject({
       candidateSupplyConfirmed: false,
       sources: [
-        { sourceId: 'zhihu', name: 'Zhihu', enabled: true, credentialConfigured: true },
+        { sourceId: 'tavily', enabled: false, credentialConfigured: true, state: 'disabled' },
+        { sourceId: 'bing_rss', enabled: false, state: 'disabled' },
+        { sourceId: 'zhihu', enabled: true, credentialConfigured: true, state: 'unchecked' },
+        { sourceId: 'bilibili', enabled: false, state: 'disabled' },
+        { sourceId: 'xiaohongshu', enabled: false, state: 'disabled' },
       ],
     });
 
     const withoutCredential = compose({ secret: undefined });
-    expect(await withoutCredential.host.getConfiguration()).toMatchObject({
-      sources: [{ sourceId: 'zhihu', credentialConfigured: false }],
-    });
+    expect((await withoutCredential.host.getConfiguration()).sources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: 'zhihu', credentialConfigured: false })]));
 
     expect(
       await configured.host.updateConfiguration({ enabledSources: [] }),
-    ).toMatchObject({ sources: [{ enabled: false }] });
+    ).toMatchObject({ sources: [{ enabled: false }, { enabled: false }, { enabled: false }, { enabled: false }, { enabled: false }] });
+    expect((await configured.host.updateConfiguration({ enabledSources: ['bilibili'] })).sources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceId: 'bilibili', enabled: true })]));
     await expect(
-      configured.host.updateConfiguration({ enabledSources: ['bilibili'] }),
+      configured.host.updateConfiguration({ enabledSources: ['unknown'] }),
     ).rejects.toThrow('Unknown candidate supply source');
   });
 

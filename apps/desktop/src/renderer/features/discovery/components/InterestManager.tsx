@@ -246,7 +246,7 @@ export function InterestManager({
                   <span className="min-w-0 text-sm text-[var(--color-text)]">
                     <span className="block">{source.name}</span>
                     <span className="block text-xs text-[var(--color-text-muted)]">
-                      {t(source.credentialConfigured ? 'sourceConfigured' : 'sourceNotConfigured')}
+                      {t(`contentSources.states.${source.state}`, { ns: 'settings' })}
                     </span>
                   </span>
                   <span className="flex items-center gap-1">

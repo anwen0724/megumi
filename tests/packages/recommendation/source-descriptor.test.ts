@@ -16,21 +16,22 @@ describe('source capability declaration', () => {
     expect(source.descriptor).toEqual({
       id: 'zhihu',
       description: '中文问答与专栏文章。',
+      accessPaths: ['credential', 'browser_session'],
       maxResultsPerSearch: 10,
       supportsTimeRange: true,
       material: 'excerpt',
-      supportsFetch: false,
+      supportsFetch: true,
     });
   });
 
   it('reports an enabled source that has no connector', () => {
     expect(sourceConfigurationIssues(['zhihu'])).toEqual([]);
-    expect(sourceConfigurationIssues(['zhihu', 'bilibili'])).toEqual([
+    expect(sourceConfigurationIssues(['zhihu', 'unknown'])).toEqual([
       {
         stage: 'configuration',
         code: 'SOURCE_NOT_CONFIGURED',
-        subjectId: 'bilibili',
-        message: 'Source bilibili is enabled but has no connector and is not planned.',
+        subjectId: 'unknown',
+        message: 'Source unknown is enabled but has no connector and is not planned.',
       },
     ]);
   });

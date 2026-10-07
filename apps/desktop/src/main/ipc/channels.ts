@@ -62,6 +62,8 @@ export const IPC_CHANNELS = {
     resolve: 'approval:resolve',
   },
   discovery: {
+    sourceLogin: 'recommendation:open-source-login',
+    sourceAccess: 'recommendation:check-source-access',
     interestList: 'discovery:interest:list',
     interestChange: 'discovery:interest:change',
     configurationGet: 'discovery:configuration:get',
@@ -177,6 +179,8 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.discovery.configurationGet,
   IPC_CHANNELS.discovery.configurationUpdate,
   IPC_CHANNELS.discovery.candidateSupplyConfirm,
+  IPC_CHANNELS.discovery.sourceLogin,
+  IPC_CHANNELS.discovery.sourceAccess,
   IPC_CHANNELS.voice.snapshot,
   IPC_CHANNELS.voice.modelStatus,
   IPC_CHANNELS.voice.modelCapability,

@@ -4,6 +4,8 @@ import {
   DiscoveryInterestChangeResultSchema,
   SupplyConfigurationViewSchema,
   SupplyConfirmResultSchema,
+  SourceAccessViewSchema,
+  SourceLoginResultSchema,
   type ApplicationOperations,
 } from '@megumi/application/contracts';
 import type { DesktopRuntimeLogger as ApplicationLogger } from '../../runtime-logger';
@@ -17,6 +19,8 @@ import {
   DiscoveryConfigurationGetRequestSchema,
   DiscoveryConfigurationUpdateRequestSchema,
   DiscoveryCandidateSupplyConfirmRequestSchema,
+  SourceLoginRequestSchema,
+  SourceAccessCheckRequestSchema,
 } from '../schemas';
 
 export interface DiscoveryHandlersService {
@@ -97,6 +101,14 @@ export function registerDiscoveryHandlers(
       mapError: mapDiscoveryIpcError,
     }),
   );
+  ipcMain.handle(IPC_CHANNELS.discovery.sourceLogin, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.sourceLogin, requestSchema: SourceLoginRequestSchema, responseSchema: SourceLoginResultSchema,
+    logger: options.logger, handle: (request) => service.host.discovery.openSourceLogin(request.payload), mapError: mapDiscoveryIpcError,
+  }));
+  ipcMain.handle(IPC_CHANNELS.discovery.sourceAccess, createIpcRequestHandler({
+    channel: IPC_CHANNELS.discovery.sourceAccess, requestSchema: SourceAccessCheckRequestSchema, responseSchema: SourceAccessViewSchema,
+    logger: options.logger, handle: (request) => service.host.discovery.checkSourceAccess(request.payload), mapError: mapDiscoveryIpcError,
+  }));
 }
 
 function mapDiscoveryIpcError(): RuntimeIpcError {

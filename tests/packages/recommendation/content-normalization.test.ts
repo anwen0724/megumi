@@ -120,7 +120,7 @@ describe('content normalization', () => {
 });
 
 describe('zhihu source', () => {
-  it('maps the platform response onto discoveries with publication time', async () => {
+  it('keeps EditTime as modification evidence and uses the page identity', async () => {
     const source = createZhihuSource({
       accessSecret: () => 'secret',
       // The platform sends ContentID as a raw int64 number. A JavaScript object
@@ -139,17 +139,20 @@ describe('zhihu source', () => {
 
     expect(result.status).toBe('success');
     if (result.status !== 'success') throw new Error('expected a successful search');
-    expect(result.items).toEqual([
+    expect(result.items).toMatchObject([
       {
         source: 'zhihu',
-        url: 'https://zhuanlan.zhihu.com/p/1?utm_medium=openapi_platform',
+        platform: 'zhihu',
+        url: 'https://zhuanlan.zhihu.com/p/1',
         title: '标题',
         text: '正文片段',
         author: '作者',
-        externalId: '-5776787301334619690',
-        publishedAt: 1791161176000,
+        externalId: '1',
+        kind: 'excerpt',
+        publicationEvidence: [{ kind: 'modified', value: 1791161176000, status: 'unverified' }],
       },
     ]);
+    expect(result.items[0]?.publishedAt).toBeUndefined();
   });
 
   it('reports a missing credential without calling the platform', async () => {

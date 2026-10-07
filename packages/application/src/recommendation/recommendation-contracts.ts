@@ -6,6 +6,10 @@
  */
 import { z } from 'zod';
 import { InterestTextSchema, InterestSnapshotEntrySchema } from './interests/interest-contracts';
+import { SourceAccessViewSchema, SourceIdSchema, type SourceAccessView, type SourceLoginResult } from './sources/source-access-contracts';
+export { SourceAccessViewSchema, SourceLoginResultSchema, type SourceAccessView, type SourceLoginResult } from './sources/source-access-contracts';
+export const SourceAccessRequestSchema = z.object({ sourceId: SourceIdSchema }).strict();
+export type SourceAccessRequest = z.infer<typeof SourceAccessRequestSchema>;
 
 /** One interest as the product shows it: the saved description and enable state. */
 export const InterestUiSchema = InterestSnapshotEntrySchema;
@@ -59,9 +63,8 @@ export type DiscoveryInterestChangeResult = z.infer<typeof DiscoveryInterestChan
  * first-version source is the Zhihu API, so the only facts are whether the user
  * keeps it enabled and whether a credential is available.
  */
-export const SupplySourceViewSchema = z
-  .object({
-    sourceId: z.string().trim().min(1),
+export const SupplySourceViewSchema = SourceAccessViewSchema
+  .extend({
     name: z.string().trim().min(1),
     enabled: z.boolean(),
     credentialConfigured: z.boolean(),
@@ -96,6 +99,10 @@ export type SupplyConfirmResult = z.infer<typeof SupplyConfirmResultSchema>;
  * no candidate-pool IPC, HTTP API, or UI event bus.
  */
 export interface DiscoveryHost {
+  /** Opens an isolated platform window; opening does not confirm login. */
+  openSourceLogin(request: SourceAccessRequest): Promise<SourceLoginResult>;
+  /** Makes one bounded read-only access check; configuration reads never probe. */
+  checkSourceAccess(request: SourceAccessRequest): Promise<SourceAccessView>;
   /** Reads the saved interests without model or source work. */
   listInterests(request?: DiscoveryEmptyPayload): Promise<DiscoveryInterestListResult>;
   /** Creates, edits, enables, disables, or deletes one interest. */

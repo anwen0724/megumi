@@ -82,16 +82,20 @@ describe('Discovery Product Host operations', () => {
     const initial = SupplyConfigurationViewSchema.parse(
       await application.runtime.discovery.getConfiguration(),
     );
-    expect(initial).toEqual({
+    expect(initial).toMatchObject({
       candidateSupplyConfirmed: false,
-      sources: [{ sourceId: 'zhihu', name: 'Zhihu', enabled: true, credentialConfigured: false }],
+      sources: [
+        { sourceId: 'tavily', enabled: false, state: 'disabled' },
+        { sourceId: 'bing_rss', enabled: false, state: 'disabled' },
+        { sourceId: 'zhihu', enabled: true, credentialConfigured: false, state: 'unchecked' },
+        { sourceId: 'bilibili', enabled: false, state: 'disabled' },
+        { sourceId: 'xiaohongshu', enabled: false, state: 'disabled' },
+      ],
     });
-
-    const [source] = initial.sources;
     await expect(application.runtime.discovery.updateConfiguration({ enabledSources: ['zhihu'] }))
       .resolves.toEqual(initial);
-    await expect(application.runtime.discovery.updateConfiguration({ enabledSources: [] }))
-      .resolves.toEqual({ ...initial, sources: [{ ...source, enabled: false }] });
+    const disabled = await application.runtime.discovery.updateConfiguration({ enabledSources: [] });
+    expect(disabled.sources.every((source) => !source.enabled && source.state === 'disabled')).toBe(true);
     expect(application.runtime.settings.readSettings()).toMatchObject({
       status: 'ok',
       settings: { config: { discovery: { enabledSources: [] } } },

@@ -16,8 +16,11 @@ import {
   type AnalysisInterest,
   type AnalysisRequestEstimate,
   type AnalyzeContentInput,
-} from './analyze-content';import type { ContentAnalysis, ContentAnalysisMatch, ContentAnalysisResult } from './content-contracts';
+} from './analyze-content';
+import type { ContentAnalysis, ContentAnalysisMatch, ContentAnalysisResult } from './content-contracts';
 import type { ContentStorage } from './content-storage';
+import type { MaterialInput } from './material-contracts';
+import { identifyContentUrl } from '../sources/source-material';
 import { normalizeRawItem } from './normalize-content';
 import { SCREENED_OUT } from './screen-discoveries';
 
@@ -111,8 +114,10 @@ export async function intakeContent(
     };
   }
 
+  const material = acquiredMaterial(input.item, content, input.now);
   const existing = dependencies.contents.findByCanonicalUrl(content.canonicalUrl);
   if (existing) {
+    if (material) dependencies.contents.recordMaterial(material);
     dependencies.contents.markResultReused({
       resultId: input.sourceResultId,
       contentId: existing.id,
@@ -148,6 +153,7 @@ export async function intakeContent(
   }
 
   dependencies.contents.saveNormalized({
+    ...(material ? { acquiredMaterial: material } : {}),
     content: { id: contentId, ...content },
     sourceResultId: input.sourceResultId,
     sourceUrl: content.canonicalUrl,
@@ -293,5 +299,29 @@ function completeAnalysis(analysis: ContentAnalysis | undefined): ContentAnalysi
     qualityScore: analysis.qualityScore,
     spamScore: analysis.spamScore,
     longTermValue: analysis.longTermValue,
+  };
+}
+
+/** Carries acquired facts through normalization without claiming more text than was received. */
+function acquiredMaterial(item: RawItem, content: { canonicalUrl: string; text: string; title?: string; author?: string; language?: string }, now: number): MaterialInput | undefined {
+  if (!item.kind || !item.method) return undefined;
+  const identity = identifyContentUrl(content.canonicalUrl);
+  const start = item.rangeStart ?? 0;
+  return {
+    platform: item.platform ?? identity?.platform ?? 'web',
+    externalId: item.externalId ?? identity?.externalId,
+    canonicalUrl: content.canonicalUrl,
+    title: content.title,
+    author: content.author,
+    authorId: item.authorId,
+    language: content.language,
+    text: content.text,
+    kind: item.kind,
+    method: item.method,
+    truncated: item.truncated ?? false,
+    rangeStart: start,
+    rangeEnd: start + [...content.text].length,
+    acquiredAt: item.acquiredAt ?? now,
+    publicationEvidence: [...(item.publicationEvidence ?? [])],
   };
 }

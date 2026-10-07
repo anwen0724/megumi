@@ -11,7 +11,7 @@ export const CredentialTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('provider'), providerId: z.string().trim().min(1) }).strict(),
   z.object({ kind: z.literal('webSearch') }).strict(),
   z.object({ kind: z.literal('voiceTts') }).strict(),
-  z.object({ kind: z.literal('discoverySource'), sourceId: z.enum(['twitter', 'zhihu']) }).strict(),
+  z.object({ kind: z.literal('discoverySource'), sourceId: z.enum(['twitter', 'zhihu', 'tavily']) }).strict(),
 ]);
 export type CredentialTarget = z.infer<typeof CredentialTargetSchema>;
 export const ReadCredentialRequestSchema = z

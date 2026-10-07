@@ -5,6 +5,10 @@
  */
 import { z } from 'zod';
 import type { DatabaseConnection, DatabaseRow } from '../../storage/index';
+import type { ContentMaterial, MaterialInput } from './material-contracts';
+import { MaterialInputSchema } from './material-contracts';
+import { createMaterialStorage } from './material-storage';
+import { identifyContentUrl, publicationClaim } from '../sources/source-material';
 import {
   AnalysisStatusSchema,
   ContentTypeSchema,
@@ -33,6 +37,10 @@ export interface NormalizedContentInput {
 }
 
 export interface ContentStorage {
+  /** Reads the current immutable material without source work. */
+  readCurrentMaterial(contentId: string): ContentMaterial | undefined;
+  /** Adds an immutable version to an existing content; never overwrites a saved material. */
+  recordMaterial(input: MaterialInput): ContentMaterial;
   /** Returns the existing content for a canonical URL, if any. */
   findByCanonicalUrl(canonicalUrl: string): Content | undefined;
   /** Returns one content by id, for work resumed after a restart. */
@@ -75,6 +83,7 @@ export interface ContentStorage {
    * transaction. A later model failure never rolls this material back.
    */
   saveNormalized(input: {
+    acquiredMaterial?: MaterialInput;
     content: NormalizedContentInput;
     sourceResultId: string;
     sourceUrl: string;
@@ -102,7 +111,19 @@ export interface ContentStorage {
 }
 
 export function createContentStorage(database: DatabaseConnection): ContentStorage {
+  const materials = createMaterialStorage(database);
+  function recordMaterial(input: MaterialInput): ContentMaterial {
+    const material = MaterialInputSchema.parse(input);
+    return database.transaction({ operation: () => {
+      const existing = database.prepare<{ id: string }>({ sql: 'SELECT id FROM contents WHERE canonical_url = ?' }).get([material.canonicalUrl]);
+      if (!existing) throw new Error('Content must exist before recording its material.');
+      database.prepare({ sql: 'UPDATE contents SET platform = ?, external_id = coalesce(external_id,?) WHERE id = ?' }).run([material.platform, material.externalId ?? null, existing.id]);
+      return materials.saveMaterial(material).material;
+    } });
+  }
   return {
+    readCurrentMaterial: materials.readCurrentMaterial,
+    recordMaterial,
     findByCanonicalUrl(canonicalUrl) {
       const row = database
         .prepare<ContentRow>({ sql: `${CONTENT_SELECT} WHERE canonical_url = ?` })
@@ -223,6 +244,14 @@ export function createContentStorage(database: DatabaseConnection): ContentStora
               sql: "UPDATE search_results SET content_id = ?, status = 'normalized', url = ?, attempts = attempts + 1 WHERE id = ?",
             })
             .run([content.id, input.sourceUrl, input.sourceResultId]);
+          const identity = identifyContentUrl(content.canonicalUrl);
+          recordMaterial(input.acquiredMaterial ?? {
+            platform: identity?.platform ?? 'web', externalId: identity?.externalId, canonicalUrl: content.canonicalUrl,
+            title: content.title, author: content.author, language: content.language, text: content.text,
+            kind: 'excerpt', truncated: false, rangeStart: 0, rangeEnd: [...content.text].length,
+            method: 'legacy_normalization', acquiredAt: input.now,
+            publicationEvidence: content.publishedAt === undefined ? [] : [publicationClaim(content.publishedAt, 'legacy.publishedAt')],
+          });
         },
       });
       return {

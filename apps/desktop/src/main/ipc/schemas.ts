@@ -121,6 +121,8 @@ export const DiscoveryCandidateSupplyConfirmRequestSchema = createRuntimeIpcRequ
   IPC_CHANNELS.discovery.candidateSupplyConfirm,
   host.DiscoveryEmptyPayloadSchema,
 );
+export const SourceLoginRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourceLogin, host.SourceAccessRequestSchema);
+export const SourceAccessCheckRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.discovery.sourceAccess, host.SourceAccessRequestSchema);
 export const VoiceSnapshotRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.voice.snapshot,
   host.VoiceEmptyPayloadSchema,

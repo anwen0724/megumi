@@ -5,22 +5,32 @@
  * content and analysis model.
  */
 
-/** One discovery as the source returned it, before normalization. */
-export interface RawItem {
-  readonly source: string;
-  /** Platform content id, used only inside the connector's own identity scope. */
-  readonly externalId?: string;
-  readonly url: string;
-  readonly title?: string;
-  /**
-   * Text the source already returned. It may be full content, a truncated
-   * excerpt, or absent; normalization and analysis decide what it supports.
-   */
-  readonly text?: string;
-  readonly author?: string;
-  /** Source-declared publication time in UTC milliseconds. */
-  readonly publishedAt?: number;
-}
+import { z } from 'zod';
+import { PublicationEvidenceSchema } from '../content/material-contracts';
+
+/** Validates saved source facts before a later round consumes them. */
+export const RawItemSchema = z.object({
+  source: z.string().min(1),
+  externalId: z.string().optional(),
+  serviceRecordId: z.string().optional(),
+  url: z.string().url(),
+  title: z.string().optional(),
+  text: z.string().optional(),
+  author: z.string().optional(),
+  publishedAt: z.number().int().nonnegative().optional(),
+  platform: z.enum(['web', 'zhihu', 'bilibili', 'xiaohongshu']).optional(),
+  method: z.string().optional(),
+  kind: z.enum(['full_text', 'excerpt', 'description', 'transcript']).optional(),
+  truncated: z.boolean().optional(),
+  rangeStart: z.number().int().nonnegative().optional(),
+  rangeEnd: z.number().int().nonnegative().optional(),
+  publicationEvidence: z.array(PublicationEvidenceSchema).readonly().optional(),
+  // Access parameters remain local; models and logs receive the canonical URL.
+  requestUrl: z.string().url().optional(),
+  authorId: z.string().optional(),
+  acquiredAt: z.number().int().nonnegative().optional(),
+}).strict();
+export type RawItem = z.infer<typeof RawItemSchema>;
 
 /** Failure kinds callers map to retry, cooldown, or a reported gap. */
 export type SourceFailureCode =
@@ -32,6 +42,11 @@ export type SourceFailureCode =
   | 'material_unavailable'
   | 'invalid_response'
   | 'network_error'
+  | 'login_required'
+  | 'challenge_required'
+  | 'timeout'
+  | 'material_too_large'
+  | 'budget_exhausted'
   | 'cancelled';
 
 export interface SourceFailure {
@@ -39,9 +54,12 @@ export interface SourceFailure {
   readonly message: string;
   /** True when retrying within the round budget may succeed. */
   readonly retryable: boolean;
+  readonly retryAfterMs?: number;
 }
 
 export interface SourceSearchRequest {
+  /** Reserves each actual request before sending; false stops work without fallback. */
+  readonly reserveRequest?: (kind: 'search' | 'material') => boolean;
   readonly query: string;
   readonly limit: number;
   /** Inclusive UTC-millisecond window; the source applies its own filtering. */
@@ -54,16 +72,15 @@ export type SourceSearchResult =
   | { status: 'failed'; failure: SourceFailure };
 
 export interface SourceMaterialRequest {
+  readonly reserveRequest?: (kind: 'search' | 'material') => boolean;
   readonly url: string;
   /** Platform fields the caller already knows from search. */
   readonly externalId?: string;
   readonly signal?: AbortSignal;
 }
 
-export interface SourceMaterial {
+export interface SourceMaterial extends Omit<RawItem, 'url' | 'externalId' | 'source'> {
   readonly text: string;
-  readonly author?: string;
-  readonly publishedAt?: number;
 }
 
 export type SourceMaterialResult =
@@ -80,9 +97,10 @@ export interface SourceDescriptor {
   readonly id: string;
   /** Planner-facing description: content types, main language, useful directions. */
   readonly description: string;
+  readonly accessPaths: readonly ('credential' | 'browser_session' | 'public')[];
   /** Most items one search can return. */
   readonly maxResultsPerSearch: number;
-  /** Whether the source filters by the same time it maps to `publishedAt`. */
+  /** Whether the source accepts a date window; its date evidence still requires judgment. */
   readonly supportsTimeRange: boolean;
   /** Text a search response already carries. */
   readonly material: 'full_text' | 'excerpt' | 'none';
@@ -92,6 +110,8 @@ export interface SourceDescriptor {
 
 /** One platform's search and material access behind a stable contract. */
 export interface SourceConnector {
+  /** This connector charges actual requests rather than one logical operation. */
+  readonly managesRequestBudget?: true;
   readonly id: string;
   readonly descriptor: SourceDescriptor;
   search(request: SourceSearchRequest): Promise<SourceSearchResult>;

@@ -60,6 +60,9 @@ import type {
   DiscoveryInterestListResult,
   SupplyConfigurationView,
   SupplyConfirmResult,
+  SourceAccessRequest,
+  SourceAccessView,
+  SourceLoginResult,
 } from '@megumi/application/contracts';
 import { IPC_CHANNELS } from '../main/ipc/channels';
 import type {
@@ -499,6 +502,8 @@ export const api = {
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
   discovery: {
+    openSourceLogin: (request: BusinessRequest<SourceAccessRequest, typeof IPC_CHANNELS.discovery.sourceLogin>): Promise<RuntimeIpcResult<SourceLoginResult, typeof IPC_CHANNELS.discovery.sourceLogin>> => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceLogin, request),
+    checkSourceAccess: (request: BusinessRequest<SourceAccessRequest, typeof IPC_CHANNELS.discovery.sourceAccess>): Promise<RuntimeIpcResult<SourceAccessView, typeof IPC_CHANNELS.discovery.sourceAccess>> => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceAccess, request),
     listInterests: (
       request: BusinessRequest<
         DiscoveryEmptyPayload,

@@ -26,6 +26,13 @@ function fixture(environment: Record<string, string> = {}) {
 }
 
 describe('Credentials', () => {
+  it('keeps recommendation Tavily separate from the Agent web-search key', () => {
+    const { settings } = fixture();
+    settings.updateCredential({ target: { kind: 'webSearch' }, value: 'agent-key' });
+    expect(settings.updateCredential({ target: { kind: 'discoverySource', sourceId: 'tavily' }, value: 'recommendation-key' })).toMatchObject({ status: 'updated' });
+    expect(settings.readCredential({ target: { kind: 'discoverySource', sourceId: 'tavily' } })).toMatchObject({ status: 'found', value: 'recommendation-key' });
+    expect(settings.readCredential({ target: { kind: 'webSearch' } })).toMatchObject({ status: 'found', value: 'agent-key' });
+  });
   it('rejects damaged credentials instead of treating them as missing or overwriting them', () => {
     const files = fixture({ DEFAULT_KEY: 'available' });
     const target = { kind: 'provider', providerId: 'deepseek' } as const;

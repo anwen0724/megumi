@@ -156,7 +156,7 @@ it('upgrades a copy at 0030, rolls back interruption, and preserves unrelated re
   const copyPath = path.join(folder, 'copy.sqlite3'); fs.copyFileSync(originalPath, copyPath);
   const database = createDatabase({ filename: copyPath }); databases.push(database);
   fs.writeFileSync(journalPath, journalText);
-  const pendingPath = path.join(folder, '0033_recommendation_foundation.sql');
+  const pendingPath = path.join(folder, '0034_recommendation_foundation.sql');
   const sql = fs.readFileSync(pendingPath, 'utf8');
   fs.writeFileSync(pendingPath, `${sql}\n--> statement-breakpoint\nSELECT * FROM deliberately_missing_table;`);
   expect(() => migrateDatabase({ database, migrationsFolder: folder })).toThrow();

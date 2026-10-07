@@ -5,7 +5,7 @@
  */
 import type { DatabaseConnection } from '../../storage/index';
 import type { CandidatePool } from '../candidates/candidate-contracts';
-import type { RawItem, SourceConnector } from '../sources/source-connector';
+import { RawItemSchema, type RawItem, type SourceConnector, type SourceSearchRequest } from '../sources/source-connector';
 import { normalizeContentUrl } from '../content/normalize-content';
 import { SCREENED_OUT } from '../content/screen-discoveries';
 import type { ExecutionBudget } from '../supply/execution-budget';
@@ -138,11 +138,12 @@ export async function executePlannedSearch(
     return { status: 'skipped', reason: 'recent_duplicate' };
   }
 
-  if (!dependencies.budget.reserve('searchCalls')) return { status: 'skipped', reason: 'budget' };
+  if (!dependencies.source.managesRequestBudget && !dependencies.budget.reserve('searchCalls')) return { status: 'skipped', reason: 'budget' };
 
   const searched = await callSource(dependencies.source, {
     query: query.text,
     limit: input.limit,
+    reserveRequest: (kind) => dependencies.budget.reserve(kind === 'search' ? 'searchCalls' : 'fetchCalls'),
     ...(input.timeRange ? { timeRange: input.timeRange } : {}),
     ...(input.signal ? { signal: input.signal } : {}),
   });
@@ -252,12 +253,7 @@ function resolveQuery(
 
 async function callSource(
   source: SourceConnector,
-  request: {
-    readonly query: string;
-    readonly limit: number;
-    readonly timeRange?: { readonly from?: number; readonly to?: number };
-    readonly signal?: AbortSignal;
-  },
+  request: SourceSearchRequest,
 ): Promise<
   | { status: 'success'; items: readonly RawItem[] }
   | { status: 'failed'; code: string; message: string; retryable: boolean }
@@ -353,6 +349,8 @@ function storeDiscovery(
         .prepare({ sql: 'UPDATE search_results SET last_seen_at = ? WHERE id = ?' })
         .run([now, existing.id]);
     }
+    dependencies.database.prepare({ sql: 'UPDATE search_results SET raw_payload = ? WHERE id = ?' })
+      .run([JSON.stringify(RawItemSchema.parse(item)), existing.id]);
     return { id: existing.id, created: false };
   }
 
@@ -361,8 +359,8 @@ function storeDiscovery(
     .prepare({
       sql: `INSERT INTO search_results
               (id, source, external_id, url, title, description, author, published_at,
-               status, attempts, first_seen_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)`,
+               status, attempts, first_seen_at, last_seen_at, raw_payload)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, ?)`,
     })
     .run([
       id,
@@ -375,6 +373,7 @@ function storeDiscovery(
       item.publishedAt ?? null,
       now,
       now,
+      JSON.stringify(RawItemSchema.parse(item)),
     ]);
   return { id, created: true };
 }

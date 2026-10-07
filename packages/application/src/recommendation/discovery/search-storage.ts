@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import type { DatabaseConnection, DatabaseRow } from '../../storage/index';
 import { CandidatePoolSchema } from '../candidates/candidate-contracts';
-import type { RawItem } from '../sources/source-connector';
+import { RawItemSchema, type RawItem } from '../sources/source-connector';
 
 /** The scope one search actually used; kept as validated JSON. */
 export const SearchScopeSchema = z
@@ -128,7 +128,7 @@ export function createSearchStorage(database: DatabaseConnection): SearchStorage
     listDueDiscoveries(input) {
       return database
         .prepare<DiscoveryRow>({
-          sql: `SELECT id, source, external_id, url, title, description, author, published_at
+          sql: `SELECT id, source, external_id, url, title, description, author, published_at, raw_payload
                 FROM search_results
                 WHERE attempts < ?
                   AND (status = 'pending'
@@ -139,7 +139,7 @@ export function createSearchStorage(database: DatabaseConnection): SearchStorage
         .all([input.maxAttempts, input.now, input.limit])
         .map((row) => ({
           resultId: row.id,
-          item: {
+          item: row.raw_payload ? RawItemSchema.parse(JSON.parse(row.raw_payload)) : {
             source: row.source,
             url: row.url,
             ...(row.external_id ? { externalId: row.external_id } : {}),
@@ -279,6 +279,7 @@ export interface DueDiscovery {
 }
 
 interface DiscoveryRow extends DatabaseRow {
+  readonly raw_payload: string | null;
   readonly id: string;
   readonly source: string;
   readonly external_id: string | null;

@@ -1,3 +1,7 @@
+CREATE TEMP TABLE legacy_content_materials AS SELECT * FROM content_materials;
+--> statement-breakpoint
+CREATE TEMP TABLE legacy_material_acquisitions AS SELECT * FROM material_acquisitions;
+--> statement-breakpoint
 CREATE TEMP TABLE legacy_contents AS SELECT * FROM contents;
 --> statement-breakpoint
 CREATE TEMP TABLE legacy_content_analysis AS SELECT * FROM content_analysis;
@@ -29,6 +33,10 @@ DROP TABLE search_history;
 DROP TABLE search_queries;
 --> statement-breakpoint
 DROP TABLE candidate_supply_state;
+--> statement-breakpoint
+DROP TABLE material_acquisitions;
+--> statement-breakpoint
+DROP TABLE content_materials;
 --> statement-breakpoint
 UPDATE contents SET duplicate_group_id = NULL;
 --> statement-breakpoint
@@ -208,29 +216,42 @@ CREATE INDEX idx_daily_feed_date_interest ON daily_feed_batches(date,interest_id
 --> statement-breakpoint
 CREATE INDEX idx_favorites_created ON favorites(created_at,content_id);
 --> statement-breakpoint
-INSERT INTO contents(id,platform,canonical_url,title,author,language,created_at,updated_at) SELECT id,source,canonical_url,title,author,language,created_at,updated_at FROM legacy_contents;
+INSERT INTO contents(id,platform,external_id,canonical_url,title,author,author_id,language,created_at,updated_at) SELECT id,CASE WHEN current_material_id IS NULL AND source IN ('zhihu','bilibili','xiaohongshu') THEN source ELSE platform END,external_id,canonical_url,title,author,author_id,language,created_at,updated_at FROM legacy_contents;
 --> statement-breakpoint
-INSERT INTO content_materials(id,content_id,revision,title,author,text,text_hash,kind,truncated,range_end,method,acquired_at,publication_evidence) SELECT 'legacy:'||id,id,1,title,author,text,sha256(text),'excerpt',0,length(text),'legacy',created_at,json_array(json_object('kind',CASE WHEN source = 'zhihu' AND published_at IS NOT NULL THEN 'modified' ELSE 'unknown' END,'value',published_at,'precision',CASE WHEN published_at IS NULL THEN 'unknown' ELSE 'instant' END,'timezone','UTC','location','legacy.contents.published_at','rawValue',CASE WHEN published_at IS NULL THEN NULL ELSE CAST(published_at AS TEXT) END,'status','unverified')) FROM legacy_contents;
+INSERT INTO content_materials SELECT * FROM legacy_content_materials;
 --> statement-breakpoint
-UPDATE contents SET current_material_id = 'legacy:'||id, duplicate_group_id = (SELECT duplicate_group_id FROM legacy_contents old WHERE old.id = contents.id);
+INSERT INTO content_materials(id,content_id,revision,title,author,text,text_hash,kind,truncated,range_end,method,acquired_at,publication_evidence) SELECT 'legacy:'||id,id,1,title,author,text,sha256(text),'excerpt',0,length(text),'legacy',created_at,json_array(json_object('kind',CASE WHEN source = 'zhihu' AND published_at IS NOT NULL THEN 'modified' ELSE 'unknown' END,'value',published_at,'precision',CASE WHEN published_at IS NULL THEN 'unknown' ELSE 'instant' END,'timezone','UTC','location','legacy.contents.published_at','rawValue',CASE WHEN published_at IS NULL THEN NULL ELSE CAST(published_at AS TEXT) END,'status','unverified')) FROM legacy_contents WHERE id NOT IN (SELECT content_id FROM legacy_content_materials);
 --> statement-breakpoint
-INSERT INTO material_acquisitions SELECT 'legacy:'||id,'legacy:'||id,'legacy',created_at FROM legacy_contents;
+UPDATE contents SET current_material_id = coalesce((SELECT current_material_id FROM legacy_contents old WHERE old.id = contents.id),'legacy:'||id), duplicate_group_id = (SELECT duplicate_group_id FROM legacy_contents old WHERE old.id = contents.id);
 --> statement-breakpoint
-INSERT INTO content_analysis(content_id,material_id,contract_version,status,attempts,retry_at,analyzed_at,result) SELECT content_id,'legacy:'||content_id,1,status,attempts,retry_at,analyzed_at,json_object('summary',summary,'keyPoints',json(key_points),'topics',json(topics),'entities',json(entities),'contentType',content_type,'qualityScore',quality_score,'spamScore',spam_score,'longTermValue',long_term_value) FROM legacy_content_analysis;
+INSERT INTO material_acquisitions SELECT * FROM legacy_material_acquisitions;
 --> statement-breakpoint
-INSERT INTO content_analysis(content_id,material_id,contract_version,status) SELECT id,'legacy:'||id,1,'pending' FROM legacy_contents WHERE id NOT IN (SELECT content_id FROM legacy_content_analysis);
+INSERT INTO material_acquisitions SELECT 'legacy:'||id,'legacy:'||id,'legacy',created_at FROM legacy_contents WHERE id NOT IN (SELECT content_id FROM legacy_content_materials);
 --> statement-breakpoint
-INSERT INTO recommendation_candidates(content_id,interest_id,interest_revision,material_id,analysis_contract_version,matching_contract_version,relation,status,basis,reviewed_at) SELECT m.content_id,m.interest_id,m.interest_revision,'legacy:'||m.content_id,1,1,m.relation,'stale',m.basis,m.matched_at FROM legacy_content_interest_matches m;
+INSERT INTO content_analysis(content_id,material_id,contract_version,status,attempts,retry_at,analyzed_at,result) SELECT content_id,coalesce((SELECT id FROM legacy_content_materials m WHERE m.content_id = legacy_content_analysis.content_id AND m.text = (SELECT text FROM legacy_contents c WHERE c.id = m.content_id) ORDER BY revision LIMIT 1),'legacy:'||content_id),1,status,attempts,retry_at,analyzed_at,json_object('summary',summary,'keyPoints',json(key_points),'topics',json(topics),'entities',json(entities),'contentType',content_type,'qualityScore',quality_score,'spamScore',spam_score,'longTermValue',long_term_value) FROM legacy_content_analysis;
+--> statement-breakpoint
+INSERT INTO content_analysis(content_id,material_id,contract_version,status) SELECT id,coalesce((SELECT m.id FROM legacy_content_materials m WHERE m.content_id = legacy_contents.id AND m.text = legacy_contents.text ORDER BY revision LIMIT 1),'legacy:'||id),1,'pending' FROM legacy_contents WHERE id NOT IN (SELECT content_id FROM legacy_content_analysis);
+--> statement-breakpoint
+INSERT INTO recommendation_candidates(content_id,interest_id,interest_revision,material_id,analysis_contract_version,matching_contract_version,relation,status,basis,reviewed_at) SELECT m.content_id,m.interest_id,m.interest_revision,coalesce((SELECT material_id FROM content_analysis a WHERE a.content_id = m.content_id AND a.contract_version = 1),'legacy:'||m.content_id),1,1,m.relation,'stale',m.basis,m.matched_at FROM legacy_content_interest_matches m;
 --> statement-breakpoint
 INSERT INTO search_queries(id,interest_id,interest_revision,query,category,origin,status,last_used_at,created_at) SELECT id,interest_id,interest_revision,query,category,origin,status,last_used_at,created_at FROM legacy_search_queries;
 --> statement-breakpoint
 INSERT INTO search_history(id,query_id,source_id,search_scope,searched_at,outcome,result_count,new_item_count,purpose) SELECT id,query_id,source,search_scope,searched_at,outcome,result_count,new_item_count,'legacy' FROM legacy_search_history;
 --> statement-breakpoint
-INSERT INTO search_results(id,platform,source_id,external_id,request_url,title,excerpt,author,publication_evidence,raw_payload,content_id,status,attempts,retry_at,error_code,first_seen_at,last_seen_at) SELECT id,source,source,external_id,url,title,description,author,json_array(json_object('kind',CASE WHEN source = 'zhihu' AND published_at IS NOT NULL THEN 'modified' ELSE 'unknown' END,'value',published_at,'precision',CASE WHEN published_at IS NULL THEN 'unknown' ELSE 'instant' END,'timezone','UTC','location','legacy.search_results.published_at','rawValue',CASE WHEN published_at IS NULL THEN NULL ELSE CAST(published_at AS TEXT) END,'status','unverified')),raw_payload,content_id,status,attempts,retry_at,last_error_code,merged_first_seen,last_seen_at FROM (
-  SELECT legacy_search_results.*,
-    min(first_seen_at) OVER (PARTITION BY source,coalesce(nullif(external_id,''),url)) AS merged_first_seen,
-    row_number() OVER (PARTITION BY source,coalesce(nullif(external_id,''),url) ORDER BY (content_id IS NULL),last_seen_at DESC,id) AS identity_rank
-  FROM legacy_search_results
+INSERT INTO search_results(id,platform,source_id,external_id,request_url,title,excerpt,author,publication_evidence,raw_payload,content_id,status,attempts,retry_at,error_code,first_seen_at,last_seen_at)
+SELECT id,content_platform,source,content_external_id,coalesce(json_extract(raw_payload,'$.requestUrl'),url),title,description,author,
+  coalesce(json_extract(raw_payload,'$.publicationEvidence'),json_array(json_object('kind',CASE WHEN source = 'zhihu' AND published_at IS NOT NULL THEN 'modified' ELSE 'unknown' END,'value',published_at,'precision',CASE WHEN published_at IS NULL THEN 'unknown' ELSE 'instant' END,'timezone','UTC','location','legacy.search_results.published_at','rawValue',CASE WHEN published_at IS NULL THEN NULL ELSE CAST(published_at AS TEXT) END,'status','unverified'))),
+  raw_payload,content_id,status,attempts,retry_at,last_error_code,merged_first_seen,last_seen_at
+FROM (
+  SELECT facts.*,
+    min(first_seen_at) OVER (PARTITION BY content_platform,coalesce(nullif(content_external_id,''),url)) AS merged_first_seen,
+    row_number() OVER (PARTITION BY content_platform,coalesce(nullif(content_external_id,''),url) ORDER BY (content_id IS NULL),last_seen_at DESC,id) AS identity_rank
+  FROM (
+    SELECT legacy_search_results.*,
+      coalesce(json_extract(raw_payload,'$.platform'),CASE WHEN source IN ('zhihu','bilibili','xiaohongshu') THEN source ELSE 'web' END) AS content_platform,
+      coalesce(json_extract(raw_payload,'$.externalId'),external_id) AS content_external_id
+    FROM legacy_search_results
+  ) facts
 ) WHERE identity_rank = 1;
 --> statement-breakpoint
 INSERT INTO candidate_supply_state(id,source_cooldowns,search_backoff,candidate_next_interest_id,last_finished_at) SELECT id,source_cooldowns,'{}',next_interest_id,last_finished_at FROM legacy_candidate_supply_state;
@@ -252,3 +273,8 @@ DROP TABLE legacy_search_history;
 DROP TABLE legacy_search_queries;
 --> statement-breakpoint
 DROP TABLE legacy_candidate_supply_state;
+
+--> statement-breakpoint
+DROP TABLE legacy_content_materials;
+--> statement-breakpoint
+DROP TABLE legacy_material_acquisitions;

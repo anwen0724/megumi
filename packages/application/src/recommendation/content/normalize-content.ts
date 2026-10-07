@@ -16,6 +16,8 @@ const TRACKING_PARAMETERS = new Set([
   'source',
   'spm',
   'share_token',
+  'xsec_token',
+  'xsec_source',
   'share_source',
   'share_medium',
   'share_plat',
@@ -80,7 +82,7 @@ export function normalizeContentUrl(rawUrl: string): string | undefined {
   } catch {
     return undefined;
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+  if (url.username || url.password || url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
   if (!url.hostname) return undefined;
 
   url.hash = '';
@@ -195,7 +197,7 @@ export function normalizeRawItem(item: RawItem, options: NormalizeOptions = {}):
   return {
     status: 'ok',
     content: {
-      source: item.source,
+      source: item.platform ?? item.source,
       canonicalUrl,
       ...(title ? { title } : {}),
       ...(author ? { author } : {}),

@@ -18,7 +18,7 @@ const CredentialFileSchema = z
     webSearch: SecretSchema.optional(),
     voiceTts: SecretSchema.optional(),
     discoverySources: z
-      .object({ twitter: SecretSchema.optional(), zhihu: SecretSchema.optional() })
+      .object({ twitter: SecretSchema.optional(), zhihu: SecretSchema.optional(), tavily: SecretSchema.optional() })
       .optional(),
   })
   .passthrough();

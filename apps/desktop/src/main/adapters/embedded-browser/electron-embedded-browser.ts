@@ -1,5 +1,5 @@
 /* Implements isolated persistent browser profiles and fixed document snapshots for Discovery Sources. */
-import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron';
+import { BrowserWindow, session, type BrowserWindowConstructorOptions } from 'electron';
 import { getAppIconPath } from '../../app/app-icon';
 import type {
   EmbeddedBrowser,
@@ -7,6 +7,7 @@ import type {
   EmbeddedBrowserSnapshot,
   EmbeddedBrowserSnapshotResult,
 } from '@megumi/application/recommendation/sources/browser-access';
+import { PLATFORM_PAGE_READER, PLATFORM_ORIGINS } from '@megumi/application/recommendation/sources/platform-page-reader';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_SETTLE_DELAY_MS = 1_500;
@@ -70,18 +71,116 @@ export function createElectronEmbeddedBrowser(input: {
   }>();
   const taskWindows = new Set<BrowserWindow>();
   const queues = new Map<EmbeddedBrowserProfileId, Promise<void>>();
+  const slotWaiters = new Set<() => void>();
+  const activeCancels = new Set<() => void>();
+  let activeSlots = 0;
   let shuttingDown = false;
 
   return {
+    readPlatform(request) {
+      return enqueue<EmbeddedBrowserSnapshotResult>(request.profileId, async () => {
+        if (request.signal.aborted || shuttingDown) return failed('cancelled', 'Platform read was cancelled.');
+        const origins = PLATFORM_ORIGINS[request.profileId];
+        try { requireAllowedUrl(request.url, origins); } catch { return failed('invalid_response', 'Platform URL is outside the allowed origins.'); }
+        const releaseSlot = await takeSlot(request.signal);
+        if (!releaseSlot) return failed('cancelled', 'Platform read was cancelled.');
+        let window: BrowserWindow;
+        try { window = createWindow(embeddedBrowserWindowOptions(request.profileId, false)); } catch { releaseSlot(); return failed('network_error', 'Platform task window could not be created.'); }
+        taskWindows.add(window);
+        const responses: { url: string; status: number; body: string }[] = [];
+        const responseIds = new Map<string, { url: string; status: number }>();
+        const reads = new Set<Promise<void>>();
+        const debuggerPort = window.webContents.debugger;
+        const observe = request.profileId === 'xiaohongshu' && request.operation === 'search';
+        let attached = false;
+        let tooLarge = false;
+        let responseBytes = 0;
+        let timedOut = false;
+        let rejectStopped: (error: Error) => void = () => undefined;
+        const stopped = new Promise<never>((_resolve, reject) => { rejectStopped = reject; });
+        void stopped.catch(() => undefined);
+        const stop = () => { rejectStopped(new Error('Platform read stopped.')); window.webContents.stop(); if (!window.isDestroyed()) window.destroy(); };
+        activeCancels.add(stop);
+        const timer = setTimeout(() => { timedOut = true; stop(); }, timeoutMs);
+        request.signal.addEventListener('abort', stop, { once: true });
+        const onMessage = (_event: unknown, method: string, params: Record<string, unknown>) => {
+          if (method === 'Network.responseReceived') {
+            const response = params.response;
+            if (!isRecord(response) || typeof response.url !== 'string' || typeof response.status !== 'number' || typeof params.requestId !== 'string') return;
+            let url: URL;
+            try { url = new URL(response.url); } catch { return; }
+            if (url.origin === 'https://www.xiaohongshu.com' && url.pathname === '/api/sns/web/v2/search/notes') responseIds.set(params.requestId, { url: response.url, status: response.status });
+          }
+          if (method !== 'Network.loadingFinished' || typeof params.requestId !== 'string') return;
+          const response = responseIds.get(params.requestId);
+          if (!response) return;
+          responseIds.delete(params.requestId);
+          if (typeof params.encodedDataLength === 'number' && params.encodedDataLength > 2 * 1024 * 1024) { tooLarge = true; return; }
+          const read = debuggerPort.sendCommand('Network.getResponseBody', { requestId: params.requestId }).then((value: { body: string; base64Encoded?: boolean }) => {
+            const body = value.base64Encoded ? Buffer.from(value.body, 'base64').toString('utf8') : value.body;
+            if ((responseBytes += Buffer.byteLength(body)) > 2 * 1024 * 1024) { tooLarge = true; return; }
+            responses.push({ ...response, body });
+          }).catch(() => undefined);
+          reads.add(read);
+          void read.finally(() => reads.delete(read));
+        };
+        try {
+          window.webContents.setAudioMuted(true);
+          secureWindow(window, origins);
+          if (observe) {
+            debuggerPort.attach('1.3'); attached = true;
+            debuggerPort.on('message', onMessage);
+            await debuggerPort.sendCommand('Network.enable');
+          }
+          await Promise.race([window.loadURL(request.url), stopped]);
+          while (true) {
+            if (request.signal.aborted || shuttingDown) return failed('cancelled', 'Platform read was cancelled.');
+            if (timedOut) return failed('timeout', 'Platform read timed out.');
+            await Promise.race([Promise.allSettled(reads), stopped]);
+            if (tooLarge) return failed('material_too_large', 'Platform response exceeded 2 MiB.');
+            const snapshot = normalizeSnapshot(await Promise.race([window.webContents.executeJavaScript(PLATFORM_PAGE_READER, false), stopped]), 50_000);
+            requireAllowedUrl(snapshot.finalUrl, origins);
+            if (responses.length || snapshot.completed || snapshot.pageState === 'login_required' || snapshot.pageState === 'challenge_required' || request.operation === 'status' || snapshot.structuredData || snapshot.bodyText || snapshot.links.some((link) => /\/(explore|video|question|p)\//.test(link.href))) {
+              return { status: 'success', snapshot: { ...snapshot, ...(responses.length ? { responses } : {}) } };
+            }
+            await delay(100, request.signal);
+          }
+        } catch (error) {
+          if (error instanceof SnapshotTooLarge) return failed('material_too_large', 'Platform material exceeded 2 MiB.');
+          return failed(request.signal.aborted || shuttingDown ? 'cancelled' : timedOut ? 'timeout' : 'network_error', 'Platform read could not complete.');
+        } finally {
+          clearTimeout(timer);
+          request.signal.removeEventListener('abort', stop);
+          if (attached) { debuggerPort.removeListener('message', onMessage); try { debuggerPort.detach(); } catch {} }
+          if (!window.isDestroyed()) window.destroy();
+          taskWindows.delete(window);
+          activeCancels.delete(stop);
+          releaseSlot();
+        }
+      }, request.signal).catch((error: unknown) => {
+        if (request.signal.aborted || shuttingDown) return failed('cancelled', 'Platform read was cancelled.');
+        throw error;
+      });
+    },
+    fetchWithSession(request) {
+      const url = new URL(request.url);
+      const apiPaths = new Set(['/x/web-interface/nav', '/x/web-interface/wbi/search/type', '/x/web-interface/view', '/x/web-interface/wbi/view', '/x/player/v2', '/x/player/wbi/v2']);
+      const subtitle = (url.hostname === 'aisubtitle.hdslb.com' || url.hostname.endsWith('.hdslb.com')) && url.pathname.startsWith('/bfs/subtitle/');
+      if (url.protocol !== 'https:' || url.username || url.password || !(url.hostname === 'api.bilibili.com' && apiPaths.has(url.pathname) || subtitle)) return Promise.reject(new Error('Session URL is not an approved platform read endpoint.'));
+      return enqueue('bilibili', async () => {
+        if (request.signal?.aborted || shuttingDown) throw new Error('Platform request was cancelled.');
+        return session.fromPartition('persist:megumi-discovery-bilibili').fetch(url.toString(), { method: 'GET', credentials: 'include', redirect: 'error', headers: { Referer: 'https://www.bilibili.com/' }, signal: request.signal });
+      });
+    },
     async openLogin(request) {
       requireAllowedUrl(request.url, request.allowedOrigins);
       if (shuttingDown) throw new Error('Embedded browser is shutting down.');
       const current = loginWindows.get(request.profileId);
       if (current && !current.window.isDestroyed()) {
-        await current.window.loadURL(request.url);
+        void current.window.loadURL(request.url).catch(() => { if (!current.window.isDestroyed()) current.window.destroy(); });
         current.window.show();
         current.window.focus();
-        return current.closed;
+        return { closed: current.closed };
       }
       const window = createWindow(embeddedBrowserWindowOptions(request.profileId, true));
       const closed = new Promise<void>((resolve) => {
@@ -92,15 +191,9 @@ export function createElectronEmbeddedBrowser(input: {
       });
       loginWindows.set(request.profileId, { window, closed });
       secureWindow(window, request.allowedOrigins);
-      try {
-        await window.loadURL(request.url);
-        window.show();
-        await closed;
-      } catch (error) {
-        loginWindows.delete(request.profileId);
-        if (!window.isDestroyed()) window.destroy();
-        throw error;
-      }
+      window.show();
+      void window.loadURL(request.url).catch(() => { if (!window.isDestroyed()) window.destroy(); });
+      return { closed };
     },
     snapshot(request) {
       return enqueue(request.profileId, async () => {
@@ -145,6 +238,8 @@ export function createElectronEmbeddedBrowser(input: {
     },
     async shutdown() {
       shuttingDown = true;
+      for (const cancel of activeCancels) cancel();
+      for (const wake of slotWaiters) wake();
       for (const window of [...taskWindows, ...[...loginWindows.values()].map((entry) => entry.window)]) {
         if (!window.isDestroyed()) window.destroy();
       }
@@ -154,7 +249,20 @@ export function createElectronEmbeddedBrowser(input: {
     },
   };
 
-  function enqueue<T>(profileId: EmbeddedBrowserProfileId, operation: () => Promise<T>): Promise<T> {
+  async function takeSlot(signal: AbortSignal): Promise<(() => void) | undefined> {
+    while (activeSlots >= 2 && !signal.aborted && !shuttingDown) {
+      await new Promise<void>((resolve) => {
+        const wake = () => { slotWaiters.delete(wake); signal.removeEventListener('abort', wake); resolve(); };
+        slotWaiters.add(wake);
+        signal.addEventListener('abort', wake, { once: true });
+      });
+    }
+    if (signal.aborted || shuttingDown) return undefined;
+    activeSlots += 1;
+    return () => { activeSlots -= 1; slotWaiters.values().next().value?.(); };
+  }
+
+  function enqueue<T>(profileId: EmbeddedBrowserProfileId, operation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const previous = queues.get(profileId) ?? Promise.resolve();
     const result = previous.catch(() => undefined).then(operation);
     const tail = result.then(() => undefined, () => undefined);
@@ -162,7 +270,14 @@ export function createElectronEmbeddedBrowser(input: {
     void tail.finally(() => {
       if (queues.get(profileId) === tail) queues.delete(profileId);
     });
-    return result;
+    if (!signal) return result;
+    if (signal.aborted) { void result.catch(() => undefined); return Promise.reject(signal.reason); }
+    let abort: () => void = () => undefined;
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      abort = () => reject(signal.reason);
+      signal.addEventListener('abort', abort, { once: true });
+    });
+    return Promise.race([result, cancelled]).finally(() => signal.removeEventListener('abort', abort));
   }
 }
 
@@ -215,15 +330,22 @@ function normalizeOrigin(value: string): string {
   return url.origin;
 }
 
-function normalizeSnapshot(value: unknown): EmbeddedBrowserSnapshot {
+class SnapshotTooLarge extends Error {}
+
+function normalizeSnapshot(value: unknown, maxTextPoints = 20_000): EmbeddedBrowserSnapshot {
   if (!isRecord(value) || typeof value.finalUrl !== 'string' || typeof value.bodyText !== 'string' || !Array.isArray(value.links)) {
     throw new Error('Embedded browser returned an invalid document snapshot.');
   }
+  if (maxTextPoints === 50_000 && Buffer.byteLength(JSON.stringify(value)) > 2 * 1024 * 1024) throw new SnapshotTooLarge();
   const finalUrl = new URL(value.finalUrl).toString();
   return {
     finalUrl,
+    ...(value.structuredData !== undefined ? { structuredData: value.structuredData } : {}),
+    ...(typeof value.completed === 'boolean' ? { completed: value.completed } : {}),
+    ...(value.pageState === 'available' || value.pageState === 'login_required' || value.pageState === 'challenge_required' ? { pageState: value.pageState } : {}),
     ...(typeof value.title === 'string' && value.title.trim() ? { title: value.title.trim() } : {}),
-    bodyText: value.bodyText.slice(0, 20_000),
+    bodyText: [...value.bodyText].slice(0, maxTextPoints).join(''),
+    ...(maxTextPoints === 50_000 ? { truncated: value.truncated === true || [...value.bodyText].length > maxTextPoints } : {}),
     ...(Array.isArray(value.cards) ? { cards: value.cards.slice(0, 300).flatMap((card) => {
       if (!isRecord(card) || typeof card.id !== 'string' || typeof card.title !== 'string') return [];
       if (!card.id.trim() || !card.title.trim()) return [];
@@ -261,7 +383,7 @@ function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-function failed(code: 'timeout' | 'network_error' | 'invalid_response' | 'cancelled', message: string): EmbeddedBrowserSnapshotResult {
+function failed(code: 'timeout' | 'network_error' | 'invalid_response' | 'material_too_large' | 'cancelled', message: string): EmbeddedBrowserSnapshotResult {
   return { status: 'failed', failure: { code, message } };
 }
 

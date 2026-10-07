@@ -11,14 +11,14 @@ export function rehearsalFolder() {
   const journalPath = path.join(directory, 'meta/_journal.json');
   const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8'));
   journal.entries.push({
-    idx: 33,
+    idx: 34,
     version: '6',
     when: 1791500000000,
-    tag: '0033_recommendation_foundation',
+    tag: '0034_recommendation_foundation',
     breakpoints: true
   });
-  const pending = path.join(source, 'pending/0033_recommendation_foundation.sql');
-  fs.writeFileSync(path.join(directory, '0033_recommendation_foundation.sql'), fs.readFileSync(pending));
+  const pending = path.join(source, 'pending/0034_recommendation_foundation.sql');
+  fs.writeFileSync(path.join(directory, '0034_recommendation_foundation.sql'), fs.readFileSync(pending));
   fs.writeFileSync(journalPath, JSON.stringify(journal));
   return directory;
 }
