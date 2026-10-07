@@ -74,6 +74,30 @@ export type AnalyzeContentResult =
   | { status: 'material_too_long'; message: string }
   | { status: 'failed'; code: TextModelFailureCode; message: string };
 
+/** What one request is expected to cost, before anything is sent or charged. */
+export interface AnalysisRequestEstimate {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  /** False when the material cannot fit one request, so no call will be made. */
+  readonly fits: boolean;
+}
+
+/**
+ * Estimates one request. The caller reserves budget with this number before it
+ * saves material, and this module uses the same number for its own overflow
+ * check, so the two never disagree.
+ */
+export function estimateAnalysisRequest(input: AnalyzeContentInput): AnalysisRequestEstimate {
+  const available =
+    Math.min(input.maxInputTokens, input.model.contextWindow) - input.maxOutputTokens;
+  const inputTokens = estimateTextTokens(`${SYSTEM_PROMPT}\n${buildPrompt(input)}`);
+  return {
+    inputTokens,
+    outputTokens: input.maxOutputTokens,
+    fits: inputTokens <= available,
+  };
+}
+
 /**
  * Analyzes one content and returns the eight business results plus the interest
  * relations. Nothing is saved here: the caller commits the results and the
@@ -84,15 +108,14 @@ export async function analyzeContent(
   input: AnalyzeContentInput,
   options: { observability?: Observability; now?: () => number } = {},
 ): Promise<AnalyzeContentResult> {
-  const prompt = buildPrompt(input);
-  const availableInput =
-    Math.min(input.maxInputTokens, input.model.contextWindow) - input.maxOutputTokens;
-  if (estimateTextTokens(`${SYSTEM_PROMPT}\n${prompt}`) > availableInput) {
+  const estimate = estimateAnalysisRequest(input);
+  if (!estimate.fits) {
     return {
       status: 'material_too_long',
       message: 'Material exceeds the configured model input for one analysis request.',
     };
   }
+  const prompt = buildPrompt(input);
 
   const call = await callTextModel(
     client,

@@ -50,113 +50,166 @@ export interface MatchInterestsInput {
   /** Enabled interests as the task read them. */
   readonly interests: readonly AnalysisInterest[];
   readonly model: Model<Api>;
-  readonly batchSize: number;
+  /** How many matching calls this round may still spend. */
+  readonly callBudget: number;
+  /** Per-request ceilings from the round configuration. */
   readonly maxInputTokens: number;
   readonly maxOutputTokens: number;
+  /** Reserves one matching call for the next batch; false stops matching. */
+  readonly reserveMatchingCall?: () => boolean;
   readonly now: number;
   readonly signal?: AbortSignal;
 }
 
+/** Contents one call is expected to hold before the token split reduces it. */
+const CONTENTS_PER_CALL = 25;
+
 export type MatchInterestsOutcome =
-  | { status: 'ok'; matchedContents: number; savedRelations: number; skippedRelations: number }
+  | {
+      status: 'ok';
+      matchedContents: number;
+      savedRelations: number;
+      skippedRelations: number;
+      /** True when the call budget ran out before every candidate was judged. */
+      deferred: boolean;
+    }
   | { status: 'failed'; code: TextModelFailureCode; message: string };
 
 /**
- * Re-matches one batch of already-analyzed content. Relations judged against a
- * description that changed in the meantime are skipped inside the commit, and a
- * saved `none` keeps the next round from judging the same pair again.
+ * Re-matches already-analyzed content against the current interests. Batches are
+ * split by the configured request input, so one oversized batch can no longer
+ * fail the whole re-match, and each call is charged to the round before it runs.
  */
 export async function matchPendingInterests(
   dependencies: MatchInterestsDependencies,
   input: MatchInterestsInput,
 ): Promise<MatchInterestsOutcome> {
-  if (input.interests.length === 0) {
-    return { status: 'ok', matchedContents: 0, savedRelations: 0, skippedRelations: 0 };
-  }
+  const empty = {
+    status: 'ok' as const,
+    matchedContents: 0,
+    savedRelations: 0,
+    skippedRelations: 0,
+    deferred: false,
+  };
+  if (input.interests.length === 0) return empty;
 
   const contentIds = dependencies.candidates.listContentsMissingMatches({
-    limit: input.batchSize,
+    limit: Math.max(0, input.callBudget) * CONTENTS_PER_CALL,
   });
-  if (contentIds.length === 0) {
-    return { status: 'ok', matchedContents: 0, savedRelations: 0, skippedRelations: 0 };
-  }
-
   const analyzed = contentIds.flatMap((contentId) => {
     const analysis = dependencies.contents.readAnalysis(contentId);
     return analysis ? [{ contentId, analysis }] : [];
   });
-  if (analyzed.length === 0) {
-    return { status: 'ok', matchedContents: 0, savedRelations: 0, skippedRelations: 0 };
-  }
+  if (analyzed.length === 0) return empty;
 
-  const prompt = buildPrompt(input.interests, analyzed);
-  if (estimateTextTokens(`${SYSTEM_PROMPT}\n${prompt}`) > input.maxInputTokens - input.maxOutputTokens) {
-    return { status: 'failed', code: 'CONTEXT_OVERFLOW', message: 'Matching batch exceeds the configured model input.' };
-  }
-
-  const call = await callTextModel(
-    dependencies.client,
-    {
-      model: input.model,
-      systemPrompt: SYSTEM_PROMPT,
-      prompt,
-      schema: MatchResponseSchema,
-      maxOutputTokens: input.maxOutputTokens,
-      ...(input.signal ? { signal: input.signal } : {}),
-    },
-    dependencies.observability ? { observability: dependencies.observability } : {},
-  );
-  if (call.status === 'failed') {
-    return { status: 'failed', code: call.code, message: call.message };
-  }
-
+  const batches = splitByRequestInput(analyzed, input);
   const knownInterests = new Map(input.interests.map((interest) => [interest.id, interest.text]));
+  let matchedContents = 0;
   let savedRelations = 0;
   let skippedRelations = 0;
+  let deferred = false;
 
-  for (const entry of analyzed) {
-    const matches = call.result.matches
-      .filter((match) => match.contentId === entry.contentId && knownInterests.has(match.interestId))
-      .map((match) => ({
-        interestId: match.interestId,
-        expectedText: knownInterests.get(match.interestId) ?? '',
-        relation: match.relation,
-        ...(match.basis ? { basis: match.basis } : {}),
-      }));
-    if (matches.length === 0) continue;
+  for (const batch of batches) {
+    if (input.reserveMatchingCall && !input.reserveMatchingCall()) {
+      deferred = true;
+      break;
+    }
+    const call = await callTextModel(
+      dependencies.client,
+      {
+        model: input.model,
+        systemPrompt: SYSTEM_PROMPT,
+        prompt: buildPrompt(input.interests, batch),
+        schema: MatchResponseSchema,
+        maxOutputTokens: input.maxOutputTokens,
+        ...(input.signal ? { signal: input.signal } : {}),
+      },
+      dependencies.observability ? { observability: dependencies.observability } : {},
+    );
+    if (call.status === 'failed') {
+      return { status: 'failed', code: call.code, message: call.message };
+    }
 
-    const commit = dependencies.candidates.commitRelations({
-      contentId: entry.contentId,
-      matches,
-      pools: [],
-      now: input.now,
-    });
-    savedRelations += commit.committedInterestIds.length;
-    skippedRelations += commit.skippedInterestIds.length;
+    matchedContents += batch.length;
+    for (const entry of batch) {
+      const matches = call.result.matches
+        .filter((match) => match.contentId === entry.contentId && knownInterests.has(match.interestId))
+        .map((match) => ({
+          interestId: match.interestId,
+          expectedText: knownInterests.get(match.interestId) ?? '',
+          relation: match.relation,
+          ...(match.basis ? { basis: match.basis } : {}),
+        }));
+      if (matches.length === 0) continue;
+
+      const commit = dependencies.candidates.commitRelations({
+        contentId: entry.contentId,
+        matches,
+        pools: [],
+        now: input.now,
+      });
+      savedRelations += commit.committedInterestIds.length;
+      skippedRelations += commit.skippedInterestIds.length;
+    }
   }
 
-  return {
-    status: 'ok',
-    matchedContents: analyzed.length,
-    savedRelations,
-    skippedRelations,
-  };
+  return { status: 'ok', matchedContents, savedRelations, skippedRelations, deferred };
+}
+
+/** A content that cannot fit on its own stays in a batch so the overflow is reported. */
+function splitByRequestInput(
+  analyzed: readonly JudgedContent[],
+  input: MatchInterestsInput,
+): JudgedContent[][] {
+  const available = input.maxInputTokens - input.maxOutputTokens;
+  const base = estimateTextTokens(SYSTEM_PROMPT);
+  const batches: JudgedContent[][] = [];
+  let current: JudgedContent[] = [];
+  let tokens = base;
+  for (const entry of analyzed) {
+    const entryTokens = estimateTextTokens(blockOf(entry));
+    if (current.length > 0 && tokens + entryTokens > available) {
+      batches.push(current);
+      current = [];
+      tokens = base;
+    }
+    current.push(entry);
+    tokens += entryTokens;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
+interface JudgedContent {
+  readonly contentId: string;
+  readonly analysis: ContentAnalysis;
+}
+
+/** One content as the model sees it: saved analysis only, never the source text. */
+function blockOf(entry: JudgedContent): string {
+  return [
+    `[contentId=${entry.contentId}]`,
+    `summary: ${entry.analysis.summary ?? ''}`,
+    `keyPoints: ${(entry.analysis.keyPoints ?? []).map((point) => point.text).join(' | ')}`,
+    `topics: ${(entry.analysis.topics ?? []).join(', ')}`,
+    `entities: ${(entry.analysis.entities ?? []).join(', ')}`,
+  ].join('\n');
 }
 
 function buildPrompt(
   interests: readonly AnalysisInterest[],
-  analyzed: readonly { readonly contentId: string; readonly analysis: ContentAnalysis }[],
+  analyzed: readonly JudgedContent[],
 ): string {
-  const interestLines = interests.map((interest) => `- ${interest.id}: ${interest.text}`);
-  const contentBlocks = analyzed.map((entry) =>
-    [
-      `[contentId=${entry.contentId}]`,
-      `summary: ${entry.analysis.summary ?? ''}`,
-      `keyPoints: ${(entry.analysis.keyPoints ?? []).map((point) => point.text).join(' | ')}`,
-      `topics: ${(entry.analysis.topics ?? []).join(', ')}`,
-      `entities: ${(entry.analysis.entities ?? []).join(', ')}`,
-    ].join('\n'),
+  // Identifiers travel as JSON so an id containing the display separator can be
+  // copied back verbatim.
+  const interestLines = interests.map((interest) =>
+    JSON.stringify({ interestId: interest.id, text: interest.text }),
   );
-
-  return ['Interests:', ...interestLines, '', 'Contents:', ...contentBlocks].join('\n');
+  return [
+    'Interests (copy interestId verbatim):',
+    ...interestLines.map((line) => `- ${line}`),
+    '',
+    'Contents:',
+    ...analyzed.map(blockOf),
+  ].join('\n');
 }

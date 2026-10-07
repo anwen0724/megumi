@@ -10,8 +10,13 @@ import type { CandidatePool } from '../candidates/candidate-contracts';
 import type { CandidateStorage } from '../candidates/candidate-storage';
 import { qualifyingPools } from '../candidates/evaluate-candidates';
 import type { RawItem } from '../sources/source-connector';
-import { analyzeContent, type AnalysisInterest } from './analyze-content';
-import type { ContentAnalysis, ContentAnalysisMatch, ContentAnalysisResult } from './content-contracts';
+import {
+  analyzeContent,
+  estimateAnalysisRequest,
+  type AnalysisInterest,
+  type AnalysisRequestEstimate,
+  type AnalyzeContentInput,
+} from './analyze-content';import type { ContentAnalysis, ContentAnalysisMatch, ContentAnalysisResult } from './content-contracts';
 import type { ContentStorage } from './content-storage';
 import { normalizeRawItem } from './normalize-content';
 
@@ -41,6 +46,11 @@ export interface IntakeInput {
    * attempt would read unchanged.
    */
   readonly analysisRetryAt?: (failureCode: string) => number | undefined;
+  /**
+   * Reserves one complete-analysis call with its estimated size. Returning false
+   * defers the discovery to a later round instead of spending the round on it.
+   */
+  readonly reserveAnalysis?: (estimate: AnalysisRequestEstimate) => boolean;
   readonly now: number;
   readonly signal?: AbortSignal;
 }
@@ -56,6 +66,7 @@ export type IntakeOutcome =
     }
   | { status: 'reused'; contentId: string; message: string }
   | { status: 'rejected'; reason: string; message: string }
+  | { status: 'deferred' }
   | { status: 'failed'; contentId: string; code: string; message: string };
 
 /**
@@ -99,6 +110,22 @@ export async function intakeContent(
     text: content.text,
     excludeId: contentId,
   });
+  const reused =
+    duplicateOf === undefined
+      ? undefined
+      : completeAnalysis(dependencies.contents.readAnalysis(duplicateOf));
+
+  // Only a complete analysis needs the model, so the budget is charged here and
+  // never for a reuse or a rejection. A refused reservation saves nothing, which
+  // leaves the discovery pending for a later round.
+  const request = analysisRequest(input, contentId, content);
+  if (reused === undefined) {
+    const estimate = estimateAnalysisRequest(request);
+    if (estimate.fits && input.reserveAnalysis && !input.reserveAnalysis(estimate)) {
+      return { status: 'deferred' };
+    }
+  }
+
   dependencies.contents.saveNormalized({
     content: { id: contentId, ...content },
     sourceResultId: input.sourceResultId,
@@ -106,14 +133,10 @@ export async function intakeContent(
     now: input.now,
   });
 
-  const reused =
-    duplicateOf === undefined
-      ? undefined
-      : completeAnalysis(dependencies.contents.readAnalysis(duplicateOf));
   // A reused analysis needs no model call; its relations are inherited later.
   const step: AnalysisStep =
     reused === undefined
-      ? await analyze(dependencies, input, contentId, content)
+      ? await analyze(dependencies, request)
       : { status: 'ok', result: reused, matches: [] };
 
   if (step.status === 'failed') {
@@ -181,25 +204,31 @@ type AnalysisStep =
   | { status: 'ok'; result: ContentAnalysisResult; matches: readonly ContentAnalysisMatch[] }
   | { status: 'failed'; outcome: Extract<IntakeOutcome, { status: 'failed' }> };
 
-
-async function analyze(
-  dependencies: IntakeDependencies,
+/** One complete-analysis request, built before anything is saved or charged. */
+function analysisRequest(
   input: IntakeInput,
   contentId: string,
   content: { readonly text: string; readonly title?: string },
+): AnalyzeContentInput {
+  return {
+    contentId,
+    text: content.text,
+    ...(content.title ? { title: content.title } : {}),
+    interests: input.interests,
+    model: input.model,
+    maxInputTokens: input.maxInputTokens,
+    maxOutputTokens: input.maxOutputTokens,
+    ...(input.signal ? { signal: input.signal } : {}),
+  };
+}
+
+async function analyze(
+  dependencies: IntakeDependencies,
+  request: AnalyzeContentInput,
 ): Promise<AnalysisStep> {
   const analyzed = await analyzeContent(
     dependencies.client,
-    {
-      contentId,
-      text: content.text,
-      ...(content.title ? { title: content.title } : {}),
-      interests: input.interests,
-      model: input.model,
-      maxInputTokens: input.maxInputTokens,
-      maxOutputTokens: input.maxOutputTokens,
-      ...(input.signal ? { signal: input.signal } : {}),
-    },
+    request,
     dependencies.observability ? { observability: dependencies.observability } : {},
   );
 
@@ -210,7 +239,7 @@ async function analyze(
     status: 'failed',
     outcome: {
       status: 'failed',
-      contentId,
+      contentId: request.contentId,
       code: analyzed.status === 'material_too_long' ? 'MATERIAL_TOO_LONG' : analyzed.code,
       message: analyzed.message,
     },

@@ -112,9 +112,15 @@ export async function runMaintenance(
     {
       interests,
       model: dependencies.model,
-      batchSize: dependencies.config.limits.maxAnalysisCalls,
+      callBudget: input.budget.remaining('matchingCalls'),
       maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
       maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
+      reserveMatchingCall: () =>
+        input.budget.reserve('matchingCalls') &&
+        input.budget.reserveModelTokens({
+          inputTokens: dependencies.config.limits.maxRequestInputTokens,
+          outputTokens: dependencies.config.limits.maxRequestOutputTokens,
+        }),
       now: dependencies.now(),
       signal: input.signal,
     },
@@ -168,6 +174,14 @@ export async function runMaintenance(
     needsSearchPlanning({ poolHealth, hasPendingRequest: false, interestsChanged: false });
 
   if (canPlan) {
+    // Planning is counted work: reserve its call and its tokens before asking.
+    if (
+      input.budget.reserve('planningCalls') &&
+      input.budget.reserveModelTokens({
+        inputTokens: dependencies.config.limits.maxRequestInputTokens,
+        outputTokens: dependencies.config.limits.maxRequestOutputTokens,
+      })
+    ) {
     const planned = await planSearches(
       {
         database: dependencies.database,
@@ -185,7 +199,8 @@ export async function runMaintenance(
         maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
         maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
         maxResultsPerSearch: dependencies.config.limits.maxResultsPerSearch,
-        maxItems: dependencies.config.limits.maxPlanningCalls,
+        // A plan may only contain searches the remaining round budget can pay for.
+        maxItems: input.budget.remaining('searchCalls'),
         signal: input.signal,
       },
     );
@@ -205,6 +220,13 @@ export async function runMaintenance(
         stage: 'search',
         code: planned.code,
         message: `Search planning failed: ${planned.message}`,
+      });
+    }
+    } else {
+      issues.push({
+        stage: 'search',
+        code: 'BUDGET_EXHAUSTED',
+        message: 'The round has no planning budget left for this search plan.',
       });
     }
   }
@@ -276,7 +298,6 @@ async function intake(
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<string | undefined> {
-  if (!input.budget.reserve('analysisCalls')) return 'budget';
   const interests = (await dependencies.interests.listInterests()).interests.filter(
     (entry) => entry.enabled,
   );
@@ -300,12 +321,17 @@ async function intake(
       maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
       freshnessDays: dependencies.config.freshnessDays,
       analysisRetryAt: (failureCode) => retryAtFor(dependencies, failureCode),
+      reserveAnalysis: (estimate) =>
+        input.budget.reserveModelTokens(estimate) && input.budget.reserve('analysisCalls'),
       now: dependencies.now(),
       signal: input.signal,
     },
   );
 
   switch (outcome.status) {
+    case 'deferred':
+      // The round had no budget left; the discovery stays pending for later.
+      return 'budget';
     case 'candidate':
       savedCounts.normalizedContents += 1;
       savedCounts.analyzedContents += 1;
