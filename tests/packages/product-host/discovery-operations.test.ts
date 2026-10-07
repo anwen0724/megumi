@@ -26,28 +26,28 @@ describe('Discovery Product Host operations', () => {
       .resolves.toEqual({ interests: [interest] });
 
     await expect(application.runtime.discovery.changeInterest({
-      action: 'update', interestId: interest.id, description: 'TypeScript module design',
+      action: 'update', interestId: interest.id, expectedRevision: 1, description: 'TypeScript module design',
     })).resolves.toEqual({
       status: 'changed',
-      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: true }],
+      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: true, revision: 2 }],
     });
 
     await expect(application.runtime.discovery.changeInterest({
-      action: 'pause', interestId: interest.id,
+      action: 'pause', interestId: interest.id, expectedRevision: 2,
     })).resolves.toEqual({
       status: 'changed',
-      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: false }],
+      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: false, revision: 3 }],
     });
 
     await expect(application.runtime.discovery.changeInterest({
-      action: 'resume', interestId: interest.id,
+      action: 'resume', interestId: interest.id, expectedRevision: 3,
     })).resolves.toEqual({
       status: 'changed',
-      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: true }],
+      interests: [{ id: interest.id, text: 'TypeScript module design', enabled: true, revision: 4 }],
     });
 
     await expect(application.runtime.discovery.changeInterest({
-      action: 'delete', interestId: interest.id,
+      action: 'delete', interestId: interest.id, expectedRevision: 4,
     })).resolves.toEqual({ status: 'changed', interests: [] });
     await expect(application.runtime.discovery.listInterests()).resolves.toEqual({ interests: [] });
   });
@@ -55,23 +55,23 @@ describe('Discovery Product Host operations', () => {
   it('separates an unknown Interest id from a payload the Interest rules reject', async () => {
     application = composeTestApplication();
     await expect(application.runtime.discovery.changeInterest({
-      action: 'update', interestId: 'interest:missing', description: 'Anything',
+      action: 'update', interestId: 'interest:missing', expectedRevision: 1, description: 'Anything',
     })).resolves.toEqual({ status: 'not_found' });
     await expect(application.runtime.discovery.changeInterest({
-      action: 'pause', interestId: 'interest:missing',
+      action: 'pause', interestId: 'interest:missing', expectedRevision: 1,
     })).resolves.toEqual({ status: 'not_found' });
     await expect(application.runtime.discovery.changeInterest({
-      action: 'resume', interestId: 'interest:missing',
+      action: 'resume', interestId: 'interest:missing', expectedRevision: 1,
     })).resolves.toEqual({ status: 'not_found' });
     await expect(application.runtime.discovery.changeInterest({
-      action: 'delete', interestId: 'interest:missing',
-    })).resolves.toEqual({ status: 'not_found' });
+      action: 'delete', interestId: 'interest:missing', expectedRevision: 1,
+    })).resolves.toEqual({ status: 'changed', interests: [] });
 
     await expect(application.runtime.discovery.changeInterest({
       action: 'create', description: '   ',
     })).resolves.toMatchObject({ status: 'invalid_request' });
     await expect(application.runtime.discovery.changeInterest({
-      action: 'update', interestId: 'interest:missing', description: '   ',
+      action: 'update', interestId: 'interest:missing', expectedRevision: 1, description: '   ',
     })).resolves.toMatchObject({ status: 'invalid_request' });
     // A rejected payload never reaches saved state.
     await expect(application.runtime.discovery.listInterests()).resolves.toEqual({ interests: [] });

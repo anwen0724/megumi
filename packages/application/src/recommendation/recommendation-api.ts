@@ -269,19 +269,17 @@ export function createDiscoveryOperations(input: {
           : { status: 'invalid_request', message: result.message };
       }
       if (request.action === 'delete') {
-        const result = await management.deleteInterest({ id: request.interestId });
-        if (result.status === 'deleted') return { status: 'changed', interests: [...(await list())] };
-        return result.status === 'not_found'
-          ? { status: 'not_found' }
-          : { status: 'invalid_request', message: result.message };
+        const result = await management.deleteInterest({ interestId: request.interestId, expectedRevision: request.expectedRevision });
+        if (result.status === 'deleted' || result.status === 'already_deleted') return { status: 'changed', interests: [...(await list())] };
+        return result.status === 'revision_conflict' ? { status: 'revision_conflict' } : { status: 'invalid_request', message: result.message };
       }
       const result = await management.updateInterest(
         request.action === 'update'
-          ? { id: request.interestId, text: request.description }
-          : { id: request.interestId, enabled: request.action === 'resume' },
+          ? { interestId: request.interestId, expectedRevision: request.expectedRevision, text: request.description }
+          : { interestId: request.interestId, expectedRevision: request.expectedRevision, enabled: request.action === 'resume' },
       );
-      if (result.status === 'updated') return { status: 'changed', interests: [...(await list())] };
-      return result.status === 'not_found'
+      if (result.status === 'updated' || result.status === 'unchanged') return { status: 'changed', interests: [...(await list())] };
+      return result.status === 'revision_conflict' ? { status: 'revision_conflict' } : result.status === 'not_found'
         ? { status: 'not_found' }
         : { status: 'invalid_request', message: result.message };
     },

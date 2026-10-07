@@ -19,7 +19,7 @@ describe('candidate supply storage', () => {
 
   afterEach(() => database.close());
 
-  it('clears matches and retires queries when the description changes', () => {
+  it('preserves derived facts when the original description changes', () => {
     const interests = createInterestStorage(database);
     const candidates = createCandidateStorage(database);
     interests.create({ id: 'i1', text: '摄影', now: 1 });
@@ -28,15 +28,15 @@ describe('candidate supply storage', () => {
     insertQuery(database, 'q1', 'i1');
     candidates.commitRelations({
       contentId: 'c1',
-      matches: [{ interestId: 'i1', expectedText: '摄影', relation: 'direct' }],
+      matches: [{ interestId: 'i1', expectedText: '摄影', expectedRevision: 1, relation: 'direct' }],
       pools: [{ pool: 'daily' }],
       now: 3,
     });
 
-    interests.update({ id: 'i1', text: '摄影 后期', now: 4 });
+    interests.update({ interestId: 'i1', expectedRevision: 1, text: '摄影 后期', now: 4 });
 
-    expect(countRows(database, 'content_interest_matches')).toBe(0);
-    expect(queryStatus(database, 'q1')).toBe('retired');
+    expect(countRows(database, 'content_interest_matches')).toBe(1);
+    expect(queryStatus(database, 'q1')).toBe('active');
     expect(countRows(database, 'search_queries')).toBe(1);
   });
 
@@ -48,12 +48,12 @@ describe('candidate supply storage', () => {
     saveContent(database, 'c1', 'https://example.com/a', 2);
     candidates.commitRelations({
       contentId: 'c1',
-      matches: [{ interestId: 'i1', expectedText: '摄影', relation: 'direct' }],
+      matches: [{ interestId: 'i1', expectedText: '摄影', expectedRevision: 1, relation: 'direct' }],
       pools: [{ pool: 'daily' }],
       now: 3,
     });
 
-    interests.update({ id: 'i1', text: '摄影', enabled: true, now: 4 });
+    interests.update({ interestId: 'i1', expectedRevision: 1, text: '摄影', enabled: true, now: 4 });
 
     expect(countRows(database, 'content_interest_matches')).toBe(1);
   });
@@ -64,11 +64,11 @@ describe('candidate supply storage', () => {
     interests.create({ id: 'i1', text: '摄影', now: 1 });
     insertSearchResult(database, 'r1', 'https://example.com/a');
     saveContent(database, 'c1', 'https://example.com/a', 2);
-    interests.update({ id: 'i1', text: '摄影 后期', now: 3 });
+    interests.update({ interestId: 'i1', expectedRevision: 1, text: '摄影 后期', now: 3 });
 
     const result = candidates.commitRelations({
       contentId: 'c1',
-      matches: [{ interestId: 'i1', expectedText: '摄影', relation: 'direct' }],
+      matches: [{ interestId: 'i1', expectedText: '摄影', expectedRevision: 1, relation: 'direct' }],
       pools: [{ pool: 'daily' }],
       now: 4,
     });
@@ -89,14 +89,14 @@ describe('candidate supply storage', () => {
     candidates.commitRelations({
       contentId: 'c1',
       matches: [
-        { interestId: 'i1', expectedText: '摄影', relation: 'direct' },
-        { interestId: 'i2', expectedText: '后期', relation: 'related' },
+        { interestId: 'i1', expectedText: '摄影', expectedRevision: 1, relation: 'direct' },
+        { interestId: 'i2', expectedText: '后期', expectedRevision: 1, relation: 'related' },
       ],
       pools: [{ pool: 'daily' }],
       now: 3,
     });
 
-    expect(interests.remove('i1')).toBe(true);
+    expect(interests.remove({ interestId: 'i1', expectedRevision: 1 })).toEqual({ status: 'deleted' });
 
     expect(countRows(database, 'content_interest_matches')).toBe(1);
     expect(countRows(database, 'contents')).toBe(1);

@@ -99,7 +99,7 @@ describe('counted work is charged only when it runs', () => {
       contentId: 'c1',
       text: MATERIAL,
       title: '标题',
-      interests: [{ id: 'i1', text: 'Rust 异步运行时' }],
+      interests: [{ id: 'i1', revision: 1, text: 'Rust 异步运行时' }],
       model,
       maxInputTokens: 10_000,
       maxOutputTokens: 500,
@@ -136,7 +136,7 @@ describe('counted work is charged only when it runs', () => {
     const outcome = await matchPendingInterests(
       { client, contents: createContentStorage(database), candidates: createCandidateStorage(database) },
       {
-        interests: [{ id: 'i1', text: 'Rust 异步运行时' }],
+        interests: [{ id: 'i1', revision: 1, text: 'Rust 异步运行时' }],
         model,
         callBudget: 5,
         // The prompt header alone fills one request, so every content needs its own.
@@ -178,7 +178,7 @@ describe('counted work is charged only when it runs', () => {
     const outcome = await matchPendingInterests(
       { client, contents: createContentStorage(database), candidates: createCandidateStorage(database) },
       {
-        interests: [{ id: 'i1', text: 'Rust 异步运行时' }],
+        interests: [{ id: 'i1', revision: 1, text: 'Rust 异步运行时' }],
         model,
         callBudget: 5,
         maxInputTokens: 120,
@@ -218,7 +218,7 @@ describe('counted work is charged only when it runs', () => {
           publishedAt: NOW - 60_000,
         },
         sourceResultId: input.resultId,
-        interests: [{ id: 'i1', text: 'Rust 异步运行时' }],
+        interests: [{ id: 'i1', revision: 1, text: 'Rust 异步运行时' }],
         model,
         contentLanguages: [],
         maxInputTokens: 10_000,

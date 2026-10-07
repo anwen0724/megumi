@@ -18,6 +18,7 @@ import type { InterestRelation } from '../content/content-contracts';
 export interface MatchToCommit {
   readonly interestId: string;
   readonly expectedText: string;
+  readonly expectedRevision: number;
   readonly relation: InterestRelation;
   readonly basis?: string;
 }
@@ -97,24 +98,25 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
 
           for (const match of input.matches) {
             const current = database
-              .prepare<{ text: string; enabled: number }>({
-                sql: 'SELECT text, enabled FROM interests WHERE id = ?',
+              .prepare<{ text: string; enabled: number; revision: number }>({
+                sql: 'SELECT text, enabled, revision FROM interests WHERE id = ?',
               })
               .get([match.interestId]);
-            if (!current || current.enabled !== 1 || current.text !== match.expectedText) {
+            if (!current || current.enabled !== 1 || current.text !== match.expectedText || current.revision !== match.expectedRevision) {
               skippedInterestIds.push(match.interestId);
               continue;
             }
             database
               .prepare({
-                sql: `INSERT INTO content_interest_matches (content_id, interest_id, relation, basis, matched_at)
-                      VALUES (?, ?, ?, ?, ?)
+                sql: `INSERT INTO content_interest_matches (content_id, interest_id, interest_revision, relation, basis, matched_at)
+                      VALUES (?, ?, ?, ?, ?, ?)
                       ON CONFLICT (content_id, interest_id) DO UPDATE SET
-                        relation = excluded.relation, basis = excluded.basis, matched_at = excluded.matched_at`,
+                        interest_revision = excluded.interest_revision, relation = excluded.relation, basis = excluded.basis, matched_at = excluded.matched_at`,
               })
               .run([
                 input.contentId,
                 match.interestId,
+                match.expectedRevision,
                 match.relation,
                 match.basis ?? null,
                 input.now,
@@ -129,7 +131,7 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
             committedInterestIds.length > 0 ||
             database
               .prepare({
-                sql: "SELECT 1 AS present FROM content_interest_matches WHERE content_id = ? AND relation IN ('direct','related') LIMIT 1",
+                sql: "SELECT 1 AS present FROM content_interest_matches m JOIN interests i ON i.id = m.interest_id AND i.enabled = 1 AND i.revision = m.interest_revision WHERE m.content_id = ? AND m.relation IN ('direct','related') LIMIT 1",
               })
               .get([input.contentId]) !== undefined;
           if (qualifies) {
@@ -172,10 +174,10 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
     copyRelations(input) {
       database
         .prepare({
-          sql: `INSERT INTO content_interest_matches (content_id, interest_id, relation, basis, matched_at)
-                SELECT ?, interest_id, relation, basis, ? FROM content_interest_matches WHERE content_id = ?
+          sql: `INSERT INTO content_interest_matches (content_id, interest_id, interest_revision, relation, basis, matched_at)
+                SELECT ?, interest_id, interest_revision, relation, basis, ? FROM content_interest_matches WHERE content_id = ?
                 ON CONFLICT (content_id, interest_id) DO UPDATE SET
-                  relation = excluded.relation, basis = excluded.basis, matched_at = excluded.matched_at`,
+                  interest_revision = excluded.interest_revision, relation = excluded.relation, basis = excluded.basis, matched_at = excluded.matched_at`,
         })
         .run([input.toContentId, input.now, input.fromContentId]);
     },
@@ -189,7 +191,7 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
                   SELECT 1 FROM interests i
                   WHERE i.enabled = 1 AND NOT EXISTS (
                     SELECT 1 FROM content_interest_matches m
-                    WHERE m.content_id = c.id AND m.interest_id = i.id
+                    WHERE m.content_id = c.id AND m.interest_id = i.id AND m.interest_revision = i.revision
                   )
                 )
                 ORDER BY c.created_at DESC, c.id
@@ -211,7 +213,7 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
                     SELECT 1 FROM interests i
                     WHERE i.enabled = 1 AND NOT EXISTS (
                       SELECT 1 FROM content_interest_matches m
-                      WHERE m.content_id = c.id AND m.interest_id = i.id
+                      WHERE m.content_id = c.id AND m.interest_id = i.id AND m.interest_revision = i.revision
                     )
                   )`,
         })
@@ -229,7 +231,7 @@ export function createCandidateStorage(database: DatabaseConnection): CandidateS
                 JOIN content_analysis ca ON ca.content_id = c.id AND ca.status = 'ready'
                 WHERE EXISTS (
                   SELECT 1 FROM content_interest_matches m
-                  JOIN interests i ON i.id = m.interest_id AND i.enabled = 1
+                  JOIN interests i ON i.id = m.interest_id AND i.enabled = 1 AND i.revision = m.interest_revision
                   WHERE m.content_id = c.id AND m.relation IN ('direct','related')
                 )
                   AND NOT EXISTS (

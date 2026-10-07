@@ -1,6 +1,6 @@
 /*
  * Verifies what saving `enabled: false` and then `enabled: true` does to one
- * interest's saved relations, to the other interests, and to the shared content
+ * interest's saved relation versions, to the other interests, and to the shared content
  * that both interests are matched against.
  */
 // @vitest-environment node
@@ -93,9 +93,9 @@ describe('disabling and re-enabling one interest', () => {
     expect(countFor(before, 'i1')).toBe(1);
     expect(countFor(before, 'i2')).toBe(1);
 
-    const disabled = await interests.updateInterest({ id: 'i1', enabled: false });
+    const disabled = await interests.updateInterest({ interestId: 'i1', expectedRevision: 1, enabled: false });
     expect(disabled.status).toBe('updated');
-    expect(savedMatches(database, 'i1')).toBe(0);
+    expect(savedMatches(database, 'i1')).toBe(1);
 
     // The very next read excludes the disabled interest, without waiting for a
     // maintenance round to tidy anything up.
@@ -104,15 +104,14 @@ describe('disabling and re-enabling one interest', () => {
     expect(countFor(whileDisabled, 'i1')).toBe(0);
     expect(countFor(whileDisabled, 'i2')).toBe(1);
 
-    const reEnabled = await interests.updateInterest({ id: 'i1', enabled: true });
+    const reEnabled = await interests.updateInterest({ interestId: 'i1', expectedRevision: 2, enabled: true });
     expect(reEnabled.status).toBe('updated');
 
-    // Re-enabling restores the interest itself, not the relations that disabling
-    // cleared: the content has to be judged against it again.
+    // Re-enabling restores the interest itself, not the older relation versions: the content has to be judged against it again.
     const whileEnabled = await supply.listCandidates({ requirement });
     expect(whileEnabled.counts.total).toBe(1);
     expect(countFor(whileEnabled, 'i1')).toBe(0);
-    expect(savedMatches(database, 'i1')).toBe(0);
+    expect(savedMatches(database, 'i1')).toBe(1);
 
     // The other interest and the shared content facts are untouched.
     expect(savedMatches(database, 'i2')).toBe(1);

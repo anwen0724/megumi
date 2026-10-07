@@ -1,8 +1,7 @@
 /*
  * Defines the user-managed interest contract for Candidate Supply. The
  * `interests` table is the only owner of interest state; storage code keeps the
- * untouched rows on unchanged saves and clears matches on description or
- * enabled-state changes.
+ * original text and monotonic revision. Derived data belongs to its consumers.
  */
 import { z } from 'zod';
 
@@ -11,7 +10,7 @@ export const InterestIdSchema = z.string().trim().min(1);
 export type InterestId = z.infer<typeof InterestIdSchema>;
 
 /** User-written interest description, stored without surrounding whitespace. */
-export const InterestTextSchema = z.string().trim().min(1);
+export const InterestTextSchema = z.string().trim().min(1).refine((text) => [...text].length <= 1_000, "Interest text must not exceed 1000 code points.");
 export type InterestText = z.infer<typeof InterestTextSchema>;
 
 export const InterestSchema = z
@@ -19,6 +18,7 @@ export const InterestSchema = z
     id: InterestIdSchema,
     text: InterestTextSchema,
     enabled: z.boolean(),
+    revision: z.number().int().positive(),
     createdAt: z.number().int().nonnegative(),
     updatedAt: z.number().int().nonnegative(),
   })
@@ -31,6 +31,7 @@ export const InterestSnapshotEntrySchema = z
     id: InterestIdSchema,
     text: InterestTextSchema,
     enabled: z.boolean(),
+    revision: z.number().int().positive(),
   })
   .strict();
 export type InterestSnapshotEntry = z.infer<typeof InterestSnapshotEntrySchema>;
@@ -48,7 +49,8 @@ export const CreateInterestRequestSchema = z.object({ text: InterestTextSchema }
 export type CreateInterestRequest = z.infer<typeof CreateInterestRequestSchema>;
 
 const UpdateInterestRequestShape = {
-  id: InterestIdSchema,
+  interestId: InterestIdSchema,
+  expectedRevision: z.number().int().positive(),
   text: InterestTextSchema.optional(),
   enabled: z.boolean().optional(),
 };
@@ -62,7 +64,7 @@ export const UpdateInterestRequestSchema = z
   });
 export type UpdateInterestRequest = z.infer<typeof UpdateInterestRequestSchema>;
 
-export const DeleteInterestRequestSchema = z.object({ id: InterestIdSchema }).strict();
+export const DeleteInterestRequestSchema = z.object({ interestId: InterestIdSchema, expectedRevision: z.number().int().positive() }).strict();
 export type DeleteInterestRequest = z.infer<typeof DeleteInterestRequestSchema>;
 
 export type CreateInterestResult =
@@ -71,12 +73,15 @@ export type CreateInterestResult =
 
 export type UpdateInterestResult =
   | { status: 'updated'; interest: Interest }
+  | { status: 'unchanged'; interest: Interest }
+  | { status: 'revision_conflict' }
   | { status: 'not_found' }
   | { status: 'invalid_request'; message: string };
 
 export type DeleteInterestResult =
   | { status: 'deleted' }
-  | { status: 'not_found' }
+  | { status: 'already_deleted' }
+  | { status: 'revision_conflict' }
   | { status: 'invalid_request'; message: string };
 
 /**

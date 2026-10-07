@@ -10,7 +10,7 @@ let application: TestApplication | undefined;
 afterEach(async () => { await application?.cleanup(); application = undefined; });
 
 describe('createApplication', () => {
-  it('lists saved Interests as id, text and enable state without leaking entity fields', async () => {
+  it('lists saved Interests with text, revision and enable state without leaking entity fields', async () => {
     application = composeTestApplication();
     const active = await application.runtime.discovery.changeInterest({
       action: 'create', description: 'Topic active',
@@ -23,16 +23,16 @@ describe('createApplication', () => {
     const target = second.interests.find((interest) => interest.text === 'Topic paused');
     if (!target) throw new Error('Expected the created Interest in the returned snapshot.');
     expect(await application.runtime.discovery.changeInterest({
-      action: 'pause', interestId: target.id,
+      action: 'pause', interestId: target.id, expectedRevision: target.revision,
     })).toMatchObject({ status: 'changed' });
 
     const interests = (await application.runtime.discovery.listInterests()).interests;
     expect(interests).toEqual([
-      { id: expect.any(String), text: 'Topic active', enabled: true },
-      { id: expect.any(String), text: 'Topic paused', enabled: false },
+      { id: expect.any(String), text: 'Topic active', enabled: true, revision: 1 },
+      { id: expect.any(String), text: 'Topic paused', enabled: false, revision: 2 },
     ]);
     for (const interest of interests) {
-      expect(Object.keys(interest).sort()).toEqual(['enabled', 'id', 'text']);
+      expect(Object.keys(interest).sort()).toEqual(['enabled', 'id', 'revision', 'text']);
     }
     expect(application.contexts).toHaveLength(0);
   });

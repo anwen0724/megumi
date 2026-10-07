@@ -198,6 +198,7 @@ export async function intakeContent(
     contentId,
     matches: step.matches.map((match) => ({
       interestId: match.interestId,
+      expectedRevision: input.interests.find((interest) => interest.id === match.interestId)?.revision ?? 0,
       expectedText:
         input.interests.find((interest) => interest.id === match.interestId)?.text ?? '',
       relation: match.relation,

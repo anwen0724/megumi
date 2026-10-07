@@ -1,118 +1,94 @@
-/*
- * Owns the `interests` table plus the matches and queries bound to one
- * interest's identity. A change that alters the description or the enabled
- * state clears that interest's matches and retires its active queries in the
- * same transaction, so no caller has to assemble a half-saved interest change.
- */
+/* Owns original interest text and revision. Derived rows belong to their consumers. */
 import type { DatabaseConnection, DatabaseRow } from '../../storage/index';
-import type { Interest } from './interest-contracts';
+import type { Interest, UpdateInterestResult, DeleteInterestResult } from './interest-contracts';
 
 interface InterestRow extends DatabaseRow {
-  readonly id: string;
-  readonly text: string;
-  readonly enabled: number;
-  readonly created_at: number;
-  readonly updated_at: number;
+  id: string;
+  text: string;
+  enabled: number;
+  revision: number;
+  created_at: number;
+  updated_at: number;
 }
-
 export interface InterestStorage {
+  /** Reads saved interests in stable creation order. */
   list(): readonly Interest[];
+  /** Creates an enabled interest at revision one. */
   create(input: { id: string; text: string; now: number }): Interest;
-  /** Returns the saved interest, or undefined when the id is unknown. */
-  update(input: { id: string; text?: string; enabled?: boolean; now: number }): Interest | undefined;
-  /** Returns false when the id is unknown. */
-  remove(id: string): boolean;
+  /** Atomically compares the saved revision before changing original state. */
+  update(input: {
+    interestId: string;
+    expectedRevision: number;
+    text?: string;
+    enabled?: boolean;
+    now: number
+  }): UpdateInterestResult;
+  /** Removes original state; database reference rules own dependent cleanup. */
+  remove(input: { interestId: string; expectedRevision: number }): DeleteInterestResult;
 }
 
+/** Creates local persistence; this boundary never calls sources or models. */
 export function createInterestStorage(database: DatabaseConnection): InterestStorage {
+  const read = (id: string) => {
+    const row = database.prepare<InterestRow>({ sql: 'SELECT * FROM interests WHERE id = ?' }).get([id]);
+    return row ? toInterest(row) : undefined;
+  };
   return {
     list() {
-      return database
-        .prepare<InterestRow>({
-          sql: 'SELECT id, text, enabled, created_at, updated_at FROM interests ORDER BY created_at, id',
-        })
-        .all()
-        .map(toInterest);
+      return database.prepare<InterestRow>({ sql: 'SELECT * FROM interests ORDER BY created_at, id' }).all().map(toInterest);
     },
-
     create(input) {
-      database
-        .prepare({
-          sql: 'INSERT INTO interests (id, text, enabled, created_at, updated_at) VALUES (?, ?, 1, ?, ?)',
-        })
-        .run([input.id, input.text, input.now, input.now]);
+      database.prepare({
+        sql: 'INSERT INTO interests (id, text, enabled, revision, created_at, updated_at) VALUES (?, ?, 1, 1, ?, ?)'
+      }).run([input.id, input.text, input.now, input.now]);
       return {
         id: input.id,
         text: input.text,
         enabled: true,
+        revision: 1,
         createdAt: input.now,
-        updatedAt: input.now,
+        updatedAt: input.now
       };
     },
-
     update(input) {
-      const current = readInterest(database, input.id);
-      if (!current) return undefined;
-      const text = input.text ?? current.text;
-      const enabled = input.enabled ?? current.enabled;
-      if (text === current.text && enabled === current.enabled) return current;
-
-      database.transaction({
+      return database.transaction({
         operation: () => {
-          database
-            .prepare({
-              sql: 'UPDATE interests SET text = ?, enabled = ?, updated_at = ? WHERE id = ?',
-            })
-            .run([text, enabled ? 1 : 0, input.now, input.id]);
-          clearInterestRelations(database, input.id);
-        },
+          const current = read(input.interestId);
+          if (!current) return { status: 'not_found' };
+          if (current.revision !== input.expectedRevision) return { status: 'revision_conflict' };
+          const text = input.text ?? current.text;
+          const enabled = input.enabled ?? current.enabled;
+          if (text === current.text && enabled === current.enabled) return { status: 'unchanged', interest: current };
+          database.prepare({
+            sql: 'UPDATE interests SET text = ?, enabled = ?, revision = revision + 1, updated_at = ? WHERE id = ? AND revision = ?'
+          }).run([text, enabled ? 1 : 0, input.now, input.interestId, input.expectedRevision]);
+          return {
+            status: 'updated',
+            interest: { ...current, text, enabled, revision: current.revision + 1, updatedAt: input.now }
+          };
+        }
       });
-      return { ...current, text, enabled, updatedAt: input.now };
     },
-
-    remove(id) {
-      if (!readInterest(database, id)) return false;
-      database.transaction({
+    remove(input) {
+      return database.transaction({
         operation: () => {
-          clearInterestRelations(database, id);
-          database.prepare({ sql: 'DELETE FROM interests WHERE id = ?' }).run([id]);
-        },
+          const current = read(input.interestId);
+          if (!current) return { status: 'already_deleted' };
+          if (current.revision !== input.expectedRevision) return { status: 'revision_conflict' };
+          database.prepare({ sql: 'DELETE FROM interests WHERE id = ?' }).run([input.interestId]);
+          return { status: 'deleted' };
+        }
       });
-      return true;
     },
   };
 }
-
-/**
- * Drops every saved relation for one interest and retires its active queries.
- * Search history keeps its rows: the query rows stay as `retired` records.
- */
-function clearInterestRelations(database: DatabaseConnection, interestId: string): void {
-  database
-    .prepare({ sql: 'DELETE FROM content_interest_matches WHERE interest_id = ?' })
-    .run([interestId]);
-  database
-    .prepare({
-      sql: "UPDATE search_queries SET status = 'retired', interest_id = NULL WHERE interest_id = ? AND status = 'active'",
-    })
-    .run([interestId]);
-}
-
-function readInterest(database: DatabaseConnection, id: string): Interest | undefined {
-  const row = database
-    .prepare<InterestRow>({
-      sql: 'SELECT id, text, enabled, created_at, updated_at FROM interests WHERE id = ?',
-    })
-    .get([id]);
-  return row ? toInterest(row) : undefined;
-}
-
 function toInterest(row: InterestRow): Interest {
   return {
     id: row.id,
     text: row.text,
     enabled: row.enabled === 1,
+    revision: row.revision,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: row.updated_at
   };
 }

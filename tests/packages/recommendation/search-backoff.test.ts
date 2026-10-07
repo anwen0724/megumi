@@ -410,10 +410,10 @@ describe('search backoff', () => {
         clock = at;
       },
       setInterestText: (text: string) => {
-        void interests.updateInterest({ id: INTEREST_ID, text });
+        void interests.updateInterest({ interestId: INTEREST_ID, expectedRevision: createInterestStorage(database).list()[0]?.revision ?? 0, text });
       },
       setEnabled: (enabled: boolean) => {
-        void interests.updateInterest({ id: INTEREST_ID, enabled });
+        void interests.updateInterest({ interestId: INTEREST_ID, expectedRevision: createInterestStorage(database).list()[0]?.revision ?? 0, enabled });
       },
       close: () => {
         void supply.close();

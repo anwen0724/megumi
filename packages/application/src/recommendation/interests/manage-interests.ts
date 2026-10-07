@@ -1,8 +1,9 @@
 /*
  * Owns the interest management surface: list, create, update, and delete.
- * Saving only commits interest state and the relation cleanup a change implies;
+ * Saving only commits original interest state and its revision;
  * it never searches, calls a model, or deletes content.
  */
+import { createHash } from 'node:crypto';
 import {
   CreateInterestRequestSchema,
   DeleteInterestRequestSchema,
@@ -21,6 +22,7 @@ export interface InterestManagementOptions {
   readonly now: () => number;
 }
 
+/** Creates local CRUD with input validation and optimistic revision checks. */
 export function createInterestManagement(
   options: InterestManagementOptions,
 ): InterestManagement {
@@ -29,7 +31,7 @@ export function createInterestManagement(
       return {
         interests: options.storage
           .list()
-          .map(({ id, text, enabled }) => ({ id, text, enabled })),
+          .map(({ id, text, enabled, revision }) => ({ id, text, enabled, revision })),
       };
     },
 
@@ -51,13 +53,7 @@ export function createInterestManagement(
       if (!parsed.success) {
         return { status: 'invalid_request', message: describeIssues(parsed.error) };
       }
-      const interest = options.storage.update({
-        id: parsed.data.id,
-        ...(parsed.data.text !== undefined ? { text: parsed.data.text } : {}),
-        ...(parsed.data.enabled !== undefined ? { enabled: parsed.data.enabled } : {}),
-        now: options.now(),
-      });
-      return interest ? { status: 'updated', interest } : { status: 'not_found' };
+      return options.storage.update({ ...parsed.data, now: options.now() });
     },
 
     async deleteInterest(request): Promise<DeleteInterestResult> {
@@ -65,9 +61,7 @@ export function createInterestManagement(
       if (!parsed.success) {
         return { status: 'invalid_request', message: describeIssues(parsed.error) };
       }
-      return options.storage.remove(parsed.data.id)
-        ? { status: 'deleted' }
-        : { status: 'not_found' };
+      return options.storage.remove(parsed.data);
     },
   };
 }
@@ -76,4 +70,13 @@ function describeIssues(error: { issues: readonly { path: (string | number)[]; m
   return error.issues
     .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
     .join('; ');
+}
+
+/** Identifies enabled input versions; display order and disabled interests do not change the hash. */
+export function hashEnabledInterests(snapshot: InterestSnapshot): string {
+  const versions = snapshot.interests
+    .filter((interest) => interest.enabled)
+    .map((interest) => [interest.id, interest.revision] as const)
+    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+  return createHash('sha256').update(JSON.stringify(versions)).digest('hex');
 }

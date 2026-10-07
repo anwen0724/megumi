@@ -365,7 +365,7 @@ describe('relevance screening', () => {
         now: NOW,
         maxAttempts: 3,
       }),
-      interests: [{ id: 'i1', text: 'Rust 异步运行时' }],
+      interests: [{ id: 'i1', revision: 1, text: 'Rust 异步运行时' }],
       model,
       contentLanguages: [] as readonly string[],
       maxInputTokens: 10_000,

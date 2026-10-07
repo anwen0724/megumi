@@ -82,6 +82,14 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
         const result = await window.megumi.discovery.changeInterest(
           createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.interestChange, request),
         );
+        if (result.ok && result.data.status === 'revision_conflict') {
+          setError(t('revisionConflict'));
+          const current = await window.megumi.discovery.listInterests(
+            createRendererRuntimeIpcRequest(IPC_CHANNELS.discovery.interestList, {}),
+          );
+          if (current.ok) setInterests(current.data.interests);
+          return false;
+        }
         if (!result.ok || result.data.status !== 'changed') {
           setError(t('actionFailed'));
           return false;

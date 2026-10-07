@@ -37,5 +37,6 @@ export const discovery = {
   sourceNotConfigured: 'API not configured',
   loading: 'Loading interests…',
   loadFailed: 'Could not load your interests.',
+  revisionConflict: 'This interest was changed. Your draft is preserved. Reopen the editor and review the current text.',
   actionFailed: 'The change could not be saved.',
 } as const;

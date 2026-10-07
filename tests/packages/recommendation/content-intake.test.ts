@@ -67,7 +67,7 @@ describe('content analysis', () => {
     const result = await analyzeContent(models, {
       contentId: 'c1',
       text: MATERIAL,
-      interests: [{ id: 'i1', text: '摄影' }],
+      interests: [{ id: 'i1', revision: 1, text: '摄影' }],
       model,
       maxInputTokens: 10_000,
       maxOutputTokens: 500,
@@ -114,7 +114,7 @@ describe('content analysis', () => {
       return {
         item: { source: 'zhihu', url, title: '标题', text, ...(publishedAt === null ? {} : { publishedAt }) },
         sourceResultId: 'r1',
-        interests: [{ id: 'i1', text: '摄影' }],
+        interests: [{ id: 'i1', revision: 1, text: '摄影' }],
         model,
         contentLanguages: [] as readonly string[],
         maxInputTokens: 10_000,

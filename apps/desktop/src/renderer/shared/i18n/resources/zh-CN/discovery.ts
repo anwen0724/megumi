@@ -36,5 +36,6 @@ export const discovery = {
   sourceNotConfigured: '未配置 API',
   loading: '正在读取关注…',
   loadFailed: '无法加载关注。',
+  revisionConflict: '此 interest 已被修改。你的输入已保留，请重新打开编辑并核对当前内容。',
   actionFailed: '未能保存这次修改。',
 } as const satisfies TranslationShape<typeof source>;

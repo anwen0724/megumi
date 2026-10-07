@@ -103,7 +103,7 @@ export async function matchPendingInterests(
   if (analyzed.length === 0) return empty;
 
   const batches = splitByRequestInput(analyzed, input);
-  const knownInterests = new Map(input.interests.map((interest) => [interest.id, interest.text]));
+  const knownInterests = new Map(input.interests.map((interest) => [interest.id, interest]));
   let matchedContents = 0;
   let savedRelations = 0;
   let skippedRelations = 0;
@@ -136,7 +136,8 @@ export async function matchPendingInterests(
         .filter((match) => match.contentId === entry.contentId && knownInterests.has(match.interestId))
         .map((match) => ({
           interestId: match.interestId,
-          expectedText: knownInterests.get(match.interestId) ?? '',
+          expectedText: knownInterests.get(match.interestId)?.text ?? '',
+          expectedRevision: knownInterests.get(match.interestId)?.revision ?? 0,
           relation: match.relation,
           ...(match.basis ? { basis: match.basis } : {}),
         }));

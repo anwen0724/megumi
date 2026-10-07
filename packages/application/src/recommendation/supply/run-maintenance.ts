@@ -685,6 +685,7 @@ async function reanalyze(
     contentId,
     matches: analyzed.matches.map((match) => ({
       interestId: match.interestId,
+      expectedRevision: interests.find((entry) => entry.id === match.interestId)?.revision ?? 0,
       expectedText: interests.find((entry) => entry.id === match.interestId)?.text ?? '',
       relation: match.relation,
       ...(match.basis ? { basis: match.basis } : {}),
@@ -712,7 +713,7 @@ function saveSearchBackoff(
 
 async function evaluateAll(
   dependencies: MaintenanceDependencies,
-  interests: readonly { readonly id: string; readonly text: string; readonly enabled: boolean }[],
+  interests: readonly { readonly id: string; readonly text: string; readonly enabled: boolean; readonly revision: number }[],
   usage: ReadonlyMap<CandidatePool, { readonly revision: string; readonly excludedContentIds: readonly string[] }>,
 ): Promise<PoolEvaluation[]> {
   const evaluations: PoolEvaluation[] = [];

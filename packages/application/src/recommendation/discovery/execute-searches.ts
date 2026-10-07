@@ -203,48 +203,50 @@ function resolveQuery(
     readonly now: number;
   },
 ): ResolvedQuery {
+  const interestRevision = dependencies.database.prepare<{ revision: number }>({ sql: 'SELECT revision FROM interests WHERE id = ?' }).get([input.interestId])?.revision;
+  if (interestRevision === undefined) throw new Error('Interest no longer exists.');
   if (input.queryId) {
     const stored = dependencies.database
       .prepare<{ id: string; query: string }>({
-        sql: "SELECT id, query FROM search_queries WHERE id = ? AND status = 'active'",
+        sql: "SELECT id, query FROM search_queries WHERE id = ? AND interest_id = ? AND interest_revision = ? AND status = 'active'",
       })
-      .get([input.queryId]);
+      .get([input.queryId, input.interestId, interestRevision]);
     if (stored) return { id: stored.id, text: stored.query };
   }
 
   if (input.query) {
     const existing = dependencies.database
       .prepare<{ id: string; query: string }>({
-        sql: "SELECT id, query FROM search_queries WHERE interest_id = ? AND query = ? AND status = 'active'",
+        sql: "SELECT id, query FROM search_queries WHERE interest_id = ? AND interest_revision = ? AND query = ? AND status = 'active'",
       })
-      .get([input.interestId, input.query]);
+      .get([input.interestId, interestRevision, input.query]);
     if (existing) return { id: existing.id, text: existing.query };
 
     const id = dependencies.newQueryId();
     dependencies.database
       .prepare({
-        sql: `INSERT INTO search_queries (id, interest_id, query, category, origin, status, created_at)
-              VALUES (?, ?, ?, ?, 'ai', 'active', ?)`,
+        sql: `INSERT INTO search_queries (id, interest_id, interest_revision, query, category, origin, status, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ai', 'active', ?)`,
       })
-      .run([id, input.interestId, input.query, input.category ?? 'core', input.now]);
+      .run([id, input.interestId, interestRevision, input.query, input.category ?? 'core', input.now]);
     return { id, text: input.query };
   }
 
   const active = dependencies.database
     .prepare<{ id: string; query: string }>({
-      sql: "SELECT id, query FROM search_queries WHERE interest_id = ? AND status = 'active' ORDER BY created_at, id LIMIT 1",
+      sql: "SELECT id, query FROM search_queries WHERE interest_id = ? AND interest_revision = ? AND status = 'active' ORDER BY created_at, id LIMIT 1",
     })
-    .get([input.interestId]);
+    .get([input.interestId, interestRevision]);
   if (active) return { id: active.id, text: active.query };
 
   const id = dependencies.newQueryId();
   const text = (input.fallbackQuery ?? '').trim();
   dependencies.database
     .prepare({
-      sql: `INSERT INTO search_queries (id, interest_id, query, category, origin, status, created_at)
-            VALUES (?, ?, ?, 'core', 'interest', 'active', ?)`,
+      sql: `INSERT INTO search_queries (id, interest_id, interest_revision, query, category, origin, status, created_at)
+            VALUES (?, ?, ?, ?, 'core', 'interest', 'active', ?)`,
     })
-    .run([id, input.interestId, text, input.now]);
+    .run([id, input.interestId, interestRevision, text, input.now]);
   return { id, text };
 }
 

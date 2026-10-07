@@ -123,8 +123,9 @@ export function needsSearchPlanning(input: {
 export function listActiveQueries(database: DatabaseConnection): readonly QueryRecord[] {
   return database
     .prepare<QueryRow>({
-      sql: `SELECT id, interest_id, query, category, last_used_at
-            FROM search_queries WHERE status = 'active' ORDER BY interest_id, created_at, id`,
+      sql: `SELECT q.id, q.interest_id, q.query, q.category, q.last_used_at
+            FROM search_queries q JOIN interests i ON i.id = q.interest_id AND i.revision = q.interest_revision AND i.enabled = 1
+            WHERE q.status = 'active' ORDER BY q.interest_id, q.created_at, q.id`,
     })
     .all()
     .flatMap((row) => {

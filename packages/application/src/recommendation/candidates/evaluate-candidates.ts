@@ -95,7 +95,7 @@ export function retireExitedCandidates(
                    ca.status AS analysis_status, ca.long_term_value,
                    EXISTS (
                      SELECT 1 FROM content_interest_matches m
-                     JOIN interests i ON i.id = m.interest_id AND i.enabled = 1
+                     JOIN interests i ON i.id = m.interest_id AND i.enabled = 1 AND i.revision = m.interest_revision
                      WHERE m.content_id = rc.content_id AND m.relation IN ('direct','related')
                    ) AS matched
             FROM recommendation_candidates rc
@@ -428,6 +428,7 @@ function readMatches(
     .prepare<{ content_id: string; interest_id: string; relation: string; basis: string | null }>({
       sql: `SELECT m.content_id, m.interest_id, m.relation, m.basis
             FROM content_interest_matches m
+            JOIN interests i ON i.id = m.interest_id AND i.enabled = 1 AND i.revision = m.interest_revision
             JOIN recommendation_candidates rc ON rc.content_id = m.content_id AND rc.pool = ?
             WHERE rc.status = 'active' AND m.relation IN ('direct','related')`,
     })

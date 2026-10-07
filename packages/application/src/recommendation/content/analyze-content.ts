@@ -50,6 +50,7 @@ const AnalysisResponseSchema = ContentAnalysisResultSchema.extend({
 export interface AnalysisInterest {
   readonly id: string;
   readonly text: string;
+  readonly revision: number;
 }
 
 export interface AnalyzeContentInput {

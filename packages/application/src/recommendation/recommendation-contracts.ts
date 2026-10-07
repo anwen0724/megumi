@@ -5,7 +5,7 @@
  * below describes the current behaviour, not the removed recommendation flow.
  */
 import { z } from 'zod';
-import { InterestSnapshotEntrySchema } from './interests/interest-contracts';
+import { InterestTextSchema, InterestSnapshotEntrySchema } from './interests/interest-contracts';
 
 /** One interest as the product shows it: the saved description and enable state. */
 export const InterestUiSchema = InterestSnapshotEntrySchema;
@@ -26,18 +26,19 @@ export type DiscoveryInterestListResult = z.infer<typeof DiscoveryInterestListRe
  */
 export const DiscoveryInterestChangePayloadSchema = z.discriminatedUnion('action', [
   z
-    .object({ action: z.literal('create'), description: z.string().trim().min(1).max(1_000) })
+    .object({ action: z.literal('create'), description: InterestTextSchema })
     .strict(),
   z
     .object({
       action: z.literal('update'),
       interestId: z.string().min(1),
-      description: z.string().trim().min(1).max(1_000),
+      expectedRevision: z.number().int().positive(),
+      description: InterestTextSchema,
     })
     .strict(),
-  z.object({ action: z.literal('pause'), interestId: z.string().min(1) }).strict(),
-  z.object({ action: z.literal('resume'), interestId: z.string().min(1) }).strict(),
-  z.object({ action: z.literal('delete'), interestId: z.string().min(1) }).strict(),
+  z.object({ action: z.literal('pause'), interestId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict(),
+  z.object({ action: z.literal('resume'), interestId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict(),
+  z.object({ action: z.literal('delete'), interestId: z.string().min(1), expectedRevision: z.number().int().positive() }).strict(),
 ]);
 export type DiscoveryInterestChangePayload = z.infer<typeof DiscoveryInterestChangePayloadSchema>;
 
@@ -48,6 +49,7 @@ export type DiscoveryInterestChangePayload = z.infer<typeof DiscoveryInterestCha
 export const DiscoveryInterestChangeResultSchema = z.discriminatedUnion('status', [
   z.object({ status: z.literal('changed'), interests: z.array(InterestUiSchema) }).strict(),
   z.object({ status: z.literal('not_found') }).strict(),
+  z.object({ status: z.literal('revision_conflict') }).strict(),
   z.object({ status: z.literal('invalid_request'), message: z.string().min(1) }).strict(),
 ]);
 export type DiscoveryInterestChangeResult = z.infer<typeof DiscoveryInterestChangeResultSchema>;

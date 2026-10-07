@@ -83,7 +83,7 @@ describe('DiscoveryPage', () => {
 
     expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({
       action: 'update',
-      interestId: 'interest:1',
+      interestId: 'interest:1', expectedRevision: 1,
       description: 'Agent 工程化与真实项目',
     });
     const alert = await screen.findByRole('alert');
@@ -100,28 +100,44 @@ describe('DiscoveryPage', () => {
     await user.click(screen.getByRole('switch', { name: '暂停 Agent 工程化' }));
     expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({
       action: 'pause',
-      interestId: 'interest:1',
+      interestId: 'interest:1', expectedRevision: 1,
     });
 
     await user.click(screen.getByRole('switch', { name: '恢复 秋招信息' }));
     expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({
       action: 'resume',
-      interestId: 'interest:2',
+      interestId: 'interest:2', expectedRevision: 1,
     });
 
     await user.click(screen.getByRole('button', { name: 'Agent 工程化的更多操作' }));
     await user.click(screen.getByRole('menuitem', { name: '删除' }));
     expect(changeInterest.mock.calls.at(-1)?.[0].payload).toEqual({
       action: 'delete',
-      interestId: 'interest:1',
+      interestId: 'interest:1', expectedRevision: 1,
     });
+  });
+
+  it('explains a conflicting edit and reloads current interests without discarding the draft', async () => {
+    const user = userEvent.setup();
+    render(<DiscoveryPage />);
+    await screen.findByText('Agent 工程化');
+    await user.click(screen.getByRole('button', { name: 'Agent 工程化的更多操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '编辑' }));
+    const editor = screen.getByRole('textbox', { name: '编辑关注 Agent 工程化' });
+    await user.clear(editor); await user.type(editor, '保留我的输入');
+    changeInterest.mockResolvedValue(ok({ status: 'revision_conflict' }));
+    listInterests.mockResolvedValue(ok({ interests: [{ id: 'interest:1', text: '其他设备的修改', enabled: true, revision: 2 }] }));
+    await user.click(screen.getByRole('button', { name: '保存修改' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('已被修改');
+    expect(editor).toHaveValue('保留我的输入');
+    expect(await screen.findByRole('textbox', { name: '编辑关注 其他设备的修改' })).toHaveValue('保留我的输入');
   });
 
   it('adopts the saved list the Host returns instead of re-reading interests', async () => {
     const user = userEvent.setup();
     changeInterest.mockResolvedValue(ok({
       status: 'changed',
-      interests: [{ id: 'interest:3', text: '只有这一条', enabled: true }],
+      interests: [{ id: 'interest:3', text: '只有这一条', enabled: true, revision: 1 }],
     }));
     render(<DiscoveryPage />);
     await screen.findByText('Agent 工程化');
@@ -223,7 +239,7 @@ describe('DiscoveryPage', () => {
 
   it('does not ask for supply consent while every interest is disabled', async () => {
     listInterests.mockResolvedValue(ok({
-      interests: [{ id: 'interest:2', text: '秋招信息', enabled: false }],
+      interests: [{ id: 'interest:2', text: '秋招信息', enabled: false, revision: 1 }],
     }));
     getConfiguration.mockResolvedValue(ok(configuration({ candidateSupplyConfirmed: false })));
 
@@ -252,8 +268,8 @@ describe('DiscoveryPage', () => {
 
 function savedInterests() {
   return [
-    { id: 'interest:1', text: 'Agent 工程化', enabled: true },
-    { id: 'interest:2', text: '秋招信息', enabled: false },
+    { id: 'interest:1', text: 'Agent 工程化', enabled: true, revision: 1 },
+    { id: 'interest:2', text: '秋招信息', enabled: false, revision: 1 },
   ];
 }
 

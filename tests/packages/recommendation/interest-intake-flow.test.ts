@@ -117,7 +117,7 @@ describe('interest intake flow', () => {
       {
         item,
         sourceResultId,
-        interests: [{ id: 'i1', text: '摄影' }],
+        interests: [{ id: 'i1', revision: 1, text: '摄影' }],
         model,
         contentLanguages: [],
         maxInputTokens: 10_000,

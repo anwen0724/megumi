@@ -34,6 +34,7 @@ export function InterestManager({
   const [newInterest, setNewInterest] = useState('');
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [editingInterestId, setEditingInterestId] = useState<string | null>(null);
+  const [editingRevision, setEditingRevision] = useState<number>(0);
   const [menuInterestId, setMenuInterestId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -59,7 +60,7 @@ export function InterestManager({
   async function saveInterest(interestId: string) {
     const description = drafts[interestId]?.trim();
     if (!description) return;
-    if (await change({ action: 'update', interestId, description })) {
+    if (await change({ action: 'update', interestId, expectedRevision: editingRevision, description })) {
       setEditingInterestId(null);
     }
   }
@@ -207,15 +208,16 @@ export function InterestManager({
                         setMenuInterestId(null);
                         setDrafts((current) => ({ ...current, [interest.id]: interest.text }));
                         setEditingInterestId(interest.id);
+                        setEditingRevision(interest.revision);
                       }}
                       onDelete={() => {
                         setMenuInterestId(null);
-                        void change({ action: 'delete', interestId: interest.id });
+                        void change({ action: 'delete', interestId: interest.id, expectedRevision: interest.revision });
                       }}
                       onToggleEnabled={() =>
                         void change({
                           action: interest.enabled ? 'pause' : 'resume',
-                          interestId: interest.id,
+                          interestId: interest.id, expectedRevision: interest.revision,
                         })
                       }
                     />

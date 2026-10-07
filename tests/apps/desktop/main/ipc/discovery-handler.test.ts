@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { registerDiscoveryHandlers } from '@megumi/desktop/main/ipc/handlers/discovery.handler';
 
-const interest = { id: 'interest:1', text: 'Rust 异步运行时', enabled: true };
+const interest = { id: 'interest:1', text: 'Rust 异步运行时', enabled: true, revision: 1 };
 const configuration = {
   candidateSupplyConfirmed: false,
   sources: [{ sourceId: 'zhihu', name: 'Zhihu', enabled: true, credentialConfigured: false }],
@@ -44,10 +44,10 @@ describe('registerDiscoveryHandlers', () => {
 
     const changed = await ipc.invoke(IPC_CHANNELS.discovery.interestChange, {
       action: 'pause',
-      interestId: 'interest:1',
+      interestId: 'interest:1', expectedRevision: 1,
     });
 
-    expect(changeInterest).toHaveBeenCalledWith({ action: 'pause', interestId: 'interest:1' });
+    expect(changeInterest).toHaveBeenCalledWith({ action: 'pause', interestId: 'interest:1', expectedRevision: 1 });
     expect(changed).toMatchObject({
       ok: true,
       data: { status: 'changed', interests: [{ enabled: false }] },
@@ -105,7 +105,7 @@ describe('registerDiscoveryHandlers', () => {
 
     const response = await ipc.invoke(IPC_CHANNELS.discovery.interestChange, {
       action: 'update',
-      interestId: 'interest:1',
+      interestId: 'interest:1', expectedRevision: 1,
     });
 
     expect(changeInterest).not.toHaveBeenCalled();

@@ -58,7 +58,7 @@ describe('search planning', () => {
 
     const outcome = await planSearches(
       { database, client: models },
-      planningInput(model, { interests: [{ id: 'i1', text: '摄影', enabled: true }] }),
+      planningInput(model, { interests: [{ id: 'i1', revision: 1, text: '摄影', enabled: true }] }),
     );
 
     expect(outcome.status).toBe('planned');
@@ -84,7 +84,7 @@ describe('search planning', () => {
 
     const outcome = await planSearches(
       { database, client: models },
-      planningInput(model, { interests: [{ id: 'i1', text: '摄影', enabled: true }] }),
+      planningInput(model, { interests: [{ id: 'i1', revision: 1, text: '摄影', enabled: true }] }),
     );
 
     expect(outcome.status).toBe('planned');
@@ -106,7 +106,7 @@ describe('search planning', () => {
 
     const outcome = await planSearches(
       { database, client },
-      planningInput(model, { interests: [{ id: 'interest:abc', text: 'Rust 异步运行时', enabled: true }] }),
+      planningInput(model, { interests: [{ id: 'interest:abc', revision: 1, text: 'Rust 异步运行时', enabled: true }] }),
     );
 
     expect(outcome.status).toBe('planned');

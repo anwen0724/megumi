@@ -233,6 +233,7 @@ export const interests = sqliteTable(
   {
     id: text('id').primaryKey(),
     text: text('text').notNull(),
+    revision: integer('revision').notNull().default(1),
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
@@ -331,6 +332,7 @@ export const contentInterestMatches = sqliteTable(
     interestId: text('interest_id')
       .notNull()
       .references(() => interests.id, { onDelete: 'cascade' }),
+    interestRevision: integer('interest_revision').notNull().default(1),
     relation: text('relation').notNull(),
     basis: text('basis'),
     matchedAt: integer('matched_at').notNull(),
@@ -376,6 +378,7 @@ export const searchQueries = sqliteTable(
   {
     id: text('id').primaryKey(),
     interestId: text('interest_id').references(() => interests.id, { onDelete: 'set null' }),
+    interestRevision: integer('interest_revision').notNull().default(1),
     query: text('query').notNull(),
     category: text('category').notNull(),
     origin: text('origin').notNull(),
@@ -396,7 +399,7 @@ export const searchQueries = sqliteTable(
       sql`${table.status} <> 'active' OR ${table.interestId} IS NOT NULL`,
     ),
     uniqueIndex('idx_search_queries_active_identity')
-      .on(table.interestId, table.query)
+      .on(table.interestId, table.interestRevision, table.query)
       .where(sql`${table.status} = 'active'`),
     index('idx_search_queries_interest_status').on(table.interestId, table.status),
   ],

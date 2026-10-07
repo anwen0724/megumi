@@ -50,30 +50,31 @@ describe('candidate supply composition', () => {
     expect(created.status).toBe('changed');
     const interests = created.status === 'changed' ? created.interests : [];
     expect(interests).toHaveLength(1);
-    expect(interests[0]).toEqual({ id: expect.any(String), text: 'Rust async', enabled: true });
+    expect(interests[0]).toEqual({ id: expect.any(String), text: 'Rust async', enabled: true, revision: 1 });
     const interestId = interests[0]!.id;
 
     const renamed = await host.changeInterest({
       action: 'update',
       interestId,
+      expectedRevision: 1,
       description: 'Rust runtime internals',
     });
     expect(renamed).toMatchObject({
       status: 'changed',
-      interests: [{ id: interestId, text: 'Rust runtime internals', enabled: true }],
+      interests: [{ id: interestId, revision: 2, text: 'Rust runtime internals', enabled: true }],
     });
 
-    const paused = await host.changeInterest({ action: 'pause', interestId });
+    const paused = await host.changeInterest({ action: 'pause', expectedRevision: 2, interestId });
     expect(paused).toMatchObject({ status: 'changed', interests: [{ enabled: false }] });
 
-    const resumed = await host.changeInterest({ action: 'resume', interestId });
+    const resumed = await host.changeInterest({ action: 'resume', expectedRevision: 3, interestId });
     expect(resumed).toMatchObject({ status: 'changed', interests: [{ enabled: true }] });
 
-    expect(await host.changeInterest({ action: 'delete', interestId })).toEqual({
+    expect(await host.changeInterest({ action: 'delete', expectedRevision: 4, interestId })).toEqual({
       status: 'changed',
       interests: [],
     });
-    expect(await host.changeInterest({ action: 'pause', interestId })).toEqual({
+    expect(await host.changeInterest({ action: 'pause', expectedRevision: 2, interestId })).toEqual({
       status: 'not_found',
     });
   });

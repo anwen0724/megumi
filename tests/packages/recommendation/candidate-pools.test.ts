@@ -44,15 +44,15 @@ describe('interest management', () => {
     expect(created.status).toBe('created');
     if (created.status !== 'created') throw new Error('expected a created interest');
 
-    const updated = await management.updateInterest({ id: created.interest.id, enabled: false });
+    const updated = await management.updateInterest({ interestId: created.interest.id, expectedRevision: 1, enabled: false });
     expect(updated.status).toBe('updated');
     if (updated.status !== 'updated') throw new Error('expected an updated interest');
     expect(updated.interest.enabled).toBe(false);
 
-    const missing = await management.updateInterest({ id: 'unknown', text: 'x' });
+    const missing = await management.updateInterest({ interestId: 'unknown', expectedRevision: 1, text: 'x' });
     expect(missing.status).toBe('not_found');
 
-    const deleted = await management.deleteInterest({ id: created.interest.id });
+    const deleted = await management.deleteInterest({ interestId: created.interest.id, expectedRevision: 2 });
     expect(deleted.status).toBe('deleted');
     expect((await management.listInterests()).interests).toEqual([]);
   });
@@ -266,7 +266,7 @@ function dependencies(database: DatabaseConnection) {
 function input(pool: 'daily' | 'long_term') {
   return {
     pool,
-    interests: [{ id: 'i1', text: '摄影', enabled: true }],
+    interests: [{ id: 'i1', revision: 1, text: '摄影', enabled: true }],
     usage: { revision: 'rev-1', excludedContentIds: [] },
     requirement: { pool, minimumCount: 2, coverage: [{ interestId: 'i1', minimumCount: 1 }] },
     thresholds: THRESHOLDS,

@@ -1,6 +1,7 @@
 /* Applies the append-only Database migration chain to an owned connection. */
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { createHash } from 'node:crypto';
 import {
   getDatabaseDriverForMigration,
   getDatabaseFilename,
@@ -113,7 +114,13 @@ export function migrateDatabase(request: MigrateDatabaseRequest): MigrateDatabas
   }
 
   try {
-    migrate(drizzle(getDatabaseDriverForMigration(request.database)), { migrationsFolder });
+    const driver = getDatabaseDriverForMigration(request.database);
+    // Migrations compute the same UTF-8 material fingerprint as normal content writes.
+    driver.function('sha256', { deterministic: true }, (value: unknown) => {
+      if (typeof value !== 'string') throw new TypeError('sha256 requires text.');
+      return createHash('sha256').update(value).digest('hex');
+    });
+    migrate(drizzle(driver), { migrationsFolder });
   } catch {
     throw new DatabaseMigrationError({
       databaseFile,

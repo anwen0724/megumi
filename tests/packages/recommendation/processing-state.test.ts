@@ -206,7 +206,7 @@ describe('discovery processing state', () => {
           publishedAt: NOW - 60_000,
         },
         sourceResultId: input.sourceResultId,
-        interests: [{ id: 'i1', text: 'Rust 异步运行时' }],
+        interests: [{ id: 'i1', revision: 1, text: 'Rust 异步运行时' }],
         model,
         contentLanguages: [],
         maxInputTokens: input.maxInputTokens ?? 10_000,
