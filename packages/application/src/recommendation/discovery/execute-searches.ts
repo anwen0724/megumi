@@ -6,6 +6,7 @@
 import type { DatabaseConnection } from '../../storage/index';
 import type { RawItem, SourceConnector } from '../sources/source-connector';
 import { normalizeContentUrl } from '../content/normalize-content';
+import { SCREENED_OUT } from '../content/screen-discoveries';
 import type { ExecutionBudget } from '../supply/execution-budget';
 import type { SearchStorage } from './search-storage';
 
@@ -267,7 +268,11 @@ async function callSource(
       };
 }
 
-/** Stores every discovery and reports which rows were created rather than refreshed. */
+/**
+ * Stores every discovery and reports which rows were created rather than
+ * refreshed. A row an earlier round screened out is returned to `pending`, so a
+ * later interest change can make an excluded item relevant again.
+ */
 function storeDiscovered(
   dependencies: InterestSearchDependencies,
   items: readonly RawItem[],
@@ -308,21 +313,41 @@ function recordHistory(
   });
 }
 
-/** Stores one discovery, refreshing `last_seen_at` when it was found before. */
+/**
+ * Stores one discovery, refreshing `last_seen_at` when it was found before. A row
+ * an earlier round screened out becomes pending again, unless its canonical URL
+ * already maps to a content: that content is reused without any screening.
+ */
 function storeDiscovery(
   dependencies: InterestSearchDependencies,
   item: RawItem,
   now: number,
 ): { readonly id: string; readonly created: boolean } {
   const existing = dependencies.database
-    .prepare<{ id: string }>({
-      sql: 'SELECT id FROM search_results WHERE source = ? AND url = ?',
+    .prepare<{ id: string; last_error_code: string | null; status: string }>({
+      sql: 'SELECT id, last_error_code, status FROM search_results WHERE source = ? AND url = ?',
     })
     .get([item.source, item.url]);
   if (existing) {
-    dependencies.database
-      .prepare({ sql: 'UPDATE search_results SET last_seen_at = ? WHERE id = ?' })
-      .run([now, existing.id]);
+    const excluded =
+      existing.status === 'rejected' &&
+      existing.last_error_code === SCREENED_OUT &&
+      !dependencies.database
+        .prepare<{ id: string }>({ sql: 'SELECT id FROM contents WHERE canonical_url = ?' })
+        .get([item.url]);
+    if (excluded) {
+      dependencies.database
+        .prepare({
+          sql: `UPDATE search_results
+                SET last_seen_at = ?, status = 'pending', last_error_code = NULL
+                WHERE id = ?`,
+        })
+        .run([now, existing.id]);
+    } else {
+      dependencies.database
+        .prepare({ sql: 'UPDATE search_results SET last_seen_at = ? WHERE id = ?' })
+        .run([now, existing.id]);
+    }
     return { id: existing.id, created: false };
   }
 

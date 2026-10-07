@@ -96,7 +96,14 @@ export const StopReasonSchema = z.enum([
 ]);
 export type StopReason = z.infer<typeof StopReasonSchema>;
 
-export const IssueStageSchema = z.enum(['configuration', 'search', 'material', 'analysis', 'matching']);
+export const IssueStageSchema = z.enum([
+  'configuration',
+  'search',
+  'material',
+  'screening',
+  'analysis',
+  'matching',
+]);
 export type IssueStage = z.infer<typeof IssueStageSchema>;
 
 /** One reportable problem, merged by stage, code, and subject instead of per fragment. */
@@ -127,6 +134,8 @@ export type PreparationResult =
 /** What one maintenance run saved, reported apart from pool levels. */
 export interface MaintenanceCounts {
   discoveredItems: number;
+  /** Discoveries relevance screening excluded before any full analysis. */
+  screenedOutItems: number;
   normalizedContents: number;
   analyzedContents: number;
   newCandidates: number;

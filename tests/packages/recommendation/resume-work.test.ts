@@ -1,6 +1,7 @@
 /* Verifies a round resumes work an earlier process left unfinished. */
 // @vitest-environment node
-import { createModels, fauxAssistantMessage, fauxProvider, type Api, type Model } from '@megumi/ai';
+import { fauxAssistantMessage, type Api, type Context, type Model } from '@megumi/ai';
+import type { TextModelClient } from '@megumi/application/recommendation/call-text-model';
 import { createCandidateStorage } from '@megumi/application/recommendation/candidates/candidate-storage';
 import { createContentStorage } from '@megumi/application/recommendation/content/content-storage';
 import { createSearchStorage } from '@megumi/application/recommendation/discovery/search-storage';
@@ -28,8 +29,7 @@ const MATERIAL = '这里包含正文片段以及别的内容。';
 
 describe('resume after an interrupted process', () => {
   let database: DatabaseConnection;
-  let faux: ReturnType<typeof fauxProvider>;
-  let models: ReturnType<typeof createModels>;
+  let client: TextModelClient;
   let model: Model<Api>;
   let sequence = 0;
 
@@ -38,22 +38,18 @@ describe('resume after an interrupted process', () => {
     database = createDatabase({ filename: ':memory:' });
     migrateDatabase({ database });
     seedInterest(database, 'i1');
-    faux = fauxProvider({ models: [{ id: 'faux-supply' }] });
-    models = createModels();
-    models.setProvider(faux.provider);
-    const resolved = models.getModel(faux.provider.id, 'faux-supply');
-    if (!resolved) throw new Error('expected the faux model to be registered');
-    model = resolved;
+    model = { id: 'faux-supply', contextWindow: 128_000 } as Model<Api>;
+    client = roundClient({});
   });
 
   afterEach(() => database.close());
 
   it('processes a discovery that was saved but never normalized', async () => {
     insertDiscovery(database, 'r1', 'https://example.com/a', 'pending', NOW - 60_000);
-    faux.setResponses([
-      fauxAssistantMessage(analysisJson()),
-      fauxAssistantMessage('{"items":[]}'),
-    ]);
+    client = roundClient({
+      screening: '{"decisions":[{"itemId":"r1","verdict":"keep"}]}',
+      analysis: analysisJson(),
+    });
 
     await runMaintenance(dependencies(), runInput());
 
@@ -65,7 +61,7 @@ describe('resume after an interrupted process', () => {
 
   it('leaves a failed discovery alone until its retry time is due', async () => {
     insertDiscovery(database, 'r1', 'https://example.com/a', 'failed', NOW + 60_000);
-    faux.setResponses([fauxAssistantMessage('{"items":[]}')]);
+    client = roundClient({ planning: '{"items":[]}' });
 
     await runMaintenance(dependencies(), runInput());
 
@@ -75,10 +71,10 @@ describe('resume after an interrupted process', () => {
 
   it('retries a due discovery after its retry time passed', async () => {
     insertDiscovery(database, 'r1', 'https://example.com/a', 'failed', NOW - 1_000);
-    faux.setResponses([
-      fauxAssistantMessage(analysisJson()),
-      fauxAssistantMessage('{"items":[]}'),
-    ]);
+    client = roundClient({
+      screening: '{"decisions":[{"itemId":"r1","verdict":"keep"}]}',
+      analysis: analysisJson(),
+    });
 
     await runMaintenance(dependencies(), runInput());
 
@@ -96,7 +92,7 @@ describe('resume after an interrupted process', () => {
       database,
       model,
       sources: [stubSource()],
-      client: models,
+      client,
       interests: management,
       contents: createContentStorage(database),
       candidates: createCandidateStorage(database),
@@ -150,6 +146,29 @@ function stubSource(): SourceConnector {
         status: 'failed',
         failure: { code: 'material_unavailable', message: 'unsupported', retryable: false },
       };
+    },
+  };
+}
+
+/**
+ * Every model task one round asks for, each answering from the script the test
+ * wrote for it. A task the test left unscripted is a test mistake, not a result.
+ */
+function roundClient(script: {
+  readonly screening?: string;
+  readonly analysis?: string;
+  readonly planning?: string;
+}): TextModelClient {
+  return {
+    async completeSimple(_model: Model<Api>, context: Context) {
+      const system = context.systemPrompt ?? '';
+      const answer = system.includes('"decisions"')
+        ? script.screening
+        : system.startsWith('You plan searches')
+          ? script.planning
+          : script.analysis;
+      if (answer === undefined) throw new Error(`unscripted model task: ${system.slice(0, 40)}`);
+      return fauxAssistantMessage(answer);
     },
   };
 }

@@ -45,6 +45,8 @@ const CandidateSupplyLimitsSchema = z
     maxResultsPerSearch: z.number().int().positive().max(10).default(10),
     maxFetchCalls: z.number().int().positive().default(10),
     maxPlanningCalls: z.number().int().nonnegative().default(6),
+    /** One call screens a whole batch of new discoveries before their analysis. */
+    maxScreeningCalls: z.number().int().nonnegative().default(20),
     maxAnalysisCalls: z.number().int().nonnegative().default(60),
     maxMatchingCalls: z.number().int().nonnegative().default(20),
     /** Zero keeps this round from accepting embedding work; vectors are out of scope. */

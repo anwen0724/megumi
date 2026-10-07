@@ -18,9 +18,10 @@ import { matchPendingInterests } from '../candidates/match-interests';
 import type { CandidatePool, SupplyHealth } from '../candidates/candidate-contracts';
 import type { CandidateStorage } from '../candidates/candidate-storage';
 import { intakeContent } from '../content/intake-content';
-import { analyzeContent } from '../content/analyze-content';
+import { analyzeContent, type AnalysisInterest, type AnalysisRequestEstimate } from '../content/analyze-content';
 import type { ContentStorage } from '../content/content-storage';
 import { pruneUnusedContent } from '../content/prune-content';
+import { screenDiscoveries } from '../content/screen-discoveries';
 import { executePlannedSearch, type PlannedSearch, type StoredDiscovery } from '../discovery/execute-searches';
 import { needsSearchPlanning, planSearches, type PendingGap } from '../discovery/plan-searches';
 import type { SearchStorage } from '../discovery/search-storage';
@@ -83,6 +84,7 @@ export async function runMaintenance(
   const issues: SupplyIssue[] = [...(dependencies.configIssues ?? [])];
   const savedCounts: MaintenanceCounts = {
     discoveredItems: 0,
+    screenedOutItems: 0,
     normalizedContents: 0,
     analyzedContents: 0,
     newCandidates: 0,
@@ -256,7 +258,7 @@ export async function runMaintenance(
   );
 }
 
-/** Runs each planned search and intakes whatever it discovered. */
+/** Runs each planned search, screens what it discovered, and intakes the rest. */
 async function consumePlan(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
@@ -264,11 +266,10 @@ async function consumePlan(
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<void> {
-  const enabledInterests = new Set(
-    (await dependencies.interests.listInterests()).interests
-      .filter((interest) => interest.enabled)
-      .map((interest) => interest.id),
+  const interests = (await dependencies.interests.listInterests()).interests.filter(
+    (interest) => interest.enabled,
   );
+  const enabledInterests = new Set(interests.map((interest) => interest.id));
   for (const item of items) {
     if (input.signal.aborted || input.budget.expired) return;
     // The requirement may have changed between planning and execution; a
@@ -299,12 +300,95 @@ async function consumePlan(
     if (outcome.status === 'skipped') continue;
 
     savedCounts.discoveredItems += outcome.resultCount;
-    for (const discovery of outcome.items) {
+    const screened = await screenBatch(
+      dependencies,
+      input,
+      interests,
+      outcome.items,
+      savedCounts,
+      issues,
+    );
+    if (screened.status === 'deferred') return;
+    for (const verdict of screened.verdicts) {
       if (input.signal.aborted || input.budget.expired) return;
-      await intake(dependencies, input, discovery, savedCounts, issues);
+      await intake(dependencies, input, verdict.discovery, interests, verdict.screenedOut, savedCounts, issues);
     }
     await input.deliver();
   }
+}
+
+/**
+ * Judges one search's or one resume batch's discoveries for relevance before any
+ * full analysis. A failed call keeps every discovery, and an exhausted screening
+ * budget stops the work instead of letting it skip the screen: the remaining
+ * discoveries stay pending for a later round.
+ *
+ * The returned list holds every discovery the round must still process, each with
+ * the screening exclusion the analysis has to honour.
+ */
+async function screenBatch(
+  dependencies: MaintenanceDependencies,
+  input: MaintenanceRunInput,
+  interests: readonly AnalysisInterest[],
+  discoveries: readonly StoredDiscovery[],
+  savedCounts: MaintenanceCounts,
+  issues: SupplyIssue[],
+): Promise<{ status: 'continue'; verdicts: readonly DiscoveryVerdict[] } | { status: 'deferred' }> {
+  // Nothing to judge: every discovery goes to the full analysis on its own merits.
+  const bySelf = (): { status: 'continue'; verdicts: readonly DiscoveryVerdict[] } => ({
+    status: 'continue',
+    verdicts: discoveries.map((discovery) => ({ discovery, screenedOut: false })),
+  });
+  if (discoveries.length === 0) return bySelf();
+
+  const outcome = await screenDiscoveries(
+    {
+      client: dependencies.client,
+      contents: dependencies.contents,
+      ...(dependencies.observability ? { observability: dependencies.observability } : {}),
+    },
+    {
+      items: discoveries,
+      interests,
+      model: dependencies.model,
+      contentLanguages: dependencies.config.contentLanguages,
+      maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
+      maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
+      // A batch never holds more items than the search that produced them could.
+      maxBatchItems: dependencies.config.limits.maxResultsPerSearch,
+      reserveScreening: (estimate) =>
+        input.budget.reserveModelTokens(estimate) && input.budget.reserve('screeningCalls'),
+      now: dependencies.now(),
+      signal: input.signal,
+    },
+  );
+  if (outcome.status === 'failed') {
+    // A screening problem never discards discoveries: the batch keeps all of them.
+    issues.push({
+      stage: 'screening',
+      code: outcome.code,
+      subjectId: discoveries[0]?.resultId,
+      message: `Relevance screening failed, so its ${discoveries.length} discoveries were kept for analysis: ${outcome.message}`,
+    });
+    return bySelf();
+  }
+  if (outcome.deferred) return { status: 'deferred' };
+
+  // The batch order decides the intake order, so screening never reorders work.
+  const kept = new Map(outcome.decisions.map((decision) => [decision.resultId, decision.keep]));
+  const verdicts = discoveries.map((discovery) => ({
+    discovery,
+    // A discovery no verdict names is kept: the model must not exclude it.
+    screenedOut: kept.get(discovery.resultId) === false,
+  }));
+  savedCounts.screenedOutItems += verdicts.filter((verdict) => verdict.screenedOut).length;
+  return { status: 'continue', verdicts };
+}
+
+/** One discovery the round still has to process, with the screening exclusion to honour. */
+interface DiscoveryVerdict {
+  readonly discovery: StoredDiscovery;
+  readonly screenedOut: boolean;
 }
 
 /** Brings one discovery through analysis and the first candidate commit. */
@@ -312,14 +396,30 @@ async function intake(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
   discovery: StoredDiscovery,
+  interests: readonly AnalysisInterest[],
+  /** True when relevance screening excluded this discovery from the analysis. */
+  screenedOut: boolean,
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<string | undefined> {
-  const interests = (await dependencies.interests.listInterests()).interests.filter(
-    (entry) => entry.enabled,
-  );
   if (interests.length === 0) return 'interest_changed';
 
+  const intakeInput = {
+    item: discovery.item,
+    sourceResultId: discovery.resultId,
+    interests,
+    model: dependencies.model,
+    contentLanguages: dependencies.config.contentLanguages,
+    maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
+    maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
+    freshnessDays: dependencies.config.freshnessDays,
+    analysisRetryAt: (failureCode: string) => retryAtFor(dependencies, failureCode),
+    reserveAnalysis: (estimate: AnalysisRequestEstimate) =>
+      input.budget.reserveModelTokens(estimate) && input.budget.reserve('analysisCalls'),
+    screenedOut,
+    now: dependencies.now(),
+    signal: input.signal,
+  };
   const outcome = await intakeContent(
     {
       client: dependencies.client,
@@ -328,21 +428,7 @@ async function intake(
       newContentId: () => dependencies.newId('content'),
       ...(dependencies.observability ? { observability: dependencies.observability } : {}),
     },
-    {
-      item: discovery.item,
-      sourceResultId: discovery.resultId,
-      interests,
-      model: dependencies.model,
-      contentLanguages: dependencies.config.contentLanguages,
-      maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
-      maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
-      freshnessDays: dependencies.config.freshnessDays,
-      analysisRetryAt: (failureCode) => retryAtFor(dependencies, failureCode),
-      reserveAnalysis: (estimate) =>
-        input.budget.reserveModelTokens(estimate) && input.budget.reserve('analysisCalls'),
-      now: dependencies.now(),
-      signal: input.signal,
-    },
+    intakeInput,
   );
 
   switch (outcome.status) {
@@ -396,12 +482,34 @@ async function resumePendingWork(
     now: dependencies.now(),
     maxAttempts,
   });
-  for (const discovery of dueDiscoveries) {
+  // Leftover discoveries are screened as one batch too, so a discovery an earlier
+  // round never judged is not analyzed without a verdict either.
+  const interests = (await dependencies.interests.listInterests()).interests.filter(
+    (interest) => interest.enabled,
+  );
+  const screened = await screenBatch(
+    dependencies,
+    input,
+    interests,
+    dueDiscoveries,
+    savedCounts,
+    issues,
+  );
+  if (screened.status === 'deferred') return;
+  for (const verdict of screened.verdicts) {
     if (input.signal.aborted || input.budget.expired) return;
-    const failure = await intake(dependencies, input, discovery, savedCounts, issues);
+    const failure = await intake(
+      dependencies,
+      input,
+      verdict.discovery,
+      interests,
+      verdict.screenedOut,
+      savedCounts,
+      issues,
+    );
     if (failure !== undefined && isRetryableFailure(failure)) {
       dependencies.search.scheduleDiscoveryRetry({
-        resultId: discovery.resultId,
+        resultId: verdict.discovery.resultId,
         retryAt: dependencies.now() + dependencies.config.limits.retryIntervalSeconds * 1_000,
         errorCode: failure,
       });

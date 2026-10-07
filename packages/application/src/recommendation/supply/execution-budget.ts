@@ -11,6 +11,7 @@ export type BudgetKind =
   | 'searchCalls'
   | 'fetchCalls'
   | 'planningCalls'
+  | 'screeningCalls'
   | 'analysisCalls'
   | 'matchingCalls'
   | 'embeddingCalls';
@@ -19,6 +20,7 @@ const BUDGET_LIMIT_FIELDS = {
   searchCalls: 'maxSearchCalls',
   fetchCalls: 'maxFetchCalls',
   planningCalls: 'maxPlanningCalls',
+  screeningCalls: 'maxScreeningCalls',
   analysisCalls: 'maxAnalysisCalls',
   matchingCalls: 'maxMatchingCalls',
   embeddingCalls: 'maxEmbeddingCalls',
@@ -58,6 +60,7 @@ export function createExecutionBudget(input: {
     searchCalls: 0,
     fetchCalls: 0,
     planningCalls: 0,
+    screeningCalls: 0,
     analysisCalls: 0,
     matchingCalls: 0,
     embeddingCalls: 0,

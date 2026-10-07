@@ -356,7 +356,13 @@ function emptyResult(stopReason: MaintenanceResult['stopReason']): MaintenanceRe
   return {
     status: stopReason === 'cancelled' ? 'cancelled' : 'completed',
     stopReason,
-    savedCounts: { discoveredItems: 0, normalizedContents: 0, analyzedContents: 0, newCandidates: 0 },
+    savedCounts: {
+      discoveredItems: 0,
+      screenedOutItems: 0,
+      normalizedContents: 0,
+      analyzedContents: 0,
+      newCandidates: 0,
+    },
     poolHealth: [],
     issues: [],
   };

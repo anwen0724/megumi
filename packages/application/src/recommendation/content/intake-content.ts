@@ -19,6 +19,7 @@ import {
 } from './analyze-content';import type { ContentAnalysis, ContentAnalysisMatch, ContentAnalysisResult } from './content-contracts';
 import type { ContentStorage } from './content-storage';
 import { normalizeRawItem } from './normalize-content';
+import { SCREENED_OUT } from './screen-discoveries';
 
 export interface IntakeDependencies {
   readonly client: TextModelClient;
@@ -51,6 +52,11 @@ export interface IntakeInput {
    * defers the discovery to a later round instead of spending the round on it.
    */
   readonly reserveAnalysis?: (estimate: AnalysisRequestEstimate) => boolean;
+  /**
+   * Set when relevance screening already judged this discovery unrelated to every
+   * current interest. It is recorded as rejected here and never analyzed.
+   */
+  readonly screenedOut?: boolean;
   readonly now: number;
   readonly signal?: AbortSignal;
 }
@@ -89,6 +95,21 @@ export async function intakeContent(
     return { status: 'rejected', reason: normalized.reason, message: normalized.message };
   }
   const content = normalized.content;
+
+  // Relevance screening already judged this discovery against every current
+  // interest, so it is finished work: recorded, never stored and never analyzed.
+  if (input.screenedOut) {
+    dependencies.contents.markResultRejected({
+      resultId: input.sourceResultId,
+      errorCode: SCREENED_OUT,
+      now: input.now,
+    });
+    return {
+      status: 'rejected',
+      reason: SCREENED_OUT,
+      message: 'Relevance screening found no current interest related to this item.',
+    };
+  }
 
   const existing = dependencies.contents.findByCanonicalUrl(content.canonicalUrl);
   if (existing) {
