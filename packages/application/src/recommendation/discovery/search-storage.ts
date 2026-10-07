@@ -62,7 +62,11 @@ export interface SearchStorage {
    * Discoveries saved but not yet normalized, plus failed ones whose retry is
    * due. This is how a round resumes after an earlier process stopped.
    */
-  listDueDiscoveries(input: { limit: number; now: number }): readonly DueDiscovery[];
+  listDueDiscoveries(input: {
+    limit: number;
+    now: number;
+    maxAttempts: number;
+  }): readonly DueDiscovery[];
   /** Marks a failed discovery as waiting until `retryAt`. */
   scheduleDiscoveryRetry(input: { resultId: string; retryAt: number; errorCode: string }): void;
   /** Searches newer than `since`, newest first. */
@@ -101,12 +105,13 @@ export function createSearchStorage(database: DatabaseConnection): SearchStorage
         .prepare<DiscoveryRow>({
           sql: `SELECT id, source, external_id, url, title, description, author, published_at
                 FROM search_results
-                WHERE status = 'pending'
-                   OR (status = 'failed' AND (retry_at IS NULL OR retry_at <= ?))
+                WHERE attempts < ?
+                  AND (status = 'pending'
+                       OR (status = 'failed' AND retry_at IS NOT NULL AND retry_at <= ?))
                 ORDER BY first_seen_at, id
                 LIMIT ?`,
         })
-        .all([input.now, input.limit])
+        .all([input.maxAttempts, input.now, input.limit])
         .map((row) => ({
           resultId: row.id,
           item: {

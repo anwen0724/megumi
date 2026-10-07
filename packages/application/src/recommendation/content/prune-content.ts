@@ -29,9 +29,9 @@ export interface PruneOutcome {
 /**
  * Deletes content whose analysis finished, that holds no active pool relation,
  * that no other content duplicates, and that no business record still needs.
- * Content that is merely waiting for interest matches is unfinished work, not
- * unused content, so it stays. Search history and referencing-module records are
- * left untouched.
+ * Only a finished analysis is reclaimable: a pending analysis and a failure that
+ * still has retries left are unfinished work, so they stay. Search history and
+ * referencing-module records are left untouched.
  */
 export async function pruneUnusedContent(
   dependencies: PruneDependencies,
@@ -41,7 +41,7 @@ export async function pruneUnusedContent(
     .prepare<{ id: string }>({
       sql: `SELECT c.id FROM contents c
             JOIN content_analysis ca ON ca.content_id = c.id
-            WHERE ca.status <> 'pending'
+            WHERE ca.status = 'ready'
               AND NOT EXISTS (
                 SELECT 1 FROM recommendation_candidates rc
                 WHERE rc.content_id = c.id AND rc.status = 'active'

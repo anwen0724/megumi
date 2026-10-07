@@ -96,7 +96,11 @@ export async function runMaintenance(
   // Reuse whatever an earlier process left unfinished before spending the round
   // on new work: retry what is due, judge saved analyses for the current
   // interests, and commit the pool relations that judgement already justifies.
-  await resumePendingWork(dependencies, input, evaluations, savedCounts, issues);
+  const leftoverAnalyses = dependencies.contents.listPendingAnalyses({
+    limit: dependencies.config.limits.maxAnalysisCalls,
+    maxAttempts: dependencies.config.limits.maxRetryAttempts,
+  });
+  await resumePendingWork(dependencies, input, leftoverAnalyses, savedCounts, issues);
 
   const matched = await matchPendingInterests(
     {
@@ -195,7 +199,7 @@ export async function runMaintenance(
           message: `${planned.invalidItems} planned searches were refused because they named an unknown interest, an unknown source, an unknown stored query, or no query expression.`,
         });
       }
-      await consumePlan(dependencies, input, planned.items, evaluations, savedCounts, issues);
+      await consumePlan(dependencies, input, planned.items, savedCounts, issues);
     } else {
       issues.push({
         stage: 'search',
@@ -222,12 +226,19 @@ async function consumePlan(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
   items: readonly PlannedSearch[],
-  evaluations: readonly PoolEvaluation[],
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<void> {
+  const enabledInterests = new Set(
+    (await dependencies.interests.listInterests()).interests
+      .filter((interest) => interest.enabled)
+      .map((interest) => interest.id),
+  );
   for (const item of items) {
     if (input.signal.aborted || input.budget.expired) return;
+    // The requirement may have changed between planning and execution; a
+    // changed interest never starts a new search.
+    if (!enabledInterests.has(item.interestId)) continue;
     const outcome = await executePlannedSearch(
       {
         database: dependencies.database,
@@ -251,7 +262,7 @@ async function consumePlan(
     savedCounts.discoveredItems += outcome.resultCount;
     for (const discovery of outcome.items) {
       if (input.signal.aborted || input.budget.expired) return;
-      await intake(dependencies, input, discovery, item.interestId, evaluations, savedCounts, issues);
+      await intake(dependencies, input, discovery, savedCounts, issues);
     }
     await input.deliver();
   }
@@ -262,8 +273,6 @@ async function intake(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
   discovery: StoredDiscovery,
-  interestId: string,
-  evaluations: readonly PoolEvaluation[],
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<string | undefined> {
@@ -271,7 +280,7 @@ async function intake(
   const interests = (await dependencies.interests.listInterests()).interests.filter(
     (entry) => entry.enabled,
   );
-  if (!interests.some((entry) => entry.id === interestId)) return 'interest_changed';
+  if (interests.length === 0) return 'interest_changed';
 
   const outcome = await intakeContent(
     {
@@ -290,6 +299,7 @@ async function intake(
       maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
       maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
       freshnessDays: dependencies.config.freshnessDays,
+      analysisRetryAt: (failureCode) => retryAtFor(dependencies, failureCode),
       now: dependencies.now(),
       signal: input.signal,
     },
@@ -325,63 +335,65 @@ async function intake(
 
 /**
  * Resumes work an earlier process left unfinished: discoveries saved but never
- * normalized, and analyses that failed and are due for another attempt. Both
- * follow persisted state, never an in-memory queue or a Trace.
+ * normalized, pending analyses a previous round never finished, and analyses
+ * that failed and are due. All of it follows persisted state, never an
+ * in-memory queue or a Trace. Each item is retried only while it is under the
+ * configured attempt limit.
  */
 async function resumePendingWork(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
-  evaluations: readonly PoolEvaluation[],
+  leftoverAnalyses: readonly string[],
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
 ): Promise<void> {
-  const retryAt = dependencies.now() + dependencies.config.limits.retryIntervalSeconds * 1_000;
+  const maxAttempts = dependencies.config.limits.maxRetryAttempts;
   const dueDiscoveries = dependencies.search.listDueDiscoveries({
     limit: dependencies.config.limits.maxAnalysisCalls,
     now: dependencies.now(),
+    maxAttempts,
   });
-  if (dueDiscoveries.length > 0) {
-    const enabled = (await dependencies.interests.listInterests()).interests.filter(
-      (entry) => entry.enabled,
-    );
-    const interestId = enabled[0]?.id;
-    if (interestId) {
-      for (const discovery of dueDiscoveries) {
-        if (input.signal.aborted || input.budget.expired) return;
-        const failure = await intake(
-          dependencies,
-          input,
-          discovery,
-          interestId,
-          evaluations,
-          savedCounts,
-          issues,
-        );
-        if (failure !== undefined && isRetryableFailure(failure)) {
-          dependencies.search.scheduleDiscoveryRetry({
-            resultId: discovery.resultId,
-            retryAt,
-            errorCode: failure,
-          });
-        }
-        await input.deliver();
-      }
+  for (const discovery of dueDiscoveries) {
+    if (input.signal.aborted || input.budget.expired) return;
+    const failure = await intake(dependencies, input, discovery, savedCounts, issues);
+    if (failure !== undefined && isRetryableFailure(failure)) {
+      dependencies.search.scheduleDiscoveryRetry({
+        resultId: discovery.resultId,
+        retryAt: dependencies.now() + dependencies.config.limits.retryIntervalSeconds * 1_000,
+        errorCode: failure,
+      });
     }
+    await input.deliver();
   }
 
   const dueAnalyses = dependencies.contents.listAnalysesDueForRetry({
     limit: dependencies.config.limits.maxAnalysisCalls,
     now: dependencies.now(),
+    maxAttempts,
   });
-  for (const contentId of dueAnalyses) {
+  for (const contentId of [...new Set([...dueAnalyses, ...leftoverAnalyses])]) {
     if (input.signal.aborted || input.budget.expired) return;
     if (!input.budget.reserve('analysisCalls')) return;
+    // An attempt in flight is pending, so the retry limit counts every attempt.
+    dependencies.contents.markAnalysisRetrying({ contentId });
     const failure = await reanalyze(dependencies, input, contentId);
-    if (failure !== undefined && isRetryableFailure(failure)) {
-      dependencies.contents.markAnalysisFailure({ contentId, retryAt, errorCode: failure });
+    if (failure !== undefined) {
+      const retryAt = retryAtFor(dependencies, failure);
+      dependencies.contents.markAnalysisFailure({
+        contentId,
+        ...(retryAt !== undefined ? { retryAt } : {}),
+        errorCode: failure,
+      });
     }
     await input.deliver();
   }
+}
+
+/** The retry time for a failure, or `undefined` when another attempt cannot help. */
+function retryAtFor(dependencies: MaintenanceDependencies, failureCode: string): number | undefined {
+  return isRetryableFailure(failureCode)
+    ? dependencies.now() + dependencies.config.limits.retryIntervalSeconds * 1_000
+    : undefined;
 }
 
 /** Retries the text analysis for content whose earlier attempt failed. */

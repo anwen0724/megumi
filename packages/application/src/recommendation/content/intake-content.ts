@@ -35,6 +35,12 @@ export interface IntakeInput {
   readonly maxOutputTokens: number;
   /** Recent window the daily pool uses; the long-term pool has no date rule. */
   readonly freshnessDays: number;
+  /**
+   * Decides when a failed analysis may be retried. The round owns that policy;
+   * `undefined` makes the failure terminal, which is right for material another
+   * attempt would read unchanged.
+   */
+  readonly analysisRetryAt?: (failureCode: string) => number | undefined;
   readonly now: number;
   readonly signal?: AbortSignal;
 }
@@ -50,12 +56,13 @@ export type IntakeOutcome =
     }
   | { status: 'reused'; contentId: string; message: string }
   | { status: 'rejected'; reason: string; message: string }
-  | { status: 'failed'; code: string; message: string };
+  | { status: 'failed'; contentId: string; code: string; message: string };
 
 /**
  * Processes one discovery. Material is saved before the model runs, so a later
  * model failure never loses the source facts; the eight results and the
- * interest relations are committed only after they are saved.
+ * interest relations are committed only after they are saved. Every discovery
+ * also leaves its discovery row in a recorded state, so no item stays pending.
  */
 export async function intakeContent(
   dependencies: IntakeDependencies,
@@ -63,12 +70,23 @@ export async function intakeContent(
 ): Promise<IntakeOutcome> {
   const normalized = normalizeRawItem(input.item, { contentLanguages: input.contentLanguages });
   if (normalized.status === 'rejected') {
+    dependencies.contents.markResultRejected({
+      resultId: input.sourceResultId,
+      errorCode: normalized.reason,
+      now: input.now,
+    });
     return { status: 'rejected', reason: normalized.reason, message: normalized.message };
   }
   const content = normalized.content;
 
   const existing = dependencies.contents.findByCanonicalUrl(content.canonicalUrl);
   if (existing) {
+    dependencies.contents.markResultReused({
+      resultId: input.sourceResultId,
+      contentId: existing.id,
+      url: content.canonicalUrl,
+      now: input.now,
+    });
     return {
       status: 'reused',
       contentId: existing.id,
@@ -98,7 +116,16 @@ export async function intakeContent(
       ? await analyze(dependencies, input, contentId, content)
       : { status: 'ok', result: reused, matches: [] };
 
-  if (step.status === 'failed') return step.outcome;
+  if (step.status === 'failed') {
+    // A first failure must be recorded, or the analysis stays pending forever.
+    const retryAt = input.analysisRetryAt?.(step.outcome.code);
+    dependencies.contents.markAnalysisFailure({
+      contentId,
+      ...(retryAt !== undefined ? { retryAt } : {}),
+      errorCode: step.outcome.code,
+    });
+    return step.outcome;
+  }
 
   if (duplicateOf !== undefined) {
     dependencies.contents.recordDuplicate({
@@ -183,6 +210,7 @@ async function analyze(
     status: 'failed',
     outcome: {
       status: 'failed',
+      contentId,
       code: analyzed.status === 'material_too_long' ? 'MATERIAL_TOO_LONG' : analyzed.code,
       message: analyzed.message,
     },

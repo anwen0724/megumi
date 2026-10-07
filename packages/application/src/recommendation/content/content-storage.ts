@@ -37,10 +37,37 @@ export interface ContentStorage {
   findByCanonicalUrl(canonicalUrl: string): Content | undefined;
   /** Returns one content by id, for work resumed after a restart. */
   findById(contentId: string): Content | undefined;
-  /** Analyses that failed and are due for another attempt, least-attempted first. */
-  listAnalysesDueForRetry(input: { limit: number; now: number }): readonly string[];
-  /** Records a failed analysis attempt and when it may be tried again. */
-  markAnalysisFailure(input: { contentId: string; retryAt: number; errorCode: string }): void;
+  /**
+   * Analyses that failed and are due for another attempt, least-attempted first.
+   * A failure without a retry time is terminal and never returned.
+   */
+  listAnalysesDueForRetry(input: {
+    limit: number;
+    now: number;
+    maxAttempts: number;
+  }): readonly string[];
+  /**
+   * Analyses still pending from before this round started. They are unfinished
+   * work, not new work, so a round picks them up instead of leaving them stuck.
+   */
+  listPendingAnalyses(input: { limit: number; maxAttempts: number }): readonly string[];
+  /** Records a failed analysis attempt; omitting `retryAt` makes it terminal. */
+  markAnalysisFailure(input: {
+    contentId: string;
+    retryAt?: number;
+    errorCode: string;
+  }): void;
+  /** Records that an attempt is starting, so the retry limit counts attempts. */
+  markAnalysisRetrying(input: { contentId: string }): void;
+  /** Records a discovery whose material the normalizer refused. */
+  markResultRejected(input: { resultId: string; errorCode: string; now: number }): void;
+  /** Records a rediscovery of stored content and links it to that content. */
+  markResultReused(input: {
+    resultId: string;
+    contentId: string;
+    url: string;
+    now: number;
+  }): void;
   /** Returns the first content whose normalized text is exactly equal. */
   findIdByExactText(input: { text: string; excludeId: string }): string | undefined;
   /**
@@ -94,10 +121,22 @@ export function createContentStorage(database: DatabaseConnection): ContentStora
       return database
         .prepare<{ content_id: string }>({
           sql: `SELECT content_id FROM content_analysis
-                WHERE status = 'failed' AND (retry_at IS NULL OR retry_at <= ?)
+                WHERE status = 'failed' AND retry_at IS NOT NULL AND retry_at <= ?
+                  AND attempts < ?
                 ORDER BY attempts, content_id LIMIT ?`,
         })
-        .all([input.now, input.limit])
+        .all([input.now, input.maxAttempts, input.limit])
+        .map((row) => row.content_id);
+    },
+
+    listPendingAnalyses(input) {
+      return database
+        .prepare<{ content_id: string }>({
+          sql: `SELECT content_id FROM content_analysis
+                WHERE status = 'pending' AND attempts < ?
+                ORDER BY attempts, content_id LIMIT ?`,
+        })
+        .all([input.maxAttempts, input.limit])
         .map((row) => row.content_id);
     },
 
@@ -108,7 +147,38 @@ export function createContentStorage(database: DatabaseConnection): ContentStora
                 SET status = 'failed', attempts = attempts + 1, retry_at = ?, last_error_code = ?
                 WHERE content_id = ?`,
         })
-        .run([input.retryAt, input.errorCode, input.contentId]);
+        .run([input.retryAt ?? null, input.errorCode, input.contentId]);
+    },
+
+    markAnalysisRetrying(input) {
+      database
+        .prepare({
+          sql: `UPDATE content_analysis
+                SET status = 'pending', attempts = attempts + 1, retry_at = NULL
+                WHERE content_id = ?`,
+        })
+        .run([input.contentId]);
+    },
+
+    markResultRejected(input) {
+      database
+        .prepare({
+          sql: `UPDATE search_results
+                SET status = 'rejected', attempts = attempts + 1, last_error_code = ?, last_seen_at = ?
+                WHERE id = ?`,
+        })
+        .run([input.errorCode, input.now, input.resultId]);
+    },
+
+    markResultReused(input) {
+      database
+        .prepare({
+          sql: `UPDATE search_results
+                SET status = 'normalized', content_id = ?, url = ?, attempts = attempts + 1,
+                    last_error_code = NULL, last_seen_at = ?
+                WHERE id = ?`,
+        })
+        .run([input.contentId, input.url, input.now, input.resultId]);
     },
 
     findIdByExactText(input) {
