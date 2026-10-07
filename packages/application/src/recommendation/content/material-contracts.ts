@@ -5,6 +5,14 @@ export const ANALYSIS_CONTRACT_VERSION = 2;
 
 export const MATCHING_CONTRACT_VERSION = 2;
 
+/** A single external attempt, owned by its persisted discovery run. */
+export interface DiscoveryAttempt {
+  readonly runId: string;
+  readonly token: string;
+  readonly startedAt: number;
+  readonly deadlineAt: number;
+}
+
 export const PublicationEvidenceSchema = z.object({
   kind: z.enum(['published', 'modified', 'indexed', 'unknown']),
   value: z.union([z.string(), z.number().int().nonnegative()]).nullable(),

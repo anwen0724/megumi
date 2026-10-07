@@ -3,10 +3,9 @@
  * the previous round finished. A timer that came due while the machine slept
  * fires once on resume rather than replaying every missed period.
  */
-import type { CandidateSupply } from './supply-contracts';
 
 export interface MaintenanceSchedulerOptions {
-  readonly supply: Pick<CandidateSupply, 'startMaintenance' | 'close'>;
+  readonly supply: { startMaintenance(input: {reason:'startup'|'periodic'}): {result:Promise<unknown>};close():Promise<void> };
   /** Interval measured from the end of the previous round. */
   readonly intervalMs: () => number;
   readonly setTimer?: (callback: () => void, ms: number) => unknown;
@@ -28,17 +27,19 @@ export function createMaintenanceScheduler(
   const setTimer = options.setTimer ?? ((callback, ms) => setTimeout(callback, ms));
   let handle: unknown;
   let stopped = false;
+  let started = false;
 
   return {
     start() {
-      if (stopped || handle !== undefined) return;
+      if (stopped || started) return;
+      started = true;
       void runRound('startup');
     },
 
     async stop() {
       if (stopped) return;
       stopped = true;
-      if (handle !== undefined) options.clearTimer?.(handle);
+      if (handle !== undefined) (options.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>)))(handle);
       handle = undefined;
       await options.supply.close();
     },

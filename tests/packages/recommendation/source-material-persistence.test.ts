@@ -5,9 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createDatabase, migrateDatabase } from '@megumi/application/storage/index';
-import { createContentStorage } from '@megumi/application/recommendation/content/content-storage';
 import { createSourceAccess } from '@megumi/application/recommendation/sources/source-access';
-import { rehearsalFolder } from './foundation-fixture';
+import { rehearsalFolder, legacyMigrationFolder } from './foundation-fixture';
 import { createMaterialStorage } from '@megumi/application/recommendation/content/material-storage';
 
 it('persists extracted text with its actual range and date claims in the production schema', async () => {
@@ -34,30 +33,9 @@ it('persists extracted text with its actual range and date claims in the product
     const item = searched.items[0];
     const fetched = await access.acquireMaterial(item);
     if (fetched.status !== 'success') throw new Error('Expected extracted material');
-    const contents = createContentStorage(database);
-    const content = contents.saveNormalized({
-      content: {
-        id: 'content-1',
-        source: 'web',
-        canonicalUrl: item.url,
-        text: fetched.material.text
-      },
-      sourceResultId: 'unused',
-      sourceUrl: item.url,
-      now: 1700000000000,
-      acquiredMaterial: {
-        platform: 'web',
-        canonicalUrl: item.url,
-        text: fetched.material.text,
-        kind: 'full_text',
-        method: 'tavily_extract',
-        truncated: false,
-        rangeEnd: 3,
-        acquiredAt: 1700000000000,
-        publicationEvidence: item.publicationEvidence ?? []
-      },
-    });
-    expect(contents.readCurrentMaterial(content.id)).toMatchObject({
+    const contents = createMaterialStorage(database);
+    const content = contents.saveMaterial({platform:'web',canonicalUrl:item.url,text:fetched.material.text,kind:'full_text',method:'tavily_extract',truncated:false,rangeEnd:3,acquiredAt:1700000000000,publicationEvidence:item.publicationEvidence??[]}).material;
+    expect(contents.readCurrentMaterial(content.contentId)).toMatchObject({
       text: '正文🌏',
       revision: 1,
       kind: 'full_text',
@@ -83,7 +61,7 @@ it('backfills old text without promoting legacy timestamps to verified publicati
   database.prepare({ sql: "INSERT INTO contents(id,source,canonical_url,text,published_at,created_at,updated_at) VALUES('legacy-1','zhihu','https://zhuanlan.zhihu.com/p/123','旧材料🌏',100,10,20)" }).run();
   fs.writeFileSync(journalPath, JSON.stringify(journal));
   migrateDatabase({ database, migrationsFolder: directory });
-  expect(createContentStorage(database).readCurrentMaterial('legacy-1')).toMatchObject({
+  expect(createMaterialStorage(database).readCurrentMaterial('legacy-1')).toMatchObject({
     text: '旧材料🌏',
     kind: 'excerpt',
     rangeEnd: 4,
@@ -95,32 +73,11 @@ it('preserves acquired material versions when the later foundation migration swi
   const database = createDatabase({ filename: ':memory:' });
   const folder = rehearsalFolder();
   onTestFinished(() => { database.close(); fs.rmSync(folder, { recursive: true, force: true }); });
-  migrateDatabase({ database });
-  const contents = createContentStorage(database);
-  contents.saveNormalized({
-    content: {
-      id: 'c1',
-      source: 'zhihu',
-      canonicalUrl: 'https://zhuanlan.zhihu.com/p/123',
-      text: '摘要'
-    },
-    sourceResultId: 'unused',
-    sourceUrl: 'https://zhuanlan.zhihu.com/p/123',
-    now: 10
-  });
-  const original = contents.readCurrentMaterial('c1');
-  const full = contents.recordMaterial({
-    platform: 'zhihu',
-    externalId: '123',
-    canonicalUrl: 'https://zhuanlan.zhihu.com/p/123',
-    text: '完整正文',
-    kind: 'full_text',
-    truncated: false,
-    rangeEnd: 4,
-    method: 'zhihu_browser_detail',
-    acquiredAt: 20,
-    publicationEvidence: []
-  });
+  migrateDatabase({ database, migrationsFolder: legacyMigrationFolder() });
+  database.prepare({sql:"INSERT INTO contents(id,source,platform,external_id,canonical_url,text,created_at,updated_at) VALUES('c1','zhihu','zhihu','123','https://zhuanlan.zhihu.com/p/123','摘要',10,10)"}).run();
+  const contents = createMaterialStorage(database);
+  const original = contents.saveMaterial({platform:'zhihu',externalId:'123',canonicalUrl:'https://zhuanlan.zhihu.com/p/123',text:'摘要',kind:'excerpt',truncated:false,rangeEnd:2,method:'zhihu_search',acquiredAt:10,publicationEvidence:[]}).material;
+  const full = contents.saveMaterial({platform:'zhihu',externalId:'123',canonicalUrl:'https://zhuanlan.zhihu.com/p/123',text:'完整正文',kind:'full_text',truncated:false,rangeEnd:4,method:'zhihu_browser_detail',acquiredAt:20,publicationEvidence:[]}).material;
   migrateDatabase({ database, migrationsFolder: folder });
   const materials = createMaterialStorage(database);
   expect(materials.readCurrentMaterial('c1')).toMatchObject({ id: full.id, revision: 2, text: '完整正文' });
@@ -132,7 +89,7 @@ it('preserves platform identity and access URL when discoveries from two service
   const database = createDatabase({ filename: ':memory:' });
   const folder = rehearsalFolder();
   onTestFinished(() => { database.close(); fs.rmSync(folder, { recursive: true, force: true }); });
-  migrateDatabase({ database });
+  migrateDatabase({ database, migrationsFolder: legacyMigrationFolder() });
   for (const [source, seen] of [['tavily', 10], ['bing_rss', 20]] as const) {
     const item = {
       source,

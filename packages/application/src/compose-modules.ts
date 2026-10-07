@@ -80,6 +80,7 @@ import { createRecommendation, type Recommendation } from './recommendation/reco
 import type { EmbeddedBrowser } from './recommendation/sources/browser-access';
 import { readModelCatalog, resolveModel as resolveConfiguredModel } from './settings/resolve-model';
 import { createSettings, type Settings } from './settings/settings-store';
+import { migrateRecommendationSettings } from './settings/recommendation-settings-migration';
 import { createSkills, type Skills } from './skills/manage-skills';
 import {
   initializeMegumiHomeSync,
@@ -211,6 +212,7 @@ function composeCapabilitiesWithDatabase(
   logger: ApplicationModules['logger'],
   database: DatabaseConnection,
 ): ApplicationModules {
+  migrateRecommendationSettings(homePaths.settingsPath);
   const settings = createSettings({
     globalSettingsPath: homePaths.settingsPath,
     credentialsPath: homePaths.credentialsPath,

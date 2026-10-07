@@ -48,7 +48,7 @@ describe('migrateDatabase', () => {
 
     try {
       const result = migrateDatabase({ database });
-      expect(result.currentMigration).toBe('0033_source_materials');
+      expect(result.currentMigration).toBe('0034_recommendation_foundation');
       expect(tableNames(database)).toContain('__drizzle_migrations');
       const migrationRows = database
         .prepare<{ hash: string }>({

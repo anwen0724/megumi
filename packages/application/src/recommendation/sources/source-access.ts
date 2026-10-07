@@ -100,6 +100,7 @@ export function createSourceAccess(options: SourceAccessOptions) {
       'Source is cooling down.',
       Date.parse(current.retryAt) - now()
     );
+    if(request.reserveSearch && !request.reserveSearch(source.id)) return sourceFailure('budget_exhausted','Logical search budget is exhausted.');
     const result = await source.search(request);
     if (result.status === 'success') checked(sourceId);
     else if (!['cancelled', 'budget_exhausted'].includes(result.failure.code)) checked(sourceId, result.failure);

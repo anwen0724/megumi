@@ -175,7 +175,7 @@ CREATE TABLE favorites (
 CREATE TABLE recommendation_runs (
   id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('daily_feed','curated')), request_id TEXT NOT NULL UNIQUE,
   retry_of_run_id TEXT REFERENCES recommendation_runs(id), input_hash TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('running','completed','partial','failed','cancelled','interrupted','input_changed')),
+  status TEXT NOT NULL CHECK(status IN ('queued','running','completed','partial','empty','failed','cancelled','interrupted','superseded')),
   interest_snapshot TEXT NOT NULL CHECK(json_valid(interest_snapshot)), candidate_snapshot TEXT NOT NULL CHECK(json_valid(candidate_snapshot)),
   daily_feed_batch_id TEXT REFERENCES daily_feed_batches(id) ON DELETE RESTRICT, curated_selection_id TEXT REFERENCES curated_selections(id) ON DELETE RESTRICT,
   result_id TEXT GENERATED ALWAYS AS (coalesce(daily_feed_batch_id,curated_selection_id)) VIRTUAL, outcome TEXT CHECK(outcome IS NULL OR json_valid(outcome)), error TEXT CHECK(error IS NULL OR json_valid(error)), started_at INTEGER NOT NULL, finished_at INTEGER,

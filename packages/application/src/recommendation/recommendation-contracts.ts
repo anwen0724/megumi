@@ -82,7 +82,7 @@ export const SupplyConfigurationViewSchema = z
 export type SupplyConfigurationView = z.infer<typeof SupplyConfigurationViewSchema>;
 
 export const SupplyConfigurationUpdatePayloadSchema = z
-  .object({ enabledSources: z.array(z.string().trim().min(1)).optional() })
+  .object({ enabledSources: z.array(z.enum(['tavily','bing_rss','zhihu','bilibili','xiaohongshu'])).optional() })
   .strict();
 export type SupplyConfigurationUpdatePayload = z.infer<
   typeof SupplyConfigurationUpdatePayloadSchema

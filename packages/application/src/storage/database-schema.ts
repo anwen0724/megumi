@@ -5,6 +5,9 @@ import {
   index,
   integer,
   primaryKey,
+  unique,
+  foreignKey,
+  type SQLiteTableExtraConfigValue,
   real,
   sqliteTable,
   text,
@@ -225,284 +228,404 @@ export const skillAvailability = sqliteTable(
 /*
  * Candidate Supply tables. Unlike the session tables, these store UTC
  * millisecond integers and JSON columns as validated text, as the supply Spec
- * requires. Both pools share `contents` and `content_analysis`.
+ * requires. Discovery and result consumers share acquired material through owner contracts.
  */
 
-export const interests = sqliteTable(
-  'interests',
-  {
-    id: text('id').primaryKey(),
+export const interests = sqliteTable('interests', {
+    id: text('id').primaryKey().notNull(),
     text: text('text').notNull(),
-    revision: integer('revision').notNull().default(1),
-    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    enabled: integer('enabled').notNull().default(sql.raw("true")),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
-  },
-  (table) => [check('check_interests_text', sql`length(trim(${table.text})) > 0`)],
-);
+    revision: integer('revision').notNull().default(sql.raw("1")),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  check('check_interests_1',sql.raw("length(trim(\"interests\".\"text\")) > 0")),
+]);
 
-export const contents = sqliteTable(
-  'contents',
-  {
-    id: text('id').primaryKey(),
-    source: text('source').notNull(),
-    platform: text('platform').notNull().default('web'),
+export const contents = sqliteTable('contents', {
+    id: text('id').primaryKey().notNull(),
+    platform: text('platform').notNull(),
     externalId: text('external_id'),
-    authorId: text('author_id'),
-    currentMaterialId: text('current_material_id'),
-    canonicalUrl: text('canonical_url').notNull().unique(),
+    canonicalUrl: text('canonical_url').notNull(),
     title: text('title'),
     author: text('author'),
-    publishedAt: integer('published_at'),
-    text: text('text').notNull(),
+    authorId: text('author_id'),
     language: text('language'),
-    duplicateGroupId: text('duplicate_group_id').references((): AnySQLiteColumn => contents.id),
-    duplicateConfidence: real('duplicate_confidence'),
+    currentMaterialId: text('current_material_id'),
+    duplicateGroupId: text('duplicate_group_id').references((): AnySQLiteColumn => contents.id, {onDelete:'set null'}),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
-  },
-  (table) => [
-    check('check_contents_text', sql`length(${table.text}) > 0`),
-    check(
-      'check_contents_duplicate_group',
-      sql`${table.duplicateGroupId} IS NULL OR ${table.duplicateGroupId} <> ${table.id}`,
-    ),
-    check(
-      'check_contents_duplicate_confidence',
-      sql`${table.duplicateConfidence} IS NULL OR (${table.duplicateConfidence} >= 0 AND ${table.duplicateConfidence} <= 1)`,
-    ),
-    index('idx_contents_published_at').on(table.publishedAt),
-    index('idx_contents_duplicate_group').on(table.duplicateGroupId),
-    uniqueIndex('idx_contents_platform_external').on(table.platform, table.externalId).where(sql`${table.externalId} IS NOT NULL AND ${table.externalId} <> ''`),
-  ],
-);
+}, (table): SQLiteTableExtraConfigValue[] => [
+  foreignKey({columns:[table.currentMaterialId,table.id],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('restrict'),
+  uniqueIndex('idx_contents_platform_external').on(table.platform,table.externalId).where(sql.raw("external_id IS NOT NULL AND external_id <> ''")),
+  unique('contents_canonical_url_unique').on(table.canonicalUrl),
+]);
 
 export const contentMaterials = sqliteTable('content_materials', {
-  id: text('id').primaryKey(),
-  contentId: text('content_id').notNull().references(() => contents.id, { onDelete: 'cascade' }),
-  revision: integer('revision').notNull(), title: text('title'), author: text('author'),
-  text: text('text').notNull(), textHash: text('text_hash').notNull(),
-  kind: text('kind').notNull(), truncated: integer('truncated').notNull(),
-  rangeStart: integer('range_start').notNull().default(0), rangeEnd: integer('range_end').notNull(),
-  method: text('method').notNull(), acquiredAt: integer('acquired_at').notNull(),
-  publicationEvidence: jsonText('publication_evidence').notNull(),
-}, (table) => [
-  uniqueIndex('idx_materials_content_revision').on(table.contentId, table.revision),
-  uniqueIndex('idx_materials_id_content').on(table.id, table.contentId),
-  check('check_materials_revision', sql`${table.revision} > 0`),
-  check('check_materials_text', sql`length(${table.text}) > 0`),
-  check('check_materials_kind', sql`${table.kind} IN ('full_text','excerpt','description','transcript')`),
-  check('check_materials_truncated', sql`${table.truncated} IN (0,1)`),
-  check('check_materials_range', sql`${table.rangeStart} >= 0 AND ${table.rangeEnd} > ${table.rangeStart}`),
+    id: text('id').primaryKey().notNull(),
+    contentId: text('content_id').notNull().references((): AnySQLiteColumn => contents.id, {onDelete:'cascade'}),
+    revision: integer('revision').notNull(),
+    title: text('title'),
+    author: text('author'),
+    text: text('text').notNull(),
+    textHash: text('text_hash').notNull(),
+    kind: text('kind').notNull(),
+    truncated: integer('truncated').notNull(),
+    rangeStart: integer('range_start').notNull().default(sql.raw("0")),
+    rangeEnd: integer('range_end').notNull(),
+    method: text('method').notNull(),
+    acquiredAt: integer('acquired_at').notNull(),
+    publicationEvidence: text('publication_evidence').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  unique('content_materials_id_content_id_unique').on(table.id,table.contentId),
+  unique('content_materials_content_id_revision_unique').on(table.contentId,table.revision),
+  check('check_content_materials_1',sql.raw("revision > 0")),
+  check('check_content_materials_2',sql.raw("length(text) > 0")),
+  check('check_content_materials_3',sql.raw("kind IN ('full_text','excerpt','description','transcript')")),
+  check('check_content_materials_4',sql.raw("truncated IN (0,1)")),
+  check('check_content_materials_5',sql.raw("range_start >= 0")),
+  check('check_content_materials_6',sql.raw("range_end > range_start")),
+  check('check_content_materials_7',sql.raw("json_valid(publication_evidence)")),
 ]);
 
 export const materialAcquisitions = sqliteTable('material_acquisitions', {
-  id: text('id').primaryKey(),
-  materialId: text('material_id').notNull().references(() => contentMaterials.id, { onDelete: 'cascade' }),
-  method: text('method').notNull(), acquiredAt: integer('acquired_at').notNull(),
-});
+    id: text('id').primaryKey().notNull(),
+    materialId: text('material_id').notNull().references((): AnySQLiteColumn => contentMaterials.id, {onDelete:'cascade'}),
+    method: text('method').notNull(),
+    acquiredAt: integer('acquired_at').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
 
-export const contentAnalysis = sqliteTable(
-  'content_analysis',
-  {
-    contentId: text('content_id')
-      .primaryKey()
-      .references(() => contents.id, { onDelete: 'cascade' }),
-    summary: text('summary'),
-    keyPoints: jsonText('key_points'),
-    topics: jsonText('topics'),
-    entities: jsonText('entities'),
-    contentType: text('content_type'),
-    qualityScore: real('quality_score'),
-    spamScore: real('spam_score'),
-    longTermValue: text('long_term_value'),
-    embedding: jsonText('embedding'),
-    embeddingModel: text('embedding_model'),
-    status: text('status').notNull().default('pending'),
-    attempts: integer('attempts').notNull().default(0),
-    retryAt: integer('retry_at'),
-    lastErrorCode: text('last_error_code'),
-    analyzedAt: integer('analyzed_at'),
-    embeddingRetryAt: integer('embedding_retry_at'),
-    embeddingErrorCode: text('embedding_error_code'),
-  },
-  (table) => [
-    check('check_content_analysis_status', sql`${table.status} IN ('pending','ready','failed')`),
-    check('check_content_analysis_attempts', sql`${table.attempts} >= 0`),
-    check(
-      'check_content_analysis_ready',
-      sql`${table.status} <> 'ready' OR ${table.analyzedAt} IS NOT NULL`,
-    ),
-    check(
-      'check_content_analysis_quality',
-      sql`${table.qualityScore} IS NULL OR (${table.qualityScore} >= 0 AND ${table.qualityScore} <= 1)`,
-    ),
-    check(
-      'check_content_analysis_spam',
-      sql`${table.spamScore} IS NULL OR (${table.spamScore} >= 0 AND ${table.spamScore} <= 1)`,
-    ),
-    check(
-      'check_content_analysis_content_type',
-      sql`${table.contentType} IS NULL OR ${table.contentType} IN ('news','article','discussion','video','paper','project','tutorial','opinion')`,
-    ),
-    check(
-      'check_content_analysis_long_term_value',
-      sql`${table.longTermValue} IS NULL OR ${table.longTermValue} IN ('none','learning','reference','practical')`,
-    ),
-    index('idx_content_analysis_status_retry').on(table.status, table.retryAt),
-  ],
-);
+]);
 
-export const contentInterestMatches = sqliteTable(
-  'content_interest_matches',
-  {
-    contentId: text('content_id')
-      .notNull()
-      .references(() => contents.id, { onDelete: 'cascade' }),
-    interestId: text('interest_id')
-      .notNull()
-      .references(() => interests.id, { onDelete: 'cascade' }),
-    interestRevision: integer('interest_revision').notNull().default(1),
-    relation: text('relation').notNull(),
-    basis: text('basis'),
-    matchedAt: integer('matched_at').notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.contentId, table.interestId] }),
-    check('check_content_interest_matches_relation', sql`${table.relation} IN ('direct','related','none')`),
-    index('idx_content_interest_matches_interest').on(table.interestId),
-  ],
-);
-
-export const recommendationCandidates = sqliteTable(
-  'recommendation_candidates',
-  {
-    pool: text('pool').notNull(),
-    contentId: text('content_id')
-      .notNull()
-      .references(() => contents.id, { onDelete: 'cascade' }),
+export const discoveryRuns = sqliteTable('discovery_runs', {
+    id: text('id').primaryKey().notNull(),
+    purpose: text('purpose').notNull(),
     status: text('status').notNull(),
-    inactiveReason: text('inactive_reason'),
-    expiresAt: integer('expires_at'),
-    createdAt: integer('created_at').notNull(),
-    updatedAt: integer('updated_at').notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.pool, table.contentId] }),
-    check('check_recommendation_candidates_pool', sql`${table.pool} IN ('daily','long_term')`),
-    check('check_recommendation_candidates_status', sql`${table.status} IN ('active','inactive')`),
-    check(
-      'check_recommendation_candidates_inactive_reason',
-      sql`(${table.status} = 'active' AND ${table.inactiveReason} IS NULL) OR (${table.status} = 'inactive' AND ${table.inactiveReason} IS NOT NULL AND ${table.inactiveReason} IN ('expired','unrelated','excluded','unsuitable'))`,
-    ),
-    index('idx_recommendation_candidates_pool_status_expires').on(
-      table.pool,
-      table.status,
-      table.expiresAt,
-    ),
-  ],
-);
+    interestSnapshot: text('interest_snapshot').notNull(),
+    configRevision: text('config_revision').notNull(),
+    acceptedPlan: text('accepted_plan'),
+    nextStep: text('next_step'),
+    yieldSummary: text('yield_summary'),
+    startedAt: integer('started_at').notNull(),
+    finishedAt: integer('finished_at'),
+    budget: text('budget').notNull(),
+    issues: text('issues').notNull().default(sql.raw("'[]'")),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  check('check_discovery_runs_1',sql.raw("purpose IN ('daily_feed','candidate_supply')")),
+  check('check_discovery_runs_2',sql.raw("status IN ('running','completed','partial','failed','cancelled','interrupted')")),
+  check('check_discovery_runs_3',sql.raw("json_valid(interest_snapshot)")),
+  check('check_discovery_runs_4',sql.raw("accepted_plan IS NULL OR json_valid(accepted_plan)")),
+  check('check_discovery_runs_5',sql.raw("yield_summary IS NULL OR json_valid(yield_summary)")),
+  check('check_discovery_runs_6',sql.raw("json_valid(budget)")),
+  check('check_discovery_runs_7',sql.raw("json_valid(issues)")),
+]);
 
-export const searchQueries = sqliteTable(
-  'search_queries',
-  {
-    id: text('id').primaryKey(),
-    interestId: text('interest_id').references(() => interests.id, { onDelete: 'set null' }),
-    interestRevision: integer('interest_revision').notNull().default(1),
+export const materialRequests = sqliteTable('material_requests', {
+    ownerRunId: text('owner_run_id').references((): AnySQLiteColumn => discoveryRuns.id, {onDelete:'restrict'}),
+    attemptToken: text('attempt_token'),
+    attemptStartedAt: integer('attempt_started_at'),
+    attemptDeadlineAt: integer('attempt_deadline_at'),
+    id: text('id').primaryKey().notNull(),
+    contentId: text('content_id').notNull().references((): AnySQLiteColumn => contents.id, {onDelete:'cascade'}),
+    discoveryRunId: text('discovery_run_id').references((): AnySQLiteColumn => discoveryRuns.id, {onDelete:'no action'}),
+    method: text('method').notNull(),
+    requestUrl: text('request_url').notNull(),
+    status: text('status').notNull(),
+    attempts: integer('attempts').notNull().default(sql.raw("0")),
+    retryAt: integer('retry_at'),
+    errorCode: text('error_code'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  index('idx_material_requests_status_retry').on(table.status,table.retryAt),
+  uniqueIndex('idx_material_requests_active').on(table.contentId,table.method).where(sql.raw("status IN ('pending','running')")),
+  check('check_material_requests_1',sql.raw("status IN ('pending','running','ready','failed','cancelled')")),
+  check('check_material_requests_2',sql.raw("attempts >= 0")),
+  check('check_material_requests_3',sql.raw("(owner_run_id IS NULL AND attempt_token IS NULL AND attempt_started_at IS NULL AND attempt_deadline_at IS NULL) OR (owner_run_id IS NOT NULL AND attempt_token IS NOT NULL AND attempt_started_at IS NOT NULL AND attempt_deadline_at > attempt_started_at)")),
+]);
+
+export const contentAnalysis = sqliteTable('content_analysis', {
+    ownerRunId: text('owner_run_id').references((): AnySQLiteColumn => discoveryRuns.id, {onDelete:'restrict'}),
+    attemptToken: text('attempt_token'),
+    attemptStartedAt: integer('attempt_started_at'),
+    attemptDeadlineAt: integer('attempt_deadline_at'),
+    contentId: text('content_id').notNull(),
+    materialId: text('material_id').notNull(),
+    contractVersion: integer('contract_version').notNull(),
+    status: text('status').notNull(),
+    attempts: integer('attempts').notNull().default(sql.raw("0")),
+    retryAt: integer('retry_at'),
+    result: text('result'),
+    analyzedAt: integer('analyzed_at'),
+    errorCode: text('error_code'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.contentId,table.materialId,table.contractVersion]}),
+  foreignKey({columns:[table.materialId,table.contentId],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('cascade'),
+  index('idx_content_analysis_status_retry').on(table.status,table.retryAt),
+  check('check_content_analysis_1',sql.raw("contract_version > 0")),
+  check('check_content_analysis_2',sql.raw("status IN ('pending','running','ready','failed','cancelled')")),
+  check('check_content_analysis_3',sql.raw("attempts >= 0")),
+  check('check_content_analysis_4',sql.raw("result IS NULL OR json_valid(result)")),
+  check('check_content_analysis_5',sql.raw("(owner_run_id IS NULL AND attempt_token IS NULL AND attempt_started_at IS NULL AND attempt_deadline_at IS NULL) OR (owner_run_id IS NOT NULL AND attempt_token IS NOT NULL AND attempt_started_at IS NOT NULL AND attempt_deadline_at > attempt_started_at)")),
+]);
+
+export const recommendationCandidates = sqliteTable('recommendation_candidates', {
+    ownerRunId: text('owner_run_id').references((): AnySQLiteColumn => discoveryRuns.id, {onDelete:'restrict'}),
+    attemptToken: text('attempt_token'),
+    attemptStartedAt: integer('attempt_started_at'),
+    attemptDeadlineAt: integer('attempt_deadline_at'),
+    contentId: text('content_id').notNull().references((): AnySQLiteColumn => contents.id, {onDelete:'cascade'}),
+    interestId: text('interest_id').notNull().references((): AnySQLiteColumn => interests.id, {onDelete:'cascade'}),
+    interestRevision: integer('interest_revision').notNull(),
+    materialId: text('material_id').notNull(),
+    analysisContractVersion: integer('analysis_contract_version').notNull(),
+    matchingContractVersion: integer('matching_contract_version').notNull(),
+    relation: text('relation').notNull(),
+    status: text('status').notNull(),
+    basis: text('basis'),
+    evidence: text('evidence').notNull().default(sql.raw("'[]'")),
+    reviewedAt: integer('reviewed_at'),
+    validUntil: integer('valid_until'),
+    attempts: integer('attempts').notNull().default(sql.raw("0")),
+    retryAt: integer('retry_at'),
+    errorCode: text('error_code'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.contentId,table.interestId]}),
+  foreignKey({columns:[table.contentId,table.materialId,table.analysisContractVersion],foreignColumns:[contentAnalysis.contentId,contentAnalysis.materialId,contentAnalysis.contractVersion]}).onDelete('cascade'),
+  foreignKey({columns:[table.materialId,table.contentId],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('cascade'),
+  index('idx_recommendation_candidates_status_retry').on(table.status,table.retryAt),
+  index('idx_candidates_current').on(table.interestId,table.interestRevision,table.status,table.validUntil),
+  check('check_recommendation_candidates_1',sql.raw("interest_revision > 0")),
+  check('check_recommendation_candidates_2',sql.raw("relation IN ('direct','related','none')")),
+  check('check_recommendation_candidates_3',sql.raw("status IN ('eligible','rejected','pending','stale')")),
+  check('check_recommendation_candidates_4',sql.raw("json_valid(evidence)")),
+  check('check_recommendation_candidates_5',sql.raw("attempts >= 0")),
+  check('check_recommendation_candidates_6',sql.raw("(owner_run_id IS NULL AND attempt_token IS NULL AND attempt_started_at IS NULL AND attempt_deadline_at IS NULL) OR (owner_run_id IS NOT NULL AND attempt_token IS NOT NULL AND attempt_started_at IS NOT NULL AND attempt_deadline_at > attempt_started_at)")),
+]);
+
+export const candidateSelectionInputs = sqliteTable('candidate_selection_inputs', {
+    runId: text('run_id').notNull().references((): AnySQLiteColumn => recommendationRuns.id, {onDelete:'cascade'}),
+    contentId: text('content_id').notNull().references((): AnySQLiteColumn => contents.id, {onDelete:'cascade'}),
+    interestId: text('interest_id').notNull().references((): AnySQLiteColumn => interests.id, {onDelete:'cascade'}),
+    interestRevision: integer('interest_revision').notNull(),
+    recordedAt: integer('recorded_at').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.runId,table.contentId,table.interestId]}),
+]);
+
+export const searchQueries = sqliteTable('search_queries', {
+    id: text('id').primaryKey().notNull(),
+    interestId: text('interest_id').references((): AnySQLiteColumn => interests.id, {onDelete:'set null'}),
+    interestRevision: integer('interest_revision').notNull(),
     query: text('query').notNull(),
     category: text('category').notNull(),
     origin: text('origin').notNull(),
-    status: text('status').notNull().default('active'),
+    status: text('status').notNull(),
     lastUsedAt: integer('last_used_at'),
     createdAt: integer('created_at').notNull(),
-  },
-  (table) => [
-    check(
-      'check_search_queries_category',
-      sql`${table.category} IN ('core','entity','technical','exploratory','trend')`,
-    ),
-    check('check_search_queries_origin', sql`${table.origin} IN ('ai','interest')`),
-    check('check_search_queries_status', sql`${table.status} IN ('active','retired')`),
-    check('check_search_queries_length', sql`length(${table.query}) BETWEEN 1 AND 200`),
-    check(
-      'check_search_queries_active_interest',
-      sql`${table.status} <> 'active' OR ${table.interestId} IS NOT NULL`,
-    ),
-    uniqueIndex('idx_search_queries_active_identity')
-      .on(table.interestId, table.interestRevision, table.query)
-      .where(sql`${table.status} = 'active'`),
-    index('idx_search_queries_interest_status').on(table.interestId, table.status),
-  ],
-);
+}, (table): SQLiteTableExtraConfigValue[] => [
+  uniqueIndex('idx_search_queries_active_identity').on(table.interestId,table.interestRevision,table.query).where(sql.raw("status = 'active'")),
+  check('check_search_queries_1',sql.raw("length(query) BETWEEN 1 AND 200")),
+  check('check_search_queries_2',sql.raw("category IN ('core','entity','technical','exploratory','trend')")),
+  check('check_search_queries_3',sql.raw("origin IN ('ai','interest')")),
+  check('check_search_queries_4',sql.raw("status IN ('active','retired')")),
+]);
 
-export const searchResults = sqliteTable(
-  'search_results',
-  {
-    id: text('id').primaryKey(),
-    source: text('source').notNull(),
-    externalId: text('external_id'),
-    url: text('url').notNull(),
-    title: text('title'),
-    description: text('description'),
-    author: text('author'),
-    publishedAt: integer('published_at'),
-    rawPayload: jsonText('raw_payload'),
-    contentId: text('content_id').references(() => contents.id),
-    status: text('status').notNull().default('pending'),
-    attempts: integer('attempts').notNull().default(0),
-    retryAt: integer('retry_at'),
-    lastErrorCode: text('last_error_code'),
-    firstSeenAt: integer('first_seen_at').notNull(),
-    lastSeenAt: integer('last_seen_at').notNull(),
-  },
-  (table) => [
-    check(
-      'check_search_results_status',
-      sql`${table.status} IN ('pending','normalized','rejected','failed')`,
-    ),
-    check('check_search_results_attempts', sql`${table.attempts} >= 0`),
-    uniqueIndex('idx_search_results_source_url').on(table.source, table.url),
-    index('idx_search_results_status_retry').on(table.status, table.retryAt),
-    index('idx_search_results_content').on(table.contentId),
-  ],
-);
-
-export const searchHistory = sqliteTable(
-  'search_history',
-  {
-    id: text('id').primaryKey(),
-    queryId: text('query_id')
-      .notNull()
-      .references(() => searchQueries.id),
-    source: text('source').notNull(),
-    searchScope: jsonText('search_scope').notNull(),
+export const searchHistory = sqliteTable('search_history', {
+    id: text('id').primaryKey().notNull(),
+    queryId: text('query_id').notNull().references((): AnySQLiteColumn => searchQueries.id, {onDelete:'no action'}),
+    sourceId: text('source_id').notNull(),
+    searchScope: text('search_scope').notNull(),
     searchedAt: integer('searched_at').notNull(),
     outcome: text('outcome').notNull(),
     resultCount: integer('result_count'),
     newItemCount: integer('new_item_count'),
-  },
-  (table) => [
-    check('check_search_history_outcome', sql`${table.outcome} IN ('success','failed')`),
-    check(
-      'check_search_history_counts',
-      sql`(${table.resultCount} IS NULL OR ${table.resultCount} >= 0) AND (${table.newItemCount} IS NULL OR ${table.newItemCount} >= 0)`,
-    ),
-    index('idx_search_history_query_source_time').on(
-      table.queryId,
-      table.source,
-      table.searchedAt,
-    ),
-  ],
-);
+    runId: text('run_id').references((): AnySQLiteColumn => discoveryRuns.id, {onDelete:'no action'}),
+    purpose: text('purpose').notNull(),
+    windowStart: integer('window_start'),
+    windowEnd: integer('window_end'),
+    errorCode: text('error_code'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  index('idx_search_history_source_purpose_query_date').on(table.sourceId,table.purpose,table.queryId,table.searchedAt),
+  check('check_search_history_1',sql.raw("json_valid(search_scope)")),
+  check('check_search_history_2',sql.raw("outcome IN ('success','failed')")),
+  check('check_search_history_3',sql.raw("purpose IN ('legacy','daily_feed','candidate_supply')")),
+]);
 
-export const candidateSupplyState = sqliteTable(
-  'candidate_supply_state',
-  {
+export const searchResults = sqliteTable('search_results', {
+    id: text('id').primaryKey().notNull(),
+    platform: text('platform').notNull(),
+    sourceId: text('source_id').notNull(),
+    externalId: text('external_id'),
+    requestUrl: text('request_url').notNull(),
+    title: text('title'),
+    excerpt: text('excerpt'),
+    author: text('author'),
+    publicationEvidence: text('publication_evidence').notNull(),
+    rawPayload: text('raw_payload'),
+    contentId: text('content_id').references((): AnySQLiteColumn => contents.id, {onDelete:'set null'}),
+    status: text('status').notNull(),
+    attempts: integer('attempts').notNull().default(sql.raw("0")),
+    retryAt: integer('retry_at'),
+    errorCode: text('error_code'),
+    firstSeenAt: integer('first_seen_at').notNull(),
+    lastSeenAt: integer('last_seen_at').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  index('idx_search_results_status_retry').on(table.status,table.retryAt),
+  uniqueIndex('idx_search_results_external').on(table.platform,table.externalId).where(sql.raw("external_id IS NOT NULL AND external_id <> ''")),
+  unique('search_results_platform_request_url_unique').on(table.platform,table.requestUrl),
+  check('check_search_results_1',sql.raw("json_valid(publication_evidence)")),
+  check('check_search_results_2',sql.raw("status IN ('pending','normalized','rejected','failed')")),
+]);
+
+export const searchResultLinks = sqliteTable('search_result_links', {
+    searchHistoryId: text('search_history_id').notNull().references((): AnySQLiteColumn => searchHistory.id, {onDelete:'cascade'}),
+    searchResultId: text('search_result_id').notNull().references((): AnySQLiteColumn => searchResults.id, {onDelete:'cascade'}),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.searchHistoryId,table.searchResultId]}),
+]);
+
+export const dailyFeedBatches = sqliteTable('daily_feed_batches', {
+    id: text('id').primaryKey().notNull(),
+    date: text('date').notNull(),
+    timezone: text('timezone').notNull(),
+    interestId: text('interest_id').notNull(),
+    interestRevision: integer('interest_revision').notNull(),
+    interestText: text('interest_text').notNull(),
+    windowStart: integer('window_start').notNull(),
+    windowEnd: integer('window_end').notNull(),
+    status: text('status').notNull(),
+    committedAt: integer('committed_at').notNull(),
+    issues: text('issues').notNull().default(sql.raw("'[]'")),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  index('idx_daily_feed_date_interest').on(table.date,table.interestId,table.interestRevision),
+  unique('daily_feed_batches_date_interest_id_interest_revision_unique').on(table.date,table.interestId,table.interestRevision),
+  check('check_daily_feed_batches_1',sql.raw("window_end > window_start")),
+  check('check_daily_feed_batches_2',sql.raw("status IN ('ready','partial','empty','failed')")),
+  check('check_daily_feed_batches_3',sql.raw("json_valid(issues)")),
+]);
+
+export const dailyFeedItems = sqliteTable('daily_feed_items', {
+    batchId: text('batch_id').notNull().references((): AnySQLiteColumn => dailyFeedBatches.id, {onDelete:'cascade'}),
+    contentId: text('content_id').notNull().references((): AnySQLiteColumn => contents.id, {onDelete:'restrict'}),
+    materialId: text('material_id').notNull(),
+    displayOrder: integer('display_order').notNull(),
+    titleSnapshot: text('title_snapshot').notNull(),
+    summarySnapshot: text('summary_snapshot').notNull(),
+    publicationSnapshot: text('publication_snapshot').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.batchId,table.contentId]}),
+  foreignKey({columns:[table.materialId,table.contentId],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('restrict'),
+  unique('daily_feed_items_batch_id_display_order_unique').on(table.batchId,table.displayOrder),
+  check('check_daily_feed_items_1',sql.raw("json_valid(publication_snapshot)")),
+]);
+
+export const curatedSelections = sqliteTable('curated_selections', {
+    id: text('id').primaryKey().notNull(),
+    interestSnapshot: text('interest_snapshot').notNull(),
+    createdAt: integer('created_at').notNull(),
+    status: text('status').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  check('check_curated_selections_1',sql.raw("json_valid(interest_snapshot)")),
+  check('check_curated_selections_2',sql.raw("status IN ('ready','retired')")),
+]);
+
+export const curatedSelectionItems = sqliteTable('curated_selection_items', {
+    selectionId: text('selection_id').notNull().references((): AnySQLiteColumn => curatedSelections.id, {onDelete:'cascade'}),
+    contentId: text('content_id').notNull().references((): AnySQLiteColumn => contents.id, {onDelete:'restrict'}),
+    materialId: text('material_id').notNull(),
+    displayOrder: integer('display_order').notNull(),
+    matchedInterests: text('matched_interests').notNull(),
+    reason: text('reason').notNull(),
+    evidence: text('evidence').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.selectionId,table.contentId]}),
+  foreignKey({columns:[table.materialId,table.contentId],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('restrict'),
+  unique('curated_selection_items_selection_id_display_order_unique').on(table.selectionId,table.displayOrder),
+  check('check_curated_selection_items_1',sql.raw("json_valid(matched_interests)")),
+  check('check_curated_selection_items_2',sql.raw("json_valid(evidence)")),
+]);
+
+export const favorites = sqliteTable('favorites', {
+    contentId: text('content_id').primaryKey().references((): AnySQLiteColumn => contents.id, {onDelete:'restrict'}),
+    materialId: text('material_id').notNull(),
+    titleSnapshot: text('title_snapshot').notNull(),
+    createdAt: integer('created_at').notNull(),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  foreignKey({columns:[table.materialId,table.contentId],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('restrict'),
+  index('idx_favorites_created').on(table.createdAt,table.contentId),
+]);
+
+export const recommendationRuns = sqliteTable('recommendation_runs', {
+    id: text('id').primaryKey().notNull(),
+    kind: text('kind').notNull(),
+    requestId: text('request_id').notNull(),
+    retryOfRunId: text('retry_of_run_id').references((): AnySQLiteColumn => recommendationRuns.id, {onDelete:'no action'}),
+    inputHash: text('input_hash').notNull(),
+    status: text('status').notNull(),
+    interestSnapshot: text('interest_snapshot').notNull(),
+    candidateSnapshot: text('candidate_snapshot').notNull(),
+    dailyFeedBatchId: text('daily_feed_batch_id').references((): AnySQLiteColumn => dailyFeedBatches.id, {onDelete:'restrict'}),
+    curatedSelectionId: text('curated_selection_id').references((): AnySQLiteColumn => curatedSelections.id, {onDelete:'restrict'}),
+    outcome: text('outcome'),
+    error: text('error'),
+    startedAt: integer('started_at').notNull(),
+    finishedAt: integer('finished_at'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  unique('recommendation_runs_request_id_unique').on(table.requestId),
+  check('check_recommendation_runs_1',sql.raw("kind IN ('daily_feed','curated')")),
+  check('check_recommendation_runs_2',sql.raw("status IN ('queued','running','completed','partial','empty','failed','cancelled','interrupted','superseded')")),
+  check('check_recommendation_runs_3',sql.raw("json_valid(interest_snapshot)")),
+  check('check_recommendation_runs_4',sql.raw("json_valid(candidate_snapshot)")),
+  check('check_recommendation_runs_5',sql.raw("outcome IS NULL OR json_valid(outcome)")),
+  check('check_recommendation_runs_6',sql.raw("error IS NULL OR json_valid(error)")),
+  check('check_recommendation_runs_7',sql.raw("(daily_feed_batch_id IS NULL OR kind = 'daily_feed') AND (curated_selection_id IS NULL OR kind = 'curated')")),
+]);
+
+export const recommendationRunJudgments = sqliteTable('recommendation_run_judgments', {
+    ownerRunId: text('owner_run_id').references((): AnySQLiteColumn => recommendationRuns.id, {onDelete:'restrict'}),
+    attemptToken: text('attempt_token'),
+    attemptStartedAt: integer('attempt_started_at'),
+    attemptDeadlineAt: integer('attempt_deadline_at'),
+    runId: text('run_id').notNull().references((): AnySQLiteColumn => recommendationRuns.id, {onDelete:'cascade'}),
+    stage: text('stage').notNull(),
+    contentId: text('content_id').notNull(),
+    interestId: text('interest_id').notNull(),
+    materialId: text('material_id').notNull(),
+    inputHash: text('input_hash').notNull(),
+    status: text('status').notNull(),
+    result: text('result'),
+    attempts: integer('attempts').notNull().default(sql.raw("0")),
+    retryAt: integer('retry_at'),
+    errorCode: text('error_code'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  primaryKey({columns:[table.runId,table.stage,table.contentId,table.interestId]}),
+  foreignKey({columns:[table.materialId,table.contentId],foreignColumns:[contentMaterials.id,contentMaterials.contentId]}).onDelete('restrict'),
+  index('idx_recommendation_run_judgments_status_retry').on(table.status,table.retryAt),
+  check('check_recommendation_run_judgments_1',sql.raw("stage IN ('topic','date','value')")),
+  check('check_recommendation_run_judgments_2',sql.raw("status IN ('pending','running','ready','failed','cancelled')")),
+  check('check_recommendation_run_judgments_3',sql.raw("result IS NULL OR json_valid(result)")),
+  check('check_recommendation_run_judgments_4',sql.raw("(owner_run_id IS NULL AND attempt_token IS NULL AND attempt_started_at IS NULL AND attempt_deadline_at IS NULL) OR (owner_run_id IS NOT NULL AND attempt_token IS NOT NULL AND attempt_started_at IS NOT NULL AND attempt_deadline_at > attempt_started_at)")),
+]);
+
+export const recommendationState = sqliteTable('recommendation_state', {
     id: integer('id').primaryKey(),
+    currentSelectionId: text('current_selection_id').references((): AnySQLiteColumn => curatedSelections.id, {onDelete:'restrict'}),
+    pendingInitialInterestHash: text('pending_initial_interest_hash'),
+    finishedAutomaticInterestHash: text('finished_automatic_interest_hash'),
+    automaticRetryCount: integer('automatic_retry_count').notNull().default(sql.raw("0")),
+    nextRetryAt: integer('next_retry_at'),
+}, (table): SQLiteTableExtraConfigValue[] => [
+  check('check_recommendation_state_1',sql.raw("id = 1")),
+]);
+
+export const candidateSupplyState = sqliteTable('candidate_supply_state', {
+    id: integer('id').primaryKey(),
+    sourceCooldowns: text('source_cooldowns').notNull(),
+    searchBackoff: text('search_backoff').notNull(),
+    candidateNextInterestId: text('candidate_next_interest_id'),
+    dailyFeedNextInterestId: text('daily_feed_next_interest_id'),
     lastFinishedAt: integer('last_finished_at'),
-    nextInterestId: text('next_interest_id'),
-    sourceCooldowns: jsonText('source_cooldowns').notNull(),
-    searchBackoff: jsonText('search_backoff').notNull().default(sql`'{}'`),
-  },
-  (table) => [check('check_candidate_supply_state_singleton', sql`${table.id} = 1`)],
-);
+}, (table): SQLiteTableExtraConfigValue[] => [
+  check('check_candidate_supply_state_1',sql.raw("id = 1")),
+  check('check_candidate_supply_state_2',sql.raw("json_valid(source_cooldowns)")),
+  check('check_candidate_supply_state_3',sql.raw("json_valid(search_backoff)")),
+]);

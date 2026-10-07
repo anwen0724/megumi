@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { migrateRecommendationSettings } from '@megumi/application/settings/recommendation-settings-migration';
 import { createSettings } from '@megumi/application/settings/settings-store';
 
 describe('settings written before the candidate supply switch', () => {
@@ -26,7 +27,7 @@ describe('settings written before the candidate supply switch', () => {
   it('loads and keeps the supply settings while dropping removed discovery fields', () => {
     writeSettings({
       candidateSupplyConfirmed: true,
-      enabledSources: ['bilibili', 'open_web', 'xiaohongshu', 'douyin', 'zhihu'],
+      enabledSources: ['bilibili', 'xiaohongshu', 'zhihu'],
       candidateSupplyModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
       recommendationModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
       conversationRecognitionEnabled: false,
@@ -47,7 +48,7 @@ describe('settings written before the candidate supply switch', () => {
 
     if (read.status === 'rejected') throw new Error(read.error.message);
     const discovery = read.settings.config.discovery;
-    expect(discovery.candidateSupplyConfirmed).toBe(true);
+    expect(discovery.enabled).toBe(true);
     expect(discovery.candidateSupplyModel).toEqual({
       providerId: 'deepseek',
       modelId: 'deepseek-flash',
@@ -55,13 +56,11 @@ describe('settings written before the candidate supply switch', () => {
     // The user disabled nothing explicitly, so their saved source list is kept as written.
     expect(discovery.enabledSources).toEqual([
       'bilibili',
-      'open_web',
       'xiaohongshu',
-      'douyin',
       'zhihu',
     ]);
-    expect(discovery.candidateSupply.freshnessDays).toBe(7);
-    expect(discovery.candidateSupply.limits.maxEmbeddingCalls).toBe(0);
+    expect(discovery.dailyFeed.lookbackDays).toBe(3);
+    expect(discovery.limits).not.toHaveProperty('maxEmbeddingCalls');
     for (const removed of [
       'recommendationModel',
       'conversationRecognitionEnabled',
@@ -83,7 +82,7 @@ describe('settings written before the candidate supply switch', () => {
 
     if (read.status === 'rejected') throw new Error(read.error.message);
     const discovery = read.settings.config.discovery;
-    expect(discovery.candidateSupplyConfirmed).toBe(false);
+    expect(discovery.enabled).toBe(false);
     expect(discovery.enabledSources).toEqual(['zhihu']);
     expect(discovery.candidateSupplyModel).toBeUndefined();
   });
@@ -97,6 +96,7 @@ describe('settings written before the candidate supply switch', () => {
   }
 
   function create() {
+    migrateRecommendationSettings(path.join(directory,'settings.json'));
     return createSettings({
       globalSettingsPath: path.join(directory, 'settings.json'),
       credentialsPath: path.join(directory, 'credentials.json'),

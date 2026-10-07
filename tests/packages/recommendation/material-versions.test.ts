@@ -148,3 +148,28 @@ it('keeps the previous material pointer when saving an acquisition fails', () =>
   expect(content.readCurrentMaterial(initial.contentId)?.id).toBe(initial.id);
   expect(content.readMaterial('m2')).toBeUndefined();
 });
+
+it('rejects an analysis returned by an obsolete attempt token', () => {
+  database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
+  const contents = createMaterialStorage(database);
+  const material = contents.saveMaterial({ platform: 'web', canonicalUrl: 'https://example.com/token', text: '实际材料', kind: 'full_text', truncated: false, rangeEnd: 4, method: 'direct_web', acquiredAt: 10, publicationEvidence: [] }).material;
+  database.prepare({ sql: "INSERT INTO discovery_runs(id,purpose,status,interest_snapshot,config_revision,started_at,budget) VALUES('r1','candidate_supply','running','[]','v1',10,'{}')" }).run();
+  database.prepare({ sql: "INSERT INTO content_analysis(content_id,material_id,contract_version,status,owner_run_id,attempt_token,attempt_started_at,attempt_deadline_at) VALUES(?,?,2,'running','r1','new-token',10,100)" }).run([material.contentId, material.id]);
+  contents.saveAnalysis({ contentId: material.contentId, materialId: material.id, now: 30, attempt: { runId: 'r1', token: 'old-token', startedAt: 10, deadlineAt: 100 }, result: { summary: '实际材料', keyPoints: [{ text: '材料', evidence: [{ materialId: material.id, quote: '实际材料' }] }], topics: ['材料'], contentType: 'article', qualityScore: 0.5, spamScore: 0, timeScope: { kind: 'unknown', evidence: [] } } });
+  expect(contents.readAnalysis(material.contentId, material.id)).toBeUndefined();
+});
+
+it('shares one analysis claim and prevents an earlier release from clearing a later claim', () => {
+  database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
+  const contents = createMaterialStorage(database);
+  const material = contents.saveMaterial({ platform: 'web', canonicalUrl: 'https://example.com/shared', text: '共同材料', kind: 'full_text', truncated: false, rangeEnd: 4, method: 'direct_web', acquiredAt: 10, publicationEvidence: [] }).material;
+  for (const id of ['r1', 'r2']) database.prepare({ sql: "INSERT INTO discovery_runs(id,purpose,status,interest_snapshot,config_revision,started_at,budget) VALUES(?,'candidate_supply','running','[]','v1',10,'{}')" }).run([id]);
+  const first = contents.claimAnalysis({ contentId: material.contentId, materialId: material.id, runId: 'r1', now: 20, deadlineAt: 100 })!;
+  expect(first).toBeDefined();
+  expect(contents.claimAnalysis({ contentId: material.contentId, materialId: material.id, runId: 'r2', now: 30, deadlineAt: 110 })).toBeUndefined();
+  expect(contents.releaseAnalysis({ contentId: material.contentId, materialId: material.id, attempt: first, now: 30 })).toBe(true);
+  const second = contents.claimAnalysis({ contentId: material.contentId, materialId: material.id, runId: 'r2', now: 40, deadlineAt: 120 })!;
+  expect(second.token).not.toBe(first.token);
+  expect(contents.releaseAnalysis({ contentId: material.contentId, materialId: material.id, attempt: first, now: 50 })).toBe(false);
+  expect(contents.claimAnalysis({ contentId: material.contentId, materialId: material.id, runId: 'r1', now: 60, deadlineAt: 140 })).toBeUndefined();
+});

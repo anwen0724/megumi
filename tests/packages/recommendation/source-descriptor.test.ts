@@ -5,7 +5,7 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { sourceConfigurationIssues } from '@megumi/application/recommendation/recommendation-api';
+import { RecommendationConfigurationSchema } from '@megumi/application/settings/definitions/recommendation';
 import { createZhihuSource } from '@megumi/application/recommendation/sources/zhihu-source';
 
 describe('source capability declaration', () => {
@@ -24,15 +24,8 @@ describe('source capability declaration', () => {
     });
   });
 
-  it('reports an enabled source that has no connector', () => {
-    expect(sourceConfigurationIssues(['zhihu'])).toEqual([]);
-    expect(sourceConfigurationIssues(['zhihu', 'unknown'])).toEqual([
-      {
-        stage: 'configuration',
-        code: 'SOURCE_NOT_CONFIGURED',
-        subjectId: 'unknown',
-        message: 'Source unknown is enabled but has no connector and is not planned.',
-      },
-    ]);
+  it('rejects an unknown service before planning', () => {
+    expect(RecommendationConfigurationSchema.safeParse({enabledSources:['zhihu']}).success).toBe(true);
+    expect(RecommendationConfigurationSchema.safeParse({enabledSources:['unknown']}).success).toBe(false);
   });
 });

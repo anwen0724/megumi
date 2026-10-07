@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 /** Creates real, isolated files for the public configuration operations. */
-function configurationFiles() {
+function configurationFiles(globalOnly=false) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-settings-'));
   configurationDirectories.push(directory);
   const globalSettingsPath = path.join(directory, 'settings.json');
@@ -28,7 +28,7 @@ function configurationFiles() {
     credentialsPath,
     settings: createFileSettings({
       globalSettingsPath,
-      projectSettingsPath,
+      projectSettingsPath:globalOnly?undefined:projectSettingsPath,
       credentialsPath,
       readEnvironment: () => undefined,
     }),
@@ -128,7 +128,7 @@ describe('Configuration files', () => {
   });
 
   it('treats task model selection as one value and binds revisions to the configured files', () => {
-    const files = configurationFiles();
+    const files = configurationFiles(true);
     const read = files.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Expected configuration');
     const first = files.settings.updateSettings({
@@ -153,39 +153,14 @@ describe('Configuration files', () => {
     ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
   });
 
-  it('preserves independent external edits but rejects changes to the same edited value', () => {
-    const files = configurationFiles();
-    const read = files.settings.readSettings();
-    if (read.status !== 'ok') throw new Error('Expected configuration');
-    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(
-      files.projectSettingsPath,
-      JSON.stringify({ discovery: { candidateSupply: { freshnessDays: 30 } } }),
-    );
-    expect(
-      files.settings.updateSettings({
-        patch: { discovery: { candidateSupply: { maintenanceIntervalMinutes: 90 } } },
-        expectedRevision: read.settings.revision,
-      }),
-    ).toMatchObject({
-      status: 'updated',
-      settings: {
-        config: {
-          discovery: {
-            candidateSupply: { freshnessDays: 30, maintenanceIntervalMinutes: 90 },
-          },
-        },
-      },
-    });
-    const preserved = fs.readFileSync(files.projectSettingsPath, 'utf8');
-    expect(
-      files.settings.updateSettings({
-        patch: { discovery: { candidateSupply: { freshnessDays: 40 } } },
-        expectedRevision: read.settings.revision,
-      }),
-    ).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
-    expect(fs.readFileSync(files.projectSettingsPath, 'utf8')).toBe(preserved);
-  });
+  it('preserves independent external edits but rejects changes to the same edited value',()=>{
+ const files=configurationFiles();const read=files.settings.readSettings();if(read.status!=='ok')throw new Error('Expected configuration');
+ fs.mkdirSync(path.dirname(files.projectSettingsPath),{recursive:true});fs.writeFileSync(files.projectSettingsPath,JSON.stringify({permissions:{mode:'auto'}}));
+ expect(files.settings.updateSettings({patch:{context:{compactionThresholdRatio:0.65}},expectedRevision:read.settings.revision})).toMatchObject({status:'updated',settings:{config:{permissions:{mode:'auto'},context:{compactionThresholdRatio:0.65}}}});
+ const preserved=fs.readFileSync(files.projectSettingsPath,'utf8');
+ expect(files.settings.updateSettings({patch:{permissions:{mode:'full_access'}},expectedRevision:read.settings.revision})).toMatchObject({status:'rejected',error:{code:'SETTINGS_CONFLICT'}});
+ expect(fs.readFileSync(files.projectSettingsPath,'utf8')).toBe(preserved);
+});
 
   it('rejects unknown edits and incomplete model selections without altering files', () => {
     const files = configurationFiles();
@@ -313,61 +288,13 @@ describe('Configuration files', () => {
     });
   });
 
-  it('validates relationships after combining files rather than filling each file with defaults', () => {
-    const files = configurationFiles();
-    fs.writeFileSync(
-      files.globalSettingsPath,
-      JSON.stringify({
-        discovery: {
-          candidateSupply: {
-            daily: {
-              minimumCount: 20,
-              targetCount: 60,
-              interestMinimumCount: 5,
-              interestTargetCount: 15,
-            },
-          },
-        },
-      }),
-    );
-    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
-    fs.writeFileSync(
-      files.projectSettingsPath,
-      JSON.stringify({ discovery: { candidateSupply: { daily: { targetCount: 10 } } } }),
-    );
-    expect(files.settings.readSettings()).toMatchObject({
-      status: 'rejected',
-      error: {
-        code: 'SETTINGS_INVALID',
-        issues: expect.arrayContaining([
-          {
-            path: ['discovery', 'candidateSupply', 'daily', 'targetCount'],
-            message: expect.any(String),
-          },
-        ]),
-      },
-    });
-    fs.writeFileSync(
-      files.projectSettingsPath,
-      JSON.stringify({ discovery: { candidateSupply: { daily: { targetCount: 35 } } } }),
-    );
-    expect(files.settings.readSettings()).toMatchObject({
-      status: 'ok',
-      settings: {
-        config: {
-          discovery: {
-            candidateSupply: {
-              daily: {
-                minimumCount: 20,
-                targetCount: 35,
-                interestMinimumCount: 5,
-                interestTargetCount: 15,
-              },
-            },
-          },
-        },
-      },
-    });
+  it('validates relationships after combining files rather than filling each file with defaults',()=>{
+    const files=configurationFiles();fs.writeFileSync(files.globalSettingsPath,JSON.stringify({providers:{local:{name:'Local',api:'openai-completions',baseUrl:'http://localhost:8000/v1',models:{small:{name:'Small',contextWindowTokens:8192,maxOutputTokens:2048}}}}}));
+    fs.mkdirSync(path.dirname(files.projectSettingsPath),{recursive:true});
+    fs.writeFileSync(files.projectSettingsPath,JSON.stringify({providers:{local:{models:{small:{contextWindowTokens:1024}}}}}));
+    expect(files.settings.readSettings()).toMatchObject({status:'rejected',error:{code:'SETTINGS_INVALID'}});
+    fs.writeFileSync(files.projectSettingsPath,JSON.stringify({providers:{local:{models:{small:{contextWindowTokens:4096}}}}}));
+    expect(files.settings.readSettings()).toMatchObject({status:'ok',settings:{config:{providers:{local:{models:{small:{contextWindowTokens:4096,maxOutputTokens:2048}}}}}}});
   });
 
   it('diagnoses unknown fields without disclosing or rewriting their contents', () => {
@@ -447,7 +374,6 @@ describe('Configuration files', () => {
       files.projectSettingsPath,
       JSON.stringify({
         providers: { deepseek: { baseUrl: 'https://project.example/v1' } },
-        discovery: { enabledSources: [] },
       }),
     );
     const read = files.settings.readSettings();
@@ -457,8 +383,7 @@ describe('Configuration files', () => {
         config: {
           general: { setupCompleted: true },
           providers: { deepseek: { baseUrl: 'https://project.example/v1' } },
-          discovery: { enabledSources: [] },
-        },
+          },
         sources: expect.arrayContaining([
           { path: ['general', 'setupCompleted'], source: 'global' },
           { path: ['providers', 'deepseek', 'baseUrl'], source: 'project' },
@@ -485,26 +410,7 @@ describe('Configuration files', () => {
           general: { language: 'zh-CN', theme: 'midnight-blue', setupCompleted: false },
           providers: {},
           context: { compactionThresholdRatio: 0.8 },
-          discovery: {
-            candidateSupplyConfirmed: false,
-            enabledSources: ['zhihu'],
-            candidateSupply: {
-              daily: {
-                minimumCount: 100,
-                targetCount: 200,
-                interestMinimumCount: 10,
-                interestTargetCount: 30,
-              },
-              longTerm: {
-                minimumCount: 100,
-                targetCount: 300,
-                interestMinimumCount: 10,
-                interestTargetCount: 40,
-              },
-              freshnessDays: 7,
-              maintenanceIntervalMinutes: 60,
-            },
-          },
+          discovery: {enabled:false,enabledSources:['tavily','bing_rss','zhihu','bilibili','xiaohongshu'],candidateSupply:{interestMinimumCount:10,interestTargetCount:30,maintenanceIntervalMinutes:60},dailyFeed:{lookbackDays:3,historyDays:7},curated:{targetCount:10}},
           voice: { inputDeviceId: 'default', outputDeviceId: 'default', readAloudEnabled: false },
           webSearch: {},
           permissions: { mode: 'ask', allow: [], ask: [], deny: [] },

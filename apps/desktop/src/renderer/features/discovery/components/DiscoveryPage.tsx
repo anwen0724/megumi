@@ -106,7 +106,7 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
 
   /** Saves the enabled source set; supply only searches sources saved here. */
   const changeSources = useCallback(
-    async (enabledSources: string[]): Promise<boolean> => {
+    async (enabledSources: SupplySourceView['sourceId'][]): Promise<boolean> => {
       setError(null);
       try {
         const result = await window.megumi.discovery.updateConfiguration(

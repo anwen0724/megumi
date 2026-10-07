@@ -80,7 +80,7 @@ export const RecommendationRunRecordSchema = z.object({
     'failed',
     'cancelled',
     'interrupted',
-    'input_changed'
+    'superseded'
   ]),
   interestSnapshot: z.array(InterestSnapshotEntrySchema),
   candidateSnapshot: CandidateInputSnapshotSchema,

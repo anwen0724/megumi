@@ -4,7 +4,7 @@ import { GeneralSettingsSchema } from './definitions/general';
 import { ProvidersSettingsSchema } from './definitions/providers';
 import { ModelReferenceSchema } from './definitions/providers';
 import { ContextConfigurationSchema } from './definitions/context';
-import { DiscoveryConfigurationSchema } from './definitions/discovery';
+import { RecommendationConfigurationSchema } from './definitions/recommendation';
 import { VoiceConfigurationSchema } from './definitions/voice';
 import { WebSearchConfigurationSchema } from './definitions/web-search';
 import { PermissionsConfigurationSchema } from './definitions/permissions';
@@ -13,7 +13,7 @@ export const ConfigurationSchema = z.object({
   general: GeneralSettingsSchema,
   providers: ProvidersSettingsSchema,
   context: ContextConfigurationSchema,
-  discovery: DiscoveryConfigurationSchema,
+  discovery: RecommendationConfigurationSchema.default({}),
   voice: VoiceConfigurationSchema,
   webSearch: WebSearchConfigurationSchema,
   permissions: PermissionsConfigurationSchema,
@@ -23,7 +23,7 @@ export type SettingsConfiguration = z.output<typeof ConfigurationSchema>;
 export const GlobalOnlySettingsFields = {
   general: ['setupCompleted', 'language', 'theme', 'lastSelectedModel'],
   voice: ['inputDeviceId', 'outputDeviceId'],
-  discovery: ['candidateSupplyConfirmed'],
+  discovery: ['enabled','enabledSources','candidateSupplyModel','recommendationModel','dailyFeed','candidateSupply','curated','limits'],
 } satisfies { [K in keyof SettingsConfiguration]?: readonly (keyof SettingsConfiguration[K])[] };
 
 export const ConfigurationFileSchema = z.object(

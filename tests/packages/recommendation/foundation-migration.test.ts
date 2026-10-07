@@ -2,7 +2,7 @@
 // @vitest-environment node
 import fs from 'node:fs';
 import path from 'node:path';
-import { rehearsalFolder } from './foundation-fixture';
+import { rehearsalFolder,legacyMigrationFolder } from './foundation-fixture';
 import { createMaterialStorage } from '@megumi/application/recommendation/content/material-storage';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 import { afterEach, expect, it } from 'vitest';
@@ -12,7 +12,7 @@ afterEach(() => { for (const database of databases.splice(0)) database.close(); 
 
 it('preserves legacy material and marks old qualification stale without inventing publication evidence', () => {
   const database = createDatabase({ filename: ':memory:' }); databases.push(database);
-  migrateDatabase({ database });
+  migrateDatabase({ database,migrationsFolder:legacyMigrationFolder() });
   database.prepare({
     sql: "INSERT INTO interests(id,text,enabled,created_at,updated_at) VALUES('i1','原文',1,10,20)"
   }).run();
@@ -82,7 +82,7 @@ it('requires complete attempt ownership and one active material request per meth
 });
 
 it('merges legacy search results for one platform identity without inventing search history links', () => {
-  const database = createDatabase({ filename: ':memory:' }); databases.push(database); migrateDatabase({ database });
+  const database = createDatabase({ filename: ':memory:' }); databases.push(database); migrateDatabase({ database,migrationsFolder:legacyMigrationFolder() });
   const insert = "INSERT INTO search_results(id,source,external_id,url,first_seen_at,last_seen_at) VALUES(?,'zhihu','answer:1',?,?,?)";
   database.prepare({ sql: insert }).run(['r1', 'https://www.zhihu.com/question/1/answer/1', 10, 20]);
   database.prepare({ sql: insert }).run(['r2', 'https://www.zhihu.com/answer/1', 15, 30]);

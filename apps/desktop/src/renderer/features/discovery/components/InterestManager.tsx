@@ -16,7 +16,7 @@ interface InterestManagerProps {
   interests: InterestUi[] | null;
   sources: SupplySourceView[] | null;
   onChangeInterest(request: DiscoveryInterestChangePayload): Promise<boolean>;
-  onChangeSources(enabledSources: string[]): Promise<boolean>;
+  onChangeSources(enabledSources: SupplySourceView['sourceId'][]): Promise<boolean>;
   onOpenContentSources?(): void;
 }
 

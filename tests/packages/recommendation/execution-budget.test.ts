@@ -1,64 +1,36 @@
-/* Verifies one round's execution budget reserves, charges, and expires. */
+/*
+ * Verifies execution reservations and model usage against the production budget.
+ */
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
-import { createExecutionBudget } from '@megumi/application/recommendation/supply/execution-budget';
-import { CandidateSupplyConfigurationSchema } from '@megumi/application/settings/definitions/discovery';
-
-const limits = CandidateSupplyConfigurationSchema.parse({}).limits;
-
-describe('execution budget', () => {
-  it('reserves one unit per reservation and refuses work beyond the limit', () => {
-    const budget = createExecutionBudget({
-      limits: { ...limits, maxSearchCalls: 2 },
-      startedAt: 0,
-      now: () => 0,
-    });
-
-    expect(budget.reserve('searchCalls')).toBe(true);
-    expect(budget.remaining('searchCalls')).toBe(1);
-    expect(budget.reserve('searchCalls')).toBe(true);
-    expect(budget.reserve('searchCalls')).toBe(false);
-    expect(budget.remaining('searchCalls')).toBe(0);
-  });
-
-  it('returns a reservation that never reached the external work', () => {
-    const budget = createExecutionBudget({
-      limits: { ...limits, maxPlanningCalls: 1 },
-      startedAt: 0,
-      now: () => 0,
-    });
-
-    expect(budget.reserve('planningCalls')).toBe(true);
-    budget.release('planningCalls');
-
-    expect(budget.reserve('planningCalls')).toBe(true);
-  });
-
-  it('stops accepting work once the round deadline passed', () => {
-    let now = 1_000;
-    const budget = createExecutionBudget({
-      limits: { ...limits, maxDurationMinutes: 1 },
-      startedAt: 1_000,
-      now: () => now,
-    });
-
-    expect(budget.expired).toBe(false);
-
-    now = 1_000 + 60_000;
-
-    expect(budget.expired).toBe(true);
-    expect(budget.reserve('searchCalls')).toBe(false);
-  });
-
-  it('charges the round model budget and keeps the remainder available', () => {
-    const budget = createExecutionBudget({
-      limits: { ...limits, maxModelInputTokens: 100, maxModelOutputTokens: 50 },
-      startedAt: 0,
-      now: () => 0,
-    });
-
-    expect(budget.reserveModelTokens({ inputTokens: 60, outputTokens: 20 })).toBe(true);
-    expect(budget.reserveModelTokens({ inputTokens: 60, outputTokens: 20 })).toBe(false);
-    expect(budget.remainingModelTokens()).toEqual({ inputTokens: 40, outputTokens: 30 });
-  });
+import { expect, it } from 'vitest';
+import { createDiscoveryBudget } from '@megumi/application/recommendation/discovery/discovery-budget';
+import { RecommendationLimitsSchema } from '@megumi/application/settings/definitions/recommendation';
+import { recommendationFixture } from './recommendation-fixture';
+it('reserves each logical search separately from its physical requests', () => {
+  const budget = createDiscoveryBudget(RecommendationLimitsSchema.parse({ maxSearchCalls: 2, maxSourceRequests: 3 }), 0, () => 0);
+  expect(budget.reserve('searchCalls')).toBe(true);
+  expect(budget.reserve('sourceRequests', 3)).toBe(true);
+  expect(budget.reserve('sourceRequests')).toBe(false);
+  expect(budget.reserve('searchCalls')).toBe(true);
+  expect(budget.reserve('searchCalls')).toBe(false);
+});
+it('refunds unexecuted work and rejects requests after the round deadline', () => {
+  let now = 0;
+  const budget = createDiscoveryBudget(RecommendationLimitsSchema.parse({ maxPlanningCalls: 1, maxDurationMinutes: 1 }), now, () => now);
+  expect(budget.reserve('planningCalls')).toBe(true);
+  budget.release('planningCalls');
+  expect(budget.reserve('planningCalls')).toBe(true);
+  now = 60000;
+  expect(budget.expired()).toBe(true);
+  expect(budget.reserve('searchCalls')).toBe(false);
+});
+it('settles actual tokens and refuses a request that would exceed the total', () => {
+  const f = recommendationFixture();
+  const budget = createDiscoveryBudget(RecommendationLimitsSchema.parse({ maxModelInputTokens: 100, maxModelOutputTokens: 4000 }), f.now(), f.now);
+  const reservation = budget.reserveModel('analysisCalls', f.model, 'Analyze', 'text');
+  if (typeof reservation === 'string')
+    throw new Error('Expected reservation.');
+  budget.settleModel(reservation, { input: 90, output: 100 });
+  expect(budget.snapshot().used).toMatchObject({ modelInputTokens: 90, modelOutputTokens: 100 });
+  expect(budget.reserveModel('analysisCalls', f.model, 'Analyze', 'a'.repeat(100))).toBe('budget_exhausted');
 });

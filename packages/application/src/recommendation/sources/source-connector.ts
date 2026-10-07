@@ -58,6 +58,8 @@ export interface SourceFailure {
 }
 
 export interface SourceSearchRequest {
+  /** Reserves each logical service attempt; physical transport retries use reserveRequest. */
+  readonly reserveSearch?: (sourceId: string) => boolean;
   /** Reserves each actual request before sending; false stops work without fallback. */
   readonly reserveRequest?: (kind: 'search' | 'material') => boolean;
   readonly query: string;

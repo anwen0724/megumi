@@ -3,7 +3,8 @@
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
 import { createInterestStorage } from '@megumi/application/recommendation/interests/interest-storage';
 import { createInterestManagement, hashEnabledInterests } from '@megumi/application/recommendation/interests/manage-interests';
-import { createCandidateStorage } from '@megumi/application/recommendation/candidates/candidate-storage';
+import { createCandidateQualificationStorage } from '@megumi/application/recommendation/candidates/candidate-qualification-storage';
+import { createMaterialStorage } from '@megumi/application/recommendation/content/material-storage';
 import { afterEach, expect, it } from 'vitest';
 let database: DatabaseConnection;
 afterEach(() => database?.close());
@@ -52,17 +53,11 @@ it('rejects a late match after the interest is disabled and enabled again', asyn
     now: () => 100
   });
   await interests.createInterest({ text: '面试' });
-  database.prepare({
-    sql: "INSERT INTO contents (id,source,canonical_url,text,created_at,updated_at) VALUES ('c1','web','https://example.com/1','材料',0,0)"
-  }).run();
+  const materials=createMaterialStorage(database);
+  const material=materials.saveMaterial({platform:'web',canonicalUrl:'https://example.com/1',text:'材料',kind:'excerpt',rangeEnd:2,truncated:false,method:'test',acquiredAt:100,publicationEvidence:[]}).material;
+  const evidence=[{materialId:material.id,quote:'材料'}];
+  materials.saveAnalysis({contentId:material.contentId,materialId:material.id,result:{summary:'材料',keyPoints:[{text:'材料',evidence}],topics:['面试'],contentType:'article',qualityScore:0.5,spamScore:0,timeScope:{kind:'unknown',evidence:[]}},now:100});
   await interests.updateInterest({ interestId: 'i1', expectedRevision: 1, enabled: false });
   await interests.updateInterest({ interestId: 'i1', expectedRevision: 2, enabled: true });
-  const committed = createCandidateStorage(database).commitRelations({
-    contentId: 'c1',
-    matches: [{ interestId: 'i1', expectedText: '面试', expectedRevision: 1, relation: 'direct' }],
-    pools: [],
-    now: 100
-  });
-  expect(committed.committedInterestIds).toEqual([]);
-  expect(committed.skippedInterestIds).toEqual(['i1']);
+  expect(createCandidateQualificationStorage(database).saveQualification({contentId:material.contentId,materialId:material.id,interestId:'i1',interestRevision:1,relation:'direct',status:'eligible',basis:'旧版本匹配',evidence,reviewedAt:100,validUntil:200})).toEqual({status:'input_changed'});
 });

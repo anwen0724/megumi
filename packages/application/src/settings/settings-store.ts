@@ -28,13 +28,27 @@ export type Settings = ReturnType<typeof createSettings>;
 
 /** Creates file-bound configuration access without creating any files. */
 export function createSettings(options: CreateSettingsOptions) {
+  const listeners=new Set<()=>void>();
+  let lastRevision:string|undefined;
+  function observed(result:ReadSettingsResult):ReadSettingsResult {
+    if(result.status==='ok') {
+      const changed=lastRevision!==undefined && lastRevision!==result.settings.revision;
+      lastRevision=result.settings.revision;
+      if(changed)for(const listener of listeners)listener();
+    }
+    return result;
+  }
   return {
+    /** Observes a changed configuration after a read or successful local write. */
+    subscribeConfiguration(listener:()=>void):()=>void {
+      listeners.add(listener);return ()=>{listeners.delete(listener);};
+    },
     ...createCredentialStore(options.credentialsPath, options.readEnvironment),
     /** Reads and validates the latest complete configuration; never writes files. */
     readSettings(): ReadSettingsResult {
       const documents = readConfigurationFiles(options);
       if (documents.status === 'rejected') return documents;
-      return resolveConfiguration(options, documents.global, documents.project);
+      return observed(resolveConfiguration(options, documents.global, documents.project));
     },
 
     /** Saves explicit edits to the bound file without materializing defaults. */
@@ -61,6 +75,7 @@ export function createSettings(options: CreateSettingsOptions) {
         return { status: 'unchanged', settings: result.settings };
       }
       writeJsonFile(options.projectSettingsPath ?? options.globalSettingsPath, next);
+      observed({status:'ok',settings:result.settings});
       return { status: 'updated', settings: result.settings };
     },
   };
