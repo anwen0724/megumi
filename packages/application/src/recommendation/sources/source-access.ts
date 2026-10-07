@@ -1,4 +1,6 @@
-/* Assembles the approved sources and owns search/material fallback and access state. */
+/*
+ * Assembles the approved sources and owns search/material fallback and access state.
+ */
 import type { WebFetch } from '@megumi/agent';
 import {
   SourceIdSchema,
@@ -26,7 +28,6 @@ import type {
 import { sourceFailure } from './source-http';
 import { identifyContentUrl } from './source-material';
 import { PLATFORM_ORIGINS } from './platform-page-reader';
-
 export interface SourceAccessOptions {
   enabledSources(): readonly string[];
   accessSecret(sourceId: 'tavily' | 'zhihu'): string | undefined;
@@ -35,7 +36,6 @@ export interface SourceAccessOptions {
   webFetch?: WebFetch;
   now?: () => number;
 }
-
 export function createSourceAccess(options: SourceAccessOptions) {
   const now = options.now ?? Date.now;
   const checks = new Map<SourceId, SourceAccessView>();
@@ -160,7 +160,7 @@ export function createSourceAccess(options: SourceAccessOptions) {
           profileId: sourceId,
           operation: 'status',
           url: address,
-          signal: AbortSignal.timeout(30_000)
+          signal: AbortSignal.timeout(30000)
         });
         if (result.status === 'failed') return checked(sourceId, sourceFailure(result.failure.code, result.failure.message).failure);
         const state = result.snapshot.pageState;
@@ -174,23 +174,39 @@ export function createSourceAccess(options: SourceAccessOptions) {
       const result = await callSearch(source, { query: 'Megumi', limit: 1 });
       return result.status === 'success' ? checked(sourceId) : checked(sourceId, result.failure);
     },
-    async acquireMaterial(item: RawItem, request: Pick<SourceMaterialRequest, 'signal' | 'reserveRequest'> = {}): Promise<SourceMaterialResult> {
+    async acquireMaterial(item: RawItem, request: Pick<SourceMaterialRequest, 'signal' | 'reserveRequest'> & {
+      verifyPublication?: boolean;
+    } = {}): Promise<SourceMaterialResult> {
       if (request.signal?.aborted) return sourceFailure('cancelled', 'Material acquisition was cancelled.');
       if (!options.enabledSources().length) return sourceFailure('not_configured', 'All recommendation sources are disabled.');
       const identity = identifyContentUrl(item.url);
       if (!identity) return sourceFailure('invalid_response', 'Content URL is invalid.');
       if (identity.platform !== 'web' && identity.platform && !options.enabledSources().includes(identity.platform)) return sourceFailure('not_configured', 'Content platform is disabled.');
       const platform = sources.find((source) => source.id === identity.platform);
+      let acquired: SourceMaterialResult | undefined;
       if (platform && options.enabledSources().includes(platform.id)) {
         const result = await callMaterial(platform, { ...request, url: item.requestUrl ?? identity.url, externalId: identity.externalId });
-        if (result.status === 'success' || ['cancelled', 'budget_exhausted'].includes(result.failure.code)) return result;
+        if (result.status === 'success') {
+          acquired = result;
+          if (!request.verifyPublication || result.material.publicationEvidence?.some(evidence => evidence.kind === 'published' && evidence.status === 'verified'))
+            return result;
+        }
+        else if (['cancelled', 'budget_exhausted'].includes(result.failure.code))
+          return result;
       }
       const primary = sources.find((source) => source.id === 'tavily');
       if (primary && options.enabledSources().includes('tavily')) {
         const result = await callMaterial(primary, { ...request, url: identity.url, externalId: identity.externalId });
-        if (result.status === 'success' || ['cancelled', 'budget_exhausted'].includes(result.failure.code)) return result;
+        if (result.status === 'success') {
+          acquired ??= result;
+          if (!request.verifyPublication || result.material.publicationEvidence?.some(evidence => evidence.kind === 'published' && evidence.status === 'verified'))
+            return result;
+        }
+        else if (['cancelled', 'budget_exhausted'].includes(result.failure.code))
+          return result;
       }
-      return direct.fetch({ ...request, url: identity.url });
+      const page = await direct.fetch({ ...request, url: identity.url });
+      return page.status === 'success' ? page : acquired ?? page;
     },
     connectors: () => sources.filter((source) => options.enabledSources().includes(source.id)).map((source): SourceConnector => ({
       ...source,

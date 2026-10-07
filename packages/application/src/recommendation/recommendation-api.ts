@@ -19,6 +19,9 @@ import { SOURCE_CATALOG } from './sources/source-access-contracts';
 import type { EmbeddedBrowser } from './sources/browser-access';
 import { createMaintenanceScheduler } from './supply/schedule-maintenance';
 import type { DiscoveryHost, SupplyConfigurationView } from './recommendation-contracts';
+import { createDailyFeedStorage } from './daily-feed-storage';
+import { createRecommendationRunStorage } from './recommendation-run-storage';
+import { createDailyFeed } from './create-daily-feed';
 export interface RecommendationOptions {
   readonly database: DatabaseConnection;
   readonly settings: Settings;
@@ -34,6 +37,7 @@ export interface RecommendationOptions {
   readonly sourceWebFetch?: WebFetch;
   readonly newId: (prefix: string) => string;
   readonly now?: () => number;
+  readonly timezone?: () => string;
   readonly timers?: {
     setTimeout(callback: () => void, delayMs: number): unknown;
     clearTimeout(handle: unknown): void;
@@ -56,19 +60,44 @@ export function createRecommendation(options: RecommendationOptions) {
   discovery.interruptRunning(now());
   materials.recoverInterrupted();
   candidates.recoverInterrupted();
-  const interests = createInterestManagement({ storage: createInterestStorage(options.database), newInterestId: () => options.newId('interest'), now });
+  const interestStorage = createInterestStorage(options.database);
+  const interests = createInterestManagement({ storage: interestStorage, newInterestId: () => options.newId('interest'), now });
   const sourceQueue = createSourceQueue(() => readConfiguration().config.limits.maxConcurrentSourceRequests);
   const modelQueue = createSourceQueue(() => readConfiguration().config.limits.maxConcurrentModelRequests);
   const resolveSupplyModel = async () => { const reference = readConfiguration().config.candidateSupplyModel; return reference ? options.resolveModel(reference) : undefined; };
   const supply = createCandidateSupply({ materials, candidates, discovery, interests, sources, client: options.client, sourceQueue, modelQueue, now, newId: options.newId, readConfiguration, resolveModel: resolveSupplyModel });
+  type ChangedEvent = import('./feed-contracts').RecommendationChanged;
+  const listeners = new Set<(event: ChangedEvent) => void>();
+  const changed = (event: ChangedEvent) => {
+    for (const listener of listeners) {
+      try {
+        listener(event);
+      }
+      catch (error) {
+        options.onBackgroundError?.(error, 'recommendation_notification');
+      }
+    }
+  };
+  const runs = createRecommendationRunStorage(options.database, options.newId);
+  runs.interrupt(now());
+  const dailyStorage = createDailyFeedStorage({ database: options.database, materials, interests: () => interestStorage.list(), newId: options.newId, now });
+  const daily = createDailyFeed({ materials, candidates, discovery, interests, sources, client: options.client, sourceQueue, modelQueue, now, newId: options.newId, readConfiguration, resolveModel: resolveSupplyModel, storage: dailyStorage, runs, timezone: options.timezone, changed });
   const scheduler = createMaintenanceScheduler({ supply, intervalMs: () => readConfiguration().config.candidateSupply.maintenanceIntervalMinutes * 60000, ...(options.timers ? { setTimer: options.timers.setTimeout, clearTimer: options.timers.clearTimeout } : {}), onError: error => options.onBackgroundError?.(error, 'maintenance') });
   let backgroundStarted = false;
+  let dailyTimer: unknown;
+  const setTimer = options.timers?.setTimeout ?? ((callback: () => void, delay: number) => setTimeout(callback, delay));
+  const clearTimer = options.timers?.clearTimeout ?? ((timer: unknown) => clearTimeout(timer as ReturnType<typeof setTimeout>));
+  const checkDaily = (force = false) => { void daily.check(force).catch(error => options.onBackgroundError?.(error, 'daily_feed')); };
+  const scheduleDaily = () => { dailyTimer = setTimer(() => { checkDaily(); scheduleDaily(); }, 60000); };
   const unsubscribe = options.settings.subscribeConfiguration(() => {
-    if (!readConfiguration().config.enabled)
+    if (!readConfiguration().config.enabled) {
+      daily.cancel();
       void supply.cancel().catch(error => options.onBackgroundError?.(error, 'disable'));
+    }
     else if (backgroundStarted) {
       scheduler.start();
       void supply.startMaintenance({reason:'startup'}).result.catch(error=>options.onBackgroundError?.(error,'enable'));
+      checkDaily(true);
     }
   });
   let shutdown: Promise<void> | undefined;
@@ -78,21 +107,42 @@ export function createRecommendation(options: RecommendationOptions) {
     backgroundStarted = input.automaticTriggers !== false;
     if (backgroundStarted && readConfiguration().config.enabled)
       scheduler.start();
+    if (backgroundStarted && dailyTimer === undefined) {
+      checkDaily();
+      scheduleDaily();
+    }
   };
   const host: DiscoveryHost = {
+    onChanged(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    async listDailyFeed(request) { return daily.list(request); },
+    startDailyFeed: request => daily.start(request),
+    async getRun(request) { return runs.view(request.runId); },
+    async cancelRun(request) { return { status: runs.read(request.runId) ? daily.cancel(request.runId) : 'not_found' }; },
     openSourceLogin: request => sources.openSourceLogin(request.sourceId),
     checkSourceAccess: request => sources.checkSourceAccess(request.sourceId),
     async listInterests() { return { interests: [...(await interests.listInterests()).interests] }; },
     async changeInterest(request) {
       if (request.action === 'create') {
         const result = await interests.createInterest({ text: request.description });
+        if (result.status === 'created') {
+          changed({ kind: 'interest', interestId: result.interest.id });
+          if (backgroundStarted)
+            checkDaily(true);
+        }
         return result.status === 'created' ? { status: 'changed', interests: [...(await interests.listInterests()).interests] } : { status: 'invalid_request', message: result.message };
       }
       if (request.action === 'delete') {
         const result = await interests.deleteInterest({ interestId: request.interestId, expectedRevision: request.expectedRevision });
+        if (result.status === 'deleted')
+          changed({ kind: 'interest', interestId: request.interestId });
         return result.status === 'deleted' || result.status === 'already_deleted' ? { status: 'changed', interests: [...(await interests.listInterests()).interests] } : result.status === 'revision_conflict' ? { status: 'revision_conflict' } : { status: 'invalid_request', message: result.message };
       }
       const result = await interests.updateInterest(request.action === 'update' ? { interestId: request.interestId, expectedRevision: request.expectedRevision, text: request.description } : { interestId: request.interestId, expectedRevision: request.expectedRevision, enabled: request.action === 'resume' });
+      if (result.status === 'updated') {
+        changed({ kind: 'interest', interestId: request.interestId });
+        if (backgroundStarted)
+          checkDaily(true);
+      }
       return result.status === 'updated' || result.status === 'unchanged' ? { status: 'changed', interests: [...(await interests.listInterests()).interests] } : result.status === 'revision_conflict' ? { status: 'revision_conflict' } : result.status === 'not_found' ? { status: 'not_found' } : { status: 'invalid_request', message: result.message };
     },
     async getConfiguration() { return configurationView(); },
@@ -109,6 +159,7 @@ export function createRecommendation(options: RecommendationOptions) {
       if (result.status === 'rejected')
         throw new Error(result.error.message);
       await startBackground();
+      checkDaily(true);
       return { status: 'confirmed' };
     }
   };
@@ -117,7 +168,22 @@ export function createRecommendation(options: RecommendationOptions) {
     return { candidateSupplyConfirmed: config.enabled, sources: sources.readStatuses().map(source => ({ ...source, name: SOURCE_CATALOG.find(s => s.sourceId === source.sourceId)!.name, enabled: config.enabledSources.includes(source.sourceId), credentialConfigured: (source.sourceId === 'tavily' || source.sourceId === 'zhihu') && options.accessSecret(source.sourceId) !== undefined })) };
   }
   return {
-    sources, supply, interests, host, startBackground,
-    shutdown() { shutdown ??= (async () => { unsubscribe(); await scheduler.stop(); await sources.shutdown(); })(); return shutdown; }
+    sources, supply, interests, daily, host, startBackground,
+    /** Accepts today's due work on OS resume; it does not wait for external acquisition. */
+    async resumeBackground() {
+      if (backgroundStarted && !shutdown) await daily.check();
+    },
+    onChanged(listener: (event: ChangedEvent) => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    shutdown() {
+      shutdown ??= (async () => {
+        unsubscribe();
+        if (dailyTimer !== undefined) clearTimer(dailyTimer);
+        await daily.close();
+        await scheduler.stop();
+        await sources.shutdown();
+        listeners.clear();
+      })();
+      return shutdown;
+    }
   };
 }

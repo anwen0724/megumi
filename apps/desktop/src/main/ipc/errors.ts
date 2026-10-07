@@ -1,7 +1,9 @@
-/* Desktop-owned IPC error contract and boundary sanitization. */
+/*
+ * Desktop-owned IPC error contract and boundary sanitization.
+ */
 import { z } from 'zod';
-
 export const RUNTIME_IPC_ERROR_CODES = [
+  'INVALID_REQUEST', 'REVISION_CONFLICT', 'INTEREST_NOT_FOUND', 'CONTENT_NOT_FOUND', 'DATE_OUT_OF_RANGE', 'RECOMMENDATION_DISABLED', 'LANGUAGE_CONFLICT', 'MODEL_UNAVAILABLE', 'MODEL_OUTPUT_INVALID', 'INPUT_TOO_LARGE', 'REQUEST_CONFLICT', 'STORAGE_ERROR', 'SHUTTING_DOWN',
   'ipc_invalid_request',
   'ipc_handler_failed',
   'ipc_invoke_failed',
@@ -45,7 +47,6 @@ export const RUNTIME_IPC_ERROR_CODES = [
   'approval_denied',
   'unknown',
 ] as const;
-
 export const RuntimeIpcErrorSchema = z
   .object({
     code: z.enum(RUNTIME_IPC_ERROR_CODES),
@@ -62,14 +63,11 @@ export const RuntimeIpcErrorSchema = z
     details: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
-
 export type RuntimeIpcError = z.infer<typeof RuntimeIpcErrorSchema>;
-
 const SENSITIVE_KEY =
   /(?:api.?key|authorization|credential|password|secret|token|provider.?body|prompt|raw.?stack|stack|file.?content|full.?text)/i;
 const SENSITIVE_VALUE =
   /(?:api[_-]?key\s*[=:]|authorization\s*[=:]|bearer\s+[A-Za-z0-9._-]+|password\s*[=:]|secret\s*[=:]|sk-[A-Za-z0-9_-]{8,})/i;
-
 /** Normalizes any thrown value into the Desktop IPC failure contract. */
 export function normalizeRuntimeIpcError(error: unknown, fallbackMessage: string): RuntimeIpcError {
   const parsed = RuntimeIpcErrorSchema.safeParse(error);
@@ -79,7 +77,6 @@ export function normalizeRuntimeIpcError(error: unknown, fallbackMessage: string
     message: error instanceof Error && error.message ? error.message : fallbackMessage,
   };
 }
-
 /** Removes credentials, prompt text, file contents, and stack data at the IPC boundary. */
 export function sanitizeRuntimeIpcError(error: RuntimeIpcError): RuntimeIpcError {
   const details = error.details ? sanitizeDetails(error.details) : undefined;
@@ -90,18 +87,15 @@ export function sanitizeRuntimeIpcError(error: RuntimeIpcError): RuntimeIpcError
     ...(details ? { details } : {}),
   };
 }
-
 export interface SanitizedZodIssue {
   path: string;
   code: string;
   message: string;
 }
-
 export interface SanitizedZodIssues {
   issueCount: number;
   issues: SanitizedZodIssue[];
 }
-
 export function sanitizeZodIssues(error: z.ZodError): SanitizedZodIssues {
   return {
     issueCount: error.issues.length,
@@ -112,7 +106,6 @@ export function sanitizeZodIssues(error: z.ZodError): SanitizedZodIssues {
     })),
   };
 }
-
 function sanitizeDetails(details: Record<string, unknown>): Record<string, unknown> | undefined {
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(details)) {
@@ -120,7 +113,6 @@ function sanitizeDetails(details: Record<string, unknown>): Record<string, unkno
   }
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }
-
 function sanitizeValue(value: unknown): unknown {
   if (typeof value === 'string') return SENSITIVE_VALUE.test(value) ? '[redacted]' : value;
   if (Array.isArray(value)) return value.map(sanitizeValue);

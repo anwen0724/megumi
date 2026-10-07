@@ -1,5 +1,24 @@
-/* Defines source-language copy for the interests and content-supply page. */
+/*
+ * Defines source-language copy for the interests and content-supply page.
+ */
 export const discovery = {
+  dailyTitle: 'Custom interest feed',
+  dailyDate: 'Feed date',
+  dailyLoadFailed: 'Could not read saved daily results.',
+  dailyLoading: 'Reading saved results…',
+  dailyRunning: 'Acquiring today’s content…',
+  dailyWaiting: 'No saved batch for this date yet.',
+  dailyFailed: 'Daily acquisition failed',
+  dailyEmpty: 'No qualifying new content for this date',
+  dailyPartial: 'Some results are saved; some work is unfinished.',
+  dailyRetry: 'Acquire unfinished daily content',
+  dailyDateUnknown: 'Publication date unknown',
+  material_full_text: 'Full text',
+  material_excerpt: 'Excerpt',
+  material_description: 'Description',
+  material_transcript: 'Transcript',
+  materialTruncated: 'Truncated',
+  historicalInterest: 'Historical interest',
   eyebrow: 'Content supply',
   title: 'Interests',
   subtitle:

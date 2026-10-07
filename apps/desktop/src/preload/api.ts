@@ -11,6 +11,7 @@ import type { ModelCatalogResult } from '@megumi/application/contracts';
  * Exposes validated, least-authority Desktop and Product operations to the Renderer.
  */
 import { ipcRenderer } from 'electron';
+import { RecommendationChangedSchema, type RecommendationChanged, type DailyFeedView, type StartDailyFeedResult, type RecommendationRunView } from '@megumi/application/contracts';
 import type { AnyEvent } from '@megumi/application/contracts';
 import type {
   ApprovalHostResult,
@@ -123,7 +124,6 @@ import {
   ApplicationUpdateSnapshotSchema,
   type ApplicationUpdateSnapshot,
 } from '../application-update/application-update-contract';
-
 type BusinessRequest<TPayload, TChannel extends BusinessIpcChannel> = RuntimeIpcRequest<
   TPayload,
   TChannel
@@ -133,7 +133,6 @@ type EmptyData = Record<string, never>;
 type SessionMessageSendData = SendUserInputPayload;
 type SessionBranchDraftCreateData = CreateBranchDraftResult['payload'];
 type SessionBranchDraftCancelData = CancelBranchDraftResult['payload'];
-
 // MessagePort cannot be passed as an argument of a contextBridge-exposed
 // function. The main world transfers it to this isolated world through the
 // shared DOM window first; Preload then forwards the real port to Electron Main.
@@ -145,15 +144,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
   if (!port) return;
   ipcRenderer.postMessage(IPC_CHANNELS.voice.inputPort, null, [port]);
 });
-
-async function invokeRuntimeIpc<
-  TPayload,
-  TData extends object,
-  TChannel extends BusinessIpcChannel,
->(
-  channel: TChannel,
-  request: BusinessRequest<TPayload, TChannel>,
-): Promise<RuntimeIpcResult<TData, TChannel>> {
+async function invokeRuntimeIpc<TPayload, TData, TChannel extends BusinessIpcChannel>(channel: TChannel, request: BusinessRequest<TPayload, TChannel>): Promise<RuntimeIpcResult<TData, TChannel>> {
   try {
     return (await ipcRenderer.invoke(channel, request)) as RuntimeIpcResult<TData, TChannel>;
   } catch {
@@ -171,7 +162,6 @@ async function invokeRuntimeIpc<
     };
   }
 }
-
 export const api = {
   invoke: <T>(channel: string, ...args: unknown[]): Promise<T> =>
     ipcRenderer.invoke(channel, ...args),
@@ -501,6 +491,29 @@ export const api = {
     ): Promise<RuntimeIpcResult<ApprovalHostResult, typeof IPC_CHANNELS.approval.resolve>> =>
       invokeRuntimeIpc(IPC_CHANNELS.approval.resolve, request),
   },
+  recommendation: {
+    listDailyFeed: (request: BusinessRequest<{
+      date?: string;
+    }, typeof IPC_CHANNELS.recommendation.listDailyFeed>): Promise<RuntimeIpcResult<DailyFeedView, typeof IPC_CHANNELS.recommendation.listDailyFeed>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.listDailyFeed, request),
+    startDailyFeed: (request: BusinessRequest<{
+      requestId: string;
+      interestIds?: string[];
+    }, typeof IPC_CHANNELS.recommendation.startDailyFeed>): Promise<RuntimeIpcResult<StartDailyFeedResult, typeof IPC_CHANNELS.recommendation.startDailyFeed>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.startDailyFeed, request),
+    getRun: (request: BusinessRequest<{
+      runId: string;
+    }, typeof IPC_CHANNELS.recommendation.getRun>): Promise<RuntimeIpcResult<RecommendationRunView | undefined, typeof IPC_CHANNELS.recommendation.getRun>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.getRun, request),
+    cancelRun: (request: BusinessRequest<{
+      runId: string;
+    }, typeof IPC_CHANNELS.recommendation.cancelRun>): Promise<RuntimeIpcResult<{
+      status: 'cancelling' | 'already_finished' | 'not_found';
+    }, typeof IPC_CHANNELS.recommendation.cancelRun>> => invokeRuntimeIpc(IPC_CHANNELS.recommendation.cancelRun, request),
+    onChanged(callback: (event: RecommendationChanged) => void) {
+      const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
+        const parsed = RecommendationChangedSchema.safeParse(raw); if (parsed.success)
+          callback(parsed.data);
+      }; ipcRenderer.on(IPC_CHANNELS.recommendation.changed, listener); return () => { ipcRenderer.removeListener(IPC_CHANNELS.recommendation.changed, listener); };
+    },
+  },
   discovery: {
     openSourceLogin: (request: BusinessRequest<SourceAccessRequest, typeof IPC_CHANNELS.discovery.sourceLogin>): Promise<RuntimeIpcResult<SourceLoginResult, typeof IPC_CHANNELS.discovery.sourceLogin>> => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceLogin, request),
     checkSourceAccess: (request: BusinessRequest<SourceAccessRequest, typeof IPC_CHANNELS.discovery.sourceAccess>): Promise<RuntimeIpcResult<SourceAccessView, typeof IPC_CHANNELS.discovery.sourceAccess>> => invokeRuntimeIpc(IPC_CHANNELS.discovery.sourceAccess, request),
@@ -740,7 +753,6 @@ export const api = {
     },
   },
 };
-
 function requestFor<T, C extends BusinessIpcChannel>(
   channel: C,
   payload: T,

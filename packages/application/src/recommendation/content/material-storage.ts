@@ -71,7 +71,8 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
         sql: `UPDATE content_analysis SET attempt_deadline_at=?
         WHERE content_id=? AND material_id=? AND owner_run_id=? AND attempt_token=?
         AND status='running' AND attempt_deadline_at>? AND EXISTS
-        (SELECT 1 FROM discovery_runs WHERE id=? AND status='running')` }).run([
+        (SELECT 1 FROM discovery_runs WHERE id=? AND status='running')`
+      }).run([
           deadlineAt, contentId, materialId, attempt.runId, attempt.token, now, attempt.runId
         ]).changes > 0;
     },
@@ -160,7 +161,7 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
       status: 'created' | 'unchanged';
       material: ContentMaterial;
     } {
-      const material = MaterialInputSchema.parse(input);
+      let material = MaterialInputSchema.parse(input);
       const canonicalUrl = normalizeContentUrl(material.canonicalUrl);
       if (!canonicalUrl)
         throw new Error('Material URL must use HTTP or HTTPS.');
@@ -185,9 +186,19 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
             }).run([material.externalId, contentId, material.platform]);
           }
           const previous = existing?.current_material_id ? readMaterial(existing.current_material_id) : undefined;
-          // A later search excerpt cannot replace stronger acquired text for the same identity.
-          if (previous && previous.kind !== 'excerpt' && material.kind === 'excerpt')
+          if (previous) {
+            const evidence = [...previous.publicationEvidence.filter(item => item.kind === 'published'), ...material.publicationEvidence];
+            material = { ...material, publicationEvidence: [...new Map(evidence.map(item => [JSON.stringify(item), item])).values()] };
+          }
+          // Preserve the acquired date-bearing excerpt while retaining the stronger current text.
+          const historical = Boolean(previous && previous.kind !== 'excerpt' && material.kind === 'excerpt');
+          if (previous && historical && !material.publicationEvidence.length)
             return { status: 'unchanged', material: previous };
+          const repeated = historical ? database.prepare<{
+            id: string;
+          }>({ sql: 'SELECT id FROM content_materials WHERE content_id=? AND kind=? AND text_hash=? ORDER BY revision DESC' }).all([contentId, material.kind, createHash('sha256').update(material.text).digest('hex')]).map(row => readMaterial(row.id)!).find(saved => sameMaterial(saved, material)) : undefined;
+          if (repeated)
+            return { status: 'unchanged', material: repeated };
           if (previous && sameMaterial(previous, material)) {
             database.prepare({
               sql: 'INSERT INTO material_acquisitions(id,material_id,method,acquired_at) VALUES(?,?,?,?)'
@@ -195,6 +206,9 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
             return { status: 'unchanged', material: previous };
           }
           const materialId = newId();
+          const revision = (database.prepare<{
+            revision: number | null;
+          }>({ sql: 'SELECT max(revision) AS revision FROM content_materials WHERE content_id=?' }).get([contentId])?.revision ?? 0) + 1;
           if (!existing)
             database.prepare({
               sql: 'INSERT INTO contents(id,platform,external_id,canonical_url,title,author,author_id,language,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)'
@@ -215,7 +229,7 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
           }).run([
             materialId,
             contentId,
-            (previous?.revision ?? 0) + 1,
+            revision,
             material.title ?? null,
             material.author ?? null,
             material.text,
@@ -228,17 +242,18 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
             material.acquiredAt,
             JSON.stringify(material.publicationEvidence)
           ]);
-          database.prepare({
-            sql: 'UPDATE contents SET current_material_id = ?, title = ?, author = ?, author_id = ?, language = coalesce(?,language), updated_at = ? WHERE id = ?'
-          }).run([
-            materialId,
-            material.title ?? null,
-            material.author ?? null,
-            material.authorId ?? null,
-            material.language ?? null,
-            material.acquiredAt,
-            contentId
-          ]);
+          if (!historical)
+            database.prepare({
+              sql: 'UPDATE contents SET current_material_id = ?, title = ?, author = ?, author_id = ?, language = coalesce(?,language), updated_at = ? WHERE id = ?'
+            }).run([
+              materialId,
+              material.title ?? null,
+              material.author ?? null,
+              material.authorId ?? null,
+              material.language ?? null,
+              material.acquiredAt,
+              contentId
+            ]);
           database.prepare({
             sql: 'INSERT INTO material_acquisitions(id,material_id,method,acquired_at) VALUES(?,?,?,?)'
           }).run([newId(), materialId, material.method, material.acquiredAt]);
@@ -246,7 +261,8 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
             id: string;
             duplicate_group_id: string | null;
           }>({ sql: 'SELECT c.id,c.duplicate_group_id FROM contents c JOIN content_materials m ON m.id=c.current_material_id WHERE m.text_hash=? AND c.id<>? ORDER BY c.created_at,c.id LIMIT 1' }).get([createHash('sha256').update(material.text).digest('hex'), contentId]);
-          database.prepare({ sql: 'UPDATE contents SET duplicate_group_id=? WHERE id=?' }).run([duplicate ? duplicate.duplicate_group_id ?? duplicate.id : null, contentId]);
+          if (!historical)
+            database.prepare({ sql: 'UPDATE contents SET duplicate_group_id=? WHERE id=?' }).run([duplicate ? duplicate.duplicate_group_id ?? duplicate.id : null, contentId]);
           return {
             status: 'created',
             material: {
@@ -254,7 +270,7 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
               canonicalUrl,
               id: materialId,
               contentId,
-              revision: (previous?.revision ?? 0) + 1
+              revision
             }
           };
         }

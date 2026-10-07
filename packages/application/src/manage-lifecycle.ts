@@ -20,7 +20,7 @@ interface ApplicationBindings {
   readonly start: (options: { backgroundTriggers: BackgroundTriggerMode }) => Promise<void>;
   readonly subscribeRuntimeEvents: Application['subscribeRuntimeEvents'];
   readonly subscribeSpeechOutputEvents: Application['subscribeSpeechOutputEvents'];
-  readonly recommendation: Pick<Recommendation, 'shutdown'>;
+  readonly recommendation: Pick<Recommendation, 'shutdown' | 'resumeBackground'>;
   readonly coding: Pick<Coding, 'shutdown'>;
   readonly voice: Pick<Voice, 'dispose'>;
   readonly speechOutput: { dispose(): void };
@@ -141,6 +141,9 @@ export function createApplicationLifecycle(options: {
           return startPromise;
         },
         subscribeRuntimeEvents: input.subscribeRuntimeEvents,
+        async resume() {
+          if (startPromise && !stopping) await input.recommendation.resumeBackground();
+        },
         subscribeSpeechOutputEvents: input.subscribeSpeechOutputEvents,
         stop,
         dispose() {

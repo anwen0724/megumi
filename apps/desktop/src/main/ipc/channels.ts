@@ -61,6 +61,13 @@ export const IPC_CHANNELS = {
   approval: {
     resolve: 'approval:resolve',
   },
+  recommendation: {
+    listDailyFeed: 'recommendation:list-daily-feed',
+    startDailyFeed: 'recommendation:start-daily-feed',
+    getRun: 'recommendation:get-run',
+    cancelRun: 'recommendation:cancel-run',
+    changed: 'recommendation:changed',
+  },
   discovery: {
     sourceLogin: 'recommendation:open-source-login',
     sourceAccess: 'recommendation:check-source-access',
@@ -121,13 +128,11 @@ export const IPC_CHANNELS = {
     event: 'runtime:event',
   },
 } as const;
-
 type ValueOf<T> = T[keyof T];
 type NestedValueOf<T> = T extends string ? T : ValueOf<{ [K in keyof T]: NestedValueOf<T[K]> }>;
-
 export type IpcChannel = NestedValueOf<typeof IPC_CHANNELS>;
-
 const ALL_IPC_CHANNELS = [
+  ...Object.values(IPC_CHANNELS.recommendation),
   IPC_CHANNELS.settingsRecovery.get,
   IPC_CHANNELS.settingsRecovery.openDirectory,
   IPC_CHANNELS.settingsRecovery.restart,
@@ -220,7 +225,6 @@ const ALL_IPC_CHANNELS = [
   IPC_CHANNELS.observability.bundle,
   IPC_CHANNELS.runtime.event,
 ] as const;
-
 export function isIpcChannel(value: string): value is IpcChannel {
   return (ALL_IPC_CHANNELS as readonly string[]).includes(value);
 }

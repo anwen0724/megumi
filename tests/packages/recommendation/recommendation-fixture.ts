@@ -12,6 +12,7 @@ import { createRecommendation } from '@megumi/application/recommendation/recomme
 import { createMaterialStorage } from '@megumi/application/recommendation/content/material-storage';
 import { createCandidateQualificationStorage } from '@megumi/application/recommendation/candidates/candidate-qualification-storage';
 import type { RecommendationConfiguration } from '@megumi/application/settings/definitions/recommendation';
+import type { WebFetch } from '@megumi/agent';
 export interface ModelPrompt {
   stage: string;
   items?: {
@@ -30,6 +31,7 @@ export function recommendationFixture(options: {
   config?: Partial<RecommendationConfiguration>;
   respond?: (prompt: ModelPrompt) => Promise<unknown>;
   fetch?: typeof globalThis.fetch;
+  webFetch?: WebFetch;
 } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'recommendation-owner-'));
   const database = createDatabase({ filename: ':memory:' });
@@ -51,6 +53,7 @@ export function recommendationFixture(options: {
   const candidates = createCandidateQualificationStorage(database, () => newId('match'));
   const defaultRespond = (prompt: ModelPrompt) => prompt.stage === 'planning' ? { items: prompt.interests!.map(i => ({ interestId: i.id, sourceId: 'tavily', query: '面试准备', direction: 'direct', basis: '对应用户原文' })) } : { items: prompt.items!.map(item => ({ id: item.id, result: prompt.stage === 'analysis' ? { summary: '面试的准备方法', keyPoints: [{ text: '面试方法', evidence: [{ materialId: item.materialId, quote: '准备方法' }] }], topics: ['面试'], contentType: 'article', qualityScore: 0.8, spamScore: 0, timeScope: { kind: 'unknown', evidence: [] } } : { relation: 'direct', status: 'eligible', basis: '符合面试需求', evidence: [{ materialId: item.materialId, quote: '准备方法' }] } })) };
   const ownerOptions = {
+    sourceWebFetch: options.webFetch ?? { async fetch() { return { url: 'https://example.com/interview', content: '完整正文包含面试的准备方法。', contentType: 'text/html', truncated: false, document: '<article>完整正文包含面试的准备方法。</article>' }; } },
     database, settings, newId, now, resolveModel: async () => model, accessSecret: () => 'secret',
     observability: { withTrace: async <T>(_scope: unknown, work: () => Promise<T>) => work(), withSpan: async <T>(_scope: unknown, work: () => Promise<T>) => work(), recordContent() { }, recordEvent() { }, linkTrace() { } },
     timers: { setTimeout: () => 0, clearTimeout: () => undefined },

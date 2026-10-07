@@ -15,11 +15,10 @@ import { createRendererRuntimeIpcRequest } from '../../../shared/ipc';
 import { Button } from '../../../shared/ui';
 import { FirstSupplyConfirmationDialog } from './FirstSupplyConfirmationDialog';
 import { InterestManager } from './InterestManager';
-
+import { DailyFeedList } from './DailyFeedList';
 interface DiscoveryPageProps {
   onOpenContentSources?(): void;
 }
-
 export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
   const { t } = useTranslation('discovery');
   const [interests, setInterests] = useState<InterestUi[] | null>(null);
@@ -30,7 +29,6 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
   const [supplyPromptShown, setSupplyPromptShown] = useState(false);
   const [confirmingSupply, setConfirmingSupply] = useState(false);
   const [confirmationError, setConfirmationError] = useState<string | null>(null);
-
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -59,10 +57,8 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
       active = false;
     };
   }, [t]);
-
   const hasEnabledInterest = interests?.some((interest) => interest.enabled) ?? false;
   const needsSupplyConfirmation = hasEnabledInterest && !candidateSupplyConfirmed;
-
   useEffect(() => {
     if (!needsSupplyConfirmation) {
       setSupplyPromptOpen(false);
@@ -73,7 +69,6 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
       setSupplyPromptOpen(true);
     }
   }, [needsSupplyConfirmation, supplyPromptShown]);
-
   /** Saves one interest edit and adopts the saved list the Host returns. */
   const changeInterest = useCallback(
     async (request: DiscoveryInterestChangePayload): Promise<boolean> => {
@@ -103,7 +98,6 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
     },
     [t],
   );
-
   /** Saves the enabled source set; supply only searches sources saved here. */
   const changeSources = useCallback(
     async (enabledSources: SupplySourceView['sourceId'][]): Promise<boolean> => {
@@ -128,7 +122,6 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
     },
     [t],
   );
-
   /** Confirms through the Host before any supply work can start. */
   async function confirmFirstSupply() {
     if (confirmingSupply) return;
@@ -150,11 +143,9 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
       setConfirmingSupply(false);
     }
   }
-
-  return (
-    <div className="relative h-full w-full overflow-y-auto [scrollbar-gutter:stable] bg-[radial-gradient(circle_at_10%_0%,var(--color-accent-soft),transparent_26rem),var(--color-app-bg)]">
-      <div className="mx-auto max-w-[62rem] px-5 pb-16 pt-6 sm:px-7 lg:px-10">
-        <header className="mb-7 flex flex-wrap items-end justify-between gap-5">
+  return (<div className="relative h-full w-full overflow-y-auto [scrollbar-gutter:stable] bg-[radial-gradient(circle_at_10%_0%,var(--color-accent-soft),transparent_26rem),var(--color-app-bg)]">
+    <div className="mx-auto max-w-[62rem] px-5 pb-16 pt-6 sm:px-7 lg:px-10">
+      <header className="mb-7 flex flex-wrap items-end justify-between gap-5">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">
               <Sparkles size={14} aria-hidden="true" /> {t('eyebrow')}
@@ -177,7 +168,7 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
           </Button>
         </header>
 
-        {error ? (
+      {error ? (
           <div
             role="alert"
             className="mb-6 rounded-2xl border border-[var(--color-danger)]/25 bg-[var(--color-danger-soft)] px-5 py-4 text-sm text-[var(--color-danger)]"
@@ -186,7 +177,7 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
           </div>
         ) : null}
 
-        {needsSupplyConfirmation ? (
+      {needsSupplyConfirmation ? (
           <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-4">
             <div className="min-w-0">
               <h2 className="text-sm font-semibold text-[var(--color-text)]">
@@ -209,16 +200,17 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
           </section>
         ) : null}
 
-        <InterestManager
+      <InterestManager
           interests={interests}
           sources={sources}
           onChangeInterest={changeInterest}
           onChangeSources={changeSources}
           onOpenContentSources={onOpenContentSources}
         />
-      </div>
+      <DailyFeedList />
+    </div>
 
-      {supplyPromptOpen && needsSupplyConfirmation ? (
+    {supplyPromptOpen && needsSupplyConfirmation ? (
         <FirstSupplyConfirmationDialog
           busy={confirmingSupply}
           error={confirmationError}
@@ -226,6 +218,5 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
           onConfirm={() => void confirmFirstSupply()}
         />
       ) : null}
-    </div>
-  );
+  </div>);
 }

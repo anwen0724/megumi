@@ -1,8 +1,26 @@
-/* 定义“关注与内容供给”界面的简体中文文案。 */
+/*
+ * 定义“关注与内容供给”界面的简体中文文案。
+ */
 import type { TranslationShape } from '../translation-shape';
 import type { discovery as source } from '../en-US/discovery';
-
 export const discovery = {
+  dailyTitle: '自定义兴趣动态',
+  dailyDate: '动态日期',
+  dailyLoadFailed: '未能读取已保存的动态。',
+  dailyLoading: '正在读取已保存的动态…',
+  dailyRunning: '正在获取当日内容…',
+  dailyWaiting: '该日期尚未保存动态批次。',
+  dailyFailed: '当日获取失败',
+  dailyEmpty: '当天没有符合条件的新内容',
+  dailyPartial: '已保存部分内容，仍有未完成的获取或判断。',
+  dailyRetry: '获取当日未完成的动态',
+  dailyDateUnknown: '发布时间未知',
+  material_full_text: '正文',
+  material_excerpt: '片段',
+  material_description: '简介',
+  material_transcript: '字幕',
+  materialTruncated: '已截断',
+  historicalInterest: '历史 interest',
   eyebrow: '内容供给',
   title: '关注',
   subtitle: '写下你真正关心的方向。Megumi 会从已启用的来源中搜索，并准备供推荐使用的内容。',

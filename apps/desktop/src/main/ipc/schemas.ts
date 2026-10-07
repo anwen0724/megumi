@@ -1,9 +1,14 @@
-/* Desktop IPC combines Product Host payload schemas with transport envelopes. */
+/*
+ * Desktop IPC combines Product Host payload schemas with transport envelopes.
+ */
 import { z } from 'zod';
 import * as host from '@megumi/application/contracts';
 import { createRuntimeIpcRequestSchema } from './contracts';
 import { IPC_CHANNELS } from './channels';
-
+export const DailyFeedListRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.listDailyFeed, host.DailyFeedRequestSchema);
+export const DailyFeedStartRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.startDailyFeed, host.StartDailyFeedRequestSchema);
+export const RecommendationRunRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.getRun, host.RunRequestSchema);
+export const RecommendationCancelRequestSchema = createRuntimeIpcRequestSchema(IPC_CHANNELS.recommendation.cancelRun, host.RunRequestSchema);
 export const InputSuggestionsRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.inputSuggestions,
   host.InputSuggestionsPayloadSchema,
@@ -219,7 +224,6 @@ export const ObservabilityBundleRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.observability.bundle,
   host.ObservabilityTracePayloadSchema,
 );
-
 /** Dedicated PCM frame payload on the Renderer MessagePort; travels on a bounded
  *  channel, not the business envelope. The Float32Array arrives via structured
  *  clone with its ArrayBuffer transferred. */
@@ -227,7 +231,7 @@ export const VoiceInputFramePayloadSchema = z
   .object({
     generation: z.number().int().nonnegative(),
     sequence: z.number().int().nonnegative(),
-    sampleRate: z.literal(16_000),
+    sampleRate: z.literal(16000),
     samples: z.instanceof(Float32Array).refine((samples) => samples.length === 512, {
       message: 'PCM frame must be one 512-sample 16 kHz mono frame.',
     }),
@@ -282,7 +286,6 @@ export type ObservabilityListPayload = z.infer<typeof host.ObservabilityListPayl
 export type ObservabilityTracePayload = z.infer<typeof host.ObservabilityTracePayloadSchema>;
 export type ObservabilityContentPayload = z.infer<typeof host.ObservabilityContentPayloadSchema>;
 export type ObservabilityEmptyPayload = z.infer<typeof host.ObservabilityEmptyPayloadSchema>;
-
 export const SessionModelSelectionRequestSchema = createRuntimeIpcRequestSchema(
   IPC_CHANNELS.session.sessionModelSelection,
   host.SessionModelSelectionPayloadSchema,

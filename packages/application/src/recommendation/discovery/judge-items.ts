@@ -33,7 +33,7 @@ export async function judgeItems<T>(input: {
   priority?: number;
   onSuccess?: (id: string, result: T) => void;
   beforeRetry?: (id: string) => boolean;
-  beforeRequest?: () => boolean;
+  beforeRequest?: (ids: readonly string[]) => boolean;
   onIssue?: (code: string, message: string) => void;
 }): Promise<readonly JudgmentOutcome<T>[]> {
   const results = new Map<string, JudgmentOutcome<T>>();
@@ -48,7 +48,7 @@ export async function judgeItems<T>(input: {
     try {
       const signal = AbortSignal.any([input.signal, AbortSignal.timeout(input.budget.snapshot().limits.requestTimeoutSeconds * 1000)]);
       const response = await input.queue.run(async () => {
-        if (input.beforeRequest && !input.beforeRequest())
+        if (input.beforeRequest && !input.beforeRequest(items.map(item => item.id)))
           return { status: 'failed' as const, code: 'INPUT_CLAIMED', message: 'The input was claimed or changed.' };
         executed = true;
         return callTextModel(input.client, { model: input.model, systemPrompt: system, prompt, schema: z.object({ items: z.array(z.unknown()) }), maxOutputTokens: reserved.output, signal });

@@ -17,7 +17,7 @@ import type { RawItem } from '../sources/source-connector';
 import { identifyContentUrl } from '../sources/source-material';
 import { sourceFailure } from '../sources/source-http';
 import type { DiscoveryStorage, DiscoveryQuery, DiscoveryIssue, SavedDiscovery, SearchYield } from './discovery-storage';
-import { createDiscoveryBudget } from './discovery-budget';
+import { createDiscoveryBudget, type DiscoveryBudget } from './discovery-budget';
 import type { SourceQueue } from './source-queue';
 import { processMaterial } from './process-material';
 export interface CandidateMaintenanceOptions {
@@ -41,12 +41,18 @@ export interface CandidateMaintenanceOptions {
     end: number;
   };
   interestIds?: readonly string[];
+  windows?: ReadonlyMap<string, {
+    start: number;
+    end: number;
+  }>;
   onMaterial?: (material: ContentMaterial, interest: InterestSnapshotEntry) => Promise<void>;
+  onMaterialsReady?: (issues: readonly DiscoveryIssue[], attemptedInterestIds: readonly string[], complete: boolean) => void | Promise<void>;
+  budget?: DiscoveryBudget;
 }
 /** Restores saved work, plans bounded queries, and records yields only after downstream work settles. */
 export async function maintainCandidates(input: CandidateMaintenanceOptions) {
   const { config, discovery, now } = input;
-  const budget = createDiscoveryBudget(config.limits, now(), now);
+  const budget = input.budget ?? createDiscoveryBudget(config.limits, now(), now);
   const deadline = AbortSignal.timeout(config.limits.maxDurationMinutes * 60000);
   const signal = AbortSignal.any([input.signal, deadline]);
   const issues: DiscoveryIssue[] = [];
@@ -56,6 +62,10 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
   const priority = input.purpose === 'daily_feed' ? 1 : 0;
   const tasks: Promise<void>[] = [];
   const processing = new Map<string, Promise<void>>();
+  const dailyMaterials = new Map<string, ContentMaterial>();
+  const attempted = new Set<string>();
+  const delivered = new Set<string>();
+  const interestTasks = new Map<string, Promise<void>[]>();
   const yields: SearchYield[] = [];
   const process = (material: ContentMaterial) => {
     const existing = processing.get(material.id);
@@ -78,7 +88,8 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
         issues.push({ code: 'backlog_limit', message: 'Existing actionable work has reached the interest backlog limit.', subjectId: interest.id });
     const wanted = rotated.filter(i => input.purpose === 'daily_feed' || input.candidates.inventory(now(), i.id, config.candidateSupply.contentLanguages) < config.candidateSupply.interestMinimumCount && (backlog.get(i.id) ?? 0) < 2 * config.candidateSupply.interestTargetCount && (!state.backoff[i.id] || state.backoff[i.id]!.revision !== i.revision || state.backoff[i.id]!.nextAt <= now())).slice(0, Math.max(1, config.limits.maxSearchCalls - 5));
     const available = input.sources.connectors().filter(s => (state.cooldowns[s.id] ?? 0) <= now());
-    if (wanted.length && !available.length) issues.push({code:'SOURCE_UNAVAILABLE',message:'No enabled search source is available for the current shortage.'});
+    if (wanted.length && !available.length)
+      issues.push({ code: 'SOURCE_UNAVAILABLE', message: 'No enabled search source is available for the current shortage.' });
     // Reserve planning before restoring model work, so a blocked analysis cannot starve searches.
     const planning = wanted.length && available.length && !signal.aborted ? planQueries(wanted, available.map(s => s.descriptor)) : Promise.resolve([]);
     if (input.purpose === 'candidate_supply') {
@@ -88,6 +99,9 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
         tasks.push(intake(saved));
     }
     const plan = await planning;
+    if (!plan.length && issues.length)
+      for (const interest of wanted)
+        attempted.add(interest.id);
     discovery.savePlan(input.runId, plan);
     for (const query of plan) {
       if (signal.aborted || budget.expired())
@@ -100,38 +114,50 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
       if (availableResults <= 0)
         continue;
       const queryId = discovery.queryId(query, now());
-      const cached = discovery.recent(queryId, source.id, input.purpose, input.window, now() - config.candidateSupply.searchReuseIntervalMinutes * 60000);
+      const window = input.windows?.get(current.id) ?? input.window;
+      const cached = discovery.recent(queryId, source.id, input.purpose, window, now() - config.candidateSupply.searchReuseIntervalMinutes * 60000);
       let found: {
         historyId: string;
         items: SavedDiscovery[];
       };
-      if (cached)
+      if (cached) {
         found = cached;
+        attempted.add(current.id);
+      }
       else {
         // Five logical search slots remain available for approved fallback paths.
         if (budget.remaining('searchCalls') <= Math.min(5, config.limits.maxSearchCalls - 1))
           break;
         if (!budget.reserve('searchCalls'))
           break;
+        attempted.add(current.id);
+        const position = rotated.findIndex(i => i.id === current.id);
+        discovery.saveState({ cursor: rotated[(position + 1) % rotated.length]?.id ?? null, purpose: input.purpose });
         let firstService = true;
         const response = await input.sourceQueue.run(() => source.search({
-          query: query.query, limit: Math.min(availableResults, source.descriptor.maxResultsPerSearch), ...(input.window ? { timeRange: { from: input.window.start, to: input.window.end } } : {}), signal: AbortSignal.any([signal, AbortSignal.timeout(config.limits.requestTimeoutSeconds * 1000)]), reserveSearch: () => {
+          query: query.query, limit: Math.min(availableResults, source.descriptor.maxResultsPerSearch), ...(window ? { timeRange: { from: window.start, to: window.end } } : {}), signal: AbortSignal.any([signal, AbortSignal.timeout(config.limits.requestTimeoutSeconds * 1000)]), reserveSearch: () => {
             if (firstService) {
               firstService = false;
               return true;
-            } return budget.reserve('searchCalls');
+            }
+            return budget.reserve('searchCalls');
           }, reserveRequest: () => budget.reserve('sourceRequests')
         }), signal, priority);
         if (signal.aborted)
           break;
-        found = discovery.saveSearch({ runId: input.runId, queryId, sourceId: source.id, purpose: input.purpose, query: query.query, now: now(), window: input.window, ...(response.status === 'success' ? { items: response.items } : { errorCode: response.failure.code }) });
+        found = discovery.saveSearch({ runId: input.runId, queryId, sourceId: source.id, purpose: input.purpose, query: query.query, now: now(), window, ...(response.status === 'success' ? { items: response.items } : { errorCode: response.failure.code }) });
         if (response.status === 'failed') {
-          issues.push({ code: response.failure.code.toUpperCase(), message: response.failure.message, subjectId: source.id });
+          issues.push({ code: response.failure.code.toUpperCase(), message: `${source.id}: ${response.failure.message}`, subjectId: current.id });
           yields.push({ historyId: found.historyId, interestId: current.id, interestRevision: current.revision, resultIds: [], status: 'incomplete', admittedContentIds: [], settledAt: now() });
           discovery.saveYield(input.runId, yields);
           if (response.failure.retryAfterMs) {
             state.cooldowns[source.id] = now() + response.failure.retryAfterMs;
             discovery.saveState({ cooldowns: state.cooldowns });
+          }
+          if (input.purpose === 'daily_feed' && query === plan.filter(item => item.interestId === current.id).at(-1)) {
+            await Promise.all(interestTasks.get(current.id) ?? []);
+            await input.onMaterialsReady?.(issues, [current.id], false);
+            delivered.add(current.id);
           }
           continue;
         }
@@ -142,13 +168,25 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
         yields.push({ historyId: found.historyId, interestId: current.id, interestRevision: current.revision, resultIds: found.items.map(i => i.resultId), status: 'pending', admittedContentIds: [], settledAt: null });
         discovery.saveYield(input.runId, yields);
       }
-      for (const saved of found.items)
-        tasks.push(intake(saved, current));
+      for (const saved of found.items) {
+        const task = intake(saved, current);
+        tasks.push(task);
+        interestTasks.set(current.id, [...(interestTasks.get(current.id) ?? []), task]);
+      }
+      if (input.purpose === 'daily_feed' && query === plan.filter(item => item.interestId === current.id).at(-1)) {
+        await Promise.all(interestTasks.get(current.id) ?? []);
+        await input.onMaterialsReady?.(issues, [current.id], false);
+        delivered.add(current.id);
+      }
       const position = rotated.findIndex(i => i.id === current.id);
       discovery.saveState({ cursor: rotated[(position + 1) % rotated.length]?.id ?? null, purpose: input.purpose });
       discovery.checkpoint(input.runId, budget);
     }
     await Promise.all(tasks);
+    await input.onMaterialsReady?.(issues, [...attempted].filter(id => !delivered.has(id)), true);
+    for (const material of dailyMaterials.values())
+      process(input.materials.readCurrentMaterial(material.contentId) ?? material);
+    await Promise.all(processing.values());
     await settleYields();
     if (!signal.aborted && ['analysisCalls', 'matchingCalls', 'fetchCalls'].some(kind => budget.remaining(kind as 'analysisCalls' | 'matchingCalls' | 'fetchCalls') === 0)) {
       const pending = input.materials.listCurrentMaterials().some(m => input.materials.analysisWork(m.contentId, m.id, now()) !== 'ready' || interests.some(i => input.candidates.matchingWork(m.contentId, m.id, i.id, i.revision, now()) !== 'ready'));
@@ -213,19 +251,20 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
     let raw: RawItem = saved.item;
     const contentId = input.materials.ensureIdentity({ platform: identity.platform ?? 'web', externalId: identity.externalId, canonicalUrl: identity.url, title: raw.title, author: raw.author, now: now() });
     let current = input.materials.readCurrentMaterial(contentId);
-    if ((!raw.text || raw.kind === 'excerpt') && (!current || current.kind === 'excerpt') && budget.remaining('fetchCalls')) {
+    const verifyPublication = input.purpose === 'daily_feed' && ![...(raw.publicationEvidence ?? []), ...(current?.publicationEvidence ?? [])].some(evidence => evidence.kind === 'published' && evidence.status === 'verified');
+    if (((!raw.text || raw.kind === 'excerpt') && (!current || current.kind === 'excerpt') || verifyPublication) && budget.remaining('fetchCalls')) {
       let attempt: DiscoveryAttempt | undefined;
       let failure: string | undefined;
       try {
         const response = await input.sourceQueue.run(() => {
           if (!budget.reserve('fetchCalls'))
             return Promise.resolve(sourceFailure('budget_exhausted', 'Material budget is exhausted.'));
-          attempt = input.discovery.claimMaterial({ contentId, materialId: current?.id ?? 'none', url: raw.requestUrl ?? raw.url, runId: input.runId, now: now(), deadlineAt: Math.min(budget.deadlineAt, now() + config.limits.requestTimeoutSeconds * 1000) });
+          attempt = input.discovery.claimMaterial({ contentId, materialId: current?.id ?? 'none', operation: verifyPublication ? 'publication' : 'detail', url: raw.requestUrl ?? raw.url, runId: input.runId, now: now(), deadlineAt: Math.min(budget.deadlineAt, now() + config.limits.requestTimeoutSeconds * 1000) });
           if (!attempt) {
             budget.release('fetchCalls');
             return Promise.resolve(sourceFailure('cancelled', 'Material input is claimed or waiting for retry.'));
           }
-          return input.sources.acquireMaterial(raw, { signal: AbortSignal.any([signal, AbortSignal.timeout(config.limits.requestTimeoutSeconds * 1000)]), reserveRequest: () => budget.reserve('sourceRequests') });
+          return input.sources.acquireMaterial(raw, { verifyPublication, signal: AbortSignal.any([signal, AbortSignal.timeout(config.limits.requestTimeoutSeconds * 1000)]), reserveRequest: () => budget.reserve('sourceRequests') });
         }, signal, priority);
         if (response.status === 'success' && attempt && !signal.aborted) {
           const acquired = { ...raw, ...response.material, publicationEvidence: [...(raw.publicationEvidence ?? []), ...(response.material.publicationEvidence ?? [])] };
@@ -240,7 +279,7 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
           input.discovery.releaseMaterial(attempt, now(), failure === 'cancelled' ? undefined : failure);
       }
       if (failure && failure !== 'cancelled')
-        issues.push({ code: failure.toUpperCase(), message: 'Detail material could not be acquired.', subjectId: contentId });
+        issues.push({ code: failure.toUpperCase(), message: 'Detail material could not be acquired.', subjectId: input.purpose === 'daily_feed' ? interest?.id : contentId });
     }
     if (signal.aborted)
       return;
@@ -255,7 +294,10 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
     discovery.saveYield(input.runId, yields);
     if (interest && input.onMaterial)
       await input.onMaterial(current, interest);
-    await process(current);
+    if (input.purpose === 'daily_feed')
+      dailyMaterials.set(current.id, current);
+    else
+      await process(input.materials.readCurrentMaterial(current.contentId) ?? current);
   }
   function saveRaw(raw: RawItem): ContentMaterial | undefined {
     const normalized = normalizeRawItem(raw, { contentLanguages: config.candidateSupply.contentLanguages });

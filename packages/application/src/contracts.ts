@@ -57,6 +57,8 @@ export interface Application extends ApplicationOperations {
   readonly logger: ApplicationLogger;
   /** Starts Host-ready product behavior exactly once using the first caller's trigger mode. */
   start(options?: ApplicationStartOptions): Promise<void>;
+  /** Checks due background work after OS resume without restarting the application. */
+  resume(): Promise<void>;
   /** Stops business execution while retaining resources for final read-only capture. */
   stop(): Promise<void>;
   /** Subscribes to Coding session events without participating in execution or persistence. */

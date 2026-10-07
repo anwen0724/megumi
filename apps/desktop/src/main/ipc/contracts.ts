@@ -5,8 +5,11 @@ import { z } from 'zod';
 import { IPC_CHANNELS } from './channels';
 import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './errors';
 export type { RuntimeIpcError } from './errors';
-
 export const BUSINESS_IPC_CHANNELS = [
+  IPC_CHANNELS.recommendation.listDailyFeed,
+  IPC_CHANNELS.recommendation.startDailyFeed,
+  IPC_CHANNELS.recommendation.getRun,
+  IPC_CHANNELS.recommendation.cancelRun,
   IPC_CHANNELS.settingsRecovery.get,
   IPC_CHANNELS.settingsRecovery.openDirectory,
   IPC_CHANNELS.settingsRecovery.restart,
@@ -73,16 +76,12 @@ export const BUSINESS_IPC_CHANNELS = [
   IPC_CHANNELS.observability.rebuildIndex,
   IPC_CHANNELS.observability.bundle,
 ] as const;
-
 export type BusinessIpcChannel = (typeof BUSINESS_IPC_CHANNELS)[number];
-
 export const BusinessIpcChannelSchema = z.enum([...BUSINESS_IPC_CHANNELS] as [
   BusinessIpcChannel,
   ...BusinessIpcChannel[],
 ]);
-
 export const RuntimeIpcRequestIdSchema = z.string().min(1).max(128);
-
 export const RuntimeIpcRequestMetaSchema = z
   .object({
     channel: BusinessIpcChannelSchema,
@@ -90,7 +89,6 @@ export const RuntimeIpcRequestMetaSchema = z
     source: z.literal('renderer'),
   })
   .strict();
-
 export const RuntimeIpcResponseMetaSchema = z
   .object({
     requestId: RuntimeIpcRequestIdSchema,
@@ -98,7 +96,6 @@ export const RuntimeIpcResponseMetaSchema = z
     handledAt: z.string().datetime(),
   })
   .strict();
-
 export interface RuntimeIpcRequest<
   TPayload,
   TChannel extends BusinessIpcChannel = BusinessIpcChannel,
@@ -111,27 +108,17 @@ export interface RuntimeIpcRequest<
     source: 'renderer';
   };
 }
-
-export interface RuntimeIpcSuccess<
-  TData extends object,
-  TChannel extends BusinessIpcChannel = BusinessIpcChannel,
-> {
+export interface RuntimeIpcSuccess<TData, TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
   ok: true;
   data: TData;
   meta: z.infer<typeof RuntimeIpcResponseMetaSchema> & { channel: TChannel };
 }
-
 export interface RuntimeIpcFailure<TChannel extends BusinessIpcChannel = BusinessIpcChannel> {
   ok: false;
   data: RuntimeIpcError;
   meta: z.infer<typeof RuntimeIpcResponseMetaSchema> & { channel: TChannel };
 }
-
-export type RuntimeIpcResult<
-  TData extends object,
-  TChannel extends BusinessIpcChannel = BusinessIpcChannel,
-> = RuntimeIpcSuccess<TData, TChannel> | RuntimeIpcFailure<TChannel>;
-
+export type RuntimeIpcResult<TData, TChannel extends BusinessIpcChannel = BusinessIpcChannel> = RuntimeIpcSuccess<TData, TChannel> | RuntimeIpcFailure<TChannel>;
 export function createRuntimeIpcRequestSchema<
   TPayload extends z.ZodTypeAny,
   TChannel extends BusinessIpcChannel,
@@ -146,7 +133,6 @@ export function createRuntimeIpcRequestSchema<
     })
     .strict();
 }
-
 export function createRuntimeIpcResultSchema<
   TData extends z.ZodTypeAny,
   TChannel extends BusinessIpcChannel,

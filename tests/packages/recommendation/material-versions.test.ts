@@ -1,4 +1,6 @@
-/* Verifies acquired material upgrades through Content's persistence boundary. */
+/*
+ * Verifies acquired material upgrades through Content's persistence boundary.
+ */
 // @vitest-environment node
 import fs from 'node:fs';
 import { createDatabase, migrateDatabase, type DatabaseConnection } from '@megumi/application/storage/index';
@@ -9,7 +11,6 @@ import { afterEach, expect, it } from 'vitest';
 let database: DatabaseConnection;
 let folder: string;
 afterEach(() => { database?.close(); if (folder) fs.rmSync(folder, { recursive: true, force: true }); });
-
 it('keeps content identity and the old material when the same URL yields fuller text', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   const content = createMaterialStorage(database);
@@ -39,7 +40,6 @@ it('keeps content identity and the old material when the same URL yields fuller 
   expect(fullText.material.revision).toBe(2);
   expect(content.readMaterial(excerpt.material.id)?.text).toBe('摘要');
 });
-
 it('invalidates old qualification immediately and rejects its late commit after material changes', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   database.prepare({
@@ -93,7 +93,6 @@ it('invalidates old qualification immediately and rejects its late commit after 
   expect(candidates.saveQualification({ ...qualification, reviewedAt: 40 }).status).toBe('input_changed');
   expect(content.readAnalysis(material.contentId, material.id)?.summary).toBe('面试材料');
 });
-
 it('records another acquisition without changing equal material or its revision', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   const content = createMaterialStorage(database);
@@ -122,7 +121,6 @@ it('records another acquisition without changing equal material or its revision'
   expect(repeated.material.revision).toBe(1);
   expect(database.prepare({ sql: 'SELECT method,acquired_at FROM material_acquisitions ORDER BY acquired_at' }).all()).toEqual([{ method: 'bilibili_api', acquired_at: 10 }, { method: 'browser', acquired_at: 20 }]);
 });
-
 it('retains identity when a platform identifier is learned after the first acquisition', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   const content = createMaterialStorage(database);
@@ -135,7 +133,19 @@ it('retains identity when a platform identifier is learned after the first acqui
   expect(aliased.id).toBe(first.id);
   expect(content.readCurrentMaterial(first.contentId)?.externalId).toBe('BV1test');
 });
-
+it('preserves verified dates on a later excerpt without downgrading the current full text', () => {
+  database = createDatabase({ filename: ':memory:' });
+  folder = rehearsalFolder();
+  migrateDatabase({ database, migrationsFolder: folder });
+  const content = createMaterialStorage(database);
+  const input = { platform: 'web', canonicalUrl: 'https://example.com/date', text: '完整材料', kind: 'full_text' as const, truncated: false, rangeEnd: 4, method: 'tavily_extract', acquiredAt: 10, publicationEvidence: [] };
+  const full = content.saveMaterial(input).material;
+  const evidence = { kind: 'published' as const, value: '2026-10-06T12:00:00Z', precision: 'instant' as const, timezone: 'UTC', location: 'page.JSON-LD.datePublished', rawValue: '2026-10-06T12:00:00Z', status: 'verified' as const };
+  const excerpt = content.saveMaterial({ ...input, kind: 'excerpt', text: '材料', rangeEnd: 2, method: 'direct_web', acquiredAt: 20, publicationEvidence: [evidence] }).material;
+  expect(excerpt.publicationEvidence).toEqual([evidence]);
+  expect(content.readMaterial(excerpt.id)?.text).toBe('材料');
+  expect(content.readCurrentMaterial(full.contentId)?.id).toBe(full.id);
+});
 it('keeps the previous material pointer when saving an acquisition fails', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   const ids = ['c1', 'm1', 'a1', 'm2', 'a1'];
@@ -148,7 +158,6 @@ it('keeps the previous material pointer when saving an acquisition fails', () =>
   expect(content.readCurrentMaterial(initial.contentId)?.id).toBe(initial.id);
   expect(content.readMaterial('m2')).toBeUndefined();
 });
-
 it('rejects an analysis returned by an obsolete attempt token', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   const contents = createMaterialStorage(database);
@@ -158,7 +167,6 @@ it('rejects an analysis returned by an obsolete attempt token', () => {
   contents.saveAnalysis({ contentId: material.contentId, materialId: material.id, now: 30, attempt: { runId: 'r1', token: 'old-token', startedAt: 10, deadlineAt: 100 }, result: { summary: '实际材料', keyPoints: [{ text: '材料', evidence: [{ materialId: material.id, quote: '实际材料' }] }], topics: ['材料'], contentType: 'article', qualityScore: 0.5, spamScore: 0, timeScope: { kind: 'unknown', evidence: [] } } });
   expect(contents.readAnalysis(material.contentId, material.id)).toBeUndefined();
 });
-
 it('shares one analysis claim and prevents an earlier release from clearing a later claim', () => {
   database = createDatabase({ filename: ':memory:' }); folder = rehearsalFolder(); migrateDatabase({ database, migrationsFolder: folder });
   const contents = createMaterialStorage(database);

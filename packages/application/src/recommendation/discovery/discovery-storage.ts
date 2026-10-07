@@ -64,12 +64,13 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
       runId: string;
       now: number;
       deadlineAt: number;
+      operation?: 'detail' | 'publication';
     }): DiscoveryAttempt | undefined {
       return database.transaction({
         operation: () => {
           if (input.deadlineAt <= input.now || !database.prepare({ sql: "SELECT 1 FROM discovery_runs WHERE id=? AND status='running'" }).get([input.runId]))
             return undefined;
-          const method = `detail:${input.materialId}`;
+          const method = `${input.operation ?? 'detail'}:${input.materialId}`;
           const old = database.prepare<{
             id: string;
             status: string;
@@ -83,7 +84,8 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
           const token = newId('material_request');
           database.prepare({
             sql: `INSERT INTO material_requests(id,content_id,discovery_run_id,method,request_url,status,attempts,owner_run_id,attempt_token,attempt_started_at,attempt_deadline_at)
-          VALUES(?,?,?,?,?,'running',1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status='running',attempts=attempts+1,owner_run_id=excluded.owner_run_id,attempt_token=excluded.attempt_token,attempt_started_at=excluded.attempt_started_at,attempt_deadline_at=excluded.attempt_deadline_at` }).run([id, input.contentId, input.runId, method, input.url, input.runId, token, input.now, input.deadlineAt]);
+          VALUES(?,?,?,?,?,'running',1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status='running',attempts=attempts+1,owner_run_id=excluded.owner_run_id,attempt_token=excluded.attempt_token,attempt_started_at=excluded.attempt_started_at,attempt_deadline_at=excluded.attempt_deadline_at`
+          }).run([id, input.contentId, input.runId, method, input.url, input.runId, token, input.now, input.deadlineAt]);
           return { runId: input.runId, token, startedAt: input.now, deadlineAt: input.deadlineAt };
         }
       });

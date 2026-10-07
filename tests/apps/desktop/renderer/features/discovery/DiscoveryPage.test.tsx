@@ -4,14 +4,14 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DiscoveryPage } from '@megumi/desktop/renderer/features/discovery';
 import { initializeRendererI18n } from '@megumi/desktop/renderer/shared/i18n';
-
 describe('DiscoveryPage', () => {
   const listInterests = vi.fn();
   const changeInterest = vi.fn();
   const getConfiguration = vi.fn();
   const updateConfiguration = vi.fn();
   const confirmCandidateSupply = vi.fn();
-
+  const listDailyFeed = vi.fn();
+  const startDailyFeed = vi.fn();
   beforeEach(async () => {
     await initializeRendererI18n('zh-CN');
     listInterests.mockReset().mockResolvedValue(ok({ interests: savedInterests() }));
@@ -23,9 +23,12 @@ describe('DiscoveryPage', () => {
       .mockReset()
       .mockImplementation(async (request) => ok(configuration({ enabledSources: request.payload.enabledSources })));
     confirmCandidateSupply.mockReset().mockResolvedValue(ok({ status: 'confirmed' }));
+    listDailyFeed.mockReset().mockResolvedValue(ok({ date: '2026-10-07', items: [], batches: [], activeRuns: [] }));
+    startDailyFeed.mockReset().mockResolvedValue(ok({ status: 'started', runId: 'daily-1' }));
     Object.defineProperty(window, 'megumi', {
       configurable: true,
       value: {
+        recommendation: { listDailyFeed, startDailyFeed, onChanged: () => () => undefined },
         discovery: {
           listInterests,
           changeInterest,
@@ -36,7 +39,17 @@ describe('DiscoveryPage', () => {
       },
     });
   });
-
+  it('reads daily history without starting acquisition and distinguishes source failure from an empty day', async () => {
+    listDailyFeed.mockResolvedValue(ok({ date: '2026-10-07', items: [], activeRuns: [], batches: [{ id: 'batch-1', interestId: 'interest:1', interestRevision: 1, interestText: 'Agent 工程化', status: 'failed', issues: [{ code: 'SOURCE_UNAVAILABLE', message: 'source unavailable' }] }] }));
+    render(<DiscoveryPage />);
+    expect(await screen.findByText('当日获取失败')).toBeInTheDocument();
+    expect(screen.queryByText('当天没有符合条件的新内容')).not.toBeInTheDocument();
+    expect(startDailyFeed).not.toHaveBeenCalled();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole('combobox', { name: '动态日期' }), '2026-10-06');
+    await waitFor(() => expect(listDailyFeed.mock.calls.at(-1)?.[0].payload).toEqual({ date: '2026-10-06' }));
+    expect(startDailyFeed).not.toHaveBeenCalled();
+  });
   it('reads the saved interests from the Host and links to the content sources settings', async () => {
     const onOpenContentSources = vi.fn();
     const user = userEvent.setup();
@@ -52,7 +65,6 @@ describe('DiscoveryPage', () => {
 
     expect(onOpenContentSources).toHaveBeenCalledOnce();
   });
-
   it('creates an interest with the typed description', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
@@ -67,7 +79,6 @@ describe('DiscoveryPage', () => {
     });
     expect(screen.getByRole('textbox', { name: '添加关注' })).toHaveValue('');
   });
-
   it('edits an interest from its overflow menu and keeps the saved text on failure', async () => {
     const user = userEvent.setup();
     changeInterest.mockResolvedValue({ ok: false, data: { message: 'raw host detail' }, meta: {} });
@@ -91,7 +102,6 @@ describe('DiscoveryPage', () => {
     expect(alert).not.toHaveTextContent('raw host detail');
     expect(editor).toHaveValue('Agent 工程化与真实项目');
   });
-
   it('enables, disables, and deletes an interest through one Host operation', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
@@ -116,7 +126,6 @@ describe('DiscoveryPage', () => {
       interestId: 'interest:1', expectedRevision: 1,
     });
   });
-
   it('explains a conflicting edit and reloads current interests without discarding the draft', async () => {
     const user = userEvent.setup();
     render(<DiscoveryPage />);
@@ -132,7 +141,6 @@ describe('DiscoveryPage', () => {
     expect(editor).toHaveValue('保留我的输入');
     expect(await screen.findByRole('textbox', { name: '编辑关注 其他设备的修改' })).toHaveValue('保留我的输入');
   });
-
   it('adopts the saved list the Host returns instead of re-reading interests', async () => {
     const user = userEvent.setup();
     changeInterest.mockResolvedValue(ok({
@@ -148,7 +156,6 @@ describe('DiscoveryPage', () => {
     expect(screen.queryByText('秋招信息')).not.toBeInTheDocument();
     expect(listInterests).toHaveBeenCalledOnce();
   });
-
   it('reports a rejected interest edit without inventing a saved interest', async () => {
     const user = userEvent.setup();
     changeInterest.mockResolvedValue(ok({ status: 'not_found' }));
@@ -163,7 +170,6 @@ describe('DiscoveryPage', () => {
       'true',
     );
   });
-
   it('enables a content source through the saved supply configuration', async () => {
     const user = userEvent.setup();
     updateConfiguration.mockResolvedValue(ok(configuration({ enabledSources: [] })));
@@ -182,7 +188,6 @@ describe('DiscoveryPage', () => {
       'false',
     );
   });
-
   it('asks for first-supply consent once an enabled interest exists and defers without confirming', async () => {
     getConfiguration.mockResolvedValue(ok(configuration({ candidateSupplyConfirmed: false })));
     const user = userEvent.setup();
@@ -197,7 +202,6 @@ describe('DiscoveryPage', () => {
     expect(confirmCandidateSupply).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '开始' })).toBeInTheDocument();
   });
-
   it('confirms the first supply through the Host and stops prompting', async () => {
     getConfiguration.mockResolvedValue(ok(configuration({ candidateSupplyConfirmed: false })));
     const user = userEvent.setup();
@@ -218,7 +222,6 @@ describe('DiscoveryPage', () => {
     );
     expect(screen.queryByRole('button', { name: '开始' })).not.toBeInTheDocument();
   });
-
   it('keeps a failed confirmation open without rendering raw host details', async () => {
     getConfiguration.mockResolvedValue(ok(configuration({ candidateSupplyConfirmed: false })));
     confirmCandidateSupply.mockResolvedValue({
@@ -236,7 +239,6 @@ describe('DiscoveryPage', () => {
     expect(dialog).not.toHaveTextContent('raw settings stack');
     expect(screen.getByRole('dialog', { name: '首次加载' })).toBeInTheDocument();
   });
-
   it('does not ask for supply consent while every interest is disabled', async () => {
     listInterests.mockResolvedValue(ok({
       interests: [{ id: 'interest:2', text: '秋招信息', enabled: false, revision: 1 }],
@@ -249,7 +251,6 @@ describe('DiscoveryPage', () => {
     expect(screen.queryByRole('dialog', { name: '首次加载' })).not.toBeInTheDocument();
     expect(confirmCandidateSupply).not.toHaveBeenCalled();
   });
-
   it('reports a failed read without rendering raw host details', async () => {
     listInterests.mockResolvedValue({
       ok: false,
@@ -265,14 +266,12 @@ describe('DiscoveryPage', () => {
     expect(screen.getByText('正在读取关注…')).toBeInTheDocument();
   });
 });
-
 function savedInterests() {
   return [
     { id: 'interest:1', text: 'Agent 工程化', enabled: true, revision: 1 },
     { id: 'interest:2', text: '秋招信息', enabled: false, revision: 1 },
   ];
 }
-
 function configuration(options: { candidateSupplyConfirmed?: boolean; enabledSources?: string[] } = {}) {
   const enabledSources = options.enabledSources ?? ['zhihu'];
   return {
@@ -287,7 +286,6 @@ function configuration(options: { candidateSupplyConfirmed?: boolean; enabledSou
     ],
   };
 }
-
 function ok<T extends object>(data: T) {
   return { ok: true as const, data, meta: {} };
 }

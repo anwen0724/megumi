@@ -6,12 +6,7 @@ import type { z } from 'zod';
 import type { DesktopRuntimeLogger as ApplicationLogger } from '../runtime-logger';
 import type { BusinessIpcChannel, RuntimeIpcRequest, RuntimeIpcResult } from './contracts';
 import { normalizeRuntimeIpcError, sanitizeZodIssues, type RuntimeIpcError } from './errors';
-
-export interface CreateIpcRequestHandlerOptions<
-  TPayload,
-  TData extends object,
-  TChannel extends BusinessIpcChannel,
-> {
+export interface CreateIpcRequestHandlerOptions<TPayload, TData, TChannel extends BusinessIpcChannel> {
   channel: TChannel;
   requestSchema: z.ZodType<RuntimeIpcRequest<TPayload, TChannel>>;
   responseSchema: z.ZodType<TData>;
@@ -23,12 +18,7 @@ export interface CreateIpcRequestHandlerOptions<
   ): TData | Promise<TData>;
   mapError?(error: unknown): RuntimeIpcError;
 }
-
-export function createIpcRequestHandler<
-  TPayload,
-  TData extends object,
-  TChannel extends BusinessIpcChannel,
->(options: CreateIpcRequestHandlerOptions<TPayload, TData, TChannel>) {
+export function createIpcRequestHandler<TPayload, TData, TChannel extends BusinessIpcChannel>(options: CreateIpcRequestHandlerOptions<TPayload, TData, TChannel>) {
   return async (
     event: IpcMainInvokeEvent,
     rawRequest: unknown,
@@ -80,7 +70,6 @@ export function createIpcRequestHandler<
     }
   };
 }
-
 function failureResult<TChannel extends BusinessIpcChannel>(
   channel: TChannel,
   requestId: string,

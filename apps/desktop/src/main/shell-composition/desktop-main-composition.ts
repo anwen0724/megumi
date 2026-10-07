@@ -1,5 +1,5 @@
 // Owns Desktop application composition and connects the Electron shell to Product Host contracts.
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, powerMonitor } from 'electron';
 import path from 'node:path';
 import { assertSeparateHome } from '../installation/installation-environment';
 import { resolveMegumiHomePath } from '@megumi/application/storage/home';
@@ -29,7 +29,6 @@ import {
 import { IPC_CHANNELS } from '../ipc/channels';
 import { resolveProductInstructionsPath } from '../packaging/product-resources';
 import { createElectronEmbeddedBrowser } from '../adapters/embedded-browser/electron-embedded-browser';
-
 export function composeDesktopMain() {
   const home = createElectronMegumiHomeSyncOptions();
   const homePath = resolveMegumiHomePath(home);
@@ -70,7 +69,14 @@ export function composeDesktopMain() {
   });
   const runtimeLogger = product.logger;
   const productHost = product;
-
+  const resumeRecommendation = () => {
+    void product.resume().catch(() => runtimeLogger.warn('recommendation_resume_failed'));
+  };
+  powerMonitor.on('resume', resumeRecommendation);
+  const unsubscribeRecommendation = product.discovery.onChanged(event => {
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send(IPC_CHANNELS.recommendation.changed, event);
+  });
   // Runtime event bridge: the bus is the single event source; every renderer
   // window receives the stream over IPC and filters by its active session.
   const uiEventSubscription = product.subscribeRuntimeEvents({}, (event) => {
@@ -82,7 +88,6 @@ export function composeDesktopMain() {
       );
     }
   });
-
   // Speech Input Events are projected straight from the Worker runtime to the
   // windows; the Voice package stays the owner of their type and semantics.
   const voiceInputEventSubscription = voiceInputAdapter.subscribe((event) => {
@@ -90,7 +95,6 @@ export function composeDesktopMain() {
       window.webContents.send(IPC_CHANNELS.voice.inputEvent, event);
     }
   });
-
   // Speech Output Events stream the same way: synthesis stays in Main, audio
   // chunks are projected to the windows for Web Audio playback.
   const speechOutputEventSubscription = product.subscribeSpeechOutputEvents((event) => {
@@ -98,7 +102,6 @@ export function composeDesktopMain() {
       window.webContents.send(IPC_CHANNELS.voice.speechOutputEvent, event);
     }
   });
-
   return {
     homePath,
     runtimeLogger,
@@ -113,6 +116,8 @@ export function composeDesktopMain() {
     voiceInput: { adapter: voiceInputAdapter },
     observability: { host: productHost },
     dispose: async () => {
+      powerMonitor.removeListener('resume', resumeRecommendation);
+      unsubscribeRecommendation();
       uiEventSubscription.unsubscribe();
       voiceInputEventSubscription();
       speechOutputEventSubscription.unsubscribe();
