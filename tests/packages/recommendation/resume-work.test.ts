@@ -14,6 +14,7 @@ import {
   type MaintenanceRunInput,
 } from '@megumi/application/recommendation/supply/run-maintenance';
 import { CandidateSupplyConfigurationSchema } from '@megumi/application/settings/definitions/discovery';
+import { stubDescriptor } from './source-fixture';
 import type { SupplyExecutionConfig } from '@megumi/application/recommendation/supply/read-supply-config';
 import {
   createDatabase,
@@ -94,7 +95,7 @@ describe('resume after an interrupted process', () => {
       config: supplyConfig(),
       database,
       model,
-      source: stubSource(),
+      sources: [stubSource()],
       client: models,
       interests: management,
       contents: createContentStorage(database),
@@ -139,6 +140,7 @@ function supplyConfig(): SupplyExecutionConfig {
 function stubSource(): SourceConnector {
   return {
     id: 'zhihu',
+    descriptor: stubDescriptor,
     async search() {
       return { status: 'success', items: [] };
     },

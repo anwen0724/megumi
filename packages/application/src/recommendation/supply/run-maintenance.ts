@@ -43,7 +43,8 @@ export interface MaintenanceDependencies {
   readonly config: SupplyExecutionConfig;
   readonly database: DatabaseConnection;
   readonly model: Model<Api>;
-  readonly source: SourceConnector;
+  /** Connectors for the enabled sources; a plan item picks one by id. */
+  readonly sources: readonly SourceConnector[];
   readonly client: TextModelClient;
   readonly interests: InterestManagement;
   readonly contents: ContentStorage;
@@ -51,6 +52,8 @@ export interface MaintenanceDependencies {
   readonly search: SearchStorage;
   readonly usage: UsageReader;
   readonly retention: ContentRetentionReader;
+  /** Problems found while assembling the round, reported with its result. */
+  readonly configIssues?: readonly SupplyIssue[];
   /** Platform identifiers are minted by the caller so ids stay unique per round. */
   readonly newId: (prefix: string) => string;
   readonly now: () => number;
@@ -74,7 +77,7 @@ export async function runMaintenance(
   dependencies: MaintenanceDependencies,
   input: MaintenanceRunInput,
 ): Promise<MaintenanceResult> {
-  const issues: SupplyIssue[] = [];
+  const issues: SupplyIssue[] = [...(dependencies.configIssues ?? [])];
   const savedCounts: MaintenanceCounts = {
     discoveredItems: 0,
     normalizedContents: 0,
@@ -194,7 +197,8 @@ export async function runMaintenance(
         recentSearches: dependencies.search.listRecentSearches({
           since: dependencies.now() - dependencies.config.searchHistoryDays * 24 * 60 * 60 * 1_000,
         }),
-        sources: ['zhihu'],
+        // Only sources with an assembled connector may be planned.
+        sources: dependencies.sources.map((source) => source.id),
         model: dependencies.model,
         maxInputTokens: dependencies.config.limits.maxRequestInputTokens,
         maxOutputTokens: dependencies.config.limits.maxRequestOutputTokens,
@@ -261,10 +265,14 @@ async function consumePlan(
     // The requirement may have changed between planning and execution; a
     // changed interest never starts a new search.
     if (!enabledInterests.has(item.interestId)) continue;
+    const source = dependencies.sources.find((candidate) => candidate.id === item.source);
+    // Planning only accepts sources that have a connector, so this is a contract
+    // violation rather than a gap the round can report.
+    if (!source) throw new Error(`No connector is assembled for planned source ${item.source}.`);
     const outcome = await executePlannedSearch(
       {
         database: dependencies.database,
-        source: dependencies.source,
+        source,
         storage: dependencies.search,
         budget: input.budget,
         newQueryId: () => dependencies.newId('query'),

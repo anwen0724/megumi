@@ -13,6 +13,7 @@ import {
   type DatabaseConnection,
 } from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { stubDescriptor } from './source-fixture';
 
 const NOW = 1_800_000_000_000;
 const limits = CandidateSupplyConfigurationSchema.parse({}).limits;
@@ -233,6 +234,7 @@ function stubSource(options: {
 }): SourceConnector {
   return {
     id: 'zhihu',
+    descriptor: stubDescriptor,
     async search() {
       options.onCall?.();
       if (options.failure) {

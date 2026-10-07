@@ -32,6 +32,7 @@ import {
   type PrepareDatabaseStatementRequest,
 } from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { stubDescriptor } from './source-fixture';
 
 const NOW = 1_800_000_000_000;
 const DAY = 24 * 60 * 60 * 1_000;
@@ -216,6 +217,10 @@ function holdSupply(): HeldSupply {
   };
 
   const source: SourceConnector = {
+
+    id: 'zhihu',
+
+    descriptor: stubDescriptor,
     id: 'zhihu',
     async search() {
       counters.sourceSearchCalls += 1;
@@ -263,7 +268,7 @@ function holdSupply(): HeldSupply {
           config,
           database,
           model,
-          source,
+          sources: [source],
           client,
           interests,
           contents,

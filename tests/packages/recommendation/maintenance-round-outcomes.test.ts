@@ -33,6 +33,7 @@ import {
   type PrepareDatabaseStatementRequest,
 } from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { stubDescriptor } from './source-fixture';
 
 const NOW = 1_800_000_000_000;
 const DAY = 24 * 60 * 60 * 1_000;
@@ -207,6 +208,8 @@ function composePool(
   };
   const source: SourceConnector = {
     id: 'zhihu',
+    descriptor: stubDescriptor,
+    id: 'zhihu',
     async search() {
       return { status: 'success', items: [] };
     },
@@ -235,7 +238,7 @@ function composePool(
         config,
         database,
         model,
-        source,
+        sources: [source],
         client,
         interests,
         contents,
@@ -327,6 +330,8 @@ function openCommitFixture(): CommitFixture {
   };
   const source: SourceConnector = {
     id: 'zhihu',
+    descriptor: stubDescriptor,
+    id: 'zhihu',
     async search() {
       counters.sourceSearchCalls += 1;
       return {
@@ -381,7 +386,7 @@ function openCommitFixture(): CommitFixture {
         config,
         database,
         model,
-        source,
+        sources: [source],
         client,
         interests,
         contents,

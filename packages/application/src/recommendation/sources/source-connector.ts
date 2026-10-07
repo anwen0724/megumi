@@ -70,9 +70,30 @@ export type SourceMaterialResult =
   | { status: 'success'; material: SourceMaterial }
   | { status: 'failed'; failure: SourceFailure };
 
+/**
+ * What one source can do. The program uses it to fill search parameters and
+ * decide whether material can be completed; the planner uses it to choose a
+ * source. Connector code provides it, never user configuration or the model.
+ */
+export interface SourceDescriptor {
+  /** Matches the value used in `enabledSources`. */
+  readonly id: string;
+  /** Planner-facing description: content types, main language, useful directions. */
+  readonly description: string;
+  /** Most items one search can return. */
+  readonly maxResultsPerSearch: number;
+  /** Whether the source filters by the same time it maps to `publishedAt`. */
+  readonly supportsTimeRange: boolean;
+  /** Text a search response already carries. */
+  readonly material: 'full_text' | 'excerpt' | 'none';
+  /** Whether material can be completed on demand. */
+  readonly supportsFetch: boolean;
+}
+
 /** One platform's search and material access behind a stable contract. */
 export interface SourceConnector {
   readonly id: string;
+  readonly descriptor: SourceDescriptor;
   search(request: SourceSearchRequest): Promise<SourceSearchResult>;
   fetch(request: SourceMaterialRequest): Promise<SourceMaterialResult>;
 }

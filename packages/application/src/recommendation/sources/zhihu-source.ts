@@ -8,6 +8,7 @@ import { z } from 'zod';
 import type {
   RawItem,
   SourceConnector,
+  SourceDescriptor,
   SourceFailure,
   SourceMaterialResult,
   SourceSearchResult,
@@ -52,12 +53,28 @@ export interface ZhihuSourceOptions {
   readonly now?: () => number;
 }
 
+/**
+ * The Zhihu Open Platform capabilities. The search endpoint returns an excerpt
+ * rather than full text, it filters by the same time it maps to `publishedAt`,
+ * and the full-text endpoint only serves the credential owner's own posts, so
+ * material cannot be completed on demand.
+ */
+const ZHIHU_DESCRIPTOR: SourceDescriptor = {
+  id: 'zhihu',
+  description: '中文问答与专栏文章。',
+  maxResultsPerSearch: MAX_RESULTS_PER_SEARCH,
+  supportsTimeRange: true,
+  material: 'excerpt',
+  supportsFetch: false,
+};
+
 export function createZhihuSource(options: ZhihuSourceOptions): SourceConnector {
   const fetchImplementation = options.fetch ?? globalThis.fetch;
   const now = options.now ?? Date.now;
 
   return {
     id: 'zhihu',
+    descriptor: ZHIHU_DESCRIPTOR,
 
     async search(request): Promise<SourceSearchResult> {
       const accessSecret = options.accessSecret()?.trim();

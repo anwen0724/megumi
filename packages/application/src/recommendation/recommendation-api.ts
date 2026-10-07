@@ -34,12 +34,29 @@ import {
   type SupplyModelReference,
 } from './supply/read-supply-config';
 import { createMaintenanceScheduler } from './supply/schedule-maintenance';
-import type { CandidateSupply, UnavailableCode } from './supply/supply-contracts';
+import type { CandidateSupply, SupplyIssue, UnavailableCode } from './supply/supply-contracts';
 
 /** The first-version source catalog. Adding a source is a product decision, not a setting. */
 const SUPPLY_SOURCES = [{ sourceId: 'zhihu', name: 'Zhihu' }] as const;
 
 const ZHIHU_SOURCE_ID = 'zhihu';
+
+/**
+ * Enabled values that have no connector. They never reach planning, and the
+ * round reports them so a configuration mistake is visible instead of silent.
+ */
+export function sourceConfigurationIssues(
+  enabledSources: readonly string[],
+): readonly SupplyIssue[] {
+  return enabledSources
+    .filter((id) => !SUPPLY_SOURCES.some((source) => source.sourceId === id))
+    .map((id) => ({
+      stage: 'configuration' as const,
+      code: 'SOURCE_NOT_CONFIGURED',
+      subjectId: id,
+      message: `Source ${id} is enabled but has no connector and is not planned.`,
+    }));
+}
 
 export interface RecommendationOptions {
   readonly database: DatabaseConnection;
@@ -99,8 +116,16 @@ export function createRecommendation(options: RecommendationOptions): Recommenda
       if (!model) {
         return unavailable('MODEL_UNAVAILABLE', 'The selected supply model is unavailable.');
       }
-      // A user who disabled every source keeps it disabled: no web-search fallback.
-      if (!settings.enabledSources.includes(ZHIHU_SOURCE_ID)) {
+      // Only an enabled source with an assembled connector may be planned; a user
+      // who disabled every source keeps it disabled: no web-search fallback.
+      const enabled = new Set(settings.enabledSources);
+      const sources = SUPPLY_SOURCES.filter((source) => enabled.has(source.sourceId)).flatMap(
+        (source) =>
+          source.sourceId === ZHIHU_SOURCE_ID
+            ? [createZhihuSource({ accessSecret: options.accessSecret })]
+            : [],
+      );
+      if (sources.length === 0) {
         return unavailable('SOURCE_UNAVAILABLE', 'No candidate supply source is enabled.');
       }
       return {
@@ -110,7 +135,8 @@ export function createRecommendation(options: RecommendationOptions): Recommenda
           config,
           database: options.database,
           model,
-          source: createZhihuSource({ accessSecret: options.accessSecret }),
+          sources,
+          configIssues: sourceConfigurationIssues(settings.enabledSources),
           client: options.client,
           interests,
           contents,

@@ -20,10 +20,13 @@ import {
   type DatabaseConnection,
 } from '@megumi/application/storage/index';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { stubDescriptor } from './source-fixture';
 
 const NOW = 1_800_000_000_000;
 
 const unusedSource: SourceConnector = {
+  id: 'zhihu',
+  descriptor: stubDescriptor,
   id: 'zhihu',
   async search() {
     return { status: 'success', items: [] };
@@ -144,7 +147,7 @@ describe('candidate supply reporting', () => {
           config,
           database,
           model,
-          source: unusedSource,
+          sources: [unusedSource],
           client,
           interests,
           contents,

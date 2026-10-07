@@ -5,6 +5,7 @@
  */
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import { stubDescriptor } from './source-fixture';
 import { fauxAssistantMessage, type Api, type Context, type Model } from '@megumi/ai';
 import type { TextModelClient } from '@megumi/application/recommendation/call-text-model';
 import { createCandidateStorage } from '@megumi/application/recommendation/candidates/candidate-storage';
@@ -139,6 +140,8 @@ describe('one maintenance round', () => {
     };
     const source: SourceConnector = {
       id: 'zhihu',
+      descriptor: stubDescriptor,
+      id: 'zhihu',
       async search() {
         counters.sourceSearchCalls += 1;
         return { status: 'success', items: [] };
@@ -161,7 +164,7 @@ describe('one maintenance round', () => {
           config,
           database,
           model,
-          source,
+          sources: [source],
           client,
           interests,
           contents,
