@@ -6,7 +6,7 @@ import { RecommendationConfigurationSchema, RecommendationLimitsSchema } from '.
 const ObjectSchema = z.record(z.unknown());
 const VersionSchema = z.literal(1);
 
-/** Rehearses or applies the atomic file conversion. Startup registration belongs to the P3 switch. */
+/** Converts legacy settings atomically before application capabilities start. */
 export function migrateRecommendationSettings(filePath: string): {
   status: 'migrated' | 'unchanged';
   removedPaths: string[];
@@ -26,6 +26,13 @@ export function migrateRecommendationSettings(filePath: string): {
   const defaults = RecommendationConfigurationSchema.parse({});
   const defaultedPaths: string[] = [];
   const removedPaths: string[] = [];
+  const enabledSources = old.enabledSources === undefined
+    ? ['zhihu']
+    : z.array(z.string().trim().min(1)).parse(old.enabledSources).filter((sourceId, index) => {
+      if (RecommendationConfigurationSchema.shape.enabledSources.safeParse([sourceId]).success) return true;
+      removedPaths.push(`discovery.enabledSources[${index}]`);
+      return false;
+    });
   const candidateSupply: Record<string, unknown> = {};
   for (const field of [
     'maintenanceIntervalMinutes',
@@ -64,7 +71,7 @@ export function migrateRecommendationSettings(filePath: string): {
   const discovery = {
     enabled: old.candidateSupplyConfirmed ?? false,
     // Existing installations keep the old implicit source, including files with no discovery block.
-    enabledSources: old.enabledSources ?? ['zhihu'],
+    enabledSources,
     ...(old.candidateSupplyModel !== undefined ? { candidateSupplyModel: old.candidateSupplyModel } : {}),
     candidateSupply,
     dailyFeed,

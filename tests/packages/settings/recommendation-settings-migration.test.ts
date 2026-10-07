@@ -9,6 +9,33 @@ import { afterEach, expect, it, vi } from 'vitest';
 let directory: string;
 afterEach(() => { vi.restoreAllMocks(); if (directory) fs.rmSync(directory, { recursive: true, force: true }); });
 
+it('removes retired legacy sources without enabling new services and keeps the migrated file loadable', () => {
+  directory = fs.mkdtempSync(path.join(os.tmpdir(), 'recommendation-settings-'));
+  const file = path.join(directory, 'settings.json');
+  fs.writeFileSync(file, JSON.stringify({
+    general: { locale: 'zh-CN' },
+    discovery: {
+      candidateSupplyConfirmed: true,
+      enabledSources: ['bilibili', 'open_web', 'xiaohongshu', 'douyin', 'zhihu'],
+      candidateSupplyModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
+    },
+  }));
+  const result = migrateRecommendationSettings(file);
+  const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+  expect(saved).toMatchObject({
+    general: { locale: 'zh-CN' },
+    recommendationMigrationVersion: 1,
+    discovery: {
+      enabled: true,
+      enabledSources: ['bilibili', 'xiaohongshu', 'zhihu'],
+      candidateSupplyModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
+    },
+  });
+  expect(result.removedPaths).toContain('discovery.enabledSources[1]');
+  expect(result.removedPaths).toContain('discovery.enabledSources[3]');
+  expect(migrateRecommendationSettings(file).status).toBe('unchanged');
+});
+
 it('converts only explicit recommendation fields and preserves unrelated settings and credentials', () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'recommendation-settings-'));
   const globalSettingsPath = path.join(directory, 'settings.json');

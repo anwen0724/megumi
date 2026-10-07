@@ -13,12 +13,14 @@ const alias = [
   { find: '@megumi/desktop', replacement: path.join(root, 'apps/desktop/src') },
   ...megumiPackageAliases,
 ];
+// Vite 5's esbuild needs this override in every process that imports the AI package.
+// The Electron build target still governs emitted code; AI keeps its ES2024 type library.
+const desktopEsbuildOptions = { tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } } };
 
 export default defineConfig(({ command }) => ({
   main: {
     resolve: { alias },
-    // Vite 5's esbuild cannot parse AI's ES2024 tsconfig; Electron's build target still governs emitted code.
-    esbuild: { tsconfigRaw: { compilerOptions: { target: 'ES2022', useDefineForClassFields: true } } },
+    esbuild: desktopEsbuildOptions,
     define: {
       MAIN_WINDOW_VITE_NAME: JSON.stringify('main_window'),
       MEGUMI_APP_ID: JSON.stringify(delivery.appId),
@@ -50,6 +52,7 @@ export default defineConfig(({ command }) => ({
   },
   preload: {
     resolve: { alias },
+    esbuild: desktopEsbuildOptions,
     build: {
       outDir: path.join(output, 'preload'),
       emptyOutDir: true,
@@ -64,6 +67,7 @@ export default defineConfig(({ command }) => ({
     root: path.join(root, 'apps/desktop/src/renderer'),
     base: './',
     resolve: { alias },
+    esbuild: desktopEsbuildOptions,
     server: { host: '127.0.0.1' },
     build: {
       outDir: path.join(output, 'renderer/main_window'),
