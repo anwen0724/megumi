@@ -41,11 +41,11 @@ export function FirstSupplyConfirmationDialog({ busy, error, onDefer, onConfirm 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-5 backdrop-blur-sm"
+    <div className="ui-overlay-enter fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-5 backdrop-blur-sm"
       onClick={(event) => { if (event.target === event.currentTarget && !busy) onDefer(); }}>
       <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId}
         aria-busy={busy} tabIndex={-1} onKeyDown={handleKeyDown}
-        className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-[var(--color-text)] shadow-xl outline-none">
+        className="ui-dialog-enter w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 text-[var(--color-text)] shadow-xl outline-none">
         <h2 id={titleId} className="text-lg font-semibold">{t('firstSupplyTitle')}</h2>
         <p id={descriptionId} className="mt-3 text-sm leading-6 text-[var(--color-text-muted)]">{t('firstSupplyDescription')}</p>
         {error ? <p role="alert" className="mt-3 text-sm text-[var(--color-danger)]">{error}</p> : null}

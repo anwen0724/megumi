@@ -205,7 +205,9 @@ export function DiscoveryPage({ onOpenContentSources }: DiscoveryPageProps) {
             <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--color-text-muted)]">{t('firstSupplyDescription')}</p></div>
           <Button onClick={() => { setConfirmationError(null); setSupplyPromptOpen(true); }}>{t('startFirstSupply')}</Button>
         </section> : null}
-        {page === 'daily' ? <DailyFeedList /> : page === 'curated' ? <CuratedSelectionList /> : <FavoriteList />}
+        <div key={page} className="ui-content-enter">
+          {page === 'daily' ? <DailyFeedList /> : page === 'curated' ? <CuratedSelectionList /> : <FavoriteList />}
+        </div>
       </div>
     </div>
     {managementOpen ? <RecommendationManagementDrawer onClose={() => setManagementOpen(false)}>

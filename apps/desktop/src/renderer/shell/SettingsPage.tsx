@@ -106,7 +106,7 @@ export function SettingsPage({
   return (
     <main
       data-testid="settings-page"
-      className="min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)]"
+      className="ui-page-enter min-w-[42rem] flex-1 overflow-hidden bg-[var(--color-app-bg)]"
     >
       <div className="h-full">
         <div
@@ -201,8 +201,9 @@ export function SettingsPage({
             className="h-full min-w-0 overflow-y-auto px-8 [scrollbar-gutter:stable]"
           >
             <div
+              key={category}
               className={cx(
-                'mx-auto max-w-5xl py-8',
+                'ui-page-enter mx-auto max-w-5xl py-8',
                 category === 'models' ? 'h-full min-h-[60rem] lg:min-h-[42rem]' : 'min-h-full',
               )}
             >

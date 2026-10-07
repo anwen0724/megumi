@@ -11,7 +11,7 @@ export function PageHost({
   onOpenModelSettings?: () => void;
 }) {
   return (
-    <div data-testid="page-host" className="relative flex min-h-0 flex-1 overflow-hidden">
+    <div key={page} data-testid="page-host" className="ui-page-enter relative flex min-h-0 flex-1 overflow-hidden">
       {page === 'discovery' ? (
         <DiscoveryPage onOpenContentSources={onOpenContentSources} />
       ) : (

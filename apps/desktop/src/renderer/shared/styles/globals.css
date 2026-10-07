@@ -119,7 +119,51 @@
   }
 }
 
+@keyframes megumi-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes megumi-drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes megumi-dialog-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Page fades avoid creating a containing block for nested fixed dialogs. */
+.ui-page-enter {
+  animation: megumi-fade-in 180ms ease-out;
+}
+
+.ui-content-enter {
+  animation: megumi-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ui-overlay-enter {
+  animation: megumi-fade-in 160ms ease-out;
+}
+
+.ui-drawer-enter {
+  animation: megumi-drawer-in 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ui-dialog-enter {
+  animation: megumi-dialog-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ui-page-enter,
+  .ui-content-enter,
+  .ui-overlay-enter,
+  .ui-drawer-enter,
+  .ui-dialog-enter {
+    animation: none !important;
+  }
+
   * {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
