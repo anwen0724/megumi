@@ -4,6 +4,7 @@
  * one validated plan item with history, cooldown, and budget rules applied.
  */
 import type { DatabaseConnection } from '../../storage/index';
+import type { CandidatePool } from '../candidates/candidate-contracts';
 import type { RawItem, SourceConnector } from '../sources/source-connector';
 import { normalizeContentUrl } from '../content/normalize-content';
 import { SCREENED_OUT } from '../content/screen-discoveries';
@@ -41,6 +42,8 @@ export interface InterestSearchDependencies {
 /** One plan item after the planner validated it. */
 export interface PlannedSearch {
   readonly interestId: string;
+  /** The pools this search serves; it decides the window the program fills in. */
+  readonly pools: readonly CandidatePool[];
   readonly source: string;
   readonly limit: number;
   readonly queryId?: string;

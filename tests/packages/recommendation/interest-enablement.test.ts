@@ -37,6 +37,7 @@ const config: SupplyExecutionConfig = {
   contentLanguages: configuration.contentLanguages,
   searchHistoryDays: configuration.searchHistoryDays,
   searchReuseIntervalMinutes: configuration.searchReuseIntervalMinutes,
+  maxSearchBackoffHours: configuration.maxSearchBackoffHours,
   limits: configuration.limits,
 };
 

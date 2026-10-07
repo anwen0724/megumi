@@ -198,6 +198,7 @@ function composePool(
     contentLanguages: configuration.contentLanguages,
     searchHistoryDays: configuration.searchHistoryDays,
     searchReuseIntervalMinutes: configuration.searchReuseIntervalMinutes,
+    maxSearchBackoffHours: configuration.maxSearchBackoffHours,
     limits: configuration.limits,
   };
   const interests = createInterestManagement({
@@ -388,6 +389,7 @@ function openCommitFixture(): CommitFixture {
     contentLanguages: configuration.contentLanguages,
     searchHistoryDays: configuration.searchHistoryDays,
     searchReuseIntervalMinutes: configuration.searchReuseIntervalMinutes,
+    maxSearchBackoffHours: configuration.maxSearchBackoffHours,
     limits: configuration.limits,
   };
   let sequence = 0;

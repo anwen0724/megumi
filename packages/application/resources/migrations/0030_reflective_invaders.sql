@@ -1,0 +1,1 @@
+ALTER TABLE `candidate_supply_state` ADD `search_backoff` text DEFAULT '{}' NOT NULL;

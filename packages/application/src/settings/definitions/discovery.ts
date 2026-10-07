@@ -86,6 +86,12 @@ export const CandidateSupplyConfigurationSchema = z
     }),
     freshnessDays: z.number().positive().default(7),
     maintenanceIntervalMinutes: z.number().int().positive().default(60),
+    /**
+     * Upper bound on how long a search backoff may wait. The wait doubles with
+     * every low-yield round, so this ceiling is what keeps a cold interest from
+     * waiting indefinitely.
+     */
+    maxSearchBackoffHours: z.number().positive().default(24),
     /** Empty means no language restriction. */
     contentLanguages: z.array(z.string().trim().min(1)).default([]),
     searchHistoryDays: z.number().int().positive().default(30),

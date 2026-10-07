@@ -24,10 +24,20 @@ import { pruneUnusedContent } from '../content/prune-content';
 import { screenDiscoveries } from '../content/screen-discoveries';
 import { executePlannedSearch, type PlannedSearch, type StoredDiscovery } from '../discovery/execute-searches';
 import { needsSearchPlanning, planSearches, type PendingGap } from '../discovery/plan-searches';
-import type { SearchStorage } from '../discovery/search-storage';
+import { searchBackoffKey, type SearchBackoffRecord, type SearchStorage } from '../discovery/search-storage';
 import type { InterestManagement } from '../interests/interest-contracts';
 import type { SourceConnector } from '../sources/source-connector';
 import type { ExecutionBudget } from './execution-budget';
+import {
+  countInterestCandidates,
+  currentSearchBackoff,
+  indexSearchBackoff,
+  searchBackoffIssues,
+  updateSearchBackoff,
+  withoutBackedOffGaps,
+  withoutBackedOffHealth,
+  type SearchedPairs,
+} from './search-backoff';
 import type {
   CandidateRequirement,
   ContentRetentionReader,
@@ -93,6 +103,9 @@ export async function runMaintenance(
   const interests = snapshot.interests.filter((interest) => interest.enabled);
 
   if (interests.length === 0) {
+    // A wait only survives while the interest it was recorded for is enabled and
+    // unchanged, so a round with no enabled interest clears every record.
+    saveSearchBackoff(dependencies, [], issues);
     return finish(dependencies, input, savedCounts, issues, [], 'no_work');
   }
 
@@ -178,11 +191,30 @@ export async function runMaintenance(
   // its minimum, so its own gaps are the round's highest priority.
   const pendingGaps = pendingRequirementGaps(input.pendingRequirements(), evaluations);
 
+  // Backoff is read once, before planning: a pair still inside its wait neither
+  // reaches the planner nor gets an item scheduled for it. A record whose
+  // interest was edited, disabled, or deleted is dropped rather than inherited.
+  // What the round reports is the state its searches leave behind, so that
+  // report is saved when the searches are done.
+  const storedBackoff = dependencies.search.readSearchBackoff();
+  const currentBackoff = currentSearchBackoff(storedBackoff, interests);
+  const backoffIndex = indexSearchBackoff(currentBackoff);
+  const maySearch = (interestId: string, pool: CandidatePool): boolean => {
+    const record = backoffIndex.get(searchBackoffKey({ interestId, pool }));
+    return record === undefined || record.nextAllowedAt <= dependencies.now();
+  };
+  const plannableHealth = withoutBackedOffHealth(poolHealth, backoffIndex, dependencies.now());
+  const plannableGaps = withoutBackedOffGaps(pendingGaps, backoffIndex, dependencies.now());
+  // The counts this round's searches start from; the end of the round compares
+  // them with the counts those searches left behind.
+  const candidatesBeforeSearch = countInterestCandidates(evaluations);
+  let searched: SearchedPairs = new Set();
+
   // A cancelled or expired round starts no further model request.
   const canPlan =
     !input.signal.aborted &&
     !input.budget.expired &&
-    needsSearchPlanning({ poolHealth, hasPendingRequest: pendingGaps.length > 0 });
+    needsSearchPlanning({ poolHealth: plannableHealth, hasPendingRequest: plannableGaps.length > 0 });
 
   if (canPlan) {
     // Planning is counted work: reserve its call and its tokens before asking.
@@ -201,8 +233,8 @@ export async function runMaintenance(
       },
       {
         interests,
-        poolHealth,
-        pendingGaps,
+        poolHealth: plannableHealth,
+        pendingGaps: plannableGaps,
         recentSearches: dependencies.search.listRecentSearches({
           since: dependencies.now() - dependencies.config.searchHistoryDays * 24 * 60 * 60 * 1_000,
         }),
@@ -229,7 +261,21 @@ export async function runMaintenance(
           message: `${planned.invalidItems} planned searches were refused because they named an unknown interest, an unknown source, an unknown stored query, or no query expression.`,
         });
       }
-      await consumePlan(dependencies, input, planned.items, savedCounts, issues);
+      // A pair that entered backoff between planning and execution, or that the
+      // model scheduled although it was already waiting, is refused here: the
+      // program owns backoff, never the plan.
+      const accepted = planned.items.filter((item) => {
+        const waiting = item.pools.filter((pool) => !maySearch(item.interestId, pool));
+        if (waiting.length === 0) return true;
+        issues.push({
+          stage: 'search',
+          code: 'SEARCH_BACKOFF',
+          subjectId: item.interestId,
+          message: `A planned search for the ${waiting.join(' and ')} pool was refused: the interest is still in search backoff.`,
+        });
+        return false;
+      });
+      searched = await consumePlan(dependencies, input, accepted, savedCounts, issues);
     } else {
       issues.push({
         stage: 'search',
@@ -248,6 +294,21 @@ export async function runMaintenance(
 
   await input.deliver();
   evaluations = await evaluateAll(dependencies, interests, usage);
+  // The round's searches are done, so its low-yield count and the next allowed
+  // time are settled. The reported wait is this saved state.
+  saveSearchBackoff(
+    dependencies,
+    updateSearchBackoff({
+      previous: currentBackoff,
+      interests,
+      searched,
+      before: candidatesBeforeSearch,
+      after: countInterestCandidates(evaluations),
+      config: dependencies.config,
+      now: dependencies.now(),
+    }),
+    issues,
+  );
   return finish(
     dependencies,
     input,
@@ -265,13 +326,14 @@ async function consumePlan(
   items: readonly PlannedSearch[],
   savedCounts: MaintenanceCounts,
   issues: SupplyIssue[],
-): Promise<void> {
+): Promise<SearchedPairs> {
+  const searched: string[] = [];
   const interests = (await dependencies.interests.listInterests()).interests.filter(
     (interest) => interest.enabled,
   );
   const enabledInterests = new Set(interests.map((interest) => interest.id));
   for (const item of items) {
-    if (input.signal.aborted || input.budget.expired) return;
+    if (input.signal.aborted || input.budget.expired) return new Set(searched);
     // The requirement may have changed between planning and execution; a
     // changed interest never starts a new search.
     if (!enabledInterests.has(item.interestId)) continue;
@@ -299,6 +361,11 @@ async function consumePlan(
     }
     if (outcome.status === 'skipped') continue;
 
+    // Only a search that actually ran counts towards backoff, so a failure, a
+    // cooling source, a repeated window, or an exhausted budget is no evidence.
+    for (const pool of item.pools) {
+      searched.push(searchBackoffKey({ interestId: item.interestId, pool }));
+    }
     savedCounts.discoveredItems += outcome.resultCount;
     const screened = await screenBatch(
       dependencies,
@@ -308,13 +375,14 @@ async function consumePlan(
       savedCounts,
       issues,
     );
-    if (screened.status === 'deferred') return;
+    if (screened.status === 'deferred') return new Set(searched);
     for (const verdict of screened.verdicts) {
-      if (input.signal.aborted || input.budget.expired) return;
+      if (input.signal.aborted || input.budget.expired) return new Set(searched);
       await intake(dependencies, input, verdict.discovery, interests, verdict.screenedOut, savedCounts, issues);
     }
     await input.deliver();
   }
+  return new Set(searched);
 }
 
 /**
@@ -630,6 +698,16 @@ async function reanalyze(
 /** Only transport and result-shape failures are worth another attempt. */
 function isRetryableFailure(code: string): boolean {
   return code === 'TRANSPORT' || code === 'INVALID_RESULT' || code === 'rate_limited';
+}
+
+/** Saves the round's backoff state and reports the pairs it still holds back. */
+function saveSearchBackoff(
+  dependencies: MaintenanceDependencies,
+  records: readonly SearchBackoffRecord[],
+  issues: SupplyIssue[],
+): void {
+  dependencies.search.writeSearchBackoff(records);
+  issues.push(...searchBackoffIssues(records, dependencies.now()));
 }
 
 async function evaluateAll(

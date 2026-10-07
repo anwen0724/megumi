@@ -469,6 +469,7 @@ export const candidateSupplyState = sqliteTable(
     lastFinishedAt: integer('last_finished_at'),
     nextInterestId: text('next_interest_id'),
     sourceCooldowns: jsonText('source_cooldowns').notNull(),
+    searchBackoff: jsonText('search_backoff').notNull().default(sql`'{}'`),
   },
   (table) => [check('check_candidate_supply_state_singleton', sql`${table.id} = 1`)],
 );

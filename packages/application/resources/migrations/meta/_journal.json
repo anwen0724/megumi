@@ -211,6 +211,13 @@
       "when": 1791364384806,
       "tag": "0029_remove_legacy_discovery",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1791348470602,
+      "tag": "0030_reflective_invaders",
+      "breakpoints": true
     }
   ]
 }

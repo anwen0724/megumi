@@ -130,6 +130,7 @@ function supplyConfig(): SupplyExecutionConfig {
     contentLanguages: parsed.contentLanguages,
     searchHistoryDays: parsed.searchHistoryDays,
     searchReuseIntervalMinutes: parsed.searchReuseIntervalMinutes,
+    maxSearchBackoffHours: parsed.maxSearchBackoffHours,
     limits: parsed.limits,
   };
 }

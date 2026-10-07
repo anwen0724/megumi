@@ -206,6 +206,7 @@ export async function planSearches(
     }
     items.push({
       interestId: item.interestId,
+      pools: item.pools,
       source: item.source,
       // Time range and result count come from the source declaration, never the
       // model: a daily item asks for the recent window, a long-term-only item

@@ -24,6 +24,7 @@ export interface SupplyExecutionConfig {
   readonly longTerm: CandidatePoolThresholds;
   readonly freshnessDays: number;
   readonly maintenanceIntervalMinutes: number;
+  readonly maxSearchBackoffHours: number;
   readonly contentLanguages: readonly string[];
   readonly searchHistoryDays: number;
   readonly searchReuseIntervalMinutes: number;
@@ -38,6 +39,7 @@ export function readSupplyConfig(snapshot: SettingsSnapshot): SupplyExecutionCon
     longTerm: candidateSupply.longTerm,
     freshnessDays: candidateSupply.freshnessDays,
     maintenanceIntervalMinutes: candidateSupply.maintenanceIntervalMinutes,
+    maxSearchBackoffHours: candidateSupply.maxSearchBackoffHours,
     contentLanguages: candidateSupply.contentLanguages,
     searchHistoryDays: candidateSupply.searchHistoryDays,
     searchReuseIntervalMinutes: candidateSupply.searchReuseIntervalMinutes,
