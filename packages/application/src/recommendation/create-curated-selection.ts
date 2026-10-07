@@ -50,8 +50,6 @@ export function createCuratedSelection(input: CuratedSelectionOptions) {
       checking = true;
       try {
         const interests = (await input.interests.listInterests()).interests.filter(item => item.enabled);
-        if (!interests.length)
-          return;
         const hash = interestSetHash(interests);
         if (active?.hash === hash)
           return;
@@ -60,6 +58,8 @@ export function createCuratedSelection(input: CuratedSelectionOptions) {
           input.runs.finish(active.id, 'superseded', input.now(), [{ code: 'INPUT_CHANGED', message: 'The authoritative interest set changed.' }]);
           active = undefined;
         }
+        if (!interests.length)
+          return;
         if (input.storage.current()?.interestHash === hash || input.storage.automaticState()?.finished_automatic_interest_hash === hash)
           return;
         input.storage.waitForInterestSet(hash);
@@ -134,8 +134,8 @@ export function createCuratedSelection(input: CuratedSelectionOptions) {
           const budget = createDiscoveryBudget(config.limits, input.now(), input.now);
           const values = new Map<string, ValueJudgment>();
           const counts = new Map<string, number>();
-          const data = (candidate: CuratedInput) => ({ contentId: candidate.contentId, materialId: candidate.materialId, title: candidate.material.title, summary: candidate.analysis.summary, keyPoints: candidate.analysis.keyPoints, qualifications: candidate.qualifications, interests });
-          const itemHash = (candidate: CuratedInput) => createHash('sha256').update(JSON.stringify(['value:1', data(candidate)])).digest('hex');
+          const data = (candidate: CuratedInput) => ({ contentId: candidate.contentId, materialId: candidate.materialId, materialKind: candidate.material.kind, truncated: candidate.material.truncated, title: candidate.material.title, summary: candidate.analysis.summary, keyPoints: candidate.analysis.keyPoints, qualifications: candidate.qualifications, interests });
+          const itemHash = (candidate: CuratedInput) => createHash('sha256').update(JSON.stringify(['value:2', data(candidate)])).digest('hex');
           const validate = (candidate: CuratedInput, value: unknown) => {
             const judgment = ValueJudgmentSchema.parse(value);
             validateEvidence(candidate.material, judgment.evidence);
@@ -153,7 +153,7 @@ export function createCuratedSelection(input: CuratedSelectionOptions) {
             return false;
           });
           const outcomes = await judgeItems({
-            stage: 'value', instructions: 'Judge whether the acquired material offers concrete knowledge, methods, evidence, experience or useful new information for an authoritative interest. Return worthReading, reason, exact material evidence and matchedInterestIds. Do not score items against their batch or invent knowledge of user reading history.', items: pending.map(candidate => ({ id: candidate.contentId, data: data(candidate) })), client: input.client, model, budget, queue: input.modelQueue, signal,
+            stage: 'value', instructions: 'Judge whether the acquired material offers concrete knowledge, methods, evidence, experience or useful new information for an authoritative interest. Respect explicit geography and other constraints. An excerpt or description only proves what it actually contains; do not promise methods, detail or conclusions from unseen full text. Bare promises of a review, tutorial or practical tips do not provide concrete information: return worthReading=false when no actual finding, method, example, limitation or specific release fact is acquired. A generic product landing page or name-only list is insufficient. Do not infer access, occupation or membership that the interest did not state; a resource restricted to a particular institution is not usable without such a match. Distinguish attributed promotional claims from independently supported facts. Each result must use exactly these fields: {"worthReading":true,"reason":"a concise reading reason","evidence":[{"materialId":"the supplied materialId","quote":"an exact quote from supplied evidence"}],"matchedInterestIds":["a supplied qualified interest id"]}. evidence is an array of objects, never a string or an array of strings; do not rename it materialEvidence. Use a reason of at most 80 Chinese characters or 40 English words and one short exact evidence quote when sufficient. Do not score items against their batch or invent knowledge of user reading history.', items: pending.map(candidate => ({ id: candidate.contentId, data: data(candidate) })), client: input.client, model, budget, queue: input.modelQueue, signal,
             validate(contentId, value) { return validate(candidates.find(candidate => candidate.contentId === contentId)!, value); },
             beforeRequest(ids) {
               let claimed = false;
@@ -198,7 +198,7 @@ export function createCuratedSelection(input: CuratedSelectionOptions) {
             input.runs.finish(id, issues.length ? 'failed' : 'completed', input.now(), issues, undefined, { result: issues.length ? 'failed' : 'no_change' });
             return;
           }
-          const system = `Compare the complete supplied shortlist. Select at most the target count, at most ${config.curated.maxItemsPerPublisher} items per publisher key, and one per duplicate group. Each item must have contentId, reason, exact evidence [{materialId,quote}] and matchedInterestIds. Cover supplied interests before allocating extra slots; never invent identifiers or facts. Return {items:[...]}.`;
+          const system = `Compare the complete supplied shortlist. Select at most the target count, at most ${config.curated.maxItemsPerPublisher} items per publisher key, and one per duplicate group. Each item must have contentId, reason, exact evidence [{materialId,quote}] and matchedInterestIds. Cover supplied interests before allocating extra slots; respect explicit geography and other constraints. Reasons must stay within the acquired material kind and evidence, without promising unseen full-text details or treating advertising claims as verified facts. Keep each reason under 80 Chinese characters or 40 English words, with one short exact evidence quote when sufficient. Never invent identifiers or facts. Return {items:[...]}.`;
           const covered = new Set(current?.selection.items.flatMap(item => item.interestLabels.map(label => label.interestId)));
           const interestPriority = [...interests].sort((a, b) => Number(covered.has(a.id)) - Number(covered.has(b.id))).map(item => item.id);
           const comparisonPrompt = (items: readonly CuratedInput[], correction?: string) => JSON.stringify({ stage: 'selection', targetCount: config.curated.targetCount, interests, interestPriority, items: items.map(candidate => ({ id: candidate.contentId, publisherKeys: candidate.publisherKeys, ...data(candidate), value: values.get(candidate.contentId) })), correction });

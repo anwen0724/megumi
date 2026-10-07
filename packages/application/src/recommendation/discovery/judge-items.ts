@@ -3,6 +3,7 @@
  */
 import type { Api, Model } from '@megumi/ai';
 import { z } from 'zod';
+import { estimateTextTokens } from '@megumi/ai/utils/estimate';
 import { callTextModel, type TextModelClient } from '../call-text-model';
 import type { DiscoveryBudget, RunCall } from './discovery-budget';
 import type { SourceQueue } from './source-queue';
@@ -39,8 +40,9 @@ export async function judgeItems<T>(input: {
   const results = new Map<string, JudgmentOutcome<T>>();
   const kind: RunCall = input.stage === 'analysis' ? 'analysisCalls' : input.stage === 'matching' ? 'matchingCalls' : input.stage === 'topic' ? 'judgmentCalls' : 'selectionCalls';
   const system = input.instructions + '\nReturn JSON {"items":[{"id":"the exact supplied id","result":{...}}]}. Each result is independent of other input items. Never invent identifiers or source facts.';
+  const promptFor = (items: readonly JudgmentItem[], correction?: Record<string, string>) => JSON.stringify({ stage: input.stage, items: items.map(item => ({ id: item.id, ...item.data })), ...(correction ? { correction } : {}) });
   const call = async (items: readonly JudgmentItem[], correction?: Record<string, string>) => {
-    const prompt = JSON.stringify({ stage: input.stage, items: items.map(item => ({ id: item.id, ...item.data })), ...(correction ? { correction } : {}) });
+    const prompt = promptFor(items, correction);
     const reserved = input.budget.reserveModel(kind, input.model, system, prompt);
     if (typeof reserved === 'string')
       return { status: 'failed' as const, code: reserved.toUpperCase(), message: reserved };
@@ -121,6 +123,19 @@ export async function judgeItems<T>(input: {
           results.set(item.id, { id: item.id, status: 'failed', code: retried.code, message: retried.message });
     }
   }
-  await runBatch(input.items, true);
+  const limits = input.budget.snapshot().limits;
+  const outputLimit = Math.min(limits.maxRequestOutputTokens, input.model.maxTokens);
+  const inputLimit = Math.min(limits.maxRequestInputTokens, input.model.contextWindow - outputLimit);
+  // Value replies contain prose and quoted evidence; leave room for each complete result.
+  const itemLimit = input.stage === 'value' ? Math.max(1, Math.floor(outputLimit / 600)) : Infinity;
+  let batch: JudgmentItem[] = [];
+  for (const item of input.items) {
+    if (batch.length && (batch.length >= itemLimit || estimateTextTokens(system + '\n' + promptFor([...batch, item])) > inputLimit)) {
+      await runBatch(batch, true);
+      batch = [];
+    }
+    batch.push(item);
+  }
+  await runBatch(batch, true);
   return input.items.map(item => results.get(item.id)!);
 }

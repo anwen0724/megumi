@@ -33,6 +33,25 @@ export interface SavedDiscovery {
 export type SearchYield = z.input<typeof YieldSummarySchema>[number];
 /** Creates persisted discovery history and token-scoped material acquisition. */
 export function createDiscoveryStorage(database: DatabaseConnection, newId: (prefix: string) => string) {
+  /** Removes task-only access parameters while preserving diagnostic identity links. */
+  function clearMaterialRequestUrls(runId: string, token?: string): void {
+    const rows = database.prepare<{id: string; request_url: string}>({
+      sql: token ? 'SELECT id,request_url FROM material_requests WHERE owner_run_id=? AND attempt_token=?' : 'SELECT id,request_url FROM material_requests WHERE discovery_run_id=?'
+    }).all(token ? [runId, token] : [runId]);
+    for (const row of rows) {
+      const identity = identifyContentUrl(row.request_url);
+      if (identity) database.prepare({sql: 'UPDATE material_requests SET request_url=? WHERE id=?'}).run([identity.url, row.id]);
+    }
+  }
+  /** Ends the retention of temporary discovered access URLs with the owning run. */
+  function clearRunAccessUrls(runId: string): void {
+    clearMaterialRequestUrls(runId);
+    const rows = database.prepare<{id: string; request_url: string}>({sql: 'SELECT DISTINCT r.id,r.request_url FROM search_results r JOIN search_result_links l ON l.search_result_id=r.id JOIN search_history h ON h.id=l.search_history_id WHERE h.run_id=?'}).all([runId]);
+    for (const row of rows) {
+      const identity = identifyContentUrl(row.request_url);
+      if (identity) database.prepare({sql: "UPDATE search_results SET request_url=?,raw_payload=CASE WHEN raw_payload IS NULL THEN NULL ELSE json_set(raw_payload,'$.requestUrl',?) END WHERE id=?"}).run([identity.url, identity.url, row.id]);
+    }
+  }
   const readResults = (historyId: string): SavedDiscovery[] => database.prepare<{
     id: string;
     raw_payload: string | null;
@@ -46,6 +65,8 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
   const storage = {
     /** Settles abandoned dependencies, then expires history no longer needed for recovery. */
     cleanup(now:number,protectedContentIds:ReadonlySet<string>,abandonedContentIds:readonly string[],protectedRunIds:ReadonlySet<string>) {
+      const expiredAccess = database.prepare<{id: string}>({sql: 'SELECT id FROM discovery_runs WHERE started_at<?'}).all([now-86400000]);
+      for (const run of expiredAccess) clearRunAccessUrls(run.id);
       const abandoned=new Set(abandonedContentIds);
       const waiting=database.prepare<{id:string;content_id:string|null}>({sql:"SELECT id,content_id FROM search_results WHERE status IN ('pending','failed') AND last_seen_at<? AND error_code IS NOT 'ABANDONED' AND NOT EXISTS(SELECT 1 FROM material_requests m WHERE m.content_id=search_results.content_id AND m.owner_run_id IS NOT NULL)"}).all([now-7*86400000]);
       for(const row of waiting)if(!row.content_id||!protectedContentIds.has(row.content_id)){
@@ -131,6 +152,7 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
           if (!database.prepare({ sql: "SELECT 1 FROM material_requests m JOIN discovery_runs r ON r.id=m.owner_run_id WHERE m.owner_run_id=? AND m.attempt_token=? AND m.status='running' AND m.attempt_deadline_at>? AND r.status='running'" }).get([attempt.runId, attempt.token, now]))
             return false;
           operation();
+          clearMaterialRequestUrls(attempt.runId, attempt.token);
           database.prepare({ sql: "UPDATE material_requests SET status='ready',error_code=NULL,retry_at=NULL,owner_run_id=NULL,attempt_token=NULL,attempt_started_at=NULL,attempt_deadline_at=NULL WHERE owner_run_id=? AND attempt_token=?" }).run([attempt.runId, attempt.token]);
           return true;
         }
@@ -138,6 +160,7 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
     },
     /** Clears only the acquisition named by the caller. */
     releaseMaterial(attempt: DiscoveryAttempt, now: number, errorCode?: string): void {
+      clearMaterialRequestUrls(attempt.runId, attempt.token);
       database.prepare({ sql: 'UPDATE material_requests SET status=?,error_code=?,retry_at=?,owner_run_id=NULL,attempt_token=NULL,attempt_started_at=NULL,attempt_deadline_at=NULL WHERE owner_run_id=? AND attempt_token=?' }).run([errorCode ? 'failed' : 'cancelled', errorCode ?? null, errorCode ? now + 60000 : null, attempt.runId, attempt.token]);
     },
     /** Supplies only discoveries produced for this current interest; unknown relevance is not guessed. */
@@ -162,6 +185,7 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
       database.prepare({ sql: "INSERT INTO discovery_runs(id,purpose,status,interest_snapshot,config_revision,started_at,budget,yield_summary) VALUES(?,?,'running',?,?,?,?,'[]')" }).run([input.id, input.purpose, JSON.stringify(input.interests), input.configRevision, input.now, JSON.stringify(input.budget.snapshot())]);
     },
     finishRun(id: string, status: DiscoveryRunRecord['status'], now: number, budget: DiscoveryBudget, issues: readonly DiscoveryIssue[]) {
+      clearRunAccessUrls(id);
       database.prepare({ sql: "UPDATE discovery_runs SET status = ?,finished_at = ?,budget = ?,issues = ?,next_step=? WHERE id = ? AND status = 'running'" }).run([status, now, JSON.stringify(budget.snapshot()), JSON.stringify(issues), status === 'completed' ? null : 'resume_saved_work', id]);
       database.prepare({ sql: 'UPDATE candidate_supply_state SET last_finished_at = ? WHERE id = 1' }).run([now]);
     },
@@ -186,6 +210,7 @@ export function createDiscoveryStorage(database: DatabaseConnection, newId: (pre
           const ids = database.prepare<{
             id: string;
           }>({ sql: "SELECT id FROM discovery_runs WHERE status = 'running'" }).all().map(row => row.id);
+          for (const id of ids) clearRunAccessUrls(id);
           database.prepare({ sql: "UPDATE discovery_runs SET status = 'interrupted',finished_at = ? WHERE status = 'running'" }).run([now]);
           database.prepare({ sql: "UPDATE material_requests SET status='cancelled',owner_run_id=NULL,attempt_token=NULL,attempt_started_at=NULL,attempt_deadline_at=NULL WHERE owner_run_id IN (SELECT id FROM discovery_runs WHERE status IN ('interrupted','cancelled'))" }).run();
           return ids;

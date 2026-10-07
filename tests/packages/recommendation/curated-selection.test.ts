@@ -6,6 +6,44 @@ import { expect, it } from 'vitest';
 import { recommendationFixture } from './recommendation-fixture';
 import { RecommendationConfigurationSchema } from '@megumi/application/settings/definitions/recommendation';
 import type { ModelPrompt } from './recommendation-fixture';
+it('starts the waiting initial selection after daily supply creates its first candidate', async () => {
+  let interestId = '';
+  let searches = 0;
+  const f = recommendationFixture({ fetch: async () => Response.json({ results: ++searches === 1 ? [] : [{ url: 'https://example.com/from-daily', title: '面试准备', content: '完整正文包含面试的准备方法。', raw_content: '完整正文包含面试的准备方法。' }] }), respond: async prompt => {
+    if (prompt.stage === 'value' || prompt.stage === 'selection') return readingResponse(prompt, interestId);
+    return f.defaultRespond(prompt);
+  } });
+  f.advance(-2 * 3600000);
+  interestId = (await f.owner.interests.createInterest({ text: '面试' })).interest.id;
+  await f.owner.startBackground();
+  await f.owner.supply.startMaintenance({ reason: 'startup' }).result;
+  await f.owner.curated.check();
+  expect((await f.owner.host.getCuratedSelection()).selection).toBeUndefined();
+  await f.owner.host.startDailyFeed({ requestId: 'daily-supply-first-candidate' });
+  await f.owner.daily.completion();
+  await f.owner.curated.completion();
+  await expect.poll(async () => (await f.owner.host.getCuratedSelection()).selection?.items.length).toBe(1);
+});
+it('supersedes an active selection as soon as its last interest is removed', async () => {
+  const entered = Promise.withResolvers<void>();
+  const gate = Promise.withResolvers<unknown>();
+  let interestId = '';
+  const f = recommendationFixture({ respond: async prompt => {
+    if (prompt.stage === 'value') { entered.resolve(); return gate.promise; }
+    return readingResponse(prompt, interestId);
+  } });
+  const interest = await seedQualified(f, 1); interestId = interest.id;
+  const started = await f.owner.host.startCuratedSelection({ requestId: 'remove-last-interest' });
+  if (started.status === 'no_candidates') throw new Error('Missing candidates');
+  await entered.promise;
+  await f.owner.host.deleteInterest({ interestId, expectedRevision: interest.revision });
+  await f.owner.curated.check();
+  const status = (await f.owner.host.getRun({ runId: started.runId }))?.status;
+  gate.resolve(readingResponse(f.prompts.find(prompt => prompt.stage === 'value')!, interestId));
+  await f.owner.curated.completion();
+  expect(status).toBe('superseded');
+  expect((await f.owner.host.getCuratedSelection()).selection).toBeUndefined();
+});
 function readingResponse(prompt: ModelPrompt, interestId: string, limit?: number) {
   const items = prompt.items!.slice(0, limit);
   return { items: items.map(item => prompt.stage === 'value' ? { id: item.id, result: { worthReading: true, reason: '解释面试准备的方法', evidence: [{ materialId: item.materialId, quote: '准备方法' }], matchedInterestIds: [interestId] } } : { contentId: item.id, reason: '解释面试准备的方法', evidence: [{ materialId: item.materialId, quote: '准备方法' }], matchedInterestIds: [interestId] }) };

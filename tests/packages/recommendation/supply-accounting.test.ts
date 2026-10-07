@@ -5,6 +5,19 @@
 import { expect, it } from 'vitest';
 import { recommendationFixture } from './recommendation-fixture';
 import { createDiscoveryStorage } from '@megumi/application/recommendation/discovery/discovery-storage';
+it('keeps canonical discovery links without temporary detail tokens after a run ends', async () => {
+  const f = recommendationFixture({
+    config: { enabledSources: ['tavily', 'xiaohongshu'] },
+    fetch: async () => Response.json({ results: [{ url: 'https://www.xiaohongshu.com/explore/note123?xsec_token=temporary-access', title: '面试', content: '面试的准备方法', raw_content: '完整正文包含面试的准备方法。' }] })
+  });
+  const created = await f.owner.host.createInterest({ text: '面试' });
+  await f.owner.supply.startMaintenance({ reason: 'startup' }).result;
+  const discovery = createDiscoveryStorage(f.database, f.newId);
+  const items = discovery.forInterest(created.interest.id, created.interest.revision);
+  expect(items).toHaveLength(1);
+  expect(items[0]?.item.requestUrl).toBe('https://www.xiaohongshu.com/explore/note123');
+  expect((await f.owner.supply.listCandidates()).candidates[0]?.material.canonicalUrl).toBe('https://www.xiaohongshu.com/explore/note123');
+});
 it('settles a rejected search only once and does not count cache reuse as another zero yield', async () => {
   const f = recommendationFixture({
     respond: async (prompt) => prompt.stage === 'matching'

@@ -30,6 +30,8 @@ export function createDailyFeed(input: DailyFeedOptions) {
   let closed = false;
   let active: {
     id: string;
+    hash: string;
+    delivery: Promise<void>;
     controller: AbortController;
     result: Promise<void>;
   } | undefined;
@@ -59,13 +61,18 @@ export function createDailyFeed(input: DailyFeedOptions) {
           throw Object.assign(new Error('Request ID has different inputs.'), { code: 'REQUEST_CONFLICT' });
         return { status: 'joined', runId: previous.id };
       }
-      if (active)
+      if (active?.hash === hash) {
+        input.runs.joinRequest(active.id, request.requestId, hash);
         return { status: 'joined', runId: active.id };
-      const selected = interests.filter(interest => !['ready', 'empty'].includes(storage.batch(date, interest)?.status ?? ''));
+      }
+      let selected = interests.filter(interest => !['ready', 'empty'].includes(storage.batch(date, interest)?.status ?? ''));
       if (!selected.length)
         return { status: 'already_completed', batchIds: interests.flatMap(interest => { const batch = storage.batch(date, interest); return batch ? [batch.id] : []; }) };
       const id = input.newId('recommendation');
       const controller = new AbortController();
+      const precedingDelivery = active?.delivery;
+      let releaseDelivery: () => void = () => undefined;
+      const delivery = new Promise<void>(resolve => { releaseDelivery = resolve; });
       const window = { start: midnight(shiftDate(date, 1 - config.dailyFeed.lookbackDays), zone), end: input.now() };
       const windows = new Map(selected.map(interest => {
         const batch = storage.batch(date, interest);
@@ -73,6 +80,18 @@ export function createDailyFeed(input: DailyFeedOptions) {
       }));
       input.runs.create({ id, kind: 'daily_feed', requestId: request.requestId, inputHash: hash, interests: selected, now: input.now(), outcome: { date, timezone: zone, windows: Object.fromEntries(windows) } });
       const result = Promise.resolve().then(async () => {
+        await precedingDelivery;
+        if (controller.signal.aborted) {
+          input.runs.finish(id, 'cancelled', input.now(), []);
+          input.changed({ kind: 'run', runId: id });
+          return;
+        }
+        selected = selected.filter(interest => !['ready', 'empty'].includes(storage.batch(date, interest)?.status ?? ''));
+        if (!selected.length) {
+          input.runs.finish(id, 'completed', input.now(), []);
+          input.changed({ kind: 'run', runId: id });
+          return;
+        }
         input.runs.begin(id);
         input.changed({ kind: 'run', runId: id });
         const issues: DiscoveryIssue[] = [];
@@ -110,6 +129,7 @@ export function createDailyFeed(input: DailyFeedOptions) {
           input.runs.finish(id, status, input.now(), issues, batchId, { batchStatuses });
           input.changed({ kind: 'run', runId: id });
           committed = true;
+          releaseDelivery();
           if (active?.id === id)
             active = undefined;
         };
@@ -206,11 +226,13 @@ export function createDailyFeed(input: DailyFeedOptions) {
           throw error;
         }
       });
-      active = { id, controller, result };
+      active = { id, hash, delivery, controller, result };
       background.set(id, { controller, result });
       void result.finally(() => {
+        releaseDelivery();
         background.delete(id); if (active?.id === id)
           active = undefined;
+        input.onFinished?.();
       }).catch(() => undefined);
       return { status: 'started', runId: id };
     },
@@ -248,9 +270,13 @@ export function createDailyFeed(input: DailyFeedOptions) {
     },
     async completion() { await Promise.all([...background.values()].map(work => work.result)); },
     cancel(runId?: string) {
-      if(!runId){for(const work of background.values())work.controller.abort();}
-      if (active && (!runId || active.id === runId)) {
-        active.controller.abort();
+      if (!runId) {
+        for (const work of background.values()) work.controller.abort();
+        return background.size ? 'cancelling' as const : 'already_finished' as const;
+      }
+      const work = background.get(runId);
+      if (work) {
+        work.controller.abort();
         return 'cancelling' as const;
       } return 'already_finished' as const;
     },

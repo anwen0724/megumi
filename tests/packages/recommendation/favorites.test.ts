@@ -4,6 +4,20 @@
 // @vitest-environment node
 import { expect, it } from 'vitest';
 import { recommendationFixture } from './recommendation-fixture';
+it('retains unchanged content for thirty days after its most recent acquisition', async () => {
+  const f = recommendationFixture({ config: { enabledSources: [] } });
+  const first = f.saveAnalyzedMaterial('https://reacquired.example.com/article');
+  f.advance(29 * 86400000);
+  const { id, contentId, revision, ...input } = first;
+  const repeated = f.materials.saveMaterial({ ...input, acquiredAt: f.now() });
+  expect(repeated.material.id).toBe(id);
+  f.advance(2 * 86400000);
+  await f.owner.cleanup();
+  expect(f.materials.readCurrentMaterial(contentId)?.id).toBe(id);
+  f.advance(29 * 86400000);
+  await f.owner.cleanup();
+  expect(f.materials.readCurrentMaterial(contentId)).toBeUndefined();
+});
 it('keeps the originally saved material across repeated saves, content upgrades and restart', async () => {
   const f = recommendationFixture();
   const created = await f.owner.interests.createInterest({ text: '面试' });

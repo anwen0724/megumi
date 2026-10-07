@@ -109,7 +109,7 @@ export function createElectronEmbeddedBrowser(input: {
             if (!isRecord(response) || typeof response.url !== 'string' || typeof response.status !== 'number' || typeof params.requestId !== 'string') return;
             let url: URL;
             try { url = new URL(response.url); } catch { return; }
-            if (url.origin === 'https://www.xiaohongshu.com' && url.pathname === '/api/sns/web/v2/search/notes') responseIds.set(params.requestId, { url: response.url, status: response.status });
+            if (['https://www.xiaohongshu.com', 'https://edith.xiaohongshu.com'].includes(url.origin) && url.pathname === '/api/sns/web/v2/search/notes') responseIds.set(params.requestId, { url: response.url, status: response.status });
           }
           if (method !== 'Network.loadingFinished' || typeof params.requestId !== 'string') return;
           const response = responseIds.get(params.requestId);
@@ -140,7 +140,7 @@ export function createElectronEmbeddedBrowser(input: {
             if (tooLarge) return failed('material_too_large', 'Platform response exceeded 2 MiB.');
             const snapshot = normalizeSnapshot(await Promise.race([window.webContents.executeJavaScript(PLATFORM_PAGE_READER, false), stopped]), 50_000);
             requireAllowedUrl(snapshot.finalUrl, origins);
-            if (responses.length || snapshot.completed || snapshot.pageState === 'login_required' || snapshot.pageState === 'challenge_required' || request.operation === 'status' || snapshot.structuredData || snapshot.bodyText || snapshot.links.some((link) => /\/(explore|video|question|p)\//.test(link.href))) {
+            if (responses.length || snapshot.completed || snapshot.pageState === 'login_required' || snapshot.pageState === 'challenge_required' || request.operation === 'status' || snapshot.structuredData || snapshot.bodyText || snapshot.links.some((link) => /\/(explore|discovery\/item|search_result|video|question|p)\//.test(link.href))) {
               return { status: 'success', snapshot: { ...snapshot, ...(responses.length ? { responses } : {}) } };
             }
             await delay(100, request.signal);

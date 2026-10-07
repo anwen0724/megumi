@@ -89,7 +89,7 @@ export function createRecommendation(options: RecommendationOptions) {
   const runs = createRecommendationRunStorage(options.database, options.newId);
   runs.interrupt(now());
   const dailyStorage = createDailyFeedStorage({ database: options.database, materials, interests: () => interestStorage.list(), newId: options.newId, now });
-  const daily = createDailyFeed({ materials, candidates, discovery, interests, sources, client: options.client, sourceQueue, modelQueue, now, newId: options.newId, readConfiguration, resolveModel: resolveSupplyModel, storage: dailyStorage, runs, timezone: options.timezone, changed });
+  const daily = createDailyFeed({ materials, candidates, discovery, interests, sources, client: options.client, sourceQueue, modelQueue, now, newId: options.newId, readConfiguration, resolveModel: resolveSupplyModel, storage: dailyStorage, runs, timezone: options.timezone, changed, onFinished: () => { if (backgroundStarted) checkCurated(); } });
   const curatedStorage=createCuratedSelectionStorage({database:options.database,materials,candidates,interests:()=>interestStorage.list(),now,newId:options.newId,runs});
   const favorites=createFavoriteStorage({database:options.database,materials,now});
   const retention=createRecommendationRetention(options.database);

@@ -33,7 +33,7 @@ export function identifyContentUrl(value: string): Pick<RawItem, 'url' | 'platfo
     // A question is an entry page, not an answer with its own material.
   }
   if (url.hostname === 'www.xiaohongshu.com') {
-    const id = /\/(?:explore|discovery\/item)\/([\w]+)/.exec(url.pathname)?.[1];
+    const id = /\/(?:explore|discovery\/item|search_result)\/([\w]+)/.exec(url.pathname)?.[1];
     if (id) return {
       url: `https://www.xiaohongshu.com/explore/${id}`,
       platform: 'xiaohongshu',

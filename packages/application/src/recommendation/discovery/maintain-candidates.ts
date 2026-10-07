@@ -213,11 +213,16 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
   /** A failed planner is a reported gap; user text is never substituted as an unreviewed query. */
   async function planQueries(selected: readonly InterestSnapshotEntry[], sources: readonly unknown[]): Promise<DiscoveryQuery[]> {
     const schema = z.object({ items: z.array(z.object({ interestId: z.string(), sourceId: z.string(), query: z.string().trim().min(1).max(200), direction: z.enum(['direct', 'exploratory']), basis: z.string().trim().min(1) }).strict()) }).strict();
-    const system = 'Plan searches from the authoritative interest text. Return {items:[{interestId,sourceId,query,direction:direct/exploratory,basis}]}. Use only supplied sources and interests, at most two queries per interest. Exploratory queries must explain their connection. Do not invent a user profile.';
+    const system = 'Plan searches from the authoritative interest text. Return {items:[{interestId,sourceId,query,direction:direct/exploratory,basis}]}. For each interest choose one direct query and optionally one additional query. The maximum is TWO ITEMS TOTAL per interest across ALL sources combined, not two per source. Choose one source for each query. Use only supplied source and interest IDs. Exploratory queries must explain their connection. Use the supplied current time; do not invent a calendar year or a user profile.';
     let correction: string | undefined;
     const history = selected.map(interest => ({ interestId: interest.id, items: discovery.planningHistory(interest.id, interest.revision, now() - config.candidateSupply.searchHistoryDays * 86400000) }));
     for (let attempt = 0; attempt < 2; attempt++) {
-      const prompt = JSON.stringify({ stage: 'planning', interests: selected, sources, purpose: input.purpose, window: input.window, history, inventory: selected.map(i => ({ interestId: i.id, eligible: input.candidates.inventory(now(), i.id, config.candidateSupply.contentLanguages), target: config.candidateSupply.interestTargetCount })), correction });
+      const supplements = discovery.state().supplements;
+      const prompt = JSON.stringify({ stage: 'planning', currentTime: new Date(now()).toISOString(), queryLimits: { maxItems: selected.length * 2, maxItemsPerInterestAcrossAllSources: 2, minimumDirectQueriesPerInterest: 1 }, interests: selected, sources, purpose: input.purpose, window: input.window, history, inventory: selected.map(i => {
+        const supplement = supplements.find(request => request.interestId === i.id && request.interestRevision === i.revision);
+        const eligible = supplement ? input.candidates.listCandidates(now(), { contentLanguages: config.candidateSupply.contentLanguages, interestIds: [i.id], excludeContentIds: supplement.excludeContentIds }).length : input.candidates.inventory(now(), i.id, config.candidateSupply.contentLanguages);
+        return { interestId: i.id, eligible, target: config.candidateSupply.interestTargetCount, ...(supplement ? { purpose: 'alternative_candidates', excludedContentIds: supplement.excludeContentIds } : {}) };
+      }), correction });
       const reservation = budget.reserveModel('planningCalls', input.model, system, prompt);
       if (typeof reservation === 'string')
         break;
@@ -242,7 +247,7 @@ export async function maintainCandidates(input: CandidateMaintenanceOptions) {
         const ordered = selected.flatMap(i => response.result.items.filter(q => q.interestId === i.id).slice(0, 1)).concat(selected.flatMap(i => response.result.items.filter(q => q.interestId === i.id).slice(1)));
         return ordered.map(q => ({ ...q, interestRevision: selected.find(i => i.id === q.interestId)!.revision }));
       }
-      correction = 'Use only supplied IDs and at most two queries per interest.';
+      correction = `The rejected plan has ${response.result.items.length} items. Return at most ${selected.length * 2} items total. Each interest may appear at most twice across ALL sources combined, with at least one direct query. Use only supplied IDs. Do not add one query per source or per subtopic.`;
     }
     issues.push({ code: 'MODEL_OUTPUT_INVALID', message: 'Search plan could not be validated.' });
     return [];

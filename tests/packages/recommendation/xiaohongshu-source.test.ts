@@ -14,6 +14,16 @@ function browser(snapshot: EmbeddedBrowserSnapshot): EmbeddedBrowser {
   };
 }
 describe('Xiaohongshu source', () => {
+  it('recognizes note links on the search-result detail route without persisting access tokens', async () => {
+    const source = createXiaohongshuSource({ browser: browser({
+      finalUrl: 'https://www.xiaohongshu.com/search_result?keyword=React', bodyText: '',
+      links: [{ href: 'https://www.xiaohongshu.com/search_result/abc123?xsec_token=local-secret', text: 'React 教程', contextText: 'React 实践方法' }],
+    }) });
+    expect(await source.search({ query: 'React', limit: 3 })).toMatchObject({ status: 'success', items: [{
+      externalId: 'abc123', url: 'https://www.xiaohongshu.com/explore/abc123', title: 'React 教程',
+      requestUrl: 'https://www.xiaohongshu.com/search_result/abc123?xsec_token=local-secret',
+    }] });
+  });
   it('reads the note body and its creation time with local access parameters', async () => {
     const source = createXiaohongshuSource({
       browser: browser({

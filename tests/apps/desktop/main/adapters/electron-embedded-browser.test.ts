@@ -16,6 +16,17 @@ vi.mock('electron', () => ({
 }));
 
 describe('Electron embedded browser', () => {
+  it('reads the video card title instead of the thumbnail playback statistics', async () => {
+    document.body.innerHTML = '<div class="bili-video-card"><a href="https://www.bilibili.com/video/BV17x411w7KC"><span>16.5万 338 07:43:00</span></a><h3 class="bili-video-card__info--tit" title="React 与 TypeScript 实战"><a href="https://www.bilibili.com/video/BV17x411w7KC">React 与 TypeScript 实战</a></h3></div>';
+    for (const anchor of document.querySelectorAll('a')) Object.defineProperty(anchor, 'innerText', { value: anchor.textContent });
+    onTestFinished(() => { document.body.innerHTML = ''; });
+    const taskWindow = new FakeWindow(embeddedBrowserWindowOptions('bilibili', false));
+    taskWindow.webContents.executeJavaScript.mockImplementation(async script => new Function('document', 'location', 'window', `return ${script}`)(document, { href: 'https://search.bilibili.com/all?keyword=React', hostname: 'search.bilibili.com' }, {}));
+    const browser = createElectronEmbeddedBrowser({ createWindow: () => taskWindow as never });
+    onTestFinished(() => browser.shutdown());
+    const result = await browser.readPlatform({ profileId: 'bilibili', operation: 'search', url: 'https://search.bilibili.com/all?keyword=React', signal: new AbortController().signal });
+    expect(result).toMatchObject({ status: 'success', snapshot: { links: [{ text: 'React 与 TypeScript 实战' }, { text: 'React 与 TypeScript 实战' }] } });
+  });
   it('cancels a task queued behind the same platform without waiting for the active task', async () => {
     const window = new FakeWindow(embeddedBrowserWindowOptions('zhihu', false));
     let started: () => void = () => undefined;
@@ -118,10 +129,10 @@ describe('Electron embedded browser', () => {
     };
     Object.assign(window.webContents, { debugger: debuggerPort });
     window.loadURL.mockImplementationOnce(async () => {
-      listeners.get('message')?.({}, 'Network.responseReceived', { requestId: 'r1', response: { url: 'https://www.xiaohongshu.com/api/sns/web/v2/search/notes', status: 200 } });
+      listeners.get('message')?.({}, 'Network.responseReceived', { requestId: 'r1', response: { url: 'https://edith.xiaohongshu.com/api/sns/web/v2/search/notes', status: 200 } });
       listeners.get('message')?.({}, 'Network.loadingFinished', { requestId: 'r1', encodedDataLength: 100 });
     });
-    const browser = createElectronEmbeddedBrowser({ createWindow: () => window as never, settleDelayMs: 0 });
+    const browser = createElectronEmbeddedBrowser({ createWindow: () => window as never, settleDelayMs: 0, timeoutMs: 100 });
     const result = await browser.readPlatform({ profileId: 'xiaohongshu', operation: 'search', url: 'https://www.xiaohongshu.com/search_result?keyword=React', signal: new AbortController().signal });
     expect(result).toMatchObject({ status: 'success', snapshot: { responses: [{ status: 200, body: '{"success":true,"data":{"items":[{"id":"note1"}]}}' }] } });
     expect(window.options.show).toBe(false);

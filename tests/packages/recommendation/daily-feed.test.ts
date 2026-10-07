@@ -4,6 +4,63 @@
 // @vitest-environment node
 import { expect, it } from 'vitest';
 import { recommendationFixture } from './recommendation-fixture';
+it('queues changed daily inputs and delivers them before older candidate analysis finishes', async () => {
+  const searching = Promise.withResolvers<void>();
+  const searchGate = Promise.withResolvers<Response>();
+  const analyzing = Promise.withResolvers<void>();
+  const analysisGate = Promise.withResolvers<unknown>();
+  let searches = 0;
+  const f = recommendationFixture({
+    fetch: async () => {
+      if (++searches === 1) { searching.resolve(); return searchGate.promise; }
+      return Response.json({ results: [] });
+    },
+    respond: async prompt => {
+      if (prompt.stage === 'analysis') { analyzing.resolve(); return analysisGate.promise; }
+      if (prompt.stage === 'topic') return { items: prompt.items!.map(item => ({ id: item.id, result: { relation: 'related', evidence: [{ materialId: item.materialId, quote: '准备方法' }] } })) };
+      return f.defaultRespond(prompt);
+    },
+    webFetch: { async fetch({ url }) { return { url, content: '面试准备方法', contentType: 'text/html', truncated: false, document: '<script type="application/ld+json">{"@type":"Article","datePublished":"2026-10-06T12:00:00+08:00"}</script><article>面试准备方法</article>' }; } }
+  });
+  const firstInterest = await f.owner.interests.createInterest({ text: '面试' });
+  const first = await f.owner.host.startDailyFeed({ requestId: 'before-change' });
+  await searching.promise;
+  const secondInterest = await f.owner.interests.createInterest({ text: '求职' });
+  let second;
+  try { second = await f.owner.host.startDailyFeed({ requestId: 'after-change' }); }
+  catch (error) { searchGate.resolve(Response.json({ results: [] })); analysisGate.resolve({}); throw error; }
+  expect(second.status).toBe('started');
+  expect('runId' in second && 'runId' in first && second.runId !== first.runId).toBe(true);
+  const delivered = Promise.withResolvers<void>();
+  const unsubscribe = f.owner.host.onChanged(event => {
+    if (event.kind === 'run' && 'runId' in second && event.runId === second.runId) {
+      void f.owner.host.getRun({ runId: second.runId }).then(run => { if (run?.finishedAt) delivered.resolve(); });
+    }
+  });
+  searchGate.resolve(Response.json({ results: [{ url: 'https://example.com/interview', title: '面试', content: '面试准备方法' }] }));
+  await analyzing.promise;
+  try {
+    await delivered.promise;
+    const feed = await f.owner.host.listDailyFeed({});
+    if (firstInterest.status !== 'created' || secondInterest.status !== 'created') throw new Error('Interest setup failed.');
+    expect(feed.batches.map(batch => batch.interestId)).toEqual(expect.arrayContaining([firstInterest.interest.id, secondInterest.interest.id]));
+  } finally { unsubscribe(); analysisGate.resolve(f.defaultRespond(f.prompts.find(prompt => prompt.stage === 'analysis')!)); }
+  await f.owner.daily.completion();
+});
+it('replays a joined daily request after the run finishes and the service restarts', async () => {
+  const entered = Promise.withResolvers<void>();
+  const gate = Promise.withResolvers<Response>();
+  const f = recommendationFixture({ fetch: async () => { entered.resolve(); return gate.promise; } });
+  await f.owner.interests.createInterest({ text: '面试' });
+  const first = await f.owner.host.startDailyFeed({ requestId: 'original-daily' });
+  await entered.promise;
+  const joined = await f.owner.host.startDailyFeed({ requestId: 'joined-daily' });
+  expect(joined).toMatchObject({ status: 'joined', runId: 'runId' in first ? first.runId : undefined });
+  gate.resolve(Response.json({ results: [] }));
+  await f.owner.daily.completion();
+  await f.restart();
+  expect(await f.owner.host.startDailyFeed({ requestId: 'joined-daily' })).toEqual(joined);
+});
 it('reuses successful topic judgments when retrying a partial batch', async () => {
   let retry = false;
   const f = recommendationFixture({

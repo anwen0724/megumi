@@ -217,6 +217,11 @@ export function createMaterialStorage(database: DatabaseConnection, newId: () =>
             material.externalId ?? null
           ]);
           const contentId = existing?.id ?? newId();
+          if (existing) {
+            database.prepare({
+              sql: 'UPDATE contents SET updated_at=max(updated_at,?) WHERE id=?'
+            }).run([material.acquiredAt, contentId]);
+          }
           if (existing && material.externalId) {
             database.prepare({
               sql: 'UPDATE contents SET external_id = ? WHERE id = ? AND platform = ? AND external_id IS NULL'

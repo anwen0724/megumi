@@ -9,6 +9,16 @@ import { judgeItems } from '@megumi/application/recommendation/discovery/judge-i
 import { createDiscoveryBudget } from '@megumi/application/recommendation/discovery/discovery-budget';
 import { createSourceQueue } from '@megumi/application/recommendation/discovery/source-queue';
 import { RecommendationLimitsSchema } from '@megumi/application/settings/definitions/recommendation';
+it('judges all complete items across a window larger than two request inputs', async () => {
+  const f = recommendationFixture({ respond: async prompt => ({ items: prompt.items!.map(item => ({ id: item.id, result: { score: 0.8 } })) }) });
+  const budget = createDiscoveryBudget(RecommendationLimitsSchema.parse({ maxRequestInputTokens: 1200 }), f.now(), f.now);
+  const result = await judgeItems({ stage: 'analysis', instructions: 'Score each item.',
+    items: Array.from({ length: 8 }, (_, index) => ({ id: `item-${index}`, data: { text: '材料'.repeat(1600) } })),
+    validate: (_id, value) => z.object({ score: z.number() }).parse(value), client: f.client, model: f.model,
+    budget, queue: createSourceQueue(() => 2), signal: new AbortController().signal });
+  expect(result).toHaveLength(8);
+  expect(result.every(item => item.status === 'ready')).toBe(true);
+});
 it('saves independent successes and corrects only duplicated or missing identifiers', async () => {
   let call = 0;
   const saved: string[] = [];

@@ -4,7 +4,12 @@ export const PLATFORM_PAGE_READER = `(() => {
   const title = document.title || '';
   const challenge = document.querySelector('.geetest_panel, #captcha, [class*="captcha-container"]') || /安全验证|人机验证|访问验证/.test(title);
   let login = document.querySelector('.LoginModal, .signFlowModal, .login-container, [data-testid="login-modal"]');
-  const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 300).map(a => ({ href: a.href, text: (a.innerText || '').slice(0, 500), contextText: (a.closest('article,section,li,.note-item,.video-item')?.innerText || a.innerText || '').slice(0, 2000) }));
+  const links = Array.from(document.querySelectorAll('a[href]')).slice(0, 300).map(a => {
+    const card = location.hostname.endsWith('bilibili.com') ? a.closest('[data-testid="bili-video-card"],.bili-video-card,.video-list-item') : undefined;
+    const titleElement = card?.querySelector('.bili-video-card__info--tit,.video-title,h3');
+    const text = titleElement?.getAttribute('title') || titleElement?.innerText || a.getAttribute('title') || a.innerText || '';
+    return { href: a.href, text: text.slice(0, 500), contextText: (card?.innerText || a.closest('article,section,li,.note-item,.video-item')?.innerText || a.innerText || '').slice(0, 2000) };
+  });
   let structuredData;
   let bodyText = rawText;
   if (location.hostname.endsWith('xiaohongshu.com')) {
