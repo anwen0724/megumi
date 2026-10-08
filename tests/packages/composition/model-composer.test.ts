@@ -3,6 +3,7 @@
 import { createApplicationModels } from '@megumi/application/compose-modules';
 import { readModelCatalog } from '@megumi/application/settings/resolve-model';
 import { createSettings } from '@megumi/application/settings/settings-store';
+import { resolveExtractionModel } from '@megumi/application/memory/extraction-model';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +30,29 @@ function fixture() {
 }
 
 describe('Application model configuration', () => {
+  it('keeps memory model calls and credentials global when invoked inside a foreground workspace', async () => {
+    const files = fixture();
+    const project = fixture();
+    const configuration = { providers: { local: { api: 'openai-completions', baseUrl: 'https://global.test/v1',
+      models: { small: { contextWindowTokens: 64000, maxOutputTokens: 2048 } } } } };
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify(configuration));
+    fs.writeFileSync(project.globalSettingsPath, JSON.stringify(configuration));
+    files.settings.updateCredential({ target: { kind: 'provider', providerId: 'local' }, value: 'global-secret' });
+    project.settings.updateCredential({ target: { kind: 'provider', providerId: 'local' }, value: 'workspace-secret' });
+    const scripted = createScriptedStreams(['memory']);
+    const keys: unknown[] = [];
+    const models = createApplicationModels({ settingsForWorkspace: workspace => workspace ? project.settings : files.settings,
+      apiImplementations: { 'openai-completions': { ...scripted.streams, streamSimple(model, context, request) {
+        keys.push(request?.apiKey); return scripted.streams.streamSimple(model, context, request);
+      } } } });
+    await models.withWorkspace('foreground', async () => {
+      const extraction = await resolveExtractionModel({ models, settings: files.settings, selection: { providerId: 'local', modelId: 'small' } });
+      await extraction.complete({ messages: [] }, {});
+      expect(extraction.secrets).toContain('global-secret');
+      expect(extraction.secrets).not.toContain('workspace-secret');
+    });
+    expect(keys).toEqual(['global-secret']);
+  });
   it('prepares a callable custom model and keeps selected parameters fixed while reading current credentials', async () => {
     const files = fixture();
     const configuration = (baseUrl: string) => ({

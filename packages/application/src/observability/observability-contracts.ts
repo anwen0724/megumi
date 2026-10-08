@@ -8,7 +8,7 @@ import { TraceCorrelationSchema } from './index';
 const TraceStatusSchema = z.enum(['ok', 'error', 'cancelled', 'incomplete']);
 const TraceDiagnosticsSchema = z.enum(['complete', 'incomplete']);
 const TraceKindSchema = z.enum([
-  'conversation', 'interest_understanding', 'recommendation', 'candidate_supply', 'preference_learning', 'unknown',
+  'conversation', 'interest_understanding', 'recommendation', 'candidate_supply', 'preference_learning', 'memory_extraction', 'unknown',
 ]);
 export interface ObservabilityDiagnosticErrorUiDto {
   readonly name: string;

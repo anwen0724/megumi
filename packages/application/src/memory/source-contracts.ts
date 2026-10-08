@@ -3,6 +3,7 @@ import type { SessionMessageAttachment } from '../coding/sessions/session-attach
 import type { SessionAssistantReplyMessage, SessionMessage } from '../coding/sessions/session-history';
 
 export interface MemorySourceInfo {
+  readonly kind?: 'conversation' | 'temporary' | 'internal';
   readonly sessionId: string;
   readonly workspaceId: string;
   readonly title: string;
@@ -29,7 +30,7 @@ export type MemorySourceResult =
   | { readonly status: 'failed'; readonly error: { readonly code: 'SOURCE_UNAVAILABLE' | 'STORAGE_FAILED' | 'INVALID_ARGUMENT'; readonly message: string } };
 
 export interface MemorySources {
-  listSources(): readonly MemorySourceInfo[];
+  listSources(request?: { readonly sessionId?: string; readonly limit?: number }): readonly MemorySourceInfo[];
   readSnapshot(sessionId: string): MemorySourceResult;
   readSource(sourceRef: string): MemorySourceResult;
   getReplyCursor(): number;

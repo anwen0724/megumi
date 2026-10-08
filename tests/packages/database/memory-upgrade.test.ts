@@ -26,7 +26,7 @@ it('upgrades a pre-memory database without changing saved sessions, branches or 
     database.prepare({ sql: `INSERT INTO session_messages VALUES ('m1','s1','run1','assistant_reply',?,'2026-10-02','2026-10-02')` }).run([payload]);
     database.prepare({ sql: `INSERT INTO session_entries VALUES ('e1','s1',NULL,'message','m1',NULL,'2026-10-02')` }).run();
     database.prepare({ sql: "UPDATE sessions SET active_entry_id = 'e1' WHERE session_id = 's1'" }).run();
-    expect(migrateDatabase({ database }).appliedMigrations).toBe(2);
+    expect(migrateDatabase({ database }).appliedMigrations).toBe(3);
     database.prepare({ sql: "UPDATE memory_state SET dirty_revision = 2 WHERE id = 1" }).run();
     database.close();
     database = createDatabase({ filename });

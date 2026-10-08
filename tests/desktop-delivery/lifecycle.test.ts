@@ -86,7 +86,7 @@ it.each([false, true])('starts through packaged migrations with recoverable data
     try {
       expect(database.prepare({ sql: "SELECT name FROM workspaces WHERE workspace_id='delivery-example'" }).get()).toEqual({ name: '用户资料' });
       if (!failRead) {
-        expect(migrateDatabase({ database }).currentMigration).toBe('0039_memory_source_cursor');
+        expect(migrateDatabase({ database }).currentMigration).toBe('0040_memory_extraction_attempts');
       }
       const tables = database.prepare<{ name: string }>({
         sql: "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",

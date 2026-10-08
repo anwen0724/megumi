@@ -74,6 +74,9 @@ export const memoryJobs = sqliteTable('memory_jobs', {
   targetRevision: integer('target_revision'),
   status: text('status').notNull(),
   attempt: integer('attempt').notNull(),
+  retryGroupId: text('retry_group_id').notNull().default(''),
+  retryOfJobId: text('retry_of_job_id'),
+  resultJson: jsonText('result_json'),
   ownerToken: text('owner_token'),
   leaseExpiresAt: text('lease_expires_at'),
   retryAt: text('retry_at'),
@@ -84,7 +87,7 @@ export const memoryJobs = sqliteTable('memory_jobs', {
   check('memory_job_status', sql`${table.status} IN ('pending','running','succeeded','failed','cancelled','superseded')`),
   check('memory_job_attempt', sql`${table.attempt} > 0`),
   check('memory_job_stage', sql`${table.stage} IN ('extract','consolidate')`),
-  uniqueIndex('memory_active_extraction').on(table.sessionId, table.sourceVersion)
+  uniqueIndex('memory_active_extraction').on(table.sessionId)
     .where(sql`${table.stage} = 'extract' AND ${table.status} IN ('pending','running')`),
   uniqueIndex('memory_active_consolidation').on(table.stage)
     .where(sql`${table.stage} = 'consolidate' AND ${table.status} IN ('pending','running')`),

@@ -20,7 +20,7 @@ export function createMemorySources(options: {
   const { store } = options;
 
   function snapshot(sessionId: string, branch?: { branchId?: string }): MemorySourceSnapshot | undefined {
-    const metadata = store.listSourceSessions(sessionId)[0];
+    const metadata = store.listSourceSessions({ sessionId })[0];
     if (!metadata) return undefined;
     const session = metadata.session;
     const entries = buildActiveConversationPath({ session_id: sessionId,
@@ -58,7 +58,8 @@ export function createMemorySources(options: {
   }
 
   return {
-    listSources: () => store.listSourceSessions().map(({ session, contentUpdatedAt }) => ({
+    listSources: request => store.listSourceSessions(request).map(({ session, contentUpdatedAt }) => ({
+      kind: 'conversation' as const,
       sessionId: session.session_id, workspaceId: session.workspace_id, title: session.title,
       archived: session.status === 'archived', running: options.isSessionRunning(session.session_id), contentUpdatedAt,
     })),

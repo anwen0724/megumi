@@ -10,11 +10,13 @@ export const TraceKindSchema = z.enum([
   'recommendation',
   'candidate_supply',
   'preference_learning',
+  'memory_extraction',
 ]);
 export type TraceKind = z.infer<typeof TraceKindSchema>;
 
 export const TRACE_SPAN_NAMES = [
   'model.resolve',
+  'memory.extract',
   'input.process',
   'session.resolve',
   'session.create',
@@ -180,6 +182,14 @@ export const RecordedOutcomeSchema: z.ZodType<RecordedOutcome> = z.discriminated
 ]);
 
 export const TraceEventSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('memory.extraction.settled'),
+    jobId: z.string(), sourceVersion: z.string(), attempt: z.number().int().positive(),
+    status: z.enum(['succeeded', 'failed', 'cancelled', 'superseded']),
+    durationMs: z.number().nonnegative(), includedMessages: z.number().int().nonnegative(),
+    omittedMessages: z.number().int().nonnegative(), inputTokens: z.number().nonnegative(), outputTokens: z.number().nonnegative(),
+    errorCode: z.string().optional(),
+  }).strict(),
   z.object({
     type: z.literal('context.compaction.triggered'),
     compactionId: z.string(),

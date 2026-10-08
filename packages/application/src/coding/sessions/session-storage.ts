@@ -20,7 +20,7 @@ export interface SessionStore {
   }): Session | undefined;
   findSessionById(sessionId: string): Session | undefined;
   listSessionsByWorkspaceId(workspaceId: string): Session[];
-  listSourceSessions(sessionId?: string): { session: Session; contentUpdatedAt: string }[];
+  listSourceSessions(request?: { sessionId?: string; limit?: number }): { session: Session; contentUpdatedAt: string }[];
   getReplyCursor(): number;
   listRepliesAfter(cursor: number, limit: number): { cursor: number; message: SessionAssistantReplyMessage }[];
   archiveSession(input: { session_id: string; archived_at: string }): Session | undefined;
@@ -185,11 +185,12 @@ class DatabaseSessionStore implements SessionStore {
     return undefined;
   }
 
-  listSourceSessions(sessionId?: string): { session: Session; contentUpdatedAt: string }[] {
+  listSourceSessions(request: { sessionId?: string; limit?: number } = {}): { session: Session; contentUpdatedAt: string }[] {
+    const { sessionId, limit } = request;
     return this.database.prepare<SessionRow & { content_updated_at: string | null }>({
       sql: `SELECT * FROM sessions ${sessionId ? 'WHERE session_id = ?' : ''}
-        ORDER BY COALESCE(content_updated_at, created_at) DESC, session_id ASC`,
-    }).all(sessionId ? [sessionId] : []).map(row => ({
+        ORDER BY COALESCE(content_updated_at, created_at) DESC, session_id DESC ${limit === undefined ? '' : 'LIMIT ?'}`,
+    }).all([...(sessionId ? [sessionId] : []), ...(limit === undefined ? [] : [limit])]).map(row => ({
       session: fromSessionRow(row), contentUpdatedAt: row.content_updated_at ?? row.created_at,
     }));
   }

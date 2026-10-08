@@ -283,6 +283,7 @@ function createApplicationInterface(
   };
 
   return lifecycle.bind({
+    memoryExtraction: modules.memoryExtraction,
     operations,
     logger,
     start: ({ backgroundTriggers }) =>

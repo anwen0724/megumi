@@ -31,6 +31,8 @@ import path from 'node:path';
 import { createEventBus, type EventBus } from './coding/events/event-bus';
 import type { ApplicationLogger, ApplicationOperations } from './contracts';
 import { createMemory } from './memory/memory';
+import { createMemoryExtraction } from './memory/extraction';
+import { resolveExtractionModel } from './memory/extraction-model';
 import { createMemoryFiles } from './memory/memory-files';
 import { createMemorySources } from './coding/sessions/memory-sources';
 import {
@@ -162,6 +164,7 @@ export interface ApplicationModules {
   readonly models: ReturnType<typeof createApplicationModels>;
   readonly recommendation: Recommendation;
   readonly memory: ApplicationOperations['memory'];
+  readonly memoryExtraction: ReturnType<typeof createMemoryExtraction>;
 }
 
 /** Composes the capability instances once per Host process. */
@@ -543,13 +546,26 @@ function composeCapabilitiesWithDatabase(
     },
   });
 
+  const memorySources = createMemorySources({ store: sessionStore,
+    isSessionRunning: sessionId => {
+      const run = coding.getSessionRun(sessionId);
+      return run !== undefined && !['completed', 'failed', 'cancelled'].includes(run.status);
+    },
+  });
   const modules: ApplicationModules = {
-    memory: createMemory({ database, settings, files: createMemoryFiles(homePaths.memoriesPath),
-      sources: createMemorySources({ store: sessionStore,
-        isSessionRunning: sessionId => {
-          const run = coding.getSessionRun(sessionId);
-          return run !== undefined && !['completed', 'failed', 'cancelled'].includes(run.status);
-        } }),
+    memory: createMemory({ database, settings, files: createMemoryFiles(homePaths.memoriesPath), sources: memorySources }),
+    memoryExtraction: createMemoryExtraction({ database, sources: memorySources, observability: observability.observability,
+      readConfiguration: () => {
+        const read = settings.readSettings();
+        if (read.status === 'rejected') throw new Error('SETTINGS_INVALID');
+        return read.settings.config.memory;
+      },
+      resolveModel: selection => resolveExtractionModel({ models, settings, selection }),
+      workspaceDirectory: workspaceId => {
+        const result = workspaces.getWorkspace({ workspace_id: workspaceId });
+        if (result.status !== 'found') throw new Error('SOURCE_UNAVAILABLE');
+        return result.workspace.root_path;
+      },
     }),
     homePaths,
     observability,
