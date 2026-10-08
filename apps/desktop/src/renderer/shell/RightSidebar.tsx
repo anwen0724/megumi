@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Archive, ChevronLeft, FolderTree, PanelRightClose } from 'lucide-react';
+import { Archive, Brain, ChevronLeft, FolderTree, PanelRightClose } from 'lucide-react';
+import { MemoryPanel } from '../features/memory/MemoryPanel';
+import { useMemoryPanelNavigation } from '../features/memory/memory-panel-navigation';
+import { useSidebarResize } from './use-sidebar-resize';
 import {
   ArtifactsPanelTab,
   FilesPanelTab,
@@ -8,12 +11,13 @@ import {
 import { useProjectStore } from '../entities/project/store';
 import { IconButton, PanelTitle, cx } from '../shared/ui';
 
-type RightSidebarView = 'workspace' | 'files' | 'artifacts';
+type RightSidebarView = 'workspace' | 'files' | 'artifacts' | 'memory';
 const SIDEBAR_TRANSITION_MS = 200;
 
 interface RightSidebarProps {
   open: boolean;
   onClose: () => void;
+  onOpenMemorySettings?: () => void;
 }
 
 interface SidebarToolButtonProps {
@@ -47,11 +51,14 @@ function SidebarToolButton({ icon: Icon, title, description, onClick }: SidebarT
   );
 }
 
-export function RightSidebar({ open, onClose }: RightSidebarProps) {
+export function RightSidebar({ open, onClose, onOpenMemorySettings }: RightSidebarProps) {
   const { t } = useTranslation('shell');
   const [activeView, setActiveView] = useState<RightSidebarView>('workspace');
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(open);
+  const { width, resizing, startResize } = useSidebarResize(320, 280, 640, -1);
+  const memoryRequest = useMemoryPanelNavigation(state => state.request);
+  useEffect(() => { if (memoryRequest) setActiveView('memory'); }, [memoryRequest]);
   const currentProject = useProjectStore((state) =>
     state.projects.find((project) => project.id === state.currentProjectId) ?? null
   );
@@ -84,20 +91,29 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
     <aside
       id="right-sidebar"
       data-testid="right-sidebar"
+      style={{ width: expanded ? width : 0 }}
       onTransitionEnd={(event) => {
         if (event.target === event.currentTarget && !open) {
           setMounted(false);
         }
       }}
       className={cx(
-        'flex shrink-0 overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)]',
-        'shadow-[-18px_0_48px_rgba(76,92,70,0.08)] transition-[width,opacity,transform] duration-200 ease-out',
+        'relative flex min-w-0 shrink-0 overflow-hidden border-l border-[var(--color-border)] bg-[var(--color-surface)]',
+        'shadow-[-18px_0_48px_rgba(76,92,70,0.08)] duration-200 ease-out',
+        resizing ? 'transition-none' : 'transition-[width,opacity,transform]',
         expanded
-          ? 'w-[var(--right-sidebar-width)] translate-x-0 flex-col opacity-100'
+          ? 'translate-x-0 flex-col opacity-100'
           : 'w-0 translate-x-6 flex-col opacity-0 pointer-events-none',
       )}
     >
-      <div
+      <div role="separator" aria-orientation="vertical" aria-label={t('projectSidebar.resize')}
+        onPointerDown={event => {
+          const layout = event.currentTarget.closest('[data-testid="app-body"]');
+          const layoutWidth = layout?.getBoundingClientRect().width;
+          const leftWidth = layout?.querySelector('[data-testid="left-sidebar"]')?.getBoundingClientRect().width ?? 0;
+          startResize(event, layoutWidth ? layoutWidth - leftWidth - 320 : undefined);
+        }} className="absolute left-0 top-0 z-20 h-full w-1 cursor-col-resize touch-none bg-transparent hover:bg-[var(--color-focus)]/40" />
+      {activeView !== 'memory' && <div
         data-testid="right-sidebar-header"
         className="flex min-h-16 items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3"
       >
@@ -123,9 +139,9 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
         <IconButton label={t('projectSidebar.close')} onClick={onClose} size="sm" variant="ghost">
           <PanelRightClose size={16} aria-hidden="true" />
         </IconButton>
-      </div>
+      </div>}
 
-      <div data-testid="right-sidebar-content" className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div data-testid="right-sidebar-content" className={cx('min-h-0 min-w-0 flex-1', activeView === 'memory' ? 'flex overflow-hidden' : 'overflow-y-auto p-3')}>
         {activeView === 'workspace' ? (
           <div className="space-y-3">
             <SidebarToolButton
@@ -140,6 +156,8 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
               description={t('projectSidebar.artifactsDescription')}
               onClick={() => setActiveView('artifacts')}
             />
+            <SidebarToolButton icon={Brain} title={t('projectSidebar.memory')} description={t('projectSidebar.memoryDescription')}
+              onClick={() => setActiveView('memory')} />
           </div>
         ) : null}
 
@@ -156,6 +174,8 @@ export function RightSidebar({ open, onClose }: RightSidebarProps) {
         ) : null}
 
         {activeView === 'artifacts' ? <ArtifactsPanelTab /> : null}
+        {activeView === 'memory' && <MemoryPanel onClose={onClose} onBack={() => setActiveView('workspace')}
+          onOpenSettings={onOpenMemorySettings} initialDocument={memoryRequest?.document} />}
       </div>
     </aside>
   );

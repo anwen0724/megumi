@@ -29,6 +29,20 @@ function fixture() {
 }
 
 describe('MemoryPanel', () => {
+  it('separates a historical failure from current status and does not label zero jobs as zero sources', async () => {
+    const f = fixture();
+    f.api.getStatus.mockResolvedValue({ ok: true, data: { status: 'ok', memory: {
+      generateMemories: false, useMemories: false, extractModel: { status: 'unconfigured' }, consolidationModel: { status: 'unconfigured' },
+      artifactState: 'empty', dirty: false, dirtyRevision: 0, processedRevision: 0, sourceCount: 3,
+      recentRuns: [{ runId: 'old', kind: 'startup', status: 'failed', createdAt: '2026-10-08T00:00:00Z', jobs: [], result: { error: { code: 'MODEL_UNAVAILABLE', message: 'The extraction model is unavailable.' } } }],
+    } } });
+    render(<MemoryPanel onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Status' }));
+    expect(await screen.findByText('No task is running')).toBeInTheDocument();
+    const history = screen.getByText('Recent runs').closest('details');
+    expect(history).not.toHaveAttribute('open');
+    expect(screen.queryByText(/\/ 0 sources/)).not.toBeInTheDocument();
+  });
   it('assembles paged text without inserting blank lines before editing', async () => {
     const f = fixture();
     f.api.readDocument.mockImplementation((...args: unknown[]) => {

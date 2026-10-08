@@ -25,7 +25,7 @@ export function MainContent({
   return (
     <main
       data-testid="main-content"
-      className="ui-page-enter relative flex min-h-0 min-w-[var(--main-content-width)] flex-1 flex-col overflow-hidden transition-[width] duration-200 ease-out"
+      className="ui-page-enter relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[width] duration-200 ease-out"
     >
       {page === 'chat' ? (
         <div

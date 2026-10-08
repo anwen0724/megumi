@@ -27,7 +27,7 @@ cpSync(path.join(repository, 'apps/desktop/assets/app-icon.ico'), path.join(root
 cpSync(path.join(repository, 'packages/application/resources'), path.join(root, 'packages/application/resources'), { recursive: true });
 writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'megumi-memory-verification', version: JSON.parse(readFileSync(path.join(repository, 'package.json'), 'utf8')).version, main: 'launch.cjs' }));
 mkdirSync(path.join(root, 'chromium'));
-const main = path.resolve('.vite/build/index.js');
+const main = path.resolve(process.env.MEGUMI_BUILD_OUTPUT ?? '.vite', 'build/index.js');
 if (!existsSync(main)) throw new Error('Build the current desktop first.');
 const debugPort = Number(process.env.MEMORY_DESKTOP_DEBUG_PORT ?? 9865);
 const faultFile = path.join(root, 'clear-fault.txt');
@@ -144,17 +144,19 @@ async function memory(method, payload = {}) {
 }
 async function openMemory() {
   await click('新建会话');
-  await click('记忆');
-  await until(`!!document.querySelector('[role="dialog"][aria-label="记忆"]')`);
+  if (!await evaluate(`document.querySelector('button[aria-controls="right-sidebar"]')?.getAttribute('aria-expanded') === 'true'`)) await click('Open project sidebar');
+  await until(`document.querySelector('[data-testid="right-sidebar"]')?.getBoundingClientRect().width >= 280`);
+  await click('打开项目记忆视图');
+  await until(`!!document.querySelector('[role="region"][aria-label="记忆"]')`);
 }
 async function clickOriginalSource(text) {
-  const target = `Array.from(document.querySelectorAll('[role="dialog"] article')).find(node=>node.querySelector('p')?.textContent==='Original')`;
+  const target = `Array.from(document.querySelectorAll('[role="region"][aria-label="记忆"] article')).find(node=>node.querySelector('p')?.textContent==='Original')`;
   await until(`!!(${target})`);
   await evaluate(`Array.from((${target}).querySelectorAll('button')).find(node=>node.textContent.trim()===${JSON.stringify(text)}).click(); true`);
 }
 async function closeMemory() {
-  await click('关闭', '[role="dialog"][aria-label="记忆"] header button');
-  await until(`!document.querySelector('[role="dialog"][aria-label="记忆"]')`);
+  await click('关闭', '[role="region"][aria-label="记忆"] header button');
+  await until(`!document.querySelector('[data-testid="right-sidebar"]')`);
 }
 function checked(name, detail = {}) { report.checks.push({ name, passed: true, ...detail }); }
 
@@ -209,8 +211,8 @@ try {
     const current = (await memory('getStatus')).memory;
     if (scenario === 'partial') assert.ok(current.recentRuns.some(item => item.result?.result === 'partial' && item.jobs.some(job => job.stage === 'extract' && job.status === 'failed')));
     else { assert.equal(current.artifactState, 'needsRepair'); assert.ok(current.recentRuns.some(item => item.status === 'cancelled')); }
-    await openMemory(); await click('状态', '[role="tab"]');
-    await until(`document.querySelector('[role="dialog"]').textContent.includes(${JSON.stringify(scenario === 'partial' ? '部分完成' : '需要修复')})`);
+    await openMemory(); await click('状态', '[role="tab"]'); await click('最近运行', 'summary');
+    await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes(${JSON.stringify(scenario === 'partial' ? '部分完成' : '需要修复')})`);
     await screenshot(`failure-${scenario}`);
     checked(scenario === 'partial' ? 'UI displays durable partial extraction and failed source job' : 'UI displays interrupted consolidation and blocks unverified artifacts');
     report.passed = true;
@@ -228,16 +230,32 @@ try {
   await until(`document.body.innerText.includes('Desktop acceptance answer') && !!document.querySelector('section[aria-label="记忆来源"]')`);
   assert.equal(await evaluate(`document.body.innerText.includes('<memory_citations>')`), false);
   await evaluate(`document.querySelector('section[aria-label="记忆来源"] button').click(); true`);
-  await until(`!!document.querySelector('[role="dialog"][aria-label="记忆"]') && document.querySelector('[role="dialog"]').textContent.includes('Use TypeScript')`);
+  await until(`!!document.querySelector('[role="region"][aria-label="记忆"]') && document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('Use TypeScript')`);
   checked('Saved conversation renders verified citations and opens the referenced document');
   await screenshot('00-conversation-citation');
   await closeMemory();
   await openMemory();
-  await until(`document.querySelector('[role="dialog"]').textContent.includes('TypeScript')`);
+  await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('TypeScript')`);
   await screenshot('01-ready-summary');
+  const originalWidth = await evaluate(`document.querySelector('[data-testid="right-sidebar"]').getBoundingClientRect().width`);
+  await evaluate(`{const handle=document.querySelector('[aria-label="调整项目侧边栏宽度"]'); const x=handle.getBoundingClientRect().x; handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientX:x,button:0})); window.dispatchEvent(new PointerEvent('pointermove',{clientX:x-160})); window.dispatchEvent(new PointerEvent('pointerup'));}true`);
+  await until(`document.querySelector('[data-testid="right-sidebar"]').getBoundingClientRect().width > ${originalWidth}`);
+  const resized = await evaluate(`{const sidebar=document.querySelector('[data-testid="right-sidebar"]'); const nav=sidebar.querySelector('[role="tablist"]'); ({width:sidebar.getBoundingClientRect().width,navWidth:nav.clientWidth,navScrollWidth:nav.scrollWidth,bodyWidth:document.body.clientWidth,bodyScrollWidth:document.body.scrollWidth})}`);
+  assert.ok(resized.width <= 640 && resized.width >= 280);
+  assert.ok(resized.bodyScrollWidth <= resized.bodyWidth);
+  assert.ok(resized.navScrollWidth <= resized.navWidth);
+  checked('Right sidebar resizes and Chinese tabs fit without page overflow', resized);
+  await screenshot('01b-resized-memory');
+  await evaluate(`{const handle=document.querySelector('[aria-label="调整项目侧边栏宽度"]'); const x=handle.getBoundingClientRect().x; handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientX:x,button:0})); window.dispatchEvent(new PointerEvent('pointermove',{clientX:x+1000})); window.dispatchEvent(new PointerEvent('pointerup'));}true`);
+  await until(`Math.round(document.querySelector('[data-testid="right-sidebar"]').getBoundingClientRect().width) === 280`);
+  const narrow = await evaluate(`{const nav=document.querySelector('[role="tablist"]'); ({navWidth:nav.clientWidth,navScrollWidth:nav.scrollWidth,bodyWidth:document.body.clientWidth,bodyScrollWidth:document.body.scrollWidth})}`);
+  assert.ok(narrow.navScrollWidth <= narrow.navWidth);
+  assert.ok(narrow.bodyScrollWidth <= narrow.bodyWidth);
+  checked('Chinese tabs fit at the minimum sidebar width', narrow);
+
   await click('来源', '[role="tab"]');
   await clickOriginalSource('查看原始来源');
-  await until(`document.querySelector('[role="dialog"]').textContent.includes('fictional desktop acceptance conversation')`);
+  await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('fictional desktop acceptance conversation')`);
   checked('Original source evidence is readable through the real UI');
   await screenshot('02-original-source');
   await click('知识', '[role="tab"]');
@@ -248,7 +266,7 @@ try {
   const concurrent = await memory('updateDocument', { requestId: 'desktop-concurrent', path: 'MEMORY.md', expectedVersion: original.document.version, content: original.document.content.replace('Use TypeScript', 'Use concurrent TypeScript') });
   assert.equal(concurrent.status, 'saved');
   await click('保存');
-  await until(`document.querySelector('[role="dialog"]').textContent.includes('草稿已保留')`);
+  await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('草稿已保留')`);
   assert.ok(await evaluate(`document.querySelector('textarea[aria-label="编辑草稿"]').value.includes('desktop-reviewed')`));
   checked('Concurrent edit rejects the stale version and retains the UI draft');
   await screenshot('03-conflict-draft');
@@ -261,7 +279,7 @@ try {
   if (lifecycle) await demonstrateEditedReuse();
   await click('来源', '[role="tab"]');
   await clickOriginalSource('排除');
-  await until(`document.querySelector('[role="dialog"]').textContent.includes('已排除')`);
+  await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('已排除')`);
   assert.equal((await memory('listSources')).sources.find(source => source.sessionId === fixture.sourceId).eligibility, 'excluded');
   checked('Source exclusion persists without a model binding');
   await screenshot('04-source-exclusion');
@@ -284,16 +302,18 @@ try {
   checked('Real Electron restart preserves edit, exclusion, and switches');
   await openMemory();
   await click('状态', '[role="tab"]');
+  if (!await evaluate(`Array.from(document.querySelectorAll('details')).some(node=>node.open && node.querySelector('summary')?.textContent==='清空记忆')`)) await click('清空记忆', 'summary');
   await click('清空并关闭自动记忆');
   await until(`!!document.querySelector('[role="alertdialog"]')`);
   await screenshot('06-clear-confirmation');
   writeFileSync(faultFile, 'on');
   await click('确认清空并关闭');
   await until(`window.memoryRequest('getStatus').then(result=>result.ok && result.data.memory.recentRuns.some(run=>run.kind==='clear' && run.status==='failed'))`);
-  await until(`document.querySelector('[role="dialog"]').textContent.includes('失败')`);
+  await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('失败')`);
   checked('Real clear I/O failure is displayed and remains recoverable');
   await screenshot('06b-clear-failed');
   writeFileSync(faultFile, 'off');
+  if (!await evaluate(`Array.from(document.querySelectorAll('details')).some(node=>node.open && node.querySelector('summary')?.textContent==='清空记忆')`)) await click('清空记忆', 'summary');
   await click('清空并关闭自动记忆');
   await click('确认清空并关闭');
   await until(`window.memoryRequest('getStatus').then(result=>result.ok && result.data.memory.artifactState==='empty')`);
@@ -312,7 +332,7 @@ try {
   assert.ok(JSON.stringify(originalSession.data.conversation).includes('fictional desktop acceptance conversation'));
   checked('Second restart retains empty memory, source exclusion, and original conversation');
   await openMemory();
-  await until(`document.querySelector('[role="dialog"]').textContent.includes('暂无内容')`);
+  await until(`document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('暂无记忆')`);
   await screenshot('08-empty-restarted');
   report.passed = true;
   }

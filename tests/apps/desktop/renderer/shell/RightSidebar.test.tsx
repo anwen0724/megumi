@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
@@ -33,6 +33,33 @@ function installWorkspaceFilesMock() {
 }
 
 describe('RightSidebar', () => {
+  it('resizes from the left edge and stops resizing when the pointer is released', () => {
+    render(<RightSidebar open onClose={() => undefined} />);
+    const handle = screen.getByRole('separator', { name: 'Resize project sidebar' });
+    fireEvent(handle, new MouseEvent('pointerdown', { bubbles: true, clientX: 700, button: 0 }));
+    fireEvent(window, new MouseEvent('pointermove', { clientX: 550 }));
+    expect(screen.getByTestId('right-sidebar')).toHaveStyle({ width: '470px' });
+    fireEvent(window, new MouseEvent('pointermove', { clientX: 50 }));
+    expect(screen.getByTestId('right-sidebar')).toHaveStyle({ width: '640px' });
+    fireEvent(window, new MouseEvent('pointerup'));
+    fireEvent(window, new MouseEvent('pointermove', { clientX: 900 }));
+    expect(screen.getByTestId('right-sidebar')).toHaveStyle({ width: '640px' });
+  });
+
+  it('opens memory inside the existing sidebar instead of a modal', async () => {
+    Object.assign(window.megumi, { memory: {
+      getStatus: async () => ({ ok: true, data: { status: 'ok', memory: { generateMemories: false, useMemories: false, extractModel: { status: 'unconfigured' }, consolidationModel: { status: 'unconfigured' }, artifactState: 'empty', recentRuns: [] } } }),
+      listDocuments: async () => ({ ok: true, data: { status: 'ok', documents: [] } }),
+      listSources: async () => ({ ok: true, data: { status: 'ok', sources: [] } }),
+      onChanged: () => () => {},
+    } });
+    render(<RightSidebar open onClose={() => undefined} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Memory project view' }));
+    expect(await screen.findByRole('region', { name: 'Memory' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Back to Project' }));
+    expect(screen.getByRole('heading', { name: 'Project' })).toBeInTheDocument();
+  });
   beforeEach(() => {
     useWorkspaceFilesStore.getState().reset();
     installWorkspaceFilesMock();

@@ -48,7 +48,6 @@ export default function App() {
         style={{
           '--left-sidebar-width': '18rem',
           '--main-content-width': '42rem',
-          '--right-sidebar-width': '20rem',
         } as CSSProperties}
       >
         <WindowTitleBar />

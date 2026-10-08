@@ -3,6 +3,23 @@ import { expect, it, vi } from 'vitest';
 import { fauxAssistantMessage } from '@megumi/ai';
 import { productionFixture } from './production-fixture';
 
+it('keeps an empty memory run successful when there are no eligible sources and the extraction model is unavailable', async () => {
+  const f = productionFixture(undefined, async () => { throw new Error('MODEL_UNAVAILABLE'); });
+  try {
+    f.advance(366 * 86400000);
+    expect(await f.generate()).toMatchObject({ status: 'completed', result: { result: 'empty' } });
+    expect(f.memory.getStatus()).toMatchObject({ memory: { artifactState: 'empty' } });
+  } finally { await f.dispose(); }
+});
+
+it('retains the model preparation error when eligible sources could not be processed', async () => {
+  const f = productionFixture(undefined, async () => { throw new Error('MODEL_UNAVAILABLE'); });
+  try {
+    await f.user('u1');
+    expect(await f.generate()).toMatchObject({ status: 'failed', result: { error: { code: 'MODEL_UNAVAILABLE' } } });
+  } finally { await f.dispose(); }
+});
+
 it('generates through the real Agent without adding a Coding session, then reuses unchanged knowledge', async () => {
   const f = productionFixture();
   try {

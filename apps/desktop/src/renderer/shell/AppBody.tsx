@@ -1,46 +1,13 @@
-import { useCallback, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { LeftSidebar } from './LeftSidebar';
 import { MainContent } from './MainContent';
 import { RightSidebar } from './RightSidebar';
 import { SettingsPage } from './SettingsPage';
 import { useAppBodyController } from './use-app-body-controller';
-
-const DEFAULT_LEFT_SIDEBAR_WIDTH = 288;
-const MIN_LEFT_SIDEBAR_WIDTH = 224;
-const MAX_LEFT_SIDEBAR_WIDTH = 420;
+import { useSidebarResize } from './use-sidebar-resize';
 
 export function AppBody() {
   const controller = useAppBodyController();
-  const [leftSidebarWidth, setLeftSidebarWidth] = useState(DEFAULT_LEFT_SIDEBAR_WIDTH);
-
-  const startLeftSidebarResize = useCallback(
-    (event: ReactPointerEvent) => {
-      event.preventDefault();
-      const startX = event.clientX;
-      const startWidth = leftSidebarWidth;
-
-      function handlePointerMove(moveEvent: PointerEvent) {
-        const next = Math.min(
-          MAX_LEFT_SIDEBAR_WIDTH,
-          Math.max(MIN_LEFT_SIDEBAR_WIDTH, startWidth + moveEvent.clientX - startX),
-        );
-        setLeftSidebarWidth(next);
-      }
-
-      function handlePointerUp() {
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', handlePointerUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-    },
-    [leftSidebarWidth],
-  );
+  const { width: leftSidebarWidth, startResize: startLeftSidebarResize } = useSidebarResize(288, 224, 420, 1);
 
   return (
     <div data-testid="app-body" className="flex min-h-0 flex-1 overflow-hidden">
@@ -86,6 +53,7 @@ export function AppBody() {
             <RightSidebar
               open={controller.rightSidebarOpen}
               onClose={() => controller.setRightSidebarOpen(false)}
+              onOpenMemorySettings={controller.openMemorySettings}
             />
           ) : null}
         </>

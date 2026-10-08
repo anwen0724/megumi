@@ -6,14 +6,14 @@ import { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } from '
 import { createMemory } from '@megumi/application/memory/memory';
 import { createMemoryFiles } from '@megumi/application/memory/memory-files';
 import { createMemorySources } from '@megumi/application/coding/sessions/memory-sources';
-import { createMemoryExtraction } from '@megumi/application/memory/extraction';
+import { createMemoryExtraction, type MemoryExtractionOptions } from '@megumi/application/memory/extraction';
 import { createSettings } from '@megumi/application/settings/settings-store';
 import { selectConsolidationSources } from '@megumi/application/memory/consolidation-selection';
 import { sourceMarker, EMPTY_MEMORY, EMPTY_SUMMARY } from '@megumi/application/memory/consolidation-documents';
 import { createSourceFixture } from './source-fixture';
 import type { Observability } from '@megumi/application/observability/index';
 
-export function productionFixture(observability?: Observability) {
+export function productionFixture(observability?: Observability, resolveExtractionModel?: MemoryExtractionOptions['resolveModel']) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'memory-production-'));
   const f = createSourceFixture(path.join(root, 'memory.db'));
   let now = Date.parse('2026-10-08T12:00:00Z');
@@ -28,7 +28,7 @@ export function productionFixture(observability?: Observability) {
   const files = createMemoryFiles(path.join(root, 'memories'));
   const sources = createMemorySources({ store: f.store, isSessionRunning: () => false });
   const extraction = createMemoryExtraction({ database: f.database, sources, observability, readConfiguration: config, workspaceDirectory: () => 'C:/memory-test', now: () => now,
-    resolveModel: async () => ({ model, secrets: [], complete: async () => fauxAssistantMessage(JSON.stringify({ rawMemory: 'Use TypeScript for React examples.', rolloutSummary: 'User prefers TypeScript.', rolloutSlug: 'react' })) }) });
+    resolveModel: resolveExtractionModel ?? (async () => ({ model, secrets: [], complete: async () => fauxAssistantMessage(JSON.stringify({ rawMemory: 'Use TypeScript for React examples.', rolloutSummary: 'User prefers TypeScript.', rolloutSlug: 'react' })) })) });
   const options = { database: f.database, settings, files, sources, extraction, observability, root: path.join(root, 'memories'), now: () => now, resolveModel: async () => ({ model, ai }) };
   const memory = createMemory(options);
   const tool = (name: string, args: Parameters<typeof fauxToolCall>[1]) => fauxAssistantMessage(fauxToolCall(name, args), { stopReason: 'toolUse' });

@@ -16,8 +16,7 @@ import { ChatViewport } from '../layout/ChatViewport';
 import { ComposerDock } from '../layout/ComposerDock';
 import { Composer } from '../components/Composer';
 import type { ComposerDraftDocument, ComposerDraftImage } from '../components/composer-types';
-import { MemoryPanel } from '../../memory/MemoryPanel';
-import { showToast, Button } from '../../../shared/ui';
+import { showToast } from '../../../shared/ui';
 import { rendererI18n } from '../../../shared/i18n';
 import { collectPendingApprovalActivities } from '../approval-overlay';
 
@@ -26,8 +25,6 @@ const FALLBACK_COMPOSER_SPACER_HEIGHT = 188;
 export function ChatPage({ onOpenModelSettings }: { onOpenModelSettings?: () => void }) {
   const { t } = useTranslation('chat');
   const controller = useChatPageController();
-  const { t: memoryText } = useTranslation('settings');
-  const [memoryOpen, setMemoryOpen] = useState(false);
   const providers = useProviderStore((state) => state.providers);
   const providerStatus = useProviderStore((state) => state.status);
   const loadProviders = useProviderStore((state) => state.loadProviders);
@@ -194,8 +191,6 @@ export function ChatPage({ onOpenModelSettings }: { onOpenModelSettings?: () => 
         } as CSSProperties
       }
     >
-      <div className="absolute right-4 top-3 z-20"><Button size="sm" onClick={() => setMemoryOpen(true)}>{memoryText('memory.title')}</Button></div>
-      {memoryOpen && <MemoryPanel onClose={() => setMemoryOpen(false)} />}
       {controller.hasTimelineContent ? (
         <>
           <div className="absolute inset-0 min-h-0">

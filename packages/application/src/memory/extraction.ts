@@ -112,6 +112,12 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
     if (stopped) return { status: 'skipped', reason: 'stopped' };
     const configuration = options.readConfiguration();
     if (!configuration.generateMemories) return { status: 'skipped', reason: 'disabled' };
+    const selected = selectExtractionSources({ sources: options.sources.listSources({ limit: 5000 }), configuration, now: now(), triggerSessionId: request.triggerSessionId });
+    if (!selected.length) {
+      store.beginRun(runId, iso(), !!request.failedJobId);
+      request.onProgress?.(runId);
+      return { status: 'completed', stage: 'extract', runId, result: store.finishRun(runId, iso()), jobs: [], sourceFailures: [] };
+    }
     if (!configuration.extractModel) return { status: 'failed', error: { code: 'MODEL_UNAVAILABLE', message: 'Configure an extraction model.' } };
     let model: ExtractionModel;
     try { model = await options.resolveModel(configuration.extractModel); }
@@ -119,7 +125,6 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
     if (signal.aborted || stopped || !options.readConfiguration().generateMemories) return { status: 'skipped', reason: 'stopped' };
     store.beginRun(runId, iso(), !!request.failedJobId);
     request.onProgress?.(runId);
-    const selected = selectExtractionSources({ sources: options.sources.listSources({ limit: 5000 }), configuration, now: now(), triggerSessionId: request.triggerSessionId });
     let count = 0;
     let cursor = 0;
     const sourceFailures: ExtractionSourceFailure[] = [];

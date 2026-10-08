@@ -9,6 +9,7 @@ import type { SidebarProjectItem } from './LeftSidebar';
 import { formatSessionUpdatedAt } from './shell-display';
 import { useApplicationUpdateStore } from '../features/application-update';
 import type { SettingsCategory } from './SettingsPage';
+import { useMemoryPanelNavigation } from '../features/memory/memory-panel-navigation';
 
 export function useAppBodyController() {
   const [activePage, setActivePage] = useState<'discovery' | 'chat'>('discovery');
@@ -16,6 +17,8 @@ export function useAppBodyController() {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>('appearance');
+  const memoryRequest = useMemoryPanelNavigation(state => state.request);
+  useEffect(() => { if (memoryRequest) setRightSidebarOpen(true); }, [memoryRequest]);
   const aboutRequestId = useApplicationUpdateStore((state) => state.aboutRequestId);
   const projects = useProjectStore((state) => state.projects);
   const currentProjectId = useProjectStore((state) => state.currentProjectId);
@@ -169,6 +172,7 @@ export function useAppBodyController() {
     handleRemoveProject,
     openSettings,
     openModelSettings: () => showSettingsCategory('models'),
+    openMemorySettings: () => showSettingsCategory('memory'),
     openContentSources,
     openDiscovery,
     closeSettings,

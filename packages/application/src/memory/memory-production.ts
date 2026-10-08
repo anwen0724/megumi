@@ -184,6 +184,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
   }
   async function execute(runId: string, request: MemoryGenerationRequest, controller: AbortController, maintenance: boolean): Promise<void> {
     let extractionRunId: string | undefined;
+    let extractionError: MemoryFailure['error'] | undefined;
     let extractionFailed = false; let extracted = false;
     try {
       if (!maintenance) {
@@ -197,16 +198,21 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
         if (result.status === 'completed') {
           extractionRunId = result.runId; extractionFailed = ['failed', 'partial', 'cancelled'].includes(result.result);
           extracted = result.jobs.some(job => job.status === 'succeeded');
+          extractionError = result.sourceFailures[0]?.error ?? result.jobs.find(job => job.status === 'failed')?.error;
           database.prepare({ sql: 'UPDATE memory_runs SET result_json = ? WHERE run_id = ?' }).run([JSON.stringify({ extractionRunId }), runId]);
-        } else extractionFailed = result.status === 'failed';
+        } else if (result.status === 'failed') {
+          extractionFailed = true;
+          extractionError = result.error;
+        }
       }
       if (controller.signal.aborted) throw new Error('CANCELLED');
       const failed = request.failedJobId ? database.prepare<{ stage: string }>({ sql: 'SELECT stage FROM memory_jobs WHERE job_id = ?' }).get([request.failedJobId]) : undefined;
       const consolidation = () => consolidate(runId, controller, maintenance, failed?.stage === 'consolidate' ? request.failedJobId : undefined);
       const result = options.observability ? await options.observability.withSpan({ name: 'memory.consolidate' }, consolidation) : await consolidation();
       if (extractionFailed && !extracted && result !== 'generated') {
-        store.finishRun(runId, 'failed', { extractionRunId, error: { code: 'EXTRACTION_FAILED', message: 'No required extraction completed successfully.' } });
-      } else store.finishRun(runId, 'completed', { result: extractionFailed ? 'partial' : result, extractionRunId });
+        store.finishRun(runId, 'failed', { extractionRunId, error: extractionError ?? { code: 'EXTRACTION_FAILED', message: 'Memory extraction did not complete.' } });
+      } else store.finishRun(runId, 'completed', { result: extractionFailed ? 'partial' : result, extractionRunId,
+        ...(extractionFailed && extractionError ? { error: extractionError } : {}) });
     } catch (error) {
       const failed = failure(error);
       store.finishRun(runId, controller.signal.aborted && failed.error.code !== 'TIMEOUT' ? 'cancelled' : extracted ? 'completed' : 'failed', { result: extracted ? 'partial' : undefined, extractionRunId, error: failed.error });
