@@ -10,6 +10,7 @@ export function checkEffectAnswer(fixture: EffectFixture, reply: string) {
   } catch {
     /* Retain prose for human review instead of guessing JSON. */
   }
+
   const facts = fixture.facts.map(fact => {
     const actual = parsed?.[fact.field];
     const expected = fact.expected;
@@ -21,6 +22,7 @@ export function checkEffectAnswer(fixture: EffectFixture, reply: string) {
       : typeof expected === 'string' && typeof actual === 'string'
         ? actual.toLowerCase() === expected.toLowerCase()
         : actual === expected;
+
     return {
       ...fact,
       actual,
@@ -39,6 +41,7 @@ export function checkEffectAnswer(fixture: EffectFixture, reply: string) {
       ? (parsed[rule.field] as unknown[]).includes(rule.value)
       : parsed?.[rule.field] === rule.value,
   }));
+
   return {
     parseable: !!parsed,
     facts,

@@ -16,6 +16,7 @@ import { createMemoryFiles } from '@megumi/application/memory/memory-files';
 it('publishes versioned text and rejects stale edits, read-only inputs and paths outside memory', () => {
   const parent = mkdtempSync(path.join(os.tmpdir(), 'memory-files-'));
   const files = createMemoryFiles(path.join(parent, 'memories'));
+
   try {
     const first = files.writeFinal(
       {
@@ -25,6 +26,7 @@ it('publishes versioned text and rejects stale edits, read-only inputs and paths
       },
       () => {},
     );
+
     expect(files.read('MEMORY.md')).toEqual(first);
     expect(() =>
       files.writeFinal(
@@ -66,7 +68,9 @@ it('publishes versioned text and rejects stale edits, read-only inputs and paths
         () => {},
       ),
     ).toThrow('OUTPUT_INVALID');
+
     files.writeInput('raw_memories.md', ['input\n', 'second'], () => {});
+
     expect(files.read('raw_memories.md')).toMatchObject({
       readOnly: true,
       content: 'input\nsecond',
@@ -84,6 +88,7 @@ it('publishes versioned text and rejects stale edits, read-only inputs and paths
       ),
     ).toThrow('OWNER_LOST');
     expect(files.read('MEMORY.md')?.content).toBe('First');
+
     files.writeInput('rollout_summaries/source.md', ['source'], () => {});
     const temporary = path.join(
       parent,
@@ -92,6 +97,7 @@ it('publishes versioned text and rejects stale edits, read-only inputs and paths
     );
     writeFileSync(temporary, 'interrupted write');
     files.clear(() => {});
+
     expect(files.hasArtifacts()).toBe(false);
     expect(existsSync(temporary)).toBe(false);
   } finally {
@@ -104,6 +110,7 @@ it('publishes versioned text and rejects stale edits, read-only inputs and paths
 
 it('rejects linked ancestors for reads, writes and clear without touching the target', () => {
   const parent = mkdtempSync(path.join(os.tmpdir(), 'memory-links-'));
+
   try {
     const root = path.join(parent, 'memories');
     const outside = path.join(parent, 'outside');
@@ -113,6 +120,7 @@ it('rejects linked ancestors for reads, writes and clear without touching the ta
     writeFileSync(path.join(outside, 'SKILL.md'), 'keep');
     symlinkSync(outside, path.join(root, 'skills', 'escape'), 'junction');
     const files = createMemoryFiles(root);
+
     expect(() => files.read('skills/escape/SKILL.md')).toThrow('PATH_DENIED');
     expect(() =>
       files.writeFinal(

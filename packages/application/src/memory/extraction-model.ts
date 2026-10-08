@@ -40,8 +40,10 @@ export async function resolveExtractionModel(options: {
   return options.models.withWorkspace(undefined, async () => {
     const resolved = await options.models.resolveModel({ selection: options.selection });
     if (resolved.status !== 'ok') throw new Error('MODEL_UNAVAILABLE');
+
     const read = options.settings.readSettings();
     if (read.status !== 'ok') throw new Error('SETTINGS_INVALID');
+
     const config = read.settings.config;
     const requests: ReadCredentialRequest[] = [
       ...Object.entries(config.providers).map(([providerId, provider]) => ({
@@ -84,12 +86,15 @@ export async function resolveExtractionModel(options: {
     const secrets = requests.flatMap(request => {
       const result = options.settings.readCredential(request);
       if (result.status === 'rejected') throw new Error('CREDENTIALS_UNAVAILABLE');
+
       return result.status === 'found' ? [result.value] : [];
     });
     const auth = await options.models.ai.getAuth(resolved.model);
     if (auth?.auth.apiKey) secrets.push(auth.auth.apiKey);
+
     for (const value of Object.values(auth?.auth.headers ?? {}))
       if (typeof value === 'string') secrets.push(value);
+
     return {
       model: resolved.model,
       secrets: [...new Set(secrets)],

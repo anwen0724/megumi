@@ -24,6 +24,7 @@ function transport(memory: ReturnType<typeof productionFixture>['memory']) {
   return async (channel: string, payload: unknown) => {
     const handler = handlers.get(channel);
     if (!handler) throw new Error(`Missing channel: ${channel}`);
+
     return handler({} as IpcMainInvokeEvent, {
       requestId: 'transport-request',
       payload,
@@ -38,8 +39,10 @@ function transport(memory: ReturnType<typeof productionFixture>['memory']) {
 
 it('validates requests and exposes versioned editing, source access, and clear through IPC', async () => {
   const f = productionFixture();
+
   try {
     const invoke = transport(f.memory);
+
     expect(
       await invoke(IPC_CHANNELS.memory.clearMemory, {
         requestId: 'clear',
@@ -53,23 +56,28 @@ it('validates requests and exposes versioned editing, source access, and clear t
       ok: true,
       data: { status: 'notFound' },
     });
+
     await f.user('u1');
     f.responses();
     const started = await invoke(IPC_CHANNELS.memory.startGeneration, {
       requestId: 'generate',
       reason: 'manual',
     });
+
     expect(started).toMatchObject({
       ok: true,
       data: { status: 'started' },
     });
+
     const status = f.memory.getStatus();
     if (status.status !== 'ok' || !status.memory.recentRuns[0]) throw new Error('Run missing');
+
     const runId = status.memory.recentRuns[0].runId;
     await f.memory.waitRun({
       runId,
       timeoutMs: 5000,
     });
+
     expect(await invoke(IPC_CHANNELS.memory.getStatus, {})).toMatchObject({
       ok: true,
       data: { memory: { artifactState: 'ready' } },
@@ -78,8 +86,10 @@ it('validates requests and exposes versioned editing, source access, and clear t
       ok: true,
       data: { documents: expect.arrayContaining([expect.objectContaining({ path: 'MEMORY.md' })]) },
     });
+
     const document = f.files.read('MEMORY.md');
     if (!document) throw new Error('Document missing');
+
     expect(await invoke(IPC_CHANNELS.memory.readDocument, { path: document.path })).toMatchObject({
       ok: true,
       data: {
@@ -121,8 +131,10 @@ it('validates requests and exposes versioned editing, source access, and clear t
       ok: false,
       data: { code: 'PATH_DENIED' },
     });
+
     const source = f.sources.readSnapshot('s1');
     if (source.status !== 'found') throw new Error('Source missing');
+
     expect(
       await invoke(IPC_CHANNELS.memory.readSource, { sourceRef: source.snapshot.sourceRef }),
     ).toMatchObject({
@@ -143,7 +155,9 @@ it('validates requests and exposes versioned editing, source access, and clear t
         ],
       },
     });
+
     f.responses();
+
     expect(
       await invoke(IPC_CHANNELS.memory.setSourceEligibility, {
         requestId: 'exclude',
@@ -155,6 +169,7 @@ it('validates requests and exposes versioned editing, source access, and clear t
       ok: true,
       data: { status: 'saved' },
     });
+
     await vi.waitFor(() =>
       expect(f.memory.getStatus()).toMatchObject({
         memory: {
@@ -163,6 +178,7 @@ it('validates requests and exposes versioned editing, source access, and clear t
         },
       }),
     );
+
     expect(
       await invoke(IPC_CHANNELS.memory.clearMemory, {
         requestId: 'clear',
@@ -172,9 +188,11 @@ it('validates requests and exposes versioned editing, source access, and clear t
       ok: true,
       data: { status: 'started' },
     });
+
     await vi.waitFor(() =>
       expect(f.memory.getStatus()).toMatchObject({ memory: { artifactState: 'empty' } }),
     );
+
     expect(f.sources.readSnapshot('s1')).toMatchObject({ status: 'found' });
   } finally {
     await f.dispose();
@@ -183,13 +201,16 @@ it('validates requests and exposes versioned editing, source access, and clear t
 
 it('returns a failed run as successful query data and preserves mutation rejection codes', async () => {
   const f = productionFixture();
+
   try {
     const invoke = transport(f.memory);
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const document = f.files.read('MEMORY.md');
     if (!document) throw new Error('Document missing');
+
     f.memory.updateDocument({
       requestId: 'mark-dirty',
       path: document.path,
@@ -198,6 +219,7 @@ it('returns a failed run as successful query data and preserves mutation rejecti
     });
     f.provider.setResponses([fauxAssistantMessage('No valid output produced.')]);
     const run = await f.generate('fail-consolidation');
+
     expect(run.status).toBe('failed');
     expect(await invoke(IPC_CHANNELS.memory.getRun, { runId: run.runId })).toMatchObject({
       ok: true,

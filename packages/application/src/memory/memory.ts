@@ -31,6 +31,7 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
     try {
       const read = options.settings.readSettings();
       if (read.status !== 'ok') throw new Error();
+
       production.inspect();
       const state = options.database
         .prepare<{
@@ -43,6 +44,7 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
         })
         .get();
       if (!state) throw new Error();
+
       const status = state.clear_pending
         ? 'clearing'
         : !read.settings.config.memory.useMemories
@@ -50,6 +52,7 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
           : state.artifact_state === 'empty' && options.files.hasArtifacts()
             ? 'needsRepair'
             : state.artifact_state;
+
       return {
         status,
         controlRevision: state.control_revision,
@@ -65,6 +68,7 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
 
   function capability(selection?: ModelSelection): MemoryModelCapability {
     if (!selection) return { status: 'unconfigured' };
+
     // Only the application-level Settings instance is injected. Never fall back to the chat model.
     const resolved = resolveModel({
       settings: options.settings,
@@ -82,6 +86,7 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
           message: resolved.failure.message,
         };
   }
+
   return {
     ...production,
     ...queries,
@@ -104,6 +109,7 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
             message: read.error.message,
           },
         };
+
       try {
         production.inspect();
         const state = options.database
@@ -117,12 +123,14 @@ export function createMemory(options: MemoryProductionOptions): MemoryHost {
           })
           .get();
         if (!state) throw new Error('Memory state is missing.');
+
         // Untracked files are not a successful generation and must never be silently imported.
         const artifactState =
           state.artifact_state === 'empty' && options.files.hasArtifacts()
             ? 'needsRepair'
             : state.artifact_state;
         const configuration = read.settings.config.memory;
+
         return {
           status: 'ok',
           memory: {

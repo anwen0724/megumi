@@ -6,14 +6,17 @@ import { createSourceFixture } from './source-fixture';
 
 it('allows only one owner, persists empty success and does not extract the same version again', async () => {
   const f = createSourceFixture();
+
   try {
     await f.user('u1');
+
     const sources = createMemorySources({
       store: f.store,
       isSessionRunning: () => false,
     });
     const source = sources.readSnapshot('s1');
     if (source.status !== 'found') throw new Error('Source unavailable');
+
     const store = createExtractionStore(f.database);
     const now = '2026-10-08T12:00:00.000Z';
     store.beginRun('run1', now, false);
@@ -24,6 +27,7 @@ it('allows only one owner, persists empty success and does not extract the same 
       source: source.snapshot,
       now,
     });
+
     expect(lease).toBeDefined();
     expect(
       store.claim({
@@ -34,7 +38,9 @@ it('allows only one owner, persists empty success and does not extract the same 
         now,
       }),
     ).toBeUndefined();
+
     if (!lease) throw new Error('Source was not claimed');
+
     const coverage = {
       includedMessageIds: ['u1'],
       omittedMessageIds: [],
@@ -42,6 +48,7 @@ it('allows only one owner, persists empty success and does not extract the same 
       estimatedInputTokens: 1,
       inputBudgetTokens: 10,
     };
+
     expect(
       store.complete({
         lease,
@@ -88,13 +95,16 @@ it('allows only one owner, persists empty success and does not extract the same 
 
 it('backs off failed versions, caps automatic attempts and gives an explicit retry a fresh budget', async () => {
   const f = createSourceFixture();
+
   try {
     await f.user('u1');
+
     const source = createMemorySources({
       store: f.store,
       isSessionRunning: () => false,
     }).readSnapshot('s1');
     if (source.status !== 'found') throw new Error('Source unavailable');
+
     const store = createExtractionStore(f.database);
     const start = Date.parse('2026-10-08T12:00:00Z');
     store.beginRun('run1', new Date(start).toISOString(), false);
@@ -108,10 +118,12 @@ it('backs off failed versions, caps automatic attempts and gives an explicit ret
         now,
       });
       if (!lease) throw new Error('Retry was not admitted');
+
       store.settle(lease, 'failed', now, {
         code: 'INVALID_RESULT',
         message: 'Invalid JSON.',
       });
+
       expect(store.getJob(lease.jobId)).toMatchObject({
         status: 'failed',
         attempt: index + 1,
@@ -126,7 +138,9 @@ it('backs off failed versions, caps automatic attempts and gives an explicit ret
         }),
       ).toBeUndefined();
     }
+
     const now = new Date(start + 4 * 3600000).toISOString();
+
     expect(
       store.claim({
         runId: 'run1',
@@ -136,6 +150,7 @@ it('backs off failed versions, caps automatic attempts and gives an explicit ret
         now,
       }),
     ).toBeUndefined();
+
     const retried = store.claim({
       runId: 'run1',
       jobId: 'manual',
@@ -144,16 +159,20 @@ it('backs off failed versions, caps automatic attempts and gives an explicit ret
       now,
       failedJobId: 'job2',
     });
+
     expect(retried).toBeDefined();
     expect(store.getJob('manual')).toMatchObject({
       attempt: 1,
       retryOfJobId: 'job2',
     });
+
     if (!retried) throw new Error('Retry was not created');
+
     store.settle(retried, 'failed', now, {
       code: 'INVALID_RESULT',
       message: 'Invalid JSON.',
     });
+
     expect(
       store.claim({
         runId: 'run1',
@@ -175,13 +194,16 @@ it('backs off failed versions, caps automatic attempts and gives an explicit ret
 
 it('takes over an expired lease and rejects the former owner without overwriting the new attempt', async () => {
   const f = createSourceFixture();
+
   try {
     await f.user('u1');
+
     const source = createMemorySources({
       store: f.store,
       isSessionRunning: () => false,
     }).readSnapshot('s1');
     if (source.status !== 'found') throw new Error('Source unavailable');
+
     const store = createExtractionStore(f.database);
     store.beginRun('run1', '2026-10-08T12:00:00.000Z', false);
     const first = store.claim({
@@ -199,9 +221,13 @@ it('takes over an expired lease and rejects the former owner without overwriting
       source: source.snapshot,
       now: '2026-10-08T13:00:00.000Z',
     });
+
     expect(second).toBeDefined();
+
     if (!first || !second) throw new Error('Lease not created');
+
     expect(store.isCurrent(first, '2026-10-08T13:00:00.000Z')).toBe(false);
+
     const coverage = {
       includedMessageIds: ['u1'],
       omittedMessageIds: [],
@@ -209,6 +235,7 @@ it('takes over an expired lease and rejects the former owner without overwriting
       estimatedInputTokens: 1,
       inputBudgetTokens: 10,
     };
+
     expect(
       store.complete({
         lease: first,
@@ -228,10 +255,12 @@ it('takes over an expired lease and rejects the former owner without overwriting
         },
       }),
     ).toBe(false);
+
     store.settle(first, 'cancelled', '2026-10-08T13:00:00.000Z', {
       code: 'CANCELLED',
       message: 'Late cancellation.',
     });
+
     expect(store.getJob('second')).toMatchObject({ status: 'running' });
     expect(store.getJob('first')).toMatchObject({
       status: 'failed',

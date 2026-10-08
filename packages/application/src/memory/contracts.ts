@@ -8,6 +8,7 @@ import type { TaskMemory, TaskMemoryInput } from './memory-consumption';
 import type { MemoryUsageResult } from './memory-usage';
 
 export type MemoryArtifactState = 'empty' | 'ready' | 'updating' | 'needsRepair' | 'clearing';
+
 export type MemoryModelCapability =
   | { readonly status: 'unconfigured' }
   | {
@@ -132,12 +133,14 @@ export interface MemoryFailure {
     readonly message: string;
   };
 }
+
 export interface MemoryGenerationRequest {
   readonly requestId: string;
   readonly reason: 'startup' | 'manual' | 'retry';
   readonly failedJobId?: string;
   readonly triggerSessionId?: string;
 }
+
 export type MemoryStartResult =
   | {
       readonly status: 'started' | 'reused';
@@ -148,6 +151,7 @@ export type MemoryStartResult =
       readonly reason: 'disabled' | 'stopped';
     }
   | MemoryFailure;
+
 export interface MemoryRun {
   readonly runId: string;
   readonly status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -161,6 +165,7 @@ export interface MemoryRun {
   };
   readonly jobs: readonly MemoryJob[];
 }
+
 export interface MemoryJob {
   readonly jobId: string;
   readonly stage: 'extract' | 'consolidate';
@@ -182,6 +187,7 @@ export interface MemoryJob {
     readonly durationMs?: number;
   };
 }
+
 export type MemoryWaitResult =
   | {
       readonly status: 'completed' | 'timeout';
@@ -189,6 +195,7 @@ export type MemoryWaitResult =
     }
   | { readonly status: 'notFound' }
   | MemoryFailure;
+
 export interface MemoryManagedSource {
   readonly sessionId: string;
   readonly title: string;

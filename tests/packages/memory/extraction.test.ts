@@ -92,6 +92,7 @@ export function extractionFixture() {
     now: () => Date.parse('2026-10-08T12:00:00Z'),
   };
   const extraction = createMemoryExtraction(options);
+
   return {
     ...f,
     configuration,
@@ -106,17 +107,23 @@ export function extractionFixture() {
 
 it('extracts persisted evidence and reuses the successful version after recreating the service', async () => {
   const f = extractionFixture();
+
   try {
     await f.user('u1', 'I prefer TypeScript. My test key is secret-value.');
+
     const result = await f.extraction.extract();
+
     expect(result.status).toBe('completed');
     expect(f.extraction.getExtraction('s1')).toMatchObject({ rawMemory: 'Prefers TypeScript.' });
     expect(JSON.stringify(f.contexts)).toContain('I prefer TypeScript.');
     expect(JSON.stringify(f.contexts)).not.toContain('secret-value');
     expect(f.extraction.getExtraction('s1')?.coverage.includedMessageIds).toEqual(['u1']);
+
     const restarted = createMemoryExtraction(f.options);
     await restarted.extract();
+
     expect(f.complete).toHaveBeenCalledTimes(1);
+
     await restarted.shutdown();
   } finally {
     await f.extraction.shutdown();
@@ -126,12 +133,15 @@ it('extracts persisted evidence and reuses the successful version after recreati
 
 it('excludes the triggering and running sessions but still extracts an archived persisted session', async () => {
   const f = extractionFixture();
+
   try {
     await f.user('u1');
+
     expect(await f.extraction.extract({ triggerSessionId: 's1' })).toMatchObject({
       result: 'unchanged',
       jobs: [],
     });
+
     const running = createMemoryExtraction({
       ...f.options,
       sources: createMemorySources({
@@ -139,15 +149,18 @@ it('excludes the triggering and running sessions but still extracts an archived 
         isSessionRunning: () => true,
       }),
     });
+
     expect(await running.extract()).toMatchObject({
       result: 'unchanged',
       jobs: [],
     });
+
     await running.shutdown();
     f.store.archiveSession({
       session_id: 's1',
       archived_at: '2026-10-08T12:00:00Z',
     });
+
     expect(await f.extraction.extract()).toMatchObject({
       result: 'extracted',
       jobs: [{ status: 'succeeded' }],
@@ -166,10 +179,12 @@ it.each([
   '{"rawMemory":"ok","rolloutSummary":"ok","rolloutSlug":"","extra":true}',
 ])('records invalid output as a failed attempt without a success watermark: %s', async text => {
   const f = extractionFixture();
+
   try {
     await f.user('u1');
     f.complete.mockResolvedValue(f.response(text));
     const result = await f.extraction.extract();
+
     expect(result).toMatchObject({
       status: 'completed',
       jobs: [
@@ -191,6 +206,7 @@ it.each([
 
 it('persists an empty success and never retries it as a failure', async () => {
   const f = extractionFixture();
+
   try {
     await f.user('u1');
     f.complete.mockResolvedValue(
@@ -198,6 +214,7 @@ it('persists an empty success and never retries it as a failure', async () => {
     );
     await f.extraction.extract();
     await f.extraction.extract();
+
     expect(f.complete).toHaveBeenCalledTimes(1);
     expect(f.extraction.getExtraction('s1')).toMatchObject({
       rawMemory: '',
@@ -222,6 +239,7 @@ it.each(['source', 'exclusion', 'disabled', 'cancelled', 'clear'] as const)(
             release = resolve;
           }),
       );
+
       const controller = new AbortController();
       const pending = f.extraction.extract({ signal: controller.signal });
       await vi.waitFor(() => expect(f.complete).toHaveBeenCalledOnce());
@@ -240,8 +258,10 @@ it.each(['source', 'exclusion', 'disabled', 'cancelled', 'clear'] as const)(
             sql: 'UPDATE memory_state SET clear_pending = 1, control_revision = control_revision + 1',
           })
           .run();
+
       release(f.response('{"rawMemory":"stale","rolloutSummary":"stale","rolloutSlug":""}'));
       const result = await pending;
+
       expect(result).toMatchObject({
         jobs: [
           { status: change === 'cancelled' || change === 'disabled' ? 'cancelled' : 'superseded' },
@@ -260,6 +280,7 @@ it.each([false, true])(
   async startsForeground => {
     const f = extractionFixture();
     const releases: (() => void)[] = [];
+
     try {
       await f.user('u1');
       for (let i = 2; i <= 12; i++) {
@@ -289,6 +310,7 @@ it.each([false, true])(
           created_at: '2026-10-02T00:00:00.000Z',
         });
       }
+
       f.configuration.maxSourcesPerRun = 10;
       let active = 0;
       let maximum = 0;
@@ -298,11 +320,14 @@ it.each([false, true])(
         const first = releases.length === 0;
         await new Promise<void>(resolve => releases.push(resolve));
         active--;
+
         return f.response(
           first ? 'invalid' : '{"rawMemory":"React","rolloutSummary":"Learning","rolloutSlug":""}',
         );
       });
+
       const pending = f.extraction.extract();
+
       try {
         await vi.waitFor(() => expect(f.complete).toHaveBeenCalledTimes(8), { timeout: 500 });
         if (startsForeground) for (let i = 1; i <= 12; i++) f.runningSessions.add(`s${i}`);
@@ -313,12 +338,16 @@ it.each([false, true])(
         releases.forEach(release => release());
         await pending;
       }
+
       const result = await pending;
+
       expect(result).toMatchObject({
         status: 'completed',
         result: 'partial',
       });
+
       if (result.status !== 'completed') throw new Error('Batch not settled');
+
       expect(result.jobs.filter(job => job.status === 'failed')).toHaveLength(1);
       expect(result.jobs.filter(job => job.status === 'succeeded')).toHaveLength(
         startsForeground ? 7 : 9,
@@ -334,6 +363,7 @@ it.each([false, true])(
 
 it('reports an unreadable original chain instead of pretending there was no source', async () => {
   const f = extractionFixture();
+
   try {
     await f.user('u1');
     // A storage-level corruption models a missing original record, not a model failure.
@@ -341,6 +371,7 @@ it('reports an unreadable original chain instead of pretending there was no sour
       .prepare({ sql: "UPDATE session_entries SET message_id = 'missing' WHERE message_id = 'u1'" })
       .run();
     const result = await f.extraction.extract();
+
     expect(result).toMatchObject({
       status: 'completed',
       result: 'failed',
@@ -360,19 +391,25 @@ it('reports an unreadable original chain instead of pretending there was no sour
 
 it('retains an earlier successful version through failure, then replaces it with a new empty success', async () => {
   const f = extractionFixture();
+
   try {
     await f.user('u1');
     await f.extraction.extract();
+
     const previous = f.extraction.getExtraction('s1')!;
     await f.user('u2', 'Cancel the old preference.');
     f.complete.mockResolvedValue(f.response('invalid'));
     const failed = await f.extraction.extract();
+
     expect(f.extraction.getExtraction('s1')).toEqual(previous);
+
     if (failed.status !== 'completed') throw new Error('Batch not settled');
+
     f.complete.mockResolvedValue(
       f.response('{"rawMemory":"","rolloutSummary":"","rolloutSlug":""}'),
     );
     await f.extraction.extract({ failedJobId: failed.jobs[0].jobId });
+
     expect(f.extraction.getExtraction('s1')).toMatchObject({ rawMemory: '' });
     expect(f.extraction.getExtraction('s1')?.sourceVersion).not.toBe(previous.sourceVersion);
     expect(
@@ -402,17 +439,22 @@ it.each(['timeout', 'shutdown', 'disable'] as const)(
       vi.useFakeTimers();
       const pending = f.extraction.extract();
       await vi.advanceTimersByTimeAsync(1);
+
       expect(f.complete).toHaveBeenCalledOnce();
+
       let settled = false;
       pending.then(() => {
         settled = true;
       });
       if (kind === 'shutdown') void f.extraction.shutdown();
       if (kind === 'disable') f.configuration.generateMemories = false;
+
       await vi.advanceTimersByTimeAsync(kind === 'timeout' ? 180001 : 1000);
+
       const settledBeforeResponse = settled;
       release(f.response('{"rawMemory":"late","rolloutSummary":"late","rolloutSlug":""}'));
       const result = await pending;
+
       expect(settledBeforeResponse).toBe(true);
       expect(result).toMatchObject({
         jobs: [{ status: kind === 'timeout' ? 'failed' : 'cancelled' }],
@@ -428,6 +470,7 @@ it.each(['timeout', 'shutdown', 'disable'] as const)(
 
 it('classifies provider abort rejection as cancellation without consuming a failed attempt', async () => {
   const f = extractionFixture();
+
   try {
     await f.user('u1');
     f.complete.mockImplementation(
@@ -440,10 +483,12 @@ it('classifies provider abort rejection as cancellation without consuming a fail
           );
         }),
     );
+
     const controller = new AbortController();
     const pending = f.extraction.extract({ signal: controller.signal });
     await vi.waitFor(() => expect(f.complete).toHaveBeenCalledOnce());
     controller.abort();
+
     expect(await pending).toMatchObject({
       jobs: [
         {
@@ -468,25 +513,33 @@ it('records job identity and coverage without secret content; diagnostic failure
     ...f.options,
     observability: trace.observability,
   });
+
   try {
     await f.user('u1', 'React secret-value');
+
     const result = await extraction.extract();
     await trace.flush();
+
     const traces = await trace.queries.listTraces();
+
     expect(traces).toHaveLength(1);
     expect(traces[0]).toMatchObject({
       traceKind: 'memory_extraction',
       status: 'ok',
     });
     expect(JSON.stringify(traces)).not.toContain('secret-value');
+
     if (result.status !== 'completed') throw new Error('Extraction failed');
+
     expect(traces[0].correlations).toContainEqual(
       expect.objectContaining({
         modelCallId: result.jobs[0].jobId,
         contentDigest: result.jobs[0].sourceVersion,
       }),
     );
+
     const detail = await trace.queries.getTrace(traces[0].traceId);
+
     expect(detail?.spans.flatMap(span => span.events.map(item => item.event))).toContainEqual(
       expect.objectContaining({
         type: 'memory.extraction.settled',
@@ -498,6 +551,7 @@ it('records job identity and coverage without secret content; diagnostic failure
         status: 'succeeded',
       }),
     );
+
     const broken = createMemoryExtraction({
       ...f.options,
       observability: createTraceRecorder({
@@ -508,7 +562,9 @@ it('records job identity and coverage without secret content; diagnostic failure
     });
     await f.user('u2', 'Prefer TypeScript');
     await broken.extract();
+
     expect(broken.getExtraction('s1')?.coverage.includedMessageIds).toContain('u2');
+
     await broken.shutdown();
   } finally {
     await extraction.shutdown();

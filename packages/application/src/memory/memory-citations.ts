@@ -15,7 +15,9 @@ export const MemoryCitationSchema = z
     value =>
       value.endLine >= value.startLine && value.sourceIds.length === value.sourceVersions.length,
   );
+
 export type MemoryCitation = z.infer<typeof MemoryCitationSchema>;
+
 export const MemoryEvidenceSchema = z
   .object({
     executionId: z.string(),
@@ -24,6 +26,7 @@ export const MemoryEvidenceSchema = z
     reads: z.array(MemoryCitationSchema),
   })
   .strict();
+
 export type MemoryEvidence = z.infer<typeof MemoryEvidenceSchema>;
 
 /** Accepts only ranges and source versions that the host actually supplied during this run. */
@@ -40,8 +43,10 @@ export function validateMemoryCitations(
       status: text.includes('<memory_citations') ? 'invalid' : 'absent',
       citations: [],
     };
+
   try {
     if (matches.length !== 1 || !text.trimEnd().endsWith('</memory_citations>')) throw new Error();
+
     const citations = z
       .array(MemoryCitationSchema)
       .min(1)
@@ -64,9 +69,11 @@ export function validateMemoryCitations(
         let nextLine = citation.startLine;
         for (const span of spans)
           if (span.startLine <= nextLine && span.endLine >= nextLine) nextLine = span.endLine + 1;
+
         if (nextLine <= citation.endLine) throw new Error();
       }
     }
+
     return {
       status: 'valid',
       citations,

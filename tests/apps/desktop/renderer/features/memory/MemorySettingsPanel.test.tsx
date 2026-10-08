@@ -14,6 +14,7 @@ it('saves explicit memory models while independently disabling generation', asyn
     ...window.megumi,
     ...fixture.api,
   };
+
   const user = userEvent.setup();
   render(<MemorySettingsPanel />);
   const generate = await screen.findByRole('checkbox', { name: 'Generate memories automatically' });

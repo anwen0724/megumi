@@ -17,6 +17,7 @@ it('upgrades a pre-memory database without changing saved sessions, branches or 
   journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx <= 37);
   fs.writeFileSync(journalPath, JSON.stringify(journal));
   let database = createDatabase({ filename });
+
   try {
     migrateDatabase({
       database,
@@ -33,6 +34,7 @@ it('upgrades a pre-memory database without changing saved sessions, branches or 
       VALUES ('s1','w1','Kept title','active',NULL,'2026-10-01','2026-10-07')`,
       })
       .run();
+
     const payload = JSON.stringify({
       status: 'completed',
       content: [
@@ -55,10 +57,13 @@ it('upgrades a pre-memory database without changing saved sessions, branches or 
     database
       .prepare({ sql: "UPDATE sessions SET active_entry_id = 'e1' WHERE session_id = 's1'" })
       .run();
+
     expect(migrateDatabase({ database }).appliedMigrations).toBe(4);
+
     database.prepare({ sql: 'UPDATE memory_state SET dirty_revision = 2 WHERE id = 1' }).run();
     database.close();
     database = createDatabase({ filename });
+
     expect(migrateDatabase({ database }).appliedMigrations).toBe(0);
     expect(
       database

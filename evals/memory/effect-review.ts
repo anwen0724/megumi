@@ -57,6 +57,7 @@ export function summarizeHumanReview(
   const byId = new Map(review.map(item => [item.id, item]));
   if (byId.size !== review.length)
     throw new Error('Human review contains duplicate trial identities.');
+
   const plannedIds = new Set(
     manifest.fixtures.flatMap(fixture =>
       manifest.conditions.flatMap(condition =>
@@ -70,6 +71,7 @@ export function summarizeHumanReview(
   for (const id of byId.keys())
     if (!plannedIds.has(id))
       throw new Error(`Review identity is outside the frozen experiment: ${id}`);
+
   const byCondition: Record<string, unknown> = {};
   const repeatableFixtures: string[] = [];
   for (const condition of manifest.conditions) {
@@ -127,8 +129,10 @@ export function summarizeHumanReview(
             complete = false;
           }
         }
+
         const knowledge = fixture.facts.filter(fact => fact.memoryRequired !== false);
         if (!knowledge.length) noRequiredKnowledgeTasks++;
+
         let currentUsed = 0;
         let currentCorrect = 0;
         let currentRecalled = 0;
@@ -163,6 +167,7 @@ export function summarizeHumanReview(
             complete = false;
           }
         }
+
         for (const item of current?.additionalUsedKnowledge ?? []) {
           used++;
           currentUsed++;
@@ -176,6 +181,7 @@ export function summarizeHumanReview(
           }
           if (!item.evidenceLocation.trim()) complete = false;
         }
+
         if (current?.additionalKnowledgeReviewed !== true) {
           additionalUnknown++;
           complete = false;
@@ -186,6 +192,7 @@ export function summarizeHumanReview(
           current?.additionalKnowledgeReviewed === true
         )
           noMemoryUsedTasks++;
+
         for (const [index] of fixture.forbidden.entries()) {
           const value = current?.forbidden?.[index]?.usedAsCurrentFact;
           if (value === true) forbiddenUsed++;
@@ -194,6 +201,7 @@ export function summarizeHumanReview(
             complete = false;
           }
         }
+
         if (!complete) incomplete.push(id);
         if (
           complete &&
@@ -208,9 +216,11 @@ export function summarizeHumanReview(
         )
           effectiveRepeats++;
       }
+
       if (condition === 'memory' && manifest.repeats >= 2 && effectiveRepeats === manifest.repeats)
         repeatableFixtures.push(fixture.id);
     }
+
     byCondition[condition] = {
       plannedTasks,
       taskSuccess: ratio(tasksSucceeded, plannedTasks, taskUnknown),
@@ -232,6 +242,7 @@ export function summarizeHumanReview(
       incomplete,
     };
   }
+
   const categories = [...new Set(manifest.fixtures.map(fixture => fixture.category))].map(
     category => ({
       category,
@@ -240,6 +251,7 @@ export function summarizeHumanReview(
         .map(fixture => fixture.id),
     }),
   );
+
   return {
     byCondition,
     repeatableReuseByCategory: categories,

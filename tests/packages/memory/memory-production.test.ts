@@ -7,8 +7,10 @@ it('keeps an empty memory run successful when there are no eligible sources and 
   const f = productionFixture(undefined, async () => {
     throw new Error('MODEL_UNAVAILABLE');
   });
+
   try {
     f.advance(366 * 86400000);
+
     expect(await f.generate()).toMatchObject({
       status: 'completed',
       result: { result: 'empty' },
@@ -23,8 +25,10 @@ it('retains the model preparation error when eligible sources could not be proce
   const f = productionFixture(undefined, async () => {
     throw new Error('MODEL_UNAVAILABLE');
   });
+
   try {
     await f.user('u1');
+
     expect(await f.generate()).toMatchObject({
       status: 'failed',
       result: { error: { code: 'MODEL_UNAVAILABLE' } },
@@ -36,10 +40,12 @@ it('retains the model preparation error when eligible sources could not be proce
 
 it('generates through the real Agent without adding a Coding session, then reuses unchanged knowledge', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1', 'Use TypeScript for React examples.');
     f.responses();
     const run = await f.generate();
+
     expect(run).toMatchObject({
       status: 'completed',
       result: { result: 'generated' },
@@ -55,7 +61,9 @@ it('generates through the real Agent without adding a Coding session, then reuse
       },
     });
     expect(f.sources.listSources()).toHaveLength(1);
+
     const count = f.provider.state.callCount;
+
     expect(await f.generate('unchanged')).toMatchObject({ result: { result: 'unchanged' } });
     expect(f.provider.state.callCount).toBe(count);
   } finally {
@@ -65,18 +73,22 @@ it('generates through the real Agent without adding a Coding session, then reuse
 
 it('evaluates the unused window on a production trigger rather than a status query', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
     f.advance(31 * 86400000);
+
     expect(f.memory.getStatus()).toMatchObject({
       memory: {
         artifactState: 'ready',
         dirty: false,
       },
     });
+
     f.responses();
+
     expect(await f.generate('expire')).toMatchObject({ result: { result: 'generated' } });
     expect(f.files.read('MEMORY.md')?.content).not.toContain('TypeScript');
   } finally {
@@ -86,11 +98,14 @@ it('evaluates the unused window on a production trigger rather than a status que
 
 it('saves versioned edits and maintains excluded sources even with automatic generation disabled', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const before = f.files.read('MEMORY.md')!;
+
     expect(
       f.memory.updateDocument({
         requestId: 'edit',
@@ -107,13 +122,16 @@ it('saves versioned edits and maintains excluded sources even with automatic gen
         content: before.content,
       }),
     ).toMatchObject({ error: { code: 'VERSION_CONFLICT' } });
+
     const read = f.settings.readSettings();
     if (read.status !== 'ok') throw new Error();
+
     f.settings.updateSettings({
       expectedRevision: read.settings.revision,
       patch: { memory: { generateMemories: false } },
     });
     f.responses();
+
     expect(
       f.memory.setSourceEligibility({
         requestId: 'exclude',
@@ -125,6 +143,7 @@ it('saves versioned edits and maintains excluded sources even with automatic gen
       status: 'saved',
       maintenance: 'pending',
     });
+
     await vi.waitFor(() =>
       expect(f.memory.getStatus()).toMatchObject({
         memory: {
@@ -133,6 +152,7 @@ it('saves versioned edits and maintains excluded sources even with automatic gen
         },
       }),
     );
+
     expect(f.files.read('MEMORY.md')?.content).not.toContain('TypeScript');
     expect(f.memory.listSources()).toMatchObject({
       sources: [
@@ -149,10 +169,12 @@ it('saves versioned edits and maintains excluded sources even with automatic gen
 
 it('marks partially written output for repair and preserves original histories when clearing', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const before = f.files.read('MEMORY.md')!;
     f.memory.updateDocument({
       requestId: 'edit',
@@ -169,19 +191,24 @@ it('marks partially written output for repair and preserves original histories w
       }),
       fauxAssistantMessage('Failed to finish.'),
     ]);
+
     expect(await f.generate('partial')).toMatchObject({ status: 'failed' });
     expect(f.memory.getStatus()).toMatchObject({ memory: { artifactState: 'needsRepair' } });
+
     f.reply('reply');
     const clearing = f.memory.clearMemory({
       requestId: 'clear',
       confirmed: true,
     });
+
     expect(clearing).toMatchObject({
       status: 'started',
       runId: expect.any(String),
     });
+
     if (clearing.status !== 'started' && clearing.status !== 'reused')
       throw new Error('Clear not accepted');
+
     expect(
       f.memory.cancelRun({
         requestId: 'cancel-clear',

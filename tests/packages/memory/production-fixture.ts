@@ -34,6 +34,7 @@ export function productionFixture(
   });
   const initial = settings.readSettings();
   if (initial.status !== 'ok') throw new Error('Settings missing');
+
   settings.updateSettings({
     expectedRevision: initial.settings.revision,
     patch: {
@@ -49,9 +50,11 @@ export function productionFixture(
       },
     },
   });
+
   const config = () => {
     const read = settings.readSettings();
     if (read.status !== 'ok') throw new Error('Bad settings');
+
     return read.settings.config.memory;
   };
   const ai = createModels();
@@ -121,6 +124,7 @@ export function productionFixture(
         const content = source
           ? `# Task Group: React\nscope: learning\napplies_to: workspace=w1\n## Task: Examples\n### rollout_summary_files\n- ${source.artifactPath} ${sourceMarker(source)}\n### keywords\n- TypeScript\n### learnings\n- Use TypeScript for React examples.\n`
           : EMPTY_MEMORY;
+
         return tool('memory_file', {
           action: 'write',
           path: 'MEMORY.md',
@@ -139,6 +143,7 @@ export function productionFixture(
         const content = source
           ? `# User Profile\nPrefers TypeScript. ${sourceMarker(source)}\n\n# General Tips\nUse TS examples. ${sourceMarker(source)}\n\n# What's in Memory\n## 2026-10-02\nMEMORY.md: React examples. ${sourceMarker(source)}\n`
           : EMPTY_SUMMARY;
+
         return tool('memory_file', {
           action: 'write',
           path: 'memory_summary.md',
@@ -157,13 +162,16 @@ export function productionFixture(
     });
     if (start.status !== 'started' && start.status !== 'reused')
       throw new Error(JSON.stringify(start));
+
     const waited = await memory.waitRun({
       runId: start.runId,
       timeoutMs: 5000,
     });
     if (waited.status !== 'completed') throw new Error(JSON.stringify(waited));
+
     return waited.run;
   }
+
   return {
     ...f,
     root,

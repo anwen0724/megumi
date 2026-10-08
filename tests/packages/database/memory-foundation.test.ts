@@ -6,12 +6,14 @@ import { createDatabase, migrateDatabase } from '@megumi/application/storage/ind
 describe('Memory foundation migration', () => {
   it('creates empty memory state and retains referenced extraction versions', () => {
     const database = createDatabase({ filename: ':memory:' });
+
     try {
       migrateDatabase({ database });
       const tables = database
         .prepare<{ name: string }>({ sql: "SELECT name FROM sqlite_master WHERE type = 'table'" })
         .all()
         .map(row => row.name);
+
       expect(tables).toContain('memory_state');
       expect(
         database
@@ -24,6 +26,7 @@ describe('Memory foundation migration', () => {
         dirty_revision: 0,
         clear_pending: 0,
       });
+
       database
         .prepare({
           sql: "INSERT INTO memory_sources(session_id, updated_at) VALUES ('s1', '2026-10-08T00:00:00.000Z')",
@@ -40,6 +43,7 @@ describe('Memory foundation migration', () => {
           sql: "INSERT INTO memory_current_extractions(session_id, source_version) VALUES ('s1', 'v1')",
         })
         .run();
+
       expect(() =>
         database.prepare({ sql: "DELETE FROM memory_extractions WHERE session_id = 's1'" }).run(),
       ).toThrow();
@@ -50,6 +54,7 @@ describe('Memory foundation migration', () => {
           })
           .run(),
       ).toThrow();
+
       database
         .prepare({
           sql: "INSERT INTO memory_snapshots VALUES ('snapshot1', 1, '{}', '2026-10-08')",
@@ -61,8 +66,11 @@ describe('Memory foundation migration', () => {
         })
         .run();
       database.prepare({ sql: 'DELETE FROM memory_current_extractions' }).run();
+
       expect(() => database.prepare({ sql: 'DELETE FROM memory_extractions' }).run()).toThrow();
+
       database.prepare({ sql: 'DELETE FROM memory_snapshots' }).run();
+
       expect(() => database.prepare({ sql: 'DELETE FROM memory_extractions' }).run()).not.toThrow();
       expect(migrateDatabase({ database }).appliedMigrations).toBe(0);
     } finally {

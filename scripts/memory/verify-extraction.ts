@@ -20,6 +20,7 @@ async function main() {
     throw new Error(
       'Pass --run only after authorizing the synthetic histories for the configured provider.',
     );
+
   const home = process.env.MEGUMI_HOME ?? path.join(os.homedir(), '.megumi');
   const global = createSettings({
     globalSettingsPath: path.join(home, 'settings.json'),
@@ -28,8 +29,10 @@ async function main() {
   });
   const read = global.readSettings();
   if (read.status !== 'ok') throw new Error('The global settings cannot be read.');
+
   const selection = read.settings.config.general.lastSelectedModel;
   if (!selection) throw new Error('The default conversation model is not configured.');
+
   const parent = path.resolve('.tmp');
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'memory-p2-protocol-'));
@@ -73,6 +76,7 @@ async function main() {
       historical,
       historical,
     ]);
+
   const store = createSessionStore({ database });
   const history = createSessionHistory({
     store,
@@ -97,6 +101,7 @@ async function main() {
       created_at: historical,
       updated_at: historical,
     });
+
     const saved = await history.saveUserMessage({
       session_id: sample.id,
       message_id: `user:${sample.id}`,
@@ -116,6 +121,7 @@ async function main() {
     });
     if (saved.status !== 'saved') throw new Error('Synthetic history could not be saved.');
   }
+
   let calls = 0;
   const create = () =>
     createMemoryExtraction({
@@ -143,6 +149,7 @@ async function main() {
       },
     });
   let extraction = create();
+
   try {
     const started = Date.now();
     const result = await extraction.extract();
@@ -157,6 +164,7 @@ async function main() {
     const callsBeforeRestart = calls;
     const restart = await extraction.extract();
     await trace.flush();
+
     const traces = await trace.queries.listTraces();
     const report = {
       recordedAt: new Date().toISOString(),

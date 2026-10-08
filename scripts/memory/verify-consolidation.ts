@@ -23,6 +23,7 @@ import {
 
 async function main() {
   if (!process.argv.includes('--run')) throw new Error('Explicit --run authorization is required.');
+
   const home = process.env.MEGUMI_HOME ?? path.join(os.homedir(), '.megumi');
   const global = createSettings({
     globalSettingsPath: path.join(home, 'settings.json'),
@@ -32,6 +33,7 @@ async function main() {
   const read = global.readSettings();
   if (read.status !== 'ok' || !read.settings.config.general.lastSelectedModel)
     throw new Error('No configured default model.');
+
   const selectedModel = read.settings.config.general.lastSelectedModel;
   const parent = path.resolve('.tmp');
   mkdirSync(parent, { recursive: true });
@@ -75,6 +77,7 @@ async function main() {
       historical,
       historical,
     ]);
+
   const store = createSessionStore({ database });
   store.insertSession({
     session_id: 'learning',
@@ -84,6 +87,7 @@ async function main() {
     created_at: historical,
     updated_at: historical,
   });
+
   const history = createSessionHistory({
     store,
     ids: { entryId: ({ source_id }) => `entry:${source_id}` },
@@ -99,10 +103,12 @@ async function main() {
       p2.samples?.find((sample: { id: string }) => sample.id === 'learning')?.text !== text)
   )
     throw new Error('P2 material is outside this probe scope.');
+
   const prior = p2?.outputs?.find(
     (output: { sample: string }) => output.sample === 'learning',
   )?.extraction;
   if (p2 && !prior?.rawMemory) throw new Error('The P2 extraction is empty.');
+
   const saved = await history.saveUserMessage({
     session_id: 'learning',
     message_id: 'user:learning',
@@ -121,6 +127,7 @@ async function main() {
     created_at: historical,
   });
   if (saved.status !== 'saved') throw new Error('Could not save synthetic source.');
+
   const sources = createMemorySources({
     store,
     isSessionRunning: () => false,
@@ -168,6 +175,7 @@ async function main() {
         selection,
       }),
   });
+
   try {
     const startedAt = Date.now();
     const started = memory.startGeneration({
@@ -185,6 +193,7 @@ async function main() {
         if (result.status !== 'timeout') return result;
       }
     }
+
     const generated = await wait(started.runId);
     const firstDocuments = files.list();
     writeFileSync(
@@ -198,6 +207,7 @@ async function main() {
         2,
       ),
     );
+
     const removed = memory.setSourceEligibility({
       requestId: 'synthetic-removal',
       sessionId: 'learning',
@@ -252,6 +262,7 @@ async function main() {
     database.close();
   }
 }
+
 void main().catch(() => {
   console.error('Consolidation probe failed; inspect the isolated report.');
   process.exitCode = 1;

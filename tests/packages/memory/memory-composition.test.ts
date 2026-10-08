@@ -7,8 +7,10 @@ import { composeTestApplication } from '../composition/compose-test-application'
 
 it('starts with no memory model, queries without model calls, and releases its database on dispose', async () => {
   const app = composeTestApplication();
+
   try {
     await app.runtime.start({ backgroundTriggers: 'manual' });
+
     expect(app.runtime.memory.getStatus()).toMatchObject({
       status: 'ok',
       memory: {
@@ -20,6 +22,7 @@ it('starts with no memory model, queries without model calls, and releases its d
       },
     });
     expect(fs.pathExistsSync(path.join(app.home, 'memories'))).toBe(false);
+
     const settingsPath = path.join(app.home, 'settings.json');
     const config = fs.readJsonSync(settingsPath);
     config.memory = {
@@ -37,6 +40,7 @@ it('starts with no memory model, queries without model calls, and releases its d
     fs.writeJsonSync(path.join(app.workspace, '.megumi', 'settings.json'), {
       providers: { test: { models: { model: { contextWindowTokens: 1 } } } },
     });
+
     expect(app.runtime.memory.getStatus()).toMatchObject({
       status: 'ok',
       memory: {
@@ -47,14 +51,18 @@ it('starts with no memory model, queries without model calls, and releases its d
         consolidationModel: { status: 'unavailable' },
       },
     });
+
     fs.ensureDirSync(path.join(app.home, 'memories'));
     fs.writeFileSync(path.join(app.home, 'memories', 'old-experiment.md'), 'unverified');
+
     expect(app.runtime.memory.getStatus()).toMatchObject({
       status: 'ok',
       memory: { artifactState: 'needsRepair' },
     });
     expect(app.contexts).toHaveLength(0);
+
     await app.runtime.dispose();
+
     expect(app.runtime.memory.getStatus()).toMatchObject({
       status: 'failed',
       error: { code: 'STORAGE_FAILED' },
@@ -66,6 +74,7 @@ it('starts with no memory model, queries without model calls, and releases its d
 
 it('applies project fallback names and UTF-8 budget to an actual conversation request', async () => {
   const app = composeTestApplication();
+
   try {
     fs.ensureDirSync(path.join(app.workspace, '.megumi'));
     fs.writeJsonSync(path.join(app.workspace, '.megumi', 'settings.json'), {
@@ -78,13 +87,18 @@ it('applies project fallback names and UTF-8 budget to an actual conversation re
     fs.writeFileSync(path.join(app.workspace, 'TEAM.md'), '汉'.repeat(500));
     const opened = await app.runtime.workspace.useExistingProject();
     if (opened.status !== 'opened' || !opened.project) throw new Error('Workspace was not opened.');
+
     const sent = await app.runtime.session.sendUserInput({
       projectId: opened.project.projectId,
       text: 'Hello',
     });
+
     expect(sent.payload.type).toBe('agent_run');
+
     await vi.waitFor(() => expect(app.contexts.length).toBeGreaterThan(0));
+
     const request = JSON.stringify(app.contexts[0]);
+
     expect(request).toContain('TEAM.md');
     expect(request).toContain('汉'.repeat(341));
     expect(request).not.toContain('汉'.repeat(342));
@@ -101,6 +115,7 @@ it('applies project fallback names and UTF-8 budget to an actual conversation re
 
 it('rejects re-enabling memory through application settings while clear remains pending', async () => {
   const app = composeTestApplication();
+
   try {
     fs.ensureDirSync(path.join(app.home, 'memories'));
     // Unknown legacy files are not silently removed by the new memory owner.
@@ -110,14 +125,17 @@ it('rejects re-enabling memory through application settings while clear remains 
       confirmed: true,
     });
     if (accepted.status !== 'started') throw new Error('Clear not accepted');
+
     expect(
       await app.runtime.memory.waitRun({
         runId: accepted.runId,
         timeoutMs: 5000,
       }),
     ).toMatchObject({ run: { status: 'failed' } });
+
     const read = app.runtime.settings.readSettings();
     if (read.status !== 'ok') throw new Error('Settings unavailable');
+
     expect(
       app.runtime.settings.updateSettings({
         expectedRevision: read.settings.revision,

@@ -6,18 +6,23 @@ import { productionFixture } from './production-fixture';
 
 it('retains removed source material until a successful cleanup releases its reference', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const oldPath = f.files.paths().find(path => path.startsWith('rollout_summaries/'))!;
     await f.user('u2', 'Use TypeScript, including interfaces.');
     f.provider.setResponses([fauxAssistantMessage('Consolidation failed.')]);
     const failed = await f.generate('changed');
+
     expect(failed.result).toMatchObject({ result: 'partial' });
     expect(f.memory.readDocument({ path: oldPath }).status).toBe('found');
+
     f.advance(3600001);
     f.responses();
+
     expect(await f.generate('cleanup')).toMatchObject({ result: { result: 'generated' } });
     expect(f.memory.readDocument({ path: oldPath }).status).toBe('notFound');
     expect(f.sources.readSnapshot('s1').status).toBe('found');
@@ -28,12 +33,14 @@ it('retains removed source material until a successful cleanup releases its refe
 
 it('stops at the model request budget when a model repeatedly calls unavailable capabilities', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.provider.setResponses(
       Array.from({ length: 49 }, () => f.tool('shell', { command: 'unavailable' })),
     );
     const run = await f.generate();
+
     expect(run.jobs.find(job => job.stage === 'consolidate')).toMatchObject({
       status: 'failed',
       error: { code: 'EXECUTION_LIMIT_REACHED' },
@@ -47,8 +54,10 @@ it('stops at the model request budget when a model repeatedly calls unavailable 
 
 it('reports an input budget error without sending an oversized fixed prompt', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
+
     const resolve = f.options.resolveModel;
     vi.spyOn(f.options, 'resolveModel').mockImplementation(async () => {
       const resolved = await resolve();
@@ -61,7 +70,9 @@ it('reports an input budget error without sending an oversized fixed prompt', as
         },
       };
     });
+
     const run = await f.generate();
+
     expect(run.jobs.find(job => job.stage === 'consolidate')).toMatchObject({
       status: 'failed',
       error: { code: 'BUDGET_EXCEEDED' },
@@ -75,10 +86,12 @@ it('reports an input budget error without sending an oversized fixed prompt', as
 
 it('keeps intact files ready after a model failure and bounds automatic and manual retries', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const before = f.files.read('MEMORY.md')!;
     f.memory.updateDocument({
       requestId: 'edit',
@@ -88,6 +101,7 @@ it('keeps intact files ready after a model failure and bounds automatic and manu
     });
     f.provider.setResponses([fauxAssistantMessage('Cannot perform consolidation.')]);
     const first = await f.generate('failure');
+
     expect(first.status).toBe('failed');
     expect(f.memory.getStatus()).toMatchObject({
       memory: {
@@ -95,12 +109,16 @@ it('keeps intact files ready after a model failure and bounds automatic and manu
         dirty: true,
       },
     });
+
     const calls = f.provider.state.callCount;
     await f.generate('too-soon');
+
     expect(f.provider.state.callCount).toBe(calls);
+
     for (let attempt = 2; attempt <= 3; attempt++) {
       f.advance(3600001);
       f.provider.setResponses([fauxAssistantMessage('Cannot finish.')]);
+
       expect(
         (await f.generate(`failure-${attempt}`)).jobs.find(job => job.stage === 'consolidate'),
       ).toMatchObject({
@@ -108,9 +126,12 @@ it('keeps intact files ready after a model failure and bounds automatic and manu
         status: 'failed',
       });
     }
+
     f.advance(3600001);
     const exhausted = await f.generate('exhausted');
+
     expect(exhausted.jobs.filter(job => job.stage === 'consolidate')).toHaveLength(0);
+
     const failedJob = first.jobs.find(job => job.stage === 'consolidate')!;
     const replay = f.memory.startGeneration({
       requestId: 'stale-retry',
@@ -122,6 +143,7 @@ it('keeps intact files ready after a model failure and bounds automatic and manu
         runId: replay.runId,
         timeoutMs: 5000,
       });
+
       expect(result).toMatchObject({
         run: {
           status: 'failed',
@@ -136,6 +158,7 @@ it('keeps intact files ready after a model failure and bounds automatic and manu
 
 it('does not certify final files when the successful snapshot transaction fails', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
@@ -143,14 +166,18 @@ it('does not certify final files when the successful snapshot transaction fails'
     const fault = vi.spyOn(f.database, 'prepare').mockImplementation(request => {
       if (request.sql.includes("SET artifact_state = 'ready', processed_revision"))
         throw new Error('Injected state commit failure');
+
       return original(request);
     });
     const run = await f.generate();
+
     expect(run.result).toMatchObject({
       result: 'partial',
       error: { code: 'STORAGE_FAILED' },
     });
+
     fault.mockRestore();
+
     expect(f.files.read('MEMORY.md')?.content).toContain('TypeScript');
     expect(f.memory.getStatus()).toMatchObject({
       memory: {
@@ -158,8 +185,11 @@ it('does not certify final files when the successful snapshot transaction fails'
         processedRevision: 0,
       },
     });
+
     const reopened = createMemory(f.options);
+
     expect(reopened.getStatus()).toMatchObject({ memory: { artifactState: 'needsRepair' } });
+
     await reopened.shutdown();
   } finally {
     vi.restoreAllMocks();
@@ -171,10 +201,12 @@ it.each(['configuration', 'deletion'])(
   'resumes a durable clear after %s fails without relearning original history',
   async point => {
     const f = productionFixture();
+
     try {
       await f.user('u1');
       f.responses();
       await f.generate();
+
       const calls = f.provider.state.callCount;
       const fault =
         point === 'configuration'
@@ -190,6 +222,7 @@ it.each(['configuration', 'deletion'])(
         confirmed: true,
       });
       if (accepted.status !== 'started') throw new Error('Not accepted');
+
       expect(
         await f.memory.waitRun({
           runId: accepted.runId,
@@ -203,7 +236,9 @@ it.each(['configuration', 'deletion'])(
           reason: 'manual',
         }),
       ).toMatchObject({ error: { code: 'BUSY' } });
+
       if (point === 'configuration') expect(f.files.read('MEMORY.md')).toBeDefined();
+
       fault.mockRestore();
       const reopened = createMemory(f.options);
       await vi.waitFor(() =>
@@ -215,8 +250,10 @@ it.each(['configuration', 'deletion'])(
           },
         }),
       );
+
       expect(f.provider.state.callCount).toBe(calls);
       expect(f.sources.readSnapshot('s1').status).toBe('found');
+
       await reopened.shutdown();
     } finally {
       vi.restoreAllMocks();

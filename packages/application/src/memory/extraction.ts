@@ -37,6 +37,7 @@ function outcome(jobs: readonly ExtractionJob[]): RecordedOutcome {
       code: failed.error?.code ?? 'EXTRACTION_FAILED',
       message: 'Memory extraction failed.',
     };
+
   return jobs.some(job => job.status === 'cancelled' || job.status === 'superseded')
     ? { status: 'cancelled' }
     : { status: 'ok' };
@@ -59,6 +60,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
   let stopped = false;
   const controllers = new Set<AbortController>();
   const pending = new Set<Promise<ExtractionBatchResult>>();
+
   type Request = NonNullable<Parameters<MemoryExtraction['extract']>[0]>;
 
   function check(lease: ExtractionLease, signal: AbortSignal): void {
@@ -77,6 +79,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
     let coverage: ReturnType<typeof buildExtractionInput>['coverage'] | undefined;
     let inputTokens = 0;
     let outputTokens = 0;
+
     try {
       check(lease, signal);
       const maxTokens = Math.min(8192, model.model.maxTokens);
@@ -88,6 +91,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         secrets: model.secrets,
       });
       coverage = input.coverage;
+
       const controller = new AbortController();
       let rejectWait!: (error: Error) => void;
       const interrupted = new Promise<never>((_, reject) => {
@@ -108,6 +112,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           interrupt(error instanceof Error ? error.message : 'STORAGE_FAILED');
         }
       }, 250);
+
       let response;
       try {
         const call = async () => {
@@ -148,29 +153,35 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         clearInterval(monitor);
         signal.removeEventListener('abort', abort);
       }
+
       inputTokens = response.usage.input;
       outputTokens = response.usage.output;
+
       check(lease, signal);
       const current = options.sources.readSnapshot(source.sessionId);
       if (current.status !== 'found' || current.snapshot.sourceVersion !== source.sourceVersion)
         throw new Error('SOURCE_CHANGED');
+
       if (response.stopReason === 'error') throw new Error('MODEL_FAILED');
       if (
         response.stopReason !== 'stop' ||
         response.content.some(block => block.type === 'toolCall')
       )
         throw new Error('INVALID_RESULT');
+
       const text = response.content
         .filter(block => block.type === 'text')
         .map(block => block.text)
         .join('');
       if (Buffer.byteLength(text, 'utf8') > 1048576) throw new Error('INVALID_RESULT');
+
       let output;
       try {
         output = OutputSchema.parse(JSON.parse(text));
       } catch {
         throw new Error('INVALID_RESULT');
       }
+
       if (
         !store.complete({
           lease,
@@ -238,12 +249,14 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         status: 'skipped',
         reason: 'stopped',
       };
+
     const configuration = options.readConfiguration();
     if (!configuration.generateMemories)
       return {
         status: 'skipped',
         reason: 'disabled',
       };
+
     const selected = selectExtractionSources({
       sources: options.sources.listSources({ limit: 5000 }),
       configuration,
@@ -270,6 +283,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           message: 'Configure an extraction model.',
         },
       };
+
     let model: ExtractionModel;
     try {
       model = await options.resolveModel(configuration.extractModel);
@@ -282,11 +296,13 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         },
       };
     }
+
     if (signal.aborted || stopped || !options.readConfiguration().generateMemories)
       return {
         status: 'skipped',
         reason: 'stopped',
       };
+
     store.beginRun(runId, iso(), !!request.failedJobId);
     request.onProgress?.(runId);
     let count = 0;
@@ -309,6 +325,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           triggerSessionId: request.triggerSessionId,
         });
         if (!current.length) continue;
+
         const read = options.sources.readSnapshot(info.sessionId);
         if (read.status !== 'found') {
           sourceFailures.push({
@@ -320,6 +337,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           });
           continue;
         }
+
         const source = read.snapshot;
         const lease = store.claim({
           runId,
@@ -330,6 +348,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           failedJobId: request.failedJobId,
         });
         if (!lease) continue;
+
         count++;
         request.onProgress?.(runId);
         const operation = () => extractSource(source, lease, model, signal);
@@ -352,6 +371,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         request.onProgress?.(runId);
       }
     }
+
     const workers = await Promise.allSettled(Array.from({ length: 8 }, worker));
     if (workers.some(worker => worker.status === 'rejected'))
       return {
@@ -361,7 +381,9 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           message: 'Extraction state could not be saved.',
         },
       };
+
     const result = store.finishRun(runId, iso(), sourceFailures);
+
     return {
       status: 'completed',
       stage: 'extract',
@@ -371,11 +393,13 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
       sourceFailures,
     };
   }
+
   return {
     extract(request = {}) {
       const controller = new AbortController();
       const abort = () => controller.abort();
       if (request.signal?.aborted) controller.abort();
+
       request.signal?.addEventListener('abort', abort, { once: true });
       controllers.add(controller);
       const runId = randomUUID();
@@ -424,6 +448,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         request.signal?.removeEventListener('abort', abort);
       });
       pending.add(operation);
+
       return operation;
     },
     getJob: store.getJob,

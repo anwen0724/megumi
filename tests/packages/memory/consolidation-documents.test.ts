@@ -69,13 +69,16 @@ it('requires a source on each skill paragraph so read steps have local citation 
     ['Applicability', 'Steps', 'Checks', 'Failure handling', 'Sources']
       .map(heading => `## ${heading}\nUse TypeScript. ${sourceMarker(source)}`)
       .join('\n\n');
+
   expect(() =>
     validateMemoryDocument(document('skills/react/SKILL.md', content), [source]),
   ).not.toThrow();
+
   const missing = content.replace(
     `## Steps\nUse TypeScript. ${sourceMarker(source)}`,
     '## Steps\nUse TypeScript.',
   );
+
   expect(() =>
     validateMemoryDocument(document('skills/react/SKILL.md', missing), [source]),
   ).toThrow('OUTPUT_INVALID');
@@ -83,6 +86,7 @@ it('requires a source on each skill paragraph so read steps have local citation 
 
 it('identifies the invalid file so consolidation can repair it without replacing valid knowledge', async () => {
   const f = productionFixture();
+
   try {
     f.files.writeFinal(
       {
@@ -100,6 +104,7 @@ it('identifies the invalid file so consolidation can repair it without replacing
       },
       () => {},
     );
+
     expect(() =>
       validateMemoryArtifacts(f.files, {
         targetRevision: 0,

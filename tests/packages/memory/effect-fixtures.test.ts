@@ -13,9 +13,11 @@ it('defines twelve isolated synthetic cases with evidence for every acceptance l
       expect(fact.evidence.length).toBeGreaterThan(0);
       expect(fact.evidence.every(id => allowed.has(id))).toBe(true);
     }
+
     if (fixture.category === 'verified-procedure')
       expect(fixture.histories.some(item => item.tool?.succeeded)).toBe(true);
   }
+
   expect(counts.size).toBe(6);
   expect([...counts.values()]).toEqual([2, 2, 2, 2, 2, 2]);
   expect(effectFixtures.length * effectConditions.length * 2).toBe(72);
@@ -27,12 +29,15 @@ it('does not accept a corrected old value and never fills human judgments automa
     fixture,
     '{"endpoint":"/api/v1/items","paginationParameter":"page"}',
   );
+
   expect(old.mechanicalPass).toBe(false);
   expect(old.forbidden.every(item => item.matched)).toBe(true);
+
   const current = checkEffectAnswer(
     fixture,
     '```json\n{"method":"GET","endpoint":"/api/v2/items","paginationParameter":"cursor"}\n```\n<memory_citations>[]</memory_citations>',
   );
+
   expect(current.mechanicalPass).toBe(true);
   expect(current.humanReview.taskSucceeded).toBeNull();
   expect(current.facts.every(item => item.review.recalled === null)).toBe(true);
@@ -40,6 +45,7 @@ it('does not accept a corrected old value and never fills human judgments automa
 
 it('retains unparseable output as a failure instead of guessing values from prose', () => {
   const result = checkEffectAnswer(effectFixtures[0], 'I think this should be zh-CN and ms.');
+
   expect(result.parseable).toBe(false);
   expect(result.mechanicalPass).toBe(false);
 });

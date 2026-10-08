@@ -26,6 +26,7 @@ async function savedUsage(
       created_at: '2026-10-08',
       updated_at: '2026-10-08',
     });
+
   const text = `Use TS.\n<memory_citations>${JSON.stringify(evidence.reads)}</memory_citations>`;
   const result = f.history.saveAssistantReply({
     message_id: replyId,
@@ -41,11 +42,13 @@ async function savedUsage(
     memory_evidence: evidence,
     completed_at: '2026-10-08T13:00:00Z',
   });
+
   expect(result.status).toBe('saved');
 }
 
 it('rejects unread versions, forged ranges and source identities without losing the reply', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
@@ -67,6 +70,7 @@ it('rejects unread versions, forged ranges and source identities without losing 
         return `Answer preserved.\n<memory_citations>${JSON.stringify([citation])}</memory_citations>`;
       });
     }
+
     expect(f.memory.recordUsage().status).toBe('recorded');
     expect(
       f.sources.listReplies({
@@ -89,10 +93,12 @@ it('rejects unread versions, forged ranges and source identities without losing 
 
 it('recovers saved replies when both accounting and pending-event writes fail, without recounting after restart', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -105,6 +111,7 @@ it('recovers saved replies when both accounting and pending-event writes fail, w
         sql: "CREATE TRIGGER fail_receipt BEFORE INSERT ON memory_usage_receipts BEGIN SELECT RAISE(ABORT, 'injected'); END",
       })
       .run();
+
     expect(f.memory.recordUsage().status).toBe('pendingRetry');
     expect(
       f.sources.listReplies({
@@ -112,13 +119,16 @@ it('recovers saved replies when both accounting and pending-event writes fail, w
         limit: 20,
       }),
     ).toHaveLength(1);
+
     f.database.prepare({ sql: 'DROP TRIGGER fail_receipt' }).run();
     f.database
       .prepare({
         sql: "CREATE TRIGGER fail_count BEFORE UPDATE OF usage_count ON memory_sources BEGIN SELECT RAISE(ABORT, 'injected'); END",
       })
       .run();
+
     expect(f.memory.recordUsage().status).toBe('pendingRetry');
+
     f.database.prepare({ sql: 'DROP TRIGGER fail_count' }).run();
     await f.memory.shutdown();
     f.database.close();
@@ -132,6 +142,7 @@ it('recovers saved replies when both accounting and pending-event writes fail, w
       database,
       sources,
     });
+
     try {
       expect(reopened.listSources()).toMatchObject({
         sources: expect.arrayContaining([
@@ -153,10 +164,12 @@ it('recovers saved replies when both accounting and pending-event writes fail, w
 
 it('clearing excludes prior replies and late replies that used a pre-clear snapshot', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -164,11 +177,13 @@ it('clearing excludes prior replies and late replies that used a pre-clear snaps
     });
     task.getPromptMemory('before');
     await savedUsage(f, 'before', task.evidence());
+
     const clear = f.memory.clearMemory({
       requestId: 'clear',
       confirmed: true,
     });
     if (clear.status !== 'started') throw new Error();
+
     await f.memory.waitRun({
       runId: clear.runId,
       timeoutMs: 5000,
@@ -178,6 +193,7 @@ it('clearing excludes prior replies and late replies that used a pre-clear snaps
       executionId: 'late',
     });
     f.memory.recordUsage();
+
     expect(f.memory.listSources()).toMatchObject({
       sources: expect.arrayContaining([
         expect.objectContaining({
@@ -199,10 +215,12 @@ it('clearing excludes prior replies and late replies that used a pre-clear snaps
 
 it('does not turn host receipts or injected memory tool bodies into new extraction evidence', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -225,8 +243,10 @@ it('does not turn host receipts or injected memory tool bodies into new extracti
       ],
       completed_at: '2026-10-08T13:00:01Z',
     });
+
     const source = f.sources.readSnapshot('task');
     if (source.status !== 'found') throw new Error();
+
     const input = buildExtractionInput({
       source: source.snapshot,
       workspaceDirectory: f.root,
@@ -234,6 +254,7 @@ it('does not turn host receipts or injected memory tool bodies into new extracti
       maxOutputTokens: 8192,
       secrets: [],
     });
+
     expect(input.prompt).not.toContain('memory_evidence');
     expect(input.prompt).not.toContain('INJECTED_MEMORY_ONLY');
     expect(input.prompt).toContain('Use TS.');
@@ -244,6 +265,7 @@ it('does not turn host receipts or injected memory tool bodies into new extracti
 
 it('persists host evidence with the reply and counts verified sources once across replay', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
@@ -256,6 +278,7 @@ it('persists host evidence with the reply and counts verified sources once acros
       created_at: '2026-10-08',
       updated_at: '2026-10-08',
     });
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -279,6 +302,7 @@ it('persists host evidence with the reply and counts verified sources once acros
         `Use TS.\n<memory_citations>${JSON.stringify([citation])}</memory_citations>`,
       ),
     });
+
     expect(
       f.sources.listReplies({
         afterCursor: 0,

@@ -35,6 +35,7 @@ export function redactExtractionValue(value: unknown, secrets: readonly string[]
         )
         .map(([key, item]) => [key, redactExtractionValue(item, secrets)]),
     );
+
   return value;
 }
 
@@ -112,15 +113,18 @@ export function buildExtractionInput(input: {
     for (let index = start; index <= end; index++) {
       for (const block of messages[index].content) {
         if (block.type !== 'toolCall') continue;
+
         const result = messages.findIndex(
           (message, candidate) => candidate > index && message.toolCallId === block.id,
         );
         if (result >= 0) end = Math.max(end, result);
       }
     }
+
     groups.push(messages.slice(start, end + 1));
     start = end + 1;
   }
+
   const inputBudgetTokens = Math.floor((input.contextWindow - input.maxOutputTokens) * 0.7);
   while (true) {
     const retained = groups.flat();
@@ -158,6 +162,7 @@ export function buildExtractionInput(input: {
         },
       };
     if (groups.length <= 2) throw new Error('BUDGET_EXCEEDED');
+
     groups.splice(Math.floor(groups.length / 2), 1);
   }
 }

@@ -34,6 +34,7 @@ it('includes idle and age boundaries and archived sources, while excluding activ
       source('temporary', 7, { kind: 'temporary' }),
     ],
   });
+
   expect(chosen.map(item => item.sessionId)).toEqual(['idle-boundary', 'old-boundary']);
 });
 
@@ -51,6 +52,7 @@ it('scans only the newest 5000 identities, breaking equal timestamps by descendi
     now: Date.parse('2026-10-08T12:00:00Z'),
     configuration: MemoryConfigurationSchema.parse({}),
   });
+
   expect(chosen).toHaveLength(5000);
   expect(chosen[0].sessionId).toBe('s5000');
   expect(chosen.at(-1)?.sessionId).toBe('s0001');

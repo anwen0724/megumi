@@ -11,6 +11,7 @@ import { createMegumiHomeVersion } from '../../packages/application/src/storage/
 async function main() {
   if (!process.argv.includes('--prepare'))
     throw new Error('Use --prepare to create a new isolated fixture.');
+
   const parent = path.resolve('.tmp');
   mkdirSync(parent, { recursive: true });
   const root = mkdtempSync(path.join(parent, 'memory-desktop-'));
@@ -21,6 +22,7 @@ async function main() {
   process.env.TEMP = root;
   process.env.TMP = root;
   const f = productionFixture();
+
   try {
     await f.user(
       'u1',
@@ -40,6 +42,7 @@ async function main() {
     const generated = await f.generate();
     if (generated.status !== 'completed' || generated.result?.result !== 'generated')
       throw new Error('Fixture production did not complete.');
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: workspace,
@@ -49,6 +52,7 @@ async function main() {
     const read = task.read({ path: 'MEMORY.md' });
     if (read.status !== 'found' || !read.references.length)
       throw new Error('Fixture has no verified citations.');
+
     f.store.insertSession({
       session_id: 'task',
       workspace_id: 'w1',
@@ -75,6 +79,7 @@ async function main() {
       ],
       created_at: '2026-10-08T12:00:00Z',
     });
+
     const reply = f.history.saveAssistantReply({
       session_id: 'task',
       message_id: 'desktop-reply',
@@ -90,6 +95,7 @@ async function main() {
       completed_at: '2026-10-08T13:00:00Z',
     });
     if (reply.status !== 'saved') throw new Error('Fixture reply was not saved.');
+
     f.memory.recordUsage();
     await f.memory.shutdown();
     f.database.prepare({ sql: 'PRAGMA wal_checkpoint(TRUNCATE)' }).all();
@@ -97,6 +103,7 @@ async function main() {
     cpSync(path.join(f.root, 'memories'), path.join(home, 'memories'), { recursive: true });
     const settings = f.settings.readSettings();
     if (settings.status !== 'ok') throw new Error('Fixture settings are unavailable.');
+
     const config = settings.settings.config;
     writeFileSync(
       path.join(home, 'settings.json'),
@@ -151,6 +158,7 @@ async function main() {
       created_at: '2026-10-02T00:00:00Z',
     });
     await f.user('u2', 'Use TypeScript for React examples and explain each dependency.');
+
     const extraction = createMemoryExtraction({
       database: f.database,
       sources: f.sources,
@@ -163,6 +171,7 @@ async function main() {
         complete: async context => {
           if (JSON.stringify(context).includes('__extraction_failure__'))
             throw new Error('MODEL_FAILED');
+
           return fauxAssistantMessage(
             JSON.stringify({
               rawMemory: 'Use TypeScript for React examples.',
@@ -184,11 +193,13 @@ async function main() {
         reason: 'manual',
       });
       if (started.status !== 'started') throw new Error('Failure case was not accepted.');
+
       const result = await failureMemory.waitRun({
         runId: started.runId,
         timeoutMs: 5000,
       });
       if (result.status !== 'completed') throw new Error('Failure case did not settle.');
+
       return result.run;
     }
 
@@ -198,8 +209,10 @@ async function main() {
       f.database.prepare({ sql: 'PRAGMA wal_checkpoint(TRUNCATE)' }).all();
       cpSync(path.join(f.root, 'memory.db'), path.join(target, 'sqlite', 'megumi.sqlite'));
       cpSync(path.join(f.root, 'memories'), path.join(target, 'memories'), { recursive: true });
+
       return target;
     }
+
     f.responses();
     const partial = await runCase('partial-extraction');
     if (
@@ -207,9 +220,11 @@ async function main() {
       !partial.jobs.some(job => job.stage === 'extract' && job.status === 'failed')
     )
       throw new Error('Partial extraction case is invalid.');
+
     const partialHome = saveCase('partial');
     const document = f.files.read('MEMORY.md');
     if (!document) throw new Error('No document before interruption.');
+
     failureMemory.updateDocument({
       requestId: 'dirty-before-interrupt',
       path: document.path,
@@ -227,13 +242,16 @@ async function main() {
         const status = failureMemory.getStatus();
         if (status.status !== 'ok' || !status.memory.recentRuns[0])
           throw new Error('Active run is missing.');
+
         failureMemory.cancelRun({
           requestId: 'cancel-consolidation',
           runId: status.memory.recentRuns[0].runId,
         });
+
         return fauxAssistantMessage('Cancelled.');
       },
     ]);
+
     const interrupted = await runCase('interrupted-consolidation');
     const interruptedStatus = failureMemory.getStatus();
     if (
@@ -242,8 +260,10 @@ async function main() {
       interruptedStatus.memory.artifactState !== 'needsRepair'
     )
       throw new Error('Interruption case is invalid.');
+
     const interruptedHome = saveCase('interrupted');
     await failureMemory.shutdown();
+
     const fixture = {
       scope: 'synthetic-only',
       root,
@@ -271,6 +291,7 @@ async function main() {
     await f.dispose();
   }
 }
+
 void main().catch(error => {
   console.error(error);
   process.exitCode = 1;

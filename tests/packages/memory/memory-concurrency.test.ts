@@ -14,6 +14,7 @@ it('processes a newer extraction after the active fixed selection becomes supers
   const paused = new Promise<void>(resolve => {
     entered = resolve;
   });
+
   try {
     await f.user('u1');
     f.provider.setResponses([
@@ -39,12 +40,15 @@ it('processes a newer extraction after the active fixed selection becomes supers
         return f.tool('memory_file', { action: 'list' });
       },
     ]);
+
     const accepted = f.memory.startGeneration({
       requestId: 'first',
       reason: 'manual',
     });
     if (accepted.status !== 'started') throw new Error('Not started');
+
     await paused;
+
     expect(
       f.memory.updateDocument({
         requestId: 'busy',
@@ -53,6 +57,7 @@ it('processes a newer extraction after the active fixed selection becomes supers
         content: EMPTY_MEMORY,
       }),
     ).toMatchObject({ error: { code: 'BUSY' } });
+
     await f.user('u2', 'Continue using TypeScript.');
     await f.options.extraction.extract();
     resume();
@@ -60,6 +65,7 @@ it('processes a newer extraction after the active fixed selection becomes supers
       runId: accepted.runId,
       timeoutMs: 5000,
     });
+
     expect(finished).toMatchObject({
       run: {
         jobs: expect.arrayContaining([
@@ -70,6 +76,7 @@ it('processes a newer extraction after the active fixed selection becomes supers
         ]),
       },
     });
+
     await vi.waitFor(
       () =>
         expect(f.memory.getStatus()).toMatchObject({
@@ -81,6 +88,7 @@ it('processes a newer extraction after the active fixed selection becomes supers
         }),
       { timeout: 3000 },
     );
+
     expect(f.files.read('MEMORY.md')?.content).toContain('TypeScript');
   } finally {
     resume();
@@ -94,6 +102,7 @@ it('cancels the active Agent without allowing its delayed response to publish fi
   const paused = new Promise<void>(resolve => {
     entered = resolve;
   });
+
   try {
     await f.user('u1');
     f.provider.setResponses([
@@ -105,12 +114,15 @@ it('cancels the active Agent without allowing its delayed response to publish fi
         return fauxAssistantMessage('Late response');
       },
     ]);
+
     const accepted = f.memory.startGeneration({
       requestId: 'first',
       reason: 'manual',
     });
     if (accepted.status !== 'started') throw new Error();
+
     await paused;
+
     expect(
       f.memory.startGeneration({
         requestId: 'duplicate-trigger',

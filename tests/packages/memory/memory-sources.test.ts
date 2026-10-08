@@ -10,6 +10,7 @@ import { createSourceFixture } from './source-fixture';
 
 function found(result: MemorySourceResult) {
   if (result.status !== 'found') throw new Error(JSON.stringify(result));
+
   return result.snapshot;
 }
 
@@ -19,8 +20,11 @@ it('distinguishes unavailable storage from a missing source', () => {
     store: f.store,
     isSessionRunning: () => false,
   });
+
   expect(sources.readSnapshot('absent')).toEqual({ status: 'notFound' });
+
   f.database.close();
+
   expect(sources.readSnapshot('s1')).toMatchObject({
     status: 'failed',
     error: { code: 'STORAGE_FAILED' },
@@ -33,8 +37,10 @@ it('keeps original evidence through compaction and metadata edits, and resolves 
     store: f.store,
     isSessionRunning: () => false,
   });
+
   try {
     await f.user('u1');
+
     const reply = f.reply('a1');
     const before = found(sources.readSnapshot('s1'));
     f.database
@@ -74,17 +80,23 @@ it('keeps original evidence through compaction and metadata edits, and resolves 
       active_entry_id: 'entry:c1',
       updated_at: '2026-10-06',
     });
+
     expect(found(sources.readSnapshot('s1'))).toEqual(before);
     expect(sources.listSources()[0]).toMatchObject({
       title: 'Renamed',
       archived: true,
       contentUpdatedAt: before.contentUpdatedAt,
     });
+
     await f.user('alternate', 'New branch', 'entry:u1');
+
     const alternate = found(sources.readSnapshot('s1'));
+
     expect(alternate.sourceVersion).not.toBe(before.sourceVersion);
     expect(alternate.messages.map(message => message.message_id)).toEqual(['u1', 'alternate']);
+
     const original = sources.readSource(before.sourceRef);
+
     expect(original).toMatchObject({
       status: 'found',
       sourceChanged: true,
@@ -108,6 +120,7 @@ it('returns one snapshot when a second connection commits during reading, and re
   // WAL permits another connection to commit while the source holds its read snapshot.
   f.database.prepare({ sql: 'PRAGMA journal_mode = WAL' }).get();
   const other = createDatabase({ filename });
+
   try {
     await f.user('u1');
     f.reply('a1');
@@ -125,9 +138,12 @@ it('returns one snapshot when a second connection commits during reading, and re
         .run();
       return listEntries(sessionId);
     });
+
     expect(found(sources.readSnapshot('s1'))).toEqual(before);
     expect(found(sources.readSnapshot('s1')).sourceVersion).not.toBe(before.sourceVersion);
+
     const cursor = sources.getReplyCursor();
+
     expect(
       sources
         .listReplies({
@@ -136,14 +152,17 @@ it('returns one snapshot when a second connection commits during reading, and re
         })
         .map(reply => reply.message.message_id),
     ).toEqual(['a1']);
+
     f.database.close();
     const reopened = createSourceFixture(filename);
+
     try {
       reopened.reply('a2');
       const resumed = createMemorySources({
         store: reopened.store,
         isSessionRunning: () => true,
       });
+
       expect(
         resumed
           .listReplies({
@@ -168,8 +187,10 @@ it('returns one snapshot when a second connection commits during reading, and re
 
 it('changes the content version when saved attachment metadata changes and rejects missing original evidence', async () => {
   const f = createSourceFixture();
+
   try {
     await f.user('u1');
+
     const sources = createMemorySources({
       store: f.store,
       isSessionRunning: () => false,
@@ -187,12 +208,15 @@ it('changes the content version when saved attachment metadata changes and rejec
         created_at: '2026-10-02',
       },
     ]);
+
     expect(found(sources.readSnapshot('s1')).sourceVersion).not.toBe(before.sourceVersion);
     expect(sources.readSource(before.sourceRef)).toMatchObject({
       status: 'failed',
       error: { code: 'SOURCE_UNAVAILABLE' },
     });
+
     f.database.prepare({ sql: "DELETE FROM session_messages WHERE message_id = 'u1'" }).run();
+
     expect(sources.readSnapshot('s1')).toMatchObject({
       status: 'failed',
       error: { code: 'SOURCE_UNAVAILABLE' },

@@ -13,6 +13,7 @@ it('links the generated snapshot to task reads and verified saved usage in actua
     storage: new ObservabilityMemoryStorage(),
   });
   const f = productionFixture(trace.observability);
+
   try {
     await f.user('u1');
     f.responses();
@@ -49,6 +50,7 @@ it('links the generated snapshot to task reads and verified saved usage in actua
         }),
     );
     await trace.flush();
+
     const summaries = await trace.queries.listTraces();
     const details = await Promise.all(
       summaries.map(summary => trace.queries.getTrace(summary.traceId)),
@@ -57,11 +59,14 @@ it('links the generated snapshot to task reads and verified saved usage in actua
       detail => detail?.spans.flatMap(span => span.events.map(item => item.event)) ?? [],
     );
     const committed = events.find(event => event.type === 'memory.snapshot.committed');
+
     expect(committed).toMatchObject({
       runId: generated.runId,
       snapshotId: expect.any(String),
     });
+
     if (!committed || committed.type !== 'memory.snapshot.committed') throw new Error();
+
     expect(events).toContainEqual(
       expect.objectContaining({
         type: 'memory.context.read',
@@ -77,6 +82,7 @@ it('links the generated snapshot to task reads and verified saved usage in actua
         status: 'valid',
       }),
     );
+
     const recorder = createTraceRecorder({
       enqueue: () => {
         throw new Error('Disk full');
@@ -109,9 +115,11 @@ it('links the generated snapshot to task reads and verified saved usage in actua
           ],
           completed_at: '2026-10-08T14:01:00Z',
         });
+
         expect(broken.recordUsage().status).toBe('recorded');
       }),
     );
+
     expect(broken.listSources()).toMatchObject({
       sources: [
         {
@@ -120,6 +128,7 @@ it('links the generated snapshot to task reads and verified saved usage in actua
         },
       ],
     });
+
     await broken.shutdown();
   } finally {
     await f.dispose();

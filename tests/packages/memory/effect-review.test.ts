@@ -65,6 +65,7 @@ const reviewed: EffectReview = {
 
 it('retains missing trials and unknown judgments while excluding current-task facts from recall', () => {
   const result = summarizeHumanReview(manifest, [reviewed]);
+
   expect(result.byCondition.memory).toMatchObject({
     plannedTasks: 2,
     taskSuccess: {
@@ -102,6 +103,7 @@ it('counts unsupported used knowledge against precision and does not infer repea
     },
   };
   const result = summarizeHumanReview(manifest, [reviewed, other]);
+
   expect(result.byCondition.memory).toMatchObject({
     taskSuccess: { rate: 1 },
     knowledgeRecall: { rate: 1 },

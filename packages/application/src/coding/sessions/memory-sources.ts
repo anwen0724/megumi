@@ -38,6 +38,7 @@ export function createMemorySources(options: {
   ): MemorySourceSnapshot | undefined {
     const metadata = store.listSourceSessions({ sessionId })[0];
     if (!metadata) return undefined;
+
     const session = metadata.session;
     const entries = buildActiveConversationPath({
       session_id: sessionId,
@@ -51,6 +52,7 @@ export function createMemorySources(options: {
       const message = entry.message_id ? store.findMessageById(entry.message_id) : undefined;
       if (!message || message.session_id !== sessionId)
         throw new Error('Original source message is unavailable.');
+
       return message;
     });
     const attachments = store
@@ -78,6 +80,7 @@ export function createMemorySources(options: {
       sourceVersion,
       contentUpdatedAt: metadata.contentUpdatedAt,
     };
+
     return {
       ...identity,
       sourceVersion,
@@ -133,6 +136,7 @@ export function createMemorySources(options: {
       try {
         if (!sourceRef.startsWith('session:v1:') || sourceRef.length > 4096)
           throw new Error('Invalid reference.');
+
         reference = SourceReference.parse(
           JSON.parse(Buffer.from(sourceRef.slice(11), 'base64url').toString('utf8')),
         );
@@ -145,10 +149,12 @@ export function createMemorySources(options: {
           },
         };
       }
+
       return read(() => {
         if (!store.findSessionById(reference.sessionId)) return { status: 'notFound' };
         if (reference.branchId && !store.findEntryById(reference.branchId))
           return { status: 'notFound' };
+
         const original = snapshot(reference.sessionId, reference);
         if (!original) return { status: 'notFound' };
         if (
@@ -165,6 +171,7 @@ export function createMemorySources(options: {
             },
           };
         }
+
         return {
           status: 'found',
           snapshot: {

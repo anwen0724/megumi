@@ -28,8 +28,11 @@ export const MemorySourceSchema = z
     limit: z.number().int().min(1).max(50).optional(),
   })
   .strict();
+
 export type MemorySearchRequest = z.infer<typeof MemorySearchSchema>;
+
 export type MemoryReadRequest = z.infer<typeof MemoryReadSchema>;
+
 export type MemorySourceRequest = z.infer<typeof MemorySourceSchema>;
 
 const Id = z.string().min(1).max(200);
@@ -141,6 +144,7 @@ export const MemoryChangedSchema = z
     runId: z.string().min(1).optional(),
   })
   .strict();
+
 export type MemoryChanged = z.infer<typeof MemoryChangedSchema>;
 
 export const MemoryRequestSchemas = {
@@ -282,6 +286,9 @@ export const MemoryResponseSchemas = {
       : Exclude<ReturnType<MemoryHost[K]>, MemoryFailure>
   >;
 };
+
 export type MemoryOperation = keyof typeof MemoryRequestSchemas;
+
 export type MemoryRequest<K extends MemoryOperation> = z.infer<(typeof MemoryRequestSchemas)[K]>;
+
 export type MemoryResponse<K extends MemoryOperation> = z.infer<(typeof MemoryResponseSchemas)[K]>;

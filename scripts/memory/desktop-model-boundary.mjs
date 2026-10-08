@@ -10,6 +10,7 @@ export async function startDesktopModelBoundary(logFile) {
     try {
       let text = '';
       for await (const part of request) text += part;
+
       const body = JSON.parse(text);
       const results = body.messages
         .filter(message => message.role === 'tool')
@@ -155,6 +156,7 @@ export async function startDesktopModelBoundary(logFile) {
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
+
   return {
     calls,
     baseUrl: `http://127.0.0.1:${server.address().port}/v1`,

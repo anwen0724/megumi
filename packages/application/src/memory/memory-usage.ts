@@ -38,8 +38,10 @@ export function createMemoryUsage(options: {
       /* Observability is best effort; saved reply receipts remain authoritative. */
     }
   }
+
   return function recordUsage(): MemoryUsageResult {
     let processedReplies = 0;
+
     try {
       for (;;) {
         const state = database
@@ -58,6 +60,7 @@ export function createMemoryUsage(options: {
             status: 'pendingRetry',
             processedReplies,
           };
+
         const replies = sources.listReplies({
           afterCursor: Math.max(state.reply_cursor, state.clear_reply_cursor),
           limit: 200,
@@ -67,6 +70,7 @@ export function createMemoryUsage(options: {
             status: processedReplies ? 'recorded' : 'alreadyProcessed',
             processedReplies,
           };
+
         for (const { message, cursor } of replies) {
           const evidence = message.memory_evidence;
           const text = message.content
@@ -90,6 +94,7 @@ export function createMemoryUsage(options: {
               citation.sourceIds.forEach((id, index) =>
                 used.set(id, citation.sourceVersions[index]),
               );
+
           try {
             database.transaction({
               operation: () => {
@@ -114,6 +119,7 @@ export function createMemoryUsage(options: {
               processedReplies,
             };
           }
+
           database.transaction({
             operation: () => {
               // Recheck on replay and inside the accounting transaction; earlier validation is not eligibility.
@@ -123,6 +129,7 @@ export function createMemoryUsage(options: {
                 >({ sql: 'SELECT reply_cursor, clear_reply_cursor, clear_pending, control_revision FROM memory_state WHERE id = 1' })
                 .get();
               if (!current || current.clear_pending) throw new Error('Memory clearing');
+
               for (const [id] of used) {
                 const pending = database
                   .prepare<{
@@ -130,6 +137,7 @@ export function createMemoryUsage(options: {
                   }>({ sql: 'SELECT status FROM memory_usage_receipts WHERE reply_id = ? AND session_id = ?' })
                   .get([message.message_id, id]);
                 if (pending?.status !== 'pending') continue;
+
                 const eligible = database
                   .prepare<{
                     eligibility: string;
@@ -152,12 +160,14 @@ export function createMemoryUsage(options: {
                       message.completed_at ?? message.created_at,
                       id,
                     ]);
+
                 database
                   .prepare({
                     sql: 'UPDATE memory_usage_receipts SET status = ? WHERE reply_id = ? AND session_id = ?',
                   })
                   .run([count ? 'counted' : 'ignored', message.message_id, id]);
               }
+
               database
                 .prepare({
                   sql: 'UPDATE memory_state SET reply_cursor = max(reply_cursor, ?) WHERE id = 1',

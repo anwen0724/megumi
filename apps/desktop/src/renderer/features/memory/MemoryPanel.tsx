@@ -16,12 +16,15 @@ import { memoryReadingText, sourceMessageText } from './memory-presentation';
 import type { MemoryDocumentTarget } from './memory-panel-navigation';
 import { useSessionStore } from '../../entities/session/store';
 import { useProjectStore } from '../../entities/project/store';
+
 type View = 'content' | 'sources' | 'activity';
+
 type DocumentItem = {
   path: string;
   version: string;
   readOnly: boolean;
 };
+
 type SourcePage = Extract<
   Awaited<ReturnType<Window['megumi']['memory']['readSource']>>,
   {
@@ -44,6 +47,7 @@ export function MemoryPanel({
   const { t } = useTranslation('settings');
   const [view, setView] = useState<View>('content');
   const [status, setStatus] = useState<MemoryStatus>();
+
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [documentCursor, setDocumentCursor] = useState<string>();
   const [sources, setSources] = useState<readonly MemoryManagedSource[]>([]);
@@ -51,6 +55,7 @@ export function MemoryPanel({
   const [selected, setSelected] = useState(initialDocument?.path ?? '');
   const [documentTarget, setDocumentTarget] = useState(initialDocument);
   const previousDocument = useRef(initialDocument);
+
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -61,10 +66,13 @@ export function MemoryPanel({
     if (draftOpen) setPendingNavigation(() => next);
     else next();
   }
+
   useEffect(() => {
     if (initialDocument === previousDocument.current) return;
+
     previousDocument.current = initialDocument;
     if (!initialDocument) return;
+
     navigate(() => {
       setDraftOpen(false);
       setDocumentTarget(initialDocument);
@@ -72,6 +80,7 @@ export function MemoryPanel({
       setView('content');
     });
   }, [initialDocument]);
+
   const [clearOpen, setClearOpen] = useState(false);
   const [source, setSource] = useState<{
     ref: string;
@@ -87,6 +96,7 @@ export function MemoryPanel({
   const queryRevision = useRef(0);
   const load = useCallback(async () => {
     const revision = ++queryRevision.current;
+
     try {
       const [memory, files, origins] = await Promise.all([
         window.megumi.memory.getStatus(request(IPC_CHANNELS.memory.getStatus, {})),
@@ -97,11 +107,13 @@ export function MemoryPanel({
       if (!memory.ok) throw new Error(memory.data.message);
       if (!files.ok) throw new Error(files.data.message);
       if (!origins.ok) throw new Error(origins.data.message);
+
       if (memory.data.status === 'ok') setStatus(memory.data.memory);
       if (files.data.status === 'ok') {
         setDocuments([...files.data.documents]);
         setDocumentCursor(files.data.nextCursor);
       }
+
       if (origins.data.status === 'ok') {
         setSources(origins.data.sources);
         setSourceCursor(origins.data.nextCursor);
@@ -110,6 +122,7 @@ export function MemoryPanel({
       if (queryRevision.current === revision) setError(String(error));
     }
   }, []);
+
   useEffect(() => {
     void load();
     const unsubscribe = window.megumi.memory.onChanged(event => {
@@ -119,6 +132,7 @@ export function MemoryPanel({
         previous.sequence >= event.sequence
       )
         return;
+
       eventCursor.current = event;
       void load();
     });
@@ -127,6 +141,7 @@ export function MemoryPanel({
       unsubscribe();
     };
   }, [load]);
+
   /** Displays domain errors while leaving editor drafts untouched during refresh. */
   async function action(
     operation: () => Promise<{
@@ -137,6 +152,7 @@ export function MemoryPanel({
     setBusy(true);
     setError('');
     setNotice('');
+
     try {
       const result = await operation();
       if (!result.ok) {
@@ -147,6 +163,7 @@ export function MemoryPanel({
             : t('memory.failed'),
         );
       }
+
       await load();
     } catch (error) {
       setError(String(error));
@@ -166,6 +183,7 @@ export function MemoryPanel({
       setDocuments(items => [...items, ...result.data.documents]);
       setDocumentCursor(result.data.nextCursor);
     }
+
     return result;
   }
 
@@ -190,6 +208,7 @@ export function MemoryPanel({
       }),
     );
     if (!result.ok) throw new Error(result.data.message);
+
     setSource(previous => {
       const page = result.data;
       if (
@@ -202,6 +221,7 @@ export function MemoryPanel({
           ref: sourceRef,
           page,
         };
+
       const messages = [...previous.page.messages];
       for (const message of page.messages) {
         const last = messages.at(-1);
@@ -213,6 +233,7 @@ export function MemoryPanel({
           };
         } else messages.push(message);
       }
+
       return {
         ref: sourceRef,
         page: {
@@ -222,6 +243,7 @@ export function MemoryPanel({
       };
     });
   }
+
   const mainDocument =
     documents.find(item => item.path === 'MEMORY.md') ??
     documents.find(item => item.path === 'memory_summary.md');
@@ -237,6 +259,7 @@ export function MemoryPanel({
       setView(next);
     });
   }
+
   const pending = status?.artifactState === 'updating' || status?.artifactState === 'clearing';
   const running =
     status?.recentRuns.filter(run => ['pending', 'running'].includes(run.status)) ?? [];
@@ -325,6 +348,7 @@ export function MemoryPanel({
       </article>
     );
   }
+
   return (
     <section
       role="region"
@@ -514,6 +538,7 @@ export function MemoryPanel({
                         }),
                       );
                       if (result.ok) setClearOpen(false);
+
                       return result;
                     })
                   }
@@ -551,13 +576,16 @@ export function MemoryPanel({
                     onClick={() =>
                       void action(async () => {
                         await useSessionStore.getState().loadSessions();
+
                         const session = useSessionStore
                           .getState()
                           .sessions.find(value => value.id === item.sessionId);
                         if (!session) throw new Error(t('memory.unavailable'));
+
                         useProjectStore.getState().setCurrentProject(session.projectId);
                         useSessionStore.getState().setActiveSession(item.sessionId);
                         onClose();
+
                         return {
                           ok: true,
                           data: {},
@@ -598,6 +626,7 @@ export function MemoryPanel({
                                 : 'memory.excluded',
                             ),
                           );
+
                         return result;
                       })
                     }
@@ -746,6 +775,7 @@ function SourceMessage({
       return <p role="alert">{t('memory.sourceUnreadable')}</p>;
     }
   }
+
   return (
     <article className="space-y-2 rounded border border-[var(--color-border)] p-3 text-sm">
       <p className="font-medium">
@@ -813,6 +843,7 @@ function MemoryDocumentView({
             ? t('memory.versionChanged')
             : result.data.message,
         );
+
       return result.data.status === 'found' ? result.data.document : undefined;
     },
     [path, t],
@@ -830,6 +861,7 @@ function MemoryDocumentView({
   async function edit(refresh = false) {
     setBusy(true);
     setError('');
+
     try {
       let line = 1;
       let character = 0;
@@ -838,12 +870,15 @@ function MemoryDocumentView({
       for (;;) {
         const page = await readPage(line, version, character, 400);
         if (!page) throw new Error(t('memory.empty'));
+
         version = page.version;
         chunks.push(page.content);
         if (!page.truncated) break;
+
         line = page.nextLine;
         character = page.nextCharacter ?? 0;
       }
+
       const content = chunks.join('');
       if (refresh)
         setLatest({
@@ -863,8 +898,10 @@ function MemoryDocumentView({
 
   async function save() {
     if (draft === undefined || !draftVersion) return;
+
     setBusy(true);
     setError('');
+
     try {
       const result = await window.megumi.memory.updateDocument(
         request(IPC_CHANNELS.memory.updateDocument, {
@@ -880,6 +917,7 @@ function MemoryDocumentView({
         );
         return;
       }
+
       setDraft(undefined);
       setLatest(undefined);
       await load(1, result.data.status === 'saved' ? result.data.document.version : undefined);
@@ -889,11 +927,13 @@ function MemoryDocumentView({
       setBusy(false);
     }
   }
+
   const sourceRefs = [
     ...new Set(
       [...(document?.content.matchAll(/sourceRef=([^\]\s;]+)/g) ?? [])].map(match => match[1]),
     ),
   ];
+
   return (
     <section className="space-y-3">
       {error && (

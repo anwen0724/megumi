@@ -17,18 +17,23 @@ async function invoke(task: TaskMemory, name: string, arguments_: Record<string,
       onOutput: () => {},
     });
   const normalized = normalizeRawToolContent(raw);
+
   expect(normalized.truncated).toBe(false);
+
   return JSON.parse(normalized.content);
 }
 
 it('pages long Unicode reads before delivery and records only delivered complete lines', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.responses();
     await f.generate();
+
     const old = f.files.read('MEMORY.md')!;
     const content = old.content + '中文知识😀'.repeat(2200) + '\nLATE_FACT\n';
+
     expect(
       f.memory.updateDocument({
         requestId: 'long',
@@ -37,7 +42,9 @@ it('pages long Unicode reads before delivery and records only delivered complete
         content,
       }).status,
     ).toBe('saved');
+
     const summary = f.files.read('memory_summary.md')!;
+
     expect(
       f.memory.updateDocument({
         requestId: 'empty-summary',
@@ -46,6 +53,7 @@ it('pages long Unicode reads before delivery and records only delivered complete
         content: EMPTY_SUMMARY,
       }).status,
     ).toBe('saved');
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -53,10 +61,14 @@ it('pages long Unicode reads before delivery and records only delivered complete
     });
     task.getPromptMemory('execution');
     const first = await invoke(task, 'memory_read', { path: 'MEMORY.md' });
+
     expect(first.document.truncated).toBe(true);
     expect(task.evidence().reads.some(read => read.endLine >= first.document.nextLine)).toBe(false);
+
     const lateLine = content.split('\n').indexOf('LATE_FACT') + 1;
+
     expect(task.evidence().reads.some(read => read.endLine >= lateLine)).toBe(false);
+
     let restored = first.document.content;
     let page = first;
     for (let count = 0; page.document.truncated && count < 20; count++) {
@@ -68,6 +80,7 @@ it('pages long Unicode reads before delivery and records only delivered complete
       });
       restored += page.document.content;
     }
+
     expect(page.document.truncated).toBe(false);
     expect(restored).toBe(content);
     expect(task.evidence().reads.some(read => read.endLine >= lateLine)).toBe(true);
@@ -78,6 +91,7 @@ it('pages long Unicode reads before delivery and records only delivered complete
 
 it('pages search metadata without authorizing excluded hits and returns each match once', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1');
     f.store.insertSession({
@@ -107,10 +121,12 @@ it('pages search metadata without authorizing excluded hits and returns each mat
     });
     f.responses();
     await f.generate();
+
     const source1 = f.sources.readSnapshot('s1');
     const source2 = f.sources.readSnapshot('s2');
     if (source1.status !== 'found' || source2.status !== 'found')
       throw new Error('Missing fixture source');
+
     const rollout = f.files
       .paths()
       .find(
@@ -133,6 +149,7 @@ it('pages search metadata without authorizing excluded hits and returns each mat
         return `\n## Task: Example ${index}\n### rollout_summary_files\n${`- ${index < 6 ? rollout : rollout2} ${marker}\n`.repeat(3)}### keywords\n- example\n### learnings\nneedle-${index} ${'中文事实'.repeat(180)}\n`;
       }).join('');
     const old = f.files.read('MEMORY.md')!;
+
     expect(
       f.memory.updateDocument({
         requestId: 'search-data',
@@ -141,7 +158,9 @@ it('pages search metadata without authorizing excluded hits and returns each mat
         content,
       }).status,
     ).toBe('saved');
+
     const summary = f.files.read('memory_summary.md')!;
+
     expect(
       f.memory.updateDocument({
         requestId: 'empty-summary',
@@ -150,6 +169,7 @@ it('pages search metadata without authorizing excluded hits and returns each mat
         content: EMPTY_SUMMARY,
       }).status,
     ).toBe('saved');
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -160,6 +180,7 @@ it('pages search metadata without authorizing excluded hits and returns each mat
       terms: ['needle'],
       limit: 50,
     });
+
     expect(page.status).toBe('ok');
     expect(page.nextCursor).toBeTypeOf('string');
     expect(task.evidence().reads.some(read => read.sourceIds.includes('s2'))).toBe(false);
@@ -169,19 +190,24 @@ it('pages search metadata without authorizing excluded hits and returns each mat
       status: 'failed',
       error: { code: 'SOURCE_UNAVAILABLE' },
     });
+
     const lines: number[] = [];
     for (let count = 0; count < 20; count++) {
       for (const hit of page.hits) {
         expect(hit.sourceRefs).toHaveLength(1);
+
         lines.push(hit.line);
       }
+
       if (!page.nextCursor) break;
+
       page = await invoke(task, 'memory_search', {
         terms: ['needle'],
         limit: 50,
         cursor: page.nextCursor,
       });
     }
+
     expect(lines).toEqual(
       content.split('\n').flatMap((line, index) => (line.startsWith('needle-') ? [index + 1] : [])),
     );
@@ -193,13 +219,16 @@ it('pages search metadata without authorizing excluded hits and returns each mat
 
 it('delivers original Unicode evidence as complete JSON pages without losing message text', async () => {
   const f = productionFixture();
+
   try {
     const original = '原始消息😀'.repeat(2300) + 'SOURCE_END';
     await f.user('u1', original);
     f.responses();
     await f.generate();
+
     const source = f.sources.readSnapshot('s1');
     if (source.status !== 'found') throw new Error('Missing fixture source');
+
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
       workspaceDirectory: f.root,
@@ -207,24 +236,30 @@ it('delivers original Unicode evidence as complete JSON pages without losing mes
     });
     task.getPromptMemory('execution');
     await invoke(task, 'memory_read', { path: 'MEMORY.md' });
+
     let page = await invoke(task, 'memory_source', {
       sourceRef: source.snapshot.sourceRef,
       limit: 1,
     });
+
     expect(page.status).toBe('found');
     expect(page.nextCursor).toBeTypeOf('string');
+
     let restored = '';
     for (let count = 0; count < 20; count++) {
       expect(page.messages).toHaveLength(1);
       expect(page.messages[0].characterOffset).toBe(restored.length);
+
       restored += page.messages[0].text;
       if (!page.nextCursor) break;
+
       page = await invoke(task, 'memory_source', {
         sourceRef: source.snapshot.sourceRef,
         limit: 1,
         cursor: page.nextCursor,
       });
     }
+
     expect(restored).toBe(
       JSON.stringify([
         {
@@ -240,11 +275,14 @@ it('delivers original Unicode evidence as complete JSON pages without losing mes
 
 it('associates a received rollout body page with its host source identity without authorizing unread lines', async () => {
   const f = productionFixture();
+
   try {
     await f.user('u1', 'Original rollout evidence');
     f.responses();
     await f.generate();
+
     const summary = f.files.read('memory_summary.md')!;
+
     expect(
       f.memory.updateDocument({
         requestId: 'empty-summary',
@@ -253,6 +291,7 @@ it('associates a received rollout body page with its host source identity withou
         content: EMPTY_SUMMARY,
       }).status,
     ).toBe('saved');
+
     const rollout = f.files.paths().find(file => file.startsWith('rollout_summaries/'))!;
     const task = f.memory.createTaskMemory({
       workspaceId: 'w1',
@@ -265,6 +304,7 @@ it('associates a received rollout body page with its host source identity withou
       startLine: 3,
       lineCount: 1,
     });
+
     expect(page.document.content).toBe('User prefers TypeScript.');
     expect(page.references).toEqual([
       {
@@ -294,7 +334,9 @@ it('associates a received rollout body page with its host source identity withou
         task.evidence(),
       ).status,
     ).toBe('invalid');
+
     const source = await invoke(task, 'memory_source', { sourceRef: page.sourceRefs[0] });
+
     expect(source.status).toBe('found');
     expect(source.messages[0].text).toContain('Original rollout evidence');
   } finally {

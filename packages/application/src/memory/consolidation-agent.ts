@@ -13,6 +13,7 @@ export interface ConsolidationModel {
   readonly model: Model<Api>;
   readonly ai: Pick<Models, 'streamSimple' | 'completeSimple'>;
 }
+
 const FileInput = z
   .object({
     action: z.enum(['list', 'read', 'search', 'write', 'replace', 'delete']),
@@ -88,6 +89,7 @@ export async function runConsolidationAgent(input: {
         if (request.action === 'list') result = input.files.paths();
         else if (request.action === 'search') {
           if (!request.query) throw new Error('INVALID_ARGUMENT');
+
           const hits: {
             path: string;
             line: number;
@@ -99,6 +101,7 @@ export async function runConsolidationAgent(input: {
               input.guard();
               if (hits.length >= 20 || chars >= 16000) break;
               if (!text.toLowerCase().includes(request.query.toLowerCase())) continue;
+
               const excerpt = text.slice(0, Math.min(1000, 16000 - chars));
               hits.push({
                 path: file,
@@ -107,8 +110,10 @@ export async function runConsolidationAgent(input: {
               });
               chars += excerpt.length;
             }
+
             if (hits.length >= 20 || chars >= 16000) break;
           }
+
           result = hits;
         } else {
           if (!request.path) throw new Error('INVALID_ARGUMENT');
@@ -134,13 +139,16 @@ export async function runConsolidationAgent(input: {
                 isError: true,
               };
             }
+
             let content = request.content;
             if (request.action === 'replace') {
               const before = input.files.read(request.path);
               if (!before || !request.oldText || before.content.split(request.oldText).length !== 2)
                 throw new Error('VERSION_CONFLICT');
+
               content = before.content.replace(request.oldText, request.content);
             }
+
             const document = input.files.writeFinal(
               {
                 path: request.path,
@@ -155,6 +163,7 @@ export async function runConsolidationAgent(input: {
             };
           }
         }
+
         return {
           outputKind: 'json',
           content: result,
@@ -326,13 +335,16 @@ Each final file is at most 1 MiB. Inputs cannot be edited. Every write needs exp
             (message, index) => index > 0 && message.role === 'assistant',
           );
           if (next < 0) break;
+
           messages.splice(0, next);
           keepFrom += next;
         }
+
         if (size() > request.budget.inputTokens) {
           inputBudgetExceeded = true;
           throw new Error('BUDGET_EXCEEDED');
         }
+
         return {
           systemPrompt: prompt,
           messages,
@@ -354,8 +366,10 @@ Each final file is at most 1 MiB. Inputs cannot be edited. Every write needs exp
           ? result.error.code
           : 'OUTPUT_INVALID',
     );
+
   input.guard();
   const replies = result.runMessages.filter(message => message.role === 'assistant');
+
   return {
     versions,
     modelCalls: replies.length,

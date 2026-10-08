@@ -10,6 +10,7 @@ it('reads the tail and finds a match past a long input line without skipping evi
   const f = productionFixture();
   let tail = '';
   let search = '';
+
   try {
     f.files.writeInput('raw_memories.md', ['x'.repeat(17000) + 'TAIL_EVIDENCE\n'], () => {});
     f.provider.setResponses([
@@ -60,6 +61,7 @@ it('reads the tail and finds a match past a long input line without skipping evi
       signal: new AbortController().signal,
       guard: () => {},
     });
+
     expect(tail).toContain('TAIL_EVIDENCE');
     expect(search).toContain('raw_memories.md');
   } finally {

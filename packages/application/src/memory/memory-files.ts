@@ -48,6 +48,7 @@ export interface MemoryFiles {
   removeInput(path: string, guard: () => void): void;
   discardTemporary(guard: () => void): void;
 }
+
 export interface MemoryDocumentSlice {
   readonly path: string;
   readonly version: string;
@@ -59,6 +60,7 @@ export interface MemoryDocumentSlice {
   readonly firstLineComplete?: boolean;
   readonly nextCharacter?: number;
 }
+
 export interface MemoryDocument {
   readonly path: string;
   readonly version: string;
@@ -92,18 +94,23 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
       !/^skills\/[a-zA-Z0-9_-]+\/.+$/.test(relative)
     )
       throw new Error('PATH_DENIED');
+
     const target = path.resolve(root, relative);
     if (!target.startsWith(root + path.sep)) throw new Error('PATH_DENIED');
+
     for (let ancestor = target; ; ancestor = path.dirname(ancestor)) {
       try {
         if (lstatSync(ancestor).isSymbolicLink()) throw new Error('PATH_DENIED');
       } catch (error) {
         if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
       }
+
       if (ancestor === path.dirname(ancestor)) break;
     }
+
     return target;
   }
+
   const readOnly = (relative: string) =>
     relative === 'raw_memories.md' || relative.startsWith('rollout_summaries/');
 
@@ -111,6 +118,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
     try {
       const value = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
       if (value.includes('\0')) throw new Error();
+
       return value;
     } catch {
       throw new Error('OUTPUT_INVALID');
@@ -120,8 +128,10 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
   function read(relative: string): MemoryDocument | undefined {
     const target = checked(relative);
     if (!existsSync(target)) return undefined;
+
     const bytes = readFileSync(target);
     if (relative !== 'raw_memories.md' && bytes.length > 1048576) throw new Error('OUTPUT_INVALID');
+
     return {
       path: relative,
       content: text(bytes),
@@ -140,27 +150,34 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
     guard();
     if (expectedVersion !== undefined && (read(relative)?.version ?? 'absent') !== expectedVersion)
       throw new Error('VERSION_CONFLICT');
+
     mkdirSync(path.dirname(target), { recursive: true });
     checked(relative);
     const temporary = `${target}.${randomUUID()}.tmp`;
     const fd = openSync(temporary, 'wx');
     let size = 0;
+
     try {
       for (const chunk of chunks) {
         const bytes = Buffer.from(chunk, 'utf8');
         if (text(bytes) !== chunk) throw new Error('OUTPUT_INVALID');
+
         size += bytes.length;
         if (relative !== 'raw_memories.md' && size > 1048576) throw new Error('OUTPUT_INVALID');
+
         let offset = 0;
         while (offset < bytes.length) offset += writeSync(fd, bytes, offset);
       }
+
       fsyncSync(fd);
     } catch (error) {
       closeSync(fd);
       unlinkSync(temporary);
       throw error;
     }
+
     closeSync(fd);
+
     try {
       checked(relative);
       guard();
@@ -169,6 +186,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         (read(relative)?.version ?? 'absent') !== expectedVersion
       )
         throw new Error('VERSION_CONFLICT');
+
       renameSync(temporary, target);
     } finally {
       if (existsSync(temporary)) unlinkSync(temporary);
@@ -178,6 +196,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
   function paths(includeTemporary = false): string[] {
     checked('MEMORY.md');
     if (!existsSync(root)) return [];
+
     const found: string[] = [];
 
     function walk(directory: string) {
@@ -192,6 +211,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
             !relative.startsWith('skills/')
           )
             throw new Error('PATH_DENIED');
+
           walk(target);
         } else {
           const temporary = /^(.*)\.[0-9a-f-]{36}\.tmp$/.exec(relative);
@@ -200,7 +220,9 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         }
       }
     }
+
     walk(root);
+
     return found.sort();
   }
 
@@ -208,11 +230,13 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
     for (const relative of paths(true)) {
       const temporary = /^(.*)\.[0-9a-f-]{36}\.tmp$/.exec(relative);
       if (!temporary) continue;
+
       checked(temporary[1]);
       guard();
       unlinkSync(path.resolve(root, relative));
     }
   }
+
   return {
     list: () =>
       paths()
@@ -226,13 +250,16 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
       let pending = '';
       let line = 1;
       let bytes = 0;
+
       try {
         let count: number;
         while ((count = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
           bytes += count;
           if (relative !== 'raw_memories.md' && bytes > 1048576) throw new Error('OUTPUT_INVALID');
+
           pending += decoder.decode(buffer.subarray(0, count), { stream: true });
           if (pending.includes('\0')) throw new Error('OUTPUT_INVALID');
+
           let newline: number;
           while ((newline = pending.indexOf('\n')) >= 0) {
             yield {
@@ -242,6 +269,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
             pending = pending.slice(newline + 1);
           }
         }
+
         pending += decoder.decode();
         if (pending)
           yield {
@@ -264,8 +292,10 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         startCharacter < 0
       )
         throw new Error('INVALID_ARGUMENT');
+
       const target = checked(relative);
       if (!existsSync(target)) return undefined;
+
       const fd = openSync(target, 'r');
       const hash = createHash('sha256');
       const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -280,6 +310,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
 
       function collect(value: string) {
         if (value.includes('\0')) throw new Error('OUTPUT_INVALID');
+
         for (const char of value) {
           if (
             line === startLine &&
@@ -307,21 +338,25 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
           } else column += char.length;
         }
       }
+
       try {
         let count: number;
         while ((count = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
           hash.update(buffer.subarray(0, count));
           collect(decoder.decode(buffer.subarray(0, count), { stream: true }));
         }
+
         collect(decoder.decode());
       } finally {
         closeSync(fd);
       }
+
       if (line === startLine && column < startCharacter) throw new Error('INVALID_ARGUMENT');
       if (!truncated) {
         nextLine = Math.max(startLine, line + (column ? 1 : 0));
         nextCharacter = 0;
       }
+
       return {
         path: relative,
         version: hash.digest('hex'),
@@ -338,17 +373,21 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
     writeFinal(input, guard) {
       checked(input.path);
       if (readOnly(input.path)) throw new Error('PATH_DENIED');
+
       publish(input.path, [input.content], guard, input.expectedVersion);
+
       return read(input.path)!;
     },
     writeInput(relative, chunks, guard) {
       checked(relative);
       if (!readOnly(relative)) throw new Error('PATH_DENIED');
+
       publish(relative, chunks, guard);
     },
     deleteFinal(relative, guard) {
       const target = checked(relative);
       if (readOnly(relative)) throw new Error('PATH_DENIED');
+
       guard();
       if (existsSync(target)) unlinkSync(target);
     },
@@ -359,11 +398,13 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         guard();
         unlinkSync(target);
       }
+
       discardTemporary(guard);
     },
     removeInput(relative, guard) {
       const target = checked(relative);
       if (!readOnly(relative)) throw new Error('PATH_DENIED');
+
       guard();
       if (existsSync(target)) unlinkSync(target);
     },
@@ -373,6 +414,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         const root = lstatSync(rootPath);
         if (!root.isDirectory() || root.isSymbolicLink())
           throw new Error('Invalid memory directory.');
+
         return paths().length > 0;
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;

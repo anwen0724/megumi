@@ -15,6 +15,7 @@ export interface ConsolidationSource {
   readonly coverage: unknown;
   readonly artifactPath: string;
 }
+
 export interface ConsolidationSelection {
   readonly targetRevision: number;
   readonly selected: readonly ConsolidationSource[];
@@ -23,6 +24,7 @@ export interface ConsolidationSelection {
   readonly removed: readonly ConsolidationSource[];
   readonly retained: readonly ConsolidationSource[];
 }
+
 type SourceRow = {
   session_id: string;
   source_version: string;
@@ -95,12 +97,15 @@ export function selectConsolidationSources(input: {
           throw new Error('STORAGE_FAILED');
         if (current.status !== 'found' || current.snapshot.sourceVersion !== row.source_version)
           continue;
+
         selected.push(material(row));
         if (selected.length >= input.configuration.maxConsolidationSources) break;
       }
+
       const previous = readSuccessfulSources(input.database);
       const same = (a: ConsolidationSource, b: ConsolidationSource) =>
         a.sessionId === b.sessionId && a.sourceVersion === b.sourceVersion;
+
       return {
         targetRevision: state.dirty_revision,
         selected,

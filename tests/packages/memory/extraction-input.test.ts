@@ -6,6 +6,7 @@ import { createSourceFixture } from './source-fixture';
 
 it('preserves user evidence while excluding model-only injections and redacting known secrets', async () => {
   const f = createSourceFixture();
+
   try {
     await f.history.saveUserMessage({
       session_id: 's1',
@@ -30,6 +31,7 @@ it('preserves user evidence while excluding model-only injections and redacting 
       isSessionRunning: () => false,
     }).readSnapshot('s1');
     if (result.status !== 'found') throw new Error('Source unavailable');
+
     const built = buildExtractionInput({
       source: result.snapshot,
       workspaceDirectory: 'C:/test',
@@ -37,6 +39,7 @@ it('preserves user evidence while excluding model-only injections and redacting 
       maxOutputTokens: 4096,
       secrets: ['synthetic-secret'],
     });
+
     expect(built.prompt).toContain('Use AGENTS.md.');
     expect(built.prompt).toContain('[REDACTED]');
     expect(built.prompt).not.toContain('synthetic-secret');
@@ -53,6 +56,7 @@ it('preserves user evidence while excluding model-only injections and redacting 
 
 it('removes whole middle tool exchanges and reports the omitted message IDs under the input budget', async () => {
   const f = createSourceFixture();
+
   try {
     await f.user('u1', 'Learn TypeScript generics');
     f.history.saveModelResponse({
@@ -94,6 +98,7 @@ it('removes whole middle tool exchanges and reports the omitted message IDs unde
       isSessionRunning: () => false,
     }).readSnapshot('s1');
     if (source.status !== 'found') throw new Error('Source unavailable');
+
     const built = buildExtractionInput({
       source: source.snapshot,
       workspaceDirectory: 'C:/test',
@@ -101,6 +106,7 @@ it('removes whole middle tool exchanges and reports the omitted message IDs unde
       maxOutputTokens: 512,
       secrets: [],
     });
+
     expect(built.coverage).toMatchObject({
       includedMessageIds: ['u1', 'a1'],
       omittedMessageIds: ['call', 'result'],
@@ -110,6 +116,7 @@ it('removes whole middle tool exchanges and reports the omitted message IDs unde
       built.coverage.inputBudgetTokens,
     );
     expect(built.prompt).toContain('omittedMessageIds');
+
     const full = buildExtractionInput({
       source: source.snapshot,
       workspaceDirectory: 'C:/test',
@@ -117,6 +124,7 @@ it('removes whole middle tool exchanges and reports the omitted message IDs unde
       maxOutputTokens: 8192,
       secrets: [],
     });
+
     expect(full.prompt).toContain('tool1');
     expect(full.prompt).not.toContain('not-for-model');
     expect(() =>

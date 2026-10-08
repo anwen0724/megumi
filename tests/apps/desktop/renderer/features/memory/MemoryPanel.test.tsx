@@ -86,8 +86,10 @@ function fixture() {
               message: 'changed',
             },
           });
+
         content = payload.content;
         version = 'v3';
+
         return ok({
           status: 'saved',
           document: {
@@ -116,6 +118,7 @@ function fixture() {
     configurable: true,
     value: { memory: api },
   });
+
   return {
     api,
     changeFile: () => {
@@ -153,6 +156,7 @@ describe('MemoryPanel', () => {
         ],
       },
     });
+
     const text = JSON.stringify([
       {
         type: 'thinking',
@@ -191,6 +195,7 @@ describe('MemoryPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Manage sources' }));
     fireEvent.click(await screen.findByRole('button', { name: 'View evidence' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+
     expect(await screen.findByText('Use pnpm.')).toBeInTheDocument();
     expect(screen.getByText('Assistant')).toBeInTheDocument();
     expect(screen.queryByText(/Internal reasoning/)).not.toBeInTheDocument();
@@ -233,11 +238,14 @@ describe('MemoryPanel', () => {
       },
     });
     render(<MemoryPanel onClose={vi.fn()} />);
+
     expect(await screen.findByText('Use pnpm for this project.')).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
     expect(screen.queryByText('MEMORY.md')).not.toBeInTheDocument();
     expect(screen.queryByText(/sourceId=/)).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Edit memory' }));
+
     expect(await screen.findByRole('textbox', { name: 'Draft' })).toHaveValue(content);
   });
   it('separates a historical failure from current status and does not label zero jobs as zero sources', async () => {
@@ -276,8 +284,11 @@ describe('MemoryPanel', () => {
     });
     render(<MemoryPanel onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Run details' }));
+
     expect(await screen.findByText('No task is running')).toBeInTheDocument();
+
     const history = screen.getByText('Recent runs').closest('details');
+
     expect(history).not.toHaveAttribute('open');
     expect(screen.queryByText(/\/ 0 sources/)).not.toBeInTheDocument();
   });
@@ -303,6 +314,7 @@ describe('MemoryPanel', () => {
     });
     render(<MemoryPanel onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Edit memory' }));
+
     expect(await screen.findByRole('textbox', { name: 'Draft' })).toHaveValue(
       'First line\nSecond line\nThird line\n',
     );
@@ -337,6 +349,7 @@ describe('MemoryPanel', () => {
       });
       render(<MemoryPanel onClose={vi.fn()} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Edit memory' }));
+
       expect(await screen.findByRole('textbox', { name: 'Draft' })).toHaveValue(content);
     },
   );
@@ -345,6 +358,7 @@ describe('MemoryPanel', () => {
     const f = fixture();
     render(<MemoryPanel onClose={vi.fn()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Edit memory' }));
+
     const draft = await screen.findByRole('textbox', { name: 'Draft' });
     fireEvent.change(draft, { target: { value: '# User Profile\nMy corrected memory\n' } });
     f.changeFile();
@@ -354,11 +368,15 @@ describe('MemoryPanel', () => {
         exact: true,
       }),
     );
+
     expect(await screen.findByRole('alert')).toHaveTextContent('Your draft is preserved');
     expect(draft).toHaveValue('# User Profile\nMy corrected memory\n');
+
     fireEvent.click(screen.getByRole('button', { name: 'Read latest content' }));
+
     expect(await screen.findByText(/External change/)).toBeInTheDocument();
     expect(draft).toHaveValue('# User Profile\nMy corrected memory\n');
+
     fireEvent.click(screen.getByRole('button', { name: 'Keep merged draft with latest version' }));
     fireEvent.click(
       screen.getByRole('button', {
@@ -369,6 +387,7 @@ describe('MemoryPanel', () => {
     await waitFor(() =>
       expect(screen.queryByRole('textbox', { name: 'Draft' })).not.toBeInTheDocument(),
     );
+
     expect(await screen.findByText(/My corrected memory/)).toBeInTheDocument();
   });
 
@@ -376,11 +395,15 @@ describe('MemoryPanel', () => {
     const f = fixture();
     render(<MemoryPanel onClose={vi.fn()} />);
     await screen.findByRole('button', { name: 'Edit memory' });
+
     expect(f.api.startGeneration).not.toHaveBeenCalled();
+
     fireEvent.click(screen.getByRole('button', { name: 'Run details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear and disable automatic memory' }));
+
     expect(f.api.clearMemory).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Keep original sessions');
+
     fireEvent.click(screen.getByRole('button', { name: 'Confirm clear and disable' }));
     await waitFor(() => expect(f.api.clearMemory).toHaveBeenCalledTimes(1));
   });
@@ -422,7 +445,9 @@ describe('MemoryPanel', () => {
     render(<MemoryPanel onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Run details' }));
     const clear = await screen.findByRole('button', { name: 'Clear and disable automatic memory' });
+
     expect(clear).not.toBeDisabled();
+
     fireEvent.click(clear);
     fireEvent.click(screen.getByRole('button', { name: 'Confirm clear and disable' }));
     await waitFor(() => expect(f.api.clearMemory).toHaveBeenCalledTimes(1));
@@ -433,13 +458,17 @@ describe('MemoryPanel', () => {
     render(<MemoryPanel onClose={vi.fn()} />);
     await screen.findByRole('button', { name: 'Edit memory' });
     await act(async () => f.changed(3));
+
     const reads = f.api.getStatus.mock.calls.length;
     await act(async () => {
       f.changed(3);
       f.changed(2);
     });
+
     expect(f.api.getStatus).toHaveBeenCalledTimes(reads);
+
     await act(async () => f.changed(4));
+
     expect(f.api.getStatus).toHaveBeenCalledTimes(reads + 1);
   });
 });

@@ -20,6 +20,7 @@ const repository = process.cwd();
 const fixtureArg = process.argv.indexOf('--fixture');
 if (!process.argv.includes('--run') || fixtureArg < 0)
   throw new Error('Use --run --fixture <new synthetic fixture.json>.');
+
 const fixture = JSON.parse(readFileSync(process.argv[fixtureArg + 1], 'utf8'));
 const preparedRoot = path.resolve(fixture.root);
 if (
@@ -28,13 +29,16 @@ if (
   path.resolve(fixture.home) !== path.join(preparedRoot, 'home')
 )
   throw new Error('Only the prepared isolated fixture is accepted.');
+
 const scenarioIndex = process.argv.indexOf('--scenario');
 const scenario = scenarioIndex < 0 ? 'main' : process.argv[scenarioIndex + 1];
 if (!['main', 'partial', 'interrupted'].includes(scenario))
   throw new Error('Unknown verification scenario.');
+
 const sourceHome = scenario === 'main' ? fixture.home : fixture.scenarioHomes[scenario];
 if (!path.resolve(sourceHome).startsWith(preparedRoot + path.sep))
   throw new Error('Scenario Home must remain in the fixture.');
+
 const root = mkdtempSync(path.join(preparedRoot, `run-${scenario}-`));
 cpSync(sourceHome, path.join(root, 'home'), { recursive: true });
 fixture.home = path.join(root, 'home');
@@ -59,6 +63,7 @@ writeFileSync(
 mkdirSync(path.join(root, 'chromium'));
 const main = path.resolve(process.env.MEGUMI_BUILD_OUTPUT ?? '.vite', 'build/index.js');
 if (!existsSync(main)) throw new Error('Build the current desktop first.');
+
 const debugPort = Number(process.env.MEMORY_DESKTOP_DEBUG_PORT ?? 9865);
 const faultFile = path.join(root, 'clear-fault.txt');
 const report = {
@@ -124,6 +129,7 @@ require(${JSON.stringify(main)});
     run,
     root,
   });
+
   const log = createWriteStream(path.join(root, `electron-${run}.log`));
   child.stdout.pipe(log, { end: false });
   child.stderr.pipe(log, { end: false });
@@ -132,6 +138,7 @@ require(${JSON.stringify(main)});
   let target;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error(`Electron exited: ${child.exitCode}`);
+
     try {
       const targets = await fetch(`http://127.0.0.1:${debugPort}/json/list`, {
         signal: AbortSignal.timeout(1000),
@@ -145,15 +152,20 @@ require(${JSON.stringify(main)});
     } catch {
       /* Debug transport is unavailable before Electron opens its first window. */
     }
+
     if (target) break;
+
     await delay(200);
   }
+
   if (!target) throw new Error('The real Electron renderer did not start.');
+
   socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
     socket.onopen = resolve;
     socket.onerror = reject;
   });
+
   let id = 0;
   const pending = new Map();
   socket.onmessage = message => {
@@ -225,6 +237,7 @@ async function evaluate(expression) {
   });
   if (result.exceptionDetails)
     throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text);
+
   return result.result.value;
 }
 
@@ -232,8 +245,10 @@ async function until(expression) {
   const end = Date.now() + 10000;
   while (Date.now() < end) {
     if (await evaluate(expression)) return;
+
     await delay(100);
   }
+
   throw new Error(`DOM/state condition was not reached: ${expression}`);
 }
 
@@ -249,11 +264,14 @@ async function screenshot(name) {
     writeFileSync(file, await evaluate('document.body.innerText'));
     report.domSnapshots ??= [];
     report.domSnapshots.push(file);
+
     return;
   }
+
   await evaluate(
     `Promise.all(document.getAnimations().filter(animation=>animation.effect?.getTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>undefined))).then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))`,
   );
+
   const captured = await call('Page.captureScreenshot', {
     format: 'png',
     captureBeyondViewport: false,
@@ -268,6 +286,7 @@ async function memory(method, payload = {}) {
     `window.memoryRequest(${JSON.stringify(method)},${JSON.stringify(payload)})`,
   );
   if (!result.ok) throw new Error(`Memory ${method}: ${result.data.code}`);
+
   return result.data;
 }
 
@@ -279,6 +298,7 @@ async function openMemory() {
     ))
   )
     await click('Open project sidebar');
+
   await until(
     `document.querySelector('[data-testid="right-sidebar"]')?.getBoundingClientRect().width >= 280`,
   );
@@ -349,6 +369,7 @@ async function demonstrateEditedReuse() {
   await until(
     `Promise.all([window.memoryRequest('getStatus'),window.memoryRequest('readDocument',{path:'memory_summary.md'})]).then(([status,read])=>status.ok && status.data.memory.artifactState==='ready' && read.ok && read.data.document?.content.includes('desktop-reviewed'))`,
   );
+
   const summary = await memory('readDocument', { path: 'memory_summary.md' });
   assert.ok(summary.document.content.includes('desktop-reviewed'));
   assert.ok(
@@ -362,6 +383,7 @@ async function demonstrateEditedReuse() {
     'Edited knowledge is consolidated through the actual desktop lifecycle and reflected in the summary',
   );
   await closeMemory();
+
   const priorUsage = (await memory('listSources')).sources.find(
     source => source.sessionId === fixture.sourceId,
   ).usageCount;
@@ -384,6 +406,7 @@ async function demonstrateEditedReuse() {
   await until(
     `${readSession}.then(result=>result.ok && JSON.stringify(result.data).includes('Verified edited memory'))`,
   );
+
   const persisted = await evaluate(readSession);
   writeFileSync(path.join(root, 'edited-task.json'), JSON.stringify(persisted, null, 2));
   const doc = await memory('readDocument', { path: 'MEMORY.md' });
@@ -418,6 +441,7 @@ async function demonstrateEditedReuse() {
   await evaluate(
     `{const project=document.querySelector('[data-testid="project-row-icon-w1"]').closest('button');if(project.getAttribute('aria-expanded')!=='true')project.click();}true`,
   );
+
   const sessionButton = `Array.from(document.querySelectorAll('button')).find(node=>node.getAttribute('aria-label')?.startsWith(${JSON.stringify('打开会话 ' + sent.data.session.title)}))`;
   await until(`!!(${sessionButton})`);
   await evaluate(`(${sessionButton}).click();true`);
@@ -492,6 +516,7 @@ try {
       `document.querySelector('[role="region"][aria-label="记忆"]').textContent.includes('TypeScript')`,
     );
     await screenshot('01-ready-summary');
+
     const originalWidth = await evaluate(
       `document.querySelector('[data-testid="right-sidebar"]').getBoundingClientRect().width`,
     );
@@ -501,6 +526,7 @@ try {
     await until(
       `document.querySelector('[data-testid="right-sidebar"]').getBoundingClientRect().width > ${originalWidth}`,
     );
+
     const resized = await evaluate(
       `{const sidebar=document.querySelector('[data-testid="right-sidebar"]'); const content=sidebar.querySelector('[data-testid="right-sidebar-content"]'); ({width:sidebar.getBoundingClientRect().width,contentWidth:content.clientWidth,contentScrollWidth:content.scrollWidth,bodyWidth:document.body.clientWidth,bodyScrollWidth:document.body.scrollWidth})}`,
     );
@@ -515,6 +541,7 @@ try {
     await until(
       `Math.round(document.querySelector('[data-testid="right-sidebar"]').getBoundingClientRect().width) === 280`,
     );
+
     const narrow = await evaluate(
       `{const content=document.querySelector('[data-testid="right-sidebar-content"]'); ({contentWidth:content.clientWidth,contentScrollWidth:content.scrollWidth,bodyWidth:document.body.clientWidth,bodyScrollWidth:document.body.scrollWidth})}`,
     );
@@ -532,10 +559,12 @@ try {
     await click('返回记忆', 'header button');
     await click('编辑记忆');
     await until(`!!document.querySelector('textarea[aria-label="编辑草稿"]')`);
+
     const original = await memory('readDocument', { path: 'MEMORY.md' });
     await evaluate(
       `{ const editor=document.querySelector('textarea[aria-label="编辑草稿"]'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(editor, editor.value.replace('Use TypeScript','Use desktop-reviewed TypeScript')); editor.dispatchEvent(new Event('input',{bubbles:true})); } true`,
     );
+
     const concurrent = await memory('updateDocument', {
       requestId: 'desktop-concurrent',
       path: 'MEMORY.md',
@@ -565,6 +594,7 @@ try {
     );
     checked('Explicit merged edit saves with the current version');
     if (lifecycle) await demonstrateEditedReuse();
+
     await click('管理来源');
     await clickOriginalSource('排除出记忆');
     await until(
@@ -630,6 +660,7 @@ try {
     await until(
       `window.memoryRequest('getStatus').then(result=>result.ok && result.data.memory.artifactState==='empty')`,
     );
+
     const empty = await memory('getStatus');
     assert.equal(empty.memory.generateMemories, false);
     assert.equal(empty.memory.useMemories, false);
@@ -644,6 +675,7 @@ try {
         .eligibility,
       'excluded',
     );
+
     const originalSession = await evaluate(
       `window.megumi.session.read({requestId:crypto.randomUUID(),payload:{sessionId:'s1'},meta:{channel:'session:read',source:'renderer',createdAt:new Date().toISOString()}})`,
     );
@@ -673,6 +705,7 @@ try {
       /* Preserve the original verification failure if the renderer closed. */
     }
   }
+
   process.exitCode = 1;
 } finally {
   try {
@@ -682,6 +715,7 @@ try {
     report.passed = false;
     process.exitCode = 1;
   }
+
   await modelBoundary?.close();
   report.completedAt = new Date().toISOString();
   writeFileSync(path.join(root, 'desktop-result.json'), JSON.stringify(report, null, 2));

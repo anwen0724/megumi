@@ -19,6 +19,7 @@ import { IPC_CHANNELS } from '../channels';
 export interface MemoryHandlersService {
   host: Pick<ApplicationOperations, 'memory'>;
 }
+
 interface MemoryHandlersOptions {
   logger?: DesktopRuntimeLogger;
   ipcMain?: DesktopIpcMain;
@@ -31,6 +32,7 @@ export function registerMemoryHandlers(
 ): void {
   const ipcMain = options.ipcMain ?? electronIpcMain;
   const memory = service.host.memory;
+
   /** Converts only operation failures, then validates the serializable response once. */
   function register<Input, Output>(
     channel: BusinessIpcChannel,
@@ -57,6 +59,7 @@ export function registerMemoryHandlers(
             'error' in result
           )
             throw result.error;
+
           return response.parse(result);
         },
         mapError(error) {
@@ -71,6 +74,7 @@ export function registerMemoryHandlers(
       }),
     );
   }
+
   register(
     IPC_CHANNELS.memory.getStatus,
     createRuntimeIpcRequestSchema(IPC_CHANNELS.memory.getStatus, MemoryRequestSchemas.getStatus),

@@ -13,6 +13,7 @@ if (!process.argv[2] || outputArgument < 0 || !process.argv[outputArgument + 1])
   throw new Error(
     'Pass the experiment directory and --out <new-summary-directory>. Optionally pass --review <review-file>.',
   );
+
 const output = path.resolve(process.argv[outputArgument + 1]);
 const sourceRoot = realpathSync(root);
 const outputRoot = path.join(realpathSync(path.dirname(output)), path.basename(output));
@@ -27,6 +28,7 @@ if (within(sourceRoot, outputRoot) || within(outputRoot, sourceRoot))
   throw new Error('Summary output must be separate from the experiment directory.');
 if (existsSync(outputRoot))
   throw new Error('Choose a new summary directory; existing results must not be overwritten.');
+
 const read = (file: string) => JSON.parse(readFileSync(path.join(root, file), 'utf8'));
 const manifest = read('manifest.json') as {
   fixtures: EffectFixture[];
@@ -99,6 +101,7 @@ for (const row of rows) {
       phase[key] += call.usage?.[key] ?? 0;
   }
 }
+
 const worksheet = [];
 for (const fixture of manifest.fixtures)
   for (const condition of manifest.conditions)
@@ -132,6 +135,7 @@ for (const fixture of manifest.fixtures)
           'Inspect task-phase system/tool messages for recalled facts, then answer for actual use. Do not count extraction/production files as task recall. memoryRequired=false labels are current-task facts/calculations and excluded from memory metrics. Record all extra used knowledge, including wrong or unsupported claims. Mark forbidden values usedAsCurrentFact only when asserted as current, not quoted as obsolete. Evidence locations must identify requests.jsonl line/role/tool and answer field. Null means unreviewed, never success.',
       });
     }
+
 const reviewPath =
   reviewArgument < 0
     ? path.join(root, 'human-review.json')

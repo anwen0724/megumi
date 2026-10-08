@@ -12,6 +12,7 @@ export function createSourceFixture(filename = ':memory:') {
     ('w1', 'test', 'C:/memory-test', 'c:/memory-test', 'available', '2026-10-01', '2026-10-01', '2026-10-01')`,
     })
     .run();
+
   const store = createSessionStore({ database });
   if (!store.findSessionById('s1'))
     store.insertSession({
@@ -22,10 +23,12 @@ export function createSourceFixture(filename = ':memory:') {
       created_at: '2026-10-01',
       updated_at: '2026-10-01',
     });
+
   const history = createSessionHistory({
     store,
     ids: { entryId: ({ source_id }) => `entry:${source_id}` },
   });
+
   return {
     database,
     store,
@@ -50,6 +53,7 @@ export function createSourceFixture(filename = ':memory:') {
         created_at: `2026-10-02T00:00:00.000Z`,
       });
       if (saved.status !== 'saved') throw new Error(saved.failure.message);
+
       return saved.entry;
     },
     reply(id: string) {
@@ -67,6 +71,7 @@ export function createSourceFixture(filename = ':memory:') {
         completed_at: '2026-10-03T00:00:00.000Z',
       });
       if (saved.status !== 'saved') throw new Error(saved.failure.message);
+
       return saved.entry;
     },
   };

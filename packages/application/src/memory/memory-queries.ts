@@ -37,15 +37,19 @@ function decode(value: string | undefined, revision: string) {
       offset: 0,
       character: 0,
     };
+
   let cursor;
   try {
     cursor = Cursor.parse(JSON.parse(Buffer.from(value, 'base64url').toString('utf8')));
   } catch {
     throw new Error('INVALID_ARGUMENT');
   }
+
   if (cursor.revision !== revision) throw new Error('VERSION_CONFLICT');
+
   return cursor;
 }
+
 /** Converts boundary failures without returning file contents or host paths as error text. */
 export function memoryQueryFailure(error: unknown): MemoryFailure {
   const code =
@@ -69,6 +73,7 @@ export function memoryQueryFailure(error: unknown): MemoryFailure {
     },
   };
 }
+
 /** Reads management data without starting production or changing source qualification. */
 export function createMemoryQueries(options: {
   files: MemoryFiles;
@@ -117,6 +122,7 @@ export function createMemoryQueries(options: {
               more = true;
               break outer;
             }
+
             const excerpt = options.files.readLines(
               file,
               Math.max(1, line - 1),
@@ -126,6 +132,7 @@ export function createMemoryQueries(options: {
             )!;
             if (excerpt.version !== versions.find(pair => pair[0] === file)?.[1])
               throw new Error('VERSION_CONFLICT');
+
             hits.push({
               ...excerpt,
               line,
@@ -136,6 +143,7 @@ export function createMemoryQueries(options: {
         for (const [file, version] of versions)
           if (file && options.files.readLines(file, 1, 1)?.version !== version)
             throw new Error('VERSION_CONFLICT');
+
         return {
           status: 'ok' as const,
           hits,
@@ -158,6 +166,7 @@ export function createMemoryQueries(options: {
         const result = options.sources.readSource(input.sourceRef);
         if (result.status !== 'found') return result;
         if (options.excluded(result.snapshot.sessionId)) throw new Error('SOURCE_UNAVAILABLE');
+
         const cursor = decode(input.cursor, hash(input.sourceRef));
         const messages: {
           messageId: string;
@@ -193,9 +202,11 @@ export function createMemoryQueries(options: {
             character += part.length;
             break;
           }
+
           index++;
           character = 0;
         }
+
         return {
           status: 'found' as const,
           sessionId: result.snapshot.sessionId,

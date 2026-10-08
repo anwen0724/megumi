@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SettingsSnapshot } from '@megumi/application/settings/settings-contracts';
 import { Button, Select, SettingsPageHeader, SettingsSection } from '../../shared/ui';
+
 type ModelOption = {
   value: string;
   label: string;
   providerId: string;
   modelId: string;
 };
+
 const modelValue = (model?: { providerId: string; modelId: string }) =>
   model ? `${model.providerId}/${model.modelId}` : '';
 
@@ -31,6 +33,7 @@ export function MemorySettingsPanel() {
         if (!settings.ok) throw new Error(settings.data.message);
         if (!catalog.ok) throw new Error(catalog.data.message);
         if (catalog.data.status === 'failed') throw new Error(catalog.data.failure.message);
+
         setSnapshot(settings.data);
         setGenerate(settings.data.config.memory.generateMemories);
         setUse(settings.data.config.memory.useMemories);
@@ -54,6 +57,7 @@ export function MemorySettingsPanel() {
       active = false;
     };
   }, []);
+
   const saved = snapshot?.config.memory;
   const dirty =
     saved &&
@@ -99,8 +103,10 @@ export function MemorySettingsPanel() {
 
   async function save() {
     if (!snapshot) return;
+
     setSaving(true);
     setError('');
+
     try {
       const result = await window.megumi.settings.updateSettings({
         expectedRevision: snapshot.revision,
@@ -121,6 +127,7 @@ export function MemorySettingsPanel() {
       setSaving(false);
     }
   }
+
   return (
     <div className="space-y-6">
       <SettingsPageHeader

@@ -37,6 +37,7 @@ export interface MemoryProductionOptions {
   readonly now?: () => number;
   readonly observability?: Observability;
 }
+
 export function createMemoryProduction(
   options: MemoryProductionOptions,
 ): Omit<
@@ -67,6 +68,7 @@ export function createMemoryProduction(
       }
     }
   }
+
   let active:
     | {
         runId: string;
@@ -91,8 +93,10 @@ export function createMemoryProduction(
   function configuration() {
     const read = settings.readSettings();
     if (read.status !== 'ok') throw new Error('SETTINGS_INVALID');
+
     return read.settings.config.memory;
   }
+
   const versions = () =>
     Object.fromEntries(files.list().map(document => [document.path, document.version]));
   const selection = () =>
@@ -112,6 +116,7 @@ export function createMemoryProduction(
       store.markRepair();
       return;
     }
+
     store.recover(actual);
     const state = store.state();
     if (state.clear_pending || state.writer_token) return;
@@ -132,6 +137,7 @@ export function createMemoryProduction(
       });
       if (invalid) {
         if (state.dirty_revision === state.processed_revision) store.dirty();
+
         store.markRepair();
         return;
       }
@@ -145,7 +151,9 @@ export function createMemoryProduction(
             removed: [],
             retained: saved,
           });
+
           const writer = store.acquire();
+
           try {
             store.assertWriter(writer);
             database
@@ -175,6 +183,7 @@ export function createMemoryProduction(
       }>({ sql: "SELECT * FROM memory_runs WHERE run_id = ? AND kind <> 'extract'" })
       .get([runId]);
     if (!row) return undefined;
+
     const result = row.result_json ? JSON.parse(row.result_json) : undefined;
     const jobs = database
       .prepare<{
@@ -192,6 +201,7 @@ export function createMemoryProduction(
         result_json: string | null;
       }>({ sql: 'SELECT * FROM memory_jobs WHERE run_id IN (?,?) ORDER BY started_at,job_id' })
       .all([runId, result?.extractionRunId ?? '']);
+
     return {
       runId,
       kind: row.kind,
@@ -237,12 +247,14 @@ export function createMemoryProduction(
     for (const candidate of candidates) {
       const source = sources.readSnapshot(candidate.session_id);
       if (source.status === 'failed' && source.error.code === 'STORAGE_FAILED') continue;
+
       const obsolete =
         candidate.current_version !== candidate.source_version ||
         candidate.eligibility === 'excluded' ||
         candidate.last_use < cutoff ||
         source.status !== 'found';
       if (!obsolete) continue;
+
       const key = createHash('sha256').update(candidate.session_id).digest('hex');
       files.removeInput(`rollout_summaries/${key}-${candidate.source_version}.md`, () =>
         store.assertWriter(writer),
@@ -274,12 +286,14 @@ export function createMemoryProduction(
     inspect();
     const writer = store.acquire();
     const before = store.state();
+
     let baseline: Record<string, string> | undefined;
     try {
       baseline = versions();
     } catch {
       /* The Agent can delete and replace malformed final files. */
     }
+
     let jobId: string | undefined;
     const guard = () => {
       if (controller.signal.aborted && controller.signal.reason?.message === 'TIMEOUT')
@@ -298,6 +312,7 @@ export function createMemoryProduction(
           .get([runId])?.cancel_requested
       )
         throw new Error('CANCELLED');
+
       store.assertWriter(writer);
     };
     const renew = setInterval(() => {
@@ -316,6 +331,7 @@ export function createMemoryProduction(
       }
     }, 250);
     const timeout = setTimeout(() => controller.abort(new Error('TIMEOUT')), 900000);
+
     try {
       guard();
       files.discardTemporary(guard);
@@ -345,14 +361,19 @@ export function createMemoryProduction(
         gc(writer);
         return 'unchanged';
       }
+
       jobId = store.claimJob(writer, runId, chosen, failedJobId);
       if (!jobId) throw new Error('RETRY_DEFERRED');
+
       const config = configuration();
       if (!config.consolidationModel) throw new Error('MODEL_UNAVAILABLE');
+
       const model = await options.resolveModel(config.consolidationModel);
       guard();
+
       changed(runId);
       publishConsolidationInputs(files, chosen, guard);
+
       const operation = () =>
         runConsolidationAgent({
           model,
@@ -369,6 +390,7 @@ export function createMemoryProduction(
       const finalVersions = validateMemoryArtifacts(files, chosen);
       if (JSON.stringify(finalVersions) !== JSON.stringify(result.versions))
         throw new Error('SOURCE_CHANGED');
+
       database.transaction({
         operation: () => {
           guard();
@@ -380,9 +402,11 @@ export function createMemoryProduction(
             )
               throw new Error('SOURCE_CHANGED');
           }
+
           store.commit(writer, jobId!, chosen, finalVersions, result);
         },
       });
+
       try {
         options.observability?.recordEvent({
           type: 'memory.snapshot.committed',
@@ -393,6 +417,7 @@ export function createMemoryProduction(
       } catch {
         /* Diagnostics do not change a committed snapshot. */
       }
+
       gc(writer);
       publishConsolidationInputs(
         files,
@@ -402,6 +427,7 @@ export function createMemoryProduction(
         },
         guard,
       );
+
       return 'generated';
     } catch (error) {
       const code =
@@ -417,14 +443,17 @@ export function createMemoryProduction(
               : 'failed',
           code,
         );
+
       const current = store.state();
       if (current.writer_token === writer.token && !current.clear_pending) {
         let intact = false;
+
         try {
           intact = JSON.stringify(versions()) === JSON.stringify(baseline);
         } catch {
           /* Unreadable files require repair. */
         }
+
         database
           .prepare({ sql: 'UPDATE memory_state SET artifact_state = ? WHERE id = 1' })
           .run([intact ? before.artifact_state : 'needsRepair']);
@@ -448,6 +477,7 @@ export function createMemoryProduction(
     let extractionError: MemoryFailure['error'] | undefined;
     let extractionFailed = false;
     let extracted = false;
+
     try {
       if (!maintenance) {
         const failedJob = request.failedJobId
@@ -482,6 +512,7 @@ export function createMemoryProduction(
         }
       }
       if (controller.signal.aborted) throw new Error('CANCELLED');
+
       const failed = request.failedJobId
         ? database
             .prepare<{ stage: string }>({ sql: 'SELECT stage FROM memory_jobs WHERE job_id = ?' })
@@ -619,6 +650,7 @@ export function createMemoryProduction(
           .get([request.failedJobId])
       )
         throw new Error('INVALID_ARGUMENT');
+
       const result = store.request<MemoryStartResult>(
         'generate',
         request.requestId,
@@ -631,9 +663,11 @@ export function createMemoryProduction(
               runId: active.runId,
             };
           }
+
           inspect();
           const runId = randomUUID();
           store.beginRun(runId, maintenance ? 'maintenance' : request.reason);
+
           return {
             status: 'started',
             runId,
@@ -642,6 +676,7 @@ export function createMemoryProduction(
       );
       if (result.status === 'started' && !active && getRun(result.runId)?.status === 'running')
         launch(result.runId, request, maintenance);
+
       return result;
     } catch (error) {
       return failure(error);
@@ -652,6 +687,7 @@ export function createMemoryProduction(
     try {
       const read = settings.readSettings();
       if (read.status !== 'ok') throw new Error('SETTINGS_INVALID');
+
       const saved = settings.updateSettings({
         expectedRevision: read.settings.revision,
         patch: {
@@ -662,24 +698,30 @@ export function createMemoryProduction(
         },
       });
       if (saved.status === 'rejected') throw new Error('SETTINGS_INVALID');
+
       active?.controller.abort();
       await options.extraction.cancelActive();
       await active?.completion;
       if (stopped) throw new Error('CANCELLED');
+
       let writer: MemoryWriter;
       for (;;) {
         if (stopped) throw new Error('CANCELLED');
+
         try {
           writer = store.acquire(true);
           break;
         } catch (error) {
           if (failure(error).error.code !== 'BUSY') throw error;
+
           await new Promise(resolve => setTimeout(resolve, 50));
         }
       }
+
       try {
         const guard = () => {
           if (stopped) throw new Error('CANCELLED');
+
           store.assertWriter(writer, true);
         };
         files.clear(guard);
@@ -700,6 +742,7 @@ export function createMemoryProduction(
               'memory_jobs',
             ])
               database.prepare({ sql: `DELETE FROM ${table}` }).run();
+
             database.prepare({ sql: 'DELETE FROM memory_runs WHERE run_id <> ?' }).run([runId]);
             database
               .prepare({ sql: 'UPDATE memory_sources SET usage_count = 0, last_used_at = NULL' })
@@ -731,6 +774,7 @@ export function createMemoryProduction(
   ) {
     const limit = request.limit ?? 50;
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error('INVALID_ARGUMENT');
+
     const revision = createHash('sha256').update(JSON.stringify(items)).digest('hex');
     let after = '';
     if (request.cursor) {
@@ -740,11 +784,15 @@ export function createMemoryProduction(
       } catch {
         throw new Error('INVALID_ARGUMENT');
       }
+
       if (cursor.revision !== revision) throw new Error('VERSION_CONFLICT');
+
       after = cursor.after;
     }
+
     const remaining = items.filter(item => identity(item) > after);
     const selected = remaining.slice(0, limit);
+
     return {
       items: selected,
       ...(remaining.length > limit
@@ -759,6 +807,7 @@ export function createMemoryProduction(
         : {}),
     };
   }
+
   const host: ReturnType<typeof createMemoryProduction> = {
     subscribeChanges(handler) {
       listeners.add(handler);
@@ -773,6 +822,7 @@ export function createMemoryProduction(
       const timeout = request.timeoutMs ?? 60000;
       if (!Number.isInteger(timeout) || timeout < 0 || timeout > 60000)
         return failure(new Error('INVALID_ARGUMENT'));
+
       const deadline = Date.now() + timeout;
       for (;;) {
         const run = getRun(request.runId);
@@ -787,6 +837,7 @@ export function createMemoryProduction(
             status: 'timeout',
             run,
           };
+
         await new Promise(resolve => setTimeout(resolve, Math.min(50, deadline - Date.now())));
       }
     },
@@ -798,10 +849,12 @@ export function createMemoryProduction(
           if (run.kind === 'clear') throw new Error('INVALID_ARGUMENT');
           if (!['pending', 'running'].includes(run.status))
             return { status: 'alreadyFinished' as const };
+
           database
             .prepare({ sql: 'UPDATE memory_runs SET cancel_requested = 1 WHERE run_id = ?' })
             .run([request.runId]);
           if (active?.runId === request.runId) active.controller.abort();
+
           return { status: 'cancelling' as const };
         });
       } catch (error) {
@@ -841,6 +894,7 @@ export function createMemoryProduction(
         if (!document) return { status: 'notFound' };
         if (request.expectedVersion && request.expectedVersion !== document.version)
           throw new Error('VERSION_CONFLICT');
+
         return {
           status: 'found',
           document,
@@ -861,6 +915,7 @@ export function createMemoryProduction(
           request,
         );
         if (cached) return cached;
+
         writer = store.acquire();
         before = store.state();
         baseline = versions();
@@ -878,6 +933,7 @@ export function createMemoryProduction(
         const owner = writer;
         const document = files.writeFinal(request, () => store.assertWriter(owner));
         const priorState = before.artifact_state;
+
         return store.request('edit', request.requestId, request, () => {
           store.assertWriter(owner);
           store.dirty();
@@ -886,6 +942,7 @@ export function createMemoryProduction(
               sql: 'UPDATE memory_state SET artifact_versions_json = ?, artifact_state = ? WHERE id = 1',
             })
             .run([JSON.stringify(versions()), priorState]);
+
           return {
             status: 'saved' as const,
             document,
@@ -894,15 +951,18 @@ export function createMemoryProduction(
       } catch (error) {
         if (writer && before && store.state().writer_token === writer.token) {
           let intact = false;
+
           try {
             intact = JSON.stringify(versions()) === JSON.stringify(baseline);
           } catch {
             /* Invalid files stay unavailable. */
           }
+
           database
             .prepare({ sql: 'UPDATE memory_state SET artifact_state = ? WHERE id = 1' })
             .run([intact ? before.artifact_state : 'needsRepair']);
         }
+
         return failure(error);
       } finally {
         if (writer) {
@@ -952,6 +1012,7 @@ export function createMemoryProduction(
           })
           .sort((a, b) => (a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : 0));
         const result = page(items, request, item => item.sessionId);
+
         return {
           status: 'ok',
           sources: result.items,
@@ -966,21 +1027,26 @@ export function createMemoryProduction(
         const result = store.request('eligibility', request.requestId, request, () => {
           if (!['eligible', 'excluded'].includes(request.eligibility))
             throw new Error('INVALID_ARGUMENT');
+
           const writer = store.acquire();
+
           try {
             if (sources.readSnapshot(request.sessionId).status !== 'found')
               throw new Error('SOURCE_UNAVAILABLE');
+
             database
               .prepare({
                 sql: 'INSERT OR IGNORE INTO memory_sources(session_id,updated_at) VALUES (?,?)',
               })
               .run([request.sessionId, iso()]);
+
             const updated = database
               .prepare<{
                 eligibility_version: number;
               }>({ sql: 'UPDATE memory_sources SET eligibility = ?, eligibility_version = eligibility_version + 1, updated_at = ? WHERE session_id = ? AND eligibility_version = ? RETURNING eligibility_version' })
               .get([request.eligibility, iso(), request.sessionId, request.expectedVersion]);
             if (!updated) throw new Error('VERSION_CONFLICT');
+
             store.dirty();
             const selected = !!database
               .prepare({
@@ -988,6 +1054,7 @@ export function createMemoryProduction(
               })
               .get([request.sessionId]);
             if (selected && request.eligibility === 'excluded') store.markRepair();
+
             return {
               status: 'saved' as const,
               version: updated.eligibility_version,
@@ -1017,6 +1084,7 @@ export function createMemoryProduction(
               runId: started.runId,
             };
         }
+
         return result;
       } catch (error) {
         return failure(error);
@@ -1025,6 +1093,7 @@ export function createMemoryProduction(
     clearMemory(request) {
       try {
         if (request.confirmed !== true || stopped) throw new Error('INVALID_ARGUMENT');
+
         const result = store.request<Extract<MemoryStartResult, { runId: string }>>(
           'clear',
           request.requestId,
@@ -1042,16 +1111,19 @@ export function createMemoryProduction(
                 status: 'reused',
                 runId: existing.run_id,
               };
+
             database
               .prepare({
                 sql: "UPDATE memory_state SET clear_pending = 1, artifact_state = 'clearing', control_revision = control_revision + 1, clear_reply_cursor = ? WHERE id = 1",
               })
               .run([sources.getReplyCursor()]);
+
             const runId = randomUUID();
             store.beginRun(runId, 'manual');
             database
               .prepare({ sql: "UPDATE memory_runs SET kind = 'clear' WHERE run_id = ?" })
               .run([runId]);
+
             return {
               status: 'started',
               runId,
@@ -1077,6 +1149,7 @@ export function createMemoryProduction(
               changed(result.runId);
             });
         }
+
         return result;
       } catch (error) {
         return failure(error);
@@ -1097,5 +1170,6 @@ export function createMemoryProduction(
       requestId: `recover-clear:${store.state().control_revision}`,
       confirmed: true,
     });
+
   return host;
 }

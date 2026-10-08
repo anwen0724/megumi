@@ -11,6 +11,7 @@ export interface EffectHistory {
   conclusion: string;
   excluded?: boolean;
 }
+
 export interface EffectFact {
   id: string;
   description: string;
@@ -21,6 +22,7 @@ export interface EffectFact {
   memoryRequired?: boolean;
   ordered?: boolean;
 }
+
 export interface EffectFixture {
   id: string;
   category: string;
@@ -34,6 +36,7 @@ export interface EffectFixture {
     reason: string;
   }[];
 }
+
 const history = (
   id: string,
   project: string,
@@ -536,4 +539,5 @@ export const effectFixtures: readonly EffectFixture[] = [
 ];
 
 export const effectConditions = ['none', 'full-history', 'memory'] as const;
+
 export type EffectCondition = (typeof effectConditions)[number];

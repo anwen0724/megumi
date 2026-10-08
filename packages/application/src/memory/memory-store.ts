@@ -17,6 +17,7 @@ export type MemoryState = {
   writer_token: string | null;
   writer_lease_expires_at: string | null;
 };
+
 export interface MemoryWriter {
   readonly token: string;
   readonly controlRevision: number;
@@ -43,6 +44,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
 
   function cachedRequest<T>(operation: string, requestId: string, input: unknown): T | undefined {
     if (!requestId || requestId.length > 200) throw new Error('INVALID_ARGUMENT');
+
     const hash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
     const previous = database
       .prepare<{
@@ -54,8 +56,10 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
       .get([operation, requestId]);
     if (!previous) return undefined;
     if (previous.input_hash !== hash) throw new Error('REQUEST_CONFLICT');
+
     return JSON.parse(previous.result_json) as T;
   }
+
   return {
     state,
     assertWriter,
@@ -69,12 +73,14 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
             (current.writer_token && current.writer_lease_expires_at! > iso())
           )
             throw new Error('BUSY');
+
           const token = randomUUID();
           database
             .prepare({
               sql: 'UPDATE memory_state SET writer_token = ?, writer_lease_expires_at = ? WHERE id = 1',
             })
             .run([token, new Date(now() + 3600000).toISOString()]);
+
           return {
             token,
             controlRevision: current.control_revision,
@@ -155,8 +161,10 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
           if (failedJobId) {
             if (latest?.job_id !== failedJobId || latest.status !== 'failed')
               throw new Error('INVALID_ARGUMENT');
+
             group = jobId;
           }
+
           const failures = database
             .prepare<{
               count: number;
@@ -167,6 +175,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
             .get([group])!;
           if (failures.count >= 3 || (failures.retry_at && failures.retry_at > iso()))
             return undefined;
+
           database
             .prepare({
               sql: `INSERT INTO memory_jobs(job_id,run_id,stage,target_revision,status,attempt,retry_group_id,retry_of_job_id,owner_token,lease_expires_at,started_at,result_json)
@@ -190,6 +199,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
           database
             .prepare({ sql: "UPDATE memory_state SET artifact_state = 'updating' WHERE id = 1" })
             .run();
+
           return jobId;
         },
       });
@@ -237,6 +247,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
             )
               throw new Error('SOURCE_CHANGED');
           }
+
           const snapshotId = randomUUID();
           const identities = (items: ConsolidationSelection['selected']) =>
             items.map(({ sessionId, sourceVersion }) => ({
@@ -291,6 +302,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
         operation: () => {
           const current = state();
           if (current.writer_token && current.writer_lease_expires_at! > iso()) return;
+
           const expired = database
             .prepare<{
               run_id: string;
@@ -331,6 +343,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
                 job.run_id,
               ]);
           }
+
           if (current.artifact_state === 'updating' && !expired.length) {
             database
               .prepare({
@@ -338,6 +351,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
               })
               .run();
           }
+
           database
             .prepare({
               sql: 'UPDATE memory_state SET writer_token = NULL, writer_lease_expires_at = NULL WHERE id = 1',
@@ -348,6 +362,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
     },
     request<T>(operation: string, requestId: string, input: unknown, execute: () => T): T {
       if (!requestId || requestId.length > 200) throw new Error('INVALID_ARGUMENT');
+
       const hash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
       return database.transaction({
         operation: () => {
@@ -361,8 +376,10 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
             .get([operation, requestId]);
           if (previous) {
             if (previous.input_hash !== hash) throw new Error('REQUEST_CONFLICT');
+
             return JSON.parse(previous.result_json) as T;
           }
+
           const result = execute();
           database
             .prepare({
@@ -376,6 +393,7 @@ export function createMemoryStore(database: DatabaseConnection, now: () => numbe
               iso(),
               new Date(now() + 86400000).toISOString(),
             ]);
+
           return result;
         },
       });

@@ -61,6 +61,7 @@ export function createExtractionStore(database: DatabaseConnection) {
       })
       .get([lease.jobId, lease.ownerToken, now, lease.eligibilityVersion, lease.controlRevision]);
   }
+
   const store = {
     beginRun(runId: string, now: string, retry: boolean): void {
       database
@@ -86,6 +87,7 @@ export function createExtractionStore(database: DatabaseConnection) {
               sql: 'INSERT OR IGNORE INTO memory_sources(session_id,updated_at) VALUES (?,?)',
             })
             .run([source.sessionId, input.now]);
+
           const eligibility = database
             .prepare<{
               eligibility: string;
@@ -101,6 +103,7 @@ export function createExtractionStore(database: DatabaseConnection) {
             }>({ sql: 'SELECT control_revision, clear_pending FROM memory_state WHERE id = 1' })
             .get()!;
           if (eligibility.eligibility !== 'eligible' || state.clear_pending) return undefined;
+
           const saved = database
             .prepare({
               sql: 'SELECT 1 FROM memory_extractions WHERE session_id = ? AND source_version = ?',
@@ -120,8 +123,10 @@ export function createExtractionStore(database: DatabaseConnection) {
                   sql: 'UPDATE memory_state SET dirty_revision = dirty_revision + 1 WHERE id = 1',
                 })
                 .run();
+
             return undefined;
           }
+
           const expired = database
             .prepare<{ run_id: string }>({
               sql: `UPDATE memory_jobs SET status = 'failed', completed_at = ?, retry_at = ?, error_json = ?
@@ -143,6 +148,7 @@ export function createExtractionStore(database: DatabaseConnection) {
             )
               store.finishRun(runId, input.now);
           }
+
           if (
             database
               .prepare({
@@ -151,12 +157,14 @@ export function createExtractionStore(database: DatabaseConnection) {
               .get([source.sessionId])
           )
             return undefined;
+
           const active = database
             .prepare<{
               count: number;
             }>({ sql: "SELECT count(*) AS count FROM memory_jobs WHERE stage = 'extract' AND status IN ('pending','running')" })
             .get()!;
           if (active.count >= 8) return undefined;
+
           const latest = database
             .prepare<JobRow>({
               sql: "SELECT * FROM memory_jobs WHERE session_id = ? AND source_version = ? AND stage = 'extract' ORDER BY rowid DESC LIMIT 1",
@@ -167,6 +175,7 @@ export function createExtractionStore(database: DatabaseConnection) {
           if (input.failedJobId) {
             if (latest?.job_id !== input.failedJobId || latest.status !== 'failed')
               return undefined;
+
             group = input.jobId;
           } else if (latest) {
             const failures = database
@@ -179,6 +188,7 @@ export function createExtractionStore(database: DatabaseConnection) {
               .get([group])!;
             if (failures.count >= 3 || (failures.retry_at && failures.retry_at > input.now))
               return undefined;
+
             attempt = failures.count + 1;
           }
           database
@@ -198,6 +208,7 @@ export function createExtractionStore(database: DatabaseConnection) {
               group,
               input.failedJobId ?? null,
             ]);
+
           return {
             jobId: input.jobId,
             ownerToken: input.ownerToken,
@@ -225,6 +236,7 @@ export function createExtractionStore(database: DatabaseConnection) {
             !isCurrent(input.lease, input.now)
           )
             return false;
+
           database
             .prepare({
               sql: `INSERT INTO memory_extractions(session_id,source_version,workspace_id,source_updated_at,raw_memory,rollout_summary,rollout_slug,coverage_json,extracted_at)
@@ -261,6 +273,7 @@ export function createExtractionStore(database: DatabaseConnection) {
               sql: 'UPDATE memory_state SET dirty_revision = dirty_revision + 1 WHERE id = 1',
             })
             .run();
+
           return true;
         },
       });
@@ -293,6 +306,7 @@ export function createExtractionStore(database: DatabaseConnection) {
       const jobs = store.listJobs(runId);
       if (jobs.some(job => job.status === 'running'))
         throw new Error('Extraction jobs have not settled.');
+
       const succeeded = jobs.some(job => job.status === 'succeeded');
       const failed = sourceFailures.length > 0 || jobs.some(job => job.status === 'failed');
       const cancelled = jobs.some(job => job.status === 'cancelled' || job.status === 'superseded');
@@ -325,6 +339,7 @@ export function createExtractionStore(database: DatabaseConnection) {
           }),
           runId,
         ]);
+
       return result;
     },
     getJob(jobId: string): ExtractionJob | undefined {
@@ -357,7 +372,9 @@ export function createExtractionStore(database: DatabaseConnection) {
         })
         .get([sessionId]);
       if (!row) return undefined;
+
       const { sourceRef, ...coverage } = JSON.parse(row.coverage_json);
+
       return {
         sessionId,
         sourceVersion: row.source_version,

@@ -8,6 +8,7 @@ export const EMPTY_MEMORY =
   '# Task Group: Empty\nscope: general\napplies_to: general\n\nNo reusable knowledge.\n';
 export const EMPTY_SUMMARY =
   "# User Profile\nNo reusable knowledge.\n\n# General Tips\nNo reusable knowledge.\n\n# What's in Memory\nNo reusable knowledge.\n";
+
 export function sourceMarker(source: ConsolidationSource): string {
   return `[sourceId=${source.sessionId}; sourceVersion=${source.sourceVersion}; sourceRef=${source.sourceRef}]`;
 }
@@ -23,6 +24,7 @@ function references(content: string, sources: readonly ConsolidationSource[]): n
     ),
   ];
   if ((content.match(/\[sourceId=/g)?.length ?? 0) !== markers.length) invalid();
+
   for (const match of markers)
     if (
       !sources.some(
@@ -33,6 +35,7 @@ function references(content: string, sources: readonly ConsolidationSource[]): n
       )
     )
       invalid();
+
   return markers.length;
 }
 
@@ -51,26 +54,33 @@ function validateParagraphSources(
     }
   }
 }
+
 export function validateMemoryDocument(
   document: MemoryDocument,
   sources: readonly ConsolidationSource[],
 ): void {
   const { path, content } = document;
   if (Buffer.byteLength(content, 'utf8') > 1048576 || content.includes('\0')) invalid();
+
   references(content, sources);
   if (path === 'MEMORY.md') {
     if (content === EMPTY_MEMORY) return;
+
     const groups = content.split(/^# Task Group: /m);
     if (groups.shift()?.trim() || !groups.length) invalid();
+
     for (const group of groups) {
       const [heading, ...tasks] = group.split(/^## Task: /m);
       if (!/^scope: \S.*$/m.test(heading) || !/^applies_to: \S.*$/m.test(heading) || !tasks.length)
         invalid();
+
       for (const task of tasks) {
         for (const field of ['rollout_summary_files', 'keywords', 'learnings']) {
           if (!new RegExp(`^### ${field}\\r?\\n[^#]*\\S`, 'm').test(task)) invalid();
         }
+
         if (!references(task, sources)) invalid();
+
         const sourceSection = task.split(/^### rollout_summary_files\r?\n/m)[1]?.split(/^### /m)[0];
         const links = [
           ...(sourceSection ?? '').matchAll(
@@ -81,6 +91,7 @@ export function validateMemoryDocument(
           invalid(
             'Each rollout_summary_files entry must pair its exact rollout path with the exact selected source marker.',
           );
+
         for (const match of links) {
           if (
             !sources.some(
@@ -96,20 +107,25 @@ export function validateMemoryDocument(
       throw new Error(
         `BUDGET_EXCEEDED: memory_summary.md uses ${estimateExtractionTokens(content)} conservative tokens (UTF-8 bytes + 64), maximum 5000. Combine related facts in one short paragraph per section; keep exact markers. Do not duplicate facts across Profile and Tips.`,
       );
+
     for (const heading of ['User Profile', 'General Tips', "What's in Memory"]) {
       if (!content.split(/\r?\n/).includes(`# ${heading}`)) invalid();
     }
+
     if (content === EMPTY_SUMMARY) return;
+
     validateParagraphSources(content, sources, 'summary');
   } else if (path.endsWith('/SKILL.md')) {
     const front = /^---\r?\n([\s\S]+?)\r?\n---\r?\n/.exec(content);
     if (!front) invalid();
+
     let metadata;
     try {
       metadata = parseYaml(front[1]);
     } catch {
       invalid();
     }
+
     if (
       typeof metadata?.name !== 'string' ||
       !metadata.name.trim() ||
@@ -117,13 +133,17 @@ export function validateMemoryDocument(
       !metadata.description.trim()
     )
       invalid();
+
     for (const heading of ['Applicability', 'Steps', 'Checks', 'Failure handling', 'Sources']) {
       if (!content.includes(`## ${heading}\n`) && !content.includes(`## ${heading}\r\n`)) invalid();
     }
+
     if (!references(content, sources)) invalid();
+
     validateParagraphSources(content.slice(front[0].length), sources, 'skill');
   }
 }
+
 export function validateMemoryArtifacts(
   files: MemoryFiles,
   selection: ConsolidationSelection,
@@ -132,6 +152,7 @@ export function validateMemoryArtifacts(
   const paths = new Set(documents.map(document => document.path));
   if (!paths.has('MEMORY.md') || !paths.has('memory_summary.md'))
     invalid('Both MEMORY.md and memory_summary.md are required.');
+
   for (const document of documents) {
     try {
       validateMemoryDocument(document, selection.selected);
@@ -142,11 +163,13 @@ export function validateMemoryArtifacts(
         `${separator < 0 ? message : message.slice(0, separator)}: ${document.path}. ${separator < 0 ? '' : message.slice(separator + 1).trim()}`,
       );
     }
+
     if (
       document.path.startsWith('skills/') &&
       !paths.has(document.path.split('/').slice(0, 2).join('/') + '/SKILL.md')
     )
       invalid();
+
     for (const match of document.content.matchAll(
       /(?:MEMORY\.md|memory_summary\.md|skills\/[\w./-]+|rollout_summaries\/[\w-]+\.md)/g,
     )) {
@@ -157,10 +180,12 @@ export function validateMemoryArtifacts(
         invalid();
     }
   }
+
   const summary = documents.find(document => document.path === 'memory_summary.md')!;
   if (summary.content !== EMPTY_SUMMARY) {
     const index = summary.content.split("# What's in Memory")[1];
     if (!index || !/(?:MEMORY\.md|skills\/[\w./-]+)/.test(index)) invalid();
+
     const dates = [
       ...new Set(
         selection.selected
@@ -180,6 +205,7 @@ export function validateMemoryArtifacts(
       );
     if (dates.length > 3 && !/^## Older\s*$/m.test(index)) invalid();
   }
+
   return Object.fromEntries(documents.map(document => [document.path, document.version]));
 }
 
@@ -206,6 +232,7 @@ export function publishConsolidationInputs(
       ],
       guard,
     );
+
   function* chunks() {
     const identity = (source: ConsolidationSource) => ({
       sessionId: source.sessionId,
@@ -228,5 +255,6 @@ export function publishConsolidationInputs(
     for (const source of materials)
       yield `\n# Source: ${source.sessionId}\n${source.artifactPath} ${sourceMarker(source)}\nworkspace: ${source.workspaceId}\nupdated: ${source.sourceUpdatedAt}\n${source.rawMemory}\n`;
   }
+
   files.writeInput('raw_memories.md', chunks(), guard);
 }

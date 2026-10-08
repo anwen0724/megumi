@@ -6,12 +6,14 @@ export function memoryReadingText(content: string): string {
     .flatMap(line => {
       if (/^#{1,6}\s/.test(line)) metadata = /^### (rollout_summary_files|keywords)\s*$/.test(line);
       if (metadata || /^applies_to:/.test(line)) return [];
+
       const text = line
         .replace(/\[sourceId=[^\]\n]+\]/g, '')
         .replace(/^# Task Group:\s*/, '# ')
         .replace(/^## Task:\s*/, '## ')
         .replace(/^scope:\s*/, '')
         .replace(/^### learnings\s*$/, '');
+
       return [text];
     })
     .join('\n');
@@ -22,6 +24,7 @@ export function sourceMessageText(serialized: string): string {
   const content: unknown = JSON.parse(serialized);
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
+
   return content
     .flatMap(block =>
       block?.type === 'text' && typeof block.text === 'string' ? [block.text] : [],

@@ -8,8 +8,10 @@ import { createSourceFixture } from './source-fixture';
 
 it('keeps the prior version as removed when its current extraction becomes empty', async () => {
   const f = createSourceFixture();
+
   try {
     await f.user('u1');
+
     const sources = createMemorySources({
       store: f.store,
       isSessionRunning: () => false,
@@ -20,6 +22,7 @@ it('keeps the prior version as removed when its current extraction becomes empty
     function save(id: string, rawMemory: string) {
       const read = sources.readSnapshot('s1');
       if (read.status !== 'found') throw new Error('Source missing');
+
       store.beginRun(id, now, false);
       const lease = store.claim({
         runId: id,
@@ -53,6 +56,7 @@ it('keeps the prior version as removed when its current extraction becomes empty
         },
       });
     }
+
     save('first', 'Use TypeScript');
     const input = {
       database: f.database,
@@ -61,6 +65,7 @@ it('keeps the prior version as removed when its current extraction becomes empty
       now: Date.parse(now),
     };
     const first = selectConsolidationSources(input);
+
     expect(first.added.map(source => source.sessionId)).toEqual(['s1']);
     expect(
       selectConsolidationSources({
@@ -68,6 +73,7 @@ it('keeps the prior version as removed when its current extraction becomes empty
         now: Date.parse(now) + 366 * 86400000,
       }).selected,
     ).toEqual([]);
+
     const old = first.selected[0];
     // Seed the prior successful snapshot through the persistence contract.
     f.database.prepare({ sql: "INSERT INTO memory_snapshots VALUES ('snap',1,'{}',?)" }).run([now]);
@@ -82,6 +88,7 @@ it('keeps the prior version as removed when its current extraction becomes empty
     await f.user('u2', 'No reusable knowledge remains.');
     save('second', '');
     const second = selectConsolidationSources(input);
+
     expect(second.selected).toEqual([]);
     expect(second.added).toEqual([]);
     expect(second.removed).toEqual([old]);
@@ -94,6 +101,7 @@ it('keeps the prior version as removed when its current extraction becomes empty
 
 it('ranks by usage, then recent use and source identity before applying capacity', async () => {
   const f = createSourceFixture();
+
   try {
     const now = '2026-10-08T12:00:00.000Z';
     const sources = createMemorySources({
@@ -111,6 +119,7 @@ it('ranks by usage, then recent use and source identity before applying capacity
           created_at: now,
           updated_at: now,
         });
+
       await f.history.saveUserMessage({
         session_id: id,
         message_id: id,
@@ -128,8 +137,10 @@ it('ranks by usage, then recent use and source identity before applying capacity
         ],
         created_at: '2026-10-02T00:00:00.000Z',
       });
+
       const read = sources.readSnapshot(id);
       if (read.status !== 'found') throw new Error();
+
       store.beginRun(id, now, false);
       const lease = store.claim({
         runId: id,
@@ -163,6 +174,7 @@ it('ranks by usage, then recent use and source identity before applying capacity
         },
       });
     }
+
     // Usage is a persisted input contract; P4 owns recording it from verified replies.
     f.database
       .prepare({ sql: "UPDATE memory_sources SET usage_count = 1 WHERE session_id IN ('s1','s2')" })
@@ -172,7 +184,9 @@ it('ranks by usage, then recent use and source identity before applying capacity
         sql: "UPDATE memory_sources SET last_used_at = '2026-10-07T00:00:00.000Z' WHERE session_id = 's1'",
       })
       .run();
+
     const configuration = MemoryConfigurationSchema.parse({ maxConsolidationSources: 2 });
+
     expect(
       selectConsolidationSources({
         database: f.database,
@@ -181,7 +195,9 @@ it('ranks by usage, then recent use and source identity before applying capacity
         now: Date.parse(now),
       }).selected.map(source => source.sessionId),
     ).toEqual(['s1', 's2']);
+
     f.database.prepare({ sql: 'UPDATE memory_sources SET last_used_at = NULL' }).run();
+
     expect(
       selectConsolidationSources({
         database: f.database,

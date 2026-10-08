@@ -4,15 +4,18 @@ import type { SettingsConfiguration } from '../settings/settings-schema';
 import type { ExtractionCoverage } from './extraction-input';
 
 export type ExtractionJobStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'superseded';
+
 export interface ExtractionError {
   readonly code: string;
   readonly message: string;
 }
+
 export interface ExtractionOutput {
   readonly rawMemory: string;
   readonly rolloutSummary: string;
   readonly rolloutSlug: string;
 }
+
 export interface ExtractionJob {
   readonly jobId: string;
   readonly runId: string;
@@ -31,6 +34,7 @@ export interface ExtractionJob {
     readonly outputTokens: number;
   };
 }
+
 export interface SavedExtraction extends ExtractionOutput {
   readonly sessionId: string;
   readonly sourceVersion: string;
@@ -38,17 +42,22 @@ export interface SavedExtraction extends ExtractionOutput {
   readonly sourceRef: string;
   readonly extractedAt: string;
 }
+
 export interface ExtractionModel {
   readonly model: Model<Api>;
   readonly secrets: readonly string[];
   complete(context: Context, options: ModelsSimpleStreamOptions): Promise<AssistantMessage>;
 }
+
 export type MemoryConfiguration = SettingsConfiguration['memory'];
+
 export interface ExtractionSourceFailure {
   readonly sessionId: string;
   readonly error: ExtractionError;
 }
+
 export type ExtractionResult = 'extracted' | 'unchanged' | 'partial' | 'failed' | 'cancelled';
+
 export type ExtractionBatchResult =
   | {
       readonly status: 'completed';
