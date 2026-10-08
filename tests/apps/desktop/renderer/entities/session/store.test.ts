@@ -16,15 +16,15 @@ describe('useSessionStore', () => {
     sessions: [], activeSessionId: null, newSessionDraftTargetProjectId: null,
   }));
 
-  it('requests asynchronous memory work once when entering a persisted session', async () => {
+  it('selects a persisted session without starting memory production', async () => {
     const startGeneration = vi.fn().mockResolvedValue({ ok: true, data: { status: 'skipped', reason: 'disabled' } });
     vi.stubGlobal('window', { megumi: { memory: { startGeneration } } });
     useSessionStore.getState().upsertSession(session);
     useSessionStore.getState().setActiveSession(session.id);
     useSessionStore.getState().setActiveSession(session.id);
     await Promise.resolve();
-    expect(startGeneration).toHaveBeenCalledTimes(1);
-    expect(startGeneration.mock.calls[0][0].payload).toMatchObject({ reason: 'startup', triggerSessionId: session.id });
+    expect(startGeneration).not.toHaveBeenCalled();
+    expect(useSessionStore.getState().activeSessionId).toBe(session.id);
   });
 
   it('stores and replaces canonical Product Host Session projections', () => {

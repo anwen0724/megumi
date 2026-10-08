@@ -114,7 +114,8 @@ export interface Coding {
 }
 
 export interface CreateCodingOptions {
-  readonly memory?: () => Pick<import('../memory/contracts').MemoryHost, 'createTaskMemory' | 'recordUsage'>;
+  readonly memory?: () => Pick<import('../memory/contracts').MemoryHost, 'createTaskMemory' | 'recordUsage' | 'startGeneration'>;
+  readonly logger?: Pick<import('../contracts').ApplicationLogger, 'warn'>;
   readonly observability?: Observability;
   readonly ai: Pick<Models, 'streamSimple' | 'completeSimple'>;
   readonly agent: Agent;
@@ -161,6 +162,8 @@ export interface CreateCodingOptions {
 export function createCoding(options: CreateCodingOptions): Coding {
   const requests = new Map<string, CodingRequest>();
   const occupied = new Map<string, CodingRequest>();
+  // A turn is not a session lifetime. A new host resumes persisted sessions on first execution.
+  const startedSessions = new Set<string>();
   let stopped = false;
 
   async function submit(request: SubmitCodingInputRequest): Promise<SubmitCodingInputResult> {
@@ -460,6 +463,14 @@ export function createCoding(options: CreateCodingOptions): Coding {
         result.status === 'failed' ? result.error.message : 'Input was cancelled before saving.',
         session,
       );
+    }
+    if (!startedSessions.has(session.session_id)) {
+      startedSessions.add(session.session_id);
+      const production = memory?.startGeneration({
+        requestId: crypto.randomUUID(), reason: 'startup', triggerSessionId: session.session_id,
+      });
+      if (production?.status === 'failed')
+        options.logger?.warn('memory_startup_failed', { sessionId: session.session_id, ...production.error });
     }
     let branchCommit: Extract<SubmitCodingInputResult, { status: 'started' }>['branchCommit'];
     if (request.branchMarkerId) {

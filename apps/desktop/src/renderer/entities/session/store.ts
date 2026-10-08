@@ -54,14 +54,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   setActiveSession: (activeSessionId) => {
     if (activeSessionId === get().activeSessionId) return;
     set({ activeSessionId, ...(activeSessionId ? { newSessionDraftTargetProjectId: null } : {}) });
-    if (!activeSessionId) return;
-    // Session entry is a trigger. Timeline refreshes and component mounts are queries only.
-    void Promise.resolve().then(() => window.megumi.memory.startGeneration(createRendererRuntimeIpcRequest(
-      IPC_CHANNELS.memory.startGeneration,
-      { requestId: crypto.randomUUID(), reason: 'startup', triggerSessionId: activeSessionId },
-    ))).then(result => {
-      if (!result.ok) useChatUiStore.getState().setLastError(result.data.message);
-    }).catch(error => useChatUiStore.getState().setLastError(String(error)));
   },
   startNewSessionDraft: (projectId) => set({
     activeSessionId: null,

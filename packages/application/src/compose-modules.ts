@@ -488,6 +488,7 @@ function composeCapabilitiesWithDatabase(
   });
   const ownedCoding = createCoding({
     memory: () => memory,
+    logger,
     ai,
     agent,
     sessions,

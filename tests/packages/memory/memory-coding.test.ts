@@ -25,7 +25,7 @@ it('reuses generated history in another Coding session, saves verified citations
   const workspaces = createWorkspaceCatalog({ store, file_system: { stat } });
   const opened = await workspaces.openWorkspace({ root_path: f.root });
   if (opened.status !== 'opened') throw new Error();
-  const coding = createCoding({ ai, agent: createAgent({ ai }), memory: () => f.memory,
+  const startCoding = () => createCoding({ ai, agent: createAgent({ ai }), memory: () => f.memory,
     sessions: createSessionCatalog({ store: f.store }), history: f.history,
     branches: createSessionBranchDrafts({ store: f.store, events }), input: createInputProcessor({ sourceAccess: {
       async readImage(source) { if (source.type !== 'local_file') throw new Error('No host image'); return readFile(source.path); },
@@ -39,6 +39,12 @@ it('reuses generated history in another Coding session, saves verified citations
     resolveModel: async () => ({ status: 'ok', model: ai.getModels()[0], compactionThresholdRatio: 0.8 }),
     finalize: async () => {},
   });
+  let coding = startCoding();
+  function productionRuns() {
+    const status = f.memory.getStatus();
+    if (status.status !== 'ok') throw new Error(status.error.message);
+    return status.memory.recentRuns.filter(run => run.kind === 'generation');
+  }
   try {
     await f.user('u1'); f.responses(); await f.generate();
     let citations: MemoryCitation[] = [];
@@ -67,6 +73,8 @@ it('reuses generated history in another Coding session, saves verified citations
     const start = await coding.submitInput({ workspaceId: opened.workspace.workspace_id, text: 'Show an example using my preferred language.', permissionMode: 'full_access' });
     if (start.status !== 'started') throw new Error(JSON.stringify(start));
     expect(await start.run.completion).toMatchObject({ status: 'completed' });
+    expect(productionRuns()).toHaveLength(2);
+    await f.memory.waitRun({ runId: productionRuns()[0].runId, timeoutMs: 5000 });
     expect(f.memory.listSources()).toMatchObject({ sources: expect.arrayContaining([expect.objectContaining({ sessionId: 's1', usageCount: 1 })]) });
     const replies = f.sources.listReplies({ afterCursor: 0, limit: 20 });
     expect(replies[0].message.memory_evidence?.reads.some(read => read.path === 'MEMORY.md')).toBe(true);
@@ -91,5 +99,14 @@ it('reuses generated history in another Coding session, saves verified citations
     const next = await coding.submitInput({ workspaceId: opened.workspace.workspace_id, sessionId: start.session.session_id, text: 'Continue.', permissionMode: 'full_access' });
     if (next.status !== 'started') throw new Error(JSON.stringify(next));
     expect(await next.run.completion).toMatchObject({ status: 'completed' });
+    expect(productionRuns()).toHaveLength(3);
+    await coding.shutdown();
+    coding = startCoding();
+    provider.setResponses([fauxAssistantMessage('Resume the saved session.')]);
+    const resumed = await coding.submitInput({ workspaceId: opened.workspace.workspace_id,
+      sessionId: start.session.session_id, text: 'Resume.', permissionMode: 'full_access' });
+    if (resumed.status !== 'started') throw new Error(JSON.stringify(resumed));
+    expect(await resumed.run.completion).toMatchObject({ status: 'completed' });
+    expect(productionRuns()).toHaveLength(4);
   } finally { await coding.shutdown(); await f.dispose(); }
 });
