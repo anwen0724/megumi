@@ -1,5 +1,5 @@
-/* Summarizes recorded calls and builds a separate human-review worksheet without changing trial evidence. */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+/* Reads an existing run and writes a new summary without modifying its evidence or previous scores. */
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Usage } from '@megumi/ai';
 import type { EffectFixture } from './effect-fixtures';
@@ -7,7 +7,15 @@ import { checkEffectAnswer } from './effect-scoring';
 import { summarizeHumanReview, type EffectReview } from './effect-review';
 
 const root = path.resolve(process.argv[2] ?? '');
-if (!process.argv[2]) throw new Error('Pass the experiment output directory.');
+const outputArgument = process.argv.indexOf('--out');
+const reviewArgument = process.argv.indexOf('--review');
+if (!process.argv[2] || outputArgument < 0 || !process.argv[outputArgument + 1]) throw new Error('Pass the experiment directory and --out <new-summary-directory>. Optionally pass --review <review-file>.');
+const output = path.resolve(process.argv[outputArgument + 1]);
+const sourceRoot = realpathSync(root);
+const outputRoot = path.join(realpathSync(path.dirname(output)), path.basename(output));
+const within = (parent: string, child: string) => { const relative = path.relative(parent, child); return !relative || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative)); };
+if (within(sourceRoot, outputRoot) || within(outputRoot, sourceRoot)) throw new Error('Summary output must be separate from the experiment directory.');
+if (existsSync(outputRoot)) throw new Error('Choose a new summary directory; existing results must not be overwritten.');
 const read = (file: string) => JSON.parse(readFileSync(path.join(root, file), 'utf8'));
 const manifest = read('manifest.json') as { fixtures: EffectFixture[]; conditions: string[]; repeats: number };
 const rows = read('results.json') as { fixtureId: string; condition: string; repeat: number; directory?: string; calls?: { phase: 'task' | 'extract' | 'consolidate'; usage?: Usage }[]; taskDurationMs?: number; productionDurationMs?: number; mechanicalPass?: boolean; status?: string; outcome?: { status: string }; error?: string }[];
@@ -34,7 +42,8 @@ for (const row of rows) {
 const worksheet = [];
 for (const fixture of manifest.fixtures) for (const condition of manifest.conditions) for (let repeat = 1; repeat <= manifest.repeats; repeat++) {
   const row = rows.find(item => item.fixtureId === fixture.id && item.condition === condition && item.repeat === repeat);
-  const resultPath = path.join(row?.directory ?? path.join(root, `${fixture.id}-${condition}-${repeat}`), 'result.json');
+  // Trial directories are relative to this archive, even when historical JSON retains original absolute paths.
+  const resultPath = path.join(root, `${fixture.id}-${condition}-${repeat}`, 'result.json');
   const detail = existsSync(resultPath) ? JSON.parse(readFileSync(resultPath, 'utf8')) : undefined;
   const judgments = detail?.knowledgeReview ?? checkEffectAnswer(fixture, '');
   worksheet.push({ id: `${fixture.id}/${condition}/${repeat}`, evidence: resultPath,
@@ -46,19 +55,20 @@ for (const fixture of manifest.fixtures) for (const condition of manifest.condit
     instructions: 'Inspect task-phase system/tool messages for recalled facts, then answer for actual use. Do not count extraction/production files as task recall. memoryRequired=false labels are current-task facts/calculations and excluded from memory metrics. Record all extra used knowledge, including wrong or unsupported claims. Mark forbidden values usedAsCurrentFact only when asserted as current, not quoted as obsolete. Evidence locations must identify requests.jsonl line/role/tool and answer field. Null means unreviewed, never success.',
   });
 }
-const reviewPath = path.join(root, 'human-review.json');
-if (!existsSync(reviewPath)) writeFileSync(reviewPath, JSON.stringify(worksheet, null, 2));
-writeFileSync(path.join(root, 'human-review-template.json'), JSON.stringify(worksheet, null, 2));
-const human = summarizeHumanReview(manifest, read('human-review.json') as EffectReview[]);
+const reviewPath = reviewArgument < 0 ? path.join(root, 'human-review.json') : path.resolve(process.argv[reviewArgument + 1]);
+const review = existsSync(reviewPath) ? JSON.parse(readFileSync(reviewPath, 'utf8')) as EffectReview[] : [];
+const human = summarizeHumanReview(manifest, review);
 const reviewComplete = Object.values(human.byCondition).every(item => (item as { reviewComplete: boolean }).reviewComplete);
 const summary = { scope: 'synthetic-only', result: reviewComplete
-  ? 'Human review is complete. These measurements do not independently declare the Spec effect gates passed; compare quality, constraints, repeated reuse, forbidden uses and task cost.'
-  : 'Human review is incomplete; unresolved judgments are null, and mechanical checks do not prove task benefit.',
+  ? 'Review entries are complete. This does not certify independent human review or Spec effect gates; inspect the reviewer, rubric, quality, constraints and cost.'
+  : 'Review is incomplete; unresolved judgments are null, and mechanical checks do not prove task benefit.',
   byCondition, human, plannedExecutions: manifest.fixtures.length * manifest.conditions.length * manifest.repeats,
   recordedExecutions: rows.length,
   tokenAccounting: 'input, cacheRead and cacheWrite are listed separately. Total task prompt tokens = input + cacheRead + cacheWrite. Background extraction/consolidation are separate, not task samples.',
   amortization: 'For K reuses of one generated memory, amortized background token cost is (extract + consolidate prompt/output tokens) / K. This experiment rebuilds each repeat and does not measure K reuses.',
   limitations: 'These twelve cases are short-history configuration/plan-writing tasks. They measure factual retrieval and planning constraint use. Suggested repeated bad steps can be counted, but no task executes an external command, so actual repeated execution savings are unmeasured. No token improvement is assumed. Generalization beyond these fixed samples is unsupported.',
 };
-writeFileSync(path.join(root, 'summary.json'), JSON.stringify(summary, null, 2));
+mkdirSync(outputRoot);
+writeFileSync(path.join(outputRoot, 'review-template.json'), JSON.stringify(worksheet, null, 2));
+writeFileSync(path.join(outputRoot, 'summary.json'), JSON.stringify(summary, null, 2));
 console.log(JSON.stringify(summary, null, 2));

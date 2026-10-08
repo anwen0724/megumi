@@ -114,7 +114,7 @@ Desktop connects through Application and shares one AgentRuntime. Eval retains i
 
 ## Evaluation
 
-The evaluation implementation that depended on the old recommendation interfaces has been removed. Memory evaluation scripts remain in [scripts/memory](./scripts/memory/). A unified entry point for selecting evaluation scenarios is not yet available.
+The [memory evaluation guide](./evals/memory/README.md) describes scenario selection, full runs, saved evidence and offline summaries. Each run uses a separate result directory. The evaluation implementation that depended on the old recommendation interfaces has been removed.
 
 ## Quick Start
 

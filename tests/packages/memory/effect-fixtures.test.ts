@@ -1,7 +1,7 @@
 /* Offline checks of the fixed experiment and independent answer checker; no provider calls. */
 import { expect, it } from 'vitest';
-import { effectFixtures, effectConditions } from '../../../scripts/memory/effect-fixtures';
-import { checkEffectAnswer } from '../../../scripts/memory/effect-scoring';
+import { effectFixtures, effectConditions } from '../../../evals/memory/effect-fixtures';
+import { checkEffectAnswer } from '../../../evals/memory/effect-scoring';
 
 it('defines twelve isolated synthetic cases with evidence for every acceptance label', () => {
   const counts = new Map<string, number>();

@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.product.json",
-  "include": ["effect-fixtures.ts", "effect-scoring.ts", "effect-review.ts", "verify-effects.ts", "summarize-effects.ts", "verify-desktop.ts", "../../packages/application/src/**/*.d.ts"],
+  "include": ["verify-desktop.ts", "../../packages/application/src/**/*.d.ts"],
   "references": [{ "path": "../../packages/ai" }]
 }

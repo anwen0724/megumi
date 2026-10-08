@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.product.json",
+  "include": ["./*.ts", "../../packages/application/src/**/*.d.ts"],
+  "exclude": ["records", "../../node_modules"],
+  "references": [{ "path": "../../packages/ai" }]
+}

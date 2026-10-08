@@ -1,7 +1,7 @@
 /* Verifies denominator and unknown handling without a database or external model. */
 import { expect, it } from 'vitest';
-import { summarizeHumanReview, type EffectReview } from '../../../scripts/memory/effect-review';
-import type { EffectFixture } from '../../../scripts/memory/effect-fixtures';
+import { summarizeHumanReview, type EffectReview } from '../../../evals/memory/effect-review';
+import type { EffectFixture } from '../../../evals/memory/effect-fixtures';
 
 const fixture: EffectFixture = {
   id: 'sample', category: 'preference', project: 'sample', histories: [], task: 'Synthetic review input', forbidden: [],

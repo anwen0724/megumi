@@ -169,28 +169,50 @@ async function runTrial(root: string, fixture: EffectFixture, condition: EffectC
 }
 
 async function main() {
+  if (process.argv.includes('--list')) {
+    console.log(effectFixtures.map(fixture => `${fixture.id}\t${fixture.category}`).join('\n'));
+    return;
+  }
+  const fixtureArgument = option('--fixtures');
+  if (process.argv.includes('--help') || (!process.argv.includes('--run') && !process.argv.includes('--preview'))) {
+    console.log('npm run eval:memory -- [--fixtures <id,id>] [--conditions none,full-history,memory] [--repeats 2] (--preview <file> | --run). Omit --fixtures to select all scenarios. Use --list to list scenarios. No model is called without --run.');
+    return;
+  }
+  const fixtureIds = [...new Set(fixtureArgument?.split(',') ?? effectFixtures.map(fixture => fixture.id))];
+  const unknown = fixtureIds.filter(id => !effectFixtures.some(fixture => fixture.id === id));
+  if (unknown.length) throw new Error(`Unknown scenarios: ${unknown.join(', ')}. Use --list.`);
+  const selected = effectFixtures.filter(fixture => fixtureIds.includes(fixture.id));
+  const conditions = [...new Set(option('--conditions')?.split(',') ?? [...effectConditions])];
+  if (conditions.some(condition => !effectConditions.includes(condition as EffectCondition))) throw new Error('Unknown condition.');
+  const repeats = Number(option('--repeats') ?? 2);
+  if (!Number.isInteger(repeats) || repeats < 1) throw new Error('repeats must be a positive integer.');
   const preview = option('--preview');
-  if (preview) { mkdirSync(path.dirname(path.resolve(preview)), { recursive: true }); json(preview, { scope: 'synthetic-only', taskExecutions: 72, productionRuns: 24, fixtures: effectFixtures }); console.log(path.resolve(preview)); return; }
+  if (preview) {
+    mkdirSync(path.dirname(path.resolve(preview)), { recursive: true });
+    json(preview, { scope: 'synthetic-only', fixtureVersion: 2, conditions, repeats,
+      taskExecutions: selected.length * conditions.length * repeats,
+      productionRuns: conditions.includes('memory') ? selected.length * repeats : 0, fixtures: selected });
+    console.log(path.resolve(preview));
+    return;
+  }
   if (!process.argv.includes('--run')) throw new Error('Use --preview <file> to inspect materials or --run to explicitly call the configured provider.');
-  mkdirSync(path.resolve('.tmp'), { recursive: true });
-  const root = path.resolve(option('--output') ?? mkdtempSync(path.join(path.resolve('.tmp'), 'memory-p6-effects-'))); mkdirSync(root, { recursive: true });
-  if (existsSync(path.join(root, 'manifest.json'))) throw new Error('Choose a new output directory; an existing experiment must not be overwritten.');
+  const recordsRoot = path.resolve('evals/memory/records');
+  mkdirSync(recordsRoot, { recursive: true });
+  const requestedOutput = option('--output');
+  const root = requestedOutput ? path.resolve(requestedOutput) : mkdtempSync(path.join(recordsRoot, 'run-'));
+  if (requestedOutput) {
+    if (existsSync(root)) throw new Error('Choose a new output directory; an existing experiment must not be overwritten.');
+    mkdirSync(root, { recursive: true });
+  }
   const configuredHome = process.env.MEGUMI_HOME ?? path.join(os.homedir(), '.megumi');
   const global = createSettings({ globalSettingsPath: path.join(configuredHome, 'settings.json'), credentialsPath: path.join(configuredHome, 'credentials.json'), readEnvironment: name => process.env[name] });
   const configuration = global.readSettings();
   if (configuration.status !== 'ok' || !configuration.settings.config.general.lastSelectedModel) throw new Error('No default conversation model is configured.');
   const frozen = configuration.settings.config;
-  const fixtureIds = option('--fixtures')?.split(',');
-  const selected = fixtureIds ? effectFixtures.filter(item => fixtureIds.includes(item.id)) : effectFixtures;
-  if (!selected.length) throw new Error('No matching fixtures.');
-  const conditions = option('--conditions')?.split(',') ?? [...effectConditions];
-  if (conditions.some(item => !effectConditions.includes(item as EffectCondition))) throw new Error('Unknown condition.');
-  const repeats = Number(option('--repeats') ?? 2);
-  if (!Number.isInteger(repeats) || repeats < 1) throw new Error('repeats must be a positive integer.');
   const historicalBase = Date.now() - 3 * 86400000;
-  const versionFiles = ['scripts/memory/effect-fixtures.ts', 'scripts/memory/verify-effects.ts', 'scripts/memory/effect-scoring.ts', 'packages/application/src/memory/extraction-input.ts', 'packages/application/src/memory/consolidation-agent.ts', 'packages/application/src/memory/memory-consumption.ts', 'packages/application/resources/instructions/common.md', 'packages/application/resources/instructions/conversation.md'];
+  const versionFiles = ['evals/memory/effect-fixtures.ts', 'evals/memory/verify-effects.ts', 'evals/memory/effect-scoring.ts', 'packages/application/src/memory/extraction-input.ts', 'packages/application/src/memory/consolidation-agent.ts', 'packages/application/src/memory/memory-consumption.ts', 'packages/application/resources/instructions/common.md', 'packages/application/resources/instructions/conversation.md'];
   json(path.join(root, 'manifest.json'), { recordedAt: new Date().toISOString(), codeCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
-    versions: Object.fromEntries(versionFiles.map(file => [file, hash(readFileSync(file, 'utf8'))])), fixtures: selected, conditions, repeats,
+    versions: Object.fromEntries(versionFiles.map(file => [file, hash(readFileSync(file, 'utf8'))])), fixtureVersion: 2, fixtures: selected, conditions, repeats,
     configurationHash: hash(JSON.stringify(frozen)), selectedModel: frozen.general.lastSelectedModel, historicalBase,
     scope: 'synthetic-only', toolPolicy: 'No general task tools for these plan/configuration tasks; Memory condition has product memory read tools.',
     comparison: 'Each repetition rebuilds an isolated database, sources, memory generation and zero usage counts. No generated answers are reused.' });

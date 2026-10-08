@@ -94,13 +94,13 @@ export const effectFixtures: readonly EffectFixture[] = [
   {
     id: 'cross-pagination', category: 'cross-project', project: 'Beta',
     histories: [history('alpha-pagination', 'Alpha', 'Alpha 是离线报表，分页必须用 offset，固定 limit=100。仅适用于 Alpha。'), history('beta-pagination', 'Beta', 'Beta 是实时消息流，分页必须用 cursor，固定 limit=25；不能复用 Alpha 的 offset。仅适用于 Beta。')],
-    task: '当前在 Beta 项目继续做列表加载。给该项目参数 JSON：paginationParameter、limit。',
+    task: '当前在 Beta 项目继续做列表加载。给该项目参数 JSON：paginationParameter 表示分页方式，填写 offset 或 cursor，不要求实际 HTTP 参数名；limit 填写每页数量。',
     facts: [fact('pagination', 'paginationParameter', 'cursor', 'Beta 使用游标', ['beta-pagination'], '仅 Beta 实时流'), fact('limit', 'limit', 25, 'Beta 容量', ['beta-pagination'], '仅 Beta')], forbidden: [{ field: 'paginationParameter', value: 'offset', reason: '只适用于 Alpha' }],
   },
   {
     id: 'cross-delete', category: 'cross-project', project: 'ProductionLedger',
     histories: [history('sandbox-delete', 'SandboxLedger', 'SandboxLedger 是可丢弃实验库，清理使用 hard-delete，不保留审计；仅适用于这个实验项目。'), history('production-delete', 'ProductionLedger', 'ProductionLedger 是正式账簿，删除必须 soft-delete，字段 deleted_at 标记且保留 audit_event；不得套用 SandboxLedger 物理删除规则。')],
-    task: '当前 ProductionLedger 要新增删除功能，给配置 JSON：deleteMode（hard-delete 或 soft-delete）、markerField、auditRecord。不要执行删除。',
+    task: '当前 ProductionLedger 要新增删除功能，给配置 JSON：deleteMode（hard-delete 或 soft-delete）、markerField（标记字段名称）、auditRecord（需要保留的审计记录名称，字符串，不是布尔值）。不要执行删除。',
     facts: [fact('mode', 'deleteMode', 'soft-delete', '正式项目软删', ['production-delete'], 'ProductionLedger'), fact('marker', 'markerField', 'deleted_at', '软删标记', ['production-delete'], 'ProductionLedger'), fact('audit', 'auditRecord', 'audit_event', '保留审计', ['production-delete'], 'ProductionLedger')], forbidden: [{ field: 'deleteMode', value: 'hard-delete', reason: '只适用于实验项目' }],
   },
 ];
