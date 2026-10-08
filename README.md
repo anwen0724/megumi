@@ -114,24 +114,7 @@ Desktop connects through Application and shares one AgentRuntime. Eval retains i
 
 ## Evaluation
 
-Eval has not yet been adapted to the new package paths and recommendation submission interface; the following describes the existing evaluation setup.
-
-The [Agent evaluation platform](./evals/agent/README.md) covers conversation, interest understanding, content supply, recommendation, and preference learning. The controlled suite contains **8 datasets and 23 cases**, including recommendation quality and preference changes across successive rounds.
-
-Each case runs through the product's business entry points in an isolated environment. It preserves initial and final state, Trace records, and file artifacts. Execution is separate from scoring, so saved evidence can be reviewed without another model run.
-
-- **Automatic scoring:** business constraints, model and tool usage, Token consumption, and execution time.
-- **Human semantic review:** relevance, preference evidence, and recommendation reasons, using explicit review criteria.
-- **Case-level comparison:** identify regressions and missing evidence between comparable runs.
-
-Validate datasets and inspect the metric catalog without making model calls:
-
-```bash
-npm run eval:agent -- datasets validate
-npm run eval:agent -- metrics list
-```
-
-Running Agent cases requires an explicit model configuration and credentials. See the [evaluation guide](./evals/agent/README.md) for execution, scoring, and comparison commands.
+The evaluation implementation that depended on the old recommendation interfaces has been removed. Memory evaluation scripts remain in [scripts/memory](./scripts/memory/). A unified entry point for selecting evaluation scenarios is not yet available.
 
 ## Quick Start
 
@@ -171,7 +154,6 @@ packages/
     ├── src/                   discovery, settings, workspace, voice, storage, observability
     └── resources/             SQL migrations and voice resources
 
-evals/agent/                   Datasets, isolated runs, scoring, and comparisons
 tests/                         Automated tests and architecture guards
 assets/                        Screenshots and public assets
 ```

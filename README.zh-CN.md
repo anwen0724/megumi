@@ -114,24 +114,7 @@ flowchart TD
 
 ## 质量评估
 
-当前 Eval 尚未适配新的包路径与推荐提交接口，以下为原有评估能力说明。
-
-[Agent 评估平台](./evals/agent/README.md)覆盖通用对话、兴趣理解、内容供给、推荐与偏好学习。受控题集包含 **8 个数据集、23 个样本**，包括推荐质量与连续多轮偏好变化场景。
-
-每个样本通过正式业务入口在隔离环境中执行，保存初始／最终状态、Trace 和文件产物。执行与评分分离，已有证据可以反复评审，无需重新调用模型。
-
-- **自动评分：** 检查业务约束，统计模型和工具调用、Token 用量及执行耗时。
-- **人工语义评审：** 按明确标准评审内容相关性、偏好依据和推荐理由。
-- **逐样本对照：** 比较可比运行结果，定位退化与证据缺口。
-
-校验题集、查看指标目录，无需调用模型：
-
-```bash
-npm run eval:agent -- datasets validate
-npm run eval:agent -- metrics list
-```
-
-执行 Agent 样本需要显式配置模型及凭据。运行、评分与对照命令见[评估使用说明](./evals/agent/README.md)。
+依赖旧推荐接口的评估实现已删除。记忆评估脚本仍保存在 [scripts/memory](./scripts/memory/)。按场景选择评估的统一入口尚未接入。
 
 ## 快速开始
 
@@ -171,7 +154,6 @@ packages/
     ├── src/                   discovery、settings、workspace、voice、storage、observability
     └── resources/             SQL 迁移与语音资源
 
-evals/agent/                   数据集、隔离执行、评分与对照
 tests/                         自动化测试与架构守卫
 assets/                        截图与公开资源
 ```
