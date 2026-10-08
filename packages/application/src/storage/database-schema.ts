@@ -21,6 +21,122 @@ type JsonValue = JsonObject | JsonArray | string | number | boolean | null;
 
 const jsonText = (name: string) => text(name, { mode: 'json' }).$type<JsonValue>();
 
+export const memorySources = sqliteTable('memory_sources', {
+  sessionId: text('session_id').primaryKey(),
+  eligibility: text('eligibility').notNull().default('eligible'),
+  eligibilityVersion: integer('eligibility_version').notNull().default(0),
+  usageCount: integer('usage_count').notNull().default(0),
+  lastUsedAt: text('last_used_at'),
+  updatedAt: text('updated_at').notNull(),
+}, table => [
+  check('memory_source_eligibility', sql`${table.eligibility} IN ('eligible', 'excluded')`),
+  check('memory_source_counters', sql`${table.eligibilityVersion} >= 0 AND ${table.usageCount} >= 0`),
+]);
+
+export const memoryExtractions = sqliteTable('memory_extractions', {
+  sessionId: text('session_id').notNull().references(() => memorySources.sessionId),
+  sourceVersion: text('source_version').notNull(),
+  workspaceId: text('workspace_id'),
+  sourceUpdatedAt: text('source_updated_at').notNull(),
+  rawMemory: text('raw_memory').notNull(),
+  rolloutSummary: text('rollout_summary').notNull(),
+  rolloutSlug: text('rollout_slug').notNull(),
+  coverageJson: jsonText('coverage_json').notNull(),
+  extractedAt: text('extracted_at').notNull(),
+}, table => [primaryKey({ columns: [table.sessionId, table.sourceVersion] })]);
+
+export const memoryCurrentExtractions = sqliteTable('memory_current_extractions', {
+  sessionId: text('session_id').primaryKey(),
+  sourceVersion: text('source_version').notNull(),
+}, table => [foreignKey({
+  columns: [table.sessionId, table.sourceVersion],
+  foreignColumns: [memoryExtractions.sessionId, memoryExtractions.sourceVersion],
+})]);
+
+export const memoryRuns = sqliteTable('memory_runs', {
+  runId: text('run_id').primaryKey(),
+  kind: text('kind').notNull(),
+  reason: text('reason').notNull(),
+  status: text('status').notNull(),
+  targetRevision: integer('target_revision').notNull(),
+  cancelRequested: integer('cancel_requested', { mode: 'boolean' }).notNull().default(false),
+  resultJson: jsonText('result_json'),
+  createdAt: text('created_at').notNull(),
+  completedAt: text('completed_at'),
+}, table => [check('memory_run_status', sql`${table.status} IN ('pending','running','completed','failed','cancelled')`)]);
+
+export const memoryJobs = sqliteTable('memory_jobs', {
+  jobId: text('job_id').primaryKey(),
+  runId: text('run_id').notNull().references(() => memoryRuns.runId),
+  stage: text('stage').notNull(),
+  sessionId: text('session_id'),
+  sourceVersion: text('source_version'),
+  targetRevision: integer('target_revision'),
+  status: text('status').notNull(),
+  attempt: integer('attempt').notNull(),
+  ownerToken: text('owner_token'),
+  leaseExpiresAt: text('lease_expires_at'),
+  retryAt: text('retry_at'),
+  errorJson: jsonText('error_json'),
+  startedAt: text('started_at'),
+  completedAt: text('completed_at'),
+}, table => [
+  check('memory_job_status', sql`${table.status} IN ('pending','running','succeeded','failed','cancelled','superseded')`),
+  check('memory_job_attempt', sql`${table.attempt} > 0`),
+  check('memory_job_stage', sql`${table.stage} IN ('extract','consolidate')`),
+  uniqueIndex('memory_active_extraction').on(table.sessionId, table.sourceVersion)
+    .where(sql`${table.stage} = 'extract' AND ${table.status} IN ('pending','running')`),
+  uniqueIndex('memory_active_consolidation').on(table.stage)
+    .where(sql`${table.stage} = 'consolidate' AND ${table.status} IN ('pending','running')`),
+]);
+
+export const memorySnapshots = sqliteTable('memory_snapshots', {
+  snapshotId: text('snapshot_id').primaryKey(),
+  targetRevision: integer('target_revision').notNull(),
+  diffJson: jsonText('diff_json').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
+export const memorySnapshotSources = sqliteTable('memory_snapshot_sources', {
+  snapshotId: text('snapshot_id').notNull().references(() => memorySnapshots.snapshotId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull(),
+  sourceVersion: text('source_version').notNull(),
+  ordinal: integer('ordinal').notNull(),
+  artifactPath: text('artifact_path').notNull(),
+}, table => [
+  primaryKey({ columns: [table.snapshotId, table.sessionId, table.sourceVersion] }),
+  foreignKey({ columns: [table.sessionId, table.sourceVersion],
+    foreignColumns: [memoryExtractions.sessionId, memoryExtractions.sourceVersion] }),
+]);
+
+export const memoryState = sqliteTable('memory_state', {
+  id: integer('id').primaryKey(),
+  artifactState: text('artifact_state').notNull().default('empty'),
+  controlRevision: integer('control_revision').notNull().default(0),
+  dirtyRevision: integer('dirty_revision').notNull().default(0),
+  processedRevision: integer('processed_revision').notNull().default(0),
+  successfulSnapshotId: text('successful_snapshot_id').references(() => memorySnapshots.snapshotId),
+  artifactVersionsJson: jsonText('artifact_versions_json').notNull().default('{}'),
+  clearPending: integer('clear_pending', { mode: 'boolean' }).notNull().default(false),
+  replyCursor: integer('reply_cursor').notNull().default(0),
+  clearReplyCursor: integer('clear_reply_cursor').notNull().default(0),
+  writerToken: text('writer_token'),
+  writerLeaseExpiresAt: text('writer_lease_expires_at'),
+}, table => [
+  check('memory_singleton', sql`${table.id} = 1`),
+  check('memory_artifact_state', sql`${table.artifactState} IN ('empty','ready','updating','needsRepair','clearing')`),
+  check('memory_revisions', sql`${table.controlRevision} >= 0 AND ${table.dirtyRevision} >= ${table.processedRevision} AND ${table.processedRevision} >= 0`),
+]);
+
+export const memoryRequests = sqliteTable('memory_requests', {
+  operation: text('operation').notNull(),
+  requestId: text('request_id').notNull(),
+  inputHash: text('input_hash').notNull(),
+  resultJson: jsonText('result_json').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+}, table => [primaryKey({ columns: [table.operation, table.requestId] })]);
+
 export const workspaces = sqliteTable(
   'workspaces',
   {
@@ -47,6 +163,7 @@ export const sessions = sqliteTable(
     title: text('title').notNull(),
     status: text('status').notNull(),
     activeEntryId: text('active_entry_id'),
+    contentUpdatedAt: text('content_updated_at'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     archivedAt: text('archived_at'),
@@ -106,6 +223,12 @@ export const sessionMessages = sqliteTable(
       .where(sql`${table.messageKind} = 'assistant_reply'`),
   ],
 );
+
+export const sessionReplySequence = sqliteTable('session_reply_sequence', {
+  sequence: integer('sequence').primaryKey({ autoIncrement: true }),
+  messageId: text('message_id').notNull().unique()
+    .references(() => sessionMessages.messageId, { onDelete: 'cascade' }),
+});
 
 export const sessionMessageAttachments = sqliteTable(
   'session_message_attachments',

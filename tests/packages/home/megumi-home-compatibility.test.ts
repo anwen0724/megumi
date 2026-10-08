@@ -179,7 +179,8 @@ describe('Megumi Home foundation', () => {
       },
     });
     expect(schema.required).toBeUndefined();
-    expect(schema.properties).not.toHaveProperty('memory');
+    expect(schema.properties).toHaveProperty('memory.properties.extractModel');
+    expect(schema.properties).toHaveProperty('memory.properties.consolidationModel');
     expect(JSON.stringify(schema)).not.toContain('deepseek-flash');
     expect(JSON.stringify(schema)).not.toContain('api_key');
   });

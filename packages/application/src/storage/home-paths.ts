@@ -8,6 +8,7 @@ export interface MegumiHomeEnv {
 export interface MegumiHomePaths {
   readonly homePath: string;
   readonly skillsPath: string;
+  readonly memoriesPath: string;
   readonly systemSkillsPath: string;
   readonly settingsPath: string;
   readonly credentialsPath: string;
@@ -43,6 +44,7 @@ export function buildMegumiHomePaths(homePath: string): MegumiHomePaths {
   return {
     homePath: resolvedHomePath,
     skillsPath: path.join(resolvedHomePath, 'skills'),
+    memoriesPath: path.join(resolvedHomePath, 'memories'),
     systemSkillsPath: path.join(resolvedHomePath, 'skills', '.system'),
     settingsPath: path.join(resolvedHomePath, 'settings.json'),
     credentialsPath: path.join(resolvedHomePath, 'credentials.json'),

@@ -36,6 +36,52 @@ function configurationFiles(globalOnly=false) {
 }
 
 describe('Configuration files', () => {
+  it('normalizes instruction fallback names and rejects paths and out-of-range budgets', () => {
+    const files = configurationFiles();
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ context: {
+      instructionFallbackNames: ['TEAM.md', 'TEAM.md', 'RULES.md'], instructionMaxBytes: 2048,
+    } }));
+    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: {
+      context: { instructionFallbackNames: ['TEAM.md', 'RULES.md'], instructionMaxBytes: 2048 },
+    } } });
+    for (const context of [{ instructionFallbackNames: ['../secret.md'] }, { instructionMaxBytes: 0 }]) {
+      fs.writeFileSync(files.projectSettingsPath, JSON.stringify({ context }));
+      expect(files.settings.readSettings()).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_INVALID' } });
+    }
+  });
+
+  it('rejects project memory overrides while preserving global bindings', () => {
+    const files = configurationFiles();
+    fs.writeFileSync(files.globalSettingsPath, JSON.stringify({ memory: {
+      extractModel: { providerId: 'global', modelId: 'extract' }, generateMemories: false,
+    } }));
+    fs.mkdirSync(path.dirname(files.projectSettingsPath), { recursive: true });
+    fs.writeFileSync(files.projectSettingsPath, '{"memory":{"useMemories":false}}');
+    expect(files.settings.readSettings()).toMatchObject({
+      status: 'rejected', error: { code: 'SETTINGS_SCOPE_INVALID' },
+    });
+    fs.writeFileSync(files.projectSettingsPath, '{}');
+    expect(files.settings.readSettings()).toMatchObject({ status: 'ok', settings: { config: { memory: {
+      extractModel: { providerId: 'global', modelId: 'extract' }, generateMemories: false,
+    } } } });
+  });
+
+  it('reads legacy settings with memory defaults without inventing model bindings or rewriting the file', () => {
+    const files = configurationFiles(true);
+    const original = '{"general":{"language":"zh-CN"}}';
+    fs.writeFileSync(files.globalSettingsPath, original);
+    const result = files.settings.readSettings();
+    expect(result).toMatchObject({ status: 'ok', settings: { config: { memory: {
+      generateMemories: true, useMemories: true, maxSourceAgeDays: 30,
+      minSourceIdleHours: 6, maxSourcesPerRun: 16, maxConsolidationSources: 256, maxUnusedDays: 30,
+    } } } });
+    if (result.status !== 'ok') throw new Error('Expected configuration');
+    expect(result.settings.config.memory).not.toHaveProperty('extractModel');
+    expect(result.settings.config.memory).not.toHaveProperty('consolidationModel');
+    expect(fs.readFileSync(files.globalSettingsPath, 'utf8')).toBe(original);
+  });
+
   it('persists explicitly added builtin models without copying their catalog parameters', () => {
     const files = configurationFiles();
     const read = files.settings.readSettings();
@@ -125,6 +171,23 @@ describe('Configuration files', () => {
     ).toThrow('Disk unavailable');
     expect(fs.readFileSync(files.projectSettingsPath, 'utf8')).toBe(original);
     expect(fs.readdirSync(path.dirname(files.projectSettingsPath))).toEqual(['settings.json']);
+  });
+
+  it('rejects stale edits to either memory model binding as a complete selection', () => {
+    const files = configurationFiles(true);
+    const original = files.settings.readSettings();
+    if (original.status !== 'ok') throw new Error('Expected configuration');
+    expect(files.settings.updateSettings({
+      patch: { memory: { extractModel: { providerId: 'p1', modelId: 'm1' },
+        consolidationModel: { providerId: 'p2', modelId: 'm2' } } },
+      expectedRevision: original.settings.revision,
+    }).status).toBe('updated');
+    for (const binding of ['extractModel', 'consolidationModel']) {
+      expect(files.settings.updateSettings({
+        patch: { memory: { [binding]: { providerId: 'p3', modelId: 'm3' } } },
+        expectedRevision: original.settings.revision,
+      })).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
+    }
   });
 
   it('treats task model selection as one value and binds revisions to the configured files', () => {

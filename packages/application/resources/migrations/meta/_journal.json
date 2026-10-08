@@ -267,6 +267,20 @@
       "when": 1791500000003,
       "tag": "0037_recommendation_run_states",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1791500000004,
+      "tag": "0038_memory_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1791500000005,
+      "tag": "0039_memory_source_cursor",
+      "breakpoints": true
     }
   ]
 }

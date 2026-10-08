@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  createNodeInstructionSource,
   loadInstructionFiles,
   loadSystemInstructionDocuments,
   type InstructionSource,
@@ -26,6 +27,53 @@ afterEach(() => {
 });
 
 describe('InstructionReader', () => {
+  it('rejects a real directory junction that leaves the workspace', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-instruction-junction-'));
+    temporaryInstructionRoots.push(root);
+    const workspace = path.join(root, 'workspace');
+    const outside = path.join(root, 'outside');
+    fs.mkdirSync(workspace);
+    fs.mkdirSync(outside);
+    fs.writeFileSync(path.join(outside, 'AGENTS.md'), 'Outside rules');
+    fs.symlinkSync(outside, path.join(workspace, 'linked'), 'junction');
+    const result = await loadInstructionFiles({ megumiHomePath: workspace, workspaceRoot: workspace,
+      workingDirectory: path.join(workspace, 'linked'), source: createNodeInstructionSource() });
+    expect(result).toMatchObject({ status: 'failed' });
+    expect(JSON.stringify(result)).not.toContain('Outside rules');
+  });
+
+  it('caps the combined UTF-8 budget at a character boundary and marks the last source', async () => {
+    const root = testPath('budget');
+    const child = path.join(root, 'child');
+    const result = await loadInstructionFiles({ megumiHomePath: root, workspaceRoot: root,
+      workingDirectory: child, maxBytes: 5,
+      source: new FakeInstructionSource(new Map([
+        [path.join(root, 'AGENTS.md'), 'ab'], [path.join(child, 'AGENTS.md'), '汉汉'],
+      ])),
+    });
+    expect(result).toMatchObject({ status: 'ok', sources: [
+      { content: 'ab' }, { content: '汉', truncated: true },
+    ] });
+  });
+
+  it('selects the first nonempty override, default or fallback at each directory', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'megumi-instruction-order-'));
+    temporaryInstructionRoots.push(root);
+    const nested = path.join(root, 'nested');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(path.join(root, 'AGENTS.override.md'), 'override');
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), 'default');
+    fs.writeFileSync(path.join(nested, 'AGENTS.override.md'), ' \n');
+    fs.writeFileSync(path.join(nested, 'AGENTS.md'), '\t');
+    fs.writeFileSync(path.join(nested, 'TEAM.md'), 'nested fallback');
+    const result = await loadInstructionFiles({
+      megumiHomePath: root, workspaceRoot: root, workingDirectory: nested,
+      source: createNodeInstructionSource(), fallbackNames: ['TEAM.md'],
+    });
+    if (result.status !== 'ok') throw new Error(JSON.stringify(result));
+    expect(result.sources.map(({ content }) => content)).toEqual(['override', 'nested fallback']);
+  });
+
   it('loads the selected documents in order and normalizes BOM and line endings', async () => {
     const root = createInstructionContentRoot({ common: '\uFEFFIdentity\r\nline two', conversation: 'Behavior\r\n', recommendation: 'Unused' });
     const documents = ['common', 'conversation'].map(name => ({ instructionId: name, sourcePath: path.join(root, `${name}.md`) }));

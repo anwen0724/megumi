@@ -4,6 +4,7 @@ import { GeneralSettingsSchema } from './definitions/general';
 import { ProvidersSettingsSchema } from './definitions/providers';
 import { ModelReferenceSchema } from './definitions/providers';
 import { ContextConfigurationSchema } from './definitions/context';
+import { MemoryConfigurationSchema } from './definitions/memory';
 import { RecommendationConfigurationSchema } from './definitions/recommendation';
 import { VoiceConfigurationSchema } from './definitions/voice';
 import { WebSearchConfigurationSchema } from './definitions/web-search';
@@ -13,6 +14,7 @@ export const ConfigurationSchema = z.object({
   general: GeneralSettingsSchema,
   providers: ProvidersSettingsSchema,
   context: ContextConfigurationSchema,
+  memory: MemoryConfigurationSchema,
   discovery: RecommendationConfigurationSchema.default({}),
   voice: VoiceConfigurationSchema,
   webSearch: WebSearchConfigurationSchema,
@@ -21,6 +23,7 @@ export const ConfigurationSchema = z.object({
 export type SettingsConfiguration = z.output<typeof ConfigurationSchema>;
 
 export const GlobalOnlySettingsFields = {
+  memory: Object.keys(MemoryConfigurationSchema.removeDefault().shape) as (keyof SettingsConfiguration['memory'])[],
   general: ['setupCompleted', 'language', 'theme', 'lastSelectedModel'],
   voice: ['inputDeviceId', 'outputDeviceId'],
   discovery: ['enabled','enabledSources','candidateSupplyModel','recommendationModel','dailyFeed','candidateSupply','curated','limits'],

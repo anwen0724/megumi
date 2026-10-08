@@ -20,6 +20,9 @@ export interface SessionStore {
   }): Session | undefined;
   findSessionById(sessionId: string): Session | undefined;
   listSessionsByWorkspaceId(workspaceId: string): Session[];
+  listSourceSessions(sessionId?: string): { session: Session; contentUpdatedAt: string }[];
+  getReplyCursor(): number;
+  listRepliesAfter(cursor: number, limit: number): { cursor: number; message: SessionAssistantReplyMessage }[];
   archiveSession(input: { session_id: string; archived_at: string }): Session | undefined;
   updateSessionActiveEntry(input: {
     session_id: string;
@@ -81,10 +84,10 @@ class DatabaseSessionStore implements SessionStore {
         sql: `
       INSERT INTO sessions (
         session_id, workspace_id, title, status, active_entry_id,
-        created_at, updated_at, archived_at, model_selection
+        created_at, updated_at, archived_at, model_selection, content_updated_at
       ) VALUES (
         @session_id, @workspace_id, @title, @status, @active_entry_id,
-        @created_at, @updated_at, @archived_at, @model_selection
+        @created_at, @updated_at, @archived_at, @model_selection, @created_at
       )
     `,
       })
@@ -147,11 +150,14 @@ class DatabaseSessionStore implements SessionStore {
     active_entry_id?: string;
     updated_at: string;
   }): Session | undefined {
+    const previous = this.findSessionById(input.session_id);
+    const contentChanged = this.originalTip(previous?.active_entry_id) !== this.originalTip(input.active_entry_id);
     this.database
       .prepare({
         sql: `
       UPDATE sessions
       SET active_entry_id = @active_entry_id,
+          content_updated_at = CASE WHEN @content_changed THEN @updated_at ELSE content_updated_at END,
           updated_at = @updated_at
       WHERE session_id = @session_id
     `,
@@ -160,8 +166,47 @@ class DatabaseSessionStore implements SessionStore {
         session_id: input.session_id,
         active_entry_id: input.active_entry_id ?? null,
         updated_at: input.updated_at,
+        content_changed: contentChanged ? 1 : 0,
       });
     return this.findSessionById(input.session_id);
+  }
+
+  private originalTip(entryId?: string): string | undefined {
+    const visited = new Set<string>();
+    while (entryId) {
+      if (visited.has(entryId)) throw new Error('Cycle in session compaction chain.');
+      visited.add(entryId);
+      const entry = this.findEntryById(entryId);
+      if (!entry || entry.entry_type === 'message') return entryId;
+      const summary = entry.compaction_id ? this.findCompactionById(entry.compaction_id)?.summary : undefined;
+      if (!summary) throw new Error(`Missing compaction summary for ${entryId}.`);
+      entryId = summary.covered_until_entry_id;
+    }
+    return undefined;
+  }
+
+  listSourceSessions(sessionId?: string): { session: Session; contentUpdatedAt: string }[] {
+    return this.database.prepare<SessionRow & { content_updated_at: string | null }>({
+      sql: `SELECT * FROM sessions ${sessionId ? 'WHERE session_id = ?' : ''}
+        ORDER BY COALESCE(content_updated_at, created_at) DESC, session_id ASC`,
+    }).all(sessionId ? [sessionId] : []).map(row => ({
+      session: fromSessionRow(row), contentUpdatedAt: row.content_updated_at ?? row.created_at,
+    }));
+  }
+
+  getReplyCursor(): number {
+    return this.database.prepare<{ seq: number }>({
+      sql: "SELECT seq FROM sqlite_sequence WHERE name = 'session_reply_sequence'",
+    }).get()?.seq ?? 0;
+  }
+
+  listRepliesAfter(cursor: number, limit: number): { cursor: number; message: SessionAssistantReplyMessage }[] {
+    return this.database.prepare<SessionMessageRow & { sequence: number }>({
+      sql: `SELECT m.*, r.sequence FROM session_reply_sequence r
+        JOIN session_messages m ON m.message_id = r.message_id
+        WHERE r.sequence > ? ORDER BY r.sequence ASC LIMIT ?`,
+    }).all([cursor, limit]).map(row => ({ cursor: row.sequence,
+      message: SessionAssistantReplyMessageSchema.parse(fromMessageRow(row)) }));
   }
 
   insertMessage(message: SessionMessage): SessionMessage {

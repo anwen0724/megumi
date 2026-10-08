@@ -124,7 +124,7 @@ export interface CreateCodingOptions {
   readonly preparation: CodingRunPreparation;
   readonly context: Pick<
     CodingContextOptions,
-    'attachments' | 'megumiHomePath' | 'instructionDocuments' | 'skills'
+    'attachments' | 'megumiHomePath' | 'instructionDocuments' | 'readInstructionPolicy' | 'skills'
   >;
   readonly events: EventBus;
   readonly terminalRetentionMs: number;

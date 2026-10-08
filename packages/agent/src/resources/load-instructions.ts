@@ -1,4 +1,4 @@
-/* Defines instruction-file I/O contracts and the exact AGENTS.md discovery policy. */
+/* Loads scoped instruction files in explicit priority order. */
 import { readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 export interface SystemInstructionDocument {
@@ -11,6 +11,7 @@ export interface AgentInstructionSource {
   readonly sourceId: string;
   readonly sourcePath: string;
   readonly content: string;
+  readonly truncated?: boolean;
 }
 
 export interface EffectiveInstructions {
@@ -46,7 +47,7 @@ export type GetEffectiveInstructionsResult =
   | { readonly status: 'failed'; readonly failure: EffectiveInstructionFailure }
   | { readonly status: 'cancelled' };
 
-const INSTRUCTION_FILE_NAME = 'AGENTS.md';
+const INSTRUCTION_FILE_NAMES = ['AGENTS.override.md', 'AGENTS.md'];
 
 export interface InstructionSourceOperationOptions {
   readonly signal?: AbortSignal;
@@ -102,6 +103,8 @@ export function createNodeInstructionSource(): InstructionSource {
 }
 
 interface LoadInstructionFilesRequest {
+  readonly fallbackNames?: readonly string[];
+  readonly maxBytes?: number;
   readonly megumiHomePath: string;
   readonly workspaceRoot: string;
   readonly workingDirectory: string;
@@ -179,9 +182,22 @@ export async function loadInstructionFiles(
   })));
 
   const sources: AgentInstructionSource[] = [];
+  let remainingBytes = request.maxBytes ?? Number.POSITIVE_INFINITY;
   const seenRealSourcePaths = new Set<string>();
+  const seenRealDirectories = new Set<string>();
+  const candidateNames = [...new Set([...INSTRUCTION_FILE_NAMES, ...(request.fallbackNames ?? [])])];
   for (const scope of scopes) {
+    if (remainingBytes <= 0) break;
     if (options?.signal?.aborted) return { status: 'cancelled' };
+
+    const realDirectory = await request.source.realPath({ path: scope.directoryPath }, options);
+    if (realDirectory.status === 'cancelled') return { status: 'cancelled' };
+    if (realDirectory.status === 'missing' && scope.missingIsAllowed) continue;
+    if (realDirectory.status !== 'resolved') return directoryReadFailed(scope.directoryPath);
+    if (!isWithin(scope.allowedRootPath, realDirectory.path)) return sourceOutsideScope(scope.directoryPath);
+    const directoryKey = comparablePath(realDirectory.path);
+    if (seenRealDirectories.has(directoryKey)) continue;
+    seenRealDirectories.add(directoryKey);
 
     const directoryResult = await request.source.readDirectory(
       { directoryPath: scope.directoryPath },
@@ -192,36 +208,45 @@ export async function loadInstructionFiles(
     if (directoryResult.status === 'missing' || directoryResult.status === 'failed') {
       return directoryReadFailed(scope.directoryPath);
     }
-    if (!directoryResult.entries.includes(INSTRUCTION_FILE_NAME)) continue;
+    for (const name of candidateNames) {
+      if (!directoryResult.entries.includes(name)) continue;
+      const sourcePath = path.join(scope.directoryPath, name);
+      const realSourceResult = await request.source.realPath({ path: sourcePath }, options);
+      if (realSourceResult.status === 'cancelled') return { status: 'cancelled' };
+      if (realSourceResult.status === 'missing') continue;
+      if (realSourceResult.status === 'failed') return sourceReadFailed(sourcePath);
 
-    const sourcePath = path.join(scope.directoryPath, INSTRUCTION_FILE_NAME);
-    const realSourceResult = await request.source.realPath({ path: sourcePath }, options);
-    if (realSourceResult.status === 'cancelled') return { status: 'cancelled' };
-    if (realSourceResult.status === 'missing') continue;
-    if (realSourceResult.status === 'failed') return sourceReadFailed(sourcePath);
+      const realSourcePath = path.resolve(realSourceResult.path);
+      if (!isWithin(scope.allowedRootPath, realSourcePath)) return sourceOutsideScope(sourcePath);
+      const sourceKey = comparablePath(realSourcePath);
+      if (seenRealSourcePaths.has(sourceKey)) break;
 
-    const realSourcePath = path.resolve(realSourceResult.path);
-    if (!isWithin(scope.allowedRootPath, realSourcePath)) {
-      return sourceOutsideScope(sourcePath);
+      const fileResult = await request.source.readFile({ filePath: sourcePath }, options);
+      if (fileResult.status === 'cancelled') return { status: 'cancelled' };
+      if (fileResult.status === 'missing') continue;
+      if (fileResult.status === 'failed') return sourceReadFailed(sourcePath);
+      if (!fileResult.content.trim()) continue;
+
+      seenRealSourcePaths.add(sourceKey);
+      const content = utf8Prefix(fileResult.content, remainingBytes);
+      const truncated = content.length < fileResult.content.length;
+      remainingBytes -= Buffer.byteLength(content, 'utf8');
+      sources.push({ sourceId: `agents:${sourcePath}`, sourcePath, content,
+        ...(truncated ? { truncated: true } : {}) });
+      if (truncated) return { status: 'ok', sources };
+      break;
     }
-
-    const sourceKey = comparablePath(realSourcePath);
-    if (seenRealSourcePaths.has(sourceKey)) continue;
-
-    const fileResult = await request.source.readFile({ filePath: sourcePath }, options);
-    if (fileResult.status === 'cancelled') return { status: 'cancelled' };
-    if (fileResult.status === 'missing') continue;
-    if (fileResult.status === 'failed') return sourceReadFailed(sourcePath);
-
-    seenRealSourcePaths.add(sourceKey);
-    sources.push({
-      sourceId: `agents:${sourcePath}`,
-      sourcePath,
-      content: fileResult.content,
-    });
   }
 
   return { status: 'ok', sources };
+}
+
+function utf8Prefix(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text, 'utf8');
+  if (bytes.length <= maxBytes) return text;
+  let end = Math.max(0, maxBytes);
+  while (end > 0 && (bytes[end] & 0xc0) === 0x80) end--;
+  return bytes.subarray(0, end).toString('utf8');
 }
 
 class NodeInstructionSource implements InstructionSource {

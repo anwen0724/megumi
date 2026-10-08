@@ -229,7 +229,8 @@ function isModelReferencePath(fieldPath: readonly string[]): boolean {
   return (
     fieldPath.length === 2 &&
     ((fieldPath[0] === 'general' && fieldPath[1] === 'lastSelectedModel') ||
-      (fieldPath[0] === 'discovery' && fieldPath[1] === 'candidateSupplyModel'))
+      (fieldPath[0] === 'discovery' && fieldPath[1] === 'candidateSupplyModel') ||
+      (fieldPath[0] === 'memory' && ['extractModel', 'consolidationModel'].includes(fieldPath[1])))
   );
 }
 

@@ -6,6 +6,7 @@
  * or XML blocks; grouping inside instructions never leaks into the prompt.
  */
 
+import path from 'node:path';
 import type { SystemInstructionDocument } from '../resources/load-instructions';
 import type { EffectiveInstructions } from '../resources/load-instructions';
 export interface PromptSkillCatalog {
@@ -79,7 +80,7 @@ export function renderEffectiveInstructions(instructions: EffectiveInstructions)
   if (instructions.sources.length === 0) return '';
   const entries = instructions.sources.map((source) => (
     [
-      `  <instruction path="${escapeXmlAttribute(source.sourcePath)}">`,
+      `  <instruction path="${escapeXmlAttribute(source.sourcePath)}" scope="${escapeXmlAttribute(path.dirname(source.sourcePath))}" truncated="${source.truncated === true}">`,
       `    ${source.content}`,
       '  </instruction>',
     ].join('\n')

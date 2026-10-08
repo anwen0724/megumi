@@ -48,7 +48,7 @@ describe('migrateDatabase', () => {
 
     try {
       const result = migrateDatabase({ database });
-      expect(result.currentMigration).toBe('0037_recommendation_run_states');
+      expect(result.currentMigration).toBe('0039_memory_source_cursor');
       expect(tableNames(database)).toContain('__drizzle_migrations');
       const migrationRows = database
         .prepare<{ hash: string }>({
@@ -73,5 +73,5 @@ function tableNames(database: DatabaseConnection): string[] {
   `,
     })
     .all()
-    .map((row) => row.name);
+    .map((row) => row.name).filter(name => !name.startsWith('sqlite_'));
 }

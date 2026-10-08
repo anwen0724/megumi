@@ -8,6 +8,7 @@ import type { EventFilter, EventHandler, EventSubscription } from './coding/even
 import type { SessionHost } from './coding/session-contracts';
 import type { ObservabilityHost } from './observability/observability-contracts';
 import type { RecommendationHost } from './recommendation/recommendation-contracts';
+import type { MemoryHost } from './memory/contracts';
 import type { Settings } from './settings/settings-store';
 import type { SkillHost } from './skills/contracts';
 import type { SpeechOutputEventListener, SpeechOutputSubscription } from './voice/index';
@@ -39,6 +40,7 @@ export interface ApplicationOperations {
   observability: ObservabilityHost;
   voice: VoiceHost;
   recommendation: RecommendationHost;
+  memory: MemoryHost;
 }
 
 export interface ApplicationLogger {

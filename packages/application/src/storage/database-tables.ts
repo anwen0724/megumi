@@ -1,9 +1,19 @@
 /* Declares physical Database tables and their single business owners. */
 export const databaseTables = [
+  'memory_sources',
+  'memory_extractions',
+  'memory_current_extractions',
+  'memory_runs',
+  'memory_jobs',
+  'memory_snapshots',
+  'memory_snapshot_sources',
+  'memory_state',
+  'memory_requests',
   'workspaces',
   'sessions',
   'session_entries',
   'session_messages',
+  'session_reply_sequence',
   'session_message_attachments',
   'session_compactions',
   'workspace_changes',
@@ -43,6 +53,14 @@ export interface DatabaseTableOwner {
 }
 
 export const databaseTableOwnership = {
+  memory: {
+    module: 'memory',
+    repository: 'MemoryStore',
+    modulePath: 'packages/application/src/memory',
+    tables: ['memory_sources', 'memory_extractions', 'memory_current_extractions',
+      'memory_runs', 'memory_jobs', 'memory_snapshots', 'memory_snapshot_sources',
+      'memory_state', 'memory_requests'],
+  },
   workspace: {
     module: 'workspace',
     repository: 'WorkspaceStore',
@@ -57,6 +75,7 @@ export const databaseTableOwnership = {
       'sessions',
       'session_entries',
       'session_messages',
+      'session_reply_sequence',
       'session_message_attachments',
       'session_compactions',
     ],

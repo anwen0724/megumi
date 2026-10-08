@@ -255,6 +255,7 @@ function createApplicationInterface(
     }),
   );
   const operations: ApplicationOperations = {
+    memory: modules.memory,
     recommendation: recommendation.host,
     session,
     skill: createSkillOperations({ skills }),

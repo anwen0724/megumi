@@ -455,6 +455,7 @@ export interface CodingContextOptions {
   readonly ai: Pick<Models, 'completeSimple'>;
   readonly megumiHomePath: string;
   readonly instructionDocuments: readonly { instructionId: string; sourcePath: string }[];
+  readonly readInstructionPolicy?: (workspaceId: string) => { fallbackNames: readonly string[]; maxBytes: number };
   readonly skills?: Pick<Skills, 'createView'>;
   readonly events?: Pick<EventBus, 'publish'>;
 }
@@ -481,6 +482,7 @@ export function createCodingContext(options: CodingContextOptions): AgentContext
             workspaceRoot: options.config.environment.workingDirectory,
             workingDirectory: options.config.environment.workingDirectory,
             source: createNodeInstructionSource(),
+            ...options.readInstructionPolicy?.(options.workspaceId),
           },
           { signal },
         ),

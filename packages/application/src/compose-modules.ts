@@ -30,6 +30,9 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { createEventBus, type EventBus } from './coding/events/event-bus';
 import type { ApplicationLogger, ApplicationOperations } from './contracts';
+import { createMemory } from './memory/memory';
+import { createMemoryFiles } from './memory/memory-files';
+import { createMemorySources } from './coding/sessions/memory-sources';
 import {
   PRODUCT_EXECUTION_POLICY,
   PRODUCT_RECENT_EVENT_BUFFER,
@@ -158,6 +161,7 @@ export interface ApplicationModules {
   readonly approval: ApprovalOperations;
   readonly models: ReturnType<typeof createApplicationModels>;
   readonly recommendation: Recommendation;
+  readonly memory: ApplicationOperations['memory'];
 }
 
 /** Composes the capability instances once per Host process. */
@@ -326,6 +330,12 @@ function composeCapabilitiesWithDatabase(
     attachments,
     megumiHomePath: homePaths.homePath,
     instructionDocuments: documents('conversation'),
+    readInstructionPolicy: (workspaceId: string) => {
+      const read = settingsForWorkspace(workspaceId).readSettings();
+      if (read.status !== 'ok') throw new Error(read.error.message);
+      return { fallbackNames: read.settings.config.context.instructionFallbackNames,
+        maxBytes: read.settings.config.context.instructionMaxBytes };
+    },
     skills,
     observability: observability.observability,
   };
@@ -534,6 +544,13 @@ function composeCapabilitiesWithDatabase(
   });
 
   const modules: ApplicationModules = {
+    memory: createMemory({ database, settings, files: createMemoryFiles(homePaths.memoriesPath),
+      sources: createMemorySources({ store: sessionStore,
+        isSessionRunning: sessionId => {
+          const run = coding.getSessionRun(sessionId);
+          return run !== undefined && !['completed', 'failed', 'cancelled'].includes(run.status);
+        } }),
+    }),
     homePaths,
     observability,
     logger,
