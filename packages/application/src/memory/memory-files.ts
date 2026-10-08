@@ -1,5 +1,18 @@
 /* Binds artifact inspection to the application-owned memory root. */
-import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -8,56 +21,125 @@ export interface MemoryFiles {
   list(): readonly MemoryDocument[];
   paths(): readonly string[];
   /** Streams complete text lines for literal matching before excerpt limits are applied. */
-  lines(path: string): Iterable<{ line: number; text: string }>;
+  lines(path: string): Iterable<{
+    line: number;
+    text: string;
+  }>;
   /** Internal callers may lower maxCharacters to fit their complete response envelope. */
-  readLines(path: string, startLine?: number, lineCount?: number, startCharacter?: number, maxCharacters?: number): MemoryDocumentSlice | undefined;
+  readLines(
+    path: string,
+    startLine?: number,
+    lineCount?: number,
+    startCharacter?: number,
+    maxCharacters?: number,
+  ): MemoryDocumentSlice | undefined;
   read(path: string): MemoryDocument | undefined;
-  writeFinal(input: { path: string; content: string; expectedVersion: string }, guard: () => void): MemoryDocument;
+  writeFinal(
+    input: {
+      path: string;
+      content: string;
+      expectedVersion: string;
+    },
+    guard: () => void,
+  ): MemoryDocument;
   writeInput(path: string, chunks: Iterable<string>, guard: () => void): void;
   deleteFinal(path: string, guard: () => void): void;
   clear(guard: () => void): void;
   removeInput(path: string, guard: () => void): void;
   discardTemporary(guard: () => void): void;
 }
-export interface MemoryDocumentSlice { readonly path: string; readonly version: string; readonly content: string; readonly startLine: number; readonly nextLine: number; readonly truncated: boolean; readonly lastLineComplete?: boolean; readonly firstLineComplete?: boolean; readonly nextCharacter?: number }
-export interface MemoryDocument { readonly path: string; readonly version: string; readonly content: string; readonly readOnly: boolean }
+export interface MemoryDocumentSlice {
+  readonly path: string;
+  readonly version: string;
+  readonly content: string;
+  readonly startLine: number;
+  readonly nextLine: number;
+  readonly truncated: boolean;
+  readonly lastLineComplete?: boolean;
+  readonly firstLineComplete?: boolean;
+  readonly nextCharacter?: number;
+}
+export interface MemoryDocument {
+  readonly path: string;
+  readonly version: string;
+  readonly content: string;
+  readonly readOnly: boolean;
+}
 
 export function createMemoryFiles(rootPath: string): MemoryFiles {
   const root = path.resolve(rootPath);
+
   function checked(relative: string): string {
-    if (!relative || relative.includes('\\') || relative.split('/').some(part => !part || part === '.' || part === '..'
-      || /[:\x00-\x1f<>"|?*]/.test(part) || /[. ]$/.test(part) || /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(part))) throw new Error('PATH_DENIED');
-    if (!['MEMORY.md', 'memory_summary.md', 'raw_memories.md'].includes(relative)
-      && !/^rollout_summaries\/[a-zA-Z0-9_-]+\.md$/.test(relative)
-      && !/^skills\/[a-zA-Z0-9_-]+\/.+$/.test(relative)) throw new Error('PATH_DENIED');
+    if (
+      !relative ||
+      relative.includes('\\') ||
+      relative
+        .split('/')
+        .some(
+          part =>
+            !part ||
+            part === '.' ||
+            part === '..' ||
+            /[:\x00-\x1f<>"|?*]/.test(part) ||
+            /[. ]$/.test(part) ||
+            /^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(part),
+        )
+    )
+      throw new Error('PATH_DENIED');
+    if (
+      !['MEMORY.md', 'memory_summary.md', 'raw_memories.md'].includes(relative) &&
+      !/^rollout_summaries\/[a-zA-Z0-9_-]+\.md$/.test(relative) &&
+      !/^skills\/[a-zA-Z0-9_-]+\/.+$/.test(relative)
+    )
+      throw new Error('PATH_DENIED');
     const target = path.resolve(root, relative);
     if (!target.startsWith(root + path.sep)) throw new Error('PATH_DENIED');
-    for (let ancestor = target;; ancestor = path.dirname(ancestor)) {
-      try { if (lstatSync(ancestor).isSymbolicLink()) throw new Error('PATH_DENIED'); }
-      catch (error) { if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error; }
+    for (let ancestor = target; ; ancestor = path.dirname(ancestor)) {
+      try {
+        if (lstatSync(ancestor).isSymbolicLink()) throw new Error('PATH_DENIED');
+      } catch (error) {
+        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+      }
       if (ancestor === path.dirname(ancestor)) break;
     }
     return target;
   }
-  const readOnly = (relative: string) => relative === 'raw_memories.md' || relative.startsWith('rollout_summaries/');
+  const readOnly = (relative: string) =>
+    relative === 'raw_memories.md' || relative.startsWith('rollout_summaries/');
+
   function text(buffer: Uint8Array): string {
     try {
       const value = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
       if (value.includes('\0')) throw new Error();
       return value;
-    } catch { throw new Error('OUTPUT_INVALID'); }
+    } catch {
+      throw new Error('OUTPUT_INVALID');
+    }
   }
+
   function read(relative: string): MemoryDocument | undefined {
     const target = checked(relative);
     if (!existsSync(target)) return undefined;
     const bytes = readFileSync(target);
     if (relative !== 'raw_memories.md' && bytes.length > 1048576) throw new Error('OUTPUT_INVALID');
-    return { path: relative, content: text(bytes), version: createHash('sha256').update(bytes).digest('hex'), readOnly: readOnly(relative) };
+    return {
+      path: relative,
+      content: text(bytes),
+      version: createHash('sha256').update(bytes).digest('hex'),
+      readOnly: readOnly(relative),
+    };
   }
-  function publish(relative: string, chunks: Iterable<string>, guard: () => void, expectedVersion?: string): void {
+
+  function publish(
+    relative: string,
+    chunks: Iterable<string>,
+    guard: () => void,
+    expectedVersion?: string,
+  ): void {
     const target = checked(relative);
     guard();
-    if (expectedVersion !== undefined && (read(relative)?.version ?? 'absent') !== expectedVersion) throw new Error('VERSION_CONFLICT');
+    if (expectedVersion !== undefined && (read(relative)?.version ?? 'absent') !== expectedVersion)
+      throw new Error('VERSION_CONFLICT');
     mkdirSync(path.dirname(target), { recursive: true });
     checked(relative);
     const temporary = `${target}.${randomUUID()}.tmp`;
@@ -73,25 +155,43 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         while (offset < bytes.length) offset += writeSync(fd, bytes, offset);
       }
       fsyncSync(fd);
-    } catch (error) { closeSync(fd); unlinkSync(temporary); throw error; }
+    } catch (error) {
+      closeSync(fd);
+      unlinkSync(temporary);
+      throw error;
+    }
     closeSync(fd);
     try {
-      checked(relative); guard();
-      if (expectedVersion !== undefined && (read(relative)?.version ?? 'absent') !== expectedVersion) throw new Error('VERSION_CONFLICT');
+      checked(relative);
+      guard();
+      if (
+        expectedVersion !== undefined &&
+        (read(relative)?.version ?? 'absent') !== expectedVersion
+      )
+        throw new Error('VERSION_CONFLICT');
       renameSync(temporary, target);
-    } finally { if (existsSync(temporary)) unlinkSync(temporary); }
+    } finally {
+      if (existsSync(temporary)) unlinkSync(temporary);
+    }
   }
+
   function paths(includeTemporary = false): string[] {
     checked('MEMORY.md');
     if (!existsSync(root)) return [];
     const found: string[] = [];
+
     function walk(directory: string) {
       for (const entry of readdirSync(directory, { withFileTypes: true })) {
         const target = path.join(directory, entry.name);
         const relative = path.relative(root, target).split(path.sep).join('/');
         if (entry.isSymbolicLink()) throw new Error('PATH_DENIED');
         if (entry.isDirectory()) {
-          if (relative !== 'skills' && relative !== 'rollout_summaries' && !relative.startsWith('skills/')) throw new Error('PATH_DENIED');
+          if (
+            relative !== 'skills' &&
+            relative !== 'rollout_summaries' &&
+            !relative.startsWith('skills/')
+          )
+            throw new Error('PATH_DENIED');
           walk(target);
         } else {
           const temporary = /^(.*)\.[0-9a-f-]{36}\.tmp$/.exec(relative);
@@ -103,21 +203,29 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
     walk(root);
     return found.sort();
   }
+
   function discardTemporary(guard: () => void): void {
     for (const relative of paths(true)) {
       const temporary = /^(.*)\.[0-9a-f-]{36}\.tmp$/.exec(relative);
       if (!temporary) continue;
-      checked(temporary[1]); guard(); unlinkSync(path.resolve(root, relative));
+      checked(temporary[1]);
+      guard();
+      unlinkSync(path.resolve(root, relative));
     }
   }
   return {
-    list: () => paths().filter(relative => !readOnly(relative)).map(relative => read(relative)!),
+    list: () =>
+      paths()
+        .filter(relative => !readOnly(relative))
+        .map(relative => read(relative)!),
     paths: () => paths(),
     *lines(relative) {
       const fd = openSync(checked(relative), 'r');
       const decoder = new TextDecoder('utf-8', { fatal: true });
       const buffer = Buffer.alloc(16384);
-      let pending = ''; let line = 1; let bytes = 0;
+      let pending = '';
+      let line = 1;
+      let bytes = 0;
       try {
         let count: number;
         while ((count = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
@@ -127,31 +235,64 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
           if (pending.includes('\0')) throw new Error('OUTPUT_INVALID');
           let newline: number;
           while ((newline = pending.indexOf('\n')) >= 0) {
-            yield { line: line++, text: pending.slice(0, newline) };
+            yield {
+              line: line++,
+              text: pending.slice(0, newline),
+            };
             pending = pending.slice(newline + 1);
           }
         }
         pending += decoder.decode();
-        if (pending) yield { line, text: pending };
-      } finally { closeSync(fd); }
+        if (pending)
+          yield {
+            line,
+            text: pending,
+          };
+      } finally {
+        closeSync(fd);
+      }
     },
     discardTemporary,
     readLines(relative, startLine = 1, lineCount = 200, startCharacter = 0, maxCharacters = 16000) {
-      if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > 400 || !Number.isInteger(startCharacter) || startCharacter < 0) throw new Error('INVALID_ARGUMENT');
+      if (
+        !Number.isInteger(startLine) ||
+        startLine < 1 ||
+        !Number.isInteger(lineCount) ||
+        lineCount < 1 ||
+        lineCount > 400 ||
+        !Number.isInteger(startCharacter) ||
+        startCharacter < 0
+      )
+        throw new Error('INVALID_ARGUMENT');
       const target = checked(relative);
       if (!existsSync(target)) return undefined;
       const fd = openSync(target, 'r');
       const hash = createHash('sha256');
       const decoder = new TextDecoder('utf-8', { fatal: true });
       const buffer = Buffer.alloc(16384);
-      let line = 1; let column = 0; let content = ''; let truncated = false;
-      let nextLine = startLine; let nextCharacter = startCharacter; let incompleteLine = false;
+      let line = 1;
+      let column = 0;
+      let content = '';
+      let truncated = false;
+      let nextLine = startLine;
+      let nextCharacter = startCharacter;
+      let incompleteLine = false;
+
       function collect(value: string) {
         if (value.includes('\0')) throw new Error('OUTPUT_INVALID');
         for (const char of value) {
-          if (line === startLine && column < startCharacter && (char === '\n' || column + char.length > startCharacter)) throw new Error('INVALID_ARGUMENT');
+          if (
+            line === startLine &&
+            column < startCharacter &&
+            (char === '\n' || column + char.length > startCharacter)
+          )
+            throw new Error('INVALID_ARGUMENT');
           if (line >= startLine && (line > startLine || column >= startCharacter)) {
-            if (!truncated && line < startLine + lineCount && content.length + char.length <= maxCharacters) {
+            if (
+              !truncated &&
+              line < startLine + lineCount &&
+              content.length + char.length <= maxCharacters
+            ) {
               content += char;
               nextLine = char === '\n' ? line + 1 : line;
               nextCharacter = char === '\n' ? 0 : column + char.length;
@@ -160,7 +301,10 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
               if (line === nextLine && nextCharacter > 0) incompleteLine = true;
             }
           }
-          if (char === '\n') { line++; column = 0; } else column += char.length;
+          if (char === '\n') {
+            line++;
+            column = 0;
+          } else column += char.length;
         }
       }
       try {
@@ -170,11 +314,25 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
           collect(decoder.decode(buffer.subarray(0, count), { stream: true }));
         }
         collect(decoder.decode());
-      } finally { closeSync(fd); }
+      } finally {
+        closeSync(fd);
+      }
       if (line === startLine && column < startCharacter) throw new Error('INVALID_ARGUMENT');
-      if (!truncated) { nextLine = Math.max(startLine, line + (column ? 1 : 0)); nextCharacter = 0; }
-      return { path: relative, version: hash.digest('hex'), content, startLine, nextLine, truncated,
-        lastLineComplete: !incompleteLine, firstLineComplete: startCharacter === 0, ...(nextCharacter ? { nextCharacter } : {}) };
+      if (!truncated) {
+        nextLine = Math.max(startLine, line + (column ? 1 : 0));
+        nextCharacter = 0;
+      }
+      return {
+        path: relative,
+        version: hash.digest('hex'),
+        content,
+        startLine,
+        nextLine,
+        truncated,
+        lastLineComplete: !incompleteLine,
+        firstLineComplete: startCharacter === 0,
+        ...(nextCharacter ? { nextCharacter } : {}),
+      };
     },
     read,
     writeFinal(input, guard) {
@@ -196,7 +354,11 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
     },
     clear(guard) {
       const entries = paths();
-      for (const relative of entries) { const target = checked(relative); guard(); unlinkSync(target); }
+      for (const relative of entries) {
+        const target = checked(relative);
+        guard();
+        unlinkSync(target);
+      }
       discardTemporary(guard);
     },
     removeInput(relative, guard) {
@@ -209,7 +371,8 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
       try {
         // Do not follow a root replaced with a link into another directory.
         const root = lstatSync(rootPath);
-        if (!root.isDirectory() || root.isSymbolicLink()) throw new Error('Invalid memory directory.');
+        if (!root.isDirectory() || root.isSymbolicLink())
+          throw new Error('Invalid memory directory.');
         return paths().length > 0;
       } catch (error) {
         if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;

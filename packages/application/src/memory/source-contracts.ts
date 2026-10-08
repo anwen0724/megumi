@@ -1,6 +1,9 @@
 /* Declares the read-only evidence supplied by Coding to Memory. */
 import type { SessionMessageAttachment } from '../coding/sessions/session-attachments';
-import type { SessionAssistantReplyMessage, SessionMessage } from '../coding/sessions/session-history';
+import type {
+  SessionAssistantReplyMessage,
+  SessionMessage,
+} from '../coding/sessions/session-history';
 
 export interface MemorySourceInfo {
   readonly kind?: 'conversation' | 'temporary' | 'internal';
@@ -25,15 +28,30 @@ export interface MemorySourceSnapshot {
 }
 
 export type MemorySourceResult =
-  | { readonly status: 'found'; readonly snapshot: MemorySourceSnapshot; readonly sourceChanged: boolean }
+  | {
+      readonly status: 'found';
+      readonly snapshot: MemorySourceSnapshot;
+      readonly sourceChanged: boolean;
+    }
   | { readonly status: 'notFound' }
-  | { readonly status: 'failed'; readonly error: { readonly code: 'SOURCE_UNAVAILABLE' | 'STORAGE_FAILED' | 'INVALID_ARGUMENT'; readonly message: string } };
+  | {
+      readonly status: 'failed';
+      readonly error: {
+        readonly code: 'SOURCE_UNAVAILABLE' | 'STORAGE_FAILED' | 'INVALID_ARGUMENT';
+        readonly message: string;
+      };
+    };
 
 export interface MemorySources {
-  listSources(request?: { readonly sessionId?: string; readonly limit?: number }): readonly MemorySourceInfo[];
+  listSources(request?: {
+    readonly sessionId?: string;
+    readonly limit?: number;
+  }): readonly MemorySourceInfo[];
   readSnapshot(sessionId: string): MemorySourceResult;
   readSource(sourceRef: string): MemorySourceResult;
   getReplyCursor(): number;
-  listReplies(request: { readonly afterCursor: number; readonly limit: number }):
-    readonly { readonly cursor: number; readonly message: SessionAssistantReplyMessage }[];
+  listReplies(request: { readonly afterCursor: number; readonly limit: number }): readonly {
+    readonly cursor: number;
+    readonly message: SessionAssistantReplyMessage;
+  }[];
 }

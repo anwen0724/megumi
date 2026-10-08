@@ -13,7 +13,8 @@ it('defines twelve isolated synthetic cases with evidence for every acceptance l
       expect(fact.evidence.length).toBeGreaterThan(0);
       expect(fact.evidence.every(id => allowed.has(id))).toBe(true);
     }
-    if (fixture.category === 'verified-procedure') expect(fixture.histories.some(item => item.tool?.succeeded)).toBe(true);
+    if (fixture.category === 'verified-procedure')
+      expect(fixture.histories.some(item => item.tool?.succeeded)).toBe(true);
   }
   expect(counts.size).toBe(6);
   expect([...counts.values()]).toEqual([2, 2, 2, 2, 2, 2]);
@@ -22,10 +23,16 @@ it('defines twelve isolated synthetic cases with evidence for every acceptance l
 
 it('does not accept a corrected old value and never fills human judgments automatically', () => {
   const fixture = effectFixtures.find(item => item.id === 'correction-api')!;
-  const old = checkEffectAnswer(fixture, '{"endpoint":"/api/v1/items","paginationParameter":"page"}');
+  const old = checkEffectAnswer(
+    fixture,
+    '{"endpoint":"/api/v1/items","paginationParameter":"page"}',
+  );
   expect(old.mechanicalPass).toBe(false);
   expect(old.forbidden.every(item => item.matched)).toBe(true);
-  const current = checkEffectAnswer(fixture, '```json\n{"method":"GET","endpoint":"/api/v2/items","paginationParameter":"cursor"}\n```\n<memory_citations>[]</memory_citations>');
+  const current = checkEffectAnswer(
+    fixture,
+    '```json\n{"method":"GET","endpoint":"/api/v2/items","paginationParameter":"cursor"}\n```\n<memory_citations>[]</memory_citations>',
+  );
   expect(current.mechanicalPass).toBe(true);
   expect(current.humanReview.taskSucceeded).toBeNull();
   expect(current.facts.every(item => item.review.recalled === null)).toBe(true);

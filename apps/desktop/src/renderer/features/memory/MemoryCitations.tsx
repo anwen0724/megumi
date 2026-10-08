@@ -10,18 +10,32 @@ export function memoryReplyText(text: string): string {
 }
 
 /** Opens the cited version and range through the same bounded management reader. */
-export function MemoryCitations({
-  citations
-}: {
-  citations: readonly MemoryCitation[];
-}) {
-  const {
-    t
-  } = useTranslation('settings');
+export function MemoryCitations({ citations }: { citations: readonly MemoryCitation[] }) {
+  const { t } = useTranslation('settings');
   const openDocument = useMemoryPanelNavigation(state => state.openDocument);
-  return <section aria-label={t('memory.references')} className="space-y-2 border-t border-[var(--color-border)] pt-2">
-    <p className="text-xs text-[var(--color-text-muted)]">{t('memory.references')}</p>
-    <div className="flex flex-wrap gap-2">{citations.map((citation, index) => <Button size="sm" key={`${citation.path}:${citation.startLine}:${index}`} onClick={() => openDocument({ path: citation.path, version: citation.fileVersion, startLine: citation.startLine })}>{citation.path}:{citation.startLine}–{citation.endLine}</Button>)}
-    </div>
-  </section>;
+  return (
+    <section
+      aria-label={t('memory.references')}
+      className="space-y-2 border-t border-[var(--color-border)] pt-2"
+    >
+      <p className="text-xs text-[var(--color-text-muted)]">{t('memory.references')}</p>
+      <div className="flex flex-wrap gap-2">
+        {citations.map((citation, index) => (
+          <Button
+            size="sm"
+            key={`${citation.path}:${citation.startLine}:${index}`}
+            onClick={() =>
+              openDocument({
+                path: citation.path,
+                version: citation.fileVersion,
+                startLine: citation.startLine,
+              })
+            }
+          >
+            {citation.path}:{citation.startLine}–{citation.endLine}
+          </Button>
+        ))}
+      </div>
+    </section>
+  );
 }

@@ -6,13 +6,30 @@ import type { ExtractionModel } from './extraction-contracts';
 import type { ReadCredentialRequest } from '../settings/settings-contracts';
 import type { ConsolidationModel } from './consolidation-agent';
 
-export async function resolveConsolidationModel(options: Parameters<typeof resolveExtractionModel>[0]): Promise<ConsolidationModel> {
+export async function resolveConsolidationModel(
+  options: Parameters<typeof resolveExtractionModel>[0],
+): Promise<ConsolidationModel> {
   const resolved = await resolveExtractionModel(options);
   const { models } = options;
-  return { model: resolved.model, ai: {
-    streamSimple: (model, context, request) => models.withWorkspace(undefined, () => models.ai.streamSimple(model, context, { ...request, maxTokens: Math.min(8192, model.maxTokens) })),
-    completeSimple: (model, context, request) => models.withWorkspace(undefined, () => models.ai.completeSimple(model, context, { ...request, maxTokens: Math.min(8192, model.maxTokens) })),
-  } };
+  return {
+    model: resolved.model,
+    ai: {
+      streamSimple: (model, context, request) =>
+        models.withWorkspace(undefined, () =>
+          models.ai.streamSimple(model, context, {
+            ...request,
+            maxTokens: Math.min(8192, model.maxTokens),
+          }),
+        ),
+      completeSimple: (model, context, request) =>
+        models.withWorkspace(undefined, () =>
+          models.ai.completeSimple(model, context, {
+            ...request,
+            maxTokens: Math.min(8192, model.maxTokens),
+          }),
+        ),
+    },
+  };
 }
 
 export async function resolveExtractionModel(options: {
@@ -27,12 +44,42 @@ export async function resolveExtractionModel(options: {
     if (read.status !== 'ok') throw new Error('SETTINGS_INVALID');
     const config = read.settings.config;
     const requests: ReadCredentialRequest[] = [
-      ...Object.entries(config.providers).map(([providerId, provider]) => ({ target: { kind: 'provider' as const, providerId }, apiKeyEnv: provider.apiKeyEnv })),
-      { target: { kind: 'webSearch' }, apiKeyEnv: config.webSearch.apiKeyEnv },
-      { target: { kind: 'voiceTts' }, apiKeyEnv: config.voice.tts.apiKeyEnv, defaultEnvNames: ['MINIMAX_API_KEY'] },
-      { target: { kind: 'discoverySource', sourceId: 'tavily' }, defaultEnvNames: ['TAVILY_API_KEY'] },
-      { target: { kind: 'discoverySource', sourceId: 'zhihu' }, defaultEnvNames: ['ZHIHU_ACCESS_SECRET'] },
-      { target: { kind: 'discoverySource', sourceId: 'twitter' } },
+      ...Object.entries(config.providers).map(([providerId, provider]) => ({
+        target: {
+          kind: 'provider' as const,
+          providerId,
+        },
+        apiKeyEnv: provider.apiKeyEnv,
+      })),
+      {
+        target: { kind: 'webSearch' },
+        apiKeyEnv: config.webSearch.apiKeyEnv,
+      },
+      {
+        target: { kind: 'voiceTts' },
+        apiKeyEnv: config.voice.tts.apiKeyEnv,
+        defaultEnvNames: ['MINIMAX_API_KEY'],
+      },
+      {
+        target: {
+          kind: 'discoverySource',
+          sourceId: 'tavily',
+        },
+        defaultEnvNames: ['TAVILY_API_KEY'],
+      },
+      {
+        target: {
+          kind: 'discoverySource',
+          sourceId: 'zhihu',
+        },
+        defaultEnvNames: ['ZHIHU_ACCESS_SECRET'],
+      },
+      {
+        target: {
+          kind: 'discoverySource',
+          sourceId: 'twitter',
+        },
+      },
     ];
     const secrets = requests.flatMap(request => {
       const result = options.settings.readCredential(request);
@@ -41,9 +88,15 @@ export async function resolveExtractionModel(options: {
     });
     const auth = await options.models.ai.getAuth(resolved.model);
     if (auth?.auth.apiKey) secrets.push(auth.auth.apiKey);
-    for (const value of Object.values(auth?.auth.headers ?? {})) if (typeof value === 'string') secrets.push(value);
-    return { model: resolved.model, secrets: [...new Set(secrets)],
-      complete: (context, request) => options.models.withWorkspace(undefined,
-        () => options.models.ai.completeSimple(resolved.model, context, request)) };
+    for (const value of Object.values(auth?.auth.headers ?? {}))
+      if (typeof value === 'string') secrets.push(value);
+    return {
+      model: resolved.model,
+      secrets: [...new Set(secrets)],
+      complete: (context, request) =>
+        options.models.withWorkspace(undefined, () =>
+          options.models.ai.completeSimple(resolved.model, context, request),
+        ),
+    };
   });
 }
