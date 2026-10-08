@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { setTimeout as delay } from 'node:timers/promises';
+import { startDesktopModelBoundary } from './desktop-model-boundary.mjs';
 const require = createRequire(import.meta.url);
 const repository = process.cwd();
 const fixtureArg = process.argv.indexOf('--fixture');
@@ -35,6 +36,9 @@ let child;
 let socket;
 let call;
 let run = 0;
+const lifecycle = process.argv.includes('--lifecycle');
+const modelBoundary = lifecycle ? await startDesktopModelBoundary(path.join(root, 'model-boundary.jsonl')) : undefined;
+if (lifecycle) report.modelBoundary = 'Local fixed OpenAI-compatible responses. Token fields are protocol placeholders, not effect or cost measurements.';
 
 /** Starts the actual built main, with no application code substituted. */
 async function launch() {
@@ -57,7 +61,7 @@ fs.watchFile(commandFile, { interval: 200 }, () => { const cmd = JSON.parse(fs.r
 app.on('will-quit', () => fs.unwatchFile(commandFile));
 require(${JSON.stringify(main)});
 `);
-  child = spawn(require('electron'), [root], { cwd: root, windowsHide: true, env: { ...process.env, MEGUMI_HOME: fixture.home, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(require('electron'), [root], { cwd: root, windowsHide: true, env: { ...process.env, MEGUMI_HOME: fixture.home, MEGUMI_DESKTOP_FIXTURE_KEY: 'local-fictional-key', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.commandFile = commandFile;
   report.processes ??= []; report.processes.push({ pid: child.pid, run, root });
   const log = createWriteStream(path.join(root, `electron-${run}.log`));
@@ -123,6 +127,12 @@ async function click(text, selector = 'button') {
   await evaluate(`(${condition}).click(); true`);
 }
 async function screenshot(name) {
+  if (process.argv.includes('--no-screenshots')) {
+    const file = path.join(root, `${name}.txt`);
+    writeFileSync(file, await evaluate('document.body.innerText'));
+    report.domSnapshots ??= []; report.domSnapshots.push(file);
+    return;
+  }
   await evaluate(`Promise.all(document.getAnimations().filter(animation=>animation.effect?.getTiming().iterations!==Infinity).map(animation=>animation.finished.catch(()=>undefined))).then(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))))`);
   const captured = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   const file = path.join(root, `${name}.png`); writeFileSync(file, Buffer.from(captured.data, 'base64')); report.screenshots.push(file);
@@ -147,6 +157,51 @@ async function closeMemory() {
   await until(`!document.querySelector('[role="dialog"][aria-label="记忆"]')`);
 }
 function checked(name, detail = {}) { report.checks.push({ name, passed: true, ...detail }); }
+
+async function settingsPatch(patch) {
+  const result = await evaluate(`(async()=>{const read=await window.megumi.settings.readSettings(); if(!read.ok) throw new Error(JSON.stringify(read)); return window.megumi.settings.updateSettings({expectedRevision:read.data.revision,patch:${JSON.stringify(patch)}});})()`);
+  assert.equal(result.ok, true, JSON.stringify(result));
+}
+
+async function demonstrateEditedReuse() {
+  const model = modelId => ({ providerId: 'desktop-fixture', modelId });
+  const definition = { contextWindowTokens: 128000, maxOutputTokens: 8192, capabilities: { streaming: true, toolCalls: true } };
+  await settingsPatch({ providers: { 'desktop-fixture': { api: 'openai-completions', baseUrl: modelBoundary.baseUrl, apiKeyEnv: 'MEGUMI_DESKTOP_FIXTURE_KEY', models: { extract: definition, consolidate: definition, task: definition } } },
+    memory: { generateMemories: true, extractModel: model('extract'), consolidationModel: model('consolidate') } });
+  await until(`Promise.all([window.memoryRequest('getStatus'),window.memoryRequest('readDocument',{path:'memory_summary.md'})]).then(([status,read])=>status.ok && status.data.memory.artifactState==='ready' && read.ok && read.data.document?.content.includes('desktop-reviewed'))`);
+  const summary = await memory('readDocument', { path: 'memory_summary.md' });
+  assert.ok(summary.document.content.includes('desktop-reviewed'));
+  assert.ok(modelBoundary.calls.some(item => item.model === 'consolidate' && item.response.tool_calls?.some(call => call.function.name === 'memory_finish')));
+  checked('Edited knowledge is consolidated through the actual desktop lifecycle and reflected in the summary');
+  await closeMemory();
+  const priorUsage = (await memory('listSources')).sources.find(source => source.sessionId === fixture.sourceId).usageCount;
+  const payload = { projectId: 'w1', text: 'Read the edited example preference from MEMORY.md and cite it.', modelSelection: { provider_id: 'desktop-fixture', model_id: 'task' }, permissionMode: 'full_access' };
+  const sent = await evaluate(`window.megumi.session.message.send({requestId:crypto.randomUUID(),payload:${JSON.stringify(payload)},meta:{channel:'session:message:send',source:'renderer',createdAt:new Date().toISOString()}})`);
+  assert.equal(sent.ok, true, JSON.stringify(sent));
+  assert.equal(sent.data.type, 'agent_run');
+  const sessionId = sent.data.session.id;
+  const readSession = `window.megumi.session.read({requestId:crypto.randomUUID(),payload:{sessionId:${JSON.stringify(sessionId)}},meta:{channel:'session:read',source:'renderer',createdAt:new Date().toISOString()}})`;
+  await until(`${readSession}.then(result=>result.ok && JSON.stringify(result.data).includes('Verified edited memory'))`);
+  const persisted = await evaluate(readSession);
+  writeFileSync(path.join(root, 'edited-task.json'), JSON.stringify(persisted, null, 2));
+  const doc = await memory('readDocument', { path: 'MEMORY.md' });
+  const reply = persisted.data.conversation.find(item => item.type === 'message' && item.message.kind === 'assistantReply')?.message;
+  assert.ok(reply?.memoryCitations?.some(citation => citation.path === 'MEMORY.md' && citation.fileVersion === doc.document.version));
+  assert.equal((await memory('listSources')).sources.find(source => source.sessionId === fixture.sourceId).usageCount, priorUsage + 1);
+  checked('New desktop task reads the edited file and persists host-validated citations', { sessionId, fileVersion: doc.document.version });
+  // Restart loads the IPC-created task into the normal sidebar and verifies its durable reply.
+  await settingsPatch({ memory: { generateMemories: false, extractModel: null, consolidationModel: null } });
+  await quit(); await launch();
+  await until(`!!document.querySelector('[data-testid="project-row-icon-w1"]')`);
+  await evaluate(`{const project=document.querySelector('[data-testid="project-row-icon-w1"]').closest('button');if(project.getAttribute('aria-expanded')!=='true')project.click();}true`);
+  const sessionButton = `Array.from(document.querySelectorAll('button')).find(node=>node.getAttribute('aria-label')?.startsWith(${JSON.stringify('打开会话 ' + sent.data.session.title)}))`;
+  await until(`!!(${sessionButton})`); await evaluate(`(${sessionButton}).click();true`);
+  await until(`document.body.innerText.includes('Verified edited memory') && !!document.querySelector('section[aria-label="记忆来源"]')`);
+  await screenshot('03b-new-task-citation');
+  // Continue the existing exclusion/clear checks from an unconfigured generation state.
+  await openMemory();
+  await screenshot('03b-edited-and-consolidated');
+}
 
 try {
   await launch();
@@ -203,6 +258,7 @@ try {
   await until(`!document.querySelector('textarea[aria-label="编辑草稿"]')`);
   assert.ok((await memory('readDocument', { path: 'MEMORY.md' })).document.content.includes('desktop-reviewed'));
   checked('Explicit merged edit saves with the current version');
+  if (lifecycle) await demonstrateEditedReuse();
   await click('来源', '[role="tab"]');
   await clickOriginalSource('排除');
   await until(`document.querySelector('[role="dialog"]').textContent.includes('已排除')`);
@@ -268,6 +324,7 @@ try {
   process.exitCode = 1;
 } finally {
   try { await quit(); } catch (error) { report.shutdownFailure = String(error); report.passed = false; process.exitCode = 1; }
+  await modelBoundary?.close();
   report.completedAt = new Date().toISOString();
   writeFileSync(path.join(root, 'desktop-result.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ passed: report.passed, root, checks: report.checks.length, failure: report.failure, shutdownFailure: report.shutdownFailure }));
