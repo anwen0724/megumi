@@ -300,3 +300,5 @@ export const ModelCatalogResultSchema = z.discriminatedUnion('status', [
     catalog: z.array(ConfiguredProviderSchema),
   }),
 ]);
+
+export * from './memory/wire-contracts';

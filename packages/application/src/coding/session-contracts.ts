@@ -1,5 +1,6 @@
 /* Defines the validated host contracts for Coding sessions. */
 import { z } from 'zod';
+import { MemoryCitationSchema } from '../memory/memory-citations';
 import { DOCUMENT_INPUT_POLICY, IMAGE_INPUT_POLICY } from './input/parse-message';
 import { EventSchema } from './events/contracts';
 import { SessionModelSelectionSchema } from './sessions/session-catalog';
@@ -487,6 +488,7 @@ const AssistantReplyDtoSchema = z
   .object({
     ...MessageBaseShape,
     kind: z.literal('assistantReply'),
+    memoryCitations: z.array(MemoryCitationSchema).optional(),
     status: z.enum(['completed', 'failed', 'cancelled']),
     content: z.array(AssistantContentDtoSchema),
     reasonCode: z.string().optional(),

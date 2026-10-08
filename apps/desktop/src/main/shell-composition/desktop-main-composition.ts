@@ -74,6 +74,10 @@ export function composeDesktopMain() {
     void product.resume().catch(() => runtimeLogger.warn('recommendation_resume_failed'));
   };
   powerMonitor.on('resume', resumeRecommendation);
+  const unsubscribeMemory = product.memory.subscribeChanges(event => {
+    for (const window of BrowserWindow.getAllWindows())
+      window.webContents.send(IPC_CHANNELS.memory.changed, event);
+  });
   const unsubscribeRecommendation = product.recommendation.onChanged(event => {
     for (const window of BrowserWindow.getAllWindows())
       window.webContents.send(IPC_CHANNELS.recommendation.changed, event);
@@ -113,12 +117,14 @@ export function composeDesktopMain() {
     settings: { host: productHost },
     approval: { host: productHost },
     discovery: { host: productHost },
+    memory: { host: productHost },
     voice: { host: productHost },
     voiceInput: { adapter: voiceInputAdapter },
     observability: { host: productHost },
     dispose: async () => {
       powerMonitor.removeListener('resume', resumeRecommendation);
       unsubscribeRecommendation();
+      unsubscribeMemory();
       uiEventSubscription.unsubscribe();
       voiceInputEventSubscription();
       speechOutputEventSubscription.unsubscribe();

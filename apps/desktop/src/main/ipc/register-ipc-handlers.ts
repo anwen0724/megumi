@@ -1,8 +1,9 @@
-import { registerModelsHandlers } from './handlers/models.handler';
-import { registerToolsHandlers } from './handlers/tools.handler';
 /*
  * Registers Desktop Main IPC channels with host-interface controllers and shell adapters.
  */
+import { registerMemoryHandlers, type MemoryHandlersService } from './handlers/memory.handler';
+import { registerModelsHandlers } from './handlers/models.handler';
+import { registerToolsHandlers } from './handlers/tools.handler';
 import { registerWindowHandlers } from './handlers/window.handler';
 import {
   registerWorkspaceHandlers,
@@ -51,6 +52,7 @@ export interface RegisterAllHandlersOptions {
   settingsRecovery?: SettingsRecoveryService;
   approval?: ApprovalHandlersService;
   discovery?: DiscoveryHandlersService;
+  memory?: MemoryHandlersService;
   observability?: {
     host: Pick<import('@megumi/application/contracts').ApplicationOperations, 'observability'>;
   };
@@ -95,6 +97,10 @@ export function registerAllHandlers(options: RegisterAllHandlersOptions = {}): v
 
   if (options.approval) {
     registerApprovalHandlers(options.approval, { logger: options.logger, ipcMain });
+  }
+
+  if (options.memory) {
+    registerMemoryHandlers(options.memory, { logger: options.logger, ipcMain });
   }
 
   if (options.discovery) {

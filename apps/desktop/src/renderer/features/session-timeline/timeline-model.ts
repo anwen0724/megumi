@@ -1,5 +1,6 @@
 /* Defines the Desktop-owned Timeline presentation model and runtime schemas. */
 import { z } from 'zod';
+import { MemoryCitationSchema, type MemoryCitation } from '@megumi/application/memory/memory-citations';
 
 export type WorkspaceChangeFooterFile = {
   changedFileId: string;
@@ -320,6 +321,7 @@ export interface ProcessDisclosureBlock extends TimelineBlockBase {
 }
 
 export interface AnswerTextBlock extends TimelineBlockBase {
+  memoryCitations?: MemoryCitation[];
   kind: 'answer_text';
   executionId: ExecutionId | string;
   textId: string;
@@ -630,6 +632,7 @@ export const AnswerTextBlockSchema = z
   .object({
     ...TimelineBlockBaseShape,
     kind: z.literal('answer_text'),
+    memoryCitations: z.array(MemoryCitationSchema).optional(),
     executionId: z.string().min(1),
     textId: z.string().min(1),
     status: AnswerTextStatusSchema,

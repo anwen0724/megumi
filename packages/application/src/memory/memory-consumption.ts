@@ -63,7 +63,7 @@ export function createTaskMemory(input: TaskMemoryInput, options: ConsumptionOpt
     try {
       guard(); const value = MemoryReadSchema.parse(request);
       if (value.path === 'raw_memories.md') throw new Error('PATH_DENIED');
-      const document = options.files.readLines(value.path, value.startLine, value.lineCount);
+      const document = options.files.readLines(value.path, value.startLine, value.lineCount, value.startCharacter);
       if (!document) return { status: 'notFound' };
       if (value.expectedVersion && value.expectedVersion !== document.version) throw new Error('VERSION_CONFLICT');
       return { status: 'found', document, ...capture(document) };
@@ -85,7 +85,7 @@ export function createTaskMemory(input: TaskMemoryInput, options: ConsumptionOpt
     } catch (error) { return failure(error); }
   }
   function tool<T>(name: string, description: string, schema: z.ZodType<T>, operation: (value: T) => unknown): AgentTool {
-    const properties = name === 'memory_read' ? { path: { type: 'string' }, startLine: { type: 'integer' }, lineCount: { type: 'integer' }, expectedVersion: { type: 'string' } }
+    const properties = name === 'memory_read' ? { path: { type: 'string' }, startLine: { type: 'integer' }, lineCount: { type: 'integer' }, startCharacter: { type: 'integer' }, expectedVersion: { type: 'string' } }
       : name === 'memory_search' ? { terms: { type: 'array', items: { type: 'string' } }, collections: { type: 'array', items: { type: 'string', enum: ['summary', 'memory', 'rollouts', 'skills'] } }, match: { type: 'string', enum: ['any', 'all'] }, limit: { type: 'integer' }, cursor: { type: 'string' } }
       : { sourceRef: { type: 'string' }, cursor: { type: 'string' }, limit: { type: 'integer' } };
     return { name, description, parameters: { type: 'object', properties, required: [name === 'memory_read' ? 'path' : name === 'memory_search' ? 'terms' : 'sourceRef'], additionalProperties: false }, executionMode: 'serial',
@@ -98,7 +98,7 @@ export function createTaskMemory(input: TaskMemoryInput, options: ConsumptionOpt
       } };
   }
   const tools = [
-    tool('memory_read', 'Read memory text by relative path, startLine, lineCount (max 400); pass expectedVersion to continue a snapshot. Results include citation ranges.', MemoryReadSchema, read),
+    tool('memory_read', 'Read memory text by relative path, startLine, lineCount (max 400); continue with nextLine as startLine, nextCharacter as startCharacter, and expectedVersion. Results include citation ranges.', MemoryReadSchema, read),
     tool('memory_search', 'Find 1-5 literal terms in memory. Defaults to MEMORY.md; match any/all; limit max 50. Continue with cursor.', MemorySearchSchema, search),
     tool('memory_source', 'Read original messages from an exact sourceRef previously returned by memory. limit max 50; continue with cursor.', MemorySourceSchema, source),
   ];
@@ -154,7 +154,7 @@ function describeRead(document: MemoryDocumentSlice, context: MemoryDocumentSlic
   function retain(end: number) {
     const text = lines.slice(start, end).join('\n');
     const matches = [...text.matchAll(marker)];
-    const startLine = Math.max(document.startLine, context.startLine + start);
+    const startLine = Math.max(document.startLine + (document.firstLineComplete === false ? 1 : 0), context.startLine + start);
     const endLine = Math.min(receivedEnd, context.startLine + end - 1);
     if (!matches.length || end <= start || startLine > endLine) return;
     for (const match of matches) sourceRefs.push(match[3]);

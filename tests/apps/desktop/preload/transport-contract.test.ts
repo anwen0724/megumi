@@ -28,6 +28,23 @@ const snapshot = {
 };
 
 describe('Desktop Preload transport', () => {
+  it('forwards typed memory requests and delivers only validated change hints until unsubscribe', async () => {
+    const request = { requestId: 'memory-request', payload: { runId: 'run-1' }, meta: { channel: IPC_CHANNELS.memory.getRun, source: 'renderer' as const, createdAt: new Date().toISOString() } };
+    const reply = { ok: true, data: { status: 'failed', runId: 'run-1' } };
+    electron.ipcRenderer.invoke.mockResolvedValueOnce(reply);
+    expect(await api.memory.getRun(request)).toEqual(reply);
+    expect(electron.ipcRenderer.invoke).toHaveBeenCalledWith(IPC_CHANNELS.memory.getRun, request);
+    const received: unknown[] = [];
+    const stop = api.memory.onChanged(event => received.push(event));
+    const event = { processInstanceId: 'main-1', sequence: 1, revision: 2, runId: 'run-1' };
+    electron.ipcRenderer.emit(IPC_CHANNELS.memory.changed, {}, { ...event, sequence: -1 });
+    electron.ipcRenderer.emit(IPC_CHANNELS.memory.changed, {}, event);
+    stop();
+    electron.ipcRenderer.emit(IPC_CHANNELS.memory.changed, {}, { ...event, sequence: 2 });
+    expect(received).toEqual([event]);
+  });
+
+
   it('returns a stable failure with the request identity when the main process is unreachable', async () => {
     electron.ipcRenderer.invoke.mockRejectedValueOnce(new Error('Transport closed'));
     expect(await api.tools.list()).toMatchObject({

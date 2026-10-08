@@ -118,6 +118,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
     catch { return { status: 'failed', error: { code: 'MODEL_UNAVAILABLE', message: 'The extraction model is unavailable.' } }; }
     if (signal.aborted || stopped || !options.readConfiguration().generateMemories) return { status: 'skipped', reason: 'stopped' };
     store.beginRun(runId, iso(), !!request.failedJobId);
+    request.onProgress?.(runId);
     const selected = selectExtractionSources({ sources: options.sources.listSources({ limit: 5000 }), configuration, now: now(), triggerSessionId: request.triggerSessionId });
     let count = 0;
     let cursor = 0;
@@ -138,6 +139,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
         const lease = store.claim({ runId, jobId: randomUUID(), ownerToken: randomUUID(), source, now: iso(), failedJobId: request.failedJobId });
         if (!lease) continue;
         count++;
+        request.onProgress?.(runId);
         const operation = () => extractSource(source, lease, model, signal);
         if (options.observability) await options.observability.withSpan({ name: 'memory.extract',
           correlation: { executionId: runId, sessionId: source.sessionId, workspaceId: source.workspaceId,
@@ -145,6 +147,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
           classifyResult: () => ({ outcome: outcome([store.getJob(lease.jobId)!]) }),
         }, operation);
         else await operation();
+        request.onProgress?.(runId);
       }
     }
     const workers = await Promise.allSettled(Array.from({ length: 8 }, worker));

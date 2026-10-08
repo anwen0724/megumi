@@ -8,6 +8,7 @@ import {
   Activity,
   AudioLines,
   Bot,
+  Brain,
   Boxes,
   CheckCircle2,
   Info,
@@ -20,6 +21,7 @@ import { ProviderSettingsPanel } from '../features/provider-settings';
 import { ContentSourcesSettingsPanel } from '../features/content-sources-settings';
 import { PermissionRulesPanel } from '../features/permission-settings';
 import { SkillSettingsPanel } from '../features/skill-settings';
+import { MemorySettingsPanel } from '../features/memory/MemorySettingsPanel';
 import { VoiceSettingsPanel } from '../features/voice-settings';
 import { AboutMegumiPanel, useApplicationUpdateStore } from '../features/application-update';
 import { ThemeSelector } from '../shared/theme';
@@ -27,7 +29,7 @@ import { LanguageSelector } from '../shared/i18n';
 import { Button, SettingsPageHeader, SettingsRow, SettingsSection, cx } from '../shared/ui';
 
 export type SettingsCategory =
-  'appearance' | 'voice' | 'models' | 'skills' | 'sources' | 'diagnostics' | 'security' | 'about';
+  'appearance' | 'voice' | 'memory' | 'models' | 'skills' | 'sources' | 'diagnostics' | 'security' | 'about';
 
 interface SettingsPageProps {
   onDone: () => void;
@@ -57,6 +59,7 @@ const categoryGroups: Array<{
     items: [
       { id: 'models', icon: Bot },
       { id: 'skills', icon: Boxes },
+      { id: 'memory', icon: Brain },
       { id: 'sources', icon: Rss },
       { id: 'security', icon: ShieldCheck },
     ],
@@ -237,6 +240,7 @@ export function SettingsPage({
               {category === 'voice' ? <VoiceSettingsPanel /> : null}
 
               {category === 'skills' ? <SkillSettingsPanel /> : null}
+              {category === 'memory' ? <MemorySettingsPanel /> : null}
 
               {category === 'sources' ? <ContentSourcesSettingsPanel /> : null}
 

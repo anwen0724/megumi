@@ -32,7 +32,7 @@ export type ExtractionBatchResult =
 
 export interface MemoryExtraction {
   /** Settles only source extraction. No final memory files are produced here. */
-  extract(request?: { readonly triggerSessionId?: string; readonly failedJobId?: string; readonly signal?: AbortSignal }): Promise<ExtractionBatchResult>;
+  extract(request?: { readonly triggerSessionId?: string; readonly failedJobId?: string; readonly signal?: AbortSignal; readonly onProgress?: (runId: string) => void }): Promise<ExtractionBatchResult>;
   getJob(jobId: string): ExtractionJob | undefined;
   listJobs(runId: string): readonly ExtractionJob[];
   getExtraction(sessionId: string): SavedExtraction | undefined;

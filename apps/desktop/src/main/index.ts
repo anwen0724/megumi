@@ -118,6 +118,7 @@ function startDesktop(desktopMain: ReturnType<typeof composeDesktopMain>): void 
         },
         approval: desktopMain.approval,
         discovery: desktopMain.discovery,
+        memory: desktopMain.memory,
         voice: desktopMain.voice,
         voiceInput: desktopMain.voiceInput,
         character,

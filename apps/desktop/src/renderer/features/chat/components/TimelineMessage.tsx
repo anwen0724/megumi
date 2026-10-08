@@ -5,6 +5,7 @@ import type { TimelineMessage as CanonicalTimelineMessage } from '../../session-
 import { IconButton, RecoverableErrorBoundary } from '../../../shared/ui';
 import { TimelineMessageBlocks } from './TimelineMessageBlocks';
 import { formatTime as formatLocalizedTime } from '../../../shared/i18n';
+import { memoryReplyText } from '../../memory/MemoryCitations';
 
 interface TimelineMessageProps {
   message: CanonicalTimelineMessage;
@@ -155,7 +156,7 @@ function assistantReplyText(message: CanonicalTimelineMessage): string {
   if (message.role !== 'assistant') return '';
   return message.blocks
     .filter((block) => block.kind === 'answer_text')
-    .map((block) => block.text.trim())
+    .map((block) => memoryReplyText(block.text).trim())
     .filter(Boolean)
     .join('\n\n');
 }

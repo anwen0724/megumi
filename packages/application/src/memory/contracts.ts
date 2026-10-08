@@ -1,4 +1,5 @@
 /* Defines application-owned memory production, maintenance and query results. */
+import type { MemoryChanged } from './wire-contracts';
 import type { ModelSelection } from '../contracts';
 import type { MemoryDocument, MemoryDocumentSlice } from './memory-files';
 import type { ExtractionCoverage } from './extraction-input';
@@ -27,6 +28,8 @@ export interface MemoryStatus {
 }
 
 export interface MemoryHost {
+  /** Notifications are hints; callers query persisted state and unsubscribe when released. */
+  subscribeChanges(handler: (event: MemoryChanged) => void): () => void;
   /** Creates an execution-local consumer; this does not generate knowledge. */
   createTaskMemory(request: TaskMemoryInput): TaskMemory;
   /** Replays only persisted host-verified reply evidence; never accepts model-supplied counters. */
@@ -40,7 +43,7 @@ export interface MemoryHost {
   waitRun(request: { runId: string; timeoutMs?: number; signal?: AbortSignal }): Promise<MemoryWaitResult>;
   cancelRun(request: { requestId: string; runId: string }): { status: 'cancelling' | 'alreadyFinished' | 'notFound' } | MemoryFailure;
   listDocuments(request?: { cursor?: string; limit?: number }): { status: 'ok'; documents: readonly { path: string; version: string; readOnly: boolean }[]; nextCursor?: string } | MemoryFailure;
-  readDocument(request: { path: string; startLine?: number; lineCount?: number; expectedVersion?: string }): { status: 'found'; document: MemoryDocumentSlice } | { status: 'notFound' } | MemoryFailure;
+  readDocument(request: { path: string; startLine?: number; lineCount?: number; startCharacter?: number; expectedVersion?: string }): { status: 'found'; document: MemoryDocumentSlice } | { status: 'notFound' } | MemoryFailure;
   updateDocument(request: { requestId: string; path: string; content: string; expectedVersion: string }): { status: 'saved'; document: MemoryDocument } | MemoryFailure;
   listSources(request?: { cursor?: string; limit?: number }): { status: 'ok'; sources: readonly MemoryManagedSource[]; nextCursor?: string } | MemoryFailure;
   setSourceEligibility(request: { requestId: string; sessionId: string; eligibility: 'eligible' | 'excluded'; expectedVersion: number }): { status: 'saved'; version: number; maintenance: 'pending' | 'pendingModel' | 'notRequired'; runId?: string } | MemoryFailure;
@@ -67,4 +70,4 @@ export interface MemoryJob {
     readonly inputTokens?: number; readonly outputTokens?: number; readonly modelCalls?: number; readonly durationMs?: number };
 }
 export type MemoryWaitResult = { readonly status: 'completed' | 'timeout'; readonly run: MemoryRun } | { readonly status: 'notFound' } | MemoryFailure;
-export interface MemoryManagedSource { readonly sessionId: string; readonly title: string; readonly eligibility: 'eligible' | 'excluded'; readonly version: number; readonly usageCount: number; readonly lastUsedAt?: string; readonly selected: boolean; readonly extractionVersion?: string }
+export interface MemoryManagedSource { readonly sessionId: string; readonly title: string; readonly workspaceId: string; readonly contentUpdatedAt: string; readonly sourceRef?: string; readonly eligibility: 'eligible' | 'excluded'; readonly version: number; readonly usageCount: number; readonly lastUsedAt?: string; readonly selected: boolean; readonly extractionVersion?: string }

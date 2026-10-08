@@ -11,6 +11,18 @@ import { ToastViewport, useToastStore } from '@megumi/desktop/renderer/shared/ui
 
 const createdAt = '2026-05-24T12:00:00.000Z';
 
+it('hides citation syntax and presents only host-verified memory sources', () => {
+  const message = assistantMessage();
+  const answer = message.blocks.find(block => block.kind === 'answer_text');
+  if (!answer || answer.kind !== 'answer_text') throw new Error('Answer fixture missing');
+  answer.text = 'Saved advice.<memory_citations>untrusted model payload</memory_citations>';
+  answer.memoryCitations = [{ path: 'MEMORY.md', fileVersion: 'v1', startLine: 2, endLine: 4, sourceIds: ['s1'], sourceVersions: ['sv1'] }];
+  render(<TimelineMessage message={message} />);
+  expect(screen.getByText('Saved advice.')).toBeInTheDocument();
+  expect(screen.queryByText(/untrusted model payload/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /MEMORY.md/ })).toBeInTheDocument();
+});
+
 beforeEach(() => {
   useToastStore.getState().clearToasts();
 });

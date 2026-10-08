@@ -13,6 +13,7 @@ import { IPC_CHANNELS } from '@megumi/desktop/main/ipc/channels';
 import { useTranslation } from 'react-i18next';
 import { FileText, Package } from 'lucide-react';
 import { RecommendationReferenceCard } from './RecommendationReferenceCard';
+import { MemoryCitations, memoryReplyText } from '../../memory/MemoryCitations';
 
 function UserBlockView({ block }: { block: UserTimelineBlock }) {
   if (block.kind === 'user_attachment') {
@@ -95,7 +96,8 @@ function AnswerTextBlockView({ block }: { block: AnswerTextBlock }) {
   const { t } = useTranslation('chat');
   return (
     <div className="min-w-0 space-y-2 text-sm leading-7 text-[var(--color-text)]">
-      <TimelineMarkdown text={block.text} />
+      <TimelineMarkdown text={memoryReplyText(block.text)} />
+      {block.memoryCitations?.length ? <MemoryCitations citations={block.memoryCitations} /> : null}
       {block.status === 'failed' || block.status === 'interrupted' ? (
         <p className="text-xs text-[var(--color-text-muted)]">{t('timeline.responseInterrupted')}</p>
       ) : null}

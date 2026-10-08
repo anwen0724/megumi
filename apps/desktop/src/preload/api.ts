@@ -11,6 +11,7 @@ import type {
 } from '@megumi/application/settings/settings-contracts';
 import type { RecommendationHost, ModelCatalogResult } from '@megumi/application/contracts';
 import { ipcRenderer } from 'electron';
+import { MemoryChangedSchema, type MemoryChanged, type MemoryRequest, type MemoryResponse } from '@megumi/application/contracts';
 import { RecommendationChangedSchema, type RecommendationChanged } from '@megumi/application/contracts';
 import type { AnyEvent } from '@megumi/application/contracts';
 import type {
@@ -510,6 +511,29 @@ export const api = {
         const parsed = RecommendationChangedSchema.safeParse(raw); if (parsed.success)
           callback(parsed.data);
       }; ipcRenderer.on(IPC_CHANNELS.recommendation.changed, listener); return () => { ipcRenderer.removeListener(IPC_CHANNELS.recommendation.changed, listener); };
+    },
+  },
+  memory: {
+    getStatus: (request: BusinessRequest<MemoryRequest<'getStatus'>, typeof IPC_CHANNELS.memory.getStatus>): Promise<RuntimeIpcResult<MemoryResponse<'getStatus'>, typeof IPC_CHANNELS.memory.getStatus>> => invokeRuntimeIpc(IPC_CHANNELS.memory.getStatus, request),
+    startGeneration: (request: BusinessRequest<MemoryRequest<'startGeneration'>, typeof IPC_CHANNELS.memory.startGeneration>): Promise<RuntimeIpcResult<MemoryResponse<'startGeneration'>, typeof IPC_CHANNELS.memory.startGeneration>> => invokeRuntimeIpc(IPC_CHANNELS.memory.startGeneration, request),
+    getRun: (request: BusinessRequest<MemoryRequest<'getRun'>, typeof IPC_CHANNELS.memory.getRun>): Promise<RuntimeIpcResult<MemoryResponse<'getRun'>, typeof IPC_CHANNELS.memory.getRun>> => invokeRuntimeIpc(IPC_CHANNELS.memory.getRun, request),
+    cancelRun: (request: BusinessRequest<MemoryRequest<'cancelRun'>, typeof IPC_CHANNELS.memory.cancelRun>): Promise<RuntimeIpcResult<MemoryResponse<'cancelRun'>, typeof IPC_CHANNELS.memory.cancelRun>> => invokeRuntimeIpc(IPC_CHANNELS.memory.cancelRun, request),
+    listDocuments: (request: BusinessRequest<MemoryRequest<'listDocuments'>, typeof IPC_CHANNELS.memory.listDocuments>): Promise<RuntimeIpcResult<MemoryResponse<'listDocuments'>, typeof IPC_CHANNELS.memory.listDocuments>> => invokeRuntimeIpc(IPC_CHANNELS.memory.listDocuments, request),
+    readDocument: (request: BusinessRequest<MemoryRequest<'readDocument'>, typeof IPC_CHANNELS.memory.readDocument>): Promise<RuntimeIpcResult<MemoryResponse<'readDocument'>, typeof IPC_CHANNELS.memory.readDocument>> => invokeRuntimeIpc(IPC_CHANNELS.memory.readDocument, request),
+    searchDocuments: (request: BusinessRequest<MemoryRequest<'searchDocuments'>, typeof IPC_CHANNELS.memory.searchDocuments>): Promise<RuntimeIpcResult<MemoryResponse<'searchDocuments'>, typeof IPC_CHANNELS.memory.searchDocuments>> => invokeRuntimeIpc(IPC_CHANNELS.memory.searchDocuments, request),
+    updateDocument: (request: BusinessRequest<MemoryRequest<'updateDocument'>, typeof IPC_CHANNELS.memory.updateDocument>): Promise<RuntimeIpcResult<MemoryResponse<'updateDocument'>, typeof IPC_CHANNELS.memory.updateDocument>> => invokeRuntimeIpc(IPC_CHANNELS.memory.updateDocument, request),
+    listSources: (request: BusinessRequest<MemoryRequest<'listSources'>, typeof IPC_CHANNELS.memory.listSources>): Promise<RuntimeIpcResult<MemoryResponse<'listSources'>, typeof IPC_CHANNELS.memory.listSources>> => invokeRuntimeIpc(IPC_CHANNELS.memory.listSources, request),
+    readSource: (request: BusinessRequest<MemoryRequest<'readSource'>, typeof IPC_CHANNELS.memory.readSource>): Promise<RuntimeIpcResult<MemoryResponse<'readSource'>, typeof IPC_CHANNELS.memory.readSource>> => invokeRuntimeIpc(IPC_CHANNELS.memory.readSource, request),
+    setSourceEligibility: (request: BusinessRequest<MemoryRequest<'setSourceEligibility'>, typeof IPC_CHANNELS.memory.setSourceEligibility>): Promise<RuntimeIpcResult<MemoryResponse<'setSourceEligibility'>, typeof IPC_CHANNELS.memory.setSourceEligibility>> => invokeRuntimeIpc(IPC_CHANNELS.memory.setSourceEligibility, request),
+    clearMemory: (request: BusinessRequest<MemoryRequest<'clearMemory'>, typeof IPC_CHANNELS.memory.clearMemory>): Promise<RuntimeIpcResult<MemoryResponse<'clearMemory'>, typeof IPC_CHANNELS.memory.clearMemory>> => invokeRuntimeIpc(IPC_CHANNELS.memory.clearMemory, request),
+    /** Subscribes to validated invalidation hints; callers query the current state. */
+    onChanged(callback: (event: MemoryChanged) => void): () => void {
+      const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {
+        const parsed = MemoryChangedSchema.safeParse(raw);
+        if (parsed.success) callback(parsed.data);
+      };
+      ipcRenderer.on(IPC_CHANNELS.memory.changed, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.memory.changed, listener);
     },
   },
   voiceInput: {

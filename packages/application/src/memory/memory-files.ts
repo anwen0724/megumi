@@ -9,7 +9,7 @@ export interface MemoryFiles {
   paths(): readonly string[];
   /** Streams complete text lines for literal matching before excerpt limits are applied. */
   lines(path: string): Iterable<{ line: number; text: string }>;
-  readLines(path: string, startLine?: number, lineCount?: number): MemoryDocumentSlice | undefined;
+  readLines(path: string, startLine?: number, lineCount?: number, startCharacter?: number): MemoryDocumentSlice | undefined;
   read(path: string): MemoryDocument | undefined;
   writeFinal(input: { path: string; content: string; expectedVersion: string }, guard: () => void): MemoryDocument;
   writeInput(path: string, chunks: Iterable<string>, guard: () => void): void;
@@ -18,7 +18,7 @@ export interface MemoryFiles {
   removeInput(path: string, guard: () => void): void;
   discardTemporary(guard: () => void): void;
 }
-export interface MemoryDocumentSlice { readonly path: string; readonly version: string; readonly content: string; readonly startLine: number; readonly nextLine: number; readonly truncated: boolean; readonly lastLineComplete?: boolean }
+export interface MemoryDocumentSlice { readonly path: string; readonly version: string; readonly content: string; readonly startLine: number; readonly nextLine: number; readonly truncated: boolean; readonly lastLineComplete?: boolean; readonly firstLineComplete?: boolean; readonly nextCharacter?: number }
 export interface MemoryDocument { readonly path: string; readonly version: string; readonly content: string; readonly readOnly: boolean }
 
 export function createMemoryFiles(rootPath: string): MemoryFiles {
@@ -135,22 +135,31 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
       } finally { closeSync(fd); }
     },
     discardTemporary,
-    readLines(relative, startLine = 1, lineCount = 200) {
-      if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > 400) throw new Error('INVALID_ARGUMENT');
+    readLines(relative, startLine = 1, lineCount = 200, startCharacter = 0) {
+      if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > 400 || !Number.isInteger(startCharacter) || startCharacter < 0) throw new Error('INVALID_ARGUMENT');
       const target = checked(relative);
       if (!existsSync(target)) return undefined;
       const fd = openSync(target, 'r');
       const hash = createHash('sha256');
       const decoder = new TextDecoder('utf-8', { fatal: true });
       const buffer = Buffer.alloc(16384);
-      let line = 1; let content = ''; let truncated = false; let nextLine = startLine; let incompleteLine = false;
+      let line = 1; let column = 0; let content = ''; let truncated = false;
+      let nextLine = startLine; let nextCharacter = startCharacter; let incompleteLine = false;
       function collect(value: string) {
         if (value.includes('\0')) throw new Error('OUTPUT_INVALID');
         for (const char of value) {
-          if (line >= startLine && line < startLine + lineCount && content.length < 16000) {
-            content += char; nextLine = line + 1;
-          } else if (line >= startLine) { truncated = true; if (line < nextLine && !content.endsWith('\n')) incompleteLine = true; }
-          if (char === '\n') line++;
+          if (line === startLine && column < startCharacter && (char === '\n' || column + char.length > startCharacter)) throw new Error('INVALID_ARGUMENT');
+          if (line >= startLine && (line > startLine || column >= startCharacter)) {
+            if (!truncated && line < startLine + lineCount && content.length + char.length <= 16000) {
+              content += char;
+              nextLine = char === '\n' ? line + 1 : line;
+              nextCharacter = char === '\n' ? 0 : column + char.length;
+            } else {
+              truncated = true;
+              if (line === nextLine && nextCharacter > 0) incompleteLine = true;
+            }
+          }
+          if (char === '\n') { line++; column = 0; } else column += char.length;
         }
       }
       try {
@@ -161,7 +170,10 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         }
         collect(decoder.decode());
       } finally { closeSync(fd); }
-      return { path: relative, version: hash.digest('hex'), content, startLine, nextLine, truncated, lastLineComplete: !incompleteLine };
+      if (line === startLine && column < startCharacter) throw new Error('INVALID_ARGUMENT');
+      if (!truncated) { nextLine = Math.max(startLine, line + (column ? 1 : 0)); nextCharacter = 0; }
+      return { path: relative, version: hash.digest('hex'), content, startLine, nextLine, truncated,
+        lastLineComplete: !incompleteLine, firstLineComplete: startCharacter === 0, ...(nextCharacter ? { nextCharacter } : {}) };
     },
     read,
     writeFinal(input, guard) {

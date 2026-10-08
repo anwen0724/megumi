@@ -1,4 +1,5 @@
 /* Exposes Coding session operations and projects committed history for the desktop. */
+import { validateMemoryCitations } from '../memory/memory-citations';
 import type { EventBus } from './events/event-bus';
 import { estimateContextTokens } from '@megumi/ai/utils/estimate';
 import type { AttachmentPicker } from '../platform/attachment-picker';
@@ -641,11 +642,17 @@ function toMessageDto(
         : {}),
     };
   }
+  const evidence = message.memory_evidence;
+  const citations = evidence && evidence.executionId === message.execution_id && message.status === 'completed'
+    ? validateMemoryCitations(sessionMessageText(message), evidence).citations : [];
   return {
     ...messageIdentity(message),
     kind: 'assistantReply',
+    memoryCitations: citations,
     status: message.status,
-    content: message.content.map(copyAssistantContent),
+    content: message.content.map(block => block.type === 'text' && block.text.includes('<memory_citations>')
+      ? { ...block, text: block.text.replace(/<memory_citations>[\s\S]*?(?:<\/memory_citations>|$)/g, '').trimEnd() }
+      : copyAssistantContent(block)),
     ...(message.reason_code ? { reasonCode: message.reason_code } : {}),
     ...modelFacts(message),
     ...(message.usage ? { usage: copyUsage(message.usage) } : {}),

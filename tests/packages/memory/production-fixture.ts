@@ -31,7 +31,7 @@ export function productionFixture(observability?: Observability) {
     resolveModel: async () => ({ model, secrets: [], complete: async () => fauxAssistantMessage(JSON.stringify({ rawMemory: 'Use TypeScript for React examples.', rolloutSummary: 'User prefers TypeScript.', rolloutSlug: 'react' })) }) });
   const options = { database: f.database, settings, files, sources, extraction, observability, root: path.join(root, 'memories'), now: () => now, resolveModel: async () => ({ model, ai }) };
   const memory = createMemory(options);
-  const tool = (name: string, args: Record<string, unknown>) => fauxAssistantMessage(fauxToolCall(name, args), { stopReason: 'toolUse' });
+  const tool = (name: string, args: Parameters<typeof fauxToolCall>[1]) => fauxAssistantMessage(fauxToolCall(name, args), { stopReason: 'toolUse' });
   function responses() {
     provider.setResponses([
       () => tool('memory_file', { action: 'read', path: 'raw_memories.md' }),

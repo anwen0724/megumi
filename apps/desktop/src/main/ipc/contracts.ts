@@ -6,6 +6,19 @@ import { IPC_CHANNELS } from './channels';
 import { RuntimeIpcErrorSchema, type RuntimeIpcError } from './errors';
 export type { RuntimeIpcError } from './errors';
 export const BUSINESS_IPC_CHANNELS = [
+  IPC_CHANNELS.memory.getStatus,
+  IPC_CHANNELS.memory.startGeneration,
+  IPC_CHANNELS.memory.getRun,
+  IPC_CHANNELS.memory.cancelRun,
+  IPC_CHANNELS.memory.listDocuments,
+  IPC_CHANNELS.memory.readDocument,
+  IPC_CHANNELS.memory.searchDocuments,
+  IPC_CHANNELS.memory.updateDocument,
+  IPC_CHANNELS.memory.listSources,
+  IPC_CHANNELS.memory.readSource,
+  IPC_CHANNELS.memory.setSourceEligibility,
+  IPC_CHANNELS.memory.clearMemory,
+
   IPC_CHANNELS.recommendation.listDailyFeed,
   IPC_CHANNELS.recommendation.startDailyFeed,
   IPC_CHANNELS.recommendation.getRun,

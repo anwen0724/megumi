@@ -2,6 +2,7 @@
  * Composes the complete Host-neutral Megumi application runtime.
  * Concrete hosts only inject environmental adapters and consume Application.
  */
+import { randomUUID } from 'node:crypto';
 import type { Application, ApplicationOperations } from './contracts';
 import {
   composeModules,
@@ -110,6 +111,7 @@ function createApplicationInterface(
   const settings: ApplicationOperations['settings'] = {
     ...applicationSettings,
     updateSettings(request) {
+      const previous = request.patch.memory?.generateMemories === true ? applicationSettings.readSettings() : undefined;
       if (request.patch.memory?.generateMemories === true || request.patch.memory?.useMemories === true) {
         const status = modules.memory.getStatus();
         if (status.status === 'failed') return { status: 'rejected', error: { code: 'SETTINGS_INVALID', message: 'Memory maintenance state could not be read.' } };
@@ -117,7 +119,12 @@ function createApplicationInterface(
           code: 'SETTINGS_CONFLICT', message: 'Finish clearing memory before enabling generation or use.',
         } };
       }
-      return applicationSettings.updateSettings(request);
+      const result = applicationSettings.updateSettings(request);
+      if (result.status === 'updated' && previous?.status === 'ok' && !previous.settings.config.memory.generateMemories
+        && result.settings.config.memory.generateMemories) {
+        modules.memory.startGeneration({ requestId: randomUUID(), reason: 'startup' });
+      }
+      return result;
     },
   };
 

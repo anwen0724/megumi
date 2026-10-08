@@ -5,17 +5,8 @@ import type { MemoryFiles, MemoryDocumentSlice } from './memory-files';
 import type { MemorySources } from './source-contracts';
 import type { MemoryFailure } from './contracts';
 
-const Collection = z.enum(['summary', 'memory', 'rollouts', 'skills', 'raw']);
-export const MemorySearchSchema = z.object({ terms: z.array(z.string().trim().min(1).max(128)).min(1).max(5),
-  collections: z.array(Collection).min(1).max(5).optional(), match: z.enum(['any', 'all']).optional(),
-  limit: z.number().int().min(1).max(50).optional(), cursor: z.string().max(4096).optional() }).strict();
-export const MemoryReadSchema = z.object({ path: z.string().min(1), startLine: z.number().int().positive().optional(),
-  lineCount: z.number().int().min(1).max(400).optional(), expectedVersion: z.string().optional() }).strict();
-export const MemorySourceSchema = z.object({ sourceRef: z.string().min(1).max(4096),
-  cursor: z.string().max(4096).optional(), limit: z.number().int().min(1).max(50).optional() }).strict();
-export type MemorySearchRequest = z.infer<typeof MemorySearchSchema>;
-export type MemoryReadRequest = z.infer<typeof MemoryReadSchema>;
-export type MemorySourceRequest = z.infer<typeof MemorySourceSchema>;
+import { MemorySearchSchema, MemorySourceSchema, type MemorySearchRequest, type MemorySourceRequest } from './wire-contracts';
+export { MemorySearchSchema, MemoryReadSchema, MemorySourceSchema, type MemorySearchRequest, type MemoryReadRequest, type MemorySourceRequest } from './wire-contracts';
 const Cursor = z.object({ revision: z.string(), offset: z.number().int().nonnegative(), character: z.number().int().nonnegative().optional() }).strict();
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const encode = (value: z.infer<typeof Cursor>) => Buffer.from(JSON.stringify(value)).toString('base64url');

@@ -14,5 +14,6 @@ describe('SettingsPage language settings', () => {
 
     expect(screen.getByRole('radiogroup', { name: 'Language' })).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'Theme' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Memory' })).toBeInTheDocument();
   });
 });

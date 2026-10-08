@@ -1,4 +1,5 @@
 /* Composes extraction, file consolidation and explicit maintenance in the application. */
+import type { MemoryChanged } from './wire-contracts';
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseConnection } from '../storage/index';
 import type { Settings } from '../settings/settings-store';
@@ -25,7 +26,16 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
   const iso = () => new Date(now()).toISOString();
   const store = createMemoryStore(database, now);
   let stopped = false;
-  let active: { runId: string; controller: AbortController; completion: Promise<void>; followup: boolean; targetRevision?: number } | undefined;
+  const processInstanceId = randomUUID();
+  let sequence = 0;
+  const listeners = new Set<(event: MemoryChanged) => void>();
+  function changed(runId?: string): void {
+    const event = { processInstanceId, sequence: ++sequence, revision: store.state().dirty_revision, ...(runId ? { runId } : {}) };
+    for (const listener of listeners) {
+      try { listener(event); } catch { /* A disconnected UI cannot fail a committed operation. */ }
+    }
+  }
+  let active: { runId: string; controller: AbortController; completion: Promise<void>; followup?: MemoryGenerationRequest; targetRevision?: number } | undefined;
   let clearing: Promise<void> | undefined;
   const failure = (error: unknown): MemoryFailure => ({ status: 'failed', error: {
     code: error instanceof Error && /^[A-Z_]+(?::|$)/.test(error.message) ? error.message.split(':')[0] : 'STORAGE_FAILED',
@@ -139,6 +149,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
       if (!config.consolidationModel) throw new Error('MODEL_UNAVAILABLE');
       const model = await options.resolveModel(config.consolidationModel);
       guard();
+      changed(runId);
       publishConsolidationInputs(files, chosen, guard);
       const operation = () => runConsolidationAgent({ model, files, root: options.root, selection: chosen, signal: controller.signal, guard, observability: options.observability });
       const result = await operation();
@@ -178,6 +189,10 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
       if (!maintenance) {
         const failedJob = request.failedJobId ? database.prepare<{ stage: string }>({ sql: 'SELECT stage FROM memory_jobs WHERE job_id = ?' }).get([request.failedJobId]) : undefined;
         const result = await options.extraction.extract({ triggerSessionId: request.triggerSessionId,
+          onProgress: extractionId => {
+            database.prepare({ sql: 'UPDATE memory_runs SET result_json = ? WHERE run_id = ?' }).run([JSON.stringify({ extractionRunId: extractionId }), runId]);
+            changed(runId);
+          },
           ...(failedJob?.stage === 'extract' ? { failedJobId: request.failedJobId } : {}), signal: controller.signal });
         if (result.status === 'completed') {
           extractionRunId = result.runId; extractionFailed = ['failed', 'partial', 'cancelled'].includes(result.result);
@@ -208,11 +223,15 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
             ? { status: 'error', code: 'MEMORY_GENERATION_FAILED', message: 'Some memory work did not complete.' } : { status: 'ok' } };
       } }, operation) : operation())
       .finally(() => {
-        const followup = active?.runId === runId && (active.followup || (active.targetRevision !== undefined && store.state().dirty_revision > active.targetRevision));
+        changed(runId);
+        const followup = active?.runId === runId
+          ? active.followup ?? (active.targetRevision !== undefined && store.state().dirty_revision > active.targetRevision ? request : undefined)
+          : undefined;
         if (active?.runId === runId) active = undefined;
-        if (followup && !stopped && !store.state().clear_pending && !controller.signal.aborted) start({ requestId: randomUUID(), reason: 'manual' }, maintenance);
+        if (followup && !stopped && !store.state().clear_pending && !controller.signal.aborted) start({ ...followup, requestId: randomUUID() }, maintenance);
       });
-    active = { runId, controller, completion, followup: false };
+    active = { runId, controller, completion };
+    changed(runId);
     // The background promise can outlive its caller. Trace records failures; shutdown still observes rejection.
     void completion.catch(() => {});
   }
@@ -224,7 +243,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
       if (!['startup', 'manual', 'retry'].includes(request.reason) || (request.reason === 'retry' && !request.failedJobId)) throw new Error('INVALID_ARGUMENT');
       if (request.failedJobId && !database.prepare({ sql: "SELECT 1 FROM memory_jobs WHERE job_id = ? AND status = 'failed'" }).get([request.failedJobId])) throw new Error('INVALID_ARGUMENT');
       const result = store.request<MemoryStartResult>('generate', request.requestId, request, () => {
-        if (active) { active.followup = true; return { status: 'reused', runId: active.runId }; }
+        if (active) { active.followup = request; return { status: 'reused', runId: active.runId }; }
         inspect();
         const runId = randomUUID(); store.beginRun(runId, maintenance ? 'maintenance' : request.reason);
         return { status: 'started', runId };
@@ -284,6 +303,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
     return { items: selected, ...(remaining.length > limit ? { nextCursor: Buffer.from(JSON.stringify({ revision, after: identity(selected[selected.length - 1]) })).toString('base64url') } : {}) };
   }
   const host: ReturnType<typeof createMemoryProduction> = {
+    subscribeChanges(handler) { listeners.add(handler); return () => { listeners.delete(handler); }; },
     inspect, startGeneration: request => start(request), getRun,
     async waitRun(request) {
       const timeout = request.timeoutMs ?? 60000;
@@ -318,7 +338,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
     readDocument(request) {
       try {
         inspect();
-        const document = files.readLines(request.path, request.startLine, request.lineCount);
+        const document = files.readLines(request.path, request.startLine, request.lineCount, request.startCharacter);
         if (!document) return { status: 'notFound' };
         if (request.expectedVersion && request.expectedVersion !== document.version) throw new Error('VERSION_CONFLICT');
         return { status: 'found', document };
@@ -351,14 +371,16 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
           database.prepare({ sql: 'UPDATE memory_state SET artifact_state = ? WHERE id = 1' }).run([intact ? before.artifact_state : 'needsRepair']);
         }
         return failure(error);
-      } finally { if (writer) store.release(writer); }
+      } finally { if (writer) { store.release(writer); changed(); } }
     },
     listSources(request = {}) {
       try {
         const selected = new Set(database.prepare<{ session_id: string }>({ sql: 'SELECT session_id FROM memory_snapshot_sources WHERE snapshot_id = (SELECT successful_snapshot_id FROM memory_state WHERE id = 1)' }).all().map(row => row.session_id));
         const items: MemoryManagedSource[] = sources.listSources().map(source => {
           const saved = database.prepare<{ eligibility: 'eligible' | 'excluded'; eligibility_version: number; usage_count: number; last_used_at: string | null; source_version: string | null }>({ sql: 'SELECT s.*,c.source_version FROM memory_sources s LEFT JOIN memory_current_extractions c ON c.session_id = s.session_id WHERE s.session_id = ?' }).get([source.sessionId]);
-          return { sessionId: source.sessionId, title: source.title, eligibility: saved?.eligibility ?? 'eligible', version: saved?.eligibility_version ?? 0,
+          const snapshot = sources.readSnapshot(source.sessionId);
+          return { sessionId: source.sessionId, title: source.title, workspaceId: source.workspaceId, contentUpdatedAt: source.contentUpdatedAt,
+            ...(snapshot.status === 'found' ? { sourceRef: snapshot.snapshot.sourceRef } : {}), eligibility: saved?.eligibility ?? 'eligible', version: saved?.eligibility_version ?? 0,
             usageCount: saved?.usage_count ?? 0, lastUsedAt: saved?.last_used_at ?? undefined, extractionVersion: saved?.source_version ?? undefined, selected: selected.has(source.sessionId) };
         }).sort((a, b) => a.sessionId < b.sessionId ? -1 : a.sessionId > b.sessionId ? 1 : 0);
         const result = page(items, request, item => item.sessionId);
@@ -383,6 +405,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
               maintenance: selected && request.eligibility === 'excluded' ? configuration().consolidationModel ? 'pending' as const : 'pendingModel' as const : 'notRequired' as const };
           } finally { store.release(writer); }
         });
+        changed();
         if (result.maintenance === 'pending') {
           const started = start({ requestId: `exclude:${request.requestId}`, reason: 'manual' }, true);
           if (started.status === 'started' || started.status === 'reused') return { ...result, runId: started.runId };
@@ -405,7 +428,8 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
         const pendingRun = database.prepare<{ run_id: string }>({ sql: "SELECT run_id FROM memory_runs WHERE kind = 'clear' ORDER BY rowid DESC LIMIT 1" }).get();
         if (store.state().clear_pending && !clearing && pendingRun?.run_id === result.runId) {
           database.prepare({ sql: "UPDATE memory_runs SET status = 'running', result_json = NULL, completed_at = NULL WHERE run_id = ?" }).run([result.runId]);
-          clearing = Promise.resolve().then(() => performClear(result.runId)).finally(() => { clearing = undefined; });
+          changed(result.runId);
+          clearing = Promise.resolve().then(() => performClear(result.runId)).finally(() => { clearing = undefined; changed(result.runId); });
         }
         return result;
       } catch (error) { return failure(error); }
@@ -415,6 +439,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
       await options.extraction.shutdown();
       await active?.completion;
       await clearing;
+      listeners.clear();
     },
   };
   inspect();

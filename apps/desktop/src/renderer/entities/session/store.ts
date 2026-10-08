@@ -18,7 +18,7 @@ interface SessionState {
   setNewSessionDraftTargetProject: (projectId: string | null) => void;
 }
 
-export const useSessionStore = create<SessionState>((set) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   sessions: [],
   activeSessionId: null,
   newSessionDraftTargetProjectId: null,
@@ -51,10 +51,18 @@ export const useSessionStore = create<SessionState>((set) => ({
       ? state.sessions.map((candidate) => candidate.id === session.id ? session : candidate)
       : [session, ...state.sessions],
   })),
-  setActiveSession: (activeSessionId) => set({
-    activeSessionId,
-    ...(activeSessionId ? { newSessionDraftTargetProjectId: null } : {}),
-  }),
+  setActiveSession: (activeSessionId) => {
+    if (activeSessionId === get().activeSessionId) return;
+    set({ activeSessionId, ...(activeSessionId ? { newSessionDraftTargetProjectId: null } : {}) });
+    if (!activeSessionId) return;
+    // Session entry is a trigger. Timeline refreshes and component mounts are queries only.
+    void Promise.resolve().then(() => window.megumi.memory.startGeneration(createRendererRuntimeIpcRequest(
+      IPC_CHANNELS.memory.startGeneration,
+      { requestId: crypto.randomUUID(), reason: 'startup', triggerSessionId: activeSessionId },
+    ))).then(result => {
+      if (!result.ok) useChatUiStore.getState().setLastError(result.data.message);
+    }).catch(error => useChatUiStore.getState().setLastError(String(error)));
+  },
   startNewSessionDraft: (projectId) => set({
     activeSessionId: null,
     newSessionDraftTargetProjectId: projectId,

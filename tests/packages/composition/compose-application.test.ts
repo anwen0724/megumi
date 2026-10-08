@@ -88,3 +88,19 @@ it('pins the session model when a later application default changes', async () =
   await ended.promise;
   expect(second.payload.session.modelSelection).toEqual({ providerId: 'test', modelId: 'model' });
 });
+
+
+it('checks memory once when generation changes from disabled to enabled', async () => {
+  application = composeTestApplication();
+  const app = application.runtime;
+  const update = (enabled: boolean) => {
+    const read = app.settings.readSettings(); if (read.status !== 'ok') throw new Error('Settings unavailable');
+    expect(app.settings.updateSettings({ expectedRevision: read.settings.revision, patch: { memory: { generateMemories: enabled } } })).not.toMatchObject({ status: 'rejected' });
+  };
+  update(false);
+  expect(app.memory.getStatus()).toMatchObject({ memory: { recentRuns: [] } });
+  update(true);
+  await vi.waitFor(() => expect(app.memory.getStatus()).toMatchObject({ memory: { recentRuns: [expect.objectContaining({ status: 'failed' })] } }));
+  update(true);
+  expect(app.memory.getStatus()).toMatchObject({ memory: { recentRuns: [expect.anything()] } });
+});

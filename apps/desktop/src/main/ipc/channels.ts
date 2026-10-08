@@ -2,6 +2,21 @@
  * Electron IPC channel names owned by the desktop shell.
  */
 export const IPC_CHANNELS = {
+  memory: {
+    getStatus: 'memory:get-status',
+    startGeneration: 'memory:start-generation',
+    getRun: 'memory:get-run',
+    cancelRun: 'memory:cancel-run',
+    listDocuments: 'memory:list-documents',
+    readDocument: 'memory:read-document',
+    searchDocuments: 'memory:search-documents',
+    updateDocument: 'memory:update-document',
+    listSources: 'memory:list-sources',
+    readSource: 'memory:read-source',
+    setSourceEligibility: 'memory:set-source-eligibility',
+    clearMemory: 'memory:clear',
+    changed: 'memory:changed',
+  },
   settingsRecovery: {
     get: 'settings-recovery:get',
     openDirectory: 'settings-recovery:open-directory',
@@ -136,6 +151,7 @@ type ValueOf<T> = T[keyof T];
 type NestedValueOf<T> = T extends string ? T : ValueOf<{ [K in keyof T]: NestedValueOf<T[K]> }>;
 export type IpcChannel = NestedValueOf<typeof IPC_CHANNELS>;
 const ALL_IPC_CHANNELS = [
+  ...Object.values(IPC_CHANNELS.memory),
   ...Object.values(IPC_CHANNELS.recommendation),
   IPC_CHANNELS.settingsRecovery.get,
   IPC_CHANNELS.settingsRecovery.openDirectory,

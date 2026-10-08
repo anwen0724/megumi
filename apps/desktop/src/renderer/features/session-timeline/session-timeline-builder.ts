@@ -277,6 +277,7 @@ function toTimelineAssistantMessage(input: {
       textId: `text:${messageId}`,
       status: answerStatus(reply, legacyAnswer),
       text: answer ? assistantText(answer) : '',
+      ...(reply?.kind === 'assistantReply' && reply.memoryCitations ? { memoryCitations: reply.memoryCitations } : {}),
       format: 'markdown',
       createdAt: answer?.createdAt ?? last.createdAt,
       ...(answer?.completedAt ? { updatedAt: answer.completedAt } : {}),
