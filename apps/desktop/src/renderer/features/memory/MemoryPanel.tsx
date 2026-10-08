@@ -6,11 +6,13 @@ import { ChevronLeft, PanelRightClose, RefreshCw } from 'lucide-react';
 import type { MemoryDocumentSlice } from '@megumi/application/memory/memory-files';
 import { IPC_CHANNELS } from '../../shared/ipc/channels';
 import { createRendererRuntimeIpcRequest as request } from '../../shared/ipc';
-import { Button, IconButton, cx } from '../../shared/ui';
+import { Button, IconButton } from '../../shared/ui';
+import { TimelineMarkdown } from '../chat/components/TimelineMarkdown';
+import { memoryReadingText, sourceMessageText } from './memory-presentation';
 import type { MemoryDocumentTarget } from './memory-panel-navigation';
 import { useSessionStore } from '../../entities/session/store';
 import { useProjectStore } from '../../entities/project/store';
-type Tab = 'summary' | 'knowledge' | 'skills' | 'sources' | 'status';
+type View = 'content' | 'sources' | 'activity';
 type DocumentItem = {
   path: string;
   version: string;
@@ -35,13 +37,13 @@ export function MemoryPanel({
   const {
     t
   } = useTranslation('settings');
-  const [tab, setTab] = useState<Tab>(initialDocument?.path.startsWith('skills/') ? 'skills' : initialDocument?.path.startsWith('rollout_summaries/') ? 'sources' : initialDocument?.path === 'MEMORY.md' ? 'knowledge' : 'summary');
+  const [view, setView] = useState<View>('content');
   const [status, setStatus] = useState<MemoryStatus>();
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [documentCursor, setDocumentCursor] = useState<string>();
   const [sources, setSources] = useState<readonly MemoryManagedSource[]>([]);
   const [sourceCursor, setSourceCursor] = useState<string>();
-  const [selected, setSelected] = useState(initialDocument?.path ?? 'memory_summary.md');
+  const [selected, setSelected] = useState(initialDocument?.path ?? '');
   const [documentTarget, setDocumentTarget] = useState(initialDocument);
   const previousDocument = useRef(initialDocument);
   const [error, setError] = useState('');
@@ -60,7 +62,7 @@ export function MemoryPanel({
       setDraftOpen(false);
       setDocumentTarget(initialDocument);
       setSelected(initialDocument.path);
-      setTab(initialDocument.path.startsWith('skills/') ? 'skills' : initialDocument.path.startsWith('rollout_summaries/') ? 'sources' : initialDocument.path === 'MEMORY.md' ? 'knowledge' : 'summary');
+      setView('content');
     });
   }, [initialDocument]);
   const [clearOpen, setClearOpen] = useState(false);
@@ -155,12 +157,25 @@ export function MemoryPanel({
       cursor
     }));
     if (!result.ok) throw new Error(result.data.message);
-    setSource({
-      ref: sourceRef,
-      page: result.data
+    setSource(previous => {
+      const page = result.data;
+      if (!cursor || previous?.ref !== sourceRef || previous.page.status !== 'found' || page.status !== 'found') return { ref: sourceRef, page };
+      const messages = [...previous.page.messages];
+      for (const message of page.messages) {
+        const last = messages.at(-1);
+        if (last?.messageId === message.messageId && last.truncated) {
+          messages[messages.length - 1] = { ...message, characterOffset: last.characterOffset, text: last.text + message.text };
+        } else messages.push(message);
+      }
+      return { ref: sourceRef, page: { ...page, messages } };
     });
   }
-  const visible = documents.filter(item => tab === 'summary' ? item.path === 'memory_summary.md' : tab === 'knowledge' ? item.path === 'MEMORY.md' : item.path.startsWith('skills/'));
+  const mainDocument = documents.find(item => item.path === 'MEMORY.md') ?? documents.find(item => item.path === 'memory_summary.md');
+  const selectedPath = selected || mainDocument?.path;
+  const relatedDocuments = documents.filter(item => item.path.startsWith('skills/') && item.path.endsWith('/SKILL.md'));
+  function showView(next: View) {
+    navigate(() => { setDraftOpen(false); setSource(undefined); setView(next); });
+  }
   const pending = status?.artifactState === 'updating' || status?.artifactState === 'clearing';
   const running = status?.recentRuns.filter(run => ['pending', 'running'].includes(run.status)) ?? [];
   const history = status?.recentRuns.filter(run => !['pending', 'running'].includes(run.status)) ?? [];
@@ -189,20 +204,11 @@ export function MemoryPanel({
       if (event.key === 'Escape') { event.stopPropagation(); navigate(onClose); }
     }} className="ui-page-enter flex h-full min-w-0 w-full flex-col bg-[var(--color-surface)] text-[var(--color-text)] [overflow-wrap:anywhere]">
       <header className="flex min-h-16 shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-3 py-3">
-        {onBack && <IconButton label={t('memory.back')} onClick={() => navigate(onBack)} size="sm" variant="ghost"><ChevronLeft size={16} /></IconButton>}
-        <h2 className="min-w-0 flex-1 text-sm font-semibold">{t('memory.title')}</h2>
+        {(onBack || view !== 'content') && <IconButton label={t(view === 'content' ? 'memory.back' : 'memory.backToMemory')} onClick={() => view === 'content' ? onBack && navigate(onBack) : showView('content')} size="sm" variant="ghost"><ChevronLeft size={16} /></IconButton>}
+        <h2 className="min-w-0 flex-1 text-sm font-semibold">{t(view === 'content' ? 'memory.title' : view === 'sources' ? 'memory.manageSources' : 'memory.activity')}</h2>
         <IconButton label={t('memory.refresh')} onClick={() => void load()} size="sm" variant="ghost"><RefreshCw size={16} /></IconButton>
         <IconButton label={t('memory.close')} onClick={() => navigate(onClose)} size="sm" variant="ghost"><PanelRightClose size={16} /></IconButton>
       </header>
-      <nav role="tablist" aria-label={t('memory.title')} className="flex shrink-0 gap-1 overflow-x-auto border-b border-[var(--color-border)] px-2 py-2">
-        {(['summary', 'knowledge', 'skills', 'sources', 'status'] as const).map(value => <button key={value} role="tab" aria-selected={tab === value} className={cx('min-w-fit flex-1 whitespace-nowrap rounded px-2 py-2 text-sm', tab === value && 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]')} onClick={() => navigate(() => {
-          setDraftOpen(false);
-          setTab(value);
-          if (value === 'summary') setSelected('memory_summary.md');
-          if (value === 'knowledge') setSelected('MEMORY.md');
-          if (value === 'skills') setSelected('');
-        })}>{t(`memory.${value}`)}</button>)}
-      </nav>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {pendingNavigation && <div role="alertdialog" aria-label={t('memory.discard')} className="mb-4 space-y-3 rounded border border-[var(--color-border)] p-4">
           <p>{t('memory.discardHelp')}</p>
@@ -215,15 +221,14 @@ export function MemoryPanel({
         </div>}
         {error && <p role="alert" className="mb-3 text-[var(--color-danger)]">{error}</p>}
         {notice && <p role="status" className="mb-3 text-sm">{notice}</p>}
-        {tab === 'status' && status && <div className="space-y-4">
-          <h3 className="text-sm font-medium">{t('memory.currentState')}</h3>
-          <p>{t(({
+        {status && view !== 'sources' && <p className="mb-4 text-sm text-[var(--color-text-muted)]">{t(({
             ready: 'memory.stateReady',
             empty: 'memory.stateEmpty',
             updating: 'memory.stateUpdating',
             needsRepair: 'memory.stateNeedsRepair',
             clearing: 'memory.stateClearing'
-          } as const)[status.artifactState])}{status.dirty ? ` · ${t('memory.dirty')}` : ''}</p>
+          } as const)[status.artifactState])}{status.dirty ? ` · ${t('memory.dirty')}` : ''}</p>}
+        {view === 'activity' && status && <div className="space-y-4">
           <p>{t('memory.generate')}: {t(status.generateMemories ? 'memory.enabled' : 'memory.disabled')} · {t('memory.use')}: {t(status.useMemories ? 'memory.enabled' : 'memory.disabled')}</p>
           {(status.extractModel.status === 'unconfigured' || status.consolidationModel.status === 'unconfigured') && status.generateMemories && <p className="text-sm text-[var(--color-text-muted)]">{t('memory.noModel')}</p>}
           {(['extractModel', 'consolidationModel'] as const).map(field => {
@@ -242,10 +247,9 @@ export function MemoryPanel({
             <summary className="cursor-pointer text-sm font-medium">{t('memory.recentRuns')}</summary>
             {history.length ? history.map(renderRun) : <p className="text-sm text-[var(--color-text-muted)]">{t('memory.noRuns')}</p>}
           </details>
-          <details className="space-y-2 border-t border-[var(--color-border)] pt-3">
-            <summary className="cursor-pointer text-sm text-[var(--color-danger)]">{t('memory.clearSection')}</summary>
+          <div className="border-t border-[var(--color-border)] pt-3">
           <Button variant="danger" disabled={busy || status.recentRuns.some(run => run.kind === 'clear' && ['pending', 'running'].includes(run.status))} onClick={() => setClearOpen(true)}>{t('memory.clear')}</Button>
-          </details>
+          </div>
           {clearOpen && <div role="alertdialog" aria-label={t('memory.clear')} className="space-y-3 rounded border border-[var(--color-danger)] p-4">
             <p>{t('memory.clearHelp')}</p>
             <Button onClick={() => setClearOpen(false)}>{t('memory.cancel')}</Button>
@@ -259,10 +263,10 @@ export function MemoryPanel({
             })}>{t('memory.confirmClear')}</Button>
           </div>}
         </div>}
-        {tab === 'sources' && <div className="space-y-3">{sources.length === 0 && <p>{t('memory.empty')}</p>}{sources.map(item => <article key={item.sessionId} className="space-y-2 rounded border border-[var(--color-border)] p-3">
+        {view === 'sources' && <div className="space-y-3"><p className="text-sm text-[var(--color-text-muted)]">{t('memory.sourcesHelp')}</p>{sources.length === 0 && <p>{t('memory.empty')}</p>}{sources.map(item => <article key={item.sessionId} className="space-y-2 rounded border border-[var(--color-border)] p-3">
           <p>{item.title}</p>
-            <p className="text-sm text-[var(--color-text-muted)]">{item.workspaceId}{item.contentUpdatedAt ? ` · ${new Date(item.contentUpdatedAt).toLocaleString()}` : ''}</p>
-          <p className="text-sm text-[var(--color-text-muted)]">{t('memory.usage')}: {item.usageCount} · {t(item.selected ? 'memory.selected' : 'memory.notSelected')}</p>
+            <p className="text-sm text-[var(--color-text-muted)]">{item.contentUpdatedAt ? new Date(item.contentUpdatedAt).toLocaleString() : ''}</p>
+          <p className="text-sm text-[var(--color-text-muted)]">{t(item.eligibility === 'excluded' ? 'memory.sourceExcluded' : item.selected ? 'memory.selected' : 'memory.notSelected')}</p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => void action(async () => {
               await useSessionStore.getState().loadSessions();
@@ -291,26 +295,47 @@ export function MemoryPanel({
           </div>
         </article>)}{sourceCursor && <Button onClick={() => void moreSources().catch(error => setError(String(error)))}>{t('memory.loadMore')}</Button>}
         </div>}
-        {['summary', 'knowledge', 'skills'].includes(tab) && <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">{visible.map(item => <Button key={item.path} onClick={() => navigate(() => {
-            setDraftOpen(false);
-            setSelected(item.path);
-          })}>{item.path}</Button>)}{documentCursor && <Button onClick={() => void moreDocuments().catch(error => setError(String(error)))}>{t('memory.loadMore')}</Button>}
-          </div>
-          {selected && (visible.length > 0 || documentTarget?.path === selected) ? <MemoryDocumentView key={selected} path={selected} versionHint={documents.find(item => item.path === selected)?.version} onDraftChange={setDraftOpen} expectedVersion={documentTarget?.path === selected ? documentTarget.version : undefined} startLine={documentTarget?.path === selected ? documentTarget.startLine : undefined} blocked={pending ?? false} onReadSource={ref => void openSource(ref).catch(error => setError(String(error)))} /> : <p className="text-sm text-[var(--color-text-muted)]">{t(tab === 'summary' ? 'memory.emptyHelp' : 'memory.empty')}</p>}
-        </div>}
-        {tab === 'sources' && <div className="mt-4 space-y-3">{documents.filter(item => item.readOnly).map(item => <Button key={item.path} onClick={() => setSelected(item.path)}>{item.path}</Button>)}{documentCursor && <Button onClick={() => void moreDocuments().catch(error => setError(String(error)))}>{t('memory.loadMore')}</Button>}{(selected === 'raw_memories.md' || selected.startsWith('rollout_summaries/')) && <MemoryDocumentView key={selected} path={selected} expectedVersion={documentTarget?.path === selected ? documentTarget.version : undefined} startLine={documentTarget?.path === selected ? documentTarget.startLine : undefined} blocked={true} onDraftChange={setDraftOpen} onReadSource={ref => void openSource(ref).catch(error => setError(String(error)))} />}
+        {view === 'content' && <div className="space-y-4">
+          {selected && selected !== mainDocument?.path && <Button size="sm" onClick={() => navigate(() => { setDraftOpen(false); setSelected(''); setDocumentTarget(undefined); })}>{t('memory.backToMemory')}</Button>}
+          {selectedPath ? <MemoryDocumentView key={selectedPath} path={selectedPath} versionHint={documents.find(item => item.path === selectedPath)?.version} onDraftChange={setDraftOpen} expectedVersion={documentTarget?.path === selectedPath ? documentTarget.version : undefined} startLine={documentTarget?.path === selectedPath ? documentTarget.startLine : undefined} blocked={pending ?? false} onReadSource={ref => void openSource(ref).catch(error => setError(String(error)))} /> : <p className="text-sm text-[var(--color-text-muted)]">{t('memory.emptyHelp')}</p>}
+          {relatedDocuments.length > 0 && <div className="space-y-2 border-t border-[var(--color-border)] pt-3">
+            <p className="text-sm text-[var(--color-text-muted)]">{t('memory.relatedContent')}</p>
+            {relatedDocuments.map(item => <Button key={item.path} size="sm" onClick={() => navigate(() => { setDraftOpen(false); setDocumentTarget(undefined); setSelected(item.path); })}>{item.path.split('/')[1].replace(/[-_]/g, ' ')}</Button>)}
+          </div>}
+          {documentCursor && <Button onClick={() => void moreDocuments().catch(error => setError(String(error)))}>{t('memory.loadMore')}</Button>}
         </div>}
         {source && <section className="mt-4 space-y-3 border-t border-[var(--color-border)] pt-4">
           <Button onClick={() => setSource(undefined)}>{t('memory.close')}</Button>
           {source.page.status === 'found' ? <>
-          <p className="text-xs text-[var(--color-text-muted)]">{source.page.workspaceId} · {source.page.sessionId} · {source.page.sourceVersion}</p>{source.page.sourceChanged && <p>{t('memory.sourceChanged')}</p>}{source.page.messages.map(message => <div key={`${message.messageId}:${message.characterOffset}`}><p className="text-xs text-[var(--color-text-muted)]">{message.messageId} · {message.characterOffset}–{message.characterOffset + message.text.length}</p><pre className="whitespace-pre-wrap break-words text-sm">{message.text}</pre></div>)}{source.page.nextCursor && <Button onClick={() => void openSource(source.ref, source.page.status === 'found' ? source.page.nextCursor : undefined).catch(error => setError(String(error)))}>{t('memory.loadMore')}</Button>}</> : <p>{t('memory.unavailable')}</p>}
+          <h3 className="text-sm font-medium">{t('memory.sourceEvidence')}</h3>
+          {source.page.sourceChanged && <p>{t('memory.sourceChanged')}</p>}
+          {source.page.messages.map(message => <SourceMessage key={message.messageId} message={message} />)}
+          {source.page.nextCursor && <Button onClick={() => void openSource(source.ref, source.page.status === 'found' ? source.page.nextCursor : undefined).catch(error => setError(String(error)))}>{t('memory.loadMore')}</Button>}
+          <details className="text-xs text-[var(--color-text-muted)]"><summary>{t('memory.technicalDetails')}</summary><p>{source.page.workspaceId} · {source.page.sessionId} · {source.page.sourceVersion}</p></details>
+          </> : <p>{t('memory.unavailable')}</p>}
         </section>}
       </div>
-      {onOpenSettings && <footer className="shrink-0 border-t border-[var(--color-border)] p-3">
-        <Button className="w-full" onClick={() => navigate(onOpenSettings)}>{t('memory.openSettings')}</Button>
-      </footer>}
+      <footer className="shrink-0 space-y-2 border-t border-[var(--color-border)] p-3">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => showView('sources')}>{t('memory.manageSources')}</Button>
+          <Button size="sm" onClick={() => showView('activity')}>{t('memory.activity')}</Button>
+        </div>
+        {onOpenSettings && <Button className="w-full" onClick={() => navigate(onOpenSettings)}>{t('memory.openSettings')}</Button>}
+      </footer>
     </section>;
+}
+
+function SourceMessage({ message }: { message: Extract<SourcePage, { status: 'found' }>['messages'][number] }) {
+  const { t } = useTranslation('settings');
+  let text = '';
+  if (!message.truncated) {
+    try { text = sourceMessageText(message.text); }
+    catch { return <p role="alert">{t('memory.sourceUnreadable')}</p>; }
+  }
+  return <article className="space-y-2 rounded border border-[var(--color-border)] p-3 text-sm">
+    <p className="font-medium">{t(message.kind === 'user_message' ? 'memory.sourceUser' : message.kind === 'assistant_reply' ? 'memory.sourceAssistant' : 'memory.sourceTool')}</p>
+    <p className="whitespace-pre-wrap">{message.truncated ? t('memory.sourceContinue') : text || t('memory.sourceNoText')}</p>
+  </article>;
 }
 
 /** Reads bounded pages and assembles a full, version-consistent file only for explicit editing. */
@@ -417,9 +442,8 @@ function MemoryDocumentView({
   }
   const sourceRefs = [...new Set([...(document?.content.matchAll(/sourceRef=([^\]\s;]+)/g) ?? [])].map(match => match[1]))];
   return <section className="space-y-3">
-    <h3 className="font-medium">{path}</h3>
     {error && <p role="alert" className="text-[var(--color-danger)]">{error}</p>}{draft === undefined ? <>
-      <pre className="whitespace-pre-wrap break-words rounded bg-[var(--color-surface)] p-4 font-mono text-xs leading-6">{document?.content || t('memory.empty')}</pre>
+      <div className="text-sm leading-6"><TimelineMarkdown text={document?.content ? memoryReadingText(document.content) : t('memory.empty')} /></div>
       {document?.truncated && <Button onClick={() => void load(document.nextLine, document.version, document.nextCharacter).catch(error => setError(String(error)))}>{t('memory.moreLines')}</Button>}{document && !readOnly && <Button disabled={busy || blocked} onClick={() => void edit()}>{t('memory.edit')}</Button>}</> : <>
       <textarea aria-label={t('memory.draft')} value={draft} onChange={event => setDraft(event.target.value)} rows={20} className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-3 font-mono text-xs" />
       <div className="flex flex-wrap gap-2">

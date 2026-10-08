@@ -29,6 +29,42 @@ function fixture() {
 }
 
 describe('MemoryPanel', () => {
+  it('reads paged source messages as conversation text instead of JSON or thinking blocks', async () => {
+    const f = fixture();
+    f.api.listSources.mockResolvedValue({ ok: true, data: { status: 'ok', sources: [{ sessionId: 's1', title: 'Project setup', workspaceId: 'w1', contentUpdatedAt: '', sourceRef: 'ref', eligibility: 'eligible', version: 0, usageCount: 0, selected: true }] } });
+    const text = JSON.stringify([{ type: 'thinking', thinking: 'Internal reasoning' }, { type: 'text', text: 'Use pnpm.' }]);
+    Object.assign(f.api, { readSource: vi.fn(({ payload }: { payload: { cursor?: string } }) => Promise.resolve({ ok: true, data: {
+      status: 'found', sessionId: 's1', workspaceId: 'w1', sourceVersion: 'version', sourceChanged: false,
+      messages: [{ messageId: 'm1', kind: 'assistant_reply', text: payload.cursor ? text.slice(30) : text.slice(0, 30), characterOffset: payload.cursor ? 30 : 0, truncated: !payload.cursor }],
+      ...(!payload.cursor ? { nextCursor: 'page2' } : {}),
+    } })) });
+    render(<MemoryPanel onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage sources' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'View evidence' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('Use pnpm.')).toBeInTheDocument();
+    expect(screen.getByText('Assistant')).toBeInTheDocument();
+    expect(screen.queryByText(/Internal reasoning/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/"type"/)).not.toBeInTheDocument();
+  });
+  it('opens remembered content without file categories and preserves the full document when editing', async () => {
+    const f = fixture();
+    const content = '# Task Group: Project conventions\nscope: this project\n## Task: Package manager\n### rollout_summary_files\n- rollout_summaries/abc.md [sourceId=s1; sourceVersion=v1; sourceRef=ref1]\n### keywords\npnpm\n### learnings\nUse pnpm for this project.\n';
+    f.api.listDocuments.mockResolvedValue({ ok: true, data: { status: 'ok', documents: [
+      { path: 'MEMORY.md', version: 'v1', readOnly: false },
+      { path: 'memory_summary.md', version: 'v1', readOnly: false },
+    ] } });
+    f.api.readDocument.mockResolvedValue({ ok: true, data: { status: 'found', document: {
+      path: 'MEMORY.md', version: 'v1', content, startLine: 1, nextLine: 10, truncated: false,
+    } } });
+    render(<MemoryPanel onClose={vi.fn()} />);
+    expect(await screen.findByText('Use pnpm for this project.')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByText('MEMORY.md')).not.toBeInTheDocument();
+    expect(screen.queryByText(/sourceId=/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit memory' }));
+    expect(await screen.findByRole('textbox', { name: 'Draft' })).toHaveValue(content);
+  });
   it('separates a historical failure from current status and does not label zero jobs as zero sources', async () => {
     const f = fixture();
     f.api.getStatus.mockResolvedValue({ ok: true, data: { status: 'ok', memory: {
@@ -37,7 +73,7 @@ describe('MemoryPanel', () => {
       recentRuns: [{ runId: 'old', kind: 'startup', status: 'failed', createdAt: '2026-10-08T00:00:00Z', jobs: [], result: { error: { code: 'MODEL_UNAVAILABLE', message: 'The extraction model is unavailable.' } } }],
     } } });
     render(<MemoryPanel onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Status' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run details' }));
     expect(await screen.findByText('No task is running')).toBeInTheDocument();
     const history = screen.getByText('Recent runs').closest('details');
     expect(history).not.toHaveAttribute('open');
@@ -54,7 +90,7 @@ describe('MemoryPanel', () => {
       } } });
     });
     render(<MemoryPanel onClose={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit full document' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit memory' }));
     expect(await screen.findByRole('textbox', { name: 'Draft' })).toHaveValue('First line\nSecond line\nThird line\n');
   });
 
@@ -73,14 +109,14 @@ describe('MemoryPanel', () => {
       } } });
     });
     render(<MemoryPanel onClose={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit full document' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit memory' }));
     expect(await screen.findByRole('textbox', { name: 'Draft' })).toHaveValue(content);
   });
 
   it('preserves a conflicting draft while showing the latest file, then saves an explicit merge', async () => {
     const f = fixture();
     render(<MemoryPanel onClose={vi.fn()} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Edit full document' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit memory' }));
     const draft = await screen.findByRole('textbox', { name: 'Draft' });
     fireEvent.change(draft, { target: { value: '# User Profile\nMy corrected memory\n' } });
     f.changeFile();
@@ -99,9 +135,9 @@ describe('MemoryPanel', () => {
   it('never generates on open and requires scope confirmation before clearing', async () => {
     const f = fixture();
     render(<MemoryPanel onClose={vi.fn()} />);
-    await screen.findByRole('button', { name: 'Edit full document' });
+    await screen.findByRole('button', { name: 'Edit memory' });
     expect(f.api.startGeneration).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('tab', { name: 'Status' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run details' }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear and disable automatic memory' }));
     expect(f.api.clearMemory).not.toHaveBeenCalled();
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Keep original sessions');
@@ -117,7 +153,7 @@ describe('MemoryPanel', () => {
       recentRuns: [{ runId: 'failed-clear', kind: 'clear', status: 'failed', createdAt: '2026-10-08T00:00:00Z', jobs: [], result: { error: { code: 'STORAGE_FAILED', message: 'Disk unavailable' } } }],
     } } });
     render(<MemoryPanel onClose={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Status' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Run details' }));
     const clear = await screen.findByRole('button', { name: 'Clear and disable automatic memory' });
     expect(clear).not.toBeDisabled();
     fireEvent.click(clear);
@@ -128,7 +164,7 @@ describe('MemoryPanel', () => {
   it('ignores duplicate and older notifications while refreshing newer state', async () => {
     const f = fixture();
     render(<MemoryPanel onClose={vi.fn()} />);
-    await screen.findByRole('button', { name: 'Edit full document' });
+    await screen.findByRole('button', { name: 'Edit memory' });
     await act(async () => f.changed(3));
     const reads = f.api.getStatus.mock.calls.length;
     await act(async () => { f.changed(3); f.changed(2); });
