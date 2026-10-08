@@ -38,7 +38,9 @@ describe('content normalization', () => {
     });
 
     expect(result.status).toBe('rejected');
+
     if (result.status !== 'rejected') throw new Error('expected a rejection');
+
     expect(result.reason).toBe('no_text');
   });
 
@@ -50,7 +52,9 @@ describe('content normalization', () => {
     });
 
     expect(result.status).toBe('rejected');
+
     if (result.status !== 'rejected') throw new Error('expected a rejection');
+
     expect(result.reason).toBe('no_text');
   });
 
@@ -63,7 +67,9 @@ describe('content normalization', () => {
     });
 
     expect(result.status).toBe('rejected');
+
     if (result.status !== 'rejected') throw new Error('expected a rejection');
+
     expect(result.reason).toBe('link_only');
   });
 
@@ -75,7 +81,9 @@ describe('content normalization', () => {
     });
 
     expect(result.status).toBe('rejected');
+
     if (result.status !== 'rejected') throw new Error('expected a rejection');
+
     expect(result.reason).toBe('link_only');
   });
 
@@ -87,7 +95,9 @@ describe('content normalization', () => {
     });
 
     expect(result.status).toBe('ok');
+
     if (result.status !== 'ok') throw new Error('expected normalized content');
+
     expect(result.content.text).toBe('该版本把超时改成 30 秒。');
   });
 
@@ -99,18 +109,28 @@ describe('content normalization', () => {
     });
 
     expect(result.status).toBe('ok');
+
     if (result.status !== 'ok') throw new Error('expected normalized content');
-    expect(result.content.text).toBe('发布说明见 https://example.com/notes，该版本把超时改成 30 秒。');
+
+    expect(result.content.text).toBe(
+      '发布说明见 https://example.com/notes，该版本把超时改成 30 秒。',
+    );
   });
 
   it('rejects content whose detected language is outside the configured set', () => {
     const result = normalizeRawItem(
-      { source: 'zhihu', url: 'https://example.com/a', text: '这是一段足够长的中文内容，用于判断语言归属并触发配置检查。' },
+      {
+        source: 'zhihu',
+        url: 'https://example.com/a',
+        text: '这是一段足够长的中文内容，用于判断语言归属并触发配置检查。',
+      },
       { contentLanguages: ['en'] },
     );
 
     expect(result.status).toBe('rejected');
+
     if (result.status !== 'rejected') throw new Error('expected a rejection');
+
     expect(result.reason).toBe('language');
   });
 
@@ -123,6 +143,7 @@ describe('zhihu source', () => {
   it('keeps EditTime as modification evidence and uses the page identity', async () => {
     const source = createZhihuSource({
       accessSecret: () => 'secret',
+
       // The platform sends ContentID as a raw int64 number. A JavaScript object
       // literal would already round it, so the body stays a string here.
       fetch: async () =>
@@ -131,14 +152,22 @@ describe('zhihu source', () => {
             '{"Title":"标题","ContentType":"Article","ContentID":-5776787301334619690,' +
             '"ContentText":"正文片段","Url":"https://zhuanlan.zhihu.com/p/1?utm_medium=openapi_platform",' +
             '"AuthorName":"作者","EditTime":1791161176}]}}',
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
         ),
     });
 
-    const result = await source.search({ query: '摄影', limit: 5 });
+    const result = await source.search({
+      query: '摄影',
+      limit: 5,
+    });
 
     expect(result.status).toBe('success');
+
     if (result.status !== 'success') throw new Error('expected a successful search');
+
     expect(result.items).toMatchObject([
       {
         source: 'zhihu',
@@ -149,7 +178,13 @@ describe('zhihu source', () => {
         author: '作者',
         externalId: '1',
         kind: 'excerpt',
-        publicationEvidence: [{ kind: 'modified', value: 1791161176000, status: 'unverified' }],
+        publicationEvidence: [
+          {
+            kind: 'modified',
+            value: 1791161176000,
+            status: 'unverified',
+          },
+        ],
       },
     ]);
     expect(result.items[0]?.publishedAt).toBeUndefined();
@@ -159,16 +194,22 @@ describe('zhihu source', () => {
     let called = false;
     const source = createZhihuSource({
       accessSecret: () => undefined,
+
       fetch: async () => {
         called = true;
         return jsonResponse({ Code: 0 });
       },
     });
 
-    const result = await source.search({ query: '摄影', limit: 5 });
+    const result = await source.search({
+      query: '摄影',
+      limit: 5,
+    });
 
     expect(result.status).toBe('failed');
+
     if (result.status !== 'failed') throw new Error('expected a failure');
+
     expect(result.failure.code).toBe('not_configured');
     expect(called).toBe(false);
   });
@@ -177,19 +218,27 @@ describe('zhihu source', () => {
     let requested = '';
     const source = createZhihuSource({
       accessSecret: () => 'secret',
-      fetch: async (input) => {
+
+      fetch: async input => {
         requested = String(input);
-        return jsonResponse({ Code: 0, Data: { Items: [] } });
+        return jsonResponse({
+          Code: 0,
+          Data: { Items: [] },
+        });
       },
     });
 
     await source.search({
       query: '摄影',
       limit: 50,
-      timeRange: { from: 1_700_000_000_000, to: 1_800_000_000_000 },
+      timeRange: {
+        from: 1_700_000_000_000,
+        to: 1_800_000_000_000,
+      },
     });
 
     const url = new URL(requested);
+
     expect(url.searchParams.get('Query')).toBe('摄影');
     expect(url.searchParams.get('Count')).toBe('10');
     expect(url.searchParams.get('SortBy')).toBe('EditTime:desc:(1700000000,1800000000)');
@@ -198,13 +247,23 @@ describe('zhihu source', () => {
   it('maps a platform throttling code to a retryable failure', async () => {
     const source = createZhihuSource({
       accessSecret: () => 'secret',
-      fetch: async () => jsonResponse({ Code: 30001, Message: '频率限制' }),
+
+      fetch: async () =>
+        jsonResponse({
+          Code: 30001,
+          Message: '频率限制',
+        }),
     });
 
-    const result = await source.search({ query: '摄影', limit: 5 });
+    const result = await source.search({
+      query: '摄影',
+      limit: 5,
+    });
 
     expect(result.status).toBe('failed');
+
     if (result.status !== 'failed') throw new Error('expected a failure');
+
     expect(result.failure.code).toBe('rate_limited');
     expect(result.failure.retryable).toBe(true);
   });
@@ -212,13 +271,23 @@ describe('zhihu source', () => {
   it('maps an authentication code to a non-retryable failure', async () => {
     const source = createZhihuSource({
       accessSecret: () => 'secret',
-      fetch: async () => jsonResponse({ Code: 20001, Message: '鉴权失败' }),
+
+      fetch: async () =>
+        jsonResponse({
+          Code: 20001,
+          Message: '鉴权失败',
+        }),
     });
 
-    const result = await source.search({ query: '摄影', limit: 5 });
+    const result = await source.search({
+      query: '摄影',
+      limit: 5,
+    });
 
     expect(result.status).toBe('failed');
+
     if (result.status !== 'failed') throw new Error('expected a failure');
+
     expect(result.failure.code).toBe('unauthorized');
     expect(result.failure.retryable).toBe(false);
   });

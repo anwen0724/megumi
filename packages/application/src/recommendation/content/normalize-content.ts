@@ -45,7 +45,8 @@ const MIN_MATERIAL_CHARACTERS = 10;
  * without a space is not mistaken for part of that link. An HTML anchor is not
  * matched here: converting it already dropped the href and kept only its label.
  */
-const LINK_PATTERN = /(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]+/giu;
+const LINK_PATTERN =
+  /(?:[a-z][a-z0-9+.-]*:\/\/|www\.)[^\s\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]+/giu;
 
 export interface NormalizedContent {
   readonly source: string;
@@ -61,8 +62,15 @@ export interface NormalizedContent {
 export type NormalizeRejection = 'invalid_url' | 'no_text' | 'link_only' | 'language';
 
 export type NormalizeResult =
-  | { status: 'ok'; content: NormalizedContent }
-  | { status: 'rejected'; reason: NormalizeRejection; message: string };
+  | {
+      status: 'ok';
+      content: NormalizedContent;
+    }
+  | {
+      status: 'rejected';
+      reason: NormalizeRejection;
+      message: string;
+    };
 
 export interface NormalizeOptions {
   /** Configured accepted languages; empty means no restriction. */
@@ -82,12 +90,17 @@ export function normalizeContentUrl(rawUrl: string): string | undefined {
   } catch {
     return undefined;
   }
-  if (url.username || url.password || url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+
+  if (url.username || url.password || (url.protocol !== 'http:' && url.protocol !== 'https:'))
+    return undefined;
   if (!url.hostname) return undefined;
 
   url.hash = '';
   url.hostname = url.hostname.toLowerCase();
-  if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) {
+  if (
+    (url.protocol === 'https:' && url.port === '443') ||
+    (url.protocol === 'http:' && url.port === '80')
+  ) {
     url.port = '';
   }
 
@@ -123,6 +136,7 @@ export function htmlToPlainText(input: string): string {
 
   // Collapse first and restore code afterwards, so its indentation survives.
   const collapsed = collapse(decodeEntities(stripTags(withBreaks)));
+
   return collapsed
     .replace(
       /\u0000code(\d+)\u0000/gu,
@@ -138,7 +152,8 @@ export function htmlToPlainText(input: string): string {
  */
 export function detectContentLanguage(text: string): string | undefined {
   const sample = text.slice(0, 2_000);
-  const cjk = (sample.match(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/gu) ?? []).length;
+  const cjk = (sample.match(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/gu) ?? [])
+    .length;
   const hangul = (sample.match(/[\uac00-\ud7af]/gu) ?? []).length;
   const latin = (sample.match(/[A-Za-z]/gu) ?? []).length;
   const total = cjk + hangul + latin;
@@ -146,11 +161,17 @@ export function detectContentLanguage(text: string): string | undefined {
 
   if (cjk + hangul >= total * 0.5) {
     if (hangul > cjk) return 'ko';
-    if (/[\u3040-\u30ff]/u.test(sample) && cjk > 0 && (sample.match(/[\u3040-\u30ff]/gu) ?? []).length > cjk * 0.2) {
+    if (
+      /[\u3040-\u30ff]/u.test(sample) &&
+      cjk > 0 &&
+      (sample.match(/[\u3040-\u30ff]/gu) ?? []).length > cjk * 0.2
+    ) {
       return 'ja';
     }
+
     return 'zh';
   }
+
   return latin >= total * 0.5 ? 'en' : undefined;
 }
 
@@ -162,7 +183,11 @@ export function detectContentLanguage(text: string): string | undefined {
 export function normalizeRawItem(item: RawItem, options: NormalizeOptions = {}): NormalizeResult {
   const canonicalUrl = normalizeContentUrl(item.url);
   if (!canonicalUrl) {
-    return { status: 'rejected', reason: 'invalid_url', message: `Unusable source URL: ${item.url}` };
+    return {
+      status: 'rejected',
+      reason: 'invalid_url',
+      message: `Unusable source URL: ${item.url}`,
+    };
   }
 
   const text = htmlToPlainText(item.text ?? '');
@@ -194,6 +219,7 @@ export function normalizeRawItem(item: RawItem, options: NormalizeOptions = {}):
 
   const title = item.title?.trim();
   const author = item.author?.trim();
+
   return {
     status: 'ok',
     content: {
@@ -235,6 +261,7 @@ function isTrackingParameter(name: string): boolean {
 function isLinkOnlyText(text: string): boolean {
   const withoutLinks = text.replace(LINK_PATTERN, '');
   if (withoutLinks === text) return false;
+
   return withoutLinks.replace(/\s+/gu, '').length < MIN_MATERIAL_CHARACTERS;
 }
 
@@ -255,14 +282,16 @@ function decodeEntities(value: string): string {
 }
 
 function codePoint(value: number): string {
-  return Number.isFinite(value) && value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : '';
+  return Number.isFinite(value) && value > 0 && value <= 0x10ffff
+    ? String.fromCodePoint(value)
+    : '';
 }
 
 /** Collapses horizontal whitespace and excessive blank lines without losing paragraphs. */
 function collapse(value: string): string {
   return value
     .split('\n')
-    .map((line) => line.replace(/[ \t\u00a0\u3000]+/gu, ' ').trim())
+    .map(line => line.replace(/[ \t\u00a0\u3000]+/gu, ' ').trim())
     .join('\n')
     .replace(/\n{3,}/gu, '\n\n')
     .trim();

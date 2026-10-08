@@ -21,15 +21,24 @@ describe('settings written before the candidate supply switch', () => {
   });
 
   afterEach(() => {
-    fs.rmSync(directory, { recursive: true, force: true });
+    fs.rmSync(directory, {
+      recursive: true,
+      force: true,
+    });
   });
 
   it('loads and keeps the supply settings while dropping removed discovery fields', () => {
     writeSettings({
       candidateSupplyConfirmed: true,
       enabledSources: ['bilibili', 'xiaohongshu', 'zhihu'],
-      candidateSupplyModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
-      recommendationModel: { providerId: 'deepseek', modelId: 'deepseek-flash' },
+      candidateSupplyModel: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-flash',
+      },
+      recommendationModel: {
+        providerId: 'deepseek',
+        modelId: 'deepseek-flash',
+      },
       conversationRecognitionEnabled: false,
       recommendationGenerationTime: '08:00',
       recommendationCandidateCheckIntervalSeconds: 60,
@@ -40,27 +49,30 @@ describe('settings written before the candidate supply switch', () => {
       candidateValidityDays: 30,
       candidateContentExcerptMaxCharacters: 8000,
       candidateSupplyCheckIntervalMinutes: 360,
-      twitterBudget: { maxSearchCalls: 3, maxResultsPerSearch: 20, maxResultsPerAttempt: 40 },
+      twitterBudget: {
+        maxSearchCalls: 3,
+        maxResultsPerSearch: 20,
+        maxResultsPerAttempt: 40,
+      },
     });
 
     const settings = create();
     const read = settings.readSettings();
 
     if (read.status === 'rejected') throw new Error(read.error.message);
+
     const discovery = read.settings.config.discovery;
+
     expect(discovery.enabled).toBe(true);
     expect(discovery.candidateSupplyModel).toEqual({
       providerId: 'deepseek',
       modelId: 'deepseek-flash',
     });
     // The user disabled nothing explicitly, so their saved source list is kept as written.
-    expect(discovery.enabledSources).toEqual([
-      'bilibili',
-      'xiaohongshu',
-      'zhihu',
-    ]);
+    expect(discovery.enabledSources).toEqual(['bilibili', 'xiaohongshu', 'zhihu']);
     expect(discovery.dailyFeed.lookbackDays).toBe(3);
     expect(discovery.limits).not.toHaveProperty('maxEmbeddingCalls');
+
     for (const removed of [
       'recommendationModel',
       'conversationRecognitionEnabled',
@@ -75,13 +87,18 @@ describe('settings written before the candidate supply switch', () => {
   });
 
   it('loads a settings file that never had a supply section', () => {
-    writeSettings({ recommendationTargetCount: 20, candidatePoolMinimumCount: 100 });
+    writeSettings({
+      recommendationTargetCount: 20,
+      candidatePoolMinimumCount: 100,
+    });
 
     const settings = create();
     const read = settings.readSettings();
 
     if (read.status === 'rejected') throw new Error(read.error.message);
+
     const discovery = read.settings.config.discovery;
+
     expect(discovery.enabled).toBe(false);
     expect(discovery.enabledSources).toEqual(['zhihu']);
     expect(discovery.candidateSupplyModel).toBeUndefined();
@@ -96,7 +113,7 @@ describe('settings written before the candidate supply switch', () => {
   }
 
   function create() {
-    migrateRecommendationSettings(path.join(directory,'settings.json'));
+    migrateRecommendationSettings(path.join(directory, 'settings.json'));
     return createSettings({
       globalSettingsPath: path.join(directory, 'settings.json'),
       credentialsPath: path.join(directory, 'credentials.json'),

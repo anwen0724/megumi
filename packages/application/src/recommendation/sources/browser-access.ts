@@ -15,7 +15,11 @@ export interface EmbeddedBrowserSnapshot {
   readonly bodyText: string;
   readonly truncated?: boolean;
   readonly structuredData?: unknown;
-  readonly responses?: readonly { url: string; status: number; body: string }[];
+  readonly responses?: readonly {
+    url: string;
+    status: number;
+    body: string;
+  }[];
   readonly completed?: boolean;
   readonly pageState?: 'available' | 'login_required' | 'challenge_required';
   readonly links: readonly EmbeddedBrowserLink[];
@@ -29,13 +33,24 @@ export interface EmbeddedBrowserSnapshot {
 }
 
 export type EmbeddedBrowserFailure = {
-  readonly code: 'timeout' | 'network_error' | 'invalid_response' | 'material_too_large' | 'cancelled';
+  readonly code:
+    | 'timeout'
+    | 'network_error'
+    | 'invalid_response'
+    | 'material_too_large'
+    | 'cancelled';
   readonly message: string;
 };
 
 export type EmbeddedBrowserSnapshotResult =
-  | { readonly status: 'success'; readonly snapshot: EmbeddedBrowserSnapshot; }
-  | { readonly status: 'failed'; readonly failure: EmbeddedBrowserFailure; };
+  | {
+      readonly status: 'success';
+      readonly snapshot: EmbeddedBrowserSnapshot;
+    }
+  | {
+      readonly status: 'failed';
+      readonly failure: EmbeddedBrowserFailure;
+    };
 
 export interface EmbeddedBrowser {
   /** Executes a bundled fixed reader; no caller-provided JavaScript is accepted. */
@@ -46,7 +61,11 @@ export interface EmbeddedBrowser {
     signal: AbortSignal;
   }): Promise<EmbeddedBrowserSnapshotResult>;
   /** Uses a platform session for fixed API endpoints and subtitle reads. */
-  fetchWithSession(request: { profileId: 'bilibili'; url: string; signal?: AbortSignal }): Promise<Response>;
+  fetchWithSession(request: {
+    profileId: 'bilibili';
+    url: string;
+    signal?: AbortSignal;
+  }): Promise<Response>;
   /** Opens the isolated persistent profile for an interactive Source login. */
   openLogin(request: {
     readonly profileId: EmbeddedBrowserProfileId;

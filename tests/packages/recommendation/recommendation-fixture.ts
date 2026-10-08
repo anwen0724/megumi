@@ -13,6 +13,7 @@ import { createMaterialStorage } from '@megumi/application/recommendation/conten
 import { createCandidateQualificationStorage } from '@megumi/application/recommendation/candidates/candidate-qualification-storage';
 import type { RecommendationConfiguration } from '@megumi/application/settings/definitions/recommendation';
 import type { WebFetch } from '@megumi/agent';
+
 export interface ModelPrompt {
   stage: string;
   items?: {
@@ -21,25 +22,46 @@ export interface ModelPrompt {
     text?: string;
     interestId?: string;
     contentId?: string;
-    qualifications?: {interestId:string}[];
+    qualifications?: { interestId: string }[];
   }[];
   interests?: {
     id: string;
   }[];
 }
+
 /** Tests own HTTP/model outcomes; material, qualification, migrations and lifecycle stay real. */
-export function recommendationFixture(options: {
-  config?: Partial<RecommendationConfiguration>;
-  respond?: (prompt: ModelPrompt) => Promise<unknown>;
-  fetch?: typeof globalThis.fetch;
-  webFetch?: WebFetch;
-} = {}) {
+export function recommendationFixture(
+  options: {
+    config?: Partial<RecommendationConfiguration>;
+    respond?: (prompt: ModelPrompt) => Promise<unknown>;
+    fetch?: typeof globalThis.fetch;
+    webFetch?: WebFetch;
+  } = {},
+) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'recommendation-owner-'));
   const database = createDatabase({ filename: ':memory:' });
   migrateDatabase({ database });
   const settingsPath = path.join(directory, 'settings.json');
-  fs.writeFileSync(settingsPath, JSON.stringify({ discovery: { enabled: true, enabledSources: ['tavily'], candidateSupplyModel: { providerId: 'faux', modelId: 'supply' }, ...options.config } }));
-  const settings = createSettings({ globalSettingsPath: settingsPath, credentialsPath: path.join(directory, 'credentials.json'), readEnvironment: () => undefined });
+  fs.writeFileSync(
+    settingsPath,
+    JSON.stringify({
+      discovery: {
+        enabled: true,
+        enabledSources: ['tavily'],
+        candidateSupplyModel: {
+          providerId: 'faux',
+          modelId: 'supply',
+        },
+        ...options.config,
+      },
+    }),
+  );
+
+  const settings = createSettings({
+    globalSettingsPath: settingsPath,
+    credentialsPath: path.join(directory, 'credentials.json'),
+    readEnvironment: () => undefined,
+  });
   const faux = fauxProvider({ models: [{ id: 'supply' }] });
   const models = createModels();
   models.setProvider(faux.provider);
@@ -52,38 +74,204 @@ export function recommendationFixture(options: {
   const newId = (prefix: string) => `${prefix}-${++sequence}`;
   const materials = createMaterialStorage(database, () => newId('material'));
   const candidates = createCandidateQualificationStorage(database, () => newId('match'));
-  const defaultRespond = (prompt: ModelPrompt) => prompt.stage === 'planning' ? { items: prompt.interests!.map(i => ({ interestId: i.id, sourceId: 'tavily', query: '面试准备', direction: 'direct', basis: '对应用户原文' })) } : { items: prompt.items!.map(item => ({ id: item.id, result: prompt.stage === 'analysis' ? { summary: '面试的准备方法', keyPoints: [{ text: '面试方法', evidence: [{ materialId: item.materialId, quote: '准备方法' }] }], topics: ['面试'], contentType: 'article', qualityScore: 0.8, spamScore: 0, timeScope: { kind: 'unknown', evidence: [] } } : { relation: 'direct', status: 'eligible', basis: '符合面试需求', evidence: [{ materialId: item.materialId, quote: '准备方法' }] } })) };
+  const defaultRespond = (prompt: ModelPrompt) =>
+    prompt.stage === 'planning'
+      ? {
+          items: prompt.interests!.map(i => ({
+            interestId: i.id,
+            sourceId: 'tavily',
+            query: '面试准备',
+            direction: 'direct',
+            basis: '对应用户原文',
+          })),
+        }
+      : {
+          items: prompt.items!.map(item => ({
+            id: item.id,
+            result:
+              prompt.stage === 'analysis'
+                ? {
+                    summary: '面试的准备方法',
+                    keyPoints: [
+                      {
+                        text: '面试方法',
+                        evidence: [
+                          {
+                            materialId: item.materialId,
+                            quote: '准备方法',
+                          },
+                        ],
+                      },
+                    ],
+                    topics: ['面试'],
+                    contentType: 'article',
+                    qualityScore: 0.8,
+                    spamScore: 0,
+                    timeScope: {
+                      kind: 'unknown',
+                      evidence: [],
+                    },
+                  }
+                : {
+                    relation: 'direct',
+                    status: 'eligible',
+                    basis: '符合面试需求',
+                    evidence: [
+                      {
+                        materialId: item.materialId,
+                        quote: '准备方法',
+                      },
+                    ],
+                  },
+          })),
+        };
   const ownerOptions = {
-    sourceWebFetch: options.webFetch ?? { async fetch() { return { url: 'https://example.com/interview', content: '完整正文包含面试的准备方法。', contentType: 'text/html', truncated: false, document: '<article>完整正文包含面试的准备方法。</article>' }; } },
-    database, settings, newId, now, resolveModel: async () => model, accessSecret: () => 'secret',
-    observability: { withTrace: async <T>(_scope: unknown, work: () => Promise<T>) => work(), withSpan: async <T>(_scope: unknown, work: () => Promise<T>) => work(), recordContent() { }, recordEvent() { }, linkTrace() { } },
-    timers: { setTimeout: () => 0, clearTimeout: () => undefined },
-    sourceFetch: async (input: string | URL | Request, init?: RequestInit) => { requests.push(new URL(String(input)).pathname); return options.fetch ? options.fetch(input, init) : Response.json({ results: [{ url: 'https://example.com/interview', title: '面试', content: '准备方法', raw_content: '完整正文包含面试的准备方法。' }], failed_results: [] }); },
+    sourceWebFetch: options.webFetch ?? {
+      async fetch() {
+        return {
+          url: 'https://example.com/interview',
+          content: '完整正文包含面试的准备方法。',
+          contentType: 'text/html',
+          truncated: false,
+          document: '<article>完整正文包含面试的准备方法。</article>',
+        };
+      },
+    },
+    database,
+    settings,
+    newId,
+    now,
+    resolveModel: async () => model,
+    accessSecret: () => 'secret',
+    observability: {
+      withTrace: async <T>(_scope: unknown, work: () => Promise<T>) => work(),
+      withSpan: async <T>(_scope: unknown, work: () => Promise<T>) => work(),
+      recordContent() {},
+      recordEvent() {},
+      linkTrace() {},
+    },
+    timers: {
+      setTimeout: () => 0,
+      clearTimeout: () => undefined,
+    },
+
+    sourceFetch: async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push(new URL(String(input)).pathname);
+      return options.fetch
+        ? options.fetch(input, init)
+        : Response.json({
+            results: [
+              {
+                url: 'https://example.com/interview',
+                title: '面试',
+                content: '准备方法',
+                raw_content: '完整正文包含面试的准备方法。',
+              },
+            ],
+            failed_results: [],
+          });
+    },
+
     client: {
-      async completeSimple(_model: unknown, context: {
-        messages: readonly {
-          content: unknown;
-        }[];
-      }) { const prompt: ModelPrompt = JSON.parse(String(context.messages[0]?.content)); prompts.push(prompt); return fauxAssistantMessage(JSON.stringify(options.respond ? await options.respond(prompt) : defaultRespond(prompt))); }
+      async completeSimple(
+        _model: unknown,
+        context: {
+          messages: readonly {
+            content: unknown;
+          }[];
+        },
+      ) {
+        const prompt: ModelPrompt = JSON.parse(String(context.messages[0]?.content));
+        prompts.push(prompt);
+        return fauxAssistantMessage(
+          JSON.stringify(options.respond ? await options.respond(prompt) : defaultRespond(prompt)),
+        );
+      },
     },
   };
   let owner = createRecommendation(ownerOptions);
-  onTestFinished(async () => { await owner.shutdown(); database.close(); fs.rmSync(directory, { recursive: true, force: true }); });
+  onTestFinished(async () => {
+    await owner.shutdown();
+    database.close();
+    fs.rmSync(directory, {
+      recursive: true,
+      force: true,
+    });
+  });
+
   return {
-    database, settings, materials, candidates, requests, prompts, now, newId, defaultRespond, model, client: ownerOptions.client,
-    get owner() { return owner; }, advance(ms: number) { time += ms; },
+    database,
+    settings,
+    materials,
+    candidates,
+    requests,
+    prompts,
+    now,
+    newId,
+    defaultRespond,
+    model,
+    client: ownerOptions.client,
+    get owner() {
+      return owner;
+    },
+
+    advance(ms: number) {
+      time += ms;
+    },
+
     /** Saves real analyzed materials; tests still acquire qualification through its owner. */
     saveAnalyzedMaterial(url: string, author?: string) {
       const text = `完整正文包含面试的准备方法。来源：${url}`;
-      const material = materials.saveMaterial({ platform: 'web', canonicalUrl: url,
-        title: url, author, language: 'zh', text, kind: 'full_text', truncated: false,
-        rangeEnd: [...text].length, method: 'direct_web', acquiredAt: now(), publicationEvidence: [] }).material;
-      const evidence = [{ materialId: material.id, quote: '准备方法' }];
-      materials.saveAnalysis({ contentId: material.contentId, materialId: material.id, now: now(),
-        result: { summary: text, keyPoints: [{ text: '面试方法', evidence }], topics: ['面试'],
-          contentType: 'article', qualityScore: 0.8, spamScore: 0, timeScope: { kind: 'unknown', evidence: [] } } });
+      const material = materials.saveMaterial({
+        platform: 'web',
+        canonicalUrl: url,
+        title: url,
+        author,
+        language: 'zh',
+        text,
+        kind: 'full_text',
+        truncated: false,
+        rangeEnd: [...text].length,
+        method: 'direct_web',
+        acquiredAt: now(),
+        publicationEvidence: [],
+      }).material;
+      const evidence = [
+        {
+          materialId: material.id,
+          quote: '准备方法',
+        },
+      ];
+      materials.saveAnalysis({
+        contentId: material.contentId,
+        materialId: material.id,
+        now: now(),
+        result: {
+          summary: text,
+          keyPoints: [
+            {
+              text: '面试方法',
+              evidence,
+            },
+          ],
+          topics: ['面试'],
+          contentType: 'article',
+          qualityScore: 0.8,
+          spamScore: 0,
+          timeScope: {
+            kind: 'unknown',
+            evidence: [],
+          },
+        },
+      });
+
       return material;
     },
-    async restart() { await owner.shutdown(); owner = createRecommendation(ownerOptions); return owner; }
+
+    async restart() {
+      await owner.shutdown();
+      owner = createRecommendation(ownerOptions);
+      return owner;
+    },
   };
 }

@@ -5,7 +5,10 @@
  */
 
 export interface MaintenanceSchedulerOptions {
-  readonly supply: { startMaintenance(input: {reason:'startup'|'periodic'}): {result:Promise<unknown>};close():Promise<void> };
+  readonly supply: {
+    startMaintenance(input: { reason: 'startup' | 'periodic' }): { result: Promise<unknown> };
+    close(): Promise<void>;
+  };
   /** Interval measured from the end of the previous round. */
   readonly intervalMs: () => number;
   readonly setTimer?: (callback: () => void, ms: number) => unknown;
@@ -32,14 +35,20 @@ export function createMaintenanceScheduler(
   return {
     start() {
       if (stopped || started) return;
+
       started = true;
       void runRound('startup');
     },
 
     async stop() {
       if (stopped) return;
+
       stopped = true;
-      if (handle !== undefined) (options.clearTimer ?? ((timer) => clearTimeout(timer as ReturnType<typeof setTimeout>)))(handle);
+      if (handle !== undefined)
+        (options.clearTimer ?? (timer => clearTimeout(timer as ReturnType<typeof setTimeout>)))(
+          handle,
+        );
+
       handle = undefined;
       await options.supply.close();
     },
@@ -47,18 +56,22 @@ export function createMaintenanceScheduler(
 
   async function runRound(reason: 'startup' | 'periodic'): Promise<void> {
     if (stopped) return;
+
     handle = undefined;
+
     try {
       await options.supply.startMaintenance({ reason }).result;
     } catch (error) {
       options.onError?.(error);
     }
+
     schedule();
   }
 
   /** The next round is measured from this moment, so a long round delays it. */
   function schedule(): void {
     if (stopped) return;
+
     handle = setTimer(() => {
       void runRound('periodic');
     }, options.intervalMs());

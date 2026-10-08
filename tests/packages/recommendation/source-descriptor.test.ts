@@ -25,7 +25,11 @@ describe('source capability declaration', () => {
   });
 
   it('rejects an unknown service before planning', () => {
-    expect(RecommendationConfigurationSchema.safeParse({enabledSources:['zhihu']}).success).toBe(true);
-    expect(RecommendationConfigurationSchema.safeParse({enabledSources:['unknown']}).success).toBe(false);
+    expect(RecommendationConfigurationSchema.safeParse({ enabledSources: ['zhihu'] }).success).toBe(
+      true,
+    );
+    expect(
+      RecommendationConfigurationSchema.safeParse({ enabledSources: ['unknown'] }).success,
+    ).toBe(false);
   });
 });

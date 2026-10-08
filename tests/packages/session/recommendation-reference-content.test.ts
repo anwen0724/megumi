@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SessionUserContentSchema, sessionMessageText } from '@megumi/application/coding/sessions/session-history';
+import {
+  SessionUserContentSchema,
+  sessionMessageText,
+} from '@megumi/application/coding/sessions/session-history';
 
 const reference = {
   type: 'recommendation_reference' as const,
@@ -19,11 +22,27 @@ describe('Session Recommendation reference content', () => {
   });
 
   it('does not use the reference snapshot as the Session title text', () => {
-    expect(sessionMessageText({
-      message_id: 'message:1', session_id: 'session:1', message_kind: 'user_message',
-      display_content: [reference, { type: 'text', text: '聊聊它的架构' }],
-      model_content: [reference, { type: 'text', text: '聊聊它的架构' }],
-      created_at: '2026-08-22T00:00:00.000Z',
-    })).toBe('聊聊它的架构');
+    expect(
+      sessionMessageText({
+        message_id: 'message:1',
+        session_id: 'session:1',
+        message_kind: 'user_message',
+        display_content: [
+          reference,
+          {
+            type: 'text',
+            text: '聊聊它的架构',
+          },
+        ],
+        model_content: [
+          reference,
+          {
+            type: 'text',
+            text: '聊聊它的架构',
+          },
+        ],
+        created_at: '2026-08-22T00:00:00.000Z',
+      }),
+    ).toBe('聊聊它的架构');
   });
 });

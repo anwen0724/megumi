@@ -13,7 +13,12 @@ function textModelClient() {
   models.setProvider(faux.provider);
   const model = models.getModel(faux.provider.id, 'faux-supply');
   if (!model) throw new Error('expected the faux model to be registered');
-  return { faux, models, model };
+
+  return {
+    faux,
+    models,
+    model,
+  };
 }
 
 const request = {
@@ -28,10 +33,15 @@ describe('text model call boundary', () => {
     const { faux, models, model } = textModelClient();
     faux.setResponses([fauxAssistantMessage('```json\n{"summary":"材料可用"}\n```')]);
 
-    const result = await callTextModel(models, { model, ...request });
+    const result = await callTextModel(models, {
+      model,
+      ...request,
+    });
 
     expect(result.status).toBe('ok');
+
     if (result.status !== 'ok') throw new Error('expected a validated result');
+
     expect(result.result).toEqual({ summary: '材料可用' });
     expect(result.record.usage.totalTokens).toBeGreaterThan(0);
   });
@@ -40,23 +50,36 @@ describe('text model call boundary', () => {
     const { faux, models, model } = textModelClient();
     faux.setResponses([fauxAssistantMessage('{"summary":""}')]);
 
-    const result = await callTextModel(models, { model, ...request });
+    const result = await callTextModel(models, {
+      model,
+      ...request,
+    });
 
     expect(result.status).toBe('failed');
+
     if (result.status !== 'failed') throw new Error('expected a failure');
+
     expect(result.code).toBe('INVALID_RESULT');
   });
 
   it('reports an interrupted request as a transport failure', async () => {
     const { faux, models, model } = textModelClient();
     faux.setResponses([
-      fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'upstream 500' }),
+      fauxAssistantMessage('', {
+        stopReason: 'error',
+        errorMessage: 'upstream 500',
+      }),
     ]);
 
-    const result = await callTextModel(models, { model, ...request });
+    const result = await callTextModel(models, {
+      model,
+      ...request,
+    });
 
     expect(result.status).toBe('failed');
+
     if (result.status !== 'failed') throw new Error('expected a failure');
+
     expect(result.code).toBe('TRANSPORT');
   });
 
@@ -64,10 +87,15 @@ describe('text model call boundary', () => {
     const { faux, models, model } = textModelClient();
     faux.setResponses([fauxAssistantMessage('{"summary":"x"}', { stopReason: 'length' })]);
 
-    const result = await callTextModel(models, { model, ...request });
+    const result = await callTextModel(models, {
+      model,
+      ...request,
+    });
 
     expect(result.status).toBe('failed');
+
     if (result.status !== 'failed') throw new Error('expected a failure');
+
     expect(result.code).toBe('CONTEXT_OVERFLOW');
   });
 });

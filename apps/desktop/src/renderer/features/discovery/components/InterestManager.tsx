@@ -5,16 +5,26 @@
 import { useState, type FormEvent } from 'react';
 import { MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type {
-  InterestUi,
-  SupplySourceView,
-} from '@megumi/application/contracts';
+import type { InterestUi, SupplySourceView } from '@megumi/application/contracts';
 import { Button, cx } from '../../../shared/ui';
+
 /** Local form intent; transport uses separate create, update and delete operations. */
 export type InterestEdit =
-  | {action:'create';description:string}
-  | {action:'update';interestId:string;expectedRevision:number;description:string}
-  | {action:'pause'|'resume'|'delete';interestId:string;expectedRevision:number};
+  | {
+      action: 'create';
+      description: string;
+    }
+  | {
+      action: 'update';
+      interestId: string;
+      expectedRevision: number;
+      description: string;
+    }
+  | {
+      action: 'pause' | 'resume' | 'delete';
+      interestId: string;
+      expectedRevision: number;
+    };
 
 interface InterestManagerProps {
   interests: InterestUi[] | null;
@@ -47,6 +57,7 @@ export function InterestManager({
 
   async function change(request: InterestEdit): Promise<boolean> {
     setBusy(true);
+
     try {
       return await onChangeInterest(request);
     } finally {
@@ -58,25 +69,40 @@ export function InterestManager({
     event.preventDefault();
     const description = newInterest.trim();
     if (!description) return;
-    if (await change({ action: 'create', description })) setNewInterest('');
+    if (
+      await change({
+        action: 'create',
+        description,
+      })
+    )
+      setNewInterest('');
   }
 
   async function saveInterest(interestId: string) {
     const description = drafts[interestId]?.trim();
     if (!description) return;
-    if (await change({ action: 'update', interestId, expectedRevision: editingRevision, description })) {
+    if (
+      await change({
+        action: 'update',
+        interestId,
+        expectedRevision: editingRevision,
+        description,
+      })
+    ) {
       setEditingInterestId(null);
     }
   }
 
   async function changeSource(sourceId: string, enabled: boolean) {
     if (!sources) return;
+
     setBusy(true);
+
     try {
       await onChangeSources(
         sources
-          .filter((source) => (source.sourceId === sourceId ? enabled : source.enabled))
-          .map((source) => source.sourceId),
+          .filter(source => (source.sourceId === sourceId ? enabled : source.enabled))
+          .map(source => source.sourceId),
       );
     } finally {
       setBusy(false);
@@ -112,7 +138,7 @@ export function InterestManager({
           role="tabpanel"
           className="animate-[megumi-panel-in_180ms_ease-out] space-y-5 p-6 motion-reduce:animate-none"
         >
-          <form onSubmit={(event) => void addInterest(event)} className="flex gap-2">
+          <form onSubmit={event => void addInterest(event)} className="flex gap-2">
             <label className="sr-only" htmlFor="new-discovery-interest">
               {t('addInterestLabel')}
             </label>
@@ -121,7 +147,7 @@ export function InterestManager({
               aria-label={t('addInterestLabel')}
               value={newInterest}
               disabled={busy}
-              onChange={(event) => setNewInterest(event.target.value)}
+              onChange={event => setNewInterest(event.target.value)}
               placeholder={t('addInterestPlaceholder')}
               className="min-h-11 min-w-0 flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3.5 py-2.5 text-sm text-[var(--color-text)] outline-none transition-shadow placeholder:text-[var(--color-text-subtle)] focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
             />
@@ -152,7 +178,7 @@ export function InterestManager({
           ) : null}
 
           <div className="space-y-3">
-            {savedInterests.map((interest) => {
+            {savedInterests.map(interest => {
               const editing = editingInterestId === interest.id;
               const menuOpen = menuInterestId === interest.id;
               return (
@@ -171,8 +197,11 @@ export function InterestManager({
                         rows={3}
                         value={drafts[interest.id] ?? interest.text}
                         disabled={busy}
-                        onChange={(event) =>
-                          setDrafts((current) => ({ ...current, [interest.id]: event.target.value }))
+                        onChange={event =>
+                          setDrafts(current => ({
+                            ...current,
+                            [interest.id]: event.target.value,
+                          }))
                         }
                         className="w-full resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-app-bg)] px-3 py-2.5 text-sm leading-6 text-[var(--color-text)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/20"
                       />
@@ -205,23 +234,29 @@ export function InterestManager({
                       deleteLabel={t('delete')}
                       stateLabel={t(interest.enabled ? 'active' : 'paused')}
                       switchLabel={`${t(interest.enabled ? 'pause' : 'resume')} ${interest.text}`}
-                      onToggleMenu={() =>
-                        setMenuInterestId(menuOpen ? null : interest.id)
-                      }
+                      onToggleMenu={() => setMenuInterestId(menuOpen ? null : interest.id)}
                       onEdit={() => {
                         setMenuInterestId(null);
-                        setDrafts((current) => ({ ...current, [interest.id]: interest.text }));
+                        setDrafts(current => ({
+                          ...current,
+                          [interest.id]: interest.text,
+                        }));
                         setEditingInterestId(interest.id);
                         setEditingRevision(interest.revision);
                       }}
                       onDelete={() => {
                         setMenuInterestId(null);
-                        void change({ action: 'delete', interestId: interest.id, expectedRevision: interest.revision });
+                        void change({
+                          action: 'delete',
+                          interestId: interest.id,
+                          expectedRevision: interest.revision,
+                        });
                       }}
                       onToggleEnabled={() =>
                         void change({
                           action: interest.enabled ? 'pause' : 'resume',
-                          interestId: interest.id, expectedRevision: interest.revision,
+                          interestId: interest.id,
+                          expectedRevision: interest.revision,
                         })
                       }
                     />
@@ -242,7 +277,7 @@ export function InterestManager({
           </p>
           {sources ? (
             <div className="mt-4 space-y-2">
-              {sources.map((source) => (
+              {sources.map(source => (
                 <div
                   key={source.sourceId}
                   className="flex min-h-14 items-center justify-between gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-4 py-2"
@@ -267,7 +302,7 @@ export function InterestManager({
                       checked={source.enabled}
                       disabled={busy}
                       label={source.name}
-                      onCheckedChange={(enabled) => void changeSource(source.sourceId, enabled)}
+                      onCheckedChange={enabled => void changeSource(source.sourceId, enabled)}
                     />
                   </span>
                 </div>

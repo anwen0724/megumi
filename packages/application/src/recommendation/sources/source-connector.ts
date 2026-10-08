@@ -9,27 +9,30 @@ import { z } from 'zod';
 import { PublicationEvidenceSchema } from '../content/material-contracts';
 
 /** Validates saved source facts before a later round consumes them. */
-export const RawItemSchema = z.object({
-  source: z.string().min(1),
-  externalId: z.string().optional(),
-  serviceRecordId: z.string().optional(),
-  url: z.string().url(),
-  title: z.string().optional(),
-  text: z.string().optional(),
-  author: z.string().optional(),
-  publishedAt: z.number().int().nonnegative().optional(),
-  platform: z.enum(['web', 'zhihu', 'bilibili', 'xiaohongshu']).optional(),
-  method: z.string().optional(),
-  kind: z.enum(['full_text', 'excerpt', 'description', 'transcript']).optional(),
-  truncated: z.boolean().optional(),
-  rangeStart: z.number().int().nonnegative().optional(),
-  rangeEnd: z.number().int().nonnegative().optional(),
-  publicationEvidence: z.array(PublicationEvidenceSchema).readonly().optional(),
-  // Access parameters remain local; models and logs receive the canonical URL.
-  requestUrl: z.string().url().optional(),
-  authorId: z.string().optional(),
-  acquiredAt: z.number().int().nonnegative().optional(),
-}).strict();
+export const RawItemSchema = z
+  .object({
+    source: z.string().min(1),
+    externalId: z.string().optional(),
+    serviceRecordId: z.string().optional(),
+    url: z.string().url(),
+    title: z.string().optional(),
+    text: z.string().optional(),
+    author: z.string().optional(),
+    publishedAt: z.number().int().nonnegative().optional(),
+    platform: z.enum(['web', 'zhihu', 'bilibili', 'xiaohongshu']).optional(),
+    method: z.string().optional(),
+    kind: z.enum(['full_text', 'excerpt', 'description', 'transcript']).optional(),
+    truncated: z.boolean().optional(),
+    rangeStart: z.number().int().nonnegative().optional(),
+    rangeEnd: z.number().int().nonnegative().optional(),
+    publicationEvidence: z.array(PublicationEvidenceSchema).readonly().optional(),
+    // Access parameters remain local; models and logs receive the canonical URL.
+    requestUrl: z.string().url().optional(),
+    authorId: z.string().optional(),
+    acquiredAt: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
 export type RawItem = z.infer<typeof RawItemSchema>;
 
 /** Failure kinds callers map to retry, cooldown, or a reported gap. */
@@ -65,13 +68,22 @@ export interface SourceSearchRequest {
   readonly query: string;
   readonly limit: number;
   /** Inclusive UTC-millisecond window; the source applies its own filtering. */
-  readonly timeRange?: { readonly from?: number; readonly to?: number };
+  readonly timeRange?: {
+    readonly from?: number;
+    readonly to?: number;
+  };
   readonly signal?: AbortSignal;
 }
 
 export type SourceSearchResult =
-  | { status: 'success'; items: readonly RawItem[] }
-  | { status: 'failed'; failure: SourceFailure };
+  | {
+      status: 'success';
+      items: readonly RawItem[];
+    }
+  | {
+      status: 'failed';
+      failure: SourceFailure;
+    };
 
 export interface SourceMaterialRequest {
   readonly reserveRequest?: (kind: 'search' | 'material') => boolean;
@@ -86,8 +98,14 @@ export interface SourceMaterial extends Omit<RawItem, 'url' | 'externalId' | 'so
 }
 
 export type SourceMaterialResult =
-  | { status: 'success'; material: SourceMaterial }
-  | { status: 'failed'; failure: SourceFailure };
+  | {
+      status: 'success';
+      material: SourceMaterial;
+    }
+  | {
+      status: 'failed';
+      failure: SourceFailure;
+    };
 
 /**
  * What one source can do. The program uses it to fill search parameters and

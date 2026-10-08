@@ -56,8 +56,16 @@ export interface TextModelCallRecord {
 }
 
 export type TextModelCallResult<TResult> =
-  | { status: 'ok'; result: TResult; record: TextModelCallRecord }
-  | { status: 'failed'; code: TextModelFailureCode; message: string };
+  | {
+      status: 'ok';
+      result: TResult;
+      record: TextModelCallRecord;
+    }
+  | {
+      status: 'failed';
+      code: TextModelFailureCode;
+      message: string;
+    };
 
 /**
  * Sends one request and returns either the validated result or one typed
@@ -66,13 +74,22 @@ export type TextModelCallResult<TResult> =
 export async function callTextModel<TResult>(
   client: TextModelClient,
   call: TextModelCall<TResult>,
-  options: { observability?: Observability; now?: () => number } = {},
+  options: {
+    observability?: Observability;
+    now?: () => number;
+  } = {},
 ): Promise<TextModelCallResult<TResult>> {
   const now = options.now ?? Date.now;
   const startedAt = now();
   const context: Context = {
     systemPrompt: call.systemPrompt,
-    messages: [{ role: 'user', content: call.prompt, timestamp: startedAt }],
+    messages: [
+      {
+        role: 'user',
+        content: call.prompt,
+        timestamp: startedAt,
+      },
+    ],
   };
   const requestOptions: ModelsSimpleStreamOptions = {
     maxTokens: call.maxOutputTokens,
@@ -85,24 +102,45 @@ export async function callTextModel<TResult>(
       client.completeSimple(call.model, context, requestOptions),
     );
   } catch (error) {
-    return { status: 'failed', code: classifyThrown(error), message: describeError(error) };
+    return {
+      status: 'failed',
+      code: classifyThrown(error),
+      message: describeError(error),
+    };
   }
 
   const failure = classifyStop(message);
-  if (failure) return { status: 'failed', ...failure };
+  if (failure)
+    return {
+      status: 'failed',
+      ...failure,
+    };
 
   const responseText = textOf(message);
   if (!responseText) {
-    return { status: 'failed', code: 'INVALID_RESULT', message: 'Model returned no text content.' };
+    return {
+      status: 'failed',
+      code: 'INVALID_RESULT',
+      message: 'Model returned no text content.',
+    };
   }
 
   const parsed = parseResult(responseText, call.schema);
-  if (!parsed.ok) return { status: 'failed', code: 'INVALID_RESULT', message: parsed.message };
+  if (!parsed.ok)
+    return {
+      status: 'failed',
+      code: 'INVALID_RESULT',
+      message: parsed.message,
+    };
 
   return {
     status: 'ok',
     result: parsed.value,
-    record: { usage: message.usage, durationMs: now() - startedAt, responseText },
+    record: {
+      usage: message.usage,
+      durationMs: now() - startedAt,
+      responseText,
+    },
   };
 }
 
@@ -112,18 +150,28 @@ function runWithModelSpan<T>(
   operation: () => Promise<T>,
 ): Promise<T> {
   if (!observability) return operation();
+
   return observability.withSpan({ name: 'model.call' }, operation);
 }
 
 /** Maps a settled response's stop reason to the failure callers must report. */
-function classifyStop(
-  message: AssistantMessage,
-): { code: TextModelFailureCode; message: string } | undefined {
+function classifyStop(message: AssistantMessage):
+  | {
+      code: TextModelFailureCode;
+      message: string;
+    }
+  | undefined {
   if (message.stopReason === 'aborted') {
-    return { code: 'CANCELLED', message: 'Model request was cancelled.' };
+    return {
+      code: 'CANCELLED',
+      message: 'Model request was cancelled.',
+    };
   }
   if (message.stopReason === 'error') {
-    return { code: 'TRANSPORT', message: message.errorMessage ?? 'Model request failed.' };
+    return {
+      code: 'TRANSPORT',
+      message: message.errorMessage ?? 'Model request failed.',
+    };
   }
   if (message.stopReason === 'length') {
     return {
@@ -131,6 +179,7 @@ function classifyStop(
       message: 'Model stopped at the output limit before finishing the result.',
     };
   }
+
   return undefined;
 }
 
@@ -138,6 +187,7 @@ function classifyStop(
 function classifyThrown(error: unknown): TextModelFailureCode {
   if (error instanceof ModelsError) return 'MODEL_UNAVAILABLE';
   if (isAbortError(error)) return 'CANCELLED';
+
   return 'TRANSPORT';
 }
 
@@ -152,7 +202,7 @@ function describeError(error: unknown): string {
 function textOf(message: AssistantMessage): string {
   return message.content
     .filter(isTextContent)
-    .map((part) => part.text)
+    .map(part => part.text)
     .join('\n')
     .trim();
 }
@@ -168,31 +218,50 @@ function isTextContent(value: AssistantMessage['content'][number]): value is Tex
 function parseResult<TResult>(
   text: string,
   schema: z.ZodType<TResult>,
-): { ok: true; value: TResult } | { ok: false; message: string } {
+):
+  | {
+      ok: true;
+      value: TResult;
+    }
+  | {
+      ok: false;
+      message: string;
+    } {
   let value: unknown;
   try {
     value = parseJsonWithRepair<unknown>(extractJson(text));
   } catch {
-    return { ok: false, message: 'Model response is not valid JSON.' };
+    return {
+      ok: false,
+      message: 'Model response is not valid JSON.',
+    };
   }
+
   const parsed = schema.safeParse(value);
   if (!parsed.success) {
     return {
       ok: false,
       message: parsed.error.issues
-        .map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+        .map(issue => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
         .join('; '),
     };
   }
-  return { ok: true, value: parsed.data };
+
+  return {
+    ok: true,
+    value: parsed.data,
+  };
 }
 
 /** Models sometimes wrap JSON in a fenced block or add prose around it. */
 function extractJson(text: string): string {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/u.exec(text);
   if (fenced?.[1]) return fenced[1].trim();
+
   const start = text.search(/[{[]/u);
   if (start < 0) return text.trim();
+
   const end = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+
   return end > start ? text.slice(start, end + 1) : text.trim();
 }

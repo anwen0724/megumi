@@ -12,7 +12,11 @@ import type { DesktopIpcMain } from '@megumi/desktop/main/adapters/electron-ipc-
 
 const directories: string[] = [];
 afterEach(() => {
-  for (const root of directories.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+  for (const root of directories.splice(0))
+    fs.rmSync(root, {
+      recursive: true,
+      force: true,
+    });
 });
 
 describe('Settings IPC', () => {
@@ -32,32 +36,54 @@ describe('Settings IPC', () => {
           handle: (channel, handler) => {
             handlers.set(channel, handler);
           },
+
           on: vi.fn(),
         },
         notifyChanged: () => undefined,
       },
     );
+
     const invoke = (channel: string, payload: unknown) =>
       handlers.get(channel)!({} as IpcMainInvokeEvent, {
         requestId: 'request:test',
         payload,
-        meta: { channel, source: 'renderer', createdAt: new Date().toISOString() },
+        meta: {
+          channel,
+          source: 'renderer',
+          createdAt: new Date().toISOString(),
+        },
       });
-    const target = { kind: 'discoverySource', sourceId: 'zhihu' };
-    const saved = await invoke(IPC_CHANNELS.credentials.update, { target, value: 'test-secret' });
-    expect(saved).toMatchObject({ ok: true, data: { status: 'updated' } });
+    const target = {
+      kind: 'discoverySource',
+      sourceId: 'zhihu',
+    };
+    const saved = await invoke(IPC_CHANNELS.credentials.update, {
+      target,
+      value: 'test-secret',
+    });
+
+    expect(saved).toMatchObject({
+      ok: true,
+      data: { status: 'updated' },
+    });
     expect(JSON.stringify(saved)).not.toContain('test-secret');
     expect(await invoke(IPC_CHANNELS.credentials.read, { target })).toMatchObject({
       ok: true,
-      data: { status: 'found', value: 'test-secret', source: 'stored' },
+      data: {
+        status: 'found',
+        value: 'test-secret',
+        source: 'stored',
+      },
     });
     expect(JSON.stringify(await invoke(IPC_CHANNELS.settings.read, {}))).not.toContain(
       'test-secret',
     );
+
     fs.writeFileSync(
       path.join(root, 'settings.json'),
       JSON.stringify({ context: { compactionThresholdRatio: 2 } }),
     );
+
     expect(await invoke(IPC_CHANNELS.settings.read, {})).toMatchObject({
       ok: false,
       data: {
@@ -65,9 +91,19 @@ describe('Settings IPC', () => {
         issues: [{ path: ['context', 'compactionThresholdRatio'] }],
       },
     });
-    await invoke(IPC_CHANNELS.credentials.update, { target, value: null });
+
+    await invoke(IPC_CHANNELS.credentials.update, {
+      target,
+      value: null,
+    });
+
     expect(
-      settings.readCredential({ target: { kind: 'discoverySource', sourceId: 'zhihu' } }),
+      settings.readCredential({
+        target: {
+          kind: 'discoverySource',
+          sourceId: 'zhihu',
+        },
+      }),
     ).toEqual({ status: 'missing' });
   });
 });

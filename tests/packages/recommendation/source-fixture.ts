@@ -8,7 +8,7 @@ import type { SourceDescriptor } from '@megumi/application/recommendation/source
 export const stubDescriptor: SourceDescriptor = {
   id: 'zhihu',
   description: '中文问答与专栏文章。',
-      accessPaths: ['credential', 'browser_session'],
+  accessPaths: ['credential', 'browser_session'],
   maxResultsPerSearch: 10,
   supportsTimeRange: true,
   material: 'excerpt',
