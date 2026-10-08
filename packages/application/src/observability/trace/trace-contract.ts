@@ -11,12 +11,14 @@ export const TraceKindSchema = z.enum([
   'candidate_supply',
   'preference_learning',
   'memory_extraction',
+  'memory_generation',
 ]);
 export type TraceKind = z.infer<typeof TraceKindSchema>;
 
 export const TRACE_SPAN_NAMES = [
   'model.resolve',
   'memory.extract',
+  'memory.consolidate',
   'input.process',
   'session.resolve',
   'session.create',

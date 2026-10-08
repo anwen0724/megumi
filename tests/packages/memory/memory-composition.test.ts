@@ -59,3 +59,20 @@ it('applies project fallback names and UTF-8 budget to an actual conversation re
     expect(app.runtime.memory.getStatus()).toMatchObject({ status: 'ok', memory: { sourceCount: 1 } });
   } finally { await app.cleanup(); }
 });
+
+it('rejects re-enabling memory through application settings while clear remains pending', async () => {
+  const app = composeTestApplication();
+  try {
+    fs.ensureDirSync(path.join(app.home, 'memories'));
+    // Unknown legacy files are not silently removed by the new memory owner.
+    fs.writeFileSync(path.join(app.home, 'memories', 'unknown-legacy.txt'), 'preserve');
+    const accepted = app.runtime.memory.clearMemory({ requestId: 'clear', confirmed: true });
+    if (accepted.status !== 'started') throw new Error('Clear not accepted');
+    expect(await app.runtime.memory.waitRun({ runId: accepted.runId, timeoutMs: 5000 })).toMatchObject({ run: { status: 'failed' } });
+    const read = app.runtime.settings.readSettings();
+    if (read.status !== 'ok') throw new Error('Settings unavailable');
+    expect(app.runtime.settings.updateSettings({ expectedRevision: read.settings.revision,
+      patch: { memory: { generateMemories: true, useMemories: true } } })).toMatchObject({ status: 'rejected', error: { code: 'SETTINGS_CONFLICT' } });
+    expect(fs.readFileSync(path.join(app.home, 'memories', 'unknown-legacy.txt'), 'utf8')).toBe('preserve');
+  } finally { await app.cleanup(); }
+});

@@ -32,7 +32,7 @@ import { createEventBus, type EventBus } from './coding/events/event-bus';
 import type { ApplicationLogger, ApplicationOperations } from './contracts';
 import { createMemory } from './memory/memory';
 import { createMemoryExtraction } from './memory/extraction';
-import { resolveExtractionModel } from './memory/extraction-model';
+import { resolveExtractionModel, resolveConsolidationModel } from './memory/extraction-model';
 import { createMemoryFiles } from './memory/memory-files';
 import { createMemorySources } from './coding/sessions/memory-sources';
 import {
@@ -552,21 +552,25 @@ function composeCapabilitiesWithDatabase(
       return run !== undefined && !['completed', 'failed', 'cancelled'].includes(run.status);
     },
   });
+  const memoryExtraction = createMemoryExtraction({ database, sources: memorySources, observability: observability.observability,
+    readConfiguration: () => {
+      const read = settings.readSettings();
+      if (read.status === 'rejected') throw new Error('SETTINGS_INVALID');
+      return read.settings.config.memory;
+    },
+    resolveModel: selection => resolveExtractionModel({ models, settings, selection }),
+    workspaceDirectory: workspaceId => {
+      const result = workspaces.getWorkspace({ workspace_id: workspaceId });
+      if (result.status !== 'found') throw new Error('SOURCE_UNAVAILABLE');
+      return result.workspace.root_path;
+    },
+  });
+  const memory = createMemory({ database, settings, files: createMemoryFiles(homePaths.memoriesPath), sources: memorySources,
+    extraction: memoryExtraction, root: homePaths.memoriesPath, observability: observability.observability,
+    resolveModel: selection => resolveConsolidationModel({ models, settings, selection }),
+  });
   const modules: ApplicationModules = {
-    memory: createMemory({ database, settings, files: createMemoryFiles(homePaths.memoriesPath), sources: memorySources }),
-    memoryExtraction: createMemoryExtraction({ database, sources: memorySources, observability: observability.observability,
-      readConfiguration: () => {
-        const read = settings.readSettings();
-        if (read.status === 'rejected') throw new Error('SETTINGS_INVALID');
-        return read.settings.config.memory;
-      },
-      resolveModel: selection => resolveExtractionModel({ models, settings, selection }),
-      workspaceDirectory: workspaceId => {
-        const result = workspaces.getWorkspace({ workspace_id: workspaceId });
-        if (result.status !== 'found') throw new Error('SOURCE_UNAVAILABLE');
-        return result.workspace.root_path;
-      },
-    }),
+    memory, memoryExtraction,
     homePaths,
     observability,
     logger,

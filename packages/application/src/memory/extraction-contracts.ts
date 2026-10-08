@@ -36,5 +36,6 @@ export interface MemoryExtraction {
   getJob(jobId: string): ExtractionJob | undefined;
   listJobs(runId: string): readonly ExtractionJob[];
   getExtraction(sessionId: string): SavedExtraction | undefined;
+  cancelActive(): Promise<void>;
   shutdown(): Promise<void>;
 }

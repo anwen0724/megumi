@@ -176,6 +176,7 @@ export function createMemoryExtraction(options: MemoryExtractionOptions): Memory
       return operation;
     },
     getJob: store.getJob, listJobs: store.listJobs, getExtraction: store.getExtraction,
+    async cancelActive() { controllers.forEach(controller => controller.abort()); await Promise.allSettled([...pending]); },
     async shutdown() { stopped = true; controllers.forEach(controller => controller.abort()); await Promise.allSettled([...pending]); },
   };
 }

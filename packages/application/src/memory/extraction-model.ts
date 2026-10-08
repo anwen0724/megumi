@@ -4,6 +4,16 @@ import type { Settings } from '../settings/settings-store';
 import type { ModelSelection } from '../contracts';
 import type { ExtractionModel } from './extraction-contracts';
 import type { ReadCredentialRequest } from '../settings/settings-contracts';
+import type { ConsolidationModel } from './consolidation-agent';
+
+export async function resolveConsolidationModel(options: Parameters<typeof resolveExtractionModel>[0]): Promise<ConsolidationModel> {
+  const resolved = await resolveExtractionModel(options);
+  const { models } = options;
+  return { model: resolved.model, ai: {
+    streamSimple: (model, context, request) => models.withWorkspace(undefined, () => models.ai.streamSimple(model, context, { ...request, maxTokens: Math.min(8192, model.maxTokens) })),
+    completeSimple: (model, context, request) => models.withWorkspace(undefined, () => models.ai.completeSimple(model, context, { ...request, maxTokens: Math.min(8192, model.maxTokens) })),
+  } };
+}
 
 export async function resolveExtractionModel(options: {
   readonly models: ReturnType<typeof createApplicationModels>;

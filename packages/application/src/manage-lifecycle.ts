@@ -22,7 +22,7 @@ interface ApplicationBindings {
   readonly subscribeSpeechOutputEvents: Application['subscribeSpeechOutputEvents'];
   readonly recommendation: Pick<Recommendation, 'shutdown' | 'resumeBackground'>;
   readonly coding: Pick<Coding, 'shutdown'>;
-  readonly memoryExtraction: { shutdown(): Promise<void> };
+  readonly memory: { shutdown(): Promise<void> };
   readonly voice: Pick<Voice, 'dispose'>;
   readonly speechOutput: { dispose(): void };
   readonly observability: { shutdown(): Promise<void> };
@@ -162,12 +162,12 @@ export function createApplicationLifecycle(options: {
 
 /** Stops business writers before disposing their database and diagnostics. */
 async function stopBusiness(
-  owners: Pick<ApplicationBindings, 'recommendation' | 'coding' | 'memoryExtraction'>,
+  owners: Pick<ApplicationBindings, 'recommendation' | 'coding' | 'memory'>,
   timeoutMs: number,
 ): Promise<void> {
   const recommendation = owners.recommendation.shutdown();
   const coding = owners.coding.shutdown();
-  const memory = owners.memoryExtraction.shutdown();
+  const memory = owners.memory.shutdown();
   const work = Promise.allSettled([recommendation, coding, memory]).then((results) => {
     const failures = results.flatMap((result) => result.status === 'rejected' ? [result.reason] : []);
     if (failures.length) throw new AggregateError(failures, 'Product business shutdown failed.');

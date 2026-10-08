@@ -93,7 +93,7 @@ function createApplicationInterface(
   const {
     observability,
     logger,
-    settings,
+    settings: applicationSettings,
     sessions,
     history,
     sessionStore,
@@ -106,6 +106,20 @@ function createApplicationInterface(
     skills,
     commands,
   } = modules;
+
+  const settings: ApplicationOperations['settings'] = {
+    ...applicationSettings,
+    updateSettings(request) {
+      if (request.patch.memory?.generateMemories === true || request.patch.memory?.useMemories === true) {
+        const status = modules.memory.getStatus();
+        if (status.status === 'failed') return { status: 'rejected', error: { code: 'SETTINGS_INVALID', message: 'Memory maintenance state could not be read.' } };
+        if (status.memory.artifactState === 'clearing') return { status: 'rejected', error: {
+          code: 'SETTINGS_CONFLICT', message: 'Finish clearing memory before enabling generation or use.',
+        } };
+      }
+      return applicationSettings.updateSettings(request);
+    },
+  };
 
   lifecycle.registerDatabase(modules.database);
 
@@ -283,7 +297,7 @@ function createApplicationInterface(
   };
 
   return lifecycle.bind({
-    memoryExtraction: modules.memoryExtraction,
+    memory: modules.memory,
     operations,
     logger,
     start: ({ backgroundTriggers }) =>

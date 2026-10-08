@@ -1,19 +1,12 @@
-/* Reads foundation state without scheduling generation or invoking models. */
+/* Exposes memory operations and reads status without scheduling model work. */
 import { builtinProviders } from '@megumi/ai/providers/all';
-import type { DatabaseConnection } from '../storage/index';
-import type { Settings } from '../settings/settings-store';
 import { resolveModel } from '../settings/resolve-model';
 import type { MemoryArtifactState, MemoryHost, MemoryModelCapability } from './contracts';
-import type { MemoryFiles } from './memory-files';
-import type { MemorySources } from './source-contracts';
 import type { ModelSelection } from '../contracts';
+import { createMemoryProduction, type MemoryProductionOptions } from './memory-production';
 
-export function createMemory(options: {
-  readonly database: DatabaseConnection;
-  readonly settings: Settings;
-  readonly files: MemoryFiles;
-  readonly sources: MemorySources;
-}): MemoryHost {
+export function createMemory(options: MemoryProductionOptions): MemoryHost {
+  const production = createMemoryProduction(options);
   function capability(selection?: ModelSelection): MemoryModelCapability {
     if (!selection) return { status: 'unconfigured' };
     // Only the application-level Settings instance is injected. Never fall back to the chat model.
@@ -22,10 +15,12 @@ export function createMemory(options: {
       : { status: 'unavailable', selection, message: resolved.failure.message };
   }
   return {
+    ...production,
     getStatus() {
       const read = options.settings.readSettings();
       if (read.status === 'rejected') return { status: 'failed', error: { code: 'SETTINGS_INVALID', message: read.error.message } };
       try {
+        production.inspect();
         const state = options.database.prepare<{
           artifact_state: MemoryArtifactState; dirty_revision: number; processed_revision: number;
           successful_snapshot_id: string | null;
@@ -41,6 +36,8 @@ export function createMemory(options: {
           dirtyRevision: state.dirty_revision, processedRevision: state.processed_revision,
           ...(state.successful_snapshot_id ? { successfulSnapshotId: state.successful_snapshot_id } : {}),
           sourceCount: options.sources.listSources().length,
+          recentRuns: options.database.prepare<{ run_id: string }>({ sql: "SELECT run_id FROM memory_runs WHERE kind <> 'extract' ORDER BY rowid DESC LIMIT 10" }).all()
+            .map(row => production.getRun(row.run_id)!),
         } };
       } catch {
         return { status: 'failed', error: { code: 'STORAGE_FAILED', message: 'Memory state could not be read.' } };
