@@ -17,6 +17,14 @@ function references(content: string, sources: readonly ConsolidationSource[]): n
     && source.sourceVersion === match[2] && source.sourceRef === match[3])) invalid();
   return markers.length;
 }
+function validateParagraphSources(content: string, sources: readonly ConsolidationSource[], kind: string): void {
+  for (const paragraph of content.split(/\r?\n\s*\r?\n/)) {
+    const body = paragraph.split(/\r?\n/).filter(line => line.trim() && !line.startsWith('#')).join('\n');
+    if (body && body !== 'No reusable knowledge.' && !references(body, sources)) {
+      invalid(`Every nonempty ${kind} paragraph needs a selected source marker in that paragraph.`);
+    }
+  }
+}
 export function validateMemoryDocument(document: MemoryDocument, sources: readonly ConsolidationSource[]): void {
   const { path, content } = document;
   if (Buffer.byteLength(content, 'utf8') > 1048576 || content.includes('\0')) invalid();
@@ -42,15 +50,12 @@ export function validateMemoryDocument(document: MemoryDocument, sources: readon
       }
     }
   } else if (path === 'memory_summary.md') {
-    if (estimateExtractionTokens(content) > 5000) throw new Error('BUDGET_EXCEEDED');
+    if (estimateExtractionTokens(content) > 5000) throw new Error(`BUDGET_EXCEEDED: memory_summary.md uses ${estimateExtractionTokens(content)} conservative tokens (UTF-8 bytes + 64), maximum 5000. Combine related facts in one short paragraph per section; keep exact markers. Do not duplicate facts across Profile and Tips.`);
     for (const heading of ['User Profile', 'General Tips', "What's in Memory"]) {
       if (!content.split(/\r?\n/).includes(`# ${heading}`)) invalid();
     }
     if (content === EMPTY_SUMMARY) return;
-    for (const paragraph of content.split(/\r?\n\s*\r?\n/)) {
-      const body = paragraph.split(/\r?\n/).filter(line => line.trim() && !line.startsWith('#')).join('\n');
-      if (body && body !== 'No reusable knowledge.' && !references(body, sources)) invalid('Every nonempty summary paragraph needs a selected source marker.');
-    }
+    validateParagraphSources(content, sources, 'summary');
   } else if (path.endsWith('/SKILL.md')) {
     const front = /^---\r?\n([\s\S]+?)\r?\n---\r?\n/.exec(content);
     if (!front) invalid();
@@ -61,14 +66,20 @@ export function validateMemoryDocument(document: MemoryDocument, sources: readon
       if (!content.includes(`## ${heading}\n`) && !content.includes(`## ${heading}\r\n`)) invalid();
     }
     if (!references(content, sources)) invalid();
+    validateParagraphSources(content.slice(front[0].length), sources, 'skill');
   }
 }
 export function validateMemoryArtifacts(files: MemoryFiles, selection: ConsolidationSelection): Record<string, string> {
   const documents = files.list().filter(document => !document.readOnly);
   const paths = new Set(documents.map(document => document.path));
-  if (!paths.has('MEMORY.md') || !paths.has('memory_summary.md')) invalid();
+  if (!paths.has('MEMORY.md') || !paths.has('memory_summary.md')) invalid('Both MEMORY.md and memory_summary.md are required.');
   for (const document of documents) {
-    validateMemoryDocument(document, selection.selected);
+    try { validateMemoryDocument(document, selection.selected); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const separator = message.indexOf(':');
+      throw new Error(`${separator < 0 ? message : message.slice(0, separator)}: ${document.path}. ${separator < 0 ? '' : message.slice(separator + 1).trim()}`);
+    }
     if (document.path.startsWith('skills/') && !paths.has(document.path.split('/').slice(0, 2).join('/') + '/SKILL.md')) invalid();
     for (const match of document.content.matchAll(/(?:MEMORY\.md|memory_summary\.md|skills\/[\w./-]+|rollout_summaries\/[\w-]+\.md)/g)) {
       if (!paths.has(match[0]) && !selection.selected.some(source => source.artifactPath === match[0])) invalid();

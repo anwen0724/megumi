@@ -34,4 +34,4 @@ export type { AgentDiagnostics } from './diagnostics';
 
 export type { WebSearch } from './tools/builtin/web/search-web';
 export type { WebFetch } from './tools/builtin/web/fetch-page';
-export { ToolExecutionFailure } from './tools/tool-result';
+export { ToolExecutionFailure, fitsNormalizedJson } from './tools/tool-result';

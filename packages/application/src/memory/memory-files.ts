@@ -9,7 +9,8 @@ export interface MemoryFiles {
   paths(): readonly string[];
   /** Streams complete text lines for literal matching before excerpt limits are applied. */
   lines(path: string): Iterable<{ line: number; text: string }>;
-  readLines(path: string, startLine?: number, lineCount?: number, startCharacter?: number): MemoryDocumentSlice | undefined;
+  /** Internal callers may lower maxCharacters to fit their complete response envelope. */
+  readLines(path: string, startLine?: number, lineCount?: number, startCharacter?: number, maxCharacters?: number): MemoryDocumentSlice | undefined;
   read(path: string): MemoryDocument | undefined;
   writeFinal(input: { path: string; content: string; expectedVersion: string }, guard: () => void): MemoryDocument;
   writeInput(path: string, chunks: Iterable<string>, guard: () => void): void;
@@ -135,7 +136,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
       } finally { closeSync(fd); }
     },
     discardTemporary,
-    readLines(relative, startLine = 1, lineCount = 200, startCharacter = 0) {
+    readLines(relative, startLine = 1, lineCount = 200, startCharacter = 0, maxCharacters = 16000) {
       if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > 400 || !Number.isInteger(startCharacter) || startCharacter < 0) throw new Error('INVALID_ARGUMENT');
       const target = checked(relative);
       if (!existsSync(target)) return undefined;
@@ -150,7 +151,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         for (const char of value) {
           if (line === startLine && column < startCharacter && (char === '\n' || column + char.length > startCharacter)) throw new Error('INVALID_ARGUMENT');
           if (line >= startLine && (line > startLine || column >= startCharacter)) {
-            if (!truncated && line < startLine + lineCount && content.length + char.length <= 16000) {
+            if (!truncated && line < startLine + lineCount && content.length + char.length <= maxCharacters) {
               content += char;
               nextLine = char === '\n' ? line + 1 : line;
               nextCharacter = char === '\n' ? 0 : column + char.length;

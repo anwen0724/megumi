@@ -27,7 +27,7 @@ export function memoryQueryFailure(error: unknown): MemoryFailure {
 /** Reads management data without starting production or changing source qualification. */
 export function createMemoryQueries(options: { files: MemoryFiles; sources: MemorySources; excluded: (sessionId: string) => boolean }) {
   return {
-    searchDocuments(request: MemorySearchRequest) {
+    searchDocuments(request: MemorySearchRequest, maxCharacters = 16000) {
       try {
         const input = MemorySearchSchema.parse(request);
         const collections = new Set(input.collections ?? ['memory']);
@@ -45,20 +45,18 @@ export function createMemoryQueries(options: { files: MemoryFiles; sources: Memo
             const matches = terms.map(term => text.includes(term));
             if (!(input.match === 'all' ? matches.every(Boolean) : matches.some(Boolean))) continue;
             if (ordinal++ < cursor.offset) continue;
-            if (hits.length >= (input.limit ?? 20) || characters >= 16000) { more = true; break outer; }
-            const excerpt = options.files.readLines(file, Math.max(1, line - 1), line === 1 ? 2 : 3)!;
+            if (hits.length >= (input.limit ?? 20) || characters >= maxCharacters) { more = true; break outer; }
+            const excerpt = options.files.readLines(file, Math.max(1, line - 1), line === 1 ? 2 : 3, 0, maxCharacters - characters)!;
             if (excerpt.version !== versions.find(pair => pair[0] === file)?.[1]) throw new Error('VERSION_CONFLICT');
-            const content = excerpt.content.slice(0, 16000 - characters);
-            hits.push({ ...excerpt, content, line, truncated: excerpt.truncated || content.length < excerpt.content.length,
-              lastLineComplete: excerpt.lastLineComplete && content.length === excerpt.content.length });
-            characters += content.length;
+            hits.push({ ...excerpt, line });
+            characters += excerpt.content.length;
           }
         }
         for (const [file, version] of versions) if (file && options.files.readLines(file, 1, 1)?.version !== version) throw new Error('VERSION_CONFLICT');
         return { status: 'ok' as const, hits, ...(more ? { nextCursor: encode({ revision, offset: cursor.offset + hits.length }) } : {}) };
       } catch (error) { return memoryQueryFailure(error); }
     },
-    readSource(request: MemorySourceRequest) {
+    readSource(request: MemorySourceRequest, maxCharacters = 16000) {
       try {
         const input = MemorySourceSchema.parse(request);
         const result = options.sources.readSource(input.sourceRef);
@@ -66,7 +64,7 @@ export function createMemoryQueries(options: { files: MemoryFiles; sources: Memo
         if (options.excluded(result.snapshot.sessionId)) throw new Error('SOURCE_UNAVAILABLE');
         const cursor = decode(input.cursor, hash(input.sourceRef));
         const messages: { messageId: string; kind: string; text: string; characterOffset: number; truncated: boolean }[] = [];
-        let index = cursor.offset; let character = cursor.character ?? 0; let remaining = 16000;
+        let index = cursor.offset; let character = cursor.character ?? 0; let remaining = maxCharacters;
         while (index < result.snapshot.messages.length && messages.length < (input.limit ?? 20) && remaining > 0) {
           const message = result.snapshot.messages[index];
           // Only original user content and saved reply/tool bodies are evidence; host receipts are not.
