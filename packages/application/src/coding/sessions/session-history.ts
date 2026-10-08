@@ -1,4 +1,5 @@
 /* Commits and reads session messages, preserving conversation and branch semantics. */
+import { MemoryEvidenceSchema, type MemoryEvidence } from '../../memory/memory-citations';
 import type { JsonValue } from '@megumi/ai';
 import { z } from 'zod';
 import type {
@@ -62,6 +63,7 @@ export interface SaveAssistantReplyRequest {
   session_id: string;
   execution_id: string;
   parent_entry_id?: string;
+  memory_evidence?: MemoryEvidence;
   status: AssistantReplyStatus;
   content: SessionAssistantContent[];
   reason_code?: AssistantReplyReasonCode;
@@ -327,6 +329,7 @@ class DefaultSessionHistory implements SessionHistory {
       execution_id: request.execution_id,
       message_kind: 'assistant_reply',
       status: request.status,
+      ...(request.memory_evidence ? { memory_evidence: request.memory_evidence } : {}),
       content: request.content,
       ...(request.reason_code ? { reason_code: request.reason_code } : {}),
       ...(request.api ? { api: request.api } : {}),
@@ -1298,6 +1301,7 @@ export const SessionToolResultPayloadSchema = z
 export const SessionAssistantReplyPayloadSchema = z
   .object({
     status: z.enum(ASSISTANT_REPLY_STATUSES),
+    memory_evidence: MemoryEvidenceSchema.optional(),
     content: z.array(SessionAssistantContentSchema),
     reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
     api: z.string().min(1).optional(),
@@ -1352,6 +1356,7 @@ export const SessionToolResultMessageSchema = SessionMessageBaseSchema.extend({
 export const SessionAssistantReplyMessageSchema = SessionMessageBaseSchema.extend({
   message_kind: z.literal('assistant_reply'),
   status: z.enum(ASSISTANT_REPLY_STATUSES),
+  memory_evidence: MemoryEvidenceSchema.optional(),
   content: z.array(SessionAssistantContentSchema),
   reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
   api: z.string().min(1).optional(),
@@ -1397,6 +1402,7 @@ export const SessionMessageSchema = z.discriminatedUnion('message_kind', [
   SessionMessageBaseSchema.extend({
     message_kind: z.literal('assistant_reply'),
     status: z.enum(ASSISTANT_REPLY_STATUSES),
+    memory_evidence: MemoryEvidenceSchema.optional(),
     content: z.array(SessionAssistantContentSchema),
     reason_code: z.enum(ASSISTANT_REPLY_REASON_CODES).optional(),
     api: z.string().min(1).optional(),
@@ -1454,6 +1460,8 @@ export function isLegacySessionMessage(message: SessionMessage): boolean {
 export function createSessionMessageSaver(options: {
   readonly history: SessionHistory;
   readonly user: Omit<SaveUserMessageRequest, 'message_id' | 'execution_id' | 'created_at'>;
+  readonly memoryEvidence?: () => MemoryEvidence;
+  readonly onReplySaved?: () => void;
   readonly onUserSaved?: (saved: Extract<SaveUserMessageResult, { status: 'saved' }>) => void;
 }): (request: import('@megumi/agent').SaveMessageRequest) => Promise<void> {
   return async ({ runId, messageId, message }) => {
@@ -1497,6 +1505,7 @@ export function createSessionMessageSaver(options: {
             stop_reason: message.stopReason,
           })
         : options.history.saveAssistantReply({
+            ...(options.memoryEvidence ? { memory_evidence: options.memoryEvidence() } : {}),
             ...identity,
             ...metadata,
             content,
@@ -1548,6 +1557,7 @@ export function createSessionMessageSaver(options: {
       throw new Error('System prompt messages do not belong to session history.');
     }
     if (saved.status === 'failed') throw new Error(saved.failure.message);
+    if (saved.message.message_kind === 'assistant_reply') options.onReplySaved?.();
   };
 }
 

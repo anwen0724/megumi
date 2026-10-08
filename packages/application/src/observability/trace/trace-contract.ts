@@ -184,6 +184,12 @@ export const RecordedOutcomeSchema: z.ZodType<RecordedOutcome> = z.discriminated
 ]);
 
 export const TraceEventSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('memory.snapshot.committed'), runId: z.string(), jobId: z.string(), snapshotId: z.string() }).strict(),
+  z.object({ type: z.literal('memory.context.read'), executionId: z.string(), snapshotId: z.string().optional(),
+    path: z.string(), fileVersion: z.string(), startLine: z.number().int().positive(), endLine: z.number().int().positive(), sourceIds: z.string() }).strict(),
+  z.object({ type: z.literal('memory.usage.validated'), replyId: z.string(),
+    executionId: z.string().optional(), snapshotId: z.string().optional(),
+    status: z.enum(['valid', 'invalid', 'absent', 'pendingRetry']), count: z.number().int().nonnegative() }).strict(),
   z.object({
     type: z.literal('memory.extraction.settled'),
     jobId: z.string(), sourceVersion: z.string(), attempt: z.number().int().positive(),

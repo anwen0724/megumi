@@ -9,6 +9,7 @@ export const databaseTables = [
   'memory_snapshot_sources',
   'memory_state',
   'memory_requests',
+  'memory_usage_receipts',
   'workspaces',
   'sessions',
   'session_entries',
@@ -59,7 +60,7 @@ export const databaseTableOwnership = {
     modulePath: 'packages/application/src/memory',
     tables: ['memory_sources', 'memory_extractions', 'memory_current_extractions',
       'memory_runs', 'memory_jobs', 'memory_snapshots', 'memory_snapshot_sources',
-      'memory_state', 'memory_requests'],
+      'memory_state', 'memory_requests', 'memory_usage_receipts'],
   },
   workspace: {
     module: 'workspace',

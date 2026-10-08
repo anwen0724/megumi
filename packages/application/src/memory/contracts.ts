@@ -2,6 +2,9 @@
 import type { ModelSelection } from '../contracts';
 import type { MemoryDocument, MemoryDocumentSlice } from './memory-files';
 import type { ExtractionCoverage } from './extraction-input';
+import type { createMemoryQueries } from './memory-queries';
+import type { TaskMemory, TaskMemoryInput } from './memory-consumption';
+import type { MemoryUsageResult } from './memory-usage';
 
 export type MemoryArtifactState = 'empty' | 'ready' | 'updating' | 'needsRepair' | 'clearing';
 export type MemoryModelCapability =
@@ -24,6 +27,12 @@ export interface MemoryStatus {
 }
 
 export interface MemoryHost {
+  /** Creates an execution-local consumer; this does not generate knowledge. */
+  createTaskMemory(request: TaskMemoryInput): TaskMemory;
+  /** Replays only persisted host-verified reply evidence; never accepts model-supplied counters. */
+  recordUsage(): MemoryUsageResult;
+  searchDocuments: ReturnType<typeof createMemoryQueries>['searchDocuments'];
+  readSource: ReturnType<typeof createMemoryQueries>['readSource'];
   getStatus(): { readonly status: 'ok'; readonly memory: MemoryStatus }
     | { readonly status: 'failed'; readonly error: { readonly code: 'SETTINGS_INVALID' | 'STORAGE_FAILED'; readonly message: string } };
   startGeneration(request: MemoryGenerationRequest): MemoryStartResult;

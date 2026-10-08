@@ -29,11 +29,16 @@ export function redactExtractionValue(value: unknown, secrets: readonly string[]
 }
 
 function evidence(message: SessionMessage) {
+  const memoryResult = message.message_kind === 'tool_result'
+    && ['memory_read', 'memory_search', 'memory_source'].includes(message.tool_name);
   const content = message.message_kind === 'user_message' ? message.display_content : message.content;
   return { messageId: message.message_id, kind: message.message_kind, executionId: message.execution_id,
     timestamp: message.completed_at ?? message.created_at,
     ...(message.message_kind === 'tool_result' ? { toolCallId: message.tool_call_id, toolName: message.tool_name, status: message.status } : {}),
-    content: content.filter(block => block.type === 'text' || block.type === 'toolCall' || block.type === 'recommendation_reference'),
+    content: memoryResult ? [{ type: 'text' as const, text: '[Previously supplied memory omitted; this is not new task evidence.]' }]
+      : content.filter(block => block.type === 'text' || block.type === 'toolCall' || block.type === 'recommendation_reference')
+        .map(block => block.type === 'text' && message.message_kind === 'assistant_reply' && message.memory_evidence
+          ? { ...block, text: block.text.replace(/<memory_citations>[\s\S]*?<\/memory_citations>/g, '') } : block),
   };
 }
 

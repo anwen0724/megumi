@@ -11,8 +11,9 @@ import { createSettings } from '@megumi/application/settings/settings-store';
 import { selectConsolidationSources } from '@megumi/application/memory/consolidation-selection';
 import { sourceMarker, EMPTY_MEMORY, EMPTY_SUMMARY } from '@megumi/application/memory/consolidation-documents';
 import { createSourceFixture } from './source-fixture';
+import type { Observability } from '@megumi/application/observability/index';
 
-export function productionFixture() {
+export function productionFixture(observability?: Observability) {
   const root = mkdtempSync(path.join(os.tmpdir(), 'memory-production-'));
   const f = createSourceFixture(path.join(root, 'memory.db'));
   let now = Date.parse('2026-10-08T12:00:00Z');
@@ -26,9 +27,9 @@ export function productionFixture() {
   const ai = createModels(); const provider = fauxProvider(); ai.setProvider(provider.provider); const model = ai.getModels()[0];
   const files = createMemoryFiles(path.join(root, 'memories'));
   const sources = createMemorySources({ store: f.store, isSessionRunning: () => false });
-  const extraction = createMemoryExtraction({ database: f.database, sources, readConfiguration: config, workspaceDirectory: () => 'C:/memory-test', now: () => now,
+  const extraction = createMemoryExtraction({ database: f.database, sources, observability, readConfiguration: config, workspaceDirectory: () => 'C:/memory-test', now: () => now,
     resolveModel: async () => ({ model, secrets: [], complete: async () => fauxAssistantMessage(JSON.stringify({ rawMemory: 'Use TypeScript for React examples.', rolloutSummary: 'User prefers TypeScript.', rolloutSlug: 'react' })) }) });
-  const options = { database: f.database, settings, files, sources, extraction, root: path.join(root, 'memories'), now: () => now, resolveModel: async () => ({ model, ai }) };
+  const options = { database: f.database, settings, files, sources, extraction, observability, root: path.join(root, 'memories'), now: () => now, resolveModel: async () => ({ model, ai }) };
   const memory = createMemory(options);
   const tool = (name: string, args: Record<string, unknown>) => fauxAssistantMessage(fauxToolCall(name, args), { stopReason: 'toolUse' });
   function responses() {

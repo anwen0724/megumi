@@ -7,6 +7,8 @@ export interface MemoryFiles {
   hasArtifacts(): boolean;
   list(): readonly MemoryDocument[];
   paths(): readonly string[];
+  /** Streams complete text lines for literal matching before excerpt limits are applied. */
+  lines(path: string): Iterable<{ line: number; text: string }>;
   readLines(path: string, startLine?: number, lineCount?: number): MemoryDocumentSlice | undefined;
   read(path: string): MemoryDocument | undefined;
   writeFinal(input: { path: string; content: string; expectedVersion: string }, guard: () => void): MemoryDocument;
@@ -16,7 +18,7 @@ export interface MemoryFiles {
   removeInput(path: string, guard: () => void): void;
   discardTemporary(guard: () => void): void;
 }
-export interface MemoryDocumentSlice { readonly path: string; readonly version: string; readonly content: string; readonly startLine: number; readonly nextLine: number; readonly truncated: boolean }
+export interface MemoryDocumentSlice { readonly path: string; readonly version: string; readonly content: string; readonly startLine: number; readonly nextLine: number; readonly truncated: boolean; readonly lastLineComplete?: boolean }
 export interface MemoryDocument { readonly path: string; readonly version: string; readonly content: string; readonly readOnly: boolean }
 
 export function createMemoryFiles(rootPath: string): MemoryFiles {
@@ -110,6 +112,28 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
   return {
     list: () => paths().filter(relative => !readOnly(relative)).map(relative => read(relative)!),
     paths: () => paths(),
+    *lines(relative) {
+      const fd = openSync(checked(relative), 'r');
+      const decoder = new TextDecoder('utf-8', { fatal: true });
+      const buffer = Buffer.alloc(16384);
+      let pending = ''; let line = 1; let bytes = 0;
+      try {
+        let count: number;
+        while ((count = readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+          bytes += count;
+          if (relative !== 'raw_memories.md' && bytes > 1048576) throw new Error('OUTPUT_INVALID');
+          pending += decoder.decode(buffer.subarray(0, count), { stream: true });
+          if (pending.includes('\0')) throw new Error('OUTPUT_INVALID');
+          let newline: number;
+          while ((newline = pending.indexOf('\n')) >= 0) {
+            yield { line: line++, text: pending.slice(0, newline) };
+            pending = pending.slice(newline + 1);
+          }
+        }
+        pending += decoder.decode();
+        if (pending) yield { line, text: pending };
+      } finally { closeSync(fd); }
+    },
     discardTemporary,
     readLines(relative, startLine = 1, lineCount = 200) {
       if (!Number.isInteger(startLine) || startLine < 1 || !Number.isInteger(lineCount) || lineCount < 1 || lineCount > 400) throw new Error('INVALID_ARGUMENT');
@@ -119,13 +143,13 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
       const hash = createHash('sha256');
       const decoder = new TextDecoder('utf-8', { fatal: true });
       const buffer = Buffer.alloc(16384);
-      let line = 1; let content = ''; let truncated = false; let nextLine = startLine;
+      let line = 1; let content = ''; let truncated = false; let nextLine = startLine; let incompleteLine = false;
       function collect(value: string) {
         if (value.includes('\0')) throw new Error('OUTPUT_INVALID');
         for (const char of value) {
           if (line >= startLine && line < startLine + lineCount && content.length < 16000) {
             content += char; nextLine = line + 1;
-          } else if (line >= startLine) truncated = true;
+          } else if (line >= startLine) { truncated = true; if (line < nextLine && !content.endsWith('\n')) incompleteLine = true; }
           if (char === '\n') line++;
         }
       }
@@ -137,7 +161,7 @@ export function createMemoryFiles(rootPath: string): MemoryFiles {
         }
         collect(decoder.decode());
       } finally { closeSync(fd); }
-      return { path: relative, version: hash.digest('hex'), content, startLine, nextLine, truncated };
+      return { path: relative, version: hash.digest('hex'), content, startLine, nextLine, truncated, lastLineComplete: !incompleteLine };
     },
     read,
     writeFinal(input, guard) {

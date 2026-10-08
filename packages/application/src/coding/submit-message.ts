@@ -114,6 +114,7 @@ export interface Coding {
 }
 
 export interface CreateCodingOptions {
+  readonly memory?: () => Pick<import('../memory/contracts').MemoryHost, 'createTaskMemory' | 'recordUsage'>;
   readonly observability?: Observability;
   readonly ai: Pick<Models, 'streamSimple' | 'completeSimple'>;
   readonly agent: Agent;
@@ -350,16 +351,22 @@ export function createCoding(options: CreateCodingOptions): Coding {
       : undefined;
     if (branch && branch.status !== 'resolved')
       return rejected(request.requestId, 'INPUT_REJECTED', 'Branch draft is unavailable.', session);
-    const config = await prepareCodingRun(
+    const preparedConfig = await prepareCodingRun(
       { session, model: selected.model, permissionMode: request.permissionMode ?? 'ask', signal },
       options.preparation,
     );
     signal.throwIfAborted();
+    const memory = options.memory?.();
+    const taskMemory = memory?.createTaskMemory({ workspaceId: session.workspace_id,
+      workspaceDirectory: preparedConfig.environment.workingDirectory,
+      inputBudgetTokens: Math.max(0, selected.model.contextWindow - selected.model.maxTokens) });
+    const config = taskMemory ? { ...preparedConfig, tools: [...preparedConfig.tools, ...taskMemory.tools] } : preparedConfig;
     const accepted = deferred<Extract<SaveUserMessageResult, { status: 'saved' }>>();
     const input = processed.input;
     const awaitApproval = options.awaitApproval;
     const saveMessage = createSessionMessageSaver({
       history: options.history,
+      ...(taskMemory ? { memoryEvidence: () => taskMemory.evidence(), onReplySaved: () => { memory?.recordUsage(); } } : {}),
       onUserSaved: accepted.resolve,
       user: {
         session_id: session.session_id,
@@ -405,6 +412,10 @@ export function createCoding(options: CreateCodingOptions): Coding {
       },
       context: createCodingContext({
         ...options.context,
+        ...(taskMemory ? { memory: { task: taskMemory, executionId: () => {
+          if (!entry.run) throw new Error('Coding execution identity is unavailable.');
+          return entry.run.runId;
+        } } } : {}),
         sessionId: session.session_id,
         workspaceId: session.workspace_id,
         config,

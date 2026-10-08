@@ -32,7 +32,7 @@ describe('released Database migration fixture matrix', () => {
         seedReleaseFacts(database, releaseVersion);
         const result = migrateDatabase({ database, migrationsFolder: migrationsRoot });
 
-        expect(result.currentMigration).toBe('0040_memory_extraction_attempts');
+        expect(result.currentMigration).toBe('0041_memory_usage_receipts');
         expect(appTableNames(database)).toEqual([...databaseTables].sort());
         expect(
           database

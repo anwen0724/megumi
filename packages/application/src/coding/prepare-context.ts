@@ -443,6 +443,7 @@ export function materializeRecommendationReference(
 }
 
 export interface CodingContextOptions {
+  readonly memory?: { readonly task: import('../memory/memory-consumption').TaskMemory; readonly executionId: () => string };
   readonly observability?: Observability;
   readonly sessionId: string;
   readonly workspaceId: string;
@@ -464,7 +465,7 @@ export interface CodingContextOptions {
 export function createCodingContext(options: CodingContextOptions): AgentContext {
   return {
     compact: ({ reason, signal }) => compactCodingHistory({ options, trigger: reason, signal }),
-    async prepare({ tools, signal }) {
+    async prepare({ tools: suppliedTools, signal }) {
       signal.throwIfAborted();
       const history = options.history.getActiveHistory({ session_id: options.sessionId });
       if (history.status === 'failed') throw new Error(history.failure.message);
@@ -497,6 +498,9 @@ export function createCodingContext(options: CodingContextOptions): AgentContext
             : 'Instruction loading was cancelled.',
         );
       if (skills?.status === 'failed') throw new Error('Skill catalog could not be prepared.');
+      const memory = options.memory?.task.getPromptMemory(options.memory.executionId());
+      const allowedMemoryTools = new Set(memory?.tools.map(tool => tool.name) ?? []);
+      const tools = options.memory ? suppliedTools.filter(tool => !tool.name.startsWith('memory_') || allowedMemoryTools.has(tool.name)) : suppliedTools;
       const prepared = {
         systemPrompt: buildSystemPrompt({
           systemInstructions: documents,
@@ -504,7 +508,7 @@ export function createCodingContext(options: CodingContextOptions): AgentContext
           skills: skills?.view,
           executionEnvironment: options.config.environment,
           tools,
-        }),
+        }) + (memory?.prompt ? `\n\n<automatic_memory>\n${memory.prompt}\n</automatic_memory>` : ''),
         messages: built.materialized.messages,
         tools,
       };

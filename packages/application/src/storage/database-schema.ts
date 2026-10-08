@@ -131,6 +131,15 @@ export const memoryState = sqliteTable('memory_state', {
   check('memory_revisions', sql`${table.controlRevision} >= 0 AND ${table.dirtyRevision} >= ${table.processedRevision} AND ${table.processedRevision} >= 0`),
 ]);
 
+export const memoryUsageReceipts = sqliteTable('memory_usage_receipts', {
+  replyId: text('reply_id').notNull(),
+  sessionId: text('session_id').notNull(),
+  sourceVersion: text('source_version').notNull(),
+  status: text('status').notNull(),
+  usedAt: text('used_at').notNull(),
+}, table => [primaryKey({ columns: [table.replyId, table.sessionId] }),
+  check('memory_usage_status', sql`${table.status} IN ('pending','counted','ignored')`)]);
+
 export const memoryRequests = sqliteTable('memory_requests', {
   operation: text('operation').notNull(),
   requestId: text('request_id').notNull(),

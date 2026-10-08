@@ -19,7 +19,7 @@ export interface MemoryProductionOptions {
   readonly resolveModel: (selection: ModelSelection) => Promise<ConsolidationModel>;
   readonly now?: () => number; readonly observability?: Observability;
 }
-export function createMemoryProduction(options: MemoryProductionOptions): Omit<MemoryHost, 'getStatus'> & { inspect(): void } {
+export function createMemoryProduction(options: MemoryProductionOptions): Omit<MemoryHost, 'getStatus' | 'createTaskMemory' | 'searchDocuments' | 'readSource' | 'recordUsage'> & { inspect(): void } {
   const { database, settings, files, sources } = options;
   const now = options.now ?? Date.now;
   const iso = () => new Date(now()).toISOString();
@@ -141,7 +141,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
       guard();
       publishConsolidationInputs(files, chosen, guard);
       const operation = () => runConsolidationAgent({ model, files, root: options.root, selection: chosen, signal: controller.signal, guard, observability: options.observability });
-      const result = options.observability ? await options.observability.withSpan({ name: 'memory.consolidate' }, operation) : await operation();
+      const result = await operation();
       guard();
       // Re-read after the last tool: an external edit cannot be certified by an older finish result.
       const finalVersions = validateMemoryArtifacts(files, chosen);
@@ -154,6 +154,8 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
         }
         store.commit(writer, jobId!, chosen, finalVersions, result);
       } });
+      try { options.observability?.recordEvent({ type: 'memory.snapshot.committed', runId, jobId: jobId!, snapshotId: store.state().successful_snapshot_id! }); }
+      catch { /* Diagnostics do not change a committed snapshot. */ }
       gc(writer);
       publishConsolidationInputs(files, { ...chosen, removed: [] }, guard);
       return 'generated';
@@ -185,7 +187,8 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
       }
       if (controller.signal.aborted) throw new Error('CANCELLED');
       const failed = request.failedJobId ? database.prepare<{ stage: string }>({ sql: 'SELECT stage FROM memory_jobs WHERE job_id = ?' }).get([request.failedJobId]) : undefined;
-      const result = await consolidate(runId, controller, maintenance, failed?.stage === 'consolidate' ? request.failedJobId : undefined);
+      const consolidation = () => consolidate(runId, controller, maintenance, failed?.stage === 'consolidate' ? request.failedJobId : undefined);
+      const result = options.observability ? await options.observability.withSpan({ name: 'memory.consolidate' }, consolidation) : await consolidation();
       if (extractionFailed && !extracted && result !== 'generated') {
         store.finishRun(runId, 'failed', { extractionRunId, error: { code: 'EXTRACTION_FAILED', message: 'No required extraction completed successfully.' } });
       } else store.finishRun(runId, 'completed', { result: extractionFailed ? 'partial' : result, extractionRunId });
@@ -255,7 +258,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
         database.transaction({ operation: () => {
           guard();
           database.prepare({ sql: 'UPDATE memory_state SET successful_snapshot_id = NULL WHERE id = 1' }).run();
-          for (const table of ['memory_snapshot_sources', 'memory_snapshots', 'memory_current_extractions', 'memory_extractions', 'memory_jobs']) database.prepare({ sql: `DELETE FROM ${table}` }).run();
+          for (const table of ['memory_usage_receipts', 'memory_snapshot_sources', 'memory_snapshots', 'memory_current_extractions', 'memory_extractions', 'memory_jobs']) database.prepare({ sql: `DELETE FROM ${table}` }).run();
           database.prepare({ sql: 'DELETE FROM memory_runs WHERE run_id <> ?' }).run([runId]);
           database.prepare({ sql: 'UPDATE memory_sources SET usage_count = 0, last_used_at = NULL' }).run();
           store.finishRun(runId, 'completed', { result: 'empty' });
@@ -280,7 +283,7 @@ export function createMemoryProduction(options: MemoryProductionOptions): Omit<M
     const selected = remaining.slice(0, limit);
     return { items: selected, ...(remaining.length > limit ? { nextCursor: Buffer.from(JSON.stringify({ revision, after: identity(selected[selected.length - 1]) })).toString('base64url') } : {}) };
   }
-  const host: Omit<MemoryHost, 'getStatus'> & { inspect(): void } = {
+  const host: ReturnType<typeof createMemoryProduction> = {
     inspect, startGeneration: request => start(request), getRun,
     async waitRun(request) {
       const timeout = request.timeoutMs ?? 60000;

@@ -697,6 +697,7 @@ function toMessagePayload(message: SessionMessage): Record<string, unknown> {
     });
   }
   return SessionAssistantReplyPayloadSchema.parse({
+    ...(message.memory_evidence ? { memory_evidence: message.memory_evidence } : {}),
     status: message.status,
     content: message.content,
     ...(message.reason_code ? { reason_code: message.reason_code } : {}),
