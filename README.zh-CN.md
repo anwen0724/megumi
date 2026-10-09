@@ -2,86 +2,71 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-**跨平台个性化内容推荐 Agent：围绕你的兴趣搜寻内容，从反馈中学习偏好，将值得关注的信息汇集成每日推荐。**
+**围绕你的兴趣发现内容，陪你继续探索和行动的桌面 Agent。**
 
 [![平台：Windows](https://img.shields.io/badge/平台-Windows-5f6b7a)](#快速开始)
 [![使用 TypeScript 构建](https://img.shields.io/badge/构建-TypeScript-3178c6)](https://www.typescriptlang.org/)
 [![许可证：MIT](https://img.shields.io/badge/许可证-MIT-4c7a68)](./LICENSE)
 
+[下载安装](https://github.com/anwen0724/megumi/releases) · [快速开始](#快速开始) · [从源码运行](#从源码运行与构建)
+
 <p align="center">
   <a href="./assets/screenshots/today-discoveries.png">
-    <img src="./assets/screenshots/today-discoveries.png" alt="Megumi 今日发现界面" width="100%">
+    <img src="./assets/screenshots/today-discoveries.png" alt="Megumi 桌面界面" width="100%">
   </a>
 </p>
 
 ## 为什么做 Megumi
 
-你的兴趣不局限于一个平台。无论是 AI 工程、摄影还是烹饪，相关内容往往散落在视频平台、社区和开放网页中。
+你的兴趣不局限于一个平台。无论是跟进 AI 工程、准备面试，还是研究摄影和烹饪，有用的信息往往散落在视频平台、社区和开放网页中。找到它们需要反复搜索，找到了还要判断哪些值得花时间看。
 
-用自然语言告诉 Megumi 想持续了解什么，也可以授权它从会话中理解兴趣。它会在后台搜寻已启用的来源，将筛选后的内容整理成 **“今日发现”**，附上推荐理由和原文链接。反馈帮助它调整后续推荐，你也可以查看和纠正它学到的偏好。
+用自然语言告诉 Megumi 你想了解什么，它会围绕这些兴趣搜寻内容，通过每日动态和精选推荐带到你面前。遇到感兴趣的内容，可以收藏起来，也可以直接开启会话，继续提问、分析，或让 Agent 帮你完成相关任务。
 
-Megumi 是一款采用本地数据存储、支持自选模型服务的 Windows 桌面应用。同一个 Agent 也支持通用任务、多模态对话和工具执行。
+Megumi 是一款面向个人用户的 Windows 桌面应用，支持自选模型服务，会话和应用数据保存在本地。除了内容发现，你也可以通过文字、图片、文档或语音，把它当作日常使用的 Agent 助手。
 
 ## 你可以用 Megumi 做什么
 
-- **围绕兴趣跨平台搜寻。** 通过可配置的来源适配器，从 Bilibili、小红书、抖音、知乎、X（Twitter）及开放网页寻找内容。
-- **获取个性化每日推荐。** 设置生成时间和目标数量，也可以手动生成，回看历史推荐、收藏和稍后看的内容。
-- **管理兴趣与学到的偏好。** 添加、修改、暂停或删除兴趣；通过喜欢和不喜欢影响推荐，查看偏好及其依据，并直接修改或删除。
-- **围绕推荐继续讨论。** 从一条推荐开启会话，带入对应内容上下文，继续提问或深入了解。
-- **完成通用 Agent 任务。** 输入文字、图片和文档，使用按任务提供的网页搜索、文件操作、命令执行等工具，并查看执行过程、控制操作权限。
-- **通过悬浮角色窗口说话。** 本地语音识别将语音转成文字，发送到绑定的会话。
-
-收藏、稍后看和隐藏用于整理推荐；喜欢与不喜欢是偏好学习使用的明确反馈。
-
-## 从兴趣到推荐
-
-搜寻与推荐独立运行：后台搜寻维护持久内容池，定时或手动推荐从池中选择内容，无需每次重新搜索各个平台。
-
-```mermaid
-flowchart TD
-    I["用户兴趣"] --> S["后台跨来源搜寻"]
-    S --> P["持久内容池"]
-    T["定时或手动推荐"] --> L["根据变化的反馈准备偏好"]
-    F["喜欢 / 不喜欢"] --> L
-    L --> R["确定性粗排 + Agent 精排"]
-    P --> R
-    R --> D["今日发现"]
-    D --> F
-```
-
-- **提前搜寻。** 用户确认首次搜寻后，后台按需检查并补充内容，结合有效兴趣和已启用来源开展搜索，去重后保存，供后续推荐使用。
-- **分层筛选。** 对可用内容进行确定性过滤与粗排，将范围收敛后交给 Agent 精排；信息不足时可按需扩展和读取已存内容。最终推荐与内容快照通过事务一并发布。
-- **按需学习。** 在符合执行条件的推荐开始前，处理发生变化的反馈，结合跨轮证据修订偏好；用户修改会转为明确要求，版本校验防止过期学习结果覆盖新的修改。
-
-搜寻完成不会直接触发推荐生成；推荐时暂无可用内容，则进入等待并重新检查内容池。
+- **围绕兴趣发现内容。** 自由描述想了解的主题，随时添加、修改、暂停或删除兴趣，减少在不同平台重复搜索的过程。
+- **浏览动态与精选。** 查看近期相关消息，阅读附有理由的精选内容，打开原文或收藏留待回看。
+- **从内容继续聊下去。** 将推荐内容带入会话，追问细节、讨论观点，也可以发起独立任务。
+- **让 Agent 帮你做事。** 使用网页搜索、文件读写和命令执行等工具，查看执行过程，并通过权限控制决定允许哪些操作。
+- **积累可复用的记忆。** 从历史任务整理经验，在后续会话中按需查阅；支持查看与编辑。此能力仍在完善中。
+- **用语音交流。** 通过悬浮角色窗口说话，本地语音识别将输入发送到绑定的会话。
+- **使用自己的模型。** 选择内置模型服务或添加自定义服务，按需要配置模型与认证方式。图片理解取决于所选模型的能力。
 
 ## 内容来源
 
-| 来源 | 接入方式 |
-| --- | --- |
-| Bilibili | 公开内容搜索与读取 |
-| 小红书 | 内嵌浏览器会话，可能需要登录 |
-| 抖音 | 内嵌浏览器会话，可能需要登录 |
-| 知乎 | 知乎开放平台凭据 |
-| X（Twitter） | TwitterAPI.io API Key |
-| 开放网页 | 配置的网页搜索服务，支持 Bing RSS 回退；网页内容读取 |
+目前已接入以下内容来源：
 
-在设置中启用来源并配置访问方式。可访问内容和读取能力因来源而异，搜索结果不一定包含原文全文。
+| 平台或来源 | 内容与访问方式 |
+| --- | --- |
+| B 站 | 搜索视频，读取简介及可获取的字幕；部分访问可能需要登录。 |
+| 小红书 | 通过内嵌浏览器搜索和读取笔记，需要平台登录会话。 |
+| 知乎 | 搜索回答、文章并获取材料，按访问路径配置开放平台凭据或登录会话。 |
+| 开放网页 | 使用 Tavily 搜索与提取内容，Bing RSS 提供备用搜索，支持直接读取公开网页。 |
+
+在设置中选择来源，并按需填写凭据或完成登录。内容读取范围受平台限制影响，搜索结果不一定包含完整原文。小红书搜索稳定性仍在完善，知乎登录后的详情读取尚未完成验证。
+
+“跨平台”指内容来自不同平台；桌面应用目前支持 **Windows 10 / 11**。
 
 ## 产品体验
 
-**今日发现**集中展示推荐、反馈和收藏内容；**兴趣管理**支持调整兴趣与学到的偏好；**会话**既可围绕推荐讨论，也可执行通用任务。
+**每日动态**帮助你查看近期相关消息，**精选推荐**提供值得进一步阅读的内容；你可以随时调整兴趣和来源，也可以把想保留的内容加入收藏。
+
+以下截图展示兴趣与来源管理，以及从推荐进入会话的使用方式。图片来自已有版本，实际布局以当前版本为准。
 
 <table>
   <tr>
-    <td width="50%" align="center"><strong>管理关注</strong></td>
-    <td width="50%" align="center"><strong>每日发现设置</strong></td>
+    <td width="50%" align="center"><strong>兴趣管理</strong></td>
+    <td width="50%" align="center"><strong>内容来源与设置</strong></td>
   </tr>
   <tr>
-    <td><a href="./assets/screenshots/interest-management.png"><img src="./assets/screenshots/interest-management.png" alt="Megumi 关注管理界面"></a></td>
-    <td><a href="./assets/screenshots/discovery-settings.png"><img src="./assets/screenshots/discovery-settings.png" alt="Megumi 每日发现设置界面"></a></td>
+    <td><a href="./assets/screenshots/interest-management.png"><img src="./assets/screenshots/interest-management.png" alt="Megumi 兴趣管理界面"></a></td>
+    <td><a href="./assets/screenshots/discovery-settings.png"><img src="./assets/screenshots/discovery-settings.png" alt="Megumi 内容来源与设置界面"></a></td>
   </tr>
 </table>
+
+看到值得深入了解的内容，可以带着它开启会话，继续讨论观点、查找资料，或处理具体任务。会话也可以独立使用，不必从推荐开始。
 
 <table>
   <tr>
@@ -94,40 +79,38 @@ flowchart TD
   </tr>
 </table>
 
-## Agent Harness
+## 整体架构
 
-面向通用对话、后台搜寻与个性化推荐，Megumi 通过任务指令、上下文和工具集适配不同的执行需求。
+Megumi 使用 Electron、React 和 TypeScript 构建。桌面界面通过应用层接入会话、推荐、记忆和语音等能力；应用层组织业务流程，按任务需要使用 Agent 执行或直接调用模型。
 
-| 层次 | 职责 |
+```mermaid
+flowchart TD
+    Desktop["Desktop · 桌面界面与宿主"] --> Application["Application · 应用能力与业务流程"]
+    Application --> Agent["Agent · 推理循环与工具执行"]
+    Application --> AI["AI · 模型协议与服务适配"]
+    Agent --> AI
+```
+
+| 组成 | 负责什么 |
 | --- | --- |
-| [AI](./packages/ai/) | 模型协议、服务适配、认证与流式响应 |
-| [Agent Runtime](./packages/agent-runtime/) | 共用运行入口、循环、上下文、会话、资源、工具与权限 |
-| [Application](./packages/application/) | 应用操作与生命周期、推荐业务、设置、工作区、语音、存储与观测 |
+| [Desktop](./apps/desktop/) | React 界面、Electron 窗口、IPC，以及浏览器和系统能力接入。 |
+| [Application](./packages/application/) | 会话、推荐、记忆、设置、工作区和语音等应用功能，以及数据存储和执行观测。 |
+| [Agent](./packages/agent/) | 推理循环、上下文管理、工具与 Skills、权限和沙箱，为不同任务提供执行能力。 |
+| [AI](./packages/ai/) | 模型协议、服务适配、认证与流式响应，支持切换模型服务。 |
 
-桌面通过 Application 接入，共用一个 AgentRuntime。Eval 保留现有代码，尚待单独适配新接口。
-
-- **模型与输入适配。** 支持多种模型协议、图片、文档输入（PDF、DOCX、TXT、Markdown）及本地语音识别；图片理解取决于所选模型的能力。
-- **任务驱动的工具组织。** 按当前任务和工作区绑定工具与 Skills，提供受控并发、超时处理和取消机制。
-- **长任务连续执行。** 持久化树形会话保留历史分支；分层上下文压缩通过滚动摘要保留目标和任务状态，并在模型报告上下文溢出时进行恢复。
-- **权限与沙箱。** 通过审批控制与 Windows 沙箱约束工具执行中的文件、进程和网络访问。
-- **Trace 与日志观测。** 关联上下文构建、模型请求、工具调用、来源访问和业务提交记录，通过桌面诊断界面追溯执行过程。
-
-## 质量评估
-
-[记忆评估说明](./evals/memory/README.md)介绍场景选择、全量运行、结果保存和离线汇总。每次运行使用独立结果目录。依赖旧推荐接口的评估实现已删除。
+Agent Harness 为任务执行提供上下文、工具和权限控制；应用层负责具体业务规则。会话与业务状态使用 SQLite 持久保存，长期记忆还使用本地文件。Trace 和日志用于查看模型请求、工具调用及执行中的问题。
 
 ## 快速开始
 
-Megumi 当前支持 Windows 10 和 Windows 11。本文描述源码中的实现，安装包所含功能以对应版本的发布说明为准。
+1. 从 [GitHub Releases](https://github.com/anwen0724/megumi/releases) 下载安装程序，或按下方说明从源码运行。
+2. 打开设置，配置模型服务、模型与认证方式。
+3. 如果要使用内容推荐，配置推荐使用的模型和内容来源，按需填写凭据或登录平台。
+4. 在推荐页面打开“管理兴趣与来源”，用自然语言添加兴趣，并确认启用推荐。
+5. 浏览“每日动态”和“精选推荐”，或直接新建会话开始交流。首次获取内容需要一些时间；已有结果可以直接回看。
 
-1. 从 [GitHub Releases](https://github.com/anwen0724/megumi/releases) 下载安装程序，或[从源码运行](#从源码运行与构建)。
-2. 打开设置，配置受支持的模型服务及认证方式。
-3. 启用内容来源，按需配置凭据或完成浏览器登录。
-4. 在兴趣管理中添加兴趣；从会话中理解兴趣是可选能力，需要用户授权。
-5. 设置推荐时间与数量，出现提示时确认首次后台搜寻。
-6. 手动生成“今日发现”，或等待定时推荐；首次生成可能需要等待内容池准备就绪。
+Megumi 持续开发中，安装包包含的功能以对应版本的发布说明为准。
 
-应用状态默认保存在 `~/.megumi`，可通过 `MEGUMI_HOME` 指定其他位置。模型请求和内容搜寻会访问外部服务；本地语音识别在设备上运行。
+应用数据默认保存在 `~/.megumi`，可通过 `MEGUMI_HOME` 指定其他位置。模型调用与内容搜索会连接你配置的外部服务；本地语音识别在设备上运行。
 
 ## 模型支持
 
@@ -139,7 +122,7 @@ Megumi 当前支持 Windows 10 和 Windows 11。本文描述源码中的实现�
 - Anthropic Messages
 - Google Generative AI
 
-可以使用内置模型服务目录，也可以通过受支持的协议、Base URL、Model ID 和认证配置添加自定义服务。
+可以使用内置服务目录，也可以通过受支持的协议、Base URL、Model ID 和认证信息添加自定义服务。
 
 ## 仓库结构
 
@@ -147,27 +130,29 @@ Megumi 当前支持 Windows 10 和 Windows 11。本文描述源码中的实现�
 apps/desktop/                  Electron 主进程、Preload Bridge 与 React UI
 packages/
 ├── ai/                        模型协议与服务适配
-├── agent-runtime/             共用 Agent 运行时
-│   ├── src/                   runs、context、sessions、resources、tools、permissions
-│   └── resources/             指令与内置技能
+├── agent/                     共用 Agent 执行能力
+│   └── src/                   execution、context、tools、resources、permissions、sandbox
 └── application/               应用操作、生命周期和业务模块
-    ├── src/                   discovery、settings、workspace、voice、storage、observability
-    └── resources/             SQL 迁移与语音资源
+    ├── src/                   会话、推荐、记忆、设置、工作区、语音、存储与观测
+    └── resources/             SQL 迁移、指令、内置技能与语音资源
 
 tests/                         自动化测试与架构守卫
+evals/memory/                  记忆评估场景与执行入口
 assets/                        截图与公开资源
 ```
 
 ## 从源码运行与构建
 
-环境要求：Windows 10/11、Node.js 24 与 npm（发布流程使用 24.14.0）、Git。
+环境要求：Windows 10/11、Node.js 24、npm 和 Git。
+
+安装依赖并启动开发环境：
 
 ```bash
 npm ci
 npm start
 ```
 
-运行项目检查：
+运行类型检查与测试：
 
 ```bash
 npm run typecheck:packages
@@ -175,18 +160,18 @@ npm run typecheck:product
 npm test
 ```
 
-构建未打包应用或 Windows 安装程序：
+构建应用目录或 Windows 安装程序：
 
 ```bash
 npm run package
 npm run make
 ```
 
-Electron Forge 将构建产物写入 `out/`。
+构建产物位于 `out/desktop/`。启动、构建与测试命令会为对应运行环境准备原生 SQLite 依赖。
 
 ## 致谢
 
-Megumi 的模型服务层基于 [`pi` 的 AI 包](https://github.com/earendil-works/pi)，并针对 Megumi 支持的模型服务和桌面装配方式进行适配。
+Megumi 的模型服务层基于 [`pi` 的 AI 包](https://github.com/earendil-works/pi)，并针对项目使用场景进行了适配。
 
 ## 许可证
 
